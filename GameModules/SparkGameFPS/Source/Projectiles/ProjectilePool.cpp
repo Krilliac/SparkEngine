@@ -7,7 +7,7 @@
 #include "Grenade.h"
 #include "Game/Enemy.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/Validate.h"
+#include "Core/FPSAssert.h"
 #include <algorithm>
 #include <iostream>
 #include <memory>
@@ -17,7 +17,7 @@ using namespace DirectX;
 ProjectilePool::ProjectilePool(size_t poolSize) : m_poolSize(poolSize)
 {
     FPS_CONSOLE("ProjectilePool constructed with size " + std::to_string(poolSize), "INFO");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, poolSize > 0, "ProjectilePool size must be positive");
+    FPS_REQUIRE_MSG(poolSize > 0, "ProjectilePool size must be positive");
     m_projectiles.reserve(poolSize);
 }
 
@@ -55,7 +55,7 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
         for (size_t i = 0; i < count; ++i)
         {
             auto p = TypeFactory();
-            SPARK_REQUIRE_MSG(Spark::LogCategory::Game, p != nullptr, "Failed to create projectile");
+            FPS_REQUIRE_MSG(p != nullptr, "Failed to create projectile");
             if (!p)
                 continue;
             if (m_hasRenderResources && FAILED(p->Initialize(m_device, m_context)))
@@ -69,8 +69,7 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     makeAndStore([] { return std::make_unique<Rocket>(); }, rocketsCount);
     makeAndStore([] { return std::make_unique<Grenade>(); }, grenadesCount);
 
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_projectiles.size() == m_poolSize,
-                      "Some projectiles failed to initialize");
+    FPS_REQUIRE_MSG(m_projectiles.size() == m_poolSize, "Some projectiles failed to initialize");
 
     FPS_CONSOLE("ProjectilePool created " + std::to_string(m_projectiles.size()) + " projectiles.", "INFO");
     return S_OK;
@@ -79,8 +78,7 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
 void ProjectilePool::Update(float deltaTime)
 {
     // **FIXED: Remove per-frame logging completely**
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0.0f && std::isfinite(deltaTime),
-                      "Invalid deltaTime in ProjectilePool::Update");
+    FPS_REQUIRE_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime), "Invalid deltaTime in ProjectilePool::Update");
 
     for (auto& up : m_projectiles)
     {
@@ -161,7 +159,7 @@ void ProjectilePool::ReturnProjectile(Projectile* p)
 {
     // **FIXED: Rate-limited logging for projectile return**
     FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::ReturnProjectile called.", "OPERATION");
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, p);
+    FPS_REQUIRE_NOT_NULL(p);
     if (p)
     {
         p->Deactivate();
@@ -172,7 +170,7 @@ void ProjectilePool::ReturnProjectile(Projectile* p)
 void ProjectilePool::FireBullet(const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
 {
     FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::FireBullet called. speed=" + std::to_string(speed), "OPERATION");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireBullet");
+    FPS_REQUIRE_MSG(speed >= 0.0f, "Speed must be non-negative in FireBullet");
     if (auto p = GetProjectile(ProjectileType::BULLET))
     {
         p->SetDamage(15.0f);
@@ -183,7 +181,7 @@ void ProjectilePool::FireBullet(const XMFLOAT3& pos, const XMFLOAT3& dir, float 
 void ProjectilePool::FireRocket(const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
 {
     FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::FireRocket called. speed=" + std::to_string(speed), "OPERATION");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireRocket");
+    FPS_REQUIRE_MSG(speed >= 0.0f, "Speed must be non-negative in FireRocket");
     if (auto p = GetProjectile(ProjectileType::ROCKET))
     {
         p->SetDamage(75.0f);
@@ -194,7 +192,7 @@ void ProjectilePool::FireRocket(const XMFLOAT3& pos, const XMFLOAT3& dir, float 
 void ProjectilePool::FireGrenade(const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
 {
     FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::FireGrenade called. speed=" + std::to_string(speed), "OPERATION");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireGrenade");
+    FPS_REQUIRE_MSG(speed >= 0.0f, "Speed must be non-negative in FireGrenade");
     if (auto p = GetProjectile(ProjectileType::GRENADE))
     {
         p->SetDamage(100.0f);
@@ -231,7 +229,7 @@ void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, co
     default:
         FPS_CONSOLE("Unknown ProjectileType in FireProjectile", "ERROR");
         ReturnProjectile(projectile);
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Game, false, "Unknown ProjectileType in FireProjectile");
+        FPS_REQUIRE_MSG(false, "Unknown ProjectileType in FireProjectile");
         return;
     }
 

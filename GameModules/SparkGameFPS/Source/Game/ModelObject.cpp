@@ -7,7 +7,7 @@
  * @author Spark Engine Team
  * @date 2025
  */
-#include "Utils/Validate.h"
+#include "Core/FPSAssert.h"
 
 #include <iostream>
 
@@ -19,8 +19,8 @@ ModelObject::ModelObject(const std::wstring& modelPath) : m_modelPath(modelPath)
 
 HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
+    FPS_REQUIRE_NOT_NULL(device);
+    FPS_REQUIRE_NOT_NULL(context);
 
     // Load the model
     HRESULT hr = m_model->LoadObj(m_modelPath, device);

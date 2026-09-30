@@ -2,7 +2,7 @@
 #include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Projectile.cpp
-#include "Utils/Validate.h"
+#include "Core/FPSAssert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
@@ -15,7 +15,7 @@ Projectile::Projectile()
 {
     // Base GameObject scale
     XMFLOAT3 scale{0.1f, 0.1f, 0.3f};
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale.x > 0 && scale.y > 0 && scale.z > 0, "Scale must be positive");
+    FPS_REQUIRE_MSG(scale.x > 0 && scale.y > 0 && scale.z > 0, "Scale must be positive");
     SetScale(scale);
 }
 
@@ -23,11 +23,11 @@ Projectile::~Projectile() = default;
 
 HRESULT Projectile::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
+    FPS_REQUIRE_NOT_NULL(device);
+    FPS_REQUIRE_NOT_NULL(context);
 
     HRESULT hr = GameObject::Initialize(device, context);
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "GameObject::Initialize failed in Projectile");
+    FPS_REQUIRE_MSG(SUCCEEDED(hr), "GameObject::Initialize failed in Projectile");
     if (FAILED(hr))
         return hr;
 
@@ -37,7 +37,7 @@ HRESULT Projectile::Initialize(ID3D11Device* device, ID3D11DeviceContext* contex
 
 void Projectile::Update(float deltaTime)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0 && std::isfinite(deltaTime), "Invalid deltaTime");
+    FPS_REQUIRE_MSG(deltaTime >= 0 && std::isfinite(deltaTime), "Invalid deltaTime");
     if (!m_active)
         return;
 
@@ -77,7 +77,7 @@ void Projectile::Render(const XMMATRIX& view, const XMMATRIX& projection)
 
 void Projectile::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0, "Speed must be non-negative");
+    FPS_REQUIRE_MSG(speed >= 0, "Speed must be non-negative");
     SetPosition(startPosition);
     m_previousPosition = startPosition;
     m_speed = speed;
@@ -115,7 +115,7 @@ void Projectile::Reset()
 
 void Projectile::OnHit(GameObject* target)
 {
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, target);
+    FPS_REQUIRE_NOT_NULL(target);
     FPS_LOG_DEBUG("Projectile hit target, damage={:.1f}", m_damage);
     Deactivate();
 }
@@ -128,7 +128,7 @@ void Projectile::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 
 void Projectile::SetGravity(bool enabled, float scale)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale >= 0, "Gravity scale must be non-negative");
+    FPS_REQUIRE_MSG(scale >= 0, "Gravity scale must be non-negative");
     m_hasGravity = enabled;
     m_gravityScale = scale;
 }

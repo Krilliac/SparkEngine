@@ -114,68 +114,82 @@ bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
     // Shutdown or a failed load unbinds it.
     Spark::ModuleLog::Bind(context);
 
-    if (context->IsHeadless())
+    try
     {
-        // The stable-v1 headless source gate intentionally exposes no
-        // GraphicsEngine or InputManager. Still require the real CPU-only
-        // services the FPS module needs to participate in a bounded server
-        // lifecycle; a bare OnLoad success with an unusable context would be
-        // misleading evidence.
-        if (context->GetGraphics() != nullptr || context->GetInput() != nullptr || context->GetWorld() == nullptr ||
-            context->GetTimer() == nullptr || context->GetEventBus() == nullptr ||
-            context->GetSaveSystem() == nullptr || context->GetFileCache() == nullptr ||
-            context->GetAssetRegistry() == nullptr)
+        if (context->IsHeadless())
         {
-            FPS_LOG_ERROR("SparkGameFPS headless context is missing required CPU-only services or exposes a "
-                          "render/input path");
+            // The stable-v1 headless source gate intentionally exposes no
+            // GraphicsEngine or InputManager. Still require the real CPU-only
+            // services the FPS module needs to participate in a bounded server
+            // lifecycle; a bare OnLoad success with an unusable context would be
+            // misleading evidence.
+            if (context->GetGraphics() != nullptr || context->GetInput() != nullptr || context->GetWorld() == nullptr ||
+                context->GetTimer() == nullptr || context->GetEventBus() == nullptr ||
+                context->GetSaveSystem() == nullptr || context->GetFileCache() == nullptr ||
+                context->GetAssetRegistry() == nullptr)
+            {
+                FPS_LOG_ERROR("SparkGameFPS headless context is missing required CPU-only services or exposes a "
+                              "render/input path");
+                m_context = nullptr;
+                Spark::ModuleLog::Bind(nullptr);
+                return false;
+            }
+
+            // The headless lifecycle still simulates the authored arena: scene
+            // data, respawn table and match rules, all without a render path.
+            if (!LoadHeadlessArena())
+            {
+                m_context = nullptr;
+                Spark::ModuleLog::Bind(nullptr);
+                return false;
+            }
+
+            // Local-profile persistence: the same level/xp/quicksave/quickload
+            // commands the windowed Game registers, on CPU-only state.
+            m_headlessProgression = std::make_unique<Spark::ProgressionSystem>();
+            m_headlessProgression->Initialize();
+            m_headlessPlayTime = 0.0f;
+            RegisterHeadlessPersistenceCommands();
+
+            m_initialized = true;
+            Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized for headless source execution");
+            return true;
+        }
+
+        if (!InitializeFromContext())
+        {
             m_context = nullptr;
             Spark::ModuleLog::Bind(nullptr);
             return false;
         }
 
-        // The headless lifecycle still simulates the authored arena: scene
-        // data, respawn table and match rules, all without a render path.
-        if (!LoadHeadlessArena())
+        if (g_game)
         {
-            m_context = nullptr;
-            Spark::ModuleLog::Bind(nullptr);
-            return false;
+            // Pass the engine context to Game for proper SDK v2 subsystem access
+            g_game->SetEngineContext(context);
+
+            // Wire up EventBus so game systems can communicate via events
+            if (context->GetEventBus())
+            {
+                g_game->SetEventBus(context->GetEventBus());
+            }
+
+            // Wire up physics system for projectile area queries (explosions)
+            if (context->GetPhysics())
+            {
+                g_game->SetPhysicsSystem(context->GetPhysics());
+            }
         }
 
-        // Local-profile persistence: the same level/xp/quicksave/quickload
-        // commands the windowed Game registers, on CPU-only state.
-        m_headlessProgression = std::make_unique<Spark::ProgressionSystem>();
-        m_headlessProgression->Initialize();
-        m_headlessPlayTime = 0.0f;
-        RegisterHeadlessPersistenceCommands();
-
-        m_initialized = true;
-        Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized for headless source execution");
         return true;
     }
-
-    if (!InitializeFromContext())
+    catch (...)
     {
-        m_context = nullptr;
+        // The host handles load exceptions, but a failed load must never retain its
+        // borrowed logger context. Keep m_context available for existing teardown.
         Spark::ModuleLog::Bind(nullptr);
-        return false;
+        throw;
     }
-
-    if (g_game)
-    {
-        // Pass the engine context to Game for proper SDK v2 subsystem access
-        g_game->SetEngineContext(context);
-
-        // Wire up EventBus so game systems can communicate via events
-        if (context->GetEventBus())
-            g_game->SetEventBus(context->GetEventBus());
-
-        // Wire up physics system for projectile area queries (explosions)
-        if (context->GetPhysics())
-            g_game->SetPhysicsSystem(context->GetPhysics());
-    }
-
-    return true;
 }
 
 void SparkGameModule::OnUnload()

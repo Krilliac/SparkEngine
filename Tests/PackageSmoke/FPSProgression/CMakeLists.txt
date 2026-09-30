@@ -9,6 +9,8 @@ set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "Embedded")
 
 project(SparkFPSProgressionConsumer LANGUAGES CXX)
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
 if(NOT DEFINED SPARK_ENGINE_INCLUDE_DIR)
     find_package(SparkEngine REQUIRED)
 endif()
@@ -170,3 +172,57 @@ set_target_properties(spark_fps_inventory_quests_consumer PROPERTIES
 )
 add_test(NAME SparkFPSInventoryQuestsConsumer COMMAND spark_fps_inventory_quests_consumer)
 set_tests_properties(SparkFPSInventoryQuestsConsumer PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;integration")
+
+# SDK-only ModuleLog isolation proof. Each shared library has two translation
+# units, so the test catches both cross-TU duplication and ELF interposition
+# between module images. Neither library links an engine target or includes
+# SparkEngine/Source.
+add_library(spark_module_logging_a SHARED
+    module_logging_a_bind.cpp
+    module_logging_a_observe.cpp
+)
+add_library(spark_module_logging_b SHARED
+    module_logging_b_bind.cpp
+    module_logging_b_observe.cpp
+)
+foreach(_module_logging_target IN ITEMS spark_module_logging_a spark_module_logging_b)
+    target_compile_features(${_module_logging_target} PRIVATE cxx_std_23)
+    target_include_directories(${_module_logging_target} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_public_sdk}")
+    if(MSVC)
+        target_compile_options(${_module_logging_target} PRIVATE /Od /Ob0)
+    else()
+        target_compile_options(${_module_logging_target} PRIVATE -O0 -fno-inline)
+    endif()
+endforeach()
+target_compile_definitions(spark_module_logging_a PRIVATE SPARK_MODULE_LOG_PROBE_BUILD_A)
+target_compile_definitions(spark_module_logging_b PRIVATE SPARK_MODULE_LOG_PROBE_BUILD_B)
+add_executable(spark_module_logging_consumer module_logging_consumer.cpp)
+target_compile_features(spark_module_logging_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_module_logging_consumer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${_public_sdk}")
+target_link_libraries(spark_module_logging_consumer PRIVATE spark_module_logging_a spark_module_logging_b)
+if(MSVC)
+    target_compile_options(spark_module_logging_consumer PRIVATE /Od /Ob0)
+else()
+    target_compile_options(spark_module_logging_consumer PRIVATE -O0 -fno-inline)
+endif()
+add_test(NAME SparkSDKModuleLogImageIsolation COMMAND spark_module_logging_consumer)
+set_tests_properties(SparkSDKModuleLogImageIsolation PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;static;integration")
+
+# Header-only FPS logging contract: rollover, zero quota, and deferred message
+# construction are checked with a deterministic clock seam in RateLimiter.
+add_executable(spark_fps_logging_consumer fps_logging_consumer.cpp)
+target_compile_features(spark_fps_logging_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_logging_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+add_test(NAME SparkFPSLoggingRateLimit COMMAND spark_fps_logging_consumer)
+set_tests_properties(SparkFPSLoggingRateLimit PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;static;integration")
+
+# Release builds must retain the FPS precondition checks. The Python wrapper
+# exercises intentional failures as subprocesses and also checks one evaluation.
+add_executable(spark_fps_preconditions_consumer fps_preconditions_consumer.cpp)
+target_compile_features(spark_fps_preconditions_consumer PRIVATE cxx_std_23)
+target_include_directories(spark_fps_preconditions_consumer PRIVATE "${_fps_source}" "${_public_sdk}")
+target_compile_definitions(spark_fps_preconditions_consumer PRIVATE NDEBUG)
+add_test(NAME SparkFPSPreconditions
+    COMMAND ${Python3_EXECUTABLE} -B "${CMAKE_CURRENT_LIST_DIR}/RunFPSPreconditions.py"
+            "$<TARGET_FILE:spark_fps_preconditions_consumer>")
+set_tests_properties(SparkFPSPreconditions PROPERTIES TIMEOUT 60 LABELS "sdk;package;fps;static;integration")

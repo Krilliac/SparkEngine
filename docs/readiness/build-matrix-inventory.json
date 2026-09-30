@@ -2738,10 +2738,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5284,
+      "line": 5285,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5282",
+          "id": "Tests/CMakeLists.txt:5283",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4123,7 +4123,7 @@
       "target": "spark_fps_abilities_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 152,
+      "line": 154,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4133,7 +4133,7 @@
       "target": "spark_fps_assets_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 72,
+      "line": 74,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4153,7 +4153,17 @@
       "target": "spark_fps_inventory_quests_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 165,
+      "line": 167,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_logging_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 213,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4163,7 +4173,17 @@
       "target": "spark_fps_module_api_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 34,
+      "line": 36,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_fps_preconditions_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 221,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4173,7 +4193,7 @@
       "target": "spark_fps_progression_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 52,
+      "line": 54,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4183,7 +4203,37 @@
       "target": "spark_fps_weapons_consumer",
       "kind": "executable",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-      "line": 98,
+      "line": 100,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_module_logging_a",
+      "kind": "shared_library",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 180,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_module_logging_b",
+      "kind": "shared_library",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 184,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_module_logging_consumer",
+      "kind": "executable",
+      "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+      "line": 199,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4947,7 +4997,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5284,
+          "line": 5285,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6917,7 +6967,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 152,
+          "line": 154,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6935,7 +6985,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 72,
+          "line": 74,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6971,7 +7021,25 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 165,
+          "line": 167,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_logging_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 213,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6989,7 +7057,25 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 34,
+          "line": 36,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_fps_preconditions_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 221,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7007,7 +7093,7 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 52,
+          "line": 54,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7025,7 +7111,61 @@
       "declarations": [
         {
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
-          "line": 98,
+          "line": 100,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_module_logging_a",
+      "kind": "shared_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 180,
+          "kind": "shared_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_module_logging_b",
+      "kind": "shared_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 184,
+          "kind": "shared_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_module_logging_consumer",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+          "line": 199,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

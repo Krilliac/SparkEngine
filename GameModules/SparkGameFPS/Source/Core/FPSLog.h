@@ -32,6 +32,52 @@
 
 #include <chrono>
 
+namespace Spark::FPSLog
+{
+    /**
+     * @brief Stateful fixed-window admission gate for console messages.
+     *
+     * The first admitted call starts a window; a call at or after the window
+     * duration starts the next window and is admitted as its first message.
+     * A non-positive quota admits nothing. The class is intentionally not
+     * thread-safe: FPS console call sites are game-thread state.
+     */
+    class RateLimiter final
+    {
+      public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        [[nodiscard]] bool Allow(int maxPerWindow, std::chrono::seconds window, TimePoint now)
+        {
+            if (maxPerWindow <= 0)
+            {
+                return false;
+            }
+
+            if (!m_initialized || now - m_windowStart >= window)
+            {
+                m_initialized = true;
+                m_windowStart = now;
+                m_count = 0;
+            }
+
+            if (m_count >= maxPerWindow)
+            {
+                return false;
+            }
+
+            ++m_count;
+            return true;
+        }
+
+      private:
+        TimePoint m_windowStart{};
+        int m_count = 0;
+        bool m_initialized = false;
+    };
+} // namespace Spark::FPSLog
+
 #define FPS_LOG_INFO(...) ::Spark::ModuleLog::Info(__VA_ARGS__)
 #define FPS_LOG_WARN(...) ::Spark::ModuleLog::Warn(__VA_ARGS__)
 #define FPS_LOG_ERROR(...) ::Spark::ModuleLog::Error(__VA_ARGS__)
@@ -59,22 +105,10 @@
 #define FPS_CONSOLE_RATE_LIMITED(maxPerWindow, windowSeconds, message, type)                                           \
     do                                                                                                                 \
     {                                                                                                                  \
-        static auto fpsConsoleWindowStart = std::chrono::steady_clock::now();                                          \
-        static int fpsConsoleWindowCount = 0;                                                                          \
-        const auto fpsConsoleNow = std::chrono::steady_clock::now();                                                   \
-        const bool fpsConsoleWindowElapsed =                                                                           \
-            fpsConsoleNow - fpsConsoleWindowStart >= std::chrono::seconds(windowSeconds);                              \
-        if (fpsConsoleWindowElapsed || fpsConsoleWindowCount < (maxPerWindow))                                         \
+        static ::Spark::FPSLog::RateLimiter fpsConsoleRateLimiter;                                                     \
+        if (fpsConsoleRateLimiter.Allow((maxPerWindow), std::chrono::seconds(windowSeconds),                           \
+                                        ::Spark::FPSLog::RateLimiter::Clock::now()))                                   \
         {                                                                                                              \
             FPS_CONSOLE(message, type);                                                                                \
-            if (fpsConsoleWindowElapsed)                                                                               \
-            {                                                                                                          \
-                fpsConsoleWindowStart = fpsConsoleNow;                                                                 \
-                fpsConsoleWindowCount = 0;                                                                             \
-            }                                                                                                          \
-            else                                                                                                       \
-            {                                                                                                          \
-                ++fpsConsoleWindowCount;                                                                               \
-            }                                                                                                          \
         }                                                                                                              \
     } while (0)

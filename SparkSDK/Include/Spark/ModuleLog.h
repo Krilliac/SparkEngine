@@ -32,10 +32,12 @@
  * both async-safe); the bound context is an atomic pointer, so it can be read
  * from any thread, but Bind belongs in OnLoad/OnUnload.
  * Ownership: the bound pointer is borrowed; the host keeps the context alive
- * until after the module's OnUnload returns.
+ * until after the module's OnUnload returns. Stop module worker callbacks before
+ * unbinding: an atomic pointer does not extend the borrowed context's lifetime.
  * Allocation: one formatted std::string per call.
- * Scope: the bound context is one inline variable per module image (DLL or
- * executable), so each image binds its own.
+ * Scope: the bound context is stored behind a hidden inline accessor. ELF
+ * visibility is explicitly hidden so the dynamic linker cannot interpose one
+ * module image's slot into another image.
  */
 
 #pragma once
@@ -50,12 +52,20 @@
 #include <string_view>
 #include <utility>
 
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
+#pragma GCC visibility push(hidden)
+#endif
+
 namespace Spark::ModuleLog
 {
     namespace Detail
     {
-        /** @brief The context Bind() stored for this image; null until bound. */
-        inline std::atomic<IEngineContext*> boundContext{nullptr};
+        /** @brief Return the context slot owned by this module image. */
+        [[nodiscard]] inline std::atomic<IEngineContext*>& BoundContextSlot() noexcept
+        {
+            static std::atomic<IEngineContext*> boundContext{nullptr};
+            return boundContext;
+        }
     } // namespace Detail
 
     /** @brief Log an informational message through the host logger. */
@@ -97,13 +107,13 @@ namespace Spark::ModuleLog
     /** @brief Make @p context the one the context-free helpers use; pass nullptr to unbind. */
     inline void Bind(IEngineContext* context) noexcept
     {
-        Detail::boundContext.store(context, std::memory_order_release);
+        Detail::BoundContextSlot().store(context, std::memory_order_release);
     }
 
     /** @brief The context the last Bind() stored, or null. */
     [[nodiscard]] inline IEngineContext* BoundContext() noexcept
     {
-        return Detail::boundContext.load(std::memory_order_acquire);
+        return Detail::BoundContextSlot().load(std::memory_order_acquire);
     }
 
     /** @brief Log an informational message through the bound context's logger. */
@@ -144,3 +154,7 @@ namespace Spark::ModuleLog
         }
     }
 } // namespace Spark::ModuleLog
+
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(_WIN32)
+#pragma GCC visibility pop
+#endif

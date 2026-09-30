@@ -15,7 +15,6 @@
 #include "ClassSystem.h"
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkError.h"
-#include "Utils/Validate.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/TextureSystem.h"
@@ -80,8 +79,8 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     FPS_LOG_INFO("Game::Initialize called");
     FPS_CONSOLE("Game::Initialize called.", "INFO");
 
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, graphics);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, input);
+    FPS_REQUIRE_NOT_NULL(graphics);
+    FPS_REQUIRE_NOT_NULL(input);
 
     m_graphics = graphics;
     m_input = input;

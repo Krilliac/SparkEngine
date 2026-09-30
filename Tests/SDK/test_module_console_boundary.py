@@ -43,8 +43,11 @@ FPS_SOURCE = ROOT / "GameModules" / "SparkGameFPS" / "Source"
 FPS_PRIVATE_LOG_HEADERS = (
     "Utils/LogMacros.h",
     "Utils/ConsoleProcessManager.h",
+    "Utils/Validate.h",
 )
-FPS_PRIVATE_LOG_TOKEN = re.compile(r"\b(LOG_TO_CONSOLE\w*|SPARK_LOG_\w+)\b")
+FPS_PRIVATE_LOG_TOKEN = re.compile(
+    r"\b(LOG_TO_CONSOLE\w*|SPARK_(?:LOG|VALIDATE|REQUIRE|ENSURE|TRACE)(?:_\w+)?)\b"
+)
 
 
 def _fps_logging_violations_in_text(relative: str, text: str) -> list[str]:
@@ -126,6 +129,21 @@ class ModuleConsoleBoundaryTests(unittest.TestCase):
             _fps_logging_violations_in_text("Source/Probe.cpp", source),
         )
         self.assertEqual([], _fps_logging_violations_in_text("Source/Probe.cpp", '// SPARK_LOG_INFO\nconst char* s = "LOG_TO_CONSOLE";\n'))
+
+    def test_fps_validation_cannot_reintroduce_the_private_logger(self) -> None:
+        source = (
+            '#include "Utils/Validate.h"\n'
+            'void F() { SPARK_REQUIRE(c, false); SPARK_REQUIRE_MSG(c, false, "failed"); SPARK_TRACE_ENTER(c); }\n'
+        )
+        self.assertEqual(
+            [
+                "Source/Probe.cpp: private log header Utils/Validate.h",
+                "Source/Probe.cpp: engine log macro SPARK_REQUIRE",
+                "Source/Probe.cpp: engine log macro SPARK_REQUIRE_MSG",
+                "Source/Probe.cpp: engine log macro SPARK_TRACE_ENTER",
+            ],
+            _fps_logging_violations_in_text("Source/Probe.cpp", source),
+        )
 
     def test_private_include_mutation_fails_by_header_name(self) -> None:
         source = ROOT / "GameModules" / "SparkGameRTS" / "Source" / "Core" / "Main.cpp"
