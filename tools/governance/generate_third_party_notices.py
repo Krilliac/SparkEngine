@@ -17,6 +17,9 @@ listed under "ATTENTION REQUIRED" instead of being guessed at. Tracked font
 files outside ``ThirdParty/`` carry their own licenses: each needs an entry in
 ``<font dir>/LICENSES/fonts.json`` that names its committed upstream license
 text and agrees with the font's own name table, or it is listed there too.
+Fonts that third-party code compiles into binaries (Dear ImGui's default
+fonts) are inventoried by ``ThirdParty/Licenses/embedded-fonts.json`` and
+checked against the embedding source when it is checked out.
 
 The package notice-coverage rule set (font suffixes, third-party install
 paths, and what counts as reproduced license text) lives in
@@ -224,6 +227,9 @@ class PackageRules:
     operative_terms: re.Pattern[str]
     roots: tuple[re.Pattern[str], ...]
     payload: tuple[PayloadRule, ...]
+    embedded_markers: tuple[str, ...]
+    embedded_scan: re.Pattern[str]
+    embedded_max_bytes: int
 
 
 def _rules_member(data: dict, key: str, kind: type, label: str):
@@ -274,6 +280,18 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
                 first_party if has_first_party else None,
             )
         )
+    embedded = _rules_member(data, "embeddedFonts", dict, label)
+    markers = embedded.get("markers")
+    if (
+        not isinstance(markers, list)
+        or not markers
+        or not all(isinstance(m, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", m) for m in markers)
+        or len(set(markers)) != len(markers)
+    ):
+        raise NoticeInputError(f"{label}: embeddedFonts.markers must be distinct non-empty font names")
+    maximum_scan = embedded.get("maximumScanBytes")
+    if not isinstance(maximum_scan, int) or isinstance(maximum_scan, bool) or maximum_scan <= 0:
+        raise NoticeInputError(f"{label}: embeddedFonts.maximumScanBytes must be a positive integer")
     return PackageRules(
         font_suffixes=frozenset(s.lower() for s in suffixes),
         minimum_bytes=minimum,
@@ -284,6 +302,9 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
             for p in _rules_member(data, "thirdPartyRoots", list, label)
         ),
         payload=tuple(payload),
+        embedded_markers=tuple(markers),
+        embedded_scan=_rules_regex(embedded.get("scanPattern"), f"{label}: embeddedFonts.scanPattern"),
+        embedded_max_bytes=maximum_scan,
     )
 
 
@@ -389,6 +410,43 @@ class PackageCoverage:
     uncovered: list[str]
     font_count: int
     payload_count: int
+    embedded_count: int = 0  # (binary, embedded font) pairs found
+
+
+def _font_notice_reason(name: str, entries: list[NoticeEntry]) -> str:
+    """Why font `name` is not covered by the packaged notice, or "" when it is."""
+    reason = f"not named on any 'Files:' line of {PACKAGE_NOTICE_NAME}"
+    for entry in entries:
+        if not any(PurePosixPath(named).name == name for named in entry.files):
+            continue
+        if not entry.problem:
+            return ""
+        reason = f"named by '{entry.name}' but {entry.problem}"
+    return reason
+
+
+def embedded_font_markers_in(path: Path, markers: tuple[str, ...], max_bytes: int) -> list[str]:
+    """Return the markers (ASCII font names) that occur in the file's bytes, in rule order.
+
+    Mirrors the CMake gate's file(STRINGS ... REGEX): a marker is printable
+    ASCII, so any occurrence lies inside a printable run that CMake extracts.
+    """
+    size = path.stat().st_size
+    if size > max_bytes:
+        raise NoticeInputError(f"{path} is {size} bytes, over the {max_bytes}-byte embedded-font scan limit")
+    wanted = [m.encode("ascii") for m in markers]
+    overlap = max(len(m) for m in wanted) - 1
+    found: set[bytes] = set()
+    tail = b""
+    with path.open("rb") as stream:
+        while True:
+            chunk = stream.read(1 << 20)
+            if not chunk:
+                break
+            window = tail + chunk
+            found.update(m for m in wanted if m in window)
+            tail = window[-overlap:] if overlap else b""
+    return [m.decode("ascii") for m in wanted if m in found]
 
 
 def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCoverage:
@@ -424,22 +482,23 @@ def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCo
             files.append((base / name).relative_to(package_root).as_posix())
 
     uncovered: list[str] = []
-    font_count = payload_count = 0
+    font_count = payload_count = embedded_count = 0
     for rel in sorted(files):
         name = PurePosixPath(rel).name
         if PurePosixPath(rel).suffix.lower() in rules.font_suffixes:
             font_count += 1
-            reason = f"not named on any 'Files:' line of {PACKAGE_NOTICE_NAME}"
-            for entry in entries:
-                if not any(PurePosixPath(named).name == name for named in entry.files):
-                    continue
-                if not entry.problem:
-                    reason = ""
-                    break
-                reason = f"named by '{entry.name}' but {entry.problem}"
+            reason = _font_notice_reason(name, entries)
             if reason:
                 uncovered.append(f"{rel}: font {reason}")
             continue
+
+        path = package_root / rel
+        if rules.embedded_scan.search(rel) and path.is_file() and not path.is_symlink():
+            for marker in embedded_font_markers_in(path, rules.embedded_markers, rules.embedded_max_bytes):
+                embedded_count += 1
+                reason = _font_notice_reason(marker, entries)
+                if reason:
+                    uncovered.append(f"{rel}: embeds font {marker} {reason}")
 
         rule = next((r for r in rules.payload if r.pattern.search(rel)), None)
         if rule is None:
@@ -455,7 +514,7 @@ def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCo
             uncovered.append(f"{rel}: component '{rule.component}' has no {PACKAGE_NOTICE_NAME} inventory entry")
         elif entry.problem:
             uncovered.append(f"{rel}: component '{rule.component}' {entry.problem}")
-    return PackageCoverage(uncovered, font_count, payload_count)
+    return PackageCoverage(uncovered, font_count, payload_count, embedded_count)
 
 
 # --------------------------------------------------------------------------- repository access
@@ -605,11 +664,31 @@ class FontNotice:
     license_source: str
 
 
+@dataclass(frozen=True)
+class EmbeddedFontNotice:
+    font: str  # the name the embedding code gives the font; also its marker in binaries
+    component: str
+    source_section: str
+    family: str
+    license: str
+    copyright: str
+    license_file: str
+    license_source: str
+
+
 @dataclass
 class FontInventory:
     notices: list[FontNotice] = field(default_factory=list)
     texts: dict[str, str] = field(default_factory=dict)  # license file -> normalized text
     findings: list[str] = field(default_factory=list)
+    # Fonts third-party code compiles into shipped binaries (EMBEDDED_FONT_MANIFEST).
+    embedded: list[EmbeddedFontNotice] = field(default_factory=list)
+    embedded_texts: dict[str, str] = field(default_factory=dict)
+    embedded_findings: list[str] = field(default_factory=list)
+    # Embedding sources that were not on disk (uninitialised submodule), so the
+    # inventory could not be checked against them. Not rendered, so the output
+    # stays checkout-independent; --require-complete refuses to pass over them.
+    unverified: list[str] = field(default_factory=list)
 
 
 def font_name_table(data: bytes) -> dict[int, str]:
@@ -741,6 +820,160 @@ def font_inventory(tracked: list[str], read: Callable[[str], bytes | None]) -> F
     return inventory
 
 
+# --------------------------------------------------------------------------- fonts embedded in third-party code
+
+EMBEDDED_FONT_MANIFEST = "ThirdParty/Licenses/embedded-fonts.json"
+EMBEDDED_FONT_LICENSE_DIR = "ThirdParty/Licenses"
+EMBEDDED_FONT_FIELDS = (
+    "component",
+    "source_section",
+    "family",
+    "license",
+    "copyright",
+    "license_file",
+    "license_source",
+)
+# Dear ImGui's convention for the font data it embeds: a section heading
+# followed by a rule line, then the font's declaration comment up to the next
+# rule line. The table of contents repeats the heading without a rule after it.
+EMBEDDED_FONT_SECTION = re.compile(r"^// \[SECTION\] Default font data \((?P<name>[^)\n]+)\)[ \t]*$")
+EMBEDDED_FONT_RULE = re.compile(r"^//-{20,}[ \t]*$")
+
+
+def _parse_embedded_font_manifest(raw: bytes, label: str) -> tuple[dict[str, list[str]], dict[str, dict[str, str]]]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise NoticeInputError(f"{label}: invalid JSON: {exc}") from exc
+    if not isinstance(data, dict) or data.get("schema") != 1:
+        raise NoticeInputError(f"{label}: expected an object with schema 1")
+    sources, fonts = data.get("sources"), data.get("fonts")
+    if not isinstance(sources, dict) or not sources:
+        raise NoticeInputError(f"{label}: 'sources' must map components to source files")
+    for component, files in sources.items():
+        if not isinstance(files, list) or not files or not all(
+            isinstance(f, str) and f and ".." not in PurePosixPath(f).parts and not f.startswith("/") for f in files
+        ):
+            raise NoticeInputError(f"{label}: sources[{component!r}] must be a non-empty list of relative paths")
+    if not isinstance(fonts, dict) or not fonts:
+        raise NoticeInputError(f"{label}: 'fonts' must be a non-empty object")
+    for name, entry in fonts.items():
+        if not isinstance(name, str) or not name or PurePosixPath(name).name != name or not isinstance(entry, dict):
+            raise NoticeInputError(f"{label}: fonts[{name!r}] must be a bare font name mapped to an object")
+        if set(entry) != set(EMBEDDED_FONT_FIELDS) or not all(isinstance(v, str) and v for v in entry.values()):
+            raise NoticeInputError(
+                f"{label}: fonts[{name!r}] must have exactly the non-empty string fields "
+                + ", ".join(EMBEDDED_FONT_FIELDS)
+            )
+        if not SINGLE_SPDX_ID.match(entry["license"]):
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license must be a single SPDX identifier")
+        if PurePosixPath(entry["license_file"]).name != entry["license_file"]:
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license_file must be a file name in "
+                                   f"{EMBEDDED_FONT_LICENSE_DIR}/")
+        if entry["component"] not in sources:
+            raise NoticeInputError(f"{label}: fonts[{name!r}].component has no 'sources' entry")
+    return sources, fonts
+
+
+def embedded_font_sections(source: str) -> dict[str, list[str]]:
+    """Return each embedded-font section of a source file mapped to its declaration lines."""
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    sections: dict[str, list[str]] = {}
+    for index, line in enumerate(lines):
+        match = EMBEDDED_FONT_SECTION.match(line)
+        if not match or index + 1 >= len(lines) or not EMBEDDED_FONT_RULE.match(lines[index + 1]):
+            continue
+        declaration: list[str] = []
+        for body in lines[index + 2 :]:
+            if EMBEDDED_FONT_RULE.match(body) or not body.startswith("//"):
+                break
+            declaration.append(body[2:].strip())
+        sections[match.group("name")] = [text for text in declaration if text]
+    return sections
+
+
+def embedded_font_inventory(
+    inventory: FontInventory,
+    tracked: list[str],
+    components: dict[str, str],
+    read: Callable[[str], bytes | None],
+) -> None:
+    """Match every font that third-party code embeds to a license entry.
+
+    ``components`` maps dependencies.lock component names to their local paths.
+    Each embedding source is scanned for its embedded-font sections: every
+    section needs an entry whose declaration is reproduced verbatim in its
+    license file, whose recorded copyright and license appear in the
+    declaration, and whose name is a string literal in the source (so the name
+    the package gate searches binaries for is the one the code compiles in).
+    """
+    if EMBEDDED_FONT_MANIFEST not in set(tracked):
+        return
+    raw = read(EMBEDDED_FONT_MANIFEST)
+    if raw is None:
+        raise NoticeInputError(f"{EMBEDDED_FONT_MANIFEST} is tracked but cannot be read")
+    sources, fonts = _parse_embedded_font_manifest(raw, EMBEDDED_FONT_MANIFEST)
+    rules = load_package_rules()
+    tracked_set = set(tracked)
+    findings = inventory.embedded_findings
+
+    scanned: dict[str, dict[str, list[str]]] = {}  # component -> section -> declaration
+    literals: dict[str, str] = {}  # component -> concatenated source text
+    for component, files in sorted(sources.items()):
+        if component not in components:
+            findings.append(f"{EMBEDDED_FONT_MANIFEST}: sources name {component!r}, which is not in {MANIFEST_PATH}")
+            continue
+        for rel_source in files:
+            rel = f"{components[component]}/{rel_source}"
+            raw_source = read(rel)
+            if raw_source is None:
+                inventory.unverified.append(rel)
+                continue
+            text = raw_source.decode("utf-8", errors="replace")
+            literals[component] = literals.get(component, "") + text
+            for section, declaration in embedded_font_sections(text).items():
+                scanned.setdefault(component, {})[section] = declaration
+                if not any(e["component"] == component and e["source_section"] == section for e in fonts.values()):
+                    findings.append(f"{rel} embeds font data '{section}' with no entry in {EMBEDDED_FONT_MANIFEST}")
+
+    for name, entry in sorted(fonts.items()):
+        problems = []
+        component = entry["component"]
+        license_rel = f"{EMBEDDED_FONT_LICENSE_DIR}/{entry['license_file']}"
+        text = ""
+        raw_license = read(license_rel) if license_rel in tracked_set else None
+        if raw_license is None:
+            problems.append(f"license file {license_rel} is not tracked")
+        else:
+            text = normalize_text(raw_license, license_rel)
+            if len(text.encode("utf-8")) < rules.minimum_bytes or not rules.copyright.search(text):
+                problems.append(f"{license_rel} has no copyright statement or is too short to be a license")
+            elif not rules.operative_terms.search(text):
+                problems.append(f"{license_rel} has no operative license terms")
+            elif entry["copyright"] not in text:
+                problems.append(f"{license_rel} does not reproduce the recorded copyright {entry['copyright']!r}")
+        if component in scanned or component in literals:
+            declaration = scanned.get(component, {}).get(entry["source_section"])
+            if declaration is None:
+                problems.append(f"no '{entry['source_section']}' embedded-font section in the {component} sources")
+            else:
+                joined = "\n".join(declaration)
+                if entry["copyright"] not in joined:
+                    problems.append(f"recorded copyright {entry['copyright']!r} is not in the source declaration")
+                if not re.search(rf"\b{re.escape(entry['license'])}\b", joined, re.IGNORECASE):
+                    problems.append(f"recorded license {entry['license']} is not named by the source declaration")
+                missing = [line for line in declaration if line not in text]
+                if text and missing:
+                    problems.append(f"{license_rel} does not reproduce the source declaration line {missing[0]!r}")
+            if f'"{name}"' not in literals.get(component, ""):
+                problems.append(f'the {component} sources have no "{name}" string literal to mark shipped binaries')
+        if problems:
+            findings.extend(f"{name} (embedded in {component}): {problem}" for problem in problems)
+            continue
+        inventory.embedded.append(EmbeddedFontNotice(name, **{key: entry[key] for key in EMBEDDED_FONT_FIELDS}))
+        inventory.embedded_texts[license_rel] = text
+
+
 # --------------------------------------------------------------------------- rendering
 
 
@@ -777,6 +1010,8 @@ def render(components: list[Component], supply_chain: dict, fonts: FontInventory
     add(f"Components with attention items: {len(flagged)}")
     add(f"Tracked font files outside ThirdParty/ with license text: {len(fonts.notices)}")
     add(f"Font license attention items outside ThirdParty/: {len(fonts.findings)}")
+    add(f"Fonts embedded in third-party code with license text: {len(fonts.embedded)}")
+    add(f"Embedded font license attention items: {len(fonts.embedded_findings)}")
     add("")
     for index, component in enumerate(components, start=1):
         license_ = component.entry.license if component.entry else "UNKNOWN"
@@ -787,7 +1022,7 @@ def render(components: list[Component], supply_chain: dict, fonts: FontInventory
     add(RULE)
     add("ATTENTION REQUIRED")
     add(RULE)
-    if not flagged and not fonts.findings:
+    if not flagged and not fonts.findings and not fonts.embedded_findings:
         add("None.")
     for component in flagged:
         add(f"* {component.display_name} ({component.path})")
@@ -796,6 +1031,10 @@ def render(components: list[Component], supply_chain: dict, fonts: FontInventory
     if fonts.findings:
         add(f"* Font files outside ThirdParty/ (inventoried by <font dir>/{FONT_MANIFEST_NAME})")
         for finding in fonts.findings:
+            add(f"    - {finding}")
+    if fonts.embedded_findings:
+        add(f"* Fonts embedded in third-party code (inventoried by {EMBEDDED_FONT_MANIFEST})")
+        for finding in fonts.embedded_findings:
             add(f"    - {finding}")
     add("")
 
@@ -810,6 +1049,24 @@ def render(components: list[Component], supply_chain: dict, fonts: FontInventory
         add(f"    License file: {PurePosixPath(font.font).parent}/LICENSES/{font.license_file}")
         add(f"    Upstream license text: {font.license_source}")
     for rel, text in sorted(fonts.texts.items()):
+        add("")
+        add(SUBRULE)
+        add(f"License file: {rel} (sha256 of normalized text {_sha256(text)})")
+        add(SUBRULE)
+        out.append(text.rstrip("\n"))
+    add("")
+
+    add(RULE)
+    add("FONTS EMBEDDED IN THIRD-PARTY CODE (compiled into the binaries that link it)")
+    add(RULE)
+    if not fonts.embedded:
+        add("None.")
+    for embedded in fonts.embedded:
+        add(f"* {embedded.font}: {embedded.family} - {embedded.license} - embedded by {embedded.component}")
+        add(f"    Copyright (source declaration): {embedded.copyright}")
+        add(f"    License file: {EMBEDDED_FONT_LICENSE_DIR}/{embedded.license_file}")
+        add(f"    Source: {embedded.license_source}")
+    for rel, text in sorted(fonts.embedded_texts.items()):
         add("")
         add(SUBRULE)
         add(f"License file: {rel} (sha256 of normalized text {_sha256(text)})")
@@ -876,7 +1133,9 @@ def load(root: Path) -> tuple[list[Component], dict, FontInventory]:
         path = root / rel
         return path.read_bytes() if path.is_file() else None
 
-    return components, supply_chain, font_inventory(tracked, read)
+    fonts = font_inventory(tracked, read)
+    embedded_font_inventory(fonts, tracked, {entry.name: entry.local_path for entry in manifest}, read)
+    return components, supply_chain, fonts
 
 
 def generate(root: Path = REPO_ROOT) -> tuple[str, list[Component]]:
@@ -933,6 +1192,16 @@ def main(argv: list[str] | None = None) -> int:
         for finding in fonts.findings:
             print(f"font without license text: {finding}", file=sys.stderr)
             status = 1
+        for finding in fonts.embedded_findings:
+            print(f"embedded font without license text: {finding}", file=sys.stderr)
+            status = 1
+        for rel in fonts.unverified:
+            print(
+                f"embedded fonts unverified: {rel} is not on disk, so the fonts it embeds cannot be "
+                "checked against their notices (initialise the submodule)",
+                file=sys.stderr,
+            )
+            status = 1
     return status
 
 
@@ -954,7 +1223,7 @@ def _check_package_main(package_root: Path) -> int:
             print(f"  {line}", file=sys.stderr)
         return 1
     print(
-        f"notice coverage ok: {coverage.font_count} font file(s) and "
+        f"notice coverage ok: {coverage.font_count} font file(s), {coverage.embedded_count} embedded font(s) and "
         f"{coverage.payload_count} third-party payload file(s) in {package_root}"
     )
     return 0

@@ -1,11 +1,17 @@
 {
   "schema": 1,
-  "description": "GOV-400 package notice-coverage rule set, shared by cmake/ValidateStagedPackageNotices.cmake (staged-package gate) and tools/governance/generate_third_party_notices.py (--check-package and the repository font inventory). Every font file in a package must be named on a 'Files:' line of a THIRD_PARTY_NOTICES.txt inventory entry whose notice files are reproduced with license text. Every file matching a payload rule must map to an inventory entry with license text, or carry a documented first-party exemption; a file under a third-party root that no rule maps is uncovered. Patterns are regular expressions over the package-relative path with '/' separators, limited to the syntax CMake and Python share (literals, escaped dots, bracket classes, groups with alternation, ? * + ^ $).",
+  "description": "GOV-400 package notice-coverage rule set, shared by cmake/ValidateStagedPackageNotices.cmake (staged-package gate) and tools/governance/generate_third_party_notices.py (--check-package and the repository font inventory). Every font file in a package, and every font a shipped binary embeds (embeddedFonts), must be named on a 'Files:' line of a THIRD_PARTY_NOTICES.txt inventory entry whose notice files are reproduced with license text. Every file matching a payload rule must map to an inventory entry with license text, or carry a documented first-party exemption; a file under a third-party root that no rule maps is uncovered. Patterns are regular expressions over the package-relative path with '/' separators, limited to the syntax CMake and Python share (literals, escaped dots, bracket classes, groups with alternation, ? * + ^ $).",
   "fontSuffixes": [".ttf", ".otf", ".woff", ".woff2", ".ttc"],
   "licenseText": {
     "minimumBytes": 200,
     "copyrightPattern": "[Cc]opyright",
     "operativeTermsPattern": "Permission is (hereby )?granted|Permission to use, copy, modify|Redistribution and use|public domain|TERMS AND CONDITIONS FOR USE"
+  },
+  "embeddedFonts": {
+    "description": "Fonts that third-party code compiles into binaries (ThirdParty/Licenses/embedded-fonts.json keys, which must equal 'markers'). Each marker is the name the embedding code compiles into every binary that carries the font. A package file matching 'scanPattern' that contains a marker must have the marker named on a 'Files:' line of an inventory entry whose notice files are reproduced with license text. Files larger than 'maximumScanBytes' fail closed rather than going unscanned.",
+    "markers": ["ProggyClean.ttf", "ProggyForever.ttf"],
+    "scanPattern": "^(bin|lib)/(.*/)?([^/.]+|[^/]+\\.(exe|dll|so|dylib|a|lib)|[^/]+\\.so\\.[0-9.]+)$",
+    "maximumScanBytes": 2147483648
   },
   "thirdPartyRoots": [
     "^include/SparkEngine/ThirdParty/",

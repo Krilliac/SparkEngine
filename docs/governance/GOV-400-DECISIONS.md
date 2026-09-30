@@ -79,6 +79,26 @@ The generator does not guess any of them.
 5. **Submodule notice copies.** The six submodule notices live in
    `ThirdParty/Licenses/`. A checkout without submodules cannot compare these
    copies with upstream.
+6. **Fonts compiled into binaries.** Dear ImGui's `imgui_draw.cpp` embeds two
+   fonts as compressed data: ProggyClean.ttf (declared "MIT License /
+   Copyright (c) 2004, 2005 Tristan Grimmer") and a minimal ProggyForever
+   subset (declared "MIT license / Copyright (c) 2026 Disco Hello, Copyright
+   (c) 2019,2023 Tristan Grimmer"); its `docs/FONTS.md` lists both as MIT.
+   Every binary that links Dear ImGui carries them: a byte scan of the v0.9
+   Windows MinSizeRel package found both in `SparkEditor.exe`,
+   `SparkEngine.exe`, `SparkInstaller.exe` and `SparkLauncher.exe`, and its
+   notice file named neither. `ThirdParty/Licenses/embedded-fonts.json`
+   inventories them, and `ThirdParty/Licenses/ProggyClean-LICENSE.txt` and
+   `ProggyForever-LICENSE.txt` reproduce each declaration verbatim with the MIT
+   permission notice as Dear ImGui distributes it. The font projects' own
+   license files are not vendored, so these texts are assembled from the
+   declarations, not copied from upstream; the legal review should confirm
+   that reading. The generator scans the embedding source for
+   `Default font data (...)` sections and reports any section without an
+   entry, and `--require-complete` fails when the source is not checked out.
+   The packaged notice names each font on a `Files:` line, and the package
+   gate searches shipped binaries for the names Dear ImGui compiles in
+   (`embeddedFonts` in `cmake/PackageNoticeCoverageRules.json`).
 
 ## Decisions
 
@@ -236,6 +256,12 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
   both fail and name it, so the pass is not vacuous. This measures coverage
   only. The stub, Jolt snapshot and SPDX items above remain open owner
   choices, and the CPack archive itself was not run through the gate.
+- **Fonts compiled into binaries:** repository side done (item 6). Both
+  implementations of the package gate were run on a package made from the
+  four v0.9 shipping executables and the editor fonts: with the notice file
+  rendered before this change they reported 8 uncovered (binary, font) pairs,
+  and with the current rendering they passed with 8 embedded fonts counted.
+  The legal review of the assembled license texts remains (OD-28).
 - **SPDX fields:** rewrite the free-text `license` fields as SPDX expressions
   once the choices in the inventory table are made.
 - **Files that change:** `ThirdParty/dependencies.lock`;
@@ -249,7 +275,7 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
 ```bash
 python tools/governance/generate_third_party_notices.py            # write THIRD_PARTY_NOTICES
 python tools/governance/generate_third_party_notices.py --check    # exit 1 if stale
-python tools/governance/generate_third_party_notices.py --require-complete  # exit 1 if a locked component has no notice
+python tools/governance/generate_third_party_notices.py --require-complete  # exit 1 if a locked component or a font has no notice, or an embedding source is not checked out
 python -m pytest Tests/Tools/test_third_party_notices.py
 ```
 
