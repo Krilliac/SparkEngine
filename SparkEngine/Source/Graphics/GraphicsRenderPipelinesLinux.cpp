@@ -19,6 +19,7 @@
 #include "PostProcessingPipeline.h"
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
+#include "../Utils/LogMacros.h"
 
 #include <chrono>
 #include <cmath>

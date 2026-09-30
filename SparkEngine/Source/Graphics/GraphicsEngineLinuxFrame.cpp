@@ -22,6 +22,7 @@
 // via Shader::HotReloadShaders.
 #include "ShaderHotReload.h"
 #include "../Game/GameObject.h"
+#include "../Utils/LogMacros.h"
 #include "RHI/RHI.h"
 #include <chrono>
 
