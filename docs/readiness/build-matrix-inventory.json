@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4177,
+      "line": 4196,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4215,
+      "line": 4234,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4377,
+      "line": 4403,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4618,
+      "line": 4644,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2738,10 +2738,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5284,
+      "line": 5310,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5282",
+          "id": "Tests/CMakeLists.txt:5308",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4947,7 +4947,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5284,
+          "line": 5310,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

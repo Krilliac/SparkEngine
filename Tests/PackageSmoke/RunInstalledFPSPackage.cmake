@@ -216,7 +216,8 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "repository-isolation")
     # unreachable. Three copies of the install: the package itself, one without
     # level1.scene (NullRHI control) and one without bin/Assets (D3D11 control).
     # windows_appcontainer_run.py runs them in one fresh AppContainer, which can
-    # read only these copies and write only the runs directory; it proves the
+    # read the copies and write its own profile; selected evidence is copied to
+    # the runs directory before profile deletion. The check proves the
     # source and build canaries unreadable, the controls failing, and the D3D11
     # frame visible. The record grammar is judged here by the existing parsers,
     # against an independent parse of the package copy's own scene.

@@ -78,6 +78,11 @@ class ContainmentVerdictTests(unittest.TestCase):
         results["canary-build"] = PASS
         self.assertRejected(verdict(results), "canary-build")
 
+    def test_timed_out_repository_canary_is_inconclusive(self):
+        results = good_results()
+        results["canary-source"] = isolation.RunResult(None, "", "")
+        self.assertRejected(verdict(results), "access check is inconclusive")
+
     def test_unreadable_package_canary_fails(self):
         results = good_results()
         results["canary-package"] = DENIED
@@ -145,6 +150,14 @@ class ContainmentVerdictTests(unittest.TestCase):
         screenshots, authored = good_frames()
         authored["d3d11-negative"] = True
         self.assertRejected(verdict(screenshots=screenshots, authored=authored), "asset-less package still")
+
+    def test_d3d11_negative_control_with_visible_frame_then_crash_fails(self):
+        results = good_results()
+        results["d3d11-negative"] = isolation.RunResult(3, "", "")
+        screenshots, authored = good_frames()
+        authored["d3d11-negative"] = True
+        self.assertRejected(verdict(results=results, screenshots=screenshots, authored=authored),
+                            "asset-less package still")
 
     def test_unchecked_negative_frame_fails_closed(self):
         screenshots, authored = good_frames()
@@ -244,6 +257,41 @@ class CommandLineTests(unittest.TestCase):
                     "--output", "o", "--frame-check", "f.ps1"]):
             with self.assertRaises(RuntimeError):
                 isolation.main()
+
+
+class AppContainerAclTests(unittest.TestCase):
+    def test_only_the_package_copy_gets_an_acl_grant(self):
+        container = isolation.AppContainer()
+        container.sid_string = "S-1-15-2-123"
+        calls = []
+        with patch.object(container, "_icacls", side_effect=lambda *args: calls.append(args)), \
+                patch.object(container, "_delete_profile") as delete_profile:
+            container.grant(PACKAGE, "RX")
+            container.__exit__(None, None, None)
+        self.assertEqual(calls, [
+            (PACKAGE, "/grant", "*S-1-15-2-123:(OI)(CI)RX"),
+            (PACKAGE, "/remove:g", "*S-1-15-2-123"),
+        ])
+        delete_profile.assert_called_once_with()
+
+    def test_cleanup_attempts_every_acl_removal_after_one_fails(self):
+        container = isolation.AppContainer()
+        container.sid_string = "S-1-15-2-123"
+        calls = []
+
+        def icacls(*args):
+            calls.append(args)
+            if args[:2] == (RUN + r"\package-no-scene", "/remove:g"):
+                raise OSError("simulated ACL cleanup failure")
+
+        with patch.object(container, "_icacls", side_effect=icacls), \
+                patch.object(container, "_delete_profile") as delete_profile:
+            container.grant(PACKAGE, "RX")
+            container.grant(RUN + r"\package-no-scene", "RX")
+            with self.assertRaisesRegex(OSError, "ACL cleanup failure"):
+                container.__exit__(None, None, None)
+        self.assertIn((PACKAGE, "/remove:g", "*S-1-15-2-123"), calls)
+        delete_profile.assert_called_once_with()
 
 
 if __name__ == "__main__":

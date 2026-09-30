@@ -7,8 +7,9 @@ AppContainer token passes an access check only through an ACE naming its own
 package SID or ALL APPLICATION PACKAGES, and neither appears on the repository
 or build tree. The run therefore needs no administrator rights and never
 touches the user's repository ACLs. The only ACEs added are on the test-owned
-package copies (read/execute) and the run output directory (modify). They are
-removed, and the container profile deleted, before the script exits.
+package copies (read/execute). The child writes under its own AppContainer
+profile; selected evidence is copied to the test-owned output directory before
+the profile is deleted. The package-copy ACEs are removed on exit.
 
 One session proves, in the same container:
 
@@ -37,6 +38,7 @@ import ntpath
 import os
 from pathlib import Path
 import secrets
+import shutil
 import subprocess
 import sys
 
@@ -70,11 +72,10 @@ def is_within(path: str, root: str) -> bool:
 
 
 def layout_errors(owned_dirs: list[str], forbidden_roots: list[str]) -> list[str]:
-    """Package copies and the output directory must be disjoint from the checkout and build tree.
+    """Package copies and the evidence output must be disjoint from source and build.
 
-    A directory inside a forbidden root would be granted to the container and
-    so make part of the repository reachable; a forbidden root inside a granted
-    directory would be reachable outright.
+    A package copy inside a forbidden root would be granted to the container.
+    The evidence output must also stay outside those roots.
     """
     errors = []
     if not forbidden_roots:
@@ -153,7 +154,9 @@ def containment_verdict(results: dict[str, RunResult], forbidden_roots: list[str
         return errors
 
     for name in ("canary-source", "canary-build"):
-        if results[name].exit_code == 0:
+        if results[name].exit_code is None:
+            errors.append(f"{name}: timed out, so the repository access check is inconclusive")
+        elif results[name].exit_code == 0:
             errors.append(f"{name}: the container read a repository/build file, so the checkout is reachable")
     package_canary = results["canary-package"]
     if package_canary.exit_code != 0 or "[Scene]" not in package_canary.stdout:
@@ -194,8 +197,7 @@ def containment_verdict(results: dict[str, RunResult], forbidden_roots: list[str
     elif any(_normalized(scene) != _normalized(package_scene) for scene in scenes):
         errors.append(f"d3d11-positive: loaded {scenes}, not only the package copy's {package_scene}")
     negative_frame = screenshots.get("d3d11-negative")
-    if (results["d3d11-negative"].exit_code == 0 and negative_frame is not None
-            and frames_authored.get("d3d11-negative", True)):
+    if negative_frame is not None and frames_authored.get("d3d11-negative", True):
         errors.append("d3d11-negative: the asset-less package still rendered a visible arena frame")
     if SCENE_LOAD_SUCCESS in audits.get("d3d11-negative", ""):
         errors.append("d3d11-negative: the asset-less package still loaded a scene")
@@ -210,6 +212,7 @@ class AppContainer:
         self.sid_string = ""
         self._sid = None
         self._granted: list[str] = []
+        self.profile_path: Path | None = None
 
     def __enter__(self) -> "AppContainer":
         import ctypes
@@ -232,6 +235,25 @@ class AppContainer:
             raise ctypes.WinError(ctypes.get_last_error())
         self.sid_string = text.value or ""
         kernel32.LocalFree(text)
+        profile = ctypes.c_wchar_p()
+        userenv.GetAppContainerFolderPath.argtypes = [
+            ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_wchar_p)]
+        userenv.GetAppContainerFolderPath.restype = ctypes.c_long
+        hr = userenv.GetAppContainerFolderPath(
+            ctypes.c_wchar_p(self.sid_string), ctypes.byref(profile))
+        if hr != 0:
+            self._delete_profile()
+            raise OSError(f"GetAppContainerFolderPath failed: HRESULT 0x{hr & 0xFFFFFFFF:08X}")
+        try:
+            self.profile_path = Path(profile.value) if profile.value else None
+        finally:
+            ole32 = ctypes.WinDLL("ole32", use_last_error=True)
+            ole32.CoTaskMemFree.argtypes = [ctypes.c_void_p]
+            ole32.CoTaskMemFree.restype = None
+            ole32.CoTaskMemFree(ctypes.cast(profile, ctypes.c_void_p))
+        if self.profile_path is None or not self.profile_path.is_dir():
+            self._delete_profile()
+            raise OSError(f"AppContainer profile folder is missing: {self.profile_path}")
         return self
 
     def grant(self, path: str, rights: str) -> None:
@@ -258,15 +280,24 @@ class AppContainer:
             raise OSError(f"DeleteAppContainerProfile failed: HRESULT 0x{hr & 0xFFFFFFFF:08X}")
 
     def __exit__(self, *exc: object) -> None:
+        cleanup_errors: list[OSError] = []
         try:
             for path in reversed(self._granted):
-                self._icacls(path, "/remove:g", f"*{self.sid_string}")
+                try:
+                    self._icacls(path, "/remove:g", f"*{self.sid_string}")
+                except OSError as error:
+                    cleanup_errors.append(error)
         finally:
-            self._delete_profile()
+            try:
+                self._delete_profile()
+            except OSError as error:
+                cleanup_errors.append(error)
+        if cleanup_errors:
+            raise OSError("AppContainer cleanup failed: " + "; ".join(map(str, cleanup_errors)))
 
     def run(self, argv: list[str], cwd: str, env: dict[str, str], log_dir: Path,
             timeout: int) -> RunResult:
-        """Launch argv inside this container; stdout/stderr go to files in log_dir."""
+        """Launch argv inside this container; log_dir is beneath its writable profile."""
         import ctypes
         from ctypes import wintypes
         import msvcrt
@@ -447,6 +478,16 @@ def frame_is_authored(frame_check: Path, image: Path) -> bool:
     return result.returncode == 0
 
 
+def publish_run_artifacts(private_run: Path, output_run: Path) -> None:
+    """Retain only the run's evidence before its temporary profile is deleted."""
+    output_run.mkdir()
+    for name in ("exit_code.txt", "stdout.log", "stderr.log", AUDIT_NAME,
+                 SCREENSHOT_NAME, "visual.exec"):
+        source = private_run / name
+        if source.is_file():
+            shutil.copyfile(source, output_run / name)
+
+
 def run_session(args: argparse.Namespace) -> list[str]:
     forbidden = [str(args.source_root), str(args.build_root)]
     package, output = str(args.package), str(args.output)
@@ -471,9 +512,12 @@ def run_session(args: argparse.Namespace) -> list[str]:
     audits: dict[str, str] = {}
     with AppContainer() as container:
         print(f"AppContainer {container.name} ({container.sid_string})")
+        if container.profile_path is None:
+            raise RuntimeError("AppContainer has no writable profile directory")
+        private_root = container.profile_path / "SparkPackageIsolationRuns"
+        private_root.mkdir()
         for granted in (package, scene_less, asset_less):
             container.grant(granted, "RX")
-        container.grant(output, "M")
         canaries = {
             "canary-source": str(args.source_root / "CMakeLists.txt"),
             "canary-build": str(args.build_root / "CMakeCache.txt"),
@@ -482,14 +526,15 @@ def run_session(args: argparse.Namespace) -> list[str]:
         for name, target in canaries.items():
             if name != "canary-package" and not Path(target).is_file():
                 return [f"{name}: {target} does not exist outside the container, so the canary proves nothing"]
-            run_dir = output_dir / name
+            run_dir = private_root / name
             results[name] = container.run(
-                [cmd, "/d", "/c", "type", target], str(output_dir),
+                [cmd, "/d", "/c", "type", target], str(run_dir),
                 contained_environment(run_dir / "home", {}), run_dir, CANARY_TIMEOUT_SECONDS)
+            publish_run_artifacts(run_dir, output_dir / name)
         for phase in ("nullrhi", "d3d11"):
             for variant, package_root in (("positive", package), ("negative", negatives[phase])):
                 name = f"{phase}-{variant}"
-                run_dir = output_dir / name
+                run_dir = private_root / name
                 run_dir.mkdir(parents=True, exist_ok=True)
                 visual = None
                 if phase == "d3d11":
@@ -499,13 +544,15 @@ def run_session(args: argparse.Namespace) -> list[str]:
                     engine_argv(package_root, phase, str(visual) if visual else None), str(run_dir),
                     contained_environment(run_dir / "home", phase_environment(phase)), run_dir,
                     RUN_TIMEOUT_SECONDS)
+                published_run = output_dir / name
+                publish_run_artifacts(run_dir, published_run)
                 print(f"{name}: exit {results[name].exit_code}")
                 if phase == "d3d11":
-                    frame = run_dir / SCREENSHOT_NAME
+                    frame = published_run / SCREENSHOT_NAME
                     screenshots[name] = str(frame) if frame.is_file() else None
                     if screenshots[name] is not None:
                         authored[name] = frame_is_authored(args.frame_check, frame)
-                    audit = run_dir / AUDIT_NAME
+                    audit = published_run / AUDIT_NAME
                     audits[name] = audit.read_text(encoding="utf-8", errors="replace") if audit.is_file() else ""
     summary = {name: result.exit_code for name, result in results.items()}
     (output_dir / "appcontainer-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
