@@ -459,6 +459,20 @@ TEST(LinuxForwardPass_VulkanCubeRenders)
     const std::filesystem::path validationLog =
         std::filesystem::temp_directory_path() / "spark_rhi240_forward_vulkan_validation.log";
     std::filesystem::remove(validationLog);
+    // The Ubuntu 24.04 layer (1.3.275) reads debug_action/report_flags/log_filename only from
+    // vk_layer_settings.txt, not from the VK_KHRONOS_VALIDATION_* environment variables, so the
+    // same settings are also written to a settings file the loader-visible layer is pointed at.
+    const std::filesystem::path layerSettings =
+        std::filesystem::temp_directory_path() / "spark_rhi240_forward_vk_layer_settings.txt";
+    {
+        std::ofstream settings(layerSettings, std::ios::trunc);
+        settings << "khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG\n"
+                 << "khronos_validation.report_flags = error,info\n"
+                 << "khronos_validation.log_filename = " << validationLog.string() << "\n";
+        settings.close();
+        ASSERT_TRUE(!settings.fail());
+    }
+    ScopedEnv settingsPath("VK_LAYER_SETTINGS_PATH", layerSettings.string());
     ScopedEnv layers("VK_INSTANCE_LAYERS", "VK_LAYER_KHRONOS_validation");
     ScopedEnv action("VK_KHRONOS_VALIDATION_DEBUG_ACTION", "VK_DBG_LAYER_ACTION_LOG_MSG");
     ScopedEnv reportFlags("VK_KHRONOS_VALIDATION_REPORT_FLAGS", "error,info");
@@ -483,6 +497,8 @@ TEST(LinuxForwardPass_VulkanCubeRenders)
     std::stringstream log;
     log << logStream.rdbuf();
     const std::string report = log.str();
+    std::error_code removeError;
+    std::filesystem::remove(layerSettings, removeError);
     size_t errors = 0;
     for (size_t at = report.find("Validation Error"); at != std::string::npos;
          at = report.find("Validation Error", at + 1))
