@@ -2084,7 +2084,7 @@ set_tests_properties(SparkUtf8PathTests PROPERTIES
 # directory-sync cases SKIP on Windows.
 add_test(NAME SparkSEC2PersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC2PersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=13"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=14"
     LABELS "persistence;save;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)
