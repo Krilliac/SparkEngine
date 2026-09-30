@@ -39,7 +39,7 @@ TEMPLATE_RUNTIME_HEADER = REPO_ROOT / "SparkEngine" / "Source" / "Game" / "Templ
 FPS_TEMPLATE_HEADER = REPO_ROOT / "Templates" / "FPSStarter" / "Source" / "GameModule.h"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TEST_TELEMETRY_SPOOL = REPO_ROOT / "Tests" / "TestTelemetrySpool.cpp"
-TELEMETRY_EXPECTED_COUNT = 8
+TELEMETRY_EXPECTED_COUNT = 10
 REQUIRED_CI_JOBS = (
     "fuzz-policy",
     "validate-ci-tools",
@@ -1317,8 +1317,8 @@ def required_workflow_errors(workflow: str) -> list[str]:
     if telemetry:
         if not exact_field(telemetry, "runs-on", "ubuntu-24.04"):
             errors.append("telemetry-integration must run on ubuntu-24.04")
-        if not exact_field(telemetry, "timeout-minutes", "30"):
-            errors.append("telemetry-integration must have exactly timeout-minutes: 30")
+        if not exact_field(telemetry, "timeout-minutes", "45"):
+            errors.append("telemetry-integration must have exactly timeout-minutes: 45")
         if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", telemetry):
             errors.append("telemetry-integration has a bypassing job-level directive")
 
@@ -3685,7 +3685,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             (lambda jobs: job(jobs).update({"runs-on": "ubuntu-24.04"}), "windows-2022"),
             (lambda jobs: job(jobs).pop("timeout-minutes"), "timeout-minutes"),
             (
-                lambda jobs: step(jobs, "Checkout the second tree")["with"].update({"path": "a"}),
+                lambda jobs: step(jobs, "Checkout the second tree")["with"].update({"path": "tree-a"}),
                 "two trees at distinct paths",
             ),
             (

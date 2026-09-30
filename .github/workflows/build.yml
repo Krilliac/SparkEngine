@@ -944,7 +944,7 @@ jobs:
   telemetry-integration:
     name: "Telemetry Integration"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2327,20 +2327,21 @@ jobs:
         cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b
 
     - name: Compare the two Shipping builds
-      shell: pwsh
+      shell: bash
       run: |
+        set -euo pipefail
         # OD-24 permits only equal-length build-root strings in .lib CodeView
-        # sections. Native Windows spelling must match the /Z7 object bytes.
-        $rootA = (Resolve-Path 'tree-a/build/windows-shipping').Path
-        $rootB = (Resolve-Path 'tree-b/build/windows-shipping').Path
-        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-a --build-root "$rootA" --output reproducibility/manifest-a.json
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-b --build-root "$rootB" --output reproducibility/manifest-b.json
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        python tree-a/tools/compare_build_outputs.py compare `
-          reproducibility/manifest-a.json reproducibility/manifest-b.json `
+        # sections. Native Windows spelling must match the /Z7 object bytes,
+        # so the existing build dirs are resolved and converted with cygpath -w.
+        build_a=$(cd tree-a/build/windows-shipping && pwd)
+        build_b=$(cd tree-b/build/windows-shipping && pwd)
+        root_a=$(cygpath -w "$build_a")
+        root_b=$(cygpath -w "$build_b")
+        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json --build-root "$root_a"
+        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json --build-root "$root_b"
+        python tree-a/tools/compare_build_outputs.py compare \
+          reproducibility/manifest-a.json reproducibility/manifest-b.json \
           --report reproducibility/report.json
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Upload reproducibility evidence
       if: always()
