@@ -23,7 +23,17 @@
 #include <system_error>
 #include <vector>
 
-using namespace Terrafront;
+using Terrafront::FactionId;
+using Terrafront::PlayerId;
+using Terrafront::TFAccountRecord;
+using Terrafront::TFCharacterRecord;
+using Terrafront::TFCharacterSystem;
+using Terrafront::TFCharCreateResult;
+using Terrafront::TFCharErr;
+using Terrafront::TFDatabase;
+using Terrafront::TFDatabaseStatus;
+using Terrafront::TFPlayerMetaStore;
+namespace SavePaths = Terrafront::SavePaths;
 
 namespace
 {
@@ -53,7 +63,7 @@ namespace
     /// Occupying the "<db>.tmp" staging path with a directory makes the next commit fail before its rename.
     fs::path StagingBlocker(const fs::path& path)
     {
-        return fs::path(path.wstring() + L".tmp");
+        return {path.wstring() + L".tmp"};
     }
 
     std::string ReadFile(const fs::path& path)
