@@ -889,6 +889,20 @@ class LicenseInventoryPackageTests(unittest.TestCase):
             {"bin/SparkEngine.exe": "pe\n", "bin/Shaders/Lit.hlsl": "// shader\n"},
             [],
         ),
+        # Game modules and their ABI sidecars under each platform's install naming
+        # (Windows .dll, Linux lib*.so, macOS lib*.dylib); a non-Spark library stays unclassified.
+        "closed_game_module_libraries": (
+            {
+                "bin/SparkGameFPS.dll": "pe\n",
+                "bin/SparkGameFPS.dll.sparkabi": "abi\n",
+                "bin/libSparkGameFPS.so": "elf\n",
+                "bin/libSparkGameFPS.so.sparkabi": "abi\n",
+                "bin/libSparkGameFPS.dylib": "macho\n",
+                "bin/libSparkGameFPS.dylib.sparkabi": "abi\n",
+                "bin/libfoo.dylib": "macho\n",
+            },
+            [f"bin/libfoo.dylib: {notices.UNCLASSIFIED}"],
+        ),
         "closed_unmapped_dll": (
             {"bin/SparkEngine.exe": "pe\n", "bin/foo.dll": "pe\n"},
             [f"bin/foo.dll: {notices.UNCLASSIFIED}"],
