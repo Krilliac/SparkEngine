@@ -61,7 +61,8 @@ namespace Racing
                            uint32_t vehicleId);
 
     /// Fastest speed (km/h) from which the vehicle can still brake for every corner within its braking horizon
-    /// on the authored centerline (circumradius of centerline samples against a fixed usable lateral grip).
+    /// on the authored centerline (circumradius of centerline samples against a usable lateral grip scaled by the
+    /// grip of the corner's surface).
     float ComputeCornerSpeedLimit(const VehicleInstance& vehicle, const RacingTrackSystem& trackSystem);
 
     /// Player autopilot (`race_autopilot`): full throttle along the authored racing line (ComputeTrackSteer),

@@ -129,11 +129,17 @@ namespace Racing
      * gets static bodies in the shared PhysicsSystem, generated from the
      * authored centerline, width, and elevation:
      * - a road mesh per surface type (friction = RacingVehicleSystem::GetSurfaceGrip)
-     *   over a run-off ground slab;
+     *   over a run-off ground slab, with a grass verge at road height from each
+     *   road edge out past the barrier line (no gap to fall into on raised road).
+     *   On a track with elevation, road and verge follow one continuous height
+     *   field blended from the nearby segments, so where two segments' strips
+     *   overlap at a waypoint neither stands above the other as a ledge;
      * - barrier walls along the outside of every bend, kBarrierClearance off the
-     *   road edge, where a car that runs wide leaves the road. The inside of a
-     *   bend stays open run-off, and a barrier piece that would stand on any
-     *   part of the road (a figure-8 crossing) is left out;
+     *   road edge, where a car that runs wide leaves the road. On flat ground the
+     *   inside of a bend stays open run-off; segments raised above the run-off
+     *   slab get guard rails on both sides along their full length. A barrier or
+     *   rail piece that would stand on any part of the road (a figure-8
+     *   crossing, the inside of a bend) is left out;
      * - one sensor gate per checkpoint. Gate entries arrive through the
      *   PhysicsSystem trigger callback during the physics step and queue up
      *   until the race flow drains them with TakeCheckpointCrossings(), so lap

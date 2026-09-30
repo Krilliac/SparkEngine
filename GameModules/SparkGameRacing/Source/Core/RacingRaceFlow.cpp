@@ -72,8 +72,37 @@ namespace Racing
 
             const TrackWaypoint& from = sim.track.GetWaypoint(projection.segment);
             const TrackWaypoint& to = sim.track.GetWaypoint(projection.segment + 1);
-            const VehiclePose pose{from.x + (to.x - from.x) * projection.t, roadHeight,
-                                   from.z + (to.z - from.z) * projection.t, sim.track.GetCenterlineHeading(projection)};
+            const float heading = sim.track.GetCenterlineHeading(projection);
+            const float centerX = from.x + (to.x - from.x) * projection.t;
+            const float centerZ = from.z + (to.z - from.z) * projection.t;
+
+            // A car pinned against another one would be put back right on top of it (both project to the same
+            // centerline spot), so take the first slot across the road that no other chassis occupies.
+            constexpr float kClearMeters = 4.0f;
+            const float halfWidth = from.width + (to.width - from.width) * std::clamp(projection.t, 0.0f, 1.0f);
+            const float rightX = std::cos(heading);
+            const float rightZ = -std::sin(heading);
+            VehiclePose pose{centerX, roadHeight, centerZ, heading};
+            for (const float offset : {0.0f, 4.0f, -4.0f, 8.0f, -8.0f})
+            {
+                if (std::fabs(offset) > halfWidth - 2.0f)
+                    continue;
+                const float x = centerX + rightX * offset;
+                const float z = centerZ + rightZ * offset;
+                bool occupied = false;
+                for (const VehicleInstance& other : sim.vehicles.GetVehicles())
+                {
+                    if (other.id != vehicle.id && sim.vehicles.HasChassis(other.id) &&
+                        std::hypot(other.positionX - x, other.positionZ - z) < kClearMeters)
+                        occupied = true;
+                }
+                if (!occupied)
+                {
+                    pose.x = x;
+                    pose.z = z;
+                    break;
+                }
+            }
             sim.vehicles.SetVehiclePose(vehicle.id, pose);
         }
 
@@ -320,7 +349,9 @@ namespace Racing
             if (twiceArea < 1.0e-3f)
                 continue; // straight (or clamped at a point-to-point finish)
             const float radius = a * b * c / (2.0f * twiceArea);
-            const float cornerSpeed = std::sqrt(kUsableLateralAccel * radius);
+            // The tyres only hold what the surface under the corner gives them (dirt and gravel grip less).
+            const float grip = RacingVehicleSystem::GetSurfaceGrip(trackSystem.GetSurfaceAt(x1, z1));
+            const float cornerSpeed = std::sqrt(kUsableLateralAccel * grip * radius);
 
             // Fastest speed from which the car can still brake down to the corner speed by that station.
             limitMs = std::min(limitMs, std::sqrt(cornerSpeed * cornerSpeed + 2.0f * kPlannedBrakeDecel * station));
