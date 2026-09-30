@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "rowId": "win11-x64-msvc143-d3d11",
-  "note": "Collector plan for the declared primary D3D11 row. It runs only on a clean Windows 11 x64 host with the row's GPU, driver and audio device, at the exact commit under test, through a CI job that passes --from-github-env (the plan deliberately carries no provenance block, so a hand-run collection is refused), --compiler-command cl and --windows-sdk-version. Precondition: the tree was configured at that commit with `cmake --preset windows-shipping -DBUILD_TESTS=ON`, which registers the ctest selectors below in build/windows-shipping. Probes run in category order, so 'build' rebuilds the MinSizeRel Shipping product before 'content' and 'save' install and exercise it. Every ctest probe passes --no-tests=error so a missing test fails instead of passing vacuously. The categories in uncoveredCategories have no implementation yet; the collector does not record them, and the validator then refuses to certify the row.",
+  "note": "Collector plan for the declared primary D3D11 row. It runs only on a clean Windows 11 x64 host with the row's GPU, driver and audio device, at the exact commit under test, through a CI job that passes --from-github-env (the plan deliberately carries no provenance block, so a hand-run collection is refused), --compiler-command cl and --windows-sdk-version. Precondition: the tree was configured at that commit with `cmake --preset windows-shipping -DBUILD_TESTS=ON`, which registers the ctest selectors below in build/windows-shipping. Probes run in category order, so 'build' rebuilds the MinSizeRel Shipping product before 'content' and 'save' install and exercise it. Every ctest probe passes --no-tests=error so a missing test fails instead of passing vacuously. The categories in uncoveredCategories have no implementation yet; the collector does not record them, and the validator then refuses to certify the row. firstPartyImages and dependencyClosure below are the historical declaration from the 256603c1c Windows Shipping install (2026-09-29), retained as a regression baseline only. They are not a measurement of this tree. Rebuild and stage this tree with WindowsCertification_PackageDependencyClosure before claiming current closure: it checks app-local runtime availability and both row declarations, retaining hashed import graphs and logs per run. Refresh declared versions from the new staged CRT and host System32 files; pe_imports.py measures imports and image hashes, not file versions. The current-tree remeasurement is pending; no readiness or certification promotion follows from this declaration or a synthetic fixture pass.",
   "hostOverrides": {
     "gpu": {
       "featureLevel": "11.1"
@@ -27,6 +27,42 @@
       "timeoutSeconds": 900
     }
   },
+  "firstPartyImages": [
+    "SparkAutomation.exe",
+    "SparkBuild.exe",
+    "SparkConsole.exe",
+    "SparkCooker.exe",
+    "SparkCrashReporter.exe",
+    "SparkEditor.exe",
+    "SparkEngine.exe",
+    "SparkGameFPS.dll",
+    "SparkInstaller.exe",
+    "SparkLauncher.exe",
+    "SparkShaderCompiler.exe",
+    "SparkWorker.exe"
+  ],
+  "dependencyClosure": [
+    {"name": "msvcp140.dll", "version": "14.44.35211.0", "source": "vcredist"},
+    {"name": "vcruntime140.dll", "version": "14.44.35211.0", "source": "vcredist"},
+    {"name": "vcruntime140_1.dll", "version": "14.44.35211.0", "source": "vcredist"},
+    {"name": "advapi32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "bcrypt.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "comdlg32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "d3d11.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "d3d12.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "d3dcompiler_47.dll", "version": "10.0.26100.9457", "source": "system"},
+    {"name": "dbghelp.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "dxgi.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "gdi32.dll", "version": "10.0.26100.8328", "source": "system"},
+    {"name": "imm32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "kernel32.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "ole32.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "shell32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "user32.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "winhttp.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "winmm.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "ws2_32.dll", "version": "10.0.26100.9444", "source": "system"}
+  ],
   "uncoveredCategories": {
     "install": "The stable-v1 install path is the signed Shipping MSI (.github/scripts/qualify-windows-msi.py), which needs per-run version, source SHA and package-manifest arguments that a static plan cannot carry; INST-130/REL-100 own a row-level install probe.",
     "launch": "Every existing D3D11 launch test forces the WARP software rasterizer (SPARK_D3D11_DRIVER=warp, certification=software-only), so none launches on the row's declared hardware adapter.",
@@ -36,7 +72,6 @@
     "crash": "CrashCapturePackageSecurity drives the production capture path through the SparkTests producer, not the installed Shipping runtime; a packaged-runtime crash probe is owned by OPS-100.",
     "upgrade": "Upgrade needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
     "rollback": "Rollback needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
-    "uninstall": "Uninstall runs inside the MSI transaction of .github/scripts/qualify-windows-msi.py, which needs per-run arguments; INST-130/REL-100 own a row-level probe.",
-    "dependency_closure": "collect_evidence.py --package-root measures this category from the staged package's PE import and delay-import tables (pe_imports.py), and the dependency authority's platformRuntime now lists the operating-system DLLs the shipped MSVC v143 images import, read from a 2026-09-28 windows-release Release bin/, a 2026-09-23 windows-shipping MinSizeRel bin/ and the redist component's VC143 CRT; it leaves out oleaut32.dll (imported only in the stale 2026-09-23 tree) and opengl32.dll/vulkan-1.dll (backends windows-shipping turns off). The plan can only declare its dependencyClosure and firstPartyImages from a walk of a windows-shipping MinSizeRel package built at the commit under test: the 2026-09-23 tree is stale (its SparkInstaller.exe and SparkBuild.exe import ole32.dll/oleaut32.dll, which the current Release images no longer do, and it predates the redist component), so a closure copied from it would be a typed list rather than evidence. Any third-party DLL that package ships would also need a reviewed imageNames entry in the dependency authority before it can be declared; none exists today, because every vendored library is linked statically into the Windows binaries."
+    "uninstall": "Uninstall runs inside the MSI transaction of .github/scripts/qualify-windows-msi.py, which needs per-run arguments; INST-130/REL-100 own a row-level probe."
   }
 }

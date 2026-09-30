@@ -8,6 +8,9 @@
 #                         executable and module (cmake/RunSparkHeadlessFPSSaveReload.cmake)
 #   arena-loop            MOD-310 D3D11/WARP single-player loop played by the
 #                         fps_autoplay developer command (RunInstalledFPSArenaLoop.cmake)
+#   repository-isolation  RDY-020 NullRHI and D3D11/WARP runs of package copies inside a
+#                         fresh AppContainer that cannot read the checkout or build tree
+#                         (windows_appcontainer_run.py), with scene-less/asset-less controls
 
 foreach(_required IN ITEMS SPARK_ENGINE_BUILD_DIR SPARK_SOURCE_ROOT SPARK_CONFIG SPARK_TEST_ROOT)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
@@ -17,7 +20,7 @@ endforeach()
 if(NOT DEFINED SPARK_FPS_PACKAGE_MODE OR SPARK_FPS_PACKAGE_MODE STREQUAL "")
     set(SPARK_FPS_PACKAGE_MODE full)
 endif()
-if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|arena-loop)$")
+if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|arena-loop|repository-isolation)$")
     message(FATAL_ERROR "Unknown SPARK_FPS_PACKAGE_MODE '${SPARK_FPS_PACKAGE_MODE}'")
 endif()
 # fps_autoplay is a developer command, and a Shipping (MinSizeRel) build never
@@ -205,6 +208,100 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
     message(STATUS
         "Installed SparkGameFPS runtime package passed NullRHI save/reload at "
         "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
+    return()
+endif()
+
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "repository-isolation")
+    # RDY-020: the installed package resolves its assets with the repository
+    # unreachable. Three copies of the install: the package itself, one without
+    # level1.scene (NullRHI control) and one without bin/Assets (D3D11 control).
+    # windows_appcontainer_run.py runs them in one fresh AppContainer, which can
+    # read the copies and write its own profile; selected evidence is copied to
+    # the runs directory before profile deletion. The check proves the
+    # source and build canaries unreadable, the controls failing, and the D3D11
+    # frame visible. The record grammar is judged here by the existing parsers,
+    # against an independent parse of the package copy's own scene.
+    set(_isolation_root "${_run_root}/isolation")
+    set(_isolated_package "${_isolation_root}/package")
+    set(_scene_less_package "${_isolation_root}/package-no-scene")
+    set(_asset_less_package "${_isolation_root}/package-no-assets")
+    set(_isolation_runs "${_isolation_root}/runs")
+    foreach(_copy IN ITEMS "${_isolated_package}" "${_scene_less_package}" "${_asset_less_package}")
+        file(MAKE_DIRECTORY "${_copy}")
+        file(COPY "${_install_root}/" DESTINATION "${_copy}")
+    endforeach()
+    file(REMOVE "${_scene_less_package}/bin/Assets/Scenes/level1.scene")
+    file(REMOVE_RECURSE "${_asset_less_package}/bin/Assets")
+    if(NOT EXISTS "${_isolated_package}/bin/Assets/Scenes/level1.scene"
+       OR EXISTS "${_scene_less_package}/bin/Assets/Scenes/level1.scene"
+       OR EXISTS "${_asset_less_package}/bin/Assets")
+        message(FATAL_ERROR "Could not stage the repository-isolation package copies under ${_isolation_root}")
+    endif()
+    file(MAKE_DIRECTORY "${_isolation_runs}")
+
+    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" -B "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/windows_appcontainer_run.py"
+            --source-root "${SPARK_SOURCE_ROOT}"
+            --build-root "${SPARK_ENGINE_BUILD_DIR}"
+            --package "${_isolated_package}"
+            --scene-less-package "${_scene_less_package}"
+            --asset-less-package "${_asset_less_package}"
+            --output "${_isolation_runs}"
+            --frame-check "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
+        RESULT_VARIABLE _isolation_result
+        OUTPUT_VARIABLE _isolation_output
+        ERROR_VARIABLE _isolation_error
+        TIMEOUT 480)
+    if(NOT "${_isolation_result}" STREQUAL "0")
+        message(FATAL_ERROR
+            "Installed FPS package repository isolation failed (${_isolation_result}):\n"
+            "${_isolation_output}\n${_isolation_error}\nRun logs: ${_isolation_runs}")
+    endif()
+
+    function(_spark_read_isolated_run name out_result out_stdout out_stderr)
+        set(_dir "${_isolation_runs}/${name}")
+        foreach(_log IN ITEMS exit_code.txt stdout.log stderr.log)
+            if(NOT EXISTS "${_dir}/${_log}")
+                message(FATAL_ERROR "Repository-isolation run ${name} left no ${_log}")
+            endif()
+        endforeach()
+        file(READ "${_dir}/exit_code.txt" _result)
+        file(READ "${_dir}/stdout.log" _stdout)
+        file(READ "${_dir}/stderr.log" _stderr)
+        set(${out_result} "${_result}" PARENT_SCOPE)
+        set(${out_stdout} "${_stdout}" PARENT_SCOPE)
+        set(${out_stderr} "${_stderr}" PARENT_SCOPE)
+    endfunction()
+
+    set(SPARK_FPS_HEADLESS_ARENA_PARSER_INCLUDE_ONLY ON)
+    include("${SPARK_SOURCE_ROOT}/cmake/RunSparkFPSHeadlessArena.cmake")
+    unset(SPARK_FPS_HEADLESS_ARENA_PARSER_INCLUDE_ONLY)
+    set(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY ON)
+    include("${SPARK_SOURCE_ROOT}/cmake/RunSparkModuleProfileLifecycle.cmake")
+    unset(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY)
+
+    _spark_count_authored_arena("${_isolated_package}/bin/Assets/Scenes/level1.scene"
+        _authored_objects _authored_spawns)
+    _spark_read_isolated_run(nullrhi-positive _null_result _null_stdout _null_stderr)
+    _spark_validate_fps_headless_arena("${_null_result}" "${_null_stdout}" "${_null_stderr}"
+        "${_authored_objects}" "${_authored_spawns}" _null_ok _null_reason)
+    if(NOT _null_ok)
+        message(FATAL_ERROR "Contained NullRHI package run failed the headless arena contract: ${_null_reason}")
+    endif()
+    _spark_read_isolated_run(d3d11-positive _d3d11_result _d3d11_stdout _d3d11_stderr)
+    _spark_validate_lifecycle_result("${_d3d11_result}" "${_d3d11_stdout}" "${_d3d11_stderr}"
+        _d3d11_ok _d3d11_reason)
+    if(NOT _d3d11_ok)
+        message(FATAL_ERROR "Contained D3D11/WARP package run failed the rendered lifecycle contract: ${_d3d11_reason}")
+    endif()
+
+    string(STRIP "${_isolation_output}" _isolation_output)
+    message(STATUS "${_isolation_output}")
+    message(STATUS
+        "Installed SparkGameFPS package resolved ${_authored_objects} authored nodes and ${_authored_spawns} spawns "
+        "from its own assets with the repository unreachable at ${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); "
+        "evidence retained under ${_isolation_root}")
     return()
 endif()
 

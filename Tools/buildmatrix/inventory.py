@@ -1030,15 +1030,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1771,
+            "line": 1770,
             "conditionFrames": [
-                {"id": "CMakeLists.txt:1674", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {"id": "CMakeLists.txt:1673", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1769",
+                    "id": "CMakeLists.txt:1768",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1770", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1769", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
@@ -1051,10 +1051,10 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "angelscript",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1052,
+            "line": 1051,
             "conditionFrames": [
                 {
-                    "id": "CMakeLists.txt:994",
+                    "id": "CMakeLists.txt:993",
                     "branch": 0,
                     "branches": ["ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"],
                 }

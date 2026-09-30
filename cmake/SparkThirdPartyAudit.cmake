@@ -221,7 +221,7 @@ endfunction()
 # an entry of SPARK_THIRDPARTY_AUDIT_ENTRIES (the caller's included
 # dependencies.lock), whose version the block records. The "Files:" line
 # names the font as the staged-package gate finds it inside shipped binaries
-# (cmake/PackageNoticeCoverageRules.json embeddedFontMarkers).
+# (cmake/PackageNoticeCoverageRules.json embeddedFonts.markers).
 # tools/governance/generate_third_party_notices.py checks the same inventory
 # against the embedding sources.
 function(_spark_thirdparty_append_embedded_fonts root output_file notice_files_var)
@@ -351,7 +351,44 @@ function(spark_thirdparty_export_entries manifest_file output_file)
     file(WRITE "${output_file}" "${_export_body}")
 endfunction()
 
+# Append the inventory entry for a toolchain runtime that the package ships
+# app-local (the Microsoft Visual C++ runtime that InstallRequiredSystemLibraries
+# installs into bin/). Its redistribution terms are not a file in this
+# repository, so the entry names them on a "Terms:" line instead of reproducing
+# license text, and its "Files:" line names every shipped DLL. The staged-package
+# gate's systemRuntime rule (cmake/PackageNoticeCoverageRules.json) requires both.
+# This identifies the governing terms; whether shipping satisfies them is a
+# legal-review item (docs/governance/GOV-400-DECISIONS.md, D8).
+function(_spark_thirdparty_append_system_runtime output_file runtime_libs toolset_version)
+    set(_files "")
+    foreach(_lib IN LISTS runtime_libs)
+        get_filename_component(_name "${_lib}" NAME)
+        string(TOLOWER "${_name}" _name)
+        list(APPEND _files "${_name}")
+    endforeach()
+    list(REMOVE_DUPLICATES _files)
+    list(SORT _files)
+    list(JOIN _files "," _files_csv)
+    file(APPEND "${output_file}"
+        "Microsoft Visual C++ Runtime\n"
+        "  Source: Microsoft Visual C++ Redistributable, installed app-local by CMake InstallRequiredSystemLibraries\n"
+        "  Version: MSVC ${toolset_version}\n"
+        "  License: Microsoft Software License Terms for the Visual Studio toolset (Distributable Code)\n"
+        "  Terms: Redistributed unmodified as Distributable Code under the Microsoft Software License Terms of the "
+        "Visual Studio installation that built this package (MSVC ${toolset_version}); the terms are not reproduced here\n"
+        "  Files: ${_files_csv}\n\n")
+endfunction()
+
+# spark_thirdparty_generate_notice(<manifest> <output>
+#     [SYSTEM_RUNTIME_LIBS <dll>...] [SYSTEM_RUNTIME_VERSION <toolset version>])
 function(spark_thirdparty_generate_notice manifest_file output_file)
+    cmake_parse_arguments(PARSE_ARGV 2 _notice "" "SYSTEM_RUNTIME_VERSION" "SYSTEM_RUNTIME_LIBS")
+    if(_notice_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "spark_thirdparty_generate_notice: unknown arguments ${_notice_UNPARSED_ARGUMENTS}")
+    endif()
+    if(_notice_SYSTEM_RUNTIME_LIBS AND "${_notice_SYSTEM_RUNTIME_VERSION}" STREQUAL "")
+        message(FATAL_ERROR "spark_thirdparty_generate_notice: SYSTEM_RUNTIME_LIBS needs SYSTEM_RUNTIME_VERSION")
+    endif()
     spark_thirdparty_validate_manifest_schema("${manifest_file}")
     include("${manifest_file}")
 
@@ -395,6 +432,10 @@ function(spark_thirdparty_generate_notice manifest_file output_file)
     get_filename_component(_manifest_root "${_manifest_directory}/.." REALPATH)
     _spark_thirdparty_append_editor_fonts("${_manifest_root}" "${output_file}" _all_notice_files)
     _spark_thirdparty_append_embedded_fonts("${_manifest_root}" "${output_file}" _all_notice_files)
+    if(_notice_SYSTEM_RUNTIME_LIBS)
+        _spark_thirdparty_append_system_runtime("${output_file}" "${_notice_SYSTEM_RUNTIME_LIBS}"
+            "${_notice_SYSTEM_RUNTIME_VERSION}")
+    endif()
     file(APPEND "${output_file}"
         "Complete license and notice texts\n"
         "=================================\n\n")

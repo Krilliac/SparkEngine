@@ -3,7 +3,8 @@
  * @brief Bounded retention for the per-process spark_crash_<pid>_<random> directories.
  *
  * Every InstallCrashHandler() creates one private artifact directory under the
- * user's temp directory, and a crash leaves its dump, log, manifest and
+ * selected artifact base (the user's temp directory outside a Windows sandbox),
+ * and a crash leaves its dump, log, manifest and
  * screenshot there. Nothing else ever removes them, so without this policy
  * empty directories pile up on every launch and crash dumps (which can hold
  * process memory) outlive their use.
@@ -15,7 +16,7 @@
  *   are real directories (no symlink or reparse point), are owned by the
  *   current user, and whose recorded process is no longer running.
  * - Allocation: ordinary heap use; startup only, never a hot path.
- * - Scalability: examines at most kMaxRetentionEntriesExamined temp entries.
+ * - Scalability: examines at most kMaxRetentionEntriesExamined base-directory entries.
  */
 #pragma once
 
@@ -58,7 +59,7 @@ namespace Spark::CrashHandlerDetail
         std::uintmax_t maxTotalBytes = std::uintmax_t{2} << 30; ///< Byte budget across kept directories
     };
 
-    /// Upper bound on temp-directory entries one prune pass examines.
+    /// Upper bound on base-directory entries one prune pass examines.
     inline constexpr std::size_t kMaxRetentionEntriesExamined = 16384;
 
     /// Parse "spark_crash_<pid>_<32 lowercase hex>" (the exact generated name).
@@ -258,7 +259,7 @@ namespace Spark::CrashHandlerDetail
      * first up to @p retention.maxDirectories and @p retention.maxTotalBytes,
      * and any older than @p retention.maxAge are removed.
      *
-     * @param baseDirectory The temp directory that holds spark_crash_* roots.
+     * @param baseDirectory The selected parent directory that holds spark_crash_* roots.
      * @param retention The limits to apply.
      * @return The number of directories removed.
      */

@@ -2186,6 +2186,25 @@ set_tests_properties(CrashArtifactRetention PROPERTIES
     LABELS "crash-security;security;unit"
     TIMEOUT 30)
 
+# The private crash-artifact root must be creatable, pinnable and writable from a
+# real AppContainer and from a low-integrity process, keeping its protected
+# owner-only DACL. The probe is header-only and links the static CRT so the copy
+# it relaunches inside the AppContainer needs nothing but system DLLs.
+if(MSVC AND NOT CMAKE_CROSSCOMPILING)
+    add_executable(SparkCrashArtifactSandboxProbe Fixtures/CrashArtifactSandboxProbe.cpp)
+    target_compile_features(SparkCrashArtifactSandboxProbe PRIVATE cxx_std_23)
+    target_include_directories(SparkCrashArtifactSandboxProbe PRIVATE "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
+    target_link_libraries(SparkCrashArtifactSandboxProbe PRIVATE advapi32 bcrypt ole32 userenv)
+    set_property(TARGET SparkCrashArtifactSandboxProbe PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    add_dependencies(SparkTests SparkCrashArtifactSandboxProbe)
+    add_test(NAME CrashArtifactSandbox COMMAND $<TARGET_FILE:SparkCrashArtifactSandboxProbe>)
+    set_tests_properties(CrashArtifactSandbox PROPERTIES
+        LABELS "crash-security;security;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+endif()
+
 # SEC4: the shared directory-link helper creates a real NTFS junction on Windows
 # (no privilege needed) and a symlink elsewhere, so the link-refusal tests that use
 # it run on every host instead of skipping where create_symlink needs Developer Mode.
@@ -3849,6 +3868,33 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
         RUN_SERIAL TRUE
         TIMEOUT 300)
 
+    # Exercise the actual PowerShell gate, including its fallback rejection,
+    # without requiring GPU rendering for the parser/pixel fixture cases.
+    add_test(
+        NAME FPSVisibleFrame_CheckerContract
+        COMMAND "$ENV{SystemRoot}/System32/WindowsPowerShell/v1.0/powershell.exe"
+            -NoProfile -NonInteractive -File
+            "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/TestFPSVisibleFrame.ps1"
+            -WorkRoot "${CMAKE_CURRENT_BINARY_DIR}/fps-visible-checker/$<CONFIG>")
+    set_tests_properties(FPSVisibleFrame_CheckerContract PROPERTIES
+        LABELS "module;fps;scene;contract"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+
+    # Both paths render a plausible arena. Remove only the copied authored
+    # scene, require identity-based rejection, restore it, then require GREEN.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(
+        NAME FPSVisibleFrame_AuthoredAndFallback
+        COMMAND ${Python3_EXECUTABLE} -B
+            "${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunFPSVisibleFrameProbe.py"
+            --package-bin "$<TARGET_FILE_DIR:SparkEngine>"
+            --work-root "${CMAKE_CURRENT_BINARY_DIR}/fps-visible/$<CONFIG>")
+    set_tests_properties(FPSVisibleFrame_AuthoredAndFallback PROPERTIES
+        LABELS "module;fps;d3d11;scene;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+
     # Copy the built FPS runtime to a fresh package-like directory, edit only
     # its copied scene, and inspect post-update game/wave state plus rendered
     # frames. Fresh-process and same-process material edits also catch stale
@@ -3905,12 +3951,13 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
         # ENG-220: a Vulkan-enabled Windows build hard-imports vulkan-1.dll,
         # which only a Vulkan GPU driver provides, so its package fails the PE
-        # import-closure step of the two package tests below. That is an open
+        # import-closure step of the package tests below. That is an open
         # product gap, not a test fault: configure the FPS package tree with
         # ENABLE_VULKAN=OFF, as windows-shipping does.
         if(WIN32 AND SPARK_VULKAN_AVAILABLE)
             message(WARNING
-                "FPSPackage_InstalledRuntime and FPSHeadlessPackage_NullRHISaveReload will fail their import-closure "
+                "FPSPackage_InstalledRuntime, FPSHeadlessPackage_NullRHISaveReload, and "
+                "FPSPackage_RepositoryUnreachable will fail their import-closure "
                 "check: this tree links Vulkan, so SparkEngine.exe/SparkServer.exe hard-import vulkan-1.dll. "
                 "Configure the FPS package tree with -DENABLE_VULKAN=OFF (wiki/gameplay-tools/Game-Packaging.md).")
         endif()
@@ -3928,6 +3975,29 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
+        # PLT-200: the Windows row plans declare the import closure of the
+        # windows-shipping MSI component set, so the walk is offered only in a
+        # MinSizeRel tree that builds exactly that product set; any other set
+        # of backends or tools ships a different graph by design.
+        if(Python3_FOUND AND NOT ENABLE_VULKAN AND NOT ENABLE_OPENGL AND NOT ENABLE_NETWORKING
+           AND NOT ENABLE_SERVER_PROCESSES AND ENABLE_EDITOR AND ENABLE_LAUNCHER AND ENABLE_SPARKBUILD
+           AND ENABLE_INSTALLER AND ENABLE_ASSET_PIPELINE_TOOLS AND ENABLE_AUTOMATION_HOST)
+            add_test(
+                NAME WindowsCertification_PackageDependencyClosure
+                CONFIGURATIONS MinSizeRel
+                COMMAND ${CMAKE_COMMAND}
+                    "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                    "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                    "-DSPARK_CONFIG=$<CONFIG>"
+                    "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-closure/$<CONFIG>"
+                    "-DSPARK_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
+                    -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake)
+            set_tests_properties(WindowsCertification_PackageDependencyClosure PROPERTIES
+                LABELS "certification;package"
+                RUN_SERIAL TRUE
+                TIMEOUT 900)
+        endif()
+
         # HEAD-220: the same staged package's NullRHI writer/reader save/reload
         # (the headless counterpart of the WARP phase above). Local evidence
         # still runs on a host with a GPU and display; the clean no-GPU host is
@@ -3943,6 +4013,24 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
                 -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
         set_tests_properties(FPSHeadlessPackage_NullRHISaveReload PROPERTIES
             LABELS "nullrhi-headless;stable-v1;fps;package;save;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+
+        # RDY-020: copies of the same staged package run NullRHI and D3D11/WARP
+        # inside a fresh AppContainer that cannot read this checkout or build
+        # tree (canaries prove it), and scene-less/asset-less copies must fail.
+        # D3D11 needs an interactive desktop, so this runs on a local box.
+        add_test(
+            NAME FPSPackage_RepositoryUnreachable
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/u/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=repository-isolation
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSPackage_RepositoryUnreachable PROPERTIES
+            LABELS "stable-v1;fps;package;asset;nullrhi-headless;d3d11;integration"
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
@@ -4406,6 +4494,13 @@ set_tests_properties(PackageAssets_RepositoryIsolationContract PROPERTIES
     LABELS "stable-v1;asset;package;unit;python"
     TIMEOUT 60)
 
+add_test(NAME PackageAssets_WindowsRepositoryIsolationContract
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/windows_appcontainer_run_tests.py)
+set_tests_properties(PackageAssets_WindowsRepositoryIsolationContract PROPERTIES
+    LABELS "stable-v1;asset;package;unit;python"
+    TIMEOUT 60)
+
 option(SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS "Register installed CPack tree repeatability qualification" OFF)
 if(TARGET SparkEngine AND SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS)
     add_test(NAME PackageInstall_Repeatability
@@ -4522,6 +4617,23 @@ add_test(
 set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
     LABELS "governance;unit;python"
     TIMEOUT 300)
+# GOV-400: both notice-gate implementations, in closed-world classification,
+# against this build's real install tree (the CPACK_COMPONENTS_ALL components,
+# read from the generated CPackConfig.cmake). Probe files prove the pass is not
+# vacuous.
+add_test(
+    NAME LicenseInventory_InstallTreeNoticeCoverage
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -DSPARK_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DSPARK_CONFIG=$<CONFIG>
+        -DSPARK_PYTHON=${Python3_EXECUTABLE}
+        -DSPARK_INSTALL_ROOT=${CMAKE_BINARY_DIR}/notice-install-tree
+        -P ${CMAKE_SOURCE_DIR}/cmake/TestInstallTreeNoticeCoverage.cmake)
+set_tests_properties(LicenseInventory_InstallTreeNoticeCoverage PROPERTIES
+    LABELS "package;governance;integration"
+    RUN_SERIAL TRUE
+    TIMEOUT 1200)
 # GOV-400: every governed public claim surface stays inside the declared
 # non-OSI license classification. Runs on all hosts (no git/POSIX needed).
 add_test(
@@ -4776,27 +4888,40 @@ set_tests_properties(SupplyChain_WineSetupScriptIntegrity PROPERTIES
 
 # BLD-100 / OD-04: the stable-v1 x86-64 CPU floor is SSE4.2 + POPCNT.
 # CpuFloor_IsaBaselineChecker proves tools/check_isa_baseline.py rejects
-# AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE and the legacy-encoded AES-NI,
-# PCLMULQDQ, SHA, GFNI, RDRAND, RDSEED and ADX instructions in real ELF and PE
-# fixtures and passes floor-only builds. CpuFloor_IsaBaseline disassembles this
-# tree's linked engine, editor, server and game-module images and fails on any
+# AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE, the legacy-encoded AES-NI,
+# PCLMULQDQ, SHA, GFNI, RDRAND, RDSEED and ADX instructions and the XSAVE, TSX,
+# FSGSBASE, SSE4a, 3DNow! and newer scalar families in real ELF and PE fixtures
+# and passes floor-only builds. CpuFloor_IsaBaseline disassembles this tree's
+# linked engine, editor, server and game-module images and fails on any
 # above-floor instruction that reached them (SparkCpuFloor.cmake only sees flags).
-# The image scan is ELF-only for now. tools/check_isa_baseline.py can scan an
-# MSVC PE against its matching PDB, exempting only the reviewed CPUID-dispatched
-# MSVC runtime procedure ranges (Tests/Tools/test_pe_isa_ranges.py), but real
-# MSVC Release images still carry unreviewed above-floor code (libsodium's
-# AVX2/AES-NI variants, which the MSVC branch of SparkLibsodium.cmake compiles,
-# the UCRT's _Avx2WmemEnabled wmemchr/wmemcmp, <bit>'s LZCNT dispatch and the
-# symbol-less vector_algorithms ranges; docs/readiness/BLD-100-PROGRESS.md).
-# Registering it for Windows before those are resolved would fail every run.
+# The image scan is ELF-only for now. tools/check_isa_baseline.py scans an MSVC
+# PE against its matching PDB and exempts only reviewed mechanisms: the MSVC
+# 14.44.35207 vector_algorithms.obj section contributions and exact runtime
+# procedures (Tests/Tools/test_pe_isa_ranges.py) and inline CRT/STL code behind
+# the _Avx2WmemEnabled/__isa_available guards (test_isa_guard_dominance.py).
+# Real MSVC Release images still carry libsodium's AVX2/AES-NI variants and
+# sodium_init's XGETBV, which the MSVC branch of SparkLibsodium.cmake compiles,
+# and AVX-512 loops MSVC's auto-vectorizer adds behind __isa_available >= 6
+# (docs/readiness/BLD-100-PROGRESS.md), so registering the Windows scan now
+# would fail every run.
 add_test(
     NAME CpuFloor_IsaBaselineChecker
     COMMAND ${Python3_EXECUTABLE} -B -m unittest
-        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges -v
+        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance -v
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
     TIMEOUT 300)
+
+# BLD-100 / OD-04: libsodium's CPUID dispatch reports no AVX/AVX2/AVX-512/AES-NI/
+# PCLMUL/RDRAND variant on any toolchain, because cmake/SparkLibsodium.cmake
+# compiles none of them (on MSVC it overrides private/common.h's unconditional
+# HAVE_*INTRIN_H). Fails on any AVX2/AES-NI host if an above-floor variant returns.
+add_test(NAME CpuFloor_LibsodiumVariants COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CpuFloor_LibsodiumVariants PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CpuFloor_Libsodium_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "build;shipping;unit"
+    TIMEOUT 30)
 
 # ENG-220: tools/pe_import_closure.py fails a staged Windows package whose
 # EXE/DLL imports or delay-imports a DLL that is neither beside it, an API set,
@@ -5144,11 +5269,12 @@ set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
 # MOD-295: IEngineContext::GetLogger() and the Spark::ModuleLog helpers reach the
 # engine Logger, IEngineContext::GetConsole() registers into the host SimpleConsole,
 # and SparkGameRTS's engine-system wiring logs through them. The RTS case needs the
-# module sources, which SparkTests compiles only with ImGui.
+# module sources, which SparkTests compiles only with ImGui. MOD-310: IConsole::Print
+# and a bound ModuleLog reach the host console history, and unbound helpers are no-ops.
 if(TARGET imgui)
-    set(_spark_prototype_kit_count 4)
+    set(_spark_prototype_kit_count 6)
 else()
-    set(_spark_prototype_kit_count 3)
+    set(_spark_prototype_kit_count 5)
 endif()
 add_test(NAME PrototypeModuleKit_Helpers COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(PrototypeModuleKit_Helpers PROPERTIES

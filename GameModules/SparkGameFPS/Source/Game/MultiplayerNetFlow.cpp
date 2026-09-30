@@ -4,8 +4,7 @@
  */
 
 #include "MultiplayerSystem.h"
-#include "Utils/LogMacros.h"
-#include "Utils/SparkConsole.h"
+#include "Core/FPSLog.h"
 
 #include <algorithm>
 #include <cmath>
@@ -46,8 +45,8 @@ namespace SparkFPS
 
         if (m_playerStates.size() > kMaxPlayers)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "FPSMultiplayerSystem: %zu players exceed the %u-player batch",
-                            m_playerStates.size(), kMaxPlayers);
+            FPS_LOG_ERROR("FPSMultiplayerSystem: {} players exceed the {}-player batch", m_playerStates.size(),
+                          kMaxPlayers);
             return;
         }
 
@@ -140,7 +139,7 @@ namespace SparkFPS
         }
 
         // A client hears Disconnect only from its server endpoint: the session is over.
-        Spark::SimpleConsole::GetInstance().Log("[FPSMultiplayer] Server closed the session");
+        FPS_CONSOLE("[FPSMultiplayer] Server closed the session", "INFO");
         Disconnect();
     }
 

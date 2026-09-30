@@ -6,8 +6,8 @@
  */
 
 #include "HUDSystem.h"
-#include "Utils/AngleUtils.h"
-#include "Utils/Validate.h"
+#include "Core/FPSLog.h"
+#include <Spark/AngleUtils.h>
 #include "Player.h"
 #include <cmath>
 #include <algorithm>
@@ -20,8 +20,7 @@ namespace Spark
 
     bool HUDSystem::Initialize()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing HUDSystem");
+        FPS_LOG_INFO("Initializing HUDSystem");
         m_damageIndicators.reserve(MAX_DAMAGE_INDICATORS);
         m_objectives.reserve(16);
         m_minimapBlips.reserve(64);

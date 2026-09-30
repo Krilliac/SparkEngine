@@ -189,6 +189,95 @@ class CpuFloorAssertionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+# Two C sources in the probe directory; per-source properties are set on b.c.
+SOURCES = """
+    file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/a.c" "int a(void) { return 1; }\\n")
+    file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/b.c" "int b(void) { return 2; }\\n")
+    file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/c.c" "int c(void) { return 3; }\\n")
+    """
+
+
+@unittest.skipUnless(CMAKE, "cmake is required")
+@unittest.skipUnless(X86_HOST, "the CPU floor applies to x86-64 hosts")
+class CpuFloorPerSourceTests(unittest.TestCase):
+    """spark_assert_cpu_floor() also reads per-source-file properties of every target source."""
+
+    def configure(self, body: str, *extra: str) -> subprocess.CompletedProcess[str]:
+        # A real C project: the passing cases must also generate.
+        return configure_probe(SOURCES + textwrap.dedent(body), *extra, languages="C")
+
+    def assert_rejected(self, result: subprocess.CompletedProcess[str], fragment: str) -> None:
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        flat = " ".join(result.stderr.split())
+        self.assertIn(FLOOR_ERROR, flat)
+        self.assertIn(fragment, flat)
+        self.assertNotIn("a.c", flat.split(FLOOR_ERROR, 1)[1].split("Remove the flag", 1)[0])
+
+    def test_source_compile_options_above_floor_fail(self) -> None:
+        result = self.configure(
+            """
+            add_library(probe STATIC a.c b.c)
+            set_source_files_properties(b.c PROPERTIES COMPILE_OPTIONS "-O2;-mavx2")
+            """
+        )
+        self.assert_rejected(result, "b.c COMPILE_OPTIONS: -mavx2")
+
+    def test_source_compile_flags_above_floor_fail(self) -> None:
+        result = self.configure(
+            """
+            add_library(probe STATIC a.c b.c)
+            set_source_files_properties(b.c PROPERTIES COMPILE_FLAGS "/O2 /arch:AVX2")
+            """
+        )
+        self.assert_rejected(result, "b.c COMPILE_FLAGS: /arch:AVX2")
+
+    def test_source_jolt_selector_definition_fails(self) -> None:
+        result = self.configure(
+            """
+            add_library(probe STATIC a.c b.c)
+            set_source_files_properties(b.c PROPERTIES COMPILE_DEFINITIONS "JPH_USE_SSE4_2;JPH_USE_AVX2")
+            """
+        )
+        self.assert_rejected(result, "b.c COMPILE_DEFINITIONS: JPH_USE_AVX2")
+
+    def test_property_set_from_another_directory_is_caught(self) -> None:
+        # The target lives in sub/; the root sets the property in the target's
+        # directory scope, which is where the compiler reads it.
+        result = self.configure(
+            """
+            file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/sub/b.c" "int b(void) { return 2; }\\n")
+            file(WRITE "${CMAKE_CURRENT_SOURCE_DIR}/sub/CMakeLists.txt" "add_library(probe STATIC b.c)\\n")
+            add_subdirectory(sub)
+            set_source_files_properties(sub/b.c TARGET_DIRECTORY probe PROPERTIES COMPILE_OPTIONS -mfma)
+            """
+        )
+        self.assert_rejected(result, "sub/b.c COMPILE_OPTIONS: -mfma")
+
+    def test_floor_source_flags_and_object_entries_pass(self) -> None:
+        result = self.configure(
+            """
+            add_library(other OBJECT c.c)
+            add_library(probe STATIC a.c b.c $<TARGET_OBJECTS:other>)
+            set_source_files_properties(b.c PROPERTIES COMPILE_OPTIONS "-msse4.2;-mpopcnt"
+                COMPILE_DEFINITIONS JPH_USE_SSE4_2)
+            """
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # probe's a.c and b.c plus other's c.c; the $<TARGET_OBJECTS:other> entry is skipped.
+        self.assertRegex(
+            result.stdout, r"CPU floor: x86-64 SSE4\.2 verified for global flags, 2 targets\s+and 3 target sources"
+        )
+
+    def test_native_arch_stands_down_for_source_flags(self) -> None:
+        body = """
+            add_library(probe STATIC a.c b.c)
+            set_source_files_properties(b.c PROPERTIES COMPILE_OPTIONS -march=native)
+            """
+        self.assert_rejected(self.configure(body), "b.c COMPILE_OPTIONS: -march=native")
+        result = self.configure(body, "-DSPARK_NATIVE_ARCH=ON")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 @unittest.skipUnless(CMAKE, "cmake is required")
 @unittest.skipUnless(X86_HOST, "the CPU floor applies to x86-64 hosts")
 @unittest.skipUnless((JOLT_BUILD_DIR / "CMakeLists.txt").is_file(), "vendored Jolt is not checked out")

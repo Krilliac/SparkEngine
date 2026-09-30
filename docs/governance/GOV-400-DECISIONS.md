@@ -262,6 +262,53 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
   rendered before this change they reported 8 uncovered (binary, font) pairs,
   and with the current rendering they passed with 8 embedded fonts counted.
   The legal review of the assembled license texts remains (OD-28).
+- **Microsoft Visual C++ runtime (new legal-review item).** Every MSVC package
+  ships `vcruntime140*.dll`, `msvcp140*.dll`, `concrt140.dll` and the rest of
+  `CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS` app-local in `bin/` (the `redist`
+  component, ENG-220). Until 2026-09-29 no notice rule matched them, so both
+  gate implementations presumed these Microsoft binaries first-party; that is
+  why the Windows path mirror above reported only the fonts. The rule set now
+  has a `systemRuntime` rule for them. It requires a "Microsoft Visual C++
+  Runtime" inventory entry whose `Files:` line names each shipped DLL and whose
+  `Terms:` line names the governing terms. `spark_thirdparty_generate_notice()`
+  writes that entry from the DLL basenames and the compiler version. The
+  Distributable Code terms are not a file in the repository, so the entry names
+  them but does not reproduce them. This identifies the license; it does not
+  interpret it. **Owner/legal decision:** whether the `Terms:` wording is
+  adequate, whether the terms must be reproduced or linked, and whether shipping
+  the DLLs app-local (rather than the Microsoft redistributable installer)
+  satisfies them.
+- **Closed-world classification.** The gate used to be open-world. It checked
+  only files under the third-party roots or matching a payload rule, and
+  presumed every other installed file first-party. `SPARK_PACKAGE_NOTICE_CLASSIFICATION=closed`
+  (CMake) and `--closed-world` (Python) remove that presumption. Every other
+  file must then be either listed with an identified license (not
+  `NOASSERTION`) in the installed RDY-020 asset manifest
+  (`assetManifests`: `bin/Assets/assets.integrity.json`), or match a
+  `firstPartyRoots` pattern that carries a written justification. Anything
+  else fails as `unclassified`. A shipped license text (the editor fonts'
+  `LICENSES/*.txt`) matches a `noticeText` rule instead. It is covered only
+  when its name is on the `Notice files:` line of an inventory entry whose
+  texts are reproduced. Open world stays the default for the existing
+  staged-package callers (`ValidateStagedPackageExecutables.cmake`, the release
+  workflow and its fixtures). `LicenseInventory_InstallTreeNoticeCoverage`
+  installs the `CPACK_COMPONENTS_ALL` components of a real build into a fresh
+  prefix. It runs both implementations closed-world and requires identical,
+  non-zero counts, with every installed file classified. The one permitted
+  residual is the set of assets whose installed manifest license is
+  `NOASSERTION`. OD-09 excludes those only from the stable-v1 package, and the
+  default package still ships them. Both gates must report exactly that set
+  for exactly that reason. The files are then removed, as the stable-v1
+  profile removes them, and the rest of the tree must pass. A stable-v1 tree
+  has no such file, so it must pass as installed. Two probe files, an
+  unmapped header under `include/SparkEngine/ThirdParty/` and an unclassified
+  root file, must then make both implementations fail by name.
+  Measurements: see "Install-tree measurements (2026-09-29)" below. Still open:
+  switching the staged-package gate itself to closed world, the CPack archive
+  and native installers, and the stub/upstream license identity (item 1: the
+  zstd stub header's "BSD + GPLv2" against the lock's BSD-3-Clause). The last is
+  an owner/legal decision, so this criterion can at most be `implemented` for
+  coverage.
 - **SPDX fields:** rewrite the free-text `license` fields as SPDX expressions
   once the choices in the inventory table are made.
 - **Files that change:** `ThirdParty/dependencies.lock`;
@@ -269,6 +316,60 @@ These choices change `ThirdParty/` or its locks, which the SEC-110 lane owns.
   --update`); `ThirdParty/**` payload; `cmake/SparkThirdPartyAudit.cmake` (if packaged notices must include
   extra notices, or should reuse the repository generator);
   `THIRD_PARTY_NOTICES` (regenerated).
+
+#### Install-tree measurements (2026-09-29)
+
+Both runs are `LicenseInventory_InstallTreeNoticeCoverage` on local builds of
+this lane, and neither is hosted CI evidence.
+
+| Host | Build | Installed | NOASSERTION residual | Fonts | Third-party payload | First-party | Asset manifest |
+|---|---|---|---|---|---|---|---|
+| Windows 11 | MSVC 14.44, `windows-release` (Release, LTO on) | 2841 | 475 | 7 | 496 (8 MSVC runtime DLLs among them) | 1112 | 751 |
+| WSL2 Ubuntu | GCC 14.3, `linux-gcc-release`, `ENABLE_LTO=OFF` | 2920 | 475 | 7 | 585 | 1102 | 751 |
+
+In both runs the CMake and Python gates agreed on every count. After the
+residual was removed, every installed file was classified (2366 of 2366 on
+Windows and 2445 of 2445 on Linux), and both probe files failed both gates by
+name. The Windows components were `runtime;sdk;tools;templates;samples;redist`
+and the Linux components were the same without `redist`.
+
+The first Windows run failed, and it found real gaps:
+
+- the editor fonts' license texts, now covered by the `noticeText` rule;
+- `fonts.json`, the playtest launcher and its instructions, the asset
+  pipeline headers and the example configs, now covered by justified
+  first-party roots;
+- the NOASSERTION assets, now the explicit residual described above.
+
+RED check: with the `^tools/` first-party root removed, the Windows run failed
+and named 67 `tools/` files as unclassified. The 8 runtime DLLs covered were
+`concrt140`, `msvcp140`, `msvcp140_1`, `msvcp140_2`, `msvcp140_atomic_wait`,
+`msvcp140_codecvt_ids`, `vcruntime140` and `vcruntime140_1`.
+
+Not measured: a stable-v1 (`SparkGameFPS`) tree with tests enabled, the CPack
+archive and the native installers.
+
+#### Port review (2026-09-30)
+
+The manifest readers now parse JSON independently of key order and whitespace,
+reject duplicate paths and malformed manifests, and treat non-string, blank,
+`NONE` and `NOASSERTION` license values as unidentified. The CMake reader builds
+a path-indexed map once instead of searching for license-looking text.
+
+Script-only fixtures reproduced the previous CMake acceptance of malformed
+JSON, both readers' acceptance of duplicate paths, and the Python reader's
+coercion of null/numeric/container license fields into strings. The corrected
+readers agree on all twelve fixtures, including compact and reordered valid
+JSON.
+
+The repository notice currentness/completeness check passes. The full Python
+suite is pending because this sandbox denies access inside temporary fixture
+directories. No C++ build, CTest, real install-tree run, or hosted evidence was
+produced for this port review. The default package still ships 475
+`NOASSERTION` assets (OD-09); the install-tree test keeps them as the exact
+accounted residual described above rather than failing the default
+windows-release CTest run that `build-windows-vs2022` executes. No exception or
+readiness promotion was added.
 
 ## Regenerating and checking the notices
 

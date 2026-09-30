@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import nullcontext
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -55,7 +56,7 @@ from schema import (
     REQUIRED_PROFILE_KEYS,
     REQUIRED_SEPARATION_KEYS,
     REQUIRED_TOP_LEVEL_KEYS,
-    SANITIZER_MODULE_SELECTORS,
+    MODULE_TEST_SELECTORS,
     SANITIZER_REPORT_JUNIT,
     SCHEMA_VERSION,
     VALID_LIBRARY_PLATFORMS,
@@ -74,6 +75,41 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 class ManifestError(RuntimeError):
     """A failure that must block release promotion."""
+
+
+def derive_module_test_cases(repo_root: Path, selector_prefix: str) -> frozenset[str]:
+    """Names of the tests production-source files under ``repo_root``/Tests define with the prefix.
+
+    The classification is the test source census (Tools/test_source_census.py),
+    loaded from this validator's own checkout; only the scanned sources come
+    from ``repo_root``.  A mirror file that defines a prefixed name is not
+    production evidence, so it never enters the set.  Raises ValueError when
+    the sources cannot be scanned or a file's definitions cannot be resolved.
+    """
+    census_path = REPO_ROOT / "Tools" / "test_source_census.py"
+    spec = importlib.util.spec_from_file_location("spark_module_evidence_census", census_path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load the test source census from {census_path}")
+    census = sys.modules.get(spec.name)
+    if census is None:
+        census = importlib.util.module_from_spec(spec)
+        # dataclasses resolve their module through sys.modules while executing.
+        sys.modules[spec.name] = census
+        spec.loader.exec_module(census)
+    try:
+        rows = census.scan(repo_root)
+    except SystemExit as exc:
+        raise ValueError(f"test source census failed: {exc}") from None
+    names: set[str] = set()
+    for row in rows:
+        if row["kind"] != "production-source":
+            continue
+        text = (repo_root / row["path"]).read_text(encoding="utf-8")
+        names.update(
+            name for name, _line, _tautological in census.test_definitions(text)
+            if name.startswith(selector_prefix)
+        )
+    return frozenset(names)
 
 
 def _bounded_str(value: Any, label: str, errors: list[str], *,
@@ -141,6 +177,7 @@ class ManifestValidator:
         self.policy_only = policy_only
         self.root_authority = root_authority
         self.errors: list[str] = []
+        self._module_test_cases: dict[str, frozenset[str] | str] = {}
         self.known_profiles: set[str] = set()
         self.known_work_items: set[str] = set()
 
@@ -155,6 +192,24 @@ class ManifestValidator:
     def _profiles(self) -> list[dict[str, Any]]:
         profiles = self.manifest.get("profiles")
         return [p for p in profiles if isinstance(p, dict)] if isinstance(profiles, list) else []
+
+    def _expected_module_tests(self, selector_prefix: str) -> frozenset[str] | str:
+        """The prefix's production test set, derived once per run, or why it cannot be.
+
+        The sources are read below ``repo_root`` like the validator's other
+        root-relative reads; ``main`` re-verifies the held root lease after
+        validation, so a root replaced mid-run is still fatal.
+        """
+        if selector_prefix not in self._module_test_cases:
+            try:
+                self._module_test_cases[selector_prefix] = derive_module_test_cases(
+                    self.repo_root, selector_prefix,
+                )
+            except (OSError, UnicodeDecodeError, ValueError) as exc:
+                self._module_test_cases[selector_prefix] = (
+                    f"cannot derive the {selector_prefix}* production test set: {exc}"
+                )
+        return self._module_test_cases[selector_prefix]
 
     # -- entry point ------------------------------------------------------
     def validate(self) -> list[str]:
@@ -582,12 +637,22 @@ class ManifestValidator:
                 f"{sorted(missing)} evidence — a shipped module must prove it "
                 f"builds, loads, tests and packages"
             )
-        if "sanitizer-report" in present and name not in SANITIZER_MODULE_SELECTORS:
+        selector = MODULE_TEST_SELECTORS.get(name)
+        if present & {"junit-xml", "sanitizer-report"} and selector is None:
             self._err(
                 f"module {name!r} is included in profile {pid!r} but names no "
-                f"production-source sanitizer test selector — the whole-suite "
-                f"ASan run cannot show that the module's own code executed"
+                f"production-source module test selector — the whole-suite "
+                f"JUnit and ASan runs cannot show that the module's own code executed"
             )
+        elif selector is not None:
+            expected = self._expected_module_tests(selector)
+            if isinstance(expected, str):
+                self._err(f"module {name!r}: {expected}")
+            elif not expected:
+                self._err(
+                    f"module {name!r}: no production-source test defines {selector}*, "
+                    f"so no JUnit or ASan run can show that its production code executed"
+                )
         if mod.get("packageSmokeOwner") is None:
             self._err(
                 f"module {name!r} is included in profile {pid!r} but declares no "
@@ -748,6 +813,13 @@ class ManifestValidator:
     def _semantic_artifact_errors(self, name: Any, btype: str, pattern: str,
                                   data: bytes) -> list[str]:
         module_name = name if isinstance(name, str) else ""
+        selector = MODULE_TEST_SELECTORS.get(module_name)
+        expected_cases: frozenset[str] = frozenset()
+        if selector is not None and btype in ("junit-xml", "sanitizer-report"):
+            expected = self._expected_module_tests(selector)
+            if isinstance(expected, str):
+                return [f"module {module_name!r}: {expected}"]
+            expected_cases = expected
         companion: bytes | None = None
         if btype == "sanitizer-report":
             try:
@@ -758,7 +830,7 @@ class ManifestValidator:
         return artifacts.validate_artifact_bytes(
             data, Path(pattern).name, btype, module_name,
             expected_sha=self.expected_sha, companion=companion,
-            selector_prefix=SANITIZER_MODULE_SELECTORS.get(module_name),
+            selector_prefix=selector, expected_cases=expected_cases,
         )
 
     def _check_artifact_evidence(self) -> None:

@@ -69,3 +69,25 @@ TEST(Transport_Libsodium_InitAndRfc8439Vector)
                                                         key.data()),
               -1);
 }
+
+// BLD-100 / OD-04: the stable-v1 x86-64 floor is SSE4.2. cmake/SparkLibsodium.cmake
+// compiles libsodium without its AVX, AVX2, AVX-512 and AES-NI/PCLMUL variants on
+// every toolchain, so the CPUID dispatch must never report them, even on a host
+// that has them. On MSVC private/common.h enables those variants unconditionally;
+// a regression there makes this fail on any AVX2 host (every local and hosted
+// runner), not only on the below-floor CPUs it would crash.
+TEST(CpuFloor_Libsodium_AboveFloorVariantsExcluded)
+{
+    ASSERT_TRUE(Spark::Net::EnsureSodium());
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    EXPECT_EQ(sodium_runtime_has_avx(), 0);
+    EXPECT_EQ(sodium_runtime_has_avx2(), 0);
+    EXPECT_EQ(sodium_runtime_has_avx512f(), 0);
+    EXPECT_EQ(sodium_runtime_has_aesni(), 0);
+    EXPECT_EQ(sodium_runtime_has_pclmul(), 0);
+    EXPECT_EQ(sodium_runtime_has_rdrand(), 0);
+    EXPECT_EQ(crypto_aead_aes256gcm_is_available(), 0);
+    // The floor-level paths stay selected on any x86-64 CPU.
+    EXPECT_EQ(sodium_runtime_has_sse2(), 1);
+#endif
+}

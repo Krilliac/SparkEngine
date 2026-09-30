@@ -26,12 +26,14 @@ paths, and what counts as reproduced license text) lives in
 cmake/PackageNoticeCoverageRules.json. This tool and the staged-package gate
 cmake/ValidateStagedPackageNotices.cmake both read it; ``--check-package``
 applies the same rules to a staged install tree and its THIRD_PARTY_NOTICES.txt.
+With ``--closed-world`` every other installed file must match a justified
+first-party root, so nothing is presumed first-party by default.
 
 Usage:
   python tools/governance/generate_third_party_notices.py            # write
   python tools/governance/generate_third_party_notices.py --check    # exit 1 if stale
   python tools/governance/generate_third_party_notices.py --require-complete
-  python tools/governance/generate_third_party_notices.py --check-package <install root>
+  python tools/governance/generate_third_party_notices.py --check-package <install root> [--closed-world]
 
 Exit codes: 0 ok, 1 stale output (--check), incomplete notices
 (--require-complete), or uncovered package files (--check-package), 2 malformed
@@ -215,8 +217,30 @@ def parse_supply_chain(text: str) -> dict:
 @dataclass(frozen=True)
 class PayloadRule:
     pattern: re.Pattern[str]
-    component: str | None  # None for a documented first-party exemption
+    component: str | None  # None for a documented first-party exemption or a system runtime
     first_party: str | None
+    # A toolchain runtime shipped under its vendor's redistribution terms, which
+    # are not a file in the repository: covered by a named inventory entry with
+    # a "Terms:" line whose "Files:" line names the file.
+    system_runtime: str | None = None
+    # A shipped license text: covered when its name is on the "Notice files:"
+    # line of an inventory entry whose texts are all reproduced.
+    notice_text: str | None = None
+
+
+@dataclass(frozen=True)
+class FirstPartyRoot:
+    pattern: re.Pattern[str]
+    justification: str
+
+
+@dataclass(frozen=True)
+class AssetManifestRule:
+    """Files matching ``pattern`` are licensed by the installed manifest at ``manifest``."""
+
+    pattern: re.Pattern[str]
+    manifest: str
+    justification: str
 
 
 @dataclass(frozen=True)
@@ -230,12 +254,22 @@ class PackageRules:
     embedded_markers: tuple[str, ...]
     embedded_scan: re.Pattern[str]
     embedded_max_bytes: int
+    first_party_roots: tuple[FirstPartyRoot, ...]
+    asset_manifests: tuple[AssetManifestRule, ...]
 
 
 def _rules_member(data: dict, key: str, kind: type, label: str):
     value = data.get(key)
     if not isinstance(value, kind) or (kind is list and not value):
         raise NoticeInputError(f"{label}: '{key}' must be a non-empty {kind.__name__}")
+    return value
+
+
+def _optional_rules_list(data: dict, key: str, label: str) -> list:
+    """A member only closed-world classification reads; absent means empty (which classifies nothing)."""
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise NoticeInputError(f"{label}: '{key}' must be a list")
     return value
 
 
@@ -268,18 +302,41 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
         where = f"{label}: payloadRules[{index}]"
         if not isinstance(rule, dict):
             raise NoticeInputError(f"{where} must be an object")
-        component, first_party = rule.get("component"), rule.get("firstParty")
-        has_component = isinstance(component, str) and bool(component)
-        has_first_party = isinstance(first_party, str) and bool(first_party)
-        if has_component == has_first_party:
-            raise NoticeInputError(f"{where} must name exactly one of 'component' or 'firstParty'")
+        targets = {key: rule.get(key) for key in ("component", "firstParty", "systemRuntime", "noticeText")}
+        named = {key: value for key, value in targets.items() if isinstance(value, str) and value}
+        if len(named) != 1 or any(value is not None for key, value in targets.items() if key not in named):
+            raise NoticeInputError(
+                f"{where} must name exactly one of 'component', 'firstParty', 'systemRuntime' or 'noticeText'"
+            )
         payload.append(
             PayloadRule(
                 _rules_regex(rule.get("pattern"), where),
-                component if has_component else None,
-                first_party if has_first_party else None,
+                named.get("component"),
+                named.get("firstParty"),
+                named.get("systemRuntime"),
+                named.get("noticeText"),
             )
         )
+    first_party_roots = []
+    for index, root in enumerate(_optional_rules_list(data, "firstPartyRoots", label)):
+        where = f"{label}: firstPartyRoots[{index}]"
+        if not isinstance(root, dict):
+            raise NoticeInputError(f"{where} must be an object")
+        justification = root.get("justification")
+        if not isinstance(justification, str) or not justification.strip():
+            raise NoticeInputError(f"{where} must carry a non-empty 'justification'")
+        first_party_roots.append(FirstPartyRoot(_rules_regex(root.get("pattern"), where), justification))
+    asset_manifests = []
+    for index, rule in enumerate(_optional_rules_list(data, "assetManifests", label)):
+        where = f"{label}: assetManifests[{index}]"
+        if not isinstance(rule, dict):
+            raise NoticeInputError(f"{where} must be an object")
+        manifest, justification = rule.get("manifest"), rule.get("justification")
+        if not isinstance(manifest, str) or not manifest or manifest.startswith("/") or ".." in manifest.split("/"):
+            raise NoticeInputError(f"{where} must name a package-relative 'manifest'")
+        if not isinstance(justification, str) or not justification.strip():
+            raise NoticeInputError(f"{where} must carry a non-empty 'justification'")
+        asset_manifests.append(AssetManifestRule(_rules_regex(rule.get("pattern"), where), manifest, justification))
     embedded = _rules_member(data, "embeddedFonts", dict, label)
     markers = embedded.get("markers")
     if (
@@ -302,6 +359,8 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
             for p in _rules_member(data, "thirdPartyRoots", list, label)
         ),
         payload=tuple(payload),
+        first_party_roots=tuple(first_party_roots),
+        asset_manifests=tuple(asset_manifests),
         embedded_markers=tuple(markers),
         embedded_scan=_rules_regex(embedded.get("scanPattern"), f"{label}: embeddedFonts.scanPattern"),
         embedded_max_bytes=maximum_scan,
@@ -335,6 +394,7 @@ class NoticeEntry:
     name: str
     notice_files: list[str] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
+    terms: str = ""
     problem: str = ""
 
 
@@ -374,6 +434,8 @@ def parse_package_notice(text: str, rules: PackageRules, label: str = PACKAGE_NO
             current.notice_files = _split_csv(line[len("  Notice files: ") :])
         elif line.startswith("  Files: "):
             current.files = _split_csv(line[len("  Files: ") :])
+        elif line.startswith("  Terms: "):
+            current.terms = line[len("  Terms: ") :].strip()
     if not entries:
         raise NoticeInputError(f"{label} has an empty dependency inventory")
 
@@ -411,6 +473,8 @@ class PackageCoverage:
     font_count: int
     payload_count: int
     embedded_count: int = 0  # (binary, embedded font) pairs found
+    first_party_count: int = 0
+    asset_count: int = 0
 
 
 def _font_notice_reason(name: str, entries: list[NoticeEntry]) -> str:
@@ -449,11 +513,44 @@ def embedded_font_markers_in(path: Path, markers: tuple[str, ...], max_bytes: in
     return [m.decode("ascii") for m in wanted if m in found]
 
 
-def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCoverage:
+UNCLASSIFIED = "unclassified: no font, payload, system-runtime or first-party rule covers it"
+UNIDENTIFIED_ASSET_LICENSES = frozenset({"", "NONE", "NOASSERTION"})
+
+
+def _asset_manifest_licenses(package_root: Path, manifest: str) -> dict[str, str]:
+    """Map each path an installed RDY-020 asset manifest lists to its license; {} when it is absent."""
+    path = package_root / manifest
+    if not path.is_file() or path.is_symlink():
+        return {}
+    if path.stat().st_size > MAX_PACKAGE_NOTICE_BYTES:
+        raise NoticeInputError(f"{path} exceeds {MAX_PACKAGE_NOTICE_BYTES} bytes")
+    try:
+        data = json.loads(path.read_bytes().decode("utf-8"))
+        entries = data["entries"]
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise NoticeInputError(f"{path}: not an asset integrity manifest: {exc}") from exc
+    if not isinstance(entries, list):
+        raise NoticeInputError(f"{path}: asset manifest entries must be an array")
+    licenses: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or not entry["path"]:
+            raise NoticeInputError(f"{path}: asset manifest entries must name a non-empty string path")
+        rel = entry["path"]
+        if rel in licenses:
+            raise NoticeInputError(f"{path}: duplicate asset manifest path: {rel}")
+        license_id = entry.get("license")
+        licenses[rel] = license_id.strip() if isinstance(license_id, str) else ""
+    return licenses
+
+
+def check_package_coverage(package_root: Path, rules: PackageRules, closed_world: bool = False) -> PackageCoverage:
     """Apply the notice-coverage rules to a staged install tree.
 
     Mirrors cmake/ValidateStagedPackageNotices.cmake; the fixture tests run both
     implementations against the same packages and require identical verdicts.
+    Open world (the default) presumes a file outside every third-party root to be
+    first-party; closed world requires it to match a justified firstPartyRoots
+    pattern and reports it as unclassified otherwise.
     """
     notice_path = package_root / PACKAGE_NOTICE_NAME
     if not notice_path.is_file() or notice_path.is_symlink():
@@ -482,7 +579,8 @@ def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCo
             files.append((base / name).relative_to(package_root).as_posix())
 
     uncovered: list[str] = []
-    font_count = payload_count = embedded_count = 0
+    font_count = payload_count = first_party_count = asset_count = embedded_count = 0
+    asset_licenses: dict[str, dict[str, str]] = {}
     for rel in sorted(files):
         name = PurePosixPath(rel).name
         if PurePosixPath(rel).suffix.lower() in rules.font_suffixes:
@@ -505,8 +603,50 @@ def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCo
             if any(root.search(rel) for root in rules.roots):
                 payload_count += 1
                 uncovered.append(f"{rel}: third-party install path that no payload rule maps to a dependency")
+            elif closed_world:
+                asset_rule = next((a for a in rules.asset_manifests if a.pattern.search(rel)), None)
+                if asset_rule is not None:
+                    if asset_rule.manifest not in asset_licenses:
+                        asset_licenses[asset_rule.manifest] = _asset_manifest_licenses(package_root, asset_rule.manifest)
+                    listed = rel.removeprefix(str(PurePosixPath(asset_rule.manifest).parent) + "/")
+                    license_id = asset_licenses[asset_rule.manifest].get(listed)
+                    if rel == asset_rule.manifest:
+                        asset_count += 1
+                    elif license_id is None:
+                        uncovered.append(f"{rel}: not listed in asset manifest {asset_rule.manifest}")
+                    elif license_id in UNIDENTIFIED_ASSET_LICENSES:
+                        uncovered.append(f"{rel}: asset manifest {asset_rule.manifest} records no identified license")
+                    else:
+                        asset_count += 1
+                elif any(root.pattern.search(rel) for root in rules.first_party_roots):
+                    first_party_count += 1
+                else:
+                    uncovered.append(f"{rel}: {UNCLASSIFIED}")
             continue
         payload_count += 1
+        if rule.system_runtime is not None:
+            entry = by_name.get(rule.system_runtime)
+            if entry is None:
+                uncovered.append(
+                    f"{rel}: system runtime '{rule.system_runtime}' has no {PACKAGE_NOTICE_NAME} inventory entry"
+                )
+            elif not entry.terms:
+                uncovered.append(f"{rel}: system runtime '{rule.system_runtime}' has no 'Terms:' line")
+            elif not any(PurePosixPath(named).name == name for named in entry.files):
+                uncovered.append(f"{rel}: not named on the 'Files:' line of system runtime '{rule.system_runtime}'")
+            continue
+        if rule.notice_text is not None:
+            reason = f"not a 'Notice files:' text of any {PACKAGE_NOTICE_NAME} inventory entry"
+            for entry in entries:
+                if not any(PurePosixPath(named).name == name for named in entry.notice_files):
+                    continue
+                if not entry.problem:
+                    reason = ""
+                    break
+                reason = f"named by '{entry.name}' but {entry.problem}"
+            if reason:
+                uncovered.append(f"{rel}: license text {reason}")
+            continue
         if rule.component is None:
             continue
         entry = by_name.get(rule.component)
@@ -514,7 +654,14 @@ def check_package_coverage(package_root: Path, rules: PackageRules) -> PackageCo
             uncovered.append(f"{rel}: component '{rule.component}' has no {PACKAGE_NOTICE_NAME} inventory entry")
         elif entry.problem:
             uncovered.append(f"{rel}: component '{rule.component}' {entry.problem}")
-    return PackageCoverage(uncovered, font_count, payload_count, embedded_count)
+    return PackageCoverage(
+        uncovered,
+        font_count,
+        payload_count,
+        embedded_count=embedded_count,
+        first_party_count=first_party_count,
+        asset_count=asset_count,
+    )
 
 
 # --------------------------------------------------------------------------- repository access
@@ -1155,13 +1302,18 @@ def main(argv: list[str] | None = None) -> int:
         help="check a staged install tree's font and third-party payload notice coverage and exit",
     )
     parser.add_argument(
+        "--closed-world",
+        action="store_true",
+        help="with --check-package: also fail on any file that no first-party root classifies",
+    )
+    parser.add_argument(
         "--require-complete",
         action="store_true",
         help="exit 1 if any locked component, or any font outside ThirdParty/, has no license text on disk",
     )
     args = parser.parse_args(argv)
     if args.check_package is not None:
-        return _check_package_main(args.check_package)
+        return _check_package_main(args.check_package, args.closed_world)
     root = args.root.resolve()
     output = args.output or root / OUTPUT_NAME
 
@@ -1205,12 +1357,12 @@ def main(argv: list[str] | None = None) -> int:
     return status
 
 
-def _check_package_main(package_root: Path) -> int:
+def _check_package_main(package_root: Path, closed_world: bool = False) -> int:
     if not package_root.is_dir():
         print(f"error: {package_root} is not a directory", file=sys.stderr)
         return 2
     try:
-        coverage = check_package_coverage(package_root, load_package_rules())
+        coverage = check_package_coverage(package_root, load_package_rules(), closed_world)
     except NoticeInputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -1226,6 +1378,11 @@ def _check_package_main(package_root: Path) -> int:
         f"notice coverage ok: {coverage.font_count} font file(s), {coverage.embedded_count} embedded font(s) and "
         f"{coverage.payload_count} third-party payload file(s) in {package_root}"
     )
+    if closed_world:
+        print(
+            f"closed world: {coverage.first_party_count} first-party file(s), "
+            f"{coverage.asset_count} asset-manifest file(s), 0 unclassified"
+        )
     return 0
 
 

@@ -8,8 +8,7 @@
  */
 
 #include "MultiplayerSystem.h"
-#include "Utils/LogMacros.h"
-#include "Utils/SparkConsole.h"
+#include "Core/FPSLog.h"
 
 #include <algorithm>
 #include <cmath>
@@ -62,8 +61,7 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Initialize(bool isServer)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "FPSMultiplayerSystem::Initialize — mode=%s",
-                       isServer ? "Server" : "Client");
+        FPS_LOG_INFO("FPSMultiplayerSystem::Initialize — mode={}", isServer ? "Server" : "Client");
         m_isServer = isServer;
         m_isActive = false;
         m_playerStates.clear();
@@ -109,8 +107,7 @@ namespace SparkFPS
             m_spawnPoints.push_back({5.0f, 1.0f, -10.0f, 270.0f});
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.Log("[FPSMultiplayer] Initialized (" + std::string(isServer ? "Server" : "Client") + " mode)");
+        FPS_CONSOLE("[FPSMultiplayer] Initialized (" + std::string(isServer ? "Server" : "Client") + " mode)", "INFO");
     }
 
     void FPSMultiplayerSystem::Update(float deltaTime)
@@ -132,8 +129,7 @@ namespace SparkFPS
             // transport (this module does not enable NetworkManager auto-reconnect).
             if (network.GetConnectionState() == Spark::Net::ConnectionState::Disconnected)
             {
-                Spark::SimpleConsole::GetInstance().Log(
-                    "[FPSMultiplayer] Connection failed: " + network.GetLastConnectionError(), "ERROR");
+                FPS_CONSOLE("[FPSMultiplayer] Connection failed: " + network.GetLastConnectionError(), "ERROR");
                 Disconnect();
                 return;
             }
@@ -154,8 +150,7 @@ namespace SparkFPS
 
     void FPSMultiplayerSystem::Shutdown()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "FPSMultiplayerSystem::Shutdown — %zu players active",
-                       m_playerStates.size());
+        FPS_LOG_INFO("FPSMultiplayerSystem::Shutdown — {} players active", m_playerStates.size());
         if (m_isServer)
             StopServer();
         else
@@ -189,9 +184,9 @@ namespace SparkFPS
         m_localClientId = network.GetLocalClientID();
         OnPlayerJoined(m_localClientId);
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.Log("[FPSMultiplayer] Server started on port " + std::to_string(port) + " (max " +
-                    std::to_string(maxPlayers) + " players)");
+        FPS_CONSOLE("[FPSMultiplayer] Server started on port " + std::to_string(port) + " (max " +
+                        std::to_string(maxPlayers) + " players)",
+                    "INFO");
         return true;
     }
 
@@ -226,8 +221,7 @@ namespace SparkFPS
         m_localClientId = Spark::Net::INVALID_CLIENT;
         m_lastSnapshotBatch = 0;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.Log("[FPSMultiplayer] Connecting to " + address + ":" + std::to_string(port));
+        FPS_CONSOLE("[FPSMultiplayer] Connecting to " + address + ":" + std::to_string(port), "INFO");
         return true;
     }
 
@@ -468,8 +462,7 @@ namespace SparkFPS
         score.playerName = "Player_" + std::to_string(clientId);
         m_scores[clientId] = score;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.Log("[FPSMultiplayer] Player " + std::to_string(clientId) + " joined");
+        FPS_CONSOLE("[FPSMultiplayer] Player " + std::to_string(clientId) + " joined", "INFO");
     }
 
     void FPSMultiplayerSystem::OnPlayerLeft(uint32_t clientId)
@@ -482,8 +475,7 @@ namespace SparkFPS
         m_inputBudget.erase(clientId);
         m_fireCooldown.erase(clientId);
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.Log("[FPSMultiplayer] Player " + std::to_string(clientId) + " left");
+        FPS_CONSOLE("[FPSMultiplayer] Player " + std::to_string(clientId) + " left", "INFO");
     }
 
     void FPSMultiplayerSystem::OnPlayerInputReceived(uint32_t clientId, const PlayerInput& input)

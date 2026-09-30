@@ -203,10 +203,9 @@ option(STRIP_DEBUG_SYMBOLS "Keep private symbols out of the runtime images (spli
 # Third-party manifest audit (single source of truth lives in ThirdParty/dependencies.lock)
 include("${CMAKE_SOURCE_DIR}/cmake/SparkThirdPartyAudit.cmake")
 spark_thirdparty_audit("${CMAKE_SOURCE_DIR}/ThirdParty/dependencies.lock")
+# Written by spark_thirdparty_generate_notice() in the install section, once the
+# app-local system runtime it must also list is known.
 set(SPARK_THIRD_PARTY_NOTICES_FILE "${CMAKE_BINARY_DIR}/SparkEngineThirdPartyNotices.txt")
-spark_thirdparty_generate_notice(
-    "${CMAKE_SOURCE_DIR}/ThirdParty/dependencies.lock"
-    "${SPARK_THIRD_PARTY_NOTICES_FILE}")
 
 # ---------------------------------------------------------------------
 # 4) C++ standard and in-source build guard
@@ -2835,6 +2834,15 @@ if(MSVC)
             "will not run on a clean machine (tools/pe_import_closure.py will fail them)")
     endif()
 endif()
+
+# GOV-400: the packaged THIRD_PARTY_NOTICES.txt also lists the Visual C++ runtime
+# installed above, by DLL name and governing terms, which the staged-package
+# notice gate's systemRuntime rule requires for every such DLL in bin/.
+spark_thirdparty_generate_notice(
+    "${CMAKE_SOURCE_DIR}/ThirdParty/dependencies.lock"
+    "${SPARK_THIRD_PARTY_NOTICES_FILE}"
+    SYSTEM_RUNTIME_LIBS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+    SYSTEM_RUNTIME_VERSION "${CMAKE_CXX_COMPILER_VERSION}")
 
 function(_spark_install_tracked_source_directory source_directory destination component)
     set(_spark_absolute_source "${source_directory}")

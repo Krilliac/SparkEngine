@@ -150,8 +150,11 @@ Two further checks cover what configure-time flag checks cannot see:
   ymm/zmm, AVX-512 opmask, FMA, F16C, BMI1/BMI2, LZCNT or MOVBE instruction,
   and on the legacy-encoded AES-NI, PCLMULQDQ, SHA-NI, GFNI, RDRAND, RDSEED
   and ADX instructions, outside functions exempted with `--allow-symbol`,
-  which is only for CPUID-dispatched code. Other instruction families (for
-  example XSAVE or TSX) are not classified. TZCNT is reported but allowed: it
+  which is only for CPUID-dispatched code. It also fails on the XSAVE, TSX,
+  FSGSBASE, SSE4a, 3DNow!, CLFLUSHOPT/CLWB, RDPID, WAITPKG, MOVDIRI/MOVDIR64B,
+  SERIALIZE, PKU and AMX families. The one XGETBV the engine itself runs, in
+  `Spark::Detail::ReadXcr0` after the CPUID OSXSAVE check, is exempt for XSAVE
+  only, by exact procedure name. TZCNT is reported but allowed: it
   has the same encoding as `REP BSF`, which GCC and Clang emit at the SSE4.2
   floor. The configure-time check also rejects the matching `-mmovbe`,
   `-maes`, `-mpclmul`, `-msha`, `-mgfni`, `-mrdrnd`, `-mrdseed`, `-madx`,
@@ -159,11 +162,17 @@ Two further checks cover what configure-time flag checks cannot see:
   CTest `CpuFloor_IsaBaseline` scans the built engine, editor, server and
   game-module images. `CpuFloor_IsaBaselineChecker` proves the scanner on ELF
   and PE fixtures built with and without the extensions.
-  **Windows images are not scanned yet.** The image scan is registered only
-  for ELF toolchains. MSVC links the STL's CPUID-dispatched AVX2
-  `vector_algorithms` code statically into every image, and an MSVC PE has
-  no COFF symbol table. `--allow-symbol` therefore cannot exempt that code
-  until the scanner can look symbols up in the PDB.
+  **Windows images are not scanned in CTest yet.** The image scan is
+  registered for ELF and applicable Windows MSVC builds. The scanner checks an MSVC image
+  against its PDB, with reviewed exemptions for the MSVC runtime's
+  CPUID-dispatched code (see
+  [CI-Reproducible-Builds](../development/CI-Reproducible-Builds.md)). The
+  local Release images still contain libsodium's AVX2 and AES-NI variants,
+  which the MSVC build of libsodium compiles, and AVX-512 loops that MSVC's
+  auto-vectorizer adds behind a runtime `__isa_available` check. A registered
+  Windows scan therefore fails until the product findings and undecodable
+  bytes are resolved. Shipping CI invokes the scan's custom target even with
+  `BUILD_TESTS=OFF`; it requires matching PDBs and LLVM tools.
 - **Startup check.** The `SparkEngine` (Windows and POSIX), `SparkEditor` and
   `SparkServer` entry points call
   `Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures())`

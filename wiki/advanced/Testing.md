@@ -568,6 +568,47 @@ on Linux (headless and SDL2 windowed). The shared implementation is
 
 Coverage: `Tests/TestExecScript.cpp` (`SPARK_TEST_FILE=TestExecScript.cpp`).
 
+#### FPS authored-scene visible-frame proof (Windows)
+
+`CheckFPSVisibleFrame.ps1` requires both a rendered PNG and the same run's
+`exec_audit.log`. A procedural arena also passes the pixel checks, so the FPS
+module reports a startup scene identity after `SceneManager::LoadScene`. The
+check rejects the fallback marker, missing or duplicate authored identities,
+the wrong scene name, zero nodes, and a scene directory outside the supplied
+package directory. Existing image size, color, and geometry thresholds still
+apply. The marker's path is UTF-8; it must survive non-ASCII package paths.
+
+After building `SparkEngine` and `SparkGameFPS` with the Windows MSVC
+`windows-release` preset, run:
+
+```powershell
+ctest --test-dir build/windows-release -C Release --output-on-failure -R '^FPSVisibleFrame_(CheckerContract|AuthoredAndFallback)$'
+# The same real-runtime probe without CTest (adjust bin for single-config builds):
+python Tests/PackageSmoke/RunFPSVisibleFrameProbe.py --package-bin build/windows-release/bin/Release --work-root build/fps-visible-proof
+```
+
+`FPSVisibleFrame_CheckerContract` exercises the PowerShell checker using fixture
+logs/images. `FPSVisibleFrame_AuthoredAndFallback` copies the supplied runtime,
+removes only its `Assets/Scenes/level1.scene`, and requires the real WARP frame
+to fail specifically for procedural scene identity (RED). It then restores the
+scene and requires identity and pixels to pass (GREEN). It never changes the
+input runtime. Each invocation keeps a unique evidence directory containing
+binary hashes, both images, console audits, and checker output. This is build
+output evidence when given the build bin; installed-package evidence requires
+an installed bin. Neither replaces exact-commit CI qualification.
+
+Repeat the Python command with `--unicode-path` to check that the native marker
+preserves a non-ASCII package directory through the console audit.
+
+To repeat the checker alone, use the printed evidence path as `$proof`:
+
+```powershell
+# RED: exit 1, "FPS run used the procedural fallback arena".
+powershell -NoProfile -NonInteractive -File Tests/PackageSmoke/CheckFPSVisibleFrame.ps1 -ImagePath "$proof/fallback/fps-visible.png" -LogPath "$proof/fallback/exec_audit.log" -ExpectedSceneDirectory "$proof/bin/Assets/Scenes"
+# GREEN: exit 0, authored scene and pixel checks passed.
+powershell -NoProfile -NonInteractive -File Tests/PackageSmoke/CheckFPSVisibleFrame.ps1 -ImagePath "$proof/authored/fps-visible.png" -LogPath "$proof/authored/exec_audit.log" -ExpectedSceneDirectory "$proof/bin/Assets/Scenes"
+```
+
 ## Test Categories and Coverage
 
 The test files cover all major engine subsystems:

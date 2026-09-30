@@ -12,7 +12,6 @@
 #pragma once
 #include "Core/Platform.h"
 
-#include "Utils/Assert.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11.h>
 #include "Core/Platform.h"

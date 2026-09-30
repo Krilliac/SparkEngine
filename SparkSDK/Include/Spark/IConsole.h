@@ -1,6 +1,6 @@
 /**
  * @file IConsole.h
- * @brief Console command registration game modules reach through IEngineContext::GetConsole()
+ * @brief Console command registration and console output game modules reach through IEngineContext::GetConsole()
  *
  * The host implements IConsole (EngineSdkConsole) on its own console command
  * registry, the one SparkConsole.exe and the in-game console dispatch into. A
@@ -32,7 +32,7 @@
  * Contract:
  * - Thread affinity: game thread. Register and unregister from OnLoad/OnUnload
  *   (or other game-thread callbacks); handlers run on the thread that executes
- *   console commands, which is the game thread.
+ *   console commands, which is the game thread. Print may be called from any thread.
  * - Ownership: host-owned; the pointer stays valid until after the module's
  *   OnUnload returns. Do not cache it past OnUnload.
  * - Handlers are std::functions whose code lives in the module image. A module
@@ -90,6 +90,17 @@ namespace Spark
          * owned by someone else is then left alone.
          */
         virtual void UnregisterCommand(std::string_view name) = 0;
+
+        /**
+         * @brief Print a line to the host's in-game console (and the SparkConsole.exe window it mirrors to)
+         * @param message The text to show; copied before the call returns
+         * @param type The console's severity tag: "INFO", "SUCCESS", "WARNING", "ERROR" or "OPERATION"
+         *
+         * Unlike ILogger, which writes the engine log, this is what a player or
+         * developer sees in the console. Safe to call from any thread: the host
+         * console serializes its history.
+         */
+        virtual void Print(std::string_view message, std::string_view type) = 0;
     };
 
 } // namespace Spark
