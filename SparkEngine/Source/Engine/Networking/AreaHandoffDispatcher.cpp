@@ -7,8 +7,16 @@ namespace Spark::Net
 {
     AreaHandoffDispatcher::~AreaHandoffDispatcher()
     {
-        m_participantEvents.Unsubscribe();
-        Stop();
+        try
+        {
+            m_participantEvents.Unsubscribe();
+            Stop();
+        }
+        catch (...)
+        {
+            // A mutex/system error during teardown must not escape a destructor; pending
+            // submitters time out on their own wait.
+        }
     }
 
     void AreaHandoffDispatcher::SetParticipant(IAreaHandoffParticipant* participant)

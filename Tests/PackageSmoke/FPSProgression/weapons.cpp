@@ -2,7 +2,7 @@
  * @brief Exercise the FPS weapon configuration used by Player and GameDebugUI through the public SDK.
  */
 #include <Spark/WeaponTypes.h>
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 #include "Projectiles/WeaponStats.h"
 
 #include <array>

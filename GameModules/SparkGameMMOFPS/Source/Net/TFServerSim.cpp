@@ -37,8 +37,16 @@ namespace Terrafront
     TFServerSim::TFServerSim() = default;
     TFServerSim::~TFServerSim()
     {
-        if (m_initialized)
+        if (!m_initialized)
+            return;
+        try
+        {
             Shutdown();
+        }
+        catch (...)
+        {
+            // Shutdown failure during destruction must not escape; members release on their own.
+        }
     }
 
     bool TFServerSim::Initialize(TFGameContext& ctx, TFEventBus& events)
