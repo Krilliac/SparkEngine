@@ -5075,11 +5075,11 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/GoldenImages/manifest.json`, `Tests/GoldenImages/vulkan-lavapipe`, `Tests/TestRHI230VulkanGoldenReal.cpp`, `Tests/TestRHI230VulkanValidationReal.cpp`
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The vulkan-lavapipe row has three baselines of shipped post-process SPIR-V (PostProcess_ACES, BloomExtract, GaussianBlur_Vertical) that match locally on Lavapipe, under agent-proposed thresholds.
 2. **[unmet]** Production pass matrix executes
-   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp`
-   - SPIR-V is now built for every shipped GLSL stage and the Linux basic pair registers it, but the Linux passes record unbound draws, so production shadow/deferred/post passes do not render on Vulkan. There is no pass-matrix parity test.
+   - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp`, `SparkEngine/Source/Graphics/GraphicsEngineSubmit.cpp`, `SparkEngine/Source/Graphics/GraphicsRenderPipelinesLinux.cpp`, `Tests/TestRHI240LinuxForwardPassReal.cpp`
+   - The Linux forward draw-list and tone-mapping (FullscreenQuad + PostProcess, ACES) passes bind their pipelines and resources and render the production frame on Lavapipe, checked by CPU pixel probes (CTest LinuxForwardPassVulkan, LinuxTonemapPassVulkan; local runs). Shadow, deferred and the other post effects still have no Linux RHI pipeline. No pass-matrix parity test.
 3. **[unmet]** Validation is clean
-   - Evidence: `Tests/TestRHI230VulkanValidationReal.cpp`
-   - The validation lane fails closed but covers only unit-level draws, not production passes. It needs layers plus an ICD, and there is no vulkan-lavapipe job.
+   - Evidence: `Tests/TestRHI230VulkanValidationReal.cpp`, `Tests/TestRHI240LinuxForwardPassReal.cpp`, `Tests/CMakeLists.txt`
+   - VulkanValidation covers unit-level draws; the production forward and tone-mapping passes also run under a forced VK_LAYER_KHRONOS_validation with zero errors required (CTest LinuxForwardPassVulkan, LinuxTonemapPassVulkan; local Lavapipe runs). Shadow/deferred and other post passes do not execute on Vulkan, so are unvalidated. No vulkan-lavapipe job.
 4. **[implemented]** Shader toolchain failures are fatal
    - Evidence: `SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp`, `CMakeLists.txt`, `Tests/TestRHI230VulkanValidationReal.cpp`, `Tests/CMakeLists.txt`, `wiki/graphics/RHI-Abstraction-Layer.md`
    - Windows Vulkan builds require glslangValidator and build and ship SPIR-V. CTest VulkanShaderToolchainWindows (exact 4) registers only where the Vulkan SDK is present.

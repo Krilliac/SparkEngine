@@ -1134,17 +1134,22 @@
           "state": "unmet",
           "evidence": [
             "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp",
-            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp"
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp",
+            "SparkEngine/Source/Graphics/GraphicsEngineSubmit.cpp",
+            "SparkEngine/Source/Graphics/GraphicsRenderPipelinesLinux.cpp",
+            "Tests/TestRHI240LinuxForwardPassReal.cpp"
           ],
-          "note": "SPIR-V is now built for every shipped GLSL stage and the Linux basic pair registers it, but the Linux passes record unbound draws, so production shadow/deferred/post passes do not render on Vulkan. There is no pass-matrix parity test."
+          "note": "The Linux forward draw-list and tone-mapping (FullscreenQuad + PostProcess, ACES) passes bind their pipelines and resources and render the production frame on Lavapipe, checked by CPU pixel probes (CTest LinuxForwardPassVulkan, LinuxTonemapPassVulkan; local runs). Shadow, deferred and the other post effects still have no Linux RHI pipeline. No pass-matrix parity test."
         },
         {
           "criterionDigest": "sha256:e66683102ec6",
           "state": "unmet",
           "evidence": [
-            "Tests/TestRHI230VulkanValidationReal.cpp"
+            "Tests/TestRHI230VulkanValidationReal.cpp",
+            "Tests/TestRHI240LinuxForwardPassReal.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "The validation lane fails closed but covers only unit-level draws, not production passes. It needs layers plus an ICD, and there is no vulkan-lavapipe job."
+          "note": "VulkanValidation covers unit-level draws; the production forward and tone-mapping passes also run under a forced VK_LAYER_KHRONOS_validation with zero errors required (CTest LinuxForwardPassVulkan, LinuxTonemapPassVulkan; local Lavapipe runs). Shadow/deferred and other post passes do not execute on Vulkan, so are unvalidated. No vulkan-lavapipe job."
         },
         {
           "criterionDigest": "sha256:c30a0243b349",
