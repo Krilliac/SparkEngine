@@ -66,6 +66,13 @@ can use `Spark::ModuleLog::Bind(context)` from `OnLoad` (unbind at the end of
 `OnUnload`) and the context-free `ModuleLog` helpers. ARPG, RPG, Racing,
 OpenWorld, RTS, Platformer and FPS use these public services for commands and
 logging; FPS implementation files still depend on other private engine systems.
+The bound context is borrowed: stop module worker callbacks before unbinding it;
+an atomic pointer does not extend the host context's lifetime. The SDK-only
+package consumers check binding across translation units and separate shared
+libraries. FPS's always-on preconditions also use this logger, with a stderr
+diagnostic and unconditional termination even when the logger is unavailable.
+Engine fault isolation and other concrete service implementations remain private
+dependencies; this migration does not certify a complete SDK-only FPS build.
 
 ### Changing the SDK ABI (maintainers)
 

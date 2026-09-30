@@ -93,6 +93,10 @@ log through the bound context's `ILogger` and print in-game console lines throug
 `IConsole::Print`. Each module retains only the
 names the host accepted and unregisters them before releasing its state and
 context. A missing optional console leaves no registered callbacks.
+FPS preconditions use `FPS_REQUIRE_MSG` and `FPS_REQUIRE_NOT_NULL`, which remain
+active in Release and terminate even if the SDK logger is missing or throws.
+The private `Utils/Validate.h` is no longer a direct FPS dependency. Stop module
+worker callbacks before unbinding the borrowed logging context.
 
 Include `<Spark/GameTypes.h>` for shared gameplay enums. The SDK owns the
 declarations used by the runtime, editor and FPS; the private runtime header
@@ -106,6 +110,9 @@ still needs concrete rendering, scene, input, physics and save APIs; its CMake
 target still links the engine library on Windows. Prototype integration files
 also retain private subsystem APIs. The current remaining dependencies are
 recorded in [`module-content-inventory.json`](../../GameModules/module-content-inventory.json).
+SDK-only package consumers separately exercise the migrated logging helpers,
+cross-library binding isolation, rate limits, and always-on preconditions. Those
+bounded consumers do not prove the full FPS module meets MOD-310.
 `FPSPublicSDK_PrivateIncludeRatchet`, `FPSPublicSDK_GameTypes` and
 `PrototypeModuleKit_PublicConsoleBoundary` lock in the migrated boundaries;
 full package builds and runtime smokes remain separate verification.
