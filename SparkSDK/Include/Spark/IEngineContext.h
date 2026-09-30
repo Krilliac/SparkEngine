@@ -77,6 +77,7 @@ namespace Spark
     class VirtualFileSystem;
     class ILogger;
     class IConsole;
+    class IStateValidation;
 
     namespace Net
     {
@@ -331,7 +332,8 @@ namespace Spark
          *
          * SparkEngineLib is linked statically into every game-module DLL, so
          * InvalidStateDetector::GetInstance() inside a module is a DLL-local copy
-         * the host never ticks. Modules must register rules on this instance.
+         * the host never ticks. Modules register rules through GetStateValidation(),
+         * which needs no engine-private header; this accessor serves engine code.
          */
         virtual InvalidStateDetector* GetInvalidStateDetector() { return nullptr; }
         virtual const InvalidStateDetector* GetInvalidStateDetector() const { return nullptr; }
@@ -363,6 +365,15 @@ namespace Spark
          * registers must be unregistered in its OnUnload (see <Spark/IConsole.h>).
          */
         virtual IConsole* GetConsole() { return nullptr; }
+
+        /**
+         * @brief Get the host's ECS state-invariant rule registry
+         *
+         * Modules add and remove their invalid-state rules here instead of including
+         * the engine-private Utils/InvalidStateDetector.h. Every category a module
+         * adds must be removed in its OnUnload (see <Spark/IStateValidation.h>).
+         */
+        virtual IStateValidation* GetStateValidation() { return nullptr; }
     };
 
     /**
@@ -378,9 +389,9 @@ namespace Spark
      * vtable changed without a SPARK_SDK_VERSION bump re-pinned in
      * SparkSDK/ABI/sdk-abi-surface.json.
      */
-    inline constexpr uint32_t EngineContextVirtualCount = 90;
+    inline constexpr uint32_t EngineContextVirtualCount = 91;
 
-    static_assert(EngineContextVirtualCount == 90 && SPARK_SDK_VERSION == 7,
+    static_assert(EngineContextVirtualCount == 91 && SPARK_SDK_VERSION == 8,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

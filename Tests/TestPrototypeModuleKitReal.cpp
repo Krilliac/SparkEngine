@@ -1,23 +1,28 @@
 /**
  * @file TestPrototypeModuleKitReal.cpp
- * @brief MOD-295: prototype modules log and register console commands through the public SDK.
+ * @brief MOD-295: prototype modules log, register console commands and add state rules through the public SDK.
  *
  * IEngineContext::GetLogger() hands a module the host's Spark::ILogger
  * (EngineSdkLogger on the real EngineContext), and the Spark::ModuleLog helpers
  * in <Spark/ModuleLog.h> format through it. IEngineContext::GetConsole() hands it
  * the host's Spark::IConsole (EngineSdkConsole), which registers into the host
- * SimpleConsole. SparkGameRTS and SparkGamePlatformer use both instead of the
- * private Utils/SparkConsole.h and Utils/LogMacros.h.
+ * SimpleConsole. IEngineContext::GetStateValidation() hands it the host's
+ * Spark::IStateValidation (EngineSdkStateValidation), which adds rules to the host
+ * InvalidStateDetector. The prototype modules use these instead of the private
+ * Utils/SparkConsole.h, Utils/LogMacros.h and Utils/InvalidStateDetector.h.
  */
 
 #include "ScopedLoggerBaseline.h"
 #include "TestFramework.h"
 
 #include "Core/EngineContext.h"
+#include "Engine/ECS/Components.h"
+#include "Utils/InvalidStateDetector.h"
 #include "Utils/Logger.h"
 #include "Utils/SparkConsole.h"
 
 #include <Spark/IConsole.h>
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleLog.h>
 
 #include <algorithm>
@@ -168,6 +173,29 @@ namespace
                 console.UnregisterCommand(name);
         }
     };
+
+    /// Gives the test a freshly initialized host detector and leaves it as it found it (rules reset to defaults).
+    struct FreshDetectorScope final
+    {
+        Spark::InvalidStateDetector& detector = Spark::InvalidStateDetector::GetInstance();
+        bool wasInitialized = detector.IsInitialized();
+
+        FreshDetectorScope()
+        {
+            detector.Shutdown();
+            detector.Initialize();
+        }
+        ~FreshDetectorScope()
+        {
+            detector.Shutdown(); // also drops the scanned world pointer
+            if (wasInitialized)
+            {
+                detector.Initialize();
+            }
+        }
+        FreshDetectorScope(const FreshDetectorScope&) = delete;
+        FreshDetectorScope& operator=(const FreshDetectorScope&) = delete;
+    };
 } // namespace
 
 TEST(PrototypeModuleKit_LoggerRoutesThroughEngineContext)
@@ -269,6 +297,91 @@ TEST(PrototypeModuleKit_ConsoleRegistersThroughSdkContext)
     EXPECT_TRUE(received.empty());
     console->UnregisterCommand("kit_never_registered");
     EXPECT_TRUE(host.HasCommand("kit_taken"));
+}
+
+TEST(PrototypeModuleKit_StateRulesRegisterThroughSdkContext)
+{
+    EngineContext context;
+    Spark::IEngineContext* moduleView = &context;
+    Spark::IStateValidation* rules = moduleView->GetStateValidation();
+    ASSERT_TRUE(rules != nullptr);
+
+    const auto probeCheck = [](EntityID probe, int& runs)
+    {
+        return [probe, &runs](World&, std::vector<Spark::StateViolation>& out)
+        {
+            ++runs;
+            out.push_back({"Kit.Probe", static_cast<uint32_t>(probe), "probe violation",
+                           Spark::StateViolationSeverity::Critical});
+        };
+    };
+
+    World world;
+    const EntityID probe = world.CreateEntity("KitProbe");
+    int runs = 0;
+    {
+        // Initialize() discards earlier rules, so a detector that is not running refuses instead of losing it.
+        auto& detector = Spark::InvalidStateDetector::GetInstance();
+        const bool wasInitialized = detector.IsInitialized();
+        detector.Shutdown();
+        EXPECT_FALSE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
+        EXPECT_FALSE(detector.HasRule("Kit.Early"));
+        if (wasInitialized)
+        {
+            detector.Initialize();
+        }
+    }
+
+    FreshDetectorScope scope;
+    Spark::InvalidStateDetector& host = scope.detector;
+    const uint32_t defaultRules = host.GetRuleCount();
+
+    // A rule added through the SDK lands in the host detector and runs on the host's scan of the world.
+    ASSERT_TRUE(rules->AddRule("Kit.Probe", "Kit", Spark::StateViolationSeverity::Critical, probeCheck(probe, runs)));
+    EXPECT_TRUE(host.HasRule("Kit.Probe"));
+    EXPECT_EQ(host.GetRuleCount(), defaultRules + 1u);
+    host.SetWorld(&world);
+    host.Update(host.GetConfig().checkIntervalSec);
+    EXPECT_EQ(runs, 1);
+    const auto status = host.GetStatus();
+    const auto reported = std::find_if(status.recentViolations.begin(), status.recentViolations.end(),
+                                       [](const Spark::StateViolation& v) { return v.ruleName == "Kit.Probe"; });
+    ASSERT_TRUE(reported != status.recentViolations.end());
+    EXPECT_EQ(reported->entityId, static_cast<uint32_t>(probe));
+    EXPECT_TRUE(reported->severity == Spark::StateViolationSeverity::Critical);
+
+    // Nameless, category-less and check-less rules are refused before they reach the detector.
+    EXPECT_FALSE(rules->AddRule("", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
+    EXPECT_FALSE(rules->AddRule("Kit.NoCategory", "", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
+    EXPECT_FALSE(rules->AddRule("Kit.NoCheck", "Kit", Spark::StateViolationSeverity::Error, Spark::StateCheckFn{}));
+    EXPECT_FALSE(host.HasRule("Kit.NoCategory"));
+    EXPECT_FALSE(host.HasRule("Kit.NoCheck"));
+    EXPECT_EQ(host.GetRuleCount(), defaultRules + 1u);
+
+    // Registrations and removals are attributed to the module whose lifecycle callback is running, so one
+    // module's RemoveRulesByCategory leaves another module's rule in the same category alone.
+    {
+        Spark::InvalidStateDetector::ScopedRegistrationOwner owner(host, "kit.other");
+        ASSERT_TRUE(
+            rules->AddRule("Kit.Other", "Kit", Spark::StateViolationSeverity::Warning, probeCheck(probe, runs)));
+    }
+    {
+        Spark::InvalidStateDetector::ScopedRegistrationOwner owner(host, "kit.self");
+        ASSERT_TRUE(rules->AddRule("Kit.Self", "Kit", Spark::StateViolationSeverity::Warning, probeCheck(probe, runs)));
+        rules->RemoveRulesByCategory("Kit");
+    }
+    EXPECT_FALSE(host.HasRule("Kit.Self"));
+    EXPECT_TRUE(host.HasRule("Kit.Other"));
+    EXPECT_EQ(host.RemoveRulesByOwner("kit.other"), static_cast<size_t>(1));
+
+    // Outside any module callback the category is removed whole; an unknown category is a no-op.
+    rules->RemoveRulesByCategory("Kit");
+    EXPECT_FALSE(host.HasRule("Kit.Probe"));
+    rules->RemoveRulesByCategory("Kit.NeverAdded");
+    EXPECT_EQ(host.GetRuleCount(), defaultRules);
+    runs = 0;
+    host.Update(host.GetConfig().checkIntervalSec);
+    EXPECT_EQ(runs, 0);
 }
 
 #ifdef SPARK_TEST_HAS_IMGUI

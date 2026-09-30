@@ -21,6 +21,7 @@
 #include "Core/Contracts.h"
 #include "Core/EngineSdkConsole.h"
 #include "Core/EngineSdkLogger.h"
+#include "Core/EngineSdkStateValidation.h"
 
 #include <algorithm>
 #include <any>
@@ -286,6 +287,9 @@ class EngineContext : public Spark::IEngineContext
     /// The SDK console registry game modules use instead of the private Utils/SparkConsole.h.
     Spark::IConsole* GetConsole() override { return &m_sdkConsole; }
 
+    /// The SDK rule registry game modules use instead of the private Utils/InvalidStateDetector.h.
+    Spark::IStateValidation* GetStateValidation() override { return &m_sdkStateValidation; }
+
     // =========================================================================
     // Named setters — delegate to generic registry (R1.1)
     // =========================================================================
@@ -426,4 +430,6 @@ class EngineContext : public Spark::IEngineContext
     EngineSdkLogger m_sdkLogger;
     // Stateless: forwards to the host SimpleConsole singleton.
     EngineSdkConsole m_sdkConsole;
+    // Stateless: forwards to the host InvalidStateDetector singleton.
+    EngineSdkStateValidation m_sdkStateValidation;
 };
