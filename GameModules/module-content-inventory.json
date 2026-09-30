@@ -171,7 +171,7 @@
       "directory": "GameModules/SparkGameMMO",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameMMO/Source",
-      "sourceFileCount": 51,
+      "sourceFileCount": 52,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

@@ -8,6 +8,8 @@
  * mutex-guarded, fixed-capacity inbox; every decode and all session/world mutation happen
  * when Update() drains that inbox on the game thread. The module owns this gate; the
  * borrowed network/account/character/player services must outlive Shutdown().
+ * Credential operations (Login/Register) are admitted by AuthAdmissionBudget: per-peer
+ * cooldown and registration limit, plus global KDF and registration buckets.
  * Session, client-view and inbox storage are bounded (64 sessions, 128 queued datagrams,
  * each at most MaxPacketBytes, allocated once in Initialize); datagrams arriving while the
  * inbox is full are dropped. Admission allocates strings and characters; movement uses
@@ -18,6 +20,7 @@
 #pragma once
 
 #ifdef ENABLE_NETWORKING
+#include "MMOAuthAdmission.h"
 #include "MMOSessionGateProtocol.h"
 #include "Engine/Networking/NetworkManager.h"
 
@@ -77,6 +80,7 @@ namespace MMO
             std::string token;
             float moveCredit = 0.0f;
             float interactCooldown = 0.0f;
+            AuthAdmissionBudget::Peer admission; ///< Per-connection credential budget.
         };
 
         Session* FindSession(uint32_t clientId);
@@ -108,7 +112,7 @@ namespace MMO
         SessionGateWire::Packet m_lastReply{};
         uint32_t m_nextRequest = 0;
         uint32_t m_stateSequence = 0;
-        float m_authCooldown = 0.0f;
+        AuthAdmissionBudget m_admission; ///< Per-peer and global credential budgets.
         float m_connectionCheck = 0.0f;
     };
 } // namespace MMO

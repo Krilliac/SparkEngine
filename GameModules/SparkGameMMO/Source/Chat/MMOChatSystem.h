@@ -16,8 +16,15 @@
  * derives from the connection (`<sanitized display name>#<client id>`, see
  * ServerAttributedSenderName); a client-supplied name is never forwarded.
  *
- * Thread affinity: game thread. Ownership: the network observer captures
- * `this`; Shutdown removes it.
+ * Thread affinity: game thread, except the network handler. NetworkManager
+ * dispatches handlers on whichever thread calls NetworkManager::Update (the
+ * DedicatedServer tick thread inside SparkServer), so the handler only copies
+ * the sender id and payload into a mutex-guarded inbox bounded at
+ * MAX_PENDING_NETWORK messages (further datagrams are dropped). Update() drains
+ * it on the game thread, where all decoding, relaying and history mutation
+ * happen. Ownership: the network observer holds only a weak reference to the
+ * inbox, never `this`; Shutdown unregisters it and discards anything still
+ * queued.
  */
 
 #pragma once
@@ -25,6 +32,8 @@
 #include "Spark/IEngineContext.h"
 #include <cstdint>
 #include <deque>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -38,7 +47,8 @@
 namespace Spark::Net
 {
     struct NetworkMessage;
-}
+    enum class ChannelType;
+} // namespace Spark::Net
 
 namespace MMO
 {
@@ -145,8 +155,29 @@ namespace MMO
       private:
         void SetupNetworkHandlers();
 #ifdef ENABLE_NETWORKING
+        /// A received chat datagram awaiting game-thread processing.
+        struct PendingNetworkChat
+        {
+            uint32_t senderId = 0;
+            Spark::Net::ChannelType channel{};
+            std::vector<uint8_t> payload;
+        };
+
+        /// Lifetime-owned inbox state used by the network callback. Keeping this separate from the
+        /// system lets a callback copied by NetworkManager finish without dereferencing a torn-down
+        /// MMOChatSystem instance.
+        struct PendingNetworkInbox
+        {
+            std::mutex mutex;
+            std::deque<PendingNetworkChat> messages;
+        };
+
+        /// Any thread: copy the datagram into the bounded inbox.
+        static void EnqueueNetworkChat(PendingNetworkInbox& inbox, const Spark::Net::NetworkMessage& netMsg);
+        /// Game thread: process every queued datagram in arrival order.
+        void DrainNetworkChat();
         /// Receive path for the module chat type: server validates, re-attributes and relays; client records.
-        void HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const Spark::Net::NetworkMessage& netMsg);
+        void HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const PendingNetworkChat& received);
 #endif
         static ChatChannel ParseChannelName(const std::string& name);
         static const char* ChannelToString(ChatChannel ch);
@@ -155,6 +186,10 @@ namespace MMO
         std::deque<ChatMessage> m_history;
         float m_time{0.0f};
         bool m_initialized{false};
+#ifdef ENABLE_NETWORKING
+        std::shared_ptr<PendingNetworkInbox> m_pendingInbox;
+#endif
+        static constexpr size_t MAX_PENDING_NETWORK = 256;
 
         static constexpr size_t MAX_HISTORY = 200;
     };

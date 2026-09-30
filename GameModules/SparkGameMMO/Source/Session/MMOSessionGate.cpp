@@ -217,7 +217,7 @@ namespace MMO
         m_states = {};
         m_lastReply = {};
         m_nextRequest = 0;
-        m_authCooldown = 0.0f;
+        m_admission.Reset();
         m_connectionCheck = 0.0f;
     }
 
@@ -248,9 +248,10 @@ namespace MMO
             return;
         }
         const float elapsed = (std::min)(deltaTime, 0.1f);
-        m_authCooldown = (std::max)(0.0f, m_authCooldown - elapsed);
+        m_admission.Advance(elapsed);
         for (auto& session : m_sessions)
         {
+            AuthAdmissionBudget::AdvancePeer(session.admission, elapsed);
             session.moveCredit = (std::min)(0.1f, session.moveCredit + elapsed);
             session.interactCooldown = (std::max)(0.0f, session.interactCooldown - elapsed);
         }
@@ -277,13 +278,15 @@ namespace MMO
         {
             return Status::Rejected;
         }
-        if (m_authCooldown > 0.0f)
+        // Every Login costs one PBKDF2 (unknown usernames included); a valid, unique Register
+        // can also cost one. Charge admission before any credential work runs.
+        const bool registration = request.operation == Operation::Register;
+        if (!m_admission.TryAdmit(session.admission, registration ? AuthAdmissionBudget::Operation::Register
+                                                                  : AuthAdmissionBudget::Operation::Login))
         {
             return Status::RateLimited;
         }
-        // A global admission budget bounds KDF work even when one peer changes usernames.
-        m_authCooldown = 0.25f;
-        if (request.operation == Operation::Register)
+        if (registration)
         {
             if (m_accounts->GetAccountCount() >= 1024)
             {
