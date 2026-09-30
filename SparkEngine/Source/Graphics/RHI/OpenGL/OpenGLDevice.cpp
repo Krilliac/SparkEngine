@@ -106,6 +106,19 @@ namespace Spark
                     return GL_KEEP;
                 }
 
+                /// The colour buffer framebuffer 0 renders to. A double-buffered window renders to
+                /// GL_BACK. A single-buffered default framebuffer has only GL_FRONT: an EGL pbuffer,
+                /// which is what SDL2's offscreen video driver gives the window when no display
+                /// server is reachable. Mesa accepts GL_BACK there for draws, glClear and
+                /// glReadBuffer, but resolves glClear(Named)Framebuffer* against the absent back
+                /// attachment and silently clears nothing.
+                GLenum DefaultFramebufferColorBuffer()
+                {
+                    GLint doubleBuffered = GL_TRUE;
+                    glGetNamedFramebufferParameteriv(0, GL_DOUBLEBUFFER, &doubleBuffered);
+                    return doubleBuffered != GL_FALSE ? GL_BACK : GL_FRONT;
+                }
+
                 /// D3D clears ignore the bound pipeline's write masks and scissor; GL clears
                 /// honor them. Force full writes for the clear and restore the pipeline state.
                 class ClearStateScope
@@ -631,11 +644,12 @@ namespace Spark
 
                 if (glTex->GetGLFramebuffer() == 0)
                 {
-                    // Default framebuffer: valid draw buffers are GL_BACK (not GL_COLOR_ATTACHMENT0).
-                    // Its own depth buffer stands in for depthStencil (see ClearDepthStencil).
+                    // Default framebuffer: its colour buffer is GL_BACK or, single-buffered, GL_FRONT
+                    // (never GL_COLOR_ATTACHMENT0). glDrawBuffers rejects GL_FRONT, so the singular
+                    // form names it. Its own depth buffer stands in for depthStencil (see
+                    // ClearDepthStencil).
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    GLenum backBuf = GL_BACK;
-                    glDrawBuffers(1, &backBuf);
+                    glDrawBuffer(DefaultFramebufferColorBuffer());
                     m_defaultFramebufferDepth = depthStencil;
                 }
                 else
@@ -697,7 +711,11 @@ namespace Spark
                 ClearStateScope scope;
                 if (glTex->GetGLFramebuffer() != 0 || glTex->GetGLTexture() == 0)
                 {
-                    // The texture's private FBO (or the default framebuffer) holds exactly this target
+                    // The texture's private FBO (or the default framebuffer) holds exactly this target.
+                    // Draw buffer 0 of framebuffer 0 must name a colour buffer it has, or the clear
+                    // is a silent no-op (see DefaultFramebufferColorBuffer).
+                    if (glTex->GetGLFramebuffer() == 0)
+                        glNamedFramebufferDrawBuffer(0, DefaultFramebufferColorBuffer());
                     glClearNamedFramebufferfv(glTex->GetGLFramebuffer(), GL_COLOR, 0, color);
                 }
                 else
