@@ -22,8 +22,9 @@
  * the sender id and payload into a mutex-guarded inbox bounded at
  * MAX_PENDING_NETWORK messages (further datagrams are dropped). Update() drains
  * it on the game thread, where all decoding, relaying and history mutation
- * happen. Ownership: the network observer captures `this`; Shutdown removes it
- * and discards anything still queued.
+ * happen. Ownership: the network observer holds only a weak reference to the
+ * inbox, never `this`; Shutdown unregisters it and discards anything still
+ * queued.
  */
 
 #pragma once
@@ -31,6 +32,7 @@
 #include "Spark/IEngineContext.h"
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -152,6 +154,7 @@ namespace MMO
 
       private:
         void SetupNetworkHandlers();
+#ifdef ENABLE_NETWORKING
         /// A received chat datagram awaiting game-thread processing.
         struct PendingNetworkChat
         {
@@ -160,9 +163,17 @@ namespace MMO
             std::vector<uint8_t> payload;
         };
 
-#ifdef ENABLE_NETWORKING
+        /// Lifetime-owned inbox state used by the network callback. Keeping this separate from the
+        /// system lets a callback copied by NetworkManager finish without dereferencing a torn-down
+        /// MMOChatSystem instance.
+        struct PendingNetworkInbox
+        {
+            std::mutex mutex;
+            std::deque<PendingNetworkChat> messages;
+        };
+
         /// Any thread: copy the datagram into the bounded inbox.
-        void EnqueueNetworkChat(const Spark::Net::NetworkMessage& netMsg);
+        static void EnqueueNetworkChat(PendingNetworkInbox& inbox, const Spark::Net::NetworkMessage& netMsg);
         /// Game thread: process every queued datagram in arrival order.
         void DrainNetworkChat();
         /// Receive path for the module chat type: server validates, re-attributes and relays; client records.
@@ -175,9 +186,9 @@ namespace MMO
         std::deque<ChatMessage> m_history;
         float m_time{0.0f};
         bool m_initialized{false};
-        // Layout is identical with and without ENABLE_NETWORKING (only networked builds fill it).
-        std::mutex m_pendingMutex;
-        std::deque<PendingNetworkChat> m_pending; ///< Guarded by m_pendingMutex.
+#ifdef ENABLE_NETWORKING
+        std::shared_ptr<PendingNetworkInbox> m_pendingInbox;
+#endif
         static constexpr size_t MAX_PENDING_NETWORK = 256;
 
         static constexpr size_t MAX_HISTORY = 200;

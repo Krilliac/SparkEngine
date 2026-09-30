@@ -47,6 +47,9 @@ namespace MMO
         m_time = 0.0f;
         m_history.clear();
 
+#ifdef ENABLE_NETWORKING
+        m_pendingInbox = std::make_shared<PendingNetworkInbox>();
+#endif
         SetupNetworkHandlers();
 
         // Post a welcome message
@@ -83,29 +86,41 @@ namespace MMO
                                                                           .allowedFromServer = true,
                                                                           .stringFieldOffset = 1});
 
-        netMgr->RegisterHandler(kMMOChatMessageType,
-                                [this](const Spark::Net::NetworkMessage& netMsg) { EnqueueNetworkChat(netMsg); });
+        netMgr->RegisterHandler(
+            kMMOChatMessageType,
+            [weakInbox = std::weak_ptr<PendingNetworkInbox>(m_pendingInbox)](const Spark::Net::NetworkMessage& netMsg)
+            {
+                if (auto inbox = weakInbox.lock())
+                {
+                    EnqueueNetworkChat(*inbox, netMsg);
+                }
+            });
 #endif
     }
 
 #ifdef ENABLE_NETWORKING
-    void MMOChatSystem::EnqueueNetworkChat(const Spark::Net::NetworkMessage& netMsg)
+    void MMOChatSystem::EnqueueNetworkChat(PendingNetworkInbox& inbox, const Spark::Net::NetworkMessage& netMsg)
     {
         // Any thread (the DedicatedServer tick thread pumps NetworkManager): copy only.
-        std::lock_guard lock(m_pendingMutex);
-        if (m_pending.size() >= MAX_PENDING_NETWORK)
+        std::lock_guard lock(inbox.mutex);
+        if (inbox.messages.size() >= MAX_PENDING_NETWORK)
         {
             return;
         }
-        m_pending.push_back({netMsg.senderID, netMsg.channel, netMsg.payload});
+        inbox.messages.push_back({netMsg.senderID, netMsg.channel, netMsg.payload});
     }
 
     void MMOChatSystem::DrainNetworkChat()
     {
+        const auto inbox = m_pendingInbox;
+        if (!inbox)
+        {
+            return;
+        }
         std::deque<PendingNetworkChat> pending;
         {
-            std::lock_guard lock(m_pendingMutex);
-            pending.swap(m_pending);
+            std::lock_guard lock(inbox->mutex);
+            pending.swap(inbox->messages);
         }
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
         if (!netMgr)
@@ -261,9 +276,10 @@ namespace MMO
             // replacement already owns untouched.
             netMgr->UnregisterHandler(kMMOChatMessageType);
         }
+        if (auto inbox = std::move(m_pendingInbox))
         {
-            std::lock_guard lock(m_pendingMutex);
-            m_pending.clear();
+            std::lock_guard lock(inbox->mutex);
+            inbox->messages.clear();
         }
 #endif
         m_history.clear();
