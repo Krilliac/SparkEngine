@@ -305,6 +305,27 @@
       "kind": "environment"
     },
     {
+      "file": "Tests/TestRHI240LinuxForwardPassReal.cpp",
+      "test": null,
+      "sites": 5,
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestRHI240LinuxForwardPassReal.cpp",
+      "test": "LinuxForwardPass_OpenGLCubeRenders",
+      "sites": 1,
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestRHI240LinuxForwardPassReal.cpp",
+      "test": "LinuxForwardPass_VulkanCubeRenders",
+      "sites": 3,
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
       "file": "Tests/TestSEC3GameplayHardening.cpp",
       "test": "SEC3Gameplay_ModScanRefusesSymlinkedManifest",
       "sites": 1,
