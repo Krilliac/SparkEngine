@@ -2953,12 +2953,16 @@ class SelectorResolutionTests(ContractTestCase):
 
     def test_work_item_ctest_filters_that_select_nothing_are_rejected(self) -> None:
         # The contract before CI-110: a label no test carries and two filters
-        # whose tests do not exist yet, undeclared.
+        # whose tests do not exist yet, undeclared. MOD-320's MMOIntegratedWorld
+        # tests are registered now, so its -R case uses the still-unregistered
+        # MMOAccount family instead.
         items = self.items_of(self.mutable)
         commands = items["RDY-020"]["commands"]
         index = next(i for i, command in enumerate(commands) if " -L asset " in command)
         commands[index] = " -L profile-package ".join(commands[index].split(" -L asset "))
-        for identifier, selector in (("RHI-220", "metal"), ("MOD-320", "MMOIntegratedWorld_*")):
+        mod320 = items["MOD-320"]["commands"]
+        mod320[0] = " -R MMOAccount ".join(mod320[0].split(" -R MMOIntegratedWorld "))
+        for identifier, selector in (("RHI-220", "metal"), ("MOD-320", "MMOAccount_*")):
             items[identifier]["testSelectors"].remove(selector)
             items[identifier]["plannedTestSelectors"].remove(selector)
         validator = site_data_validate.Validator(self.mutable)
@@ -2966,7 +2970,7 @@ class SelectorResolutionTests(ContractTestCase):
         ctest_errors = sorted(error for error in validator.errors if "selects no registered" in error)
         self.assertEqual(
             [
-                "workItems.MOD-320.commands[0]: ctest -R MMOIntegratedWorld selects no registered test; "
+                "workItems.MOD-320.commands[0]: ctest -R MMOAccount selects no registered test; "
                 "fix it or declare it in plannedTestSelectors",
                 f"workItems.RDY-020.commands[{index}]: ctest -L profile-package selects no registered label; "
                 "fix it or declare it in plannedTestSelectors",
