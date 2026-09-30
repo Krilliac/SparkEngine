@@ -3508,14 +3508,23 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # Instrumented objects plus one .gcno per compile outgrow the workflow's
+      # 1G cache (the plain GCC Debug lane alone fills 0.8G); evicting during a
+      # cold fill would leave the next run only partially warm.
+      CCACHE_MAXSIZE: 3G
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev libfreetype-dev
+      # restore/save are split so a run that later times out or fails in Test
+      # still keeps the objects it compiled (the composite action saves only on
+      # success(), and a cold coverage build alone is 26-34 min of the 45).
       - name: Setup ccache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: ccache-restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.ccache
           key: ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3537,12 +3546,24 @@ jobs:
         run: |
           spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
           test -n "$spark_engine_version"
+          # Pin ccache to the directory the cache steps persist. Unset, ccache
+          # 4.9 writes to ~/.cache/ccache and ~/.ccache is never created.
+          mkdir -p "$HOME/.ccache"
+          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          export CCACHE_DIR="$HOME/.ccache"
           command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
+          # -pthread, not -fprofile-update=atomic: the GCC driver turns
+          # --coverage + -pthread into -fprofile-update=prefer-atomic (atomic on
+          # x86-64), so counters stay race-free, while ccache 4.9 (Ubuntu 24.04)
+          # rejects any unknown -fprofile-* option as an unsupported compiler
+          # option, which made every coverage compile uncacheable.
+          g++-14 -dumpspecs | grep -q 'pthread:-fprofile-update=prefer-atomic' || {
+            echo "::error::g++-14 no longer maps -pthread to -fprofile-update=prefer-atomic"; exit 1; }
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
             -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
+            -DCMAKE_CXX_FLAGS="--coverage -pthread" -DCMAKE_C_FLAGS="--coverage -pthread" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
       - name: Build
@@ -3553,6 +3574,12 @@ jobs:
       - name: Print ccache stats
         if: always()
         run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
+      - name: Save ccache
+        if: ${{ always() && steps.ccache-restore.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.ccache
+          key: ${{ steps.ccache-restore.outputs.cache-primary-key }}
       - name: Test
         id: coverage-tests
         env:

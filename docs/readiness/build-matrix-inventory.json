@@ -9481,7 +9481,7 @@
         ],
         "if": "absent",
         "continueOnError": "absent",
-        "timeoutMinutes": 30,
+        "timeoutMinutes": 45,
         "needs": [],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -11077,12 +11077,12 @@
             "name": "Compare the two Shipping builds",
             "id": "",
             "uses": "",
-            "shell": "pwsh",
+            "shell": "bash",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "c7272930cc71bcc1"
+            "runDigest": "8134113ebecd66de"
           },
           {
             "index": 6,
@@ -12514,7 +12514,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 16,
+        "stepCount": 17,
         "steps": [
           {
             "index": 0,
@@ -12543,8 +12543,8 @@
           {
             "index": 2,
             "name": "Setup ccache",
-            "id": "",
-            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "id": "ccache-restore",
+            "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
@@ -12574,7 +12574,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "3ae51b441e6ebe8a"
+            "runDigest": "1d0e08b5a02b7c97"
           },
           {
             "index": 5,
@@ -12602,6 +12602,18 @@
           },
           {
             "index": 7,
+            "name": "Save ccache",
+            "id": "",
+            "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "shell": "",
+            "if": "${{ always() && steps.ccache-restore.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 8,
             "name": "Test",
             "id": "coverage-tests",
             "uses": "",
@@ -12615,7 +12627,7 @@
             "runDigest": "349d4c74d8b72aa5"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Generate coverage",
             "id": "generate-coverage",
             "uses": "",
@@ -12627,7 +12639,7 @@
             "runDigest": "e2780fe0ed4b2ead"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Per-subsystem coverage analysis",
             "id": "subsystem-coverage",
             "uses": "",
@@ -12639,7 +12651,7 @@
             "runDigest": "5d6b6f2886b08bee"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -12651,7 +12663,7 @@
             "runDigest": "5cc9bf02c9d4033b"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12663,7 +12675,7 @@
             "runDigest": ""
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Prepare bounded coverage comment payload",
             "id": "",
             "uses": "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
@@ -12684,7 +12696,7 @@
             "runDigest": ""
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Upload bounded coverage comment payload",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12696,7 +12708,7 @@
             "runDigest": ""
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Upload coverage",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12708,7 +12720,7 @@
             "runDigest": ""
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Enforce coverage test and threshold results",
             "id": "",
             "uses": "",
@@ -12724,7 +12736,9 @@
             "runDigest": "798da9bc43c91e2a"
           }
         ],
-        "envNames": [],
+        "envNames": [
+          "CCACHE_MAXSIZE"
+        ],
         "gating": "blocking"
       },
       {
@@ -16993,7 +17007,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -pthread\" -DCMAKE_C_FLAGS=\"--coverage -pthread\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
@@ -17002,8 +17016,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "--coverage -fprofile-update=atomic",
-          "CMAKE_C_FLAGS": "--coverage -fprofile-update=atomic",
+          "CMAKE_CXX_FLAGS": "--coverage -pthread",
+          "CMAKE_C_FLAGS": "--coverage -pthread",
           "CMAKE_EXE_LINKER_FLAGS": "--coverage",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
@@ -18341,7 +18355,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+        "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -pthread\" -DCMAKE_C_FLAGS=\"--coverage -pthread\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_BUILD_TYPE": "Debug",
@@ -18350,8 +18364,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_FLAGS": "--coverage -fprofile-update=atomic",
-          "CMAKE_C_FLAGS": "--coverage -fprofile-update=atomic",
+          "CMAKE_CXX_FLAGS": "--coverage -pthread",
+          "CMAKE_C_FLAGS": "--coverage -pthread",
           "CMAKE_EXE_LINKER_FLAGS": "--coverage",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
@@ -21590,7 +21604,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -fprofile-update=atomic\" -DCMAKE_C_FLAGS=\"--coverage -fprofile-update=atomic\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
+      "command": "cmake -B build -DCMAKE_BUILD_TYPE=Debug  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"--coverage -pthread\" -DCMAKE_C_FLAGS=\"--coverage -pthread\"  -DCMAKE_EXE_LINKER_FLAGS=\"--coverage\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -21599,8 +21613,8 @@
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_FLAGS": "--coverage -fprofile-update=atomic",
-        "CMAKE_C_FLAGS": "--coverage -fprofile-update=atomic",
+        "CMAKE_CXX_FLAGS": "--coverage -pthread",
+        "CMAKE_C_FLAGS": "--coverage -pthread",
         "CMAKE_EXE_LINKER_FLAGS": "--coverage",
         "BUILD_TESTS": "ON",
         "BUILD_GAME_MODULES": "ON"
