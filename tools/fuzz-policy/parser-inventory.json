@@ -541,16 +541,23 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Modding/ModSystemIO.cpp",
-        "SparkEngine/Source/Engine/Modding/ModSystem.h"
+        "SparkEngine/Source/Engine/Modding/ModSystem.h",
+        "SparkEngine/Source/Engine/Modding/ModSystem.cpp"
       ],
       "formats": [
         ".mod",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzModManifest.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzModManifest",
+        "test_selector": "FuzzModManifestSmoke",
+        "corpus_id": "mod-manifest-corpus",
+        "entry_symbol": "Spark::ModSystem::ScanForMods",
+        "binding_source": "FuzzerTests/FuzzModManifestProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzScanMods"
       }
     },
     {
@@ -828,10 +835,16 @@
         ".json",
         ".pending"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzInstallState.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzInstallState",
+        "test_selector": "FuzzInstallStateSmoke",
+        "corpus_id": "installer-state-manifest-corpus",
+        "entry_symbol": "SparkInstaller::InstallState::Load",
+        "binding_source": "FuzzerTests/FuzzInstallStateProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadInstallState"
       }
     },
     {

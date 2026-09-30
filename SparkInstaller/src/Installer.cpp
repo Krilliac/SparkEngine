@@ -41,48 +41,6 @@ namespace SparkInstaller
             return fs::is_regular_file(fs::symlink_status(dest / InstallState::PendingFileName(), ec));
         }
 
-        // The pending marker holds the ref and the exact commit that was cloned,
-        // one "key=value" line each.
-        bool WritePendingMarker(const fs::path& tree, const std::string& ref, const std::string& commit)
-        {
-            std::ofstream out(tree / InstallState::PendingFileName(), std::ios::binary | std::ios::trunc);
-            out << "ref=" << ref << '\n' << "commit=" << commit << '\n';
-            out.close();
-            return static_cast<bool>(out);
-        }
-
-        bool ReadPendingMarker(const fs::path& tree, std::string& ref, std::string& commit)
-        {
-            constexpr std::uintmax_t kMaxPendingMarkerBytes = 4096;
-            const fs::path marker = tree / InstallState::PendingFileName();
-            std::error_code ec;
-            const std::uintmax_t size = fs::file_size(marker, ec);
-            if (ec || size > kMaxPendingMarkerBytes)
-            {
-                return false;
-            }
-            std::ifstream in(marker, std::ios::binary);
-            std::string line;
-            ref.clear();
-            commit.clear();
-            while (std::getline(in, line))
-            {
-                if (!line.empty() && line.back() == '\r')
-                {
-                    line.pop_back();
-                }
-                if (line.rfind("ref=", 0) == 0)
-                {
-                    ref = line.substr(4);
-                }
-                else if (line.rfind("commit=", 0) == 0)
-                {
-                    commit = line.substr(7);
-                }
-            }
-            return !ref.empty() && !commit.empty();
-        }
-
         // A sibling of the destination, so activation is a same-volume rename.
         fs::path MakeStagingPath(const fs::path& dest)
         {
@@ -364,7 +322,7 @@ namespace SparkInstaller
                 discardStaging();
                 return 5;
             }
-            if (!WritePendingMarker(staging, ctx.ref, stagedCommit))
+            if (!InstallState::WritePendingMarker(staging.string(), ctx.ref, stagedCommit))
             {
                 Emit(ctx.log,
                      "error: could not write the pending-install marker; " + ctx.destination + " was not changed");
@@ -384,7 +342,7 @@ namespace SparkInstaller
         {
             std::string pendingRef;
             std::string pendingCommit;
-            if (!ReadPendingMarker(dest, pendingRef, pendingCommit))
+            if (!InstallState::ReadPendingMarker(dest.string(), pendingRef, pendingCommit))
             {
                 Emit(ctx.log, "error: the pending-install marker in " + ctx.destination +
                                   " cannot be read; remove the destination and install again");

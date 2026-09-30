@@ -914,6 +914,72 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "installer-state-manifest-corpus",
+      "parser_id": "installer-state-manifest",
+      "corpus_dir": "FuzzerTests/corpora/installer-state-manifest",
+      "last_verified": "2026-09-29",
+      "content_digest": "9cee8a618c0bed56095c9c2e5b3fa18b8b768d6ff2f156b21059b85a5b83a0d6",
+      "budget": {
+        "max_input_bytes": 65537,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-schema-overflow.json",
+          "finding": "The schema field was read with std::atoi over any run of digits; atoi of 4294967297 is undefined and LP64 glibc returned 1, so the reader accepted the file as schema 1. The reader now parses the integer with std::from_chars, range-checked.",
+          "found_by": "review",
+          "guard_test": "SparkInstallerInstallStateTests"
+        },
+        {
+          "file": "regression-escaped-quote.json",
+          "finding": "String fields ended at the first quote and were never unescaped, so a ref holding an escaped quote read back as its prefix up to the backslash. The reader now unescapes exactly the escapes Save writes and refuses any other.",
+          "found_by": "review",
+          "guard_test": "SparkInstallerInstallStateTests"
+        },
+        {
+          "file": "regression-windows-destination.json",
+          "finding": "Backslashes were not unescaped, so every Windows destination and a generator holding a backslash read back doubled and changed on each Save and Load round trip.",
+          "found_by": "review",
+          "guard_test": "SparkInstallerInstallStateTests"
+        }
+      ]
+    },
+    {
+      "id": "mod-manifest-corpus",
+      "parser_id": "mod-manifest",
+      "corpus_dir": "FuzzerTests/corpora/mod-manifest",
+      "last_verified": "2026-09-29",
+      "content_digest": "a6c72361303985428f0c736cd0e46666f8bfb53e4e44048141b0979a54dcb01d",
+      "budget": {
+        "max_input_bytes": 131073,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 16,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-control-byte-id.json",
+          "finding": "A mod id had no policy beyond non-empty, so an id holding a control byte (or NUL, a path separator or 64 KiB) was published as the map key, log argument, config field and UI label. Ids are now 1-128 characters of [A-Za-z0-9._-], not '.' or '..'.",
+          "found_by": "review",
+          "guard_test": "ModSystem_RejectsIdWithControlOrSeparatorBytes"
+        },
+        {
+          "file": "regression-duplicate-id-pair.bin",
+          "finding": "Two mod directories declaring one id were both counted but only the one the directory iterator reached last was registered, so a dropped-in mod could shadow an installed one. An id claimed twice is now published from neither directory.",
+          "found_by": "review",
+          "guard_test": "ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished"
+        }
+      ]
     }
   ]
 }

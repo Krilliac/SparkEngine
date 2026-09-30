@@ -222,6 +222,67 @@ a defect in the existing parser.
   decoder's caps. The seeds are the shipped `GameManager.vscript` and the MOD-390 test's
   minimal document with one defect each. A 90-second campaign ran 473,683 inputs clean.
 
+### Installer marker and mod-manifest targets
+
+Both targets were built with Clang 21 and libFuzzer on a local WSL Ubuntu tree and their
+corpora replayed clean through the registered CTest smokes. Each was also linked against
+the pre-fix reader extracted from 256603c1c, where its regression seeds abort. Neither
+target has hosted runtime evidence yet.
+
+- **`installer-state-manifest`** (`SparkFuzzInstallState`, `FuzzInstallStateSmoke`,
+  `-runs=6`, `-max_len=65537`) writes every input twice: once as
+  `.sparkengine-install.json` for `SparkInstaller::InstallState::Load` and once as
+  `.sparkengine-install.pending` for `InstallState::ReadPendingMarker`. The adapter aborts
+  in these cases:
+  - a rejected read changed its outputs;
+  - an accepted state's `"schema"` member is not literally the token `1` (an independent
+    scan);
+  - an accepted state changes across `Save` then `Load`;
+  - an accepted pending marker holds an empty value, CR, LF or NUL, or changes across
+    `WritePendingMarker` then `ReadPendingMarker`.
+
+  The old reader used substring scanners with three defects. It read the schema with
+  `std::atoi`, so on LP64 glibc `4294967297` read back as `1`. It never unescaped
+  strings, so every Windows destination read back with doubled backslashes and a ref
+  holding a quote was cut short at the backslash. It also matched keys inside other
+  values. `Load` is now a strict tokenizer for exactly the object `Save` writes: each key
+  once, no unknown keys, only `Save`'s escapes, and `std::from_chars` for the schema
+  (without JSON's forbidden leading zeros, which a 60-second `SparkFuzzInstallState`
+  campaign found `from_chars` alone accepts as `01`).
+  `Load` also refuses a compact document that would exceed the 64 KiB limit when
+  `Save` writes it again; `Save` refuses raw controls it cannot encode and oversized
+  output before replacing an existing marker. The pending marker used to be read
+  to EOF after a stat. Its reader and writer moved from
+  `Installer.cpp` into `InstallState`, and the reader now reads at most 4 KiB + 1 bytes
+  and refuses duplicate or unknown lines. `SparkInstallerInstallStateTests` pins all of
+  this.
+- **`mod-manifest`** (`SparkFuzzModManifest`, `FuzzModManifestSmoke`, `-runs=6`,
+  `-max_len=131073`) splits each input at its first `0x00` byte into one or two `mod.json`
+  documents. It runs `Spark::ModSystem::ScanForMods` over them twice, the path the
+  editor's ModdingPanel scan and rescan buttons take, and then passes the first document
+  to `LoadConfig`. The adapter aborts in these cases:
+  - the returned count differs from `GetAllMods()`;
+  - a published id or dependency breaks the id policy (1-128 characters of
+    `[A-Za-z0-9._-]`, not `.` or `..`);
+  - a mod depends on itself or lists a dependency twice;
+  - two mods share a directory, or a scan enables or loads a mod;
+  - a rescan changes the published set;
+  - a rejected `LoadConfig` changes the mods.
+
+  The scan used to publish each manifest as it parsed it. A rescan therefore reset an
+  Active mod to `loaded=false` without running its unload callbacks, so `UnloadAll`
+  skipped it. Two directories that declared one id were both counted, but only the last
+  one read was registered. An id could also hold control bytes, NUL or separators. The
+  scan now publishes only after it completes: it skips an id that more than one directory
+  claims, and for a known id it refreshes the manifest metadata while keeping an active
+  mod's original path as its resource ownership anchor. Load and unload moved into
+  `ModSystemLifecycle.cpp`, so the discovery closure (`ModSystem.cpp`,
+  `ModSystemIO.cpp`, `FileUtils.cpp`, `Logger.cpp`) does not need the fault isolator. The
+  harden tests `ModSystem_RescanKeepsActiveModLoadedAndUnloadable`,
+  `ModSystem_RescanKeepsActiveModPathOwnership`,
+  `ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished` and
+  `ModSystem_RejectsIdWithControlOrSeparatorBytes` pin these fixes.
+
 ### Retired and reclassified records
 
 Five blocked records described code that decodes no untrusted bytes. Each now carries its
@@ -565,5 +626,5 @@ Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocki
 campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
 re-verified structurally 2026-09-28 (SparkBuild, `-exec` and `.vscript` targets and the
-record reclassification); rerun the CI command for
+record reclassification) and 2026-09-29 (installer marker and mod-manifest targets); rerun the CI command for
 current counts and exact-SHA runtime evidence.

@@ -82,8 +82,18 @@ namespace Spark
 
         /**
      * @brief Scan a directory for available mods.
+     * @details The mods directory is untrusted input. Thread affinity: game thread only
+     *          (the editor's ModdingPanel calls it); ModSystem is not synchronized.
+     *          Every manifest is parsed before anything is published: a mod id must be
+     *          1-128 characters of [A-Za-z0-9._-] other than "." and "..", and an id that
+     *          more than one directory declares is published from none of them. A rescan
+     *          refreshes the manifest metadata (name, author, version, description,
+     *          preview image, dependencies, path) of a known mod but never its load
+     *          state: enabled, loaded, loadOrder and ModState are kept, so an Active mod
+     *          stays Active and UnloadAll still unloads it. Mods absent from the
+     *          directory stay registered.
      * @param modsDirectory Path to scan (e.g. "Data/Mods/").
-     * @return Number of mods discovered.
+     * @return Number of mod ids this scan published.
      */
         size_t ScanForMods(const std::string& modsDirectory);
 
