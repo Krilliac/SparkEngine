@@ -72,7 +72,9 @@ namespace Spark
         if (m_initialized)
             return;
 
-        m_rules.clear();
+        // Keep rules added before start: the windowed hosts load game modules, which add their rules through
+        // IStateValidation, before the lifecycle initializes the detector. Shutdown() empties the list, so
+        // nothing survives from an earlier run.
         m_violations.clear();
         m_totalChecks = 0;
         m_totalViolations = 0;

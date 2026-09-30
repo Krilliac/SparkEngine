@@ -320,16 +320,27 @@ TEST(PrototypeModuleKit_StateRulesRegisterThroughSdkContext)
     const EntityID probe = world.CreateEntity("KitProbe");
     int runs = 0;
     {
-        // Initialize() discards earlier rules, so a detector that is not running refuses instead of losing it.
+        // The windowed hosts load game modules before the lifecycle initializes the detector, so a rule added
+        // while it is not running must survive Initialize() and run on the host's scan.
         auto& detector = Spark::InvalidStateDetector::GetInstance();
         const bool wasInitialized = detector.IsInitialized();
         detector.Shutdown();
-        EXPECT_FALSE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
+        const uint32_t rulesBeforeStart = detector.GetRuleCount();
+        EXPECT_TRUE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
+        EXPECT_EQ(detector.GetRuleCount(), rulesBeforeStart + 1u);
+        detector.Initialize();
+        EXPECT_TRUE(detector.HasRule("Kit.Early"));
+        detector.SetWorld(&world);
+        detector.Update(detector.GetConfig().checkIntervalSec);
+        EXPECT_EQ(runs, 1);
+        rules->RemoveRulesByCategory("Kit");
         EXPECT_FALSE(detector.HasRule("Kit.Early"));
+        detector.Shutdown(); // also drops the scanned world pointer
         if (wasInitialized)
         {
             detector.Initialize();
         }
+        runs = 0;
     }
 
     FreshDetectorScope scope;

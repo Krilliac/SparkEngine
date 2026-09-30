@@ -570,8 +570,9 @@ if (Spark::IStateValidation* rules = m_context ? m_context->GetStateValidation()
 }
 ```
 
-`AddRule` refuses an empty name, category or check and returns `false` while the
-host detector is not running. Registrations and removals made during a module's
+`AddRule` refuses an empty name, category or check. A rule added before the host
+detector starts (the windowed hosts load modules ahead of the gameplay lifecycle)
+is kept and runs once the detector does. Registrations and removals made during a module's
 `OnLoad`/`OnUnload` are attributed to that module, so removing a category never
 drops another module's rules. Every prototype module registers its rules this
 way (`PrototypeModuleKit_PublicConsoleBoundary` and `PrototypeModuleKit_Helpers`

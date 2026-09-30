@@ -164,7 +164,7 @@ namespace Spark
         }
         [[nodiscard]] uint32_t GetRuleCount() const { return static_cast<uint32_t>(m_rules.size()); }
 
-        /// True between Initialize() and Shutdown(); Initialize() discards rules added before it.
+        /// True between Initialize() and Shutdown(); rules added before Initialize() are kept, Shutdown() clears them.
         [[nodiscard]] bool IsInitialized() const { return m_initialized; }
 
         // -- Query --

@@ -102,7 +102,8 @@ namespace Spark
          * @param severity Severity the host reports the rule's violations with
          * @param check    Scans the world and appends a StateViolation per offending entity
          * @return true when the rule is registered; false when the name, category or
-         *         check is empty, or the host detector is not running
+         *         check is empty. A rule added before the host detector starts is kept
+         *         and runs once it does.
          */
         virtual bool AddRule(std::string_view name, std::string_view category, StateViolationSeverity severity,
                              StateCheckFn check) = 0;

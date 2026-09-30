@@ -19,19 +19,14 @@ bool EngineSdkStateValidation::AddRule(std::string_view name, std::string_view c
     {
         return false;
     }
-    // Initialize() clears the rule list, so a rule added before it would be dropped without a trace.
-    auto& detector = Spark::InvalidStateDetector::GetInstance();
-    if (!detector.IsInitialized())
-    {
-        return false;
-    }
+    // A rule added before the detector starts is kept: modules load ahead of the lifecycle on the windowed hosts.
     Spark::StateValidationRule rule;
     rule.name = std::string(name);
     rule.category = std::string(category);
     rule.severity = severity;
     rule.enabled = true;
     rule.checkFn = std::move(check);
-    detector.AddRule(std::move(rule));
+    Spark::InvalidStateDetector::GetInstance().AddRule(std::move(rule));
     return true;
 }
 
