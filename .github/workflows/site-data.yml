@@ -68,12 +68,6 @@ jobs:
             --generated-root docs/api --source-sha "$GITHUB_SHA"
           timeout 3m python3 tools/site-data/validate.py --docs
 
-      - name: Run readiness contract tests
-        run: |
-          set -euo pipefail
-          python3 Tests/Tools/test_site_data_contract.py -v
-          python3 Tests/Tools/test_module_content_inventory.py -v
-
       - name: Validate documentation links and routes
         run: |
           set -euo pipefail
@@ -83,6 +77,28 @@ jobs:
         run: |
           set -euo pipefail
           python3 Tests/Tools/test_docs_health.py -v
+
+  # The exact-commit determinism proof runs in its own job: two generate.py
+  # runs plus site-data-validate's validation, docs and health steps no longer
+  # fit one 10-minute budget. Same checkout and generated API docs as
+  # site-data-validate, so generation sees the same tree it did there.
+  site-data-determinism:
+    name: Deterministic exact-commit generation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Generate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
 
       # Documentation health is excluded from THIS determinism claim (see the
       # --skip-doc-health note below). The publication path proves health too:
@@ -122,6 +138,34 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+
+  # The readiness contract suites run in their own job: together with
+  # site-data-validate's validation and docs steps they no longer fit one
+  # 10-minute budget. Same checkout and generated API docs as
+  # site-data-validate, so the suites see the same tree they did there.
+  site-data-contract-tests:
+    name: Readiness contract tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Generate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+
+      - name: Run readiness contract tests
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_site_data_contract.py -v
+          python3 Tests/Tools/test_module_content_inventory.py -v
 
   # DOC-400: the reference runtime verifier and freshness classifier in
   # tools/site-data/runtime, which the site runtime imports to refuse malformed,

@@ -442,7 +442,7 @@ git diff --exit-code
 **Automated evidence**
 
 - Test selectors: `site-data-contract`, `readiness-cross-references`
-- Required CI jobs: `site-data-validate`
+- Required CI jobs: `site-data-validate`, `site-data-contract-tests`, `site-data-determinism`
 - Performance / reliability budgets:
   - Validation completes in under 60 seconds on the hosted CI runner
 
@@ -865,7 +865,7 @@ git diff --exit-code
 **Automated evidence**
 
 - Test selectors: none declared
-- Required CI jobs: `docs-health`, `site-data-validate`
+- Required CI jobs: `docs-health`, `site-data-validate`, `site-data-contract-tests`
 - Performance / reliability budgets:
   - Each generator is bounded to five minutes and the blocking exact-currentness job to fifteen minutes
 

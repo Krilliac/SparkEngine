@@ -589,7 +589,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2729,
+      "line": 2741,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -616,7 +616,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3679,
+      "line": 3691,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1348,7 +1348,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2729,
+      "line": 2741,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4159,
+      "line": 4177,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3664,
+      "line": 3682,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3659",
+          "id": "Tests/CMakeLists.txt:3677",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4197,
+      "line": 4215,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4359,
+      "line": 4377,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1401,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3607,
+      "line": 3625,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3535",
+          "id": "Tests/CMakeLists.txt:3553",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4600,
+      "line": 4618,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1427,7 +1427,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1859,
+      "line": 1863,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1478,7 +1478,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3679,
+      "line": 3691,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1505,7 +1505,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1721,
+      "line": 1725,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2221,10 +2221,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1788,
+      "line": 1800,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1774",
+          "id": "CMakeLists.txt:1786",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2259,24 +2259,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1759,
+      "line": 1771,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1662",
+          "id": "CMakeLists.txt:1674",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1757",
+          "id": "CMakeLists.txt:1769",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1758",
+          "id": "CMakeLists.txt:1770",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2370,10 +2370,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1776,
+      "line": 1788,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1774",
+          "id": "CMakeLists.txt:1786",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2570,7 +2570,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 837,
+      "line": 838,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2738,10 +2738,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5266,
+      "line": 5284,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5264",
+          "id": "Tests/CMakeLists.txt:5282",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2784,7 +2784,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 799,
+      "line": 800,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2843,10 +2843,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1523,
+      "line": 1535,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1522",
+          "id": "CMakeLists.txt:1534",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2861,10 +2861,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1525,
+      "line": 1537,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1522",
+          "id": "CMakeLists.txt:1534",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2880,10 +2880,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1506,
+      "line": 1518,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1505",
+          "id": "CMakeLists.txt:1517",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2898,7 +2898,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1479,
+      "line": 1491,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2908,10 +2908,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1475,
+      "line": 1476,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1438",
+          "id": "Tests/CMakeLists.txt:1439",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2926,7 +2926,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 953,
+      "line": 954,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3486,10 +3486,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 821,
+      "line": 822,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:820",
+          "id": "Tests/CMakeLists.txt:821",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3617,7 +3617,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 841,
+      "line": 842,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3627,10 +3627,10 @@
       "target": "SparkMMOSessionGatePeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1445,
+      "line": 1446,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1438",
+          "id": "Tests/CMakeLists.txt:1439",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -3645,7 +3645,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 832,
+      "line": 833,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3655,7 +3655,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 843,
+      "line": 844,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3685,10 +3685,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 812,
+      "line": 813,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:811",
+          "id": "Tests/CMakeLists.txt:812",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -3725,7 +3725,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 835,
+      "line": 836,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3735,7 +3735,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 839,
+      "line": 840,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3745,7 +3745,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 958,
+      "line": 959,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3755,7 +3755,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1893,
+      "line": 1905,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3805,7 +3805,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 845,
+      "line": 846,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3815,10 +3815,10 @@
       "target": "SparkSpirvShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1968,
+      "line": 1980,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1909",
+          "id": "CMakeLists.txt:1921",
           "branch": 0,
           "branches": [
             "SPARK_VULKAN_AVAILABLE"
@@ -3855,7 +3855,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 948,
+      "line": 949,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3865,7 +3865,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 788,
+      "line": 789,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3979,17 +3979,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2446,
+      "line": 2458,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2441",
+          "id": "CMakeLists.txt:2453",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2445",
+          "id": "CMakeLists.txt:2457",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4277,7 +4277,7 @@
       "target": "uninstall",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 2792,
+      "line": 2804,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4381,7 +4381,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1788,
+          "line": 1800,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4435,7 +4435,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1759,
+          "line": 1771,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4543,7 +4543,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1776,
+          "line": 1788,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4783,7 +4783,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 837,
+          "line": 838,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4947,7 +4947,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5266,
+          "line": 5284,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5001,7 +5001,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 799,
+          "line": 800,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5065,7 +5065,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1523,
+          "line": 1535,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5073,7 +5073,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1525,
+          "line": 1537,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5091,7 +5091,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1506,
+          "line": 1518,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5109,7 +5109,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1479,
+          "line": 1491,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5127,7 +5127,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1475,
+          "line": 1476,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5145,7 +5145,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 953,
+          "line": 954,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -6153,7 +6153,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 821,
+          "line": 822,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6289,7 +6289,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 841,
+          "line": 842,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6307,7 +6307,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1445,
+          "line": 1446,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6325,7 +6325,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 832,
+          "line": 833,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6343,7 +6343,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 843,
+          "line": 844,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6381,7 +6381,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 812,
+          "line": 813,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6437,7 +6437,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 835,
+          "line": 836,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6455,7 +6455,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 839,
+          "line": 840,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6473,7 +6473,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 958,
+          "line": 959,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -6491,7 +6491,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1893,
+          "line": 1905,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6581,7 +6581,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 845,
+          "line": 846,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6599,7 +6599,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1968,
+          "line": 1980,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -6655,7 +6655,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 948,
+          "line": 949,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -6673,7 +6673,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 788,
+          "line": 789,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -6819,7 +6819,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2446,
+          "line": 2458,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7151,7 +7151,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2792,
+          "line": 2804,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],

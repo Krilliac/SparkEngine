@@ -99,7 +99,9 @@
         "readiness-cross-references"
       ],
       "requiredCiJobs": [
-        "site-data-validate"
+        "site-data-validate",
+        "site-data-contract-tests",
+        "site-data-determinism"
       ],
       "performanceBudgets": [
         "Validation completes in under 60 seconds on the hosted CI runner"

@@ -119,12 +119,17 @@ def _line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+_BRACKET_OPEN = re.compile(r"\[(=*)\[")
+
+
 def _read_bracket(text: str, start: int) -> tuple[str, int] | None:
-    match = re.match(r"\[(=*)\[", text[start:])
+    # Match in place: slicing text[start:] copied the rest of the file for every
+    # scanned character, which made command scanning quadratic in file size.
+    match = _BRACKET_OPEN.match(text, start)
     if not match:
         return None
     marker = "]" + match.group(1) + "]"
-    content_start = start + match.end()
+    content_start = match.end()
     end = text.find(marker, content_start)
     if end < 0:
         raise InventoryError(f"unterminated CMake bracket argument at line {_line_number(text, start)}")
@@ -135,6 +140,10 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
     """Yield CMake commands without silently skipping command syntax."""
     index = 0
     length = len(text)
+    # Command starts only move forward, so count newlines incrementally instead
+    # of rescanning the file from offset 0 for every command.
+    line = 1
+    line_offset = 0
     while index < length:
         char = text[index]
         if char.isspace():
@@ -197,7 +206,7 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
                     newline = text.find("\n", index)
                     index = length if newline < 0 else newline + 1
                 continue
-            bracket = _read_bracket(text, index)
+            bracket = _read_bracket(text, index) if char == "[" else None
             if bracket:
                 _, index = bracket
                 continue
@@ -208,12 +217,14 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
                 if depth == 0:
                     body = text[body_start:index]
                     index += 1
+                    line += text.count("\n", line_offset, start)
+                    line_offset = start
                     yield {
                         "name": name.lower(),
                         "spelling": name,
                         "body": body,
                         "file": source,
-                        "line": _line_number(text, start),
+                        "line": line,
                     }
                     break
             index += 1
@@ -1019,15 +1030,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1749,
+            "line": 1771,
             "conditionFrames": [
-                {"id": "CMakeLists.txt:1652", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {"id": "CMakeLists.txt:1674", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1747",
+                    "id": "CMakeLists.txt:1769",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1748", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1770", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",

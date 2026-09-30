@@ -497,12 +497,26 @@ def online_service_adapter_classes(
     adapters: dict[str, tuple[str, str]] = {}
     for relative in source_paths:
         text = _cached_source_text(repo_root / relative)
-        if text is None or not any(interface in text for interface in ONLINE_SERVICE_INTERFACES):
+        if text is None:
             continue
-        for match in ONLINE_SERVICE_ADAPTER_CLASS.finditer(text):
-            if match.group(1) not in ONLINE_SERVICE_INTERFACES:
-                adapters.setdefault(match.group(1), (relative, match.group(2)))
+        for name, interface in _online_service_adapter_matches(text):
+            adapters.setdefault(name, (relative, interface))
     return adapters
+
+
+@functools.lru_cache(maxsize=16384)
+def _online_service_adapter_matches(text: str) -> tuple[tuple[str, str], ...]:
+    """(class, interface) pairs one source text declares, scanned once per exact text.
+
+    Keyed on the text, not the path, so an edited or substituted source is a new key.
+    """
+    if not any(interface in text for interface in ONLINE_SERVICE_INTERFACES):
+        return ()
+    return tuple(
+        (match.group(1), match.group(2))
+        for match in ONLINE_SERVICE_ADAPTER_CLASS.finditer(text)
+        if match.group(1) not in ONLINE_SERVICE_INTERFACES
+    )
 
 
 def _symbol_defined_under(repo_root: Path, relative: str, symbol: str) -> bool | None:
@@ -879,24 +893,43 @@ def _unqualified_platform_claims(
         if not isinstance(text, str):
             errors.append(f"{location}: {kind} wording source must be text")
             continue
-        in_fence = False
-        for number, line in enumerate(text.splitlines(), start=1):
-            if line.lstrip().startswith(("```", "~~~")):
-                in_fence = not in_fence
-                continue
-            if in_fence:
-                continue
-            is_table_row = line.lstrip().startswith("|")
-            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
-                claim = claim_pattern.search(unit)
-                platform = platform_pattern.search(unit)
-                if claim is None or platform is None or qualifier_pattern.search(unit):
-                    continue
-                errors.append(
-                    f"{location}:{number}: {claim.group(0)!r} {platform.group(0)!r} reads as a support claim; "
-                    f"{boundary}"
-                )
+        errors.extend(
+            _unqualified_platform_claims_in_text(
+                location, text, claim_pattern, platform_pattern, qualifier_pattern, boundary
+            )
+        )
     return errors
+
+
+@functools.lru_cache(maxsize=4096)
+def _unqualified_platform_claims_in_text(
+    location: str,
+    text: str,
+    claim_pattern: re.Pattern[str],
+    platform_pattern: re.Pattern[str],
+    qualifier_pattern: re.Pattern[str],
+    boundary: str,
+) -> tuple[str, ...]:
+    """One surface's unqualified platform support claims, scanned once per exact input."""
+    errors: list[str] = []
+    in_fence = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        is_table_row = line.lstrip().startswith("|")
+        for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+            claim = claim_pattern.search(unit)
+            platform = platform_pattern.search(unit)
+            if claim is None or platform is None or qualifier_pattern.search(unit):
+                continue
+            errors.append(
+                f"{location}:{number}: {claim.group(0)!r} {platform.group(0)!r} reads as a support claim; "
+                f"{boundary}"
+            )
+    return tuple(errors)
 
 
 def deferred_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
@@ -1520,6 +1553,22 @@ def _html_accessibility_text(value: str) -> str:
     return " ".join(parser.rendered)
 
 
+# Characters claim normalization deletes: format and combining marks plus the
+# invisible Hangul/halfwidth fillers, memoized per distinct character.
+_CLAIM_INVISIBLE_FILLERS = frozenset({"\u115f", "\u1160", "\u3164", "\uffa0"})
+_CLAIM_HIDDEN_CHARACTERS: set[str] = set()
+_CLAIM_CLASSIFIED_CHARACTERS: set[str] = set()
+_CLAIM_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_CLAIM_MARKDOWN_ESCAPE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!~|>])")
+_CLAIM_INLINE_LINK = re.compile(r"!?\[([^\]\n]+)\]\([^\)\n]*\)")
+_CLAIM_REFERENCE_LINK = re.compile(r"!?\[([^\]\n]+)\]\[[^\]\n]*\]")
+_CLAIM_SHORTCUT_LINK = re.compile(r"!?\[([^\]\n]+)\]")
+_CLAIM_OPEN_TAG = re.compile(r"<[A-Za-z][^>\n]*>", re.IGNORECASE)
+_CLAIM_CLOSE_TAG = re.compile(r"</[A-Za-z][^>\n]*>")
+_CLAIM_EMPHASIS = re.compile(r"[`*_~]+")
+_CLAIM_WHITESPACE = re.compile(r"\s+")
+
+
 # Claim normalization is a pure function of its input and one validate() pass
 # normalizes the same public strings tens of thousands of times; the cache keeps
 # the contract suite inside its CI time bound without changing any result.
@@ -1528,25 +1577,31 @@ def _normalized_claim_text(value: str) -> str:
     accessibility_text = _html_accessibility_text(value)
     source = f"{value}\n{accessibility_text}" if accessibility_text else value
     normalized = unicodedata.normalize("NFKC", html.unescape(source).lower())
-    invisible_fillers = {"\u115f", "\u1160", "\u3164", "\uffa0"}
-    normalized = "".join(
-        character
-        for character in normalized
-        if unicodedata.category(character) not in {"Cf", "Mn", "Me"}
-        and character not in invisible_fillers
-    )
-    normalized = re.sub(r"<!--.*?-->", "", normalized, flags=re.DOTALL)
-    normalized = re.sub(
-        r"\\([\\`*_{}\[\]()#+\-.!~|>])",
-        r"\1",
-        normalized,
-    )
-    normalized = re.sub(r"!?\[([^\]\n]+)\]\([^\)\n]*\)", r"\1", normalized)
-    normalized = re.sub(r"!?\[([^\]\n]+)\]\[[^\]\n]*\]", r"\1", normalized)
-    normalized = re.sub(r"!?\[([^\]\n]+)\]", r"\1", normalized)
+    # Drop format/combining marks and invisible fillers with str.translate,
+    # classifying each distinct character once, rather than testing every
+    # character of every discovered wiki page in Python. Each substitution
+    # below is skipped only when a literal character its pattern requires is
+    # absent, which cannot change the result.
+    characters = set(normalized)
+    for character in characters - _CLAIM_CLASSIFIED_CHARACTERS:
+        if unicodedata.category(character) in {"Cf", "Mn", "Me"} or character in _CLAIM_INVISIBLE_FILLERS:
+            _CLAIM_HIDDEN_CHARACTERS.add(character)
+        _CLAIM_CLASSIFIED_CHARACTERS.add(character)
+    hidden = characters & _CLAIM_HIDDEN_CHARACTERS
+    if hidden:
+        normalized = normalized.translate(dict.fromkeys(map(ord, hidden)))
+    if "<!--" in normalized:
+        normalized = _CLAIM_COMMENT.sub("", normalized)
+    if "\\" in normalized:
+        normalized = _CLAIM_MARKDOWN_ESCAPE.sub(r"\1", normalized)
+    if "[" in normalized:
+        normalized = _CLAIM_INLINE_LINK.sub(r"\1", normalized)
+        normalized = _CLAIM_REFERENCE_LINK.sub(r"\1", normalized)
+        normalized = _CLAIM_SHORTCUT_LINK.sub(r"\1", normalized)
 
-    normalized = re.sub(r"<[A-Za-z][^>\n]*>", " ", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"</[A-Za-z][^>\n]*>", " ", normalized)
+    if "<" in normalized:
+        normalized = _CLAIM_OPEN_TAG.sub(" ", normalized)
+        normalized = _CLAIM_CLOSE_TAG.sub(" ", normalized)
     normalized = normalized.translate(
         str.maketrans(
             {
@@ -1560,8 +1615,8 @@ def _normalized_claim_text(value: str) -> str:
             }
         )
     )
-    normalized = re.sub(r"[`*_~]+", "", normalized)
-    return re.sub(r"\s+", " ", normalized).strip()
+    normalized = _CLAIM_EMPHASIS.sub("", normalized)
+    return _CLAIM_WHITESPACE.sub(" ", normalized).strip()
 
 
 @functools.lru_cache(maxsize=4096)
@@ -1799,9 +1854,12 @@ def _explicitly_distinguishes(value: str, term: str, conflict: str) -> bool:
     )
 
 
+@functools.lru_cache(maxsize=1024)
 def contains_release_profile_identifier(identifier: str, text: str) -> bool:
     """Match a profile identifier without accepting a wider near-match token."""
 
+    # Cached on the exact pair: whole public pages are normalized here, and the
+    # shared normalizer cache is churned by the many short strings one pass sees.
     normalized_identifier = _normalized_claim_text(identifier)
     marker = re.compile(
         rf"(?<![A-Za-z0-9_-]){re.escape(normalized_identifier)}(?![A-Za-z0-9_-])",
@@ -2091,6 +2149,36 @@ def validate_public_claim_text(
 def _discovered_public_claim_errors(identifier: str, rules: str, path: str, text: str) -> tuple[str, ...]:
     """Cache only exact content/rule pairs, so edits and rule mutations invalidate the result."""
     return tuple(validate_public_claim_text({"id": identifier, "publicClaimRules": json.loads(rules)}, path, text))
+
+
+def _is_exact_json(value: Any) -> bool:
+    """Whether ``value`` survives a json.dumps/json.loads round trip unchanged (types and key order)."""
+    if value is None or type(value) in (str, int, float, bool):
+        return True
+    if type(value) is list:
+        return all(_is_exact_json(item) for item in value)
+    if type(value) is dict:
+        return all(type(key) is str and _is_exact_json(item) for key, item in value.items())
+    return False
+
+
+@functools.lru_cache(maxsize=2048)
+def _declared_public_claim_errors(identifier: str, rules: str, path: str, text: str) -> tuple[str, ...]:
+    return tuple(validate_public_claim_text({"id": identifier, "publicClaimRules": json.loads(rules)}, path, text))
+
+
+def _profile_public_claim_errors(profile: dict[str, Any], surface_location: str, text: str) -> list[str]:
+    """validate_public_claim_text, memoized on the exact profile id, rules, location, and text.
+
+    The result depends on nothing else, and the contract suite re-validates the
+    same declared surfaces under the same rules on almost every call. The rules
+    key keeps their key order, and rules that would not round-trip exactly
+    through JSON (a hostile contract can hold any Python value) are never cached.
+    """
+    rules = profile.get("publicClaimRules")
+    if not isinstance(rules, dict) or not _is_exact_json(rules):
+        return validate_public_claim_text(profile, surface_location, text)
+    return list(_declared_public_claim_errors(str(profile.get("id", "")), json.dumps(rules), surface_location, text))
 
 
 # Hand-written counts on the governed public surfaces ("50+ other subsystems",
@@ -2469,22 +2557,43 @@ def public_numeric_claim_errors(
     for surface in sorted(surface_texts):
         if surface in GENERATED_CLAIM_SURFACES:
             continue
-        masked, block_errors = _mask_auto_blocks(surface_texts[surface])
+        masked, block_errors, claims = _numeric_claim_scan(surface_texts[surface])
         errors.extend(f"{surface}:{message}" for message in block_errors)
         exempt = list(covered.get(surface, []))
         for pattern in managed_patterns.get(surface, ()):
             exempt.extend((match.start(), match.end()) for match in pattern.finditer(masked) if match.group(0))
-        for claim in PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(masked):
+        for claim_start, claim_end, claim_text, line in claims:
             # Only a claim wholly inside an owned span is exempt; an overlapping
             # claim carries a qualifier or number the owner never reviewed.
-            if any(start <= claim.start() and claim.end() <= end for start, end in exempt):
+            if any(start <= claim_start and claim_end <= end for start, end in exempt):
                 continue
-            line = masked.count("\n", 0, claim.start()) + 1
             errors.append(
-                f"{surface}:{line}: unclaimed numeric claim {claim.group(0)!r}; bind it to a metric "
+                f"{surface}:{line}: unclaimed numeric claim {claim_text!r}; bind it to a metric "
                 "or add a reviewed readiness.publicNumericClaims entry"
             )
     return errors
+
+
+@functools.lru_cache(maxsize=1024)
+def _numeric_claim_scan(
+    text: str,
+) -> tuple[str, tuple[str, ...], tuple[tuple[int, int, str, int], ...]]:
+    """Mask AUTO blocks and locate every numeric claim (start, end, text, line) once per exact text.
+
+    Every wiki page is a governed surface and the contract suite validates the
+    unchanged tree over a hundred times; the multi-megabyte generated indexes
+    made this scan the largest cost of each call. Keyed on the text, so an edit
+    or a substituted read is a new key and is scanned afresh.
+    """
+    masked, block_errors = _mask_auto_blocks(text)
+    claims: list[tuple[int, int, str, int]] = []
+    line = 1
+    offset = 0
+    for claim in PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(masked):
+        line += masked.count("\n", offset, claim.start())
+        offset = claim.start()
+        claims.append((claim.start(), claim.end(), claim.group(0), line))
+    return masked, tuple(block_errors), tuple(claims)
 
 
 class Validator:
@@ -3628,7 +3737,7 @@ class Validator:
                     surface_location,
                     f"public surface does not reference release profile {identifier!r}",
                 )
-                for violation in validate_public_claim_text(profile, surface_location, text):
+                for violation in _profile_public_claim_errors(profile, surface_location, text):
                     self.errors.append(violation)
 
         all_profiles_ready = bool(profiles) and all(

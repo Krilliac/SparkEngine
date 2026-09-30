@@ -524,7 +524,8 @@
       "testSelectors": [],
       "requiredCiJobs": [
         "docs-health",
-        "site-data-validate"
+        "site-data-validate",
+        "site-data-contract-tests"
       ],
       "performanceBudgets": [
         "Each generator is bounded to five minutes and the blocking exact-currentness job to fifteen minutes"
