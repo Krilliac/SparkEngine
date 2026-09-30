@@ -180,9 +180,7 @@ static bool PinArtifactRoot(const std::filesystem::path& root)
     flags |= O_CLOEXEC;
 #endif
     const int handle = open(absoluteRoot.c_str(), flags);
-    struct stat info
-    {
-    };
+    struct stat info{};
     if (handle < 0 || fstat(handle, &info) != 0 || !S_ISDIR(info.st_mode) || info.st_uid != geteuid() ||
         (info.st_mode & (S_IRWXG | S_IRWXO)) != 0)
     {
@@ -342,9 +340,7 @@ static PinnedFile OpenPinnedInputFile(const std::string& path)
     if (descriptor < 0)
         return result;
 
-    struct stat info
-    {
-    };
+    struct stat info{};
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -407,9 +403,7 @@ static PinnedFile CreateExclusiveOutputFile(const std::string& path)
     const int descriptor = openat(g_artifactRootHandle, name.c_str(), flags, S_IRUSR | S_IWUSR);
     if (descriptor < 0)
         return result;
-    struct stat info
-    {
-    };
+    struct stat info{};
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -1274,6 +1268,8 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
     {
         if (attempt != 0)
         {
+            // Give whatever made the page transiently unreadable (an exiting thread) time to finish.
+            Sleep(50);
             LARGE_INTEGER start{};
             if (!SetFilePointerEx(h, start, nullptr, FILE_BEGIN) || !SetEndOfFile(h))
             {
@@ -1282,12 +1278,11 @@ static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWOR
             }
         }
         // OPS-100: no thread-stack memory unless the SPARK_CRASH_FULL_DUMP opt-in asked for it.
+        // Either way DbgHelp runs on a dedicated writer thread, never on this (faulting) one.
         if (g_cfg.includeStackMemory)
         {
-            SetLastError(ERROR_SUCCESS);
-            result =
-                MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr);
-            error = result ? ERROR_SUCCESS : GetLastError();
+            result = Spark::CrashDump::WriteOnWriterThread(h, dumpType, &info, false,
+                                                           Spark::CrashDump::kWriterStartTimeoutMs, &error);
         }
         else
         {
@@ -1832,7 +1827,7 @@ namespace
         std::uintptr_t highest = 0;
         for (ElfW(Half) index = 0; index < info->dlpi_phnum; ++index)
         {
-            const ElfW(Phdr)& header = info->dlpi_phdr[index];
+            const ElfW(Phdr) & header = info->dlpi_phdr[index];
             const std::uintptr_t runtimeAddress = module.loadBias + static_cast<std::uintptr_t>(header.p_vaddr);
             if (header.p_type == PT_LOAD && header.p_memsz > 0)
             {

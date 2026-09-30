@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -118,6 +119,52 @@ namespace
             return {};
         const auto* list = static_cast<const MINIDUMP_MEMORY_LIST*>(stream);
         return {list->MemoryRanges, list->NumberOfMemoryRanges};
+    }
+
+    /** @brief Failure diagnostic: which part of the minidump image @p dump holds file offset @p offset. */
+    std::string DumpRegionHolding(const std::string& dump, size_t offset)
+    {
+        const auto within = [offset](ULONG64 rva, ULONG64 size) { return offset >= rva && offset - rva < size; };
+        MINIDUMP_HEADER header{};
+        if (dump.size() < sizeof(header))
+            return "no minidump header";
+        std::memcpy(&header, dump.data(), sizeof(header));
+        if (within(0, sizeof(header)))
+            return "the minidump header";
+        const ULONG64 directorySize = ULONG64{header.NumberOfStreams} * sizeof(MINIDUMP_DIRECTORY);
+        if (header.StreamDirectoryRva + directorySize > dump.size())
+            return "a truncated stream directory";
+        if (within(header.StreamDirectoryRva, directorySize))
+            return "the stream directory";
+        std::string owner;
+        for (ULONG32 index = 0; index != header.NumberOfStreams; ++index)
+        {
+            MINIDUMP_DIRECTORY entry{};
+            std::memcpy(&entry, dump.data() + header.StreamDirectoryRva + index * sizeof(entry), sizeof(entry));
+            if (within(entry.Location.Rva, entry.Location.DataSize))
+                owner += std::format("stream type {} [0x{:x}, +0x{:x}) ", entry.StreamType, entry.Location.Rva,
+                                     entry.Location.DataSize);
+        }
+        // Thread contexts live outside the ThreadListStream's own bytes.
+        void* stream = nullptr;
+        ULONG streamSize = 0;
+        if (MiniDumpReadDumpStream(const_cast<char*>(dump.data()), ThreadListStream, nullptr, &stream, &streamSize) &&
+            streamSize >= sizeof(ULONG32))
+        {
+            const auto* threads = static_cast<const MINIDUMP_THREAD_LIST*>(stream);
+            for (ULONG32 index = 0; index != threads->NumberOfThreads; ++index)
+            {
+                const MINIDUMP_THREAD& thread = threads->Threads[index];
+                if (within(thread.ThreadContext.Rva, thread.ThreadContext.DataSize))
+                    owner += std::format("context of thread {} ", thread.ThreadId);
+            }
+        }
+        return owner.empty() ? std::string("no stream or thread context (indirect data or file slack)") : owner;
+    }
+
+    constexpr bool IsPartialCopy(DWORD error)
+    {
+        return error == ERROR_PARTIAL_COPY || error == static_cast<DWORD>(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY));
     }
 } // namespace
 
@@ -269,18 +316,39 @@ TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
         if (handle == INVALID_HANDLE_VALUE)
             return {};
         BOOL written = FALSE;
+        DWORD error = ERROR_SUCCESS;
         {
             Spark::StackTrace::SymbolLockLease symbolLock(true);
             if (symbolLock.owns_lock())
             {
-                written = removeStacks ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, nullptr)
-                                       : MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), handle, dumpType,
-                                                           &exception, nullptr, nullptr);
+                // The raw control only proves the scan can see the canary; like the product writer it
+                // retries once when DbgHelp races a transiently unreadable page.
+                for (int attempt = 0; attempt != 2; ++attempt)
+                {
+                    LARGE_INTEGER start{};
+                    SetFilePointerEx(handle, start, nullptr, FILE_BEGIN);
+                    SetEndOfFile(handle);
+                    SetLastError(ERROR_SUCCESS);
+                    written = removeStacks ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, &error)
+                                           : MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), handle,
+                                                               dumpType, &exception, nullptr, nullptr);
+                    if (!removeStacks)
+                        error = written ? ERROR_SUCCESS : GetLastError();
+                    if (written || removeStacks || !IsPartialCopy(error))
+                        break;
+                }
+            }
+            else
+            {
+                error = ERROR_BUSY;
             }
         }
         CloseHandle(handle);
         if (!written)
+        {
+            std::printf("  %s dump failed: error 0x%lx\n", removeStacks ? "filtered" : "control", error);
             return {};
+        }
         std::ifstream in(file, std::ios::binary);
         return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     };
@@ -318,8 +386,73 @@ TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
             std::printf("  canary at dump offset 0x%zx = address 0x%llx\n", leak,
                         range.StartOfMemoryRange + (leak - range.Memory.Rva));
     }
+    if (leak != std::string::npos)
+        std::printf("  canary at dump offset 0x%zx lies in %s\n", leak, DumpRegionHolding(filtered, leak).c_str());
     EXPECT_TRUE(leak == std::string::npos);
     EXPECT_EQ(stackSecret[0], 'S');
+}
+
+// The dump writer runs DbgHelp on its own thread. If that thread cannot start (here: this thread
+// holds the loader lock, so the writer blocks before DLL_THREAD_ATTACH), the write must fail closed
+// within the bound instead of hanging, write nothing, and never fall back to this thread. The late
+// writer must not hijack the next request either.
+TEST(CrashDumpWriter_BlockedWriterThreadFailsClosedWithinTheBound)
+{
+    using LockLoaderLock = LONG(NTAPI*)(ULONG, ULONG*, PVOID*);
+    using UnlockLoaderLock = LONG(NTAPI*)(ULONG, PVOID);
+    const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    ASSERT_TRUE(ntdll != nullptr);
+    const auto lockLoader = reinterpret_cast<LockLoaderLock>(GetProcAddress(ntdll, "LdrLockLoaderLock"));
+    const auto unlockLoader = reinterpret_cast<UnlockLoaderLock>(GetProcAddress(ntdll, "LdrUnlockLoaderLock"));
+    ASSERT_TRUE(lockLoader != nullptr && unlockLoader != nullptr);
+
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    EXCEPTION_POINTERS pointers{&record, &context};
+    MINIDUMP_EXCEPTION_INFORMATION exception{GetCurrentThreadId(), &pointers, FALSE};
+    const auto dumpType = static_cast<MINIDUMP_TYPE>(SparkEditor::EditorCrashHandler::CrashDumpType());
+
+    ScratchCrashDir dir("writer_timeout");
+    const std::filesystem::path blockedPath = std::filesystem::path(dir.Path()) / "blocked.dmp";
+    const std::filesystem::path laterPath = std::filesystem::path(dir.Path()) / "later.dmp";
+    HANDLE blocked =
+        CreateFileW(blockedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, 0, nullptr);
+    HANDLE later = CreateFileW(laterPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, 0, nullptr);
+    ASSERT_TRUE(blocked != INVALID_HANDLE_VALUE && later != INVALID_HANDLE_VALUE);
+
+    BOOL blockedWritten = TRUE;
+    DWORD blockedError = ERROR_SUCCESS;
+    ULONGLONG elapsedMs = 0;
+    BOOL laterWritten = FALSE;
+    DWORD laterError = ERROR_SUCCESS;
+    {
+        Spark::StackTrace::SymbolLockLease symbolLock(true);
+        ASSERT_TRUE(symbolLock.owns_lock());
+
+        PVOID cookie = nullptr;
+        ASSERT_EQ(lockLoader(0, nullptr, &cookie), 0);
+        const ULONGLONG started = GetTickCount64();
+        blockedWritten = Spark::CrashDump::WriteOnWriterThread(blocked, dumpType, &exception, true, 500, &blockedError);
+        elapsedMs = GetTickCount64() - started;
+        unlockLoader(0, cookie);
+
+        laterWritten = Spark::CrashDump::WriteWithoutStacks(later, dumpType, &exception, &laterError);
+    }
+    // The abandoned writer has been free to start since the unlock; give it time to (wrongly) write.
+    Sleep(200);
+    CloseHandle(blocked);
+    CloseHandle(later);
+
+    EXPECT_FALSE(blockedWritten);
+    EXPECT_EQ(blockedError, static_cast<DWORD>(ERROR_TIMEOUT));
+    EXPECT_TRUE(elapsedMs < 5000);
+    std::error_code ignored;
+    EXPECT_EQ(std::filesystem::file_size(blockedPath, ignored), static_cast<std::uintmax_t>(0));
+    EXPECT_TRUE(laterWritten);
+    EXPECT_EQ(laterError, static_cast<DWORD>(ERROR_SUCCESS));
+    EXPECT_TRUE(std::filesystem::file_size(laterPath, ignored) > 0);
 }
 
 #else
