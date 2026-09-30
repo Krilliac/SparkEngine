@@ -86,7 +86,9 @@ namespace Racing
             for (const float offset : {0.0f, 4.0f, -4.0f, 8.0f, -8.0f})
             {
                 if (std::fabs(offset) > halfWidth - 2.0f)
+                {
                     continue;
+                }
                 const float x = centerX + rightX * offset;
                 const float z = centerZ + rightZ * offset;
                 bool occupied = false;
@@ -94,7 +96,9 @@ namespace Racing
                 {
                     if (other.id != vehicle.id && sim.vehicles.HasChassis(other.id) &&
                         std::hypot(other.positionX - x, other.positionZ - z) < kClearMeters)
+                    {
                         occupied = true;
+                    }
                 }
                 if (!occupied)
                 {

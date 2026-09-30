@@ -635,18 +635,22 @@ namespace Spark::Net
         constexpr int maxPacketSize = static_cast<int>(MAX_UDP_WIRE_DATAGRAM_SIZE);
         outData.clear();
         if (m_receiveScratch.size() != MAX_UDP_WIRE_DATAGRAM_SIZE)
+        {
             m_receiveScratch.resize(MAX_UDP_WIRE_DATAGRAM_SIZE);
+        }
 
         socklen_t senderLen = sizeof(outSender);
         int received = recvfrom(m_socket, reinterpret_cast<char*>(m_receiveScratch.data()), maxPacketSize, 0,
                                 reinterpret_cast<sockaddr*>(&outSender), &senderLen);
 
         if (received <= 0)
+        {
             return received;
+        }
 
         // Copy out only the datagram, then erase it from the reused scratch buffer so no
         // plaintext wire copy outlives this call (ProcessIncoming erases outData itself).
-        const size_t size = static_cast<size_t>(received);
+        const auto size = static_cast<size_t>(received);
         outData.assign(m_receiveScratch.data(), m_receiveScratch.data() + size);
         Spark::SecureErase(m_receiveScratch.data(), size);
         m_bytesReceivedSinceSample += static_cast<uint64_t>(received);

@@ -84,7 +84,9 @@ namespace Racing
         // to reconcile). Anything with elevation gets a fine grid that follows the height field.
         bool flatTrack = true;
         for (const TrackWaypoint& waypoint : m_currentTrack.waypoints)
+        {
             flatTrack = flatTrack && waypoint.y == m_currentTrack.waypoints.front().y;
+        }
         constexpr float kGridCell = 2.0f;
 
         // One strip of triangles along a segment through `stations`, between the lateral edges
@@ -325,11 +327,15 @@ namespace Racing
                     {
                         const float lateral = side * face;
                         if (onRoad(from.x + dirX * along + dirZ * lateral, from.z + dirZ * along - dirX * lateral))
+                        {
                             blocksRoad = true;
+                        }
                     }
                 }
                 if (blocksRoad)
+                {
                     continue;
+                }
 
                 auto heightAt = [&](float station)
                 { return from.y + (to.y - from.y) * std::clamp(station / length, 0.0f, 1.0f); };
@@ -366,14 +372,18 @@ namespace Racing
         constexpr float kRailPiece = 4.0f;
         float groundY = std::numeric_limits<float>::max();
         for (const TrackWaypoint& waypoint : m_currentTrack.waypoints)
+        {
             groundY = std::min(groundY, waypoint.y);
+        }
         for (uint32_t segment = 0; segment < segmentCount; ++segment)
         {
             const TrackWaypoint& from = GetWaypoint(segment);
             const TrackWaypoint& to = GetWaypoint(segment + 1);
             const float length = std::hypot(to.x - from.x, to.z - from.z);
             if (length <= 0.0f || std::max(from.y, to.y) - groundY <= kElevatedAbove)
+            {
                 continue;
+            }
             const float dirX = (to.x - from.x) / length;
             const float dirZ = (to.z - from.z) / length;
             const float innerFace = std::max(from.width, to.width) + kBarrierClearance;
@@ -398,11 +408,15 @@ namespace Racing
                         {
                             const float lateral = side * face;
                             if (onRoad(from.x + dirX * along + dirZ * lateral, from.z + dirZ * along - dirX * lateral))
+                            {
                                 blocksRoad = true;
+                            }
                         }
                     }
                     if (blocksRoad)
+                    {
                         continue;
+                    }
                     const float bottom = std::min(heightAt(start), heightAt(end)) - kBarrierSink;
                     const float top = std::max(heightAt(start), heightAt(end)) + kBarrierHeight;
                     const float middle = (start + end) * 0.5f;

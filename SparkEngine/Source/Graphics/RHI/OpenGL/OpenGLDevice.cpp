@@ -715,7 +715,9 @@ namespace Spark
                     // Draw buffer 0 of framebuffer 0 must name a colour buffer it has, or the clear
                     // is a silent no-op (see DefaultFramebufferColorBuffer).
                     if (glTex->GetGLFramebuffer() == 0)
+                    {
                         glNamedFramebufferDrawBuffer(0, DefaultFramebufferColorBuffer());
+                    }
                     glClearNamedFramebufferfv(glTex->GetGLFramebuffer(), GL_COLOR, 0, color);
                 }
                 else
