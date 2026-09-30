@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import importlib.util
+import itertools
+import random
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,106 @@ assert SPEC is not None and SPEC.loader is not None
 boundary = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = boundary
 SPEC.loader.exec_module(boundary)
+
+
+def reference_mask_cpp(text: str, *, strings: bool) -> str:
+    """The original per-character scanner, kept as the oracle for `_mask_cpp`."""
+
+    output = list(text)
+    index = 0
+    while index < len(text):
+        if text.startswith("//", index):
+            end = text.find("\n", index + 2)
+            if end < 0:
+                end = len(text)
+            for cursor in range(index, end):
+                output[cursor] = " "
+            index = end
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            end = len(text) if end < 0 else end + 2
+            for cursor in range(index, end):
+                if output[cursor] != "\n":
+                    output[cursor] = " "
+            index = end
+            continue
+        if text[index] in {'"', "'"}:
+            quote = text[index]
+            end = index + 1
+            while end < len(text):
+                if text[end] == "\\":
+                    end += 2
+                    continue
+                end += 1
+                if text[end - 1] == quote:
+                    break
+            if strings:
+                for cursor in range(index, min(end, len(text))):
+                    if output[cursor] != "\n":
+                        output[cursor] = " "
+            index = end
+            continue
+        index += 1
+    return "".join(output)
+
+
+class MaskCppEquivalenceTests(unittest.TestCase):
+    """`_mask_cpp` must preserve the scanner's output, including malformed C++."""
+
+    ADVERSARIAL = (
+        "", "/", "*", "/*", "/*/", "/**/", "/***/", "/* a **", "/* a *", "/*\n*/x", "/*/ */",
+        "//", "// a\nb", "//\r\nx", "a//b/*c*/\n", "/* // */ x", "// /* \n */",
+        '"', "'", '"\\', "'\\", '"\\"', '"a\\\nb"', '"a\nb"', "'a'b'c'", "1'000'000",
+        '"/* not */"', "'//'", '"\\\\"x"', 'R"(a"b)"', '"abc', "'\\''", '"\\x"//c\n',
+        "a/*b\n\n*/c'd\n'e\"f\\\"g\"h//i", "*/", "/ /", "/\\\n/ x", "\"*/\"/*\"*/'",
+        "/**/**/", "/*****", "/* ** / */", "/* *\n/ */", "x/*/y*/z",
+    )
+
+    def assert_equivalent(self, text: str, *, label: str = "generated input") -> None:
+        for strings in (False, True):
+            actual = boundary._mask_cpp(text, strings=strings)
+            expected = reference_mask_cpp(text, strings=strings)
+            if actual != expected:
+                # Avoid constructing/dumping whole source-file diffs on failure.
+                offset = next((index for index, pair in enumerate(zip(actual, expected))
+                               if pair[0] != pair[1]), min(len(actual), len(expected)))
+                self.fail(f"{label}: strings={strings}, first mismatch at offset {offset}")
+
+    def test_adversarial_inputs_match_reference_scanner(self) -> None:
+        for text in self.ADVERSARIAL:
+            self.assert_equivalent(text)
+
+    def test_every_short_token_sequence_matches_reference_scanner(self) -> None:
+        alphabet = ("/", "*", '"', "'", "\\", "\n", "a")
+        for length in range(6):
+            for combination in itertools.product(alphabet, repeat=length):
+                self.assert_equivalent("".join(combination))
+
+    def test_random_sources_match_reference_scanner(self) -> None:
+        generator = random.Random(587)
+        alphabet = ("/", "*", '"', "'", "\\", "\n", "\r", " ", "a", "(", "{", "R", "\u00e9")
+        for _ in range(20000):
+            self.assert_equivalent("".join(generator.choice(alphabet) for _ in range(generator.randint(0, 48))))
+
+    def test_long_tokens_match_reference_scanner(self) -> None:
+        for length in (1, 32, 32768):
+            for text in (
+                "/" * length, "/*" + "*" * length, "/*" + "*" * length + "/socket()",
+                "/*" + "*a" * length, "/*" + "*a" * length + "*/socket()",
+                '"' + "\\" * length, '"' + "\\" * length + '"socket()',
+                "'" + "\\\n" * length + "'socket()", "//" + "a" * length + "\r\nsocket()",
+                '"' + "\x00\r\n\u00e9\U0001f600" * length + '"/*tail*/socket()',
+            ):
+                self.assert_equivalent(text, label=f"long token ({length})")
+
+    def test_shipped_sources_match_reference_scanner(self) -> None:
+        paths = set(boundary._source_files(boundary.SOURCE_ROOTS))
+        paths.update(boundary.ROOT / check.path for check in boundary.CONTROL_PATH_CHECKS)
+        self.assertGreater(len(paths), 100, "boundary source inventory unexpectedly small")
+        for path in sorted(paths):
+            self.assert_equivalent(path.read_text(encoding="utf-8", errors="replace"),
+                                   label=path.relative_to(boundary.ROOT).as_posix())
 
 
 class NetworkBoundaryMutationTests(unittest.TestCase):
