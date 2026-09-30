@@ -196,6 +196,20 @@ namespace Spark::Persistence
             return escaped;
         }
 
+        /// Bytes EscapeKVField(field) produces, without building it.
+        std::uintmax_t EscapedKVFieldSize(const std::string& field)
+        {
+            std::uintmax_t size = field.size();
+            for (const char c : field)
+            {
+                if (c == '\\' || c == '\t' || c == '\n' || c == '\r')
+                {
+                    ++size;
+                }
+            }
+            return size;
+        }
+
         // First line of files written in the escaped format. Files without it
         // predate escaping and store raw bytes — they must load verbatim, or a
         // legacy value like "C:\temp" would decode its "\t" into a tab.
@@ -802,6 +816,10 @@ namespace Spark::Persistence
         std::string line;
         bool escapedFormat = false;
         size_t lineNumber = 0;
+        // Size of the revision FlushToDisk would publish for the records loaded so far. A
+        // legacy file (raw backslashes) or an escaped one holding raw tabs or CRs grows when
+        // rewritten, and a store the writer cannot publish would fail every later write.
+        std::uintmax_t canonicalBytes = std::char_traits<char>::length(kKVFormatMarker) + 1;
         while (std::getline(file, line))
         {
             ++lineNumber;
@@ -846,6 +864,11 @@ namespace Spark::Persistence
             {
                 key = line.substr(0, tabPos);
                 value = line.substr(tabPos + 1);
+            }
+            canonicalBytes += EscapedKVFieldSize(key) + 1 + EscapedKVFieldSize(value) + 1;
+            if (canonicalBytes > m_maxStoreFileBytes)
+            {
+                return reject(lineNumber, "brings the rewritten store over the store budget");
             }
             if (!loaded.emplace(std::move(key), std::move(value)).second)
             {

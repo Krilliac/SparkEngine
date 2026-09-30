@@ -2541,3 +2541,108 @@ set_tests_properties(FuzzAnimationBinarySmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# OrchestrationJournal.cpp is the translation unit OrchestrationService::LoadJournalLocked
+# restores supervised processes through; the protocol codecs it calls are header-only.
+add_executable(SparkFuzzOrchestrationJournal
+    FuzzOrchestrationJournal.cpp
+    FuzzOrchestrationJournalProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src/OrchestrationJournal.cpp"
+)
+set_source_files_properties(
+    FuzzOrchestrationJournalProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src/OrchestrationJournal.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzOrchestrationJournal PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzOrchestrationJournal PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzOrchestrationJournal PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzOrchestrationJournal PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzOrchestrationJournal PRIVATE Threads::Threads c++ c++abi)
+
+# The regression seeds (unrepresentable crash timestamp and drain deadline, a
+# repeated process id or client instance, an empty client instance) were
+# accepted before LoadOrchestrationJournal refused what the service cannot restore.
+add_test(
+    NAME FuzzOrchestrationJournalSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzOrchestrationJournal>
+        -max_len=262144
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=11
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-orchestration-journal"
+)
+set_tests_properties(FuzzOrchestrationJournalSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# AsyncDatabase.cpp is the store every AsyncDatabasePool connection (and so the MMO
+# character, guild and world persistence) loads through SQLiteConnection::Open.
+add_executable(SparkFuzzAsyncDatabase
+    FuzzAsyncDatabase.cpp
+    FuzzAsyncDatabaseProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/SaveFileDurability.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzAsyncDatabaseProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Persistence/AsyncDatabase.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/SaveFileDurability.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzAsyncDatabase PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzAsyncDatabase PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzAsyncDatabase PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzAsyncDatabase PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzAsyncDatabase PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzAsyncDatabase PRIVATE Threads::Threads c++ c++abi)
+
+# regression-legacy-rewrite-over-budget.db and regression-raw-tab-rewrite-over-budget.db
+# fit the budget as files but not once FlushToDisk escapes them; Open accepted both.
+add_test(
+    NAME FuzzAsyncDatabaseSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzAsyncDatabase>
+        -max_len=65537
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/async-database-kv"
+)
+set_tests_properties(FuzzAsyncDatabaseSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

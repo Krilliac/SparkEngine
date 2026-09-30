@@ -433,6 +433,44 @@ TEST(SEC2Persist_AsyncDatabaseNeverPublishesOverBudgetStore)
     defaultBudget.Close();
 }
 
+TEST(SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish)
+{
+    // SparkFuzzAsyncDatabase's regression-legacy-rewrite-over-budget.db: a legacy
+    // (unescaped) store keeps raw backslashes, and an escaped one may hold raw tabs, so
+    // both grow when FlushToDisk rewrites them. A 27-byte legacy file rewrites to
+    // 14 + 2 + 48 + 1 = 65 bytes, over a 64-byte budget; accepting it would fail every
+    // later write. Open refuses it and leaves it untouched.
+    Scratch scratch("kv_republish");
+    constexpr std::uintmax_t kBudget = 64;
+    const fs::path legacy = scratch / "legacy.kv";
+    const std::string legacyBytes = "k\t" + std::string(24, '\\') + "\n";
+    ASSERT_EQ(legacyBytes.size(), std::size_t{27});
+    WriteBytes(legacy, legacyBytes);
+    SQLiteConnection legacyConnection(kBudget);
+    EXPECT_FALSE(legacyConnection.Open(legacy.string()));
+    EXPECT_FALSE(legacyConnection.IsOpen());
+    EXPECT_EQ(ReadBytes(legacy), legacyBytes);
+
+    const fs::path rawTabs = scratch / "raw-tabs.kv";
+    const std::string rawTabBytes = "#!spark-kv-v2\nk\t" + std::string(47, '\t') + "\n";
+    ASSERT_EQ(rawTabBytes.size(), std::size_t{64});
+    WriteBytes(rawTabs, rawTabBytes);
+    SQLiteConnection rawTabConnection(kBudget);
+    EXPECT_FALSE(rawTabConnection.Open(rawTabs.string()));
+    EXPECT_EQ(ReadBytes(rawTabs), rawTabBytes);
+
+    // A legacy store whose rewrite fits is still accepted and republished escaped.
+    const fs::path fits = scratch / "fits.kv";
+    WriteBytes(fits, "k\t" + std::string(8, '\\') + "\n");
+    SQLiteConnection fitsConnection(kBudget);
+    ASSERT_TRUE(fitsConnection.Open(fits.string()));
+    EXPECT_EQ(GetValue(fitsConnection, "k"), std::string(8, '\\'));
+    ASSERT_TRUE(fitsConnection.BeginTransaction());
+    ASSERT_TRUE(fitsConnection.CommitTransaction());
+    EXPECT_EQ(ReadBytes(fits), "#!spark-kv-v2\nk\t" + std::string(16, '\\') + "\n");
+    fitsConnection.Close();
+}
+
 // ============================================================================
 // Finding 53: one authority per store file
 // ============================================================================
