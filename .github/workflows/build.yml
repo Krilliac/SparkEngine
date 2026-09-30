@@ -938,61 +938,16 @@ jobs:
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
-  # ===========================================================================
-  # OPS-100A durable telemetry delivery — focused Linux Shipping integration
-  # ===========================================================================
-  telemetry-integration:
-    name: "Telemetry Integration"
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      with:
-        submodules: recursive
-
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
-
-    - name: Configure Linux Shipping telemetry tests
-      run: |
-        set -o pipefail
-        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee telemetry-configure.log
-
-    - name: Build telemetry integration target
-      run: |
-        set -o pipefail
-        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee telemetry-build.log
-
-    - name: Run telemetry spool integration test
-      run: |
-        set -o pipefail
-        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
-          -R '^TelemetrySpool$' 2>&1 | tee telemetry-tests.log
-
-    - name: Extract telemetry integration error summary
-      if: failure()
-      run: |
-        .github/scripts/extract-errors.sh \
-          "telemetry-integration" \
-          error-summary.json \
-          telemetry-configure.log telemetry-build.log telemetry-tests.log
-
-    - name: Upload telemetry integration error summary
-      if: failure()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ci-errors-telemetry-integration
-        path: error-summary.json
-        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
-
   # SEC-100: runtime security selectors in the Linux Shipping configuration
   # (MinSizeRel, SPARK_SHIPPING=1), so a selector that shipping compiles out
   # fails here instead of passing only in a development tree. Each label runs
   # as its own CTest invocation with --no-tests=error, so an empty label
   # cannot hide behind a non-empty one.
+  #
+  # OPS-100A durable telemetry delivery runs here too: TelemetrySpool lives in
+  # the same Linux Shipping SparkTests build, so it reuses this job's build
+  # instead of compiling SparkTests cold a second time in a separate job. It
+  # keeps its own exact selector and --no-tests=error.
   security-runtime:
     name: "Security Runtime"
     runs-on: ubuntu-24.04
@@ -1037,6 +992,12 @@ jobs:
             -L "^${label}\$" 2>&1 | tee "security-${label}.log"
         done
 
+    - name: Run telemetry spool integration test
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^TelemetrySpool$' 2>&1 | tee telemetry-tests.log
+
     - name: Extract security runtime error summary
       if: failure()
       run: |
@@ -1044,7 +1005,8 @@ jobs:
           "security-runtime" \
           error-summary.json \
           security-configure.log security-build.log security-remote-admin-selectors.log \
-          security-remote-admin.log security-gateway.log security-crash-security.log
+          security-remote-admin.log security-gateway.log security-crash-security.log \
+          telemetry-tests.log
 
     - name: Upload security runtime error summary
       if: failure()
@@ -4258,7 +4220,6 @@ jobs:
       - license-compliance
       - build-linux-asan
       - build-linux-tsan
-      - telemetry-integration
       - build-linux-msan
       - build-windows-vs2022
       - build-windows-vs2026
@@ -4866,7 +4827,7 @@ jobs:
       - license-compliance
       - build-linux-asan
       - build-linux-tsan
-      - telemetry-integration
+      - security-runtime
       - build-windows-vs2022
       - module-profile-lifecycle
       - build-windows-shipping
@@ -4891,7 +4852,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","analysis-regressions","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","security-runtime","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","analysis-regressions","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 

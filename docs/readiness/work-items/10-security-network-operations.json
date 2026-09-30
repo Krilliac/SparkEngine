@@ -1006,7 +1006,7 @@
       "requiredCiJobs": [
         "crash-security",
         "crash-canary",
-        "telemetry-integration"
+        "security-runtime"
       ],
       "performanceBudgets": [
         "Crash handling is bounded and avoids deadlock/allocation in compromised process context",
@@ -1060,12 +1060,12 @@
           "Tests/TestCrashSymbolication.cpp (ctest CrashSymbolicationRecords, SPARK_TEST_EXPECT_COUNT=5) covers the bounded NT_GNU_BUILD_ID note parser against truncated, hostile-length, oversized and foreign notes, and the fixed-buffer SYMBOLIC FRAMES format, including whole-line truncation without an end marker",
           "Tests/Tools/test_ops100_symbolication.py (run by validate-ops100) covers the symbolizer grammar and bounds, store refusal of binaries without DWARF or build-id, idempotent store publication, missing-symbols reporting, build-id mismatch refusal, symlinked entry/directory/root refusal, and CLI exit codes against ELF files compiled on the host"
         ],
-        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all five policy suites (including test_ops100_symbolication) via unittest and included in the required-ci-gate needs list. The telemetry-integration workflow job configures Linux Shipping, builds SparkTests, and runs TelemetrySpool; neither definition substitutes for a successful exact-SHA hosted record.",
+        "ciGate": "validate-ops100 is a required job in .github/workflows/build.yml, running all five policy suites (including test_ops100_symbolication) via unittest and included in the required-ci-gate needs list. The security-runtime workflow job (a required-ci-gate dependency) configures Linux Shipping, builds SparkTests once for its security selectors, and runs TelemetrySpool from that same build under an exact selector with --no-tests=error; neither definition substitutes for a successful exact-SHA hosted record.",
         "remainingBlockers": [
           "Crash delivery has no controlled relay, scoped ephemeral authorization, private-symbol publication, split-debug release build policy, or synthetic release-crash canary through a relay; the local Linux build-id canary (CrashReporter_Symbolication) proves offline symbolication of a -g probe only and has no hosted crash-canary record",
           "Reusable client crash-transport configuration is removed from engine source and shipped settings (local tests and source-policy checks only); this removal has no exact-SHA hosted CI record yet",
           "C++ telemetry spool/retry/drop accounting is locally tested, but no hosted outage/recovery evidence establishes documented end-to-end delivery and drop bounds",
-          "The security-runtime job selects the crash-security label on Linux Shipping but has no successful exact-SHA hosted record; no crash-canary job is defined; telemetry-integration is defined but lacks a successful exact-SHA hosted record",
+          "The security-runtime job selects the crash-security label on Linux Shipping but has no successful exact-SHA hosted record; no crash-canary job is defined; the TelemetrySpool step in security-runtime is defined but lacks a successful exact-SHA hosted record",
           "Privacy/retention policy and operations runbook still require review"
         ]
       },

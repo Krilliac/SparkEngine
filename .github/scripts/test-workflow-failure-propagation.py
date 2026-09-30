@@ -54,7 +54,7 @@ REQUIRED_CI_JOBS = (
     "license-compliance",
     "build-linux-asan",
     "build-linux-tsan",
-    "telemetry-integration",
+    "security-runtime",
     "build-windows-vs2022",
     "module-profile-lifecycle",
     "build-windows-shipping",
@@ -1309,61 +1309,15 @@ def required_workflow_errors(workflow: str) -> list[str]:
             if len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", published)) != 1:
                 errors.append(f"{verify_name} duplicates or ambiguously overrides its timeout")
 
-    try:
-        telemetry = yaml_section(workflow, "telemetry-integration", indent=2)
-    except AssertionError as exc:
-        errors.append(str(exc))
-        telemetry = ""
-    if telemetry:
-        if not exact_field(telemetry, "runs-on", "ubuntu-24.04"):
-            errors.append("telemetry-integration must run on ubuntu-24.04")
-        if not exact_field(telemetry, "timeout-minutes", "45"):
-            errors.append("telemetry-integration must have exactly timeout-minutes: 45")
-        if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", telemetry):
-            errors.append("telemetry-integration has a bypassing job-level directive")
-
-        required_steps = (
-            (
-                "Configure Linux Shipping telemetry tests",
-                ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
-            ),
-            (
-                "Build telemetry integration target",
-                ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
-            ),
-            (
-                "Run telemetry spool integration test",
-                (
-                    "set -o pipefail",
-                    "ctest --test-dir build/linux-shipping",
-                    "--output-on-failure",
-                    "--no-tests=error",
-                    "-R '^TelemetrySpool$'",
-                ),
-            ),
-        )
-        for step_name, fragments in required_steps:
-            try:
-                step = named_step(telemetry, step_name)
-            except AssertionError as exc:
-                errors.append(str(exc))
-                continue
-            if re.search(r"(?m)^\s+['\"]?(?:if|continue-on-error)['\"]?:", step):
-                errors.append(f"{step_name} has a conditional/error bypass")
-            if re.search(r"\|\|\s*true\b", step):
-                errors.append(f"{step_name} suppresses failure")
-            for fragment in fragments:
-                if step.count(fragment) != 1:
-                    errors.append(f"{step_name} is missing/duplicating {fragment}")
-
-        try:
-            error_upload = named_step(telemetry, "Upload telemetry integration error summary")
-        except AssertionError as exc:
-            errors.append(str(exc))
-        else:
-            for fragment in ("if: failure()", "name: ci-errors-telemetry-integration"):
-                if error_upload.count(fragment) != 1:
-                    errors.append(f"telemetry integration error upload is missing/duplicating {fragment}")
+    # OPS-100A: TelemetrySpool runs inside security-runtime, reusing that job's
+    # Linux Shipping SparkTests build. It must run exactly once in the whole
+    # workflow, so it can neither vanish nor come back as a second job that
+    # compiles SparkTests cold again; the step itself is pinned below with the
+    # other security-runtime steps.
+    if len(re.findall(r"-R '\^TelemetrySpool\$'", workflow)) != 1:
+        errors.append("the TelemetrySpool selector must run in exactly one workflow step")
+    if re.search(r"(?m)^  telemetry-integration:", workflow):
+        errors.append("telemetry-integration must stay folded into security-runtime, not rebuild SparkTests")
 
     # SEC-100: the security-runtime and network-integration lanes run in the
     # Linux Shipping configuration, and every selector or label runs under
@@ -1404,6 +1358,16 @@ def required_workflow_errors(workflow: str) -> list[str]:
                         "--output-on-failure",
                         "--no-tests=error",
                         '-L "^${label}\\$"',
+                    ),
+                ),
+                (
+                    "Run telemetry spool integration test",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R '^TelemetrySpool$'",
                     ),
                 ),
             ),
@@ -1557,8 +1521,6 @@ def required_workflow_errors(workflow: str) -> list[str]:
         errors.append(str(exc))
         report = ""
     if report:
-        if len(re.findall(r"(?m)^      - telemetry-integration$", report)) != 1:
-            errors.append("report-ci-errors must need telemetry-integration exactly once")
         for lane in ("security-runtime", "network-integration", "network-security"):
             if len(re.findall(rf"(?m)^      - {lane}$", report)) != 1:
                 errors.append(f"report-ci-errors must need {lane} exactly once")
@@ -2892,14 +2854,26 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "build-linux-asan:\n    strategy:\n      matrix:\n        enabled: [false]\n    runs-on: ubuntu-24.04",
             1,
         )
-        mutations["missing telemetry job"] = self.build.replace(
-            "  telemetry-integration:",
-            "  telemetry-integration-disabled:",
+        mutations["missing telemetry step"] = self.build.replace(
+            "    - name: Run telemetry spool integration test",
+            "    - name: Run telemetry spool smoke",
             1,
         )
-        mutations["optional telemetry job"] = self.build.replace(
-            "  telemetry-integration:\n    name: \"Telemetry Integration\"",
-            "  telemetry-integration:\n    name: \"Telemetry Integration\"\n    continue-on-error: true",
+        mutations["optional telemetry step"] = self.build.replace(
+            "    - name: Run telemetry spool integration test",
+            "    - name: Run telemetry spool integration test\n      continue-on-error: true",
+            1,
+        )
+        mutations["telemetry rebuilt in a separate job"] = self.build.replace(
+            "  security-runtime:\n    name: \"Security Runtime\"",
+            "  telemetry-integration:\n    name: \"Telemetry Integration\"\n    runs-on: ubuntu-24.04\n"
+            "    steps:\n    - name: Build\n      run: cmake --build --preset linux-shipping --target SparkTests\n\n"
+            "  security-runtime:\n    name: \"Security Runtime\"",
+            1,
+        )
+        mutations["optional security runtime job"] = self.build.replace(
+            "  security-runtime:\n    name: \"Security Runtime\"",
+            "  security-runtime:\n    name: \"Security Runtime\"\n    continue-on-error: true",
             1,
         )
         mutations["telemetry zero-test bypass"] = self.build.replace(
@@ -2914,13 +2888,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "-R 'Telemetry'",
             1,
         )
-        mutations["telemetry report dependency removed"] = self.build.replace(
-            "      - build-linux-tsan\n      - telemetry-integration\n      - build-linux-msan",
-            "      - build-linux-tsan\n      - build-linux-msan",
+        mutations["security runtime report dependency removed"] = self.build.replace(
+            "      - network-security\n      - security-runtime\n      - network-integration",
+            "      - network-security\n      - network-integration",
             1,
         )
-        mutations["telemetry gate dependency removed"] = self.build.replace(
-            "      - build-linux-tsan\n      - telemetry-integration\n      - build-windows-vs2022",
+        mutations["security runtime gate dependency removed"] = self.build.replace(
+            "      - build-linux-tsan\n      - security-runtime\n      - build-windows-vs2022",
             "      - build-linux-tsan\n      - build-windows-vs2022",
             1,
         )
