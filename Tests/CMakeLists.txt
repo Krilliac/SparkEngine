@@ -4617,6 +4617,23 @@ add_test(
 set_tests_properties(LicenseInventory_ThirdPartyNotices PROPERTIES
     LABELS "governance;unit;python"
     TIMEOUT 300)
+# GOV-400: both notice-gate implementations, in closed-world classification,
+# against this build's real install tree (the CPACK_COMPONENTS_ALL components,
+# read from the generated CPackConfig.cmake). Probe files prove the pass is not
+# vacuous.
+add_test(
+    NAME LicenseInventory_InstallTreeNoticeCoverage
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -DSPARK_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DSPARK_CONFIG=$<CONFIG>
+        -DSPARK_PYTHON=${Python3_EXECUTABLE}
+        -DSPARK_INSTALL_ROOT=${CMAKE_BINARY_DIR}/notice-install-tree
+        -P ${CMAKE_SOURCE_DIR}/cmake/TestInstallTreeNoticeCoverage.cmake)
+set_tests_properties(LicenseInventory_InstallTreeNoticeCoverage PROPERTIES
+    LABELS "package;governance;integration"
+    RUN_SERIAL TRUE
+    TIMEOUT 1200)
 # GOV-400: every governed public claim surface stays inside the declared
 # non-OSI license classification. Runs on all hosts (no git/POSIX needed).
 add_test(
@@ -4892,6 +4909,16 @@ add_test(
 set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
     TIMEOUT 300)
+
+# BLD-100 / OD-04: libsodium's CPUID dispatch reports no AVX/AVX2/AVX-512/AES-NI/
+# PCLMUL/RDRAND variant on any toolchain, because cmake/SparkLibsodium.cmake
+# compiles none of them (on MSVC it overrides private/common.h's unconditional
+# HAVE_*INTRIN_H). Fails on any AVX2/AES-NI host if an above-floor variant returns.
+add_test(NAME CpuFloor_LibsodiumVariants COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(CpuFloor_LibsodiumVariants PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CpuFloor_Libsodium_;SPARK_TEST_EXPECT_COUNT=1"
+    LABELS "build;shipping;unit"
+    TIMEOUT 30)
 
 # ENG-220: tools/pe_import_closure.py fails a staged Windows package whose
 # EXE/DLL imports or delay-imports a DLL that is neither beside it, an API set,

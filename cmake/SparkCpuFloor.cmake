@@ -19,8 +19,12 @@
 # is documented as unsuitable for distribution, so the floor is not enforced
 # there. The windows-shipping and linux-shipping presets pin it OFF and
 # Tools/buildmatrix/check_parity.py rejects a distributed profile that enables
-# it. Per-source-file COMPILE_OPTIONS are not scanned; runtime-dispatched ISA
-# variants must be selected by CPUID (see Utils/MultiISA.h), never assumed.
+# it. Per-source-file COMPILE_OPTIONS, COMPILE_FLAGS and COMPILE_DEFINITIONS of
+# every target source are scanned too, read in the target's own directory scope
+# (set_source_files_properties() is directory-scoped). Generated source entries
+# such as $<TARGET_OBJECTS:...> are skipped: their objects are compiled, and
+# scanned, as part of the target that owns them. Runtime-dispatched ISA variants
+# must be selected by CPUID (see Utils/MultiISA.h), never assumed.
 #
 # Tests/Tools/test_cpu_floor.py exercises both functions against real CMake
 # configurations, including the vendored Jolt build.
@@ -145,6 +149,7 @@ function(spark_assert_cpu_floor)
     endforeach()
 
     _spark_cpu_floor_collect_targets("${CMAKE_SOURCE_DIR}" _targets)
+    set(_source_count 0)
     foreach(_target IN LISTS _targets)
         foreach(_property IN ITEMS COMPILE_OPTIONS INTERFACE_COMPILE_OPTIONS COMPILE_DEFINITIONS
                                    INTERFACE_COMPILE_DEFINITIONS COMPILE_FLAGS)
@@ -160,6 +165,50 @@ function(spark_assert_cpu_floor)
                 list(APPEND _findings "${_target} ${_property}: ${_value}")
             endforeach()
         endforeach()
+
+        # INTERFACE libraries compile nothing of their own.
+        get_target_property(_type ${_target} TYPE)
+        if(_type STREQUAL "INTERFACE_LIBRARY")
+            continue()
+        endif()
+        get_target_property(_sources ${_target} SOURCES)
+        if(NOT _sources)
+            continue()
+        endif()
+        get_target_property(_target_source_dir ${_target} SOURCE_DIR)
+        foreach(_source IN LISTS _sources)
+            string(FIND "${_source}" "$<" _genex_at)
+            if(NOT _genex_at EQUAL -1)
+                continue()
+            endif()
+            # Relative SOURCES entries are relative to the target's source (or,
+            # for generated files, binary) directory; the lookup would otherwise
+            # resolve them against this one.
+            if(NOT IS_ABSOLUTE "${_source}")
+                set(_base_dir "${_target_source_dir}")
+                if(NOT EXISTS "${_base_dir}/${_source}")
+                    get_target_property(_target_binary_dir ${_target} BINARY_DIR)
+                    if(EXISTS "${_target_binary_dir}/${_source}")
+                        set(_base_dir "${_target_binary_dir}")
+                    endif()
+                endif()
+                set(_source "${_base_dir}/${_source}")
+            endif()
+            foreach(_property IN ITEMS COMPILE_OPTIONS COMPILE_FLAGS COMPILE_DEFINITIONS)
+                get_source_file_property(_values "${_source}" TARGET_DIRECTORY ${_target} ${_property})
+                if(NOT _values)
+                    continue()
+                endif()
+                if(_property STREQUAL "COMPILE_FLAGS")
+                    separate_arguments(_values NATIVE_COMMAND "${_values}")
+                endif()
+                spark_cpu_floor_violations(_bad ${_values})
+                foreach(_value IN LISTS _bad)
+                    list(APPEND _findings "${_target} ${_source} ${_property}: ${_value}")
+                endforeach()
+            endforeach()
+            math(EXPR _source_count "${_source_count} + 1")
+        endforeach()
     endforeach()
 
     if(_findings)
@@ -171,5 +220,6 @@ function(spark_assert_cpu_floor)
             "for a non-distributable host-tuned build.")
     endif()
     list(LENGTH _targets _target_count)
-    message(STATUS "CPU floor: x86-64 SSE4.2 verified for global flags and ${_target_count} targets")
+    message(STATUS "CPU floor: x86-64 SSE4.2 verified for global flags, ${_target_count} targets "
+        "and ${_source_count} target sources")
 endfunction()
