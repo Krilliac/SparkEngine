@@ -4750,20 +4750,15 @@ set_tests_properties(SupplyChain_WineSetupScriptIntegrity PROPERTIES
 # and passes floor-only builds. CpuFloor_IsaBaseline disassembles this tree's
 # linked engine, editor, server and game-module images and fails on any
 # above-floor instruction that reached them (SparkCpuFloor.cmake only sees flags).
-# The image scan is ELF-only for now. tools/check_isa_baseline.py scans an MSVC
-# PE against its matching PDB and exempts only reviewed mechanisms: the MSVC
-# 14.44.35207 vector_algorithms.obj section contributions and exact runtime
-# procedures (Tests/Tools/test_pe_isa_ranges.py) and inline CRT/STL code behind
-# the _Avx2WmemEnabled/__isa_available guards (test_isa_guard_dominance.py).
-# Real MSVC Release images still carry libsodium's AVX2/AES-NI variants and
-# sodium_init's XGETBV, which the MSVC branch of SparkLibsodium.cmake compiles,
-# and AVX-512 loops MSVC's auto-vectorizer adds behind __isa_available >= 6
-# (docs/readiness/BLD-100-PROGRESS.md), so registering the Windows scan now
-# would fail every run.
+# ELF registration is below; Windows registration is in SparkIsaBaseline.cmake,
+# after the root defines SPARK_SHIPPED_IMAGE_TARGETS. Its custom target also
+# scans Shipping builds with BUILD_TESTS=OFF. Missing tools/PDBs and remaining
+# product findings fail the scan (docs/readiness/BLD-100-PROGRESS.md).
 add_test(
     NAME CpuFloor_IsaBaselineChecker
     COMMAND ${Python3_EXECUTABLE} -B -m unittest
-        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance -v
+        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance
+        Tests.Tools.test_isa_fail_closed Tests.Tools.test_isa_scan_registration -v
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
