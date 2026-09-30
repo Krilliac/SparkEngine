@@ -246,8 +246,11 @@ target has hosted runtime evidence yet.
   strings, so every Windows destination read back with doubled backslashes and a ref
   holding a quote was cut short at the backslash. It also matched keys inside other
   values. `Load` is now a strict tokenizer for exactly the object `Save` writes: each key
-  once, no unknown keys, only `Save`'s escapes, and `std::from_chars` for the schema. The
-  pending marker used to be read to EOF after a stat. Its reader and writer moved from
+  once, no unknown keys, only `Save`'s escapes, and `std::from_chars` for the schema.
+  `Load` also refuses a compact document that would exceed the 64 KiB limit when
+  `Save` writes it again; `Save` refuses raw controls it cannot encode and oversized
+  output before replacing an existing marker. The pending marker used to be read
+  to EOF after a stat. Its reader and writer moved from
   `Installer.cpp` into `InstallState`, and the reader now reads at most 4 KiB + 1 bytes
   and refuses duplicate or unknown lines. `SparkInstallerInstallStateTests` pins all of
   this.
@@ -269,10 +272,12 @@ target has hosted runtime evidence yet.
   skipped it. Two directories that declared one id were both counted, but only the last
   one read was registered. An id could also hold control bytes, NUL or separators. The
   scan now publishes only after it completes: it skips an id that more than one directory
-  claims, and for a known id it refreshes only the manifest metadata. Load and unload
-  moved into `ModSystemLifecycle.cpp`, so the discovery closure (`ModSystem.cpp`,
+  claims, and for a known id it refreshes the manifest metadata while keeping an active
+  mod's original path as its resource ownership anchor. Load and unload moved into
+  `ModSystemLifecycle.cpp`, so the discovery closure (`ModSystem.cpp`,
   `ModSystemIO.cpp`, `FileUtils.cpp`, `Logger.cpp`) does not need the fault isolator. The
   harden tests `ModSystem_RescanKeepsActiveModLoadedAndUnloadable`,
+  `ModSystem_RescanKeepsActiveModPathOwnership`,
   `ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished` and
   `ModSystem_RejectsIdWithControlOrSeparatorBytes` pin these fixes.
 
