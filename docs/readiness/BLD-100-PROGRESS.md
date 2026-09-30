@@ -221,3 +221,279 @@ The Python CMake-fixture suite is pending because temporary fixture directories
 are inaccessible in this sandbox. MSVC `spark_sodium`/`SparkTests` builds,
 runtime tests and exact-commit CI remain for the integrating session. No
 readiness status was promoted.
+
+## 2026-09-29 Windows ISA scan: contributions, guard dominance, XSAVE/TSX/EVEX (local lane)
+
+`tools/check_isa_baseline.py` gained four reviewed, feature-scoped mechanisms.
+Each fails closed outside its exact scope.
+
+1. **vector_algorithms section contributions.** The scanner reads the DBI
+   section-contribution stream (`llvm-pdbutil dump --modules --section-contribs`).
+   It exempts the code contributions of `vector_algorithms.obj` for AVX, AVX2
+   and LZCNT only. The module must carry its exact Microsoft build path (the
+   `/MT`, `/MD` or `/MDd` variant) and its PDB `Obj:` record must name a library
+   under `MSVC\14.44.35207\lib\x64`. Unknown module indices, zero sizes and
+   out-of-range or non-executable sections are errors.
+   - The review covered all 5382 lines of MSVC 14.44.35207
+     `crt/src/stl/vector_algorithms.cpp`. The file has 372 `_mm256` uses and
+     four `_lzcnt_u32` sites (2653, 2667, 3261, 3272), and every one is
+     dominated by `_Use_avx2()` (line 26). The checker cites the dispatch
+     lines. The file has no FMA, F16C, BMI or AVX-512 intrinsic.
+   - The review cannot see code the compiler adds. The shipped object also
+     holds auto-vectorized EVEX loops (`vpminuq xmm`, in `__std_minmax_disp`)
+     behind `cmpl $0x6, __isa_available`. These stay AVX-512 violations.
+   - The per-procedure vector symbol list is deleted because the contributions
+     subsume it.
+2. **Guard dominance for inline CRT/STL code.** The scanner collects every
+   `S_GPROC32`/`S_LPROC32` extent and resolves guard addresses from
+   `S_PUB32`. It builds an instruction-level CFG for each procedure that
+   contains an uncovered finding. An instruction is exempt when it is
+   reachable from the entry and unreachable once the guard edges that
+   authorize its feature are removed. Edge conditions are evaluated as signed
+   32-bit interval sets. The reviewed guards are:
+   - `_Avx2WmemEnabled`/`_Avx2WmemEnabledWeakValue != 0`, which authorizes
+     AVX/AVX2. Source: Windows SDK 10.0.26100.0 `ucrt/wchar.h`:207-214, 274
+     and 401.
+   - `__isa_available >= 5`, which authorizes LZCNT only. Source:
+     `__msvc_bit_utils.hpp`:115-127.
+
+   The real MSVC `wmemcmp` compares the guard against a register it zeroed
+   with `xorl %eax, %eax` earlier in the same block. That exact shape is
+   accepted when only mov/lea instructions that do not write the register
+   sit between. The analysis fails closed on indirect jumps, a branch target
+   between the compare and the jcc, other compare shapes, missing or
+   ambiguous guard symbols, guards in callers and code outside every
+   procedure record.
+3. **XSAVE exemptions.** XGETBV is exempt in vcruntime `__isa_available_init`,
+   via the exact `cpu_disp.obj` pair for `md` and `xmd` from 14.44.35207
+   `msvcrt(d).lib`. The source is not shipped. The disassembly shows the one
+   XGETBV only after `bt $0x1b` on CPUID.1 ECX (OSXSAVE). XGETBV is also
+   exempt in `Spark::Detail::ReadXcr0`, which is now `noinline`, with the
+   exact name matched in the PDB and in the ELF symbol. The name exemption is
+   dropped when `/OPT:ICF` folds another procedure onto the same bytes.
+4. **Classifier.** The classifier adds these families: XSAVE (`xsave*`,
+   `xrstor*`, `xgetbv`, `xsetbv`), TSX-RTM, FSGSBASE, SSE4a, 3DNow!,
+   CLFLUSHOPT/CLWB, RDPID, WAITPKG, MOVDIRI/MOVDIR64B, SERIALIZE, PKU and AMX.
+   HLE prefixes are still stripped. The scanner now reads raw instruction
+   bytes, so an EVEX-encoded xmm instruction is AVX-512 and never passes as
+   AVX. Before this change MSVC's `vpmaxuq %xmm` was reported as "AVX (VEX)",
+   which a module range or AVX guard would have excused. Undecodable bytes
+   (`<unknown>`, `(bad)`) are no longer counted as instructions.
+
+**Tests.** `Tests/Tools/test_isa_guard_dominance.py` (new, 17 cases) and the
+expanded `test_pe_isa_ranges.py` (16 cases) use synthetic `llvm-objdump` and
+`llvm-pdbutil` text, so they run on every host. `test_check_isa_baseline.py`
+(26 cases) adds:
+
+- classifier, EVEX and undecodable-byte cases;
+- `xgetbv` and `-mrtm` object fixtures;
+- ReadXcr0 name-scoping fixtures, where AVX2 inside ReadXcr0 still fails;
+- lld-link PE fixtures linked from an llvm-lib `msvcprt.lib` with the MSVC
+  module path. A neighbouring module, another toolset (14.45) and FMA are not
+  exempt, and XGETBV is exempt only in `Spark::Detail::ReadXcr0`.
+
+`CpuFloor_IsaBaselineChecker` now runs all three modules. On Windows all 59
+pass. The same tests run against the 256603c checker give 36 failures and 1
+error, and the two synthetic modules fail to import (their API did not exist).
+
+**Real-image measurement.** These are the local windows-release images
+(Release, LTO on, built before this lane's `noinline` change) scanned with
+`llvm-objdump`. GNU objdump gave the same counts for SparkServer.
+
+| Image | Before (256603c) | After | Allowed after (AVX / ymm / LZCNT / XSAVE) |
+|---|---|---|---|
+| SparkServer.exe | 1098 | 968 | 43 / 93 / 7 / 1 |
+| SparkEngine.exe | 1361 | 988 | 114 / 262 / 10 / 1 |
+| SparkEditor.exe | 1356 | 994 | 102 / 267 / 9 / 1 |
+| SparkGame.dll | 1030 | 946 | 26 / 55 / 3 / 1 |
+
+In SparkServer, the 116 vector_algorithms instructions without a procedure
+record are now under "allowed (cpuid-dispatched)". So are the 13 inline
+`wmemchr`/`wmemcmp` instructions (GatewayAreaControl.obj) and the 3 inline
+`lzcnt` from `<bit>` (ServerApplication.obj, EnTT). Some findings are new
+because XSAVE is now classified: `Spark::DetectCpuFeatures` and `sodium_init`
+in each executable.
+
+Residual per image, none of which was exempted:
+
+- **libsodium (every image).** The count is 946. It covers
+  `salsa20_encrypt_bytes` (358 ymm + 2 VEX), `chacha20_encrypt_bytes`
+  (342 ymm + 2 VEX) and the AES-NI aegis128l/aegis256 routines (242). The
+  executables also carry LTCG-inlined AVX2 `vpsrlvq`/`vpsllvq` in
+  `SecureChannel::Seal`/`Open` (16, 4 in `PasswordHash` for Server and Editor)
+  and XGETBV in `sodium_init`. All of this comes from the MSVC branch of
+  `cmake/SparkLibsodium.cmake`, which BLD100-ISA-1 owns; this lane does not
+  edit that file.
+- **`Spark::DetectCpuFeatures` XGETBV (the three executables).** These images
+  predate the `noinline` commit. A 14.44 `/O2 /MD` probe of `Utils/MultiISA.h`
+  scans OK with XSAVE allowed twice (ReadXcr0 and `__isa_available_init`).
+  GCC `-flto` and Clang keep `Spark::Detail::ReadXcr0()` out of line. No
+  engine image was rebuilt on Windows in this lane.
+- **MSVC auto-vectorizer AVX-512 dispatch.** There are 12 in
+  `__std_minmax_disp<1,_Minmax_traits_8,0>` (vector_algorithms.obj, Engine
+  and Editor) and 12 in `cgltf_calc_index_bound` (Engine and Editor). Both
+  are EVEX `vpminuq`/`vpmaxuq xmm` behind `cmpl $0x6, __isa_available; jl`.
+  Level 6 is set by `__isa_available_init` only with AVX512F/DQ/CD/BW/VL and
+  XCR0 opmask/ZMM state. Exempting them needs a reviewed
+  `__isa_available >= 6` guard, and the classifier cannot yet tell AVX-512
+  subsets apart. An alternative is a build change that stops the dispatch.
+  Both need a decision; neither was made here.
+- **Switch tables in `.text` (Editor).** One AVX-512 finding in
+  `VisualScriptEmitter::EmitNode` is jump-table data: the instruction at
+  `0x14041b956` loads `0x41c724(%rdx,%rax,4)`, and the "instruction" bytes
+  are table RVAs. One VEX finding in `nlohmann::json::escape_string` looks
+  like the same case but was not verified. Handling data in code needs a
+  jump-table-aware disassembly and was not attempted.
+
+Native MSVC 14.44 probes, built with `cl /O2 /Zi` with `/MD` and with `/MDd`,
+call `std::countl_zero`, `wmemchr`/`wmemcmp` and `std::reverse` and
+`std::max_element`. Both pass apart from one out-of-line
+`std::_Countl_zero_lzcnt<unsigned __int64>`. That is the "guard in caller"
+shape, which stays a residual by design. The `/MDd` probe confirmed the
+`xmd` module paths for `vector_algorithms.obj` and `cpu_disp.obj`.
+
+**BLD100-ISA-6 (register `CpuFloor_IsaBaseline` for PE) was not done.** The
+residuals above remain, so the test was not registered, narrowed or given
+new exemptions. `Tests/CMakeLists.txt` keeps the ELF-only registration, with
+the comment updated. No windows-shipping or Debug engine tree was scanned.
+The Windows scan still has none of the following: hosted evidence, a proof
+on SSE4.2-only hardware or an emulator, or a ledger state change.
+
+**ELF.** The classifier and EVEX changes also apply to ELF images. A local
+WSL linux-gcc-release build (GCC, LTO on) of this lane's `noinline` commit
+covered the 14 images that `CpuFloor_IsaBaseline` registers. The in-tree
+checker reports 0 above-floor instructions. The lane-head checker also
+reports 0, with one "allowed (cpuid-dispatched) XSAVE" in each of
+SparkEngine, SparkEditor and SparkServer: the XGETBV in
+`Spark::Detail::ReadXcr0()`, which GCC kept out of line. No other XSAVE, TSX,
+EVEX or newer scalar instruction was found. The `MultiISA_CpuFloor_*`
+SparkTests were not rebuilt or run. The only change they would see is the
+`noinline` attribute. `SparkServer --help` runs with exit status 0.
+
+**clang-tidy.** clang-tidy 18.1.8 used a private copy of the calibrated
+Debug/libc++ configuration. It checked the five Linux TUs that include
+`Utils/MultiISA.h` (SparkEditor and SparkServer `main.cpp`,
+`GameplayLifecycleShared.cpp`, `SparkEngineLinux.cpp`,
+`CpuNeuralInference.cpp`). The lane head and 256603c both give 2025
+diagnostics with identical per-check counts, so no budget entry changes.
+
+## 2026-09-30 continuation: fail-closed scan and Windows registration
+
+The three lane commits already ported onto `aecd0356343c20535c59807c9438c0409f9a34d1`
+were retained. Review of their scanner found failures that synthetic positive
+fixtures had missed:
+
+- Undecodable bytes were discarded, including between a guard comparison and
+  its branch. They could hide a newer ISA instruction or a flag/control-flow
+  change. They now fail the scan and invalidate guard reasoning for that
+  procedure. Reports distinguish undecodable bytes from identified ISA findings.
+- VAES, VPCLMULQDQ, GFNI and XOP rotations inherited AVX exemptions. They now
+  have separate feature classifications. AVX-512 mask operations using k0 are
+  classified too. The reviewed XSAVE procedure ranges now authorize XGETBV
+  only, not XSETBV or save/restore operations.
+- PDB guard offsets were not checked against section bounds. The whole
+  four-byte guard must now fit. A real SparkCooker PDB places its zero-valued
+  guard in the virtual, zero-filled tail of .data; that is valid data storage,
+  while executable ranges still require actual file bytes.
+- LLVM emits LOCK as a separate address record. The parser now joins only
+  contiguous prefix/instruction bytes, preserving the instruction entry address.
+  Orphan prefixes and undecodable following bytes still fail.
+- Procedure lookup walked every preceding procedure for instructions in gaps.
+  A prefix maximum of extent ends bounds that search without changing overlap
+  handling; regression coverage includes both gaps and nested extents.
+
+The new negative regressions were run against the old implementation and failed
+before each fix. Two existing expectations were strengthened: VAES is no longer
+classified as ordinary AVX, and undecodable records must remain failures rather
+than disappearing. No reviewed range, ISA exemption or readiness state was added.
+
+`cmake/SparkIsaBaseline.cmake` registers the Windows MSVC scan from the existing
+`SPARK_SHIPPED_IMAGE_TARGETS` inventory, using configuration-specific image/PDB
+pairs. It follows the existing distribution-floor applicability predicate.
+`CpuFloor_IsaBaseline` is both a custom target and, when `BUILD_TESTS=ON`, a
+CTest. The Windows Shipping CI job invokes the custom target even though its
+preset disables tests. Missing tools, PDBs or images fail; residual findings
+are no longer a reason to omit Windows registration. The generated build-matrix
+inventory was regenerated. Configuration-only fixtures use `LANGUAGES NONE`
+and capture registration arguments; they do not prove MSVC generator-expression
+resolution or a real build of the new custom target.
+
+### Actual Shipping artifact scans
+
+The existing `build/windows-shipping/CMakeCache.txt` identifies this worktree as
+its source, MinSizeRel, `SPARK_NATIVE_ARCH=OFF`, `BUILD_TESTS=OFF`, and
+`ENABLE_LTO=OFF`. No C++ build or CTest was run during this continuation. These
+previously linked artifacts establish local scanner behavior, not fresh
+same-commit or default-LTO Shipping qualification.
+
+Every existing product PE in `build/windows-shipping/bin/MinSizeRel` was scanned
+with LLVM and its matching PDB. Standalone SparkBuild test executables are not
+products in the authoritative shipped-image list. Results from the final scanner:
+
+| Image | Identified above-floor instructions | Undecodable records | Exit |
+|---|---:|---:|---:|
+| SparkAutomation.exe | 0 | 0 | 0 |
+| SparkBuild.exe | 0 | 1 | 1 |
+| SparkConsole.exe | 0 | 0 | 0 |
+| SparkCooker.exe | 0 | 76 | 1 |
+| SparkCrashReporter.exe | 0 | 70 | 1 |
+| SparkEditor.exe | 2800 | 1022 | 1 |
+| SparkEngine.exe | 2796 | 591 | 1 |
+| SparkGameFPS.dll | 959 | 448 | 1 |
+| SparkInstaller.exe | 0 | 55 | 1 |
+| SparkLauncher.exe | 2 | 205 | 1 |
+| SparkShaderCompiler.exe | 0 | 0 | 0 |
+| SparkWorker.exe | 0 | 0 | 0 |
+
+Commands, image/PDB/scanner SHA-256 hashes and per-image logs are retained locally
+under `build/isa-review/final.json` and `build/isa-review/*.final.log`. Findings
+include libsodium AES/AVX variants (including AVX-512 in `fill_block`), LZCNT
+helpers and data/instruction ambiguity inside .text. Their counts are decoder
+findings, not proof that each byte sequence is executable. Resolving the product
+code/build findings and proving code-versus-data boundaries remain necessary;
+silently excluding these bytes is not acceptable.
+
+### Verification commands for integration
+
+The focused Python and configuration-only suite passed locally, as did inventory
+currentness, standard `validate.py`, and `git diff --check`. `validate.py --docs`
+reported four errors for the absent generated `docs/api` root and its references
+from `docs/README.md`; the full documentation gate remains unverified here.
+
+Pure Python and configuration-only verification (no C++ compilation):
+
+```powershell
+python -B -m unittest Tests.Tools.test_check_isa_baseline.ClassifierTests Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance Tests.Tools.test_isa_fail_closed Tests.Tools.test_isa_scan_registration -v
+python Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json --output build/isa-review/inventory-check.json
+python tools/site-data/validate.py
+git diff --check
+```
+
+For a RED control, load the original `f7c894bdb` scanner into the test module
+without changing the working tree, then run the new negative regressions:
+
+```powershell
+python -B -c "import subprocess,unittest; from Tests.Tools.test_check_isa_baseline import checker; old=subprocess.check_output(['git','show','f7c894bdb:tools/check_isa_baseline.py'],text=True); exec(compile(old,checker.__file__,'exec'),checker.__dict__); unittest.main(module='Tests.Tools.test_isa_fail_closed',argv=['red-control'])"
+```
+
+The corrected scanner makes that regression module GREEN. The actual product
+scan must remain RED until the residuals above are resolved. Definitive Windows
+MSVC integration, through the normal vcvars/build-preflight wrapper:
+
+```powershell
+cmake --preset windows-shipping -DENABLE_LTO=ON
+cmake --build build/windows-shipping --config MinSizeRel --target CpuFloor_IsaBaseline --parallel 1
+cmake --preset windows-release -DENABLE_LTO=ON
+cmake --build build/windows-release --config Release --target SparkTests CpuFloor_IsaBaseline --parallel 1
+ctest --test-dir build/windows-release -C Release -R '^CpuFloor_IsaBaseline(Checker)?$' --output-on-failure
+$env:SPARK_TEST_NAME='MultiISA_CpuFloor_'
+$env:SPARK_TEST_EXPECT_COUNT='7'
+& .\build\windows-release\bin\Release\SparkTests.exe --warn-is-error
+$env:SPARK_TEST_NAME=$null
+$env:SPARK_TEST_EXPECT_COUNT=$null
+```
+
+Shipping has `BUILD_TESTS=OFF`: its verification command is the custom target,
+not a CTest invocation that would select nothing. A clean LTO-on rebuild,
+compiled fixture suite, below-floor execution and exact-SHA hosted CI remain
+unverified. BLD-100 remains open.

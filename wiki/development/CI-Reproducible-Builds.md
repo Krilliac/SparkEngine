@@ -334,24 +334,66 @@ OD-24; broadening the comparator to hide them is not permitted.
 
 `tools/check_isa_baseline.py` scans Windows PE images when each is given its
 matching PDB (`--pdb IMAGE=PDB`) and LLVM's `llvm-objdump` and `llvm-pdbutil`
-are available; a missing or mismatched PDB is a tool error. `CpuFloor_IsaBaseline`
-is still registered for ELF trees only: real MSVC Release images carry
-above-floor code the reviewed ranges do not cover (libsodium's AVX2/AES-NI
-variants, UCRT `wmemchr`/`wmemcmp`, `<bit>` LZCNT dispatch, symbol-less
-vector_algorithms ranges), listed in `docs/readiness/BLD-100-PROGRESS.md`.
+are available; a missing or mismatched PDB is a tool error. On Windows MSVC,
+`cmake/SparkIsaBaseline.cmake` registers `CpuFloor_IsaBaseline` from the root
+`SPARK_SHIPPED_IMAGE_TARGETS` inventory when the distribution CPU floor applies.
+It pairs each configured image with that configuration's `TARGET_PDB_FILE`.
+The custom target works with `BUILD_TESTS=OFF`; Windows Shipping CI invokes it
+after building the products. With tests enabled it also registers a CTest.
+Missing tools, missing files and remaining findings fail the scan. Existing ELF
+registration remains in `Tests/CMakeLists.txt`.
 
-The scanner binds each PE to its PDB by RSDS GUID and age. Exemptions require
-an exact reviewed MSVC procedure name, compiler module provenance, and a PDB
-range inside executable section bytes. The reviewed MSVC 14.44 runtime
-procedures guard their AVX paths through `__isa_enabled` or `__isa_available`;
-only AVX/AVX2 is exempted. FMA and other extensions, neighboring procedures,
-and unknown runtime functions remain failures. `--allow-symbol` affects ELF
-only. The allowlist and source-review locations are in
-`tools/check_isa_baseline.py`; new toolchain/runtime variants require review.
+Real MSVC images still carry these residuals (including local MinSizeRel
+artifacts with LTO disabled):
 
-`CpuFloor_IsaBaselineChecker` covers linked PE fixtures and the PDB range
-parser. Native runtime fixture passes establish local scanner behavior;
-they do not replace an engine image scan or execution on below-floor hardware.
+- libsodium's AVX2/AES-NI variants and `sodium_init`'s XGETBV, which the MSVC
+  branch of `cmake/SparkLibsodium.cmake` compiles.
+- EVEX (AVX-512) loops that MSVC's auto-vectorizer adds behind
+  `__isa_available >= 6`. They appear in the STL's `__std_minmax_disp` and in
+  `cgltf_calc_index_bound`.
+- MSVC x64 switch tables inside `.text` that happen to decode as above-floor
+  instructions, and bytes the disassembler cannot decode. Neither is excused
+  without proof of which bytes are data.
+
+The per-image residuals are in `docs/readiness/BLD-100-PROGRESS.md`.
+
+The scanner binds each PE to its PDB by RSDS GUID and age. Every exemption is
+scoped to named ISA families and to reviewed provenance:
+
+- **Section contributions.** The DBI section contributions of the STL's
+  `vector_algorithms.obj` are exempt for AVX, AVX2 and LZCNT only. The module
+  must carry its exact Microsoft build path, and the PDB must say it came from
+  an MSVC 14.44.35207 library. The whole 5382-line source was reviewed. Every
+  above-floor intrinsic in it runs only behind `_Use_avx2()`, and the line
+  numbers are cited in the checker. This covers the code that has no
+  `S_GPROC32` record.
+- **Exact procedure/module pairs.** `memcpy`/`memset` are exempt for AVX/AVX2.
+  vcruntime's `__isa_available_init` and `Spark::Detail::ReadXcr0` are exempt
+  for XGETBV only; other XSAVE-family instructions still fail.
+- **Guard dominance.** This covers CRT/STL code the headers inline into
+  arbitrary procedures: UCRT `wmemchr`/`wmemcmp` behind `_Avx2WmemEnabled`
+  (AVX/AVX2), and `<bit>` `countl_zero` behind `__isa_available >= 5`
+  (LZCNT). Such an instruction is exempt when the guard edge is the only way to
+  reach it from its procedure's entry. The analysis builds the procedure's
+  control-flow graph from the disassembly. It fails closed on indirect jumps,
+  guards in callers, unmatched compare shapes, undecodable bytes and code with
+  no procedure record. Guard storage must fit inside the section's virtual
+  data extent, including the loader's zero-filled tail.
+
+The scanner reads raw instruction bytes, so an EVEX-encoded xmm instruction
+counts as AVX-512 and never as AVX. VAES, VPCLMULQDQ, GFNI and XOP rotations
+cannot inherit AVX/AVX2 exemptions; mask-register instructions include k0.
+LLVM's separate prefix records are joined only to contiguous instruction bytes.
+Undecodable bytes remain failures and are reported separately from identified
+above-floor instructions. FMA, AVX-512, BMI, other extensions and
+unknown runtime functions remain failures under these PE mechanisms. `--allow-symbol` affects ELF only. New toolchain or
+runtime variants need a new review.
+
+`CpuFloor_IsaBaselineChecker` covers linked PE fixtures, the PDB contribution
+and procedure parsers and the guard analysis, using synthetic `llvm-objdump`
+and `llvm-pdbutil` text. Native runtime fixture passes establish local scanner
+behavior. They do not replace an engine image scan or execution on below-floor
+hardware.
 
 ## macOS (job `build-macos`, `continue-on-error`)
 
@@ -501,6 +543,7 @@ and pins the workflow wiring. A full local run of the
   - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
+  - 2026-09-29: Windows CPU instruction checks now describe the vector_algorithms section-contribution ranges, the guard-dominance analysis and the XSAVE exemptions (BLD-100). Measured on local MSVC 14.44.35207 Release images, not on a hosted run.
   - 2026-09-27: added the advisory `build-macos-shipping` job (PLT-220), the first lane that configures the `macos-shipping` preset; authored and structurally tested only, with no hosted macOS run yet.
   - 2026-09-26: added the CI-110 clang-tidy diagnostic budget ratchet (per-TU logs, `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`); the committed budget was measured locally with Ubuntu clang-tidy 18.1.3 and the lane's configure line, not yet on a hosted run.
   - 2026-09-25: added build-output reproducibility (BLD-100): the build-root prefix map, the GCC LTO seed, `tools/compare_build_outputs.py`, the `ReproducibleBuild_*` CTests and the advisory `reproducibility-windows` job, measured locally with GCC 13.3.

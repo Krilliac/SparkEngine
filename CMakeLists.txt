@@ -3282,6 +3282,13 @@ set(SPARK_SHIPPED_IMAGE_TARGETS
     SparkWorker SparkAutomation SparkLauncher SparkBuild SparkInstaller SDL2
     ${_SPARK_GAME_MODULE_NAMES}
 )
+
+# BLD-100: scan every configured shipped MSVC image against its matching PDB.
+# This registration lives after the authoritative image inventory so Shipping
+# builds with BUILD_TESTS=OFF still expose the fail-closed custom target.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkIsaBaseline.cmake")
+spark_register_isa_baseline_scan(${SPARK_SHIPPED_IMAGE_TARGETS})
+
 foreach(_spark_symbol_target IN LISTS SPARK_SHIPPED_IMAGE_TARGETS)
     if(NOT TARGET ${_spark_symbol_target})
         continue()

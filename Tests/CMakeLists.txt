@@ -4888,23 +4888,21 @@ set_tests_properties(SupplyChain_WineSetupScriptIntegrity PROPERTIES
 
 # BLD-100 / OD-04: the stable-v1 x86-64 CPU floor is SSE4.2 + POPCNT.
 # CpuFloor_IsaBaselineChecker proves tools/check_isa_baseline.py rejects
-# AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE and the legacy-encoded AES-NI,
-# PCLMULQDQ, SHA, GFNI, RDRAND, RDSEED and ADX instructions in real ELF and PE
-# fixtures and passes floor-only builds. CpuFloor_IsaBaseline disassembles this
-# tree's linked engine, editor, server and game-module images and fails on any
+# AVX/AVX2/AVX-512/FMA/F16C/BMI/LZCNT/MOVBE, the legacy-encoded AES-NI,
+# PCLMULQDQ, SHA, GFNI, RDRAND, RDSEED and ADX instructions and the XSAVE, TSX,
+# FSGSBASE, SSE4a, 3DNow! and newer scalar families in real ELF and PE fixtures
+# and passes floor-only builds. CpuFloor_IsaBaseline disassembles this tree's
+# linked engine, editor, server and game-module images and fails on any
 # above-floor instruction that reached them (SparkCpuFloor.cmake only sees flags).
-# The image scan is ELF-only for now. tools/check_isa_baseline.py can scan an
-# MSVC PE against its matching PDB, exempting only the reviewed CPUID-dispatched
-# MSVC runtime procedure ranges (Tests/Tools/test_pe_isa_ranges.py), but real
-# MSVC Release images still carry unreviewed above-floor code (libsodium's
-# AVX2/AES-NI variants, which the MSVC branch of SparkLibsodium.cmake compiles,
-# the UCRT's _Avx2WmemEnabled wmemchr/wmemcmp, <bit>'s LZCNT dispatch and the
-# symbol-less vector_algorithms ranges; docs/readiness/BLD-100-PROGRESS.md).
-# Registering it for Windows before those are resolved would fail every run.
+# ELF registration is below; Windows registration is in SparkIsaBaseline.cmake,
+# after the root defines SPARK_SHIPPED_IMAGE_TARGETS. Its custom target also
+# scans Shipping builds with BUILD_TESTS=OFF. Missing tools/PDBs and remaining
+# product findings fail the scan (docs/readiness/BLD-100-PROGRESS.md).
 add_test(
     NAME CpuFloor_IsaBaselineChecker
     COMMAND ${Python3_EXECUTABLE} -B -m unittest
-        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges -v
+        Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance
+        Tests.Tools.test_isa_fail_closed Tests.Tools.test_isa_scan_registration -v
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"
