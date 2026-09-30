@@ -160,14 +160,30 @@ namespace
         std::memcpy(destination.data(), text.data(), (std::min)(text.size(), destination.size() - 1));
     }
 
+    /**
+     * Wall-clock frame delta, clamped like the server loop. NetworkManager measures its
+     * server-silence timeout in Update() time, so a fixed 1/60 s per 2 ms poll ran the
+     * client clock ~7x fast and dropped the session whenever the server spent a few real
+     * seconds in PBKDF (Debug builds), before the reply could arrive.
+     */
+    float FrameDelta(Clock::time_point& previous)
+    {
+        const auto now = Clock::now();
+        const float delta = (std::min)(std::chrono::duration<float>(now - previous).count(), 0.1F);
+        previous = now;
+        return delta;
+    }
+
     bool PumpUntilReply(Spark::Net::NetworkManager& network, MMO::MMOSessionGate& gate, uint32_t requestId,
                         std::chrono::milliseconds timeout)
     {
         const auto deadline = Clock::now() + timeout;
+        auto previous = Clock::now();
         while (Clock::now() < deadline)
         {
-            network.Update(1.0f / 60.0f);
-            gate.Update(1.0f / 60.0f);
+            const float delta = FrameDelta(previous);
+            network.Update(delta);
+            gate.Update(delta);
             if (gate.GetLastReply().requestId == requestId && gate.GetLastReply().response)
             {
                 return true;
@@ -187,12 +203,22 @@ namespace
             if (!gate.Send(packet) || !PumpUntilReply(network, gate, packet.requestId, std::chrono::seconds(12)))
             {
                 Spark::SecureErase(packet.password.data(), packet.password.size());
+                // Diagnostics only: operation and outcome, never the credential.
+                Emit(std::format("request-failed op={} reason=no-reply connected={}",
+                                 static_cast<unsigned>(packet.operation),
+                                 network.GetConnectionState() == Spark::Net::ConnectionState::Connected ? 1 : 0));
                 return false;
             }
             const Status status = gate.GetLastReply().status;
             if (status != Status::RateLimited)
             {
                 Spark::SecureErase(packet.password.data(), packet.password.size());
+                if (status != expected)
+                {
+                    Emit(std::format("request-failed op={} status={} expected={}",
+                                     static_cast<unsigned>(packet.operation), static_cast<unsigned>(status),
+                                     static_cast<unsigned>(expected)));
+                }
                 return status == expected;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(275));
@@ -293,10 +319,11 @@ namespace
         }
 
         const auto connectionDeadline = Clock::now() + std::chrono::seconds(12);
+        auto connectPrevious = Clock::now();
         while (network.GetConnectionState() != Spark::Net::ConnectionState::Connected &&
                Clock::now() < connectionDeadline)
         {
-            network.Update(1.0f / 60.0f);
+            network.Update(FrameDelta(connectPrevious));
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
         if (network.GetConnectionState() != Spark::Net::ConnectionState::Connected)
@@ -473,10 +500,12 @@ namespace
             const auto stateDeadline = Clock::now() + std::chrono::seconds(12);
             const Packet* ownState = nullptr;
             const Packet* targetState = nullptr;
+            auto statePrevious = Clock::now();
             while (Clock::now() < stateDeadline)
             {
-                network.Update(1.0f / 60.0f);
-                gate.Update(1.0f / 60.0f);
+                const float delta = FrameDelta(statePrevious);
+                network.Update(delta);
+                gate.Update(delta);
                 ownState = gate.GetState(characterId);
                 targetState = gate.GetState(targetCharacter);
                 if (ownState && targetState && ownState->interactionCount == 1 &&

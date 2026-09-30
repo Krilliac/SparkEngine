@@ -1409,6 +1409,18 @@ set(SPARK_ENGINE_LIB_SOURCES ${SPARK_ENGINE_SOURCES})
 foreach(_ep ${SPARK_ENGINE_ENTRY_POINTS})
     list(REMOVE_ITEM SPARK_ENGINE_LIB_SOURCES "${_ep}")
 endforeach()
+# The PBKDF2-SHA256 work factor (600000 rounds) is sized for optimised code. Unoptimised
+# Debug builds take ~2-4 s per derivation, which overruns the 2 s gateway authenticator
+# call budget (GatewayAuthenticatorPolicy::callBudget), so every login on a Debug server
+# is refused as a backend fault. Optimise this one hot loop in every configuration; the
+# work factor and the budget are unchanged. The file skips the precompiled header because
+# a PCH built at -O0 cannot be reused at -O2 (GCC -Winvalid-pch, Clang hard error).
+# MSVC Debug keeps /RTC1, which /O2 rejects.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/SparkEngine/Source/Utils/PasswordHash.cpp"
+        PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>"
+                   SKIP_PRECOMPILE_HEADERS ON)
+endif()
 
 # The engine archive is reused by non-SparkEngine hosts (SparkServer, tools,
 # tests), so it must never retain an executable entry-point split. Require all

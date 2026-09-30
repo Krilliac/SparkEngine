@@ -1666,7 +1666,10 @@ if(Python3_Interpreter_FOUND)
                 --peer $<TARGET_FILE:SparkMMOSessionGatePeer>)
         set_tests_properties(MMOIntegratedWorld_TwoClientSessionGate PROPERTIES
             LABELS "mmo;network;security;integration;process"
-            TIMEOUT 180)
+            TIMEOUT 180
+            # Three processes race a 2 s authentication budget around a 600000-round
+            # PBKDF2; run alone so the timing does not depend on a concurrent ctest job.
+            RUN_SERIAL TRUE)
     endif()
     get_target_property(_spark_test_sources SparkTests SOURCES)
     string(REPLACE ";" "\n" _spark_test_source_lines "${_spark_test_sources}")
