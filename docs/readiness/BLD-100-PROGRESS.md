@@ -234,7 +234,7 @@ Each fails closed outside its exact scope.
    `/MT`, `/MD` or `/MDd` variant) and its PDB `Obj:` record must name a library
    under `MSVC\14.44.35207\lib\x64`. Unknown module indices, zero sizes and
    out-of-range or non-executable sections are errors.
-   - The review covered all 5382 lines of MSVC 14.44.35207
+   - The review covered the whole source of MSVC 14.44.35207
      `crt/src/stl/vector_algorithms.cpp`. The file has 372 `_mm256` uses and
      four `_lzcnt_u32` sites (2653, 2667, 3261, 3272), and every one is
      dominated by `_Use_avx2()` (line 26). The checker cites the dispatch
