@@ -2154,13 +2154,21 @@ set_tests_properties(TelemetrySpool PROPERTIES
 # triangle indices and adjacency links checked against the mesh they index, a
 # linear size-capped localization parser, script-bearing mods refused instead of reported
 # Active, symlinked or oversized mod manifests refused with a bounded read, junctioned or
-# linked mod directories refused, and mod folder names outside the ANSI code page scanned.
+# linked mod directories refused, mod folder names outside the ANSI code page scanned, and a
+# mod directory or mod.json swapped for a link between the path checks and the open refused
+# (SEC-120 mod-json-swap-race). Twenty tests run on every platform; POSIX adds the mod.json
+# symlink swap, which an unprivileged Windows process cannot stage.
+set(_spark_sec3_gameplay_count 20)
+if(NOT WIN32)
+    math(EXPR _spark_sec3_gameplay_count "${_spark_sec3_gameplay_count} + 1")
+endif()
 add_test(NAME SparkSEC3GameplayHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC3GameplayHardening PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=18"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC3Gameplay_;SPARK_TEST_EXPECT_COUNT=${_spark_sec3_gameplay_count}"
     LABELS "security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+unset(_spark_sec3_gameplay_count)
 
 # SEC-120 runtime .sparkterrain decoder: non-square heightmaps (which made the clipmap index
 # resolution^2 samples from a width*height map) are rejected, and the editor layout round-trips.
