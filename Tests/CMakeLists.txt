@@ -680,6 +680,8 @@ add_executable(SparkTests
     TestTF120Residency.cpp
     TestTF120HandoffReservation.cpp
     TestPersistenceConcurrency.cpp
+    # DATA-120 snapshot retries and handoff operation fences (production persistence sources below)
+    TestDATA120Idempotency.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseBackup.cpp"
@@ -2253,6 +2255,7 @@ set(_spark_data120_persistence_selectors
     "Persistence_Transaction_=3"
     "Persistence_Migration_=11"
     "Persistence_Durable_=${_spark_data120_durable_count}" "Persistence_Concurrency_=6"
+    "Persistence_Idempotency_=6"
     "AsyncDatabaseReal_=1")
 foreach(_spark_data120_selector IN LISTS _spark_data120_persistence_selectors)
     string(REPLACE "=" ";" _spark_data120_parts "${_spark_data120_selector}")

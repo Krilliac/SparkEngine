@@ -73,22 +73,17 @@ namespace Terrafront
                                                 {
                                                     continue;
                                                 }
-                                                const std::string staleOperation = row.migrationOperation;
-                                                const std::string staleSource = row.migrationSource;
-                                                const std::string staleDestination = row.migrationDestination;
-                                                const std::string stalePayload = row.migrationPayload;
                                                 row.residentContinent.clear();
-                                                row.migrationOperation.clear();
-                                                row.migrationSource.clear();
-                                                row.migrationDestination.clear();
-                                                row.migrationPayload.clear();
-                                                if (!staleOperation.empty())
+                                                // An in-flight reservation the dead source left behind becomes a
+                                                // terminal rollback. A terminal committed or rolled_back record
+                                                // is kept whole: it fences replays of that operation, and a
+                                                // terminal row without its source and destination fails load
+                                                // validation.
+                                                if (!row.migrationOperation.empty())
                                                 {
-                                                    row.migrationLastOperation = staleOperation;
+                                                    row.migrationLastOperation = row.migrationOperation;
+                                                    row.migrationOperation.clear();
                                                     row.migrationState = "rolled_back";
-                                                    row.migrationSource = staleSource;
-                                                    row.migrationDestination = staleDestination;
-                                                    row.migrationPayload = stalePayload;
                                                 }
                                                 row.revision = newRevision;
                                                 ++cleared;
