@@ -307,10 +307,10 @@ evidence yet, and structural policy results are not sanitizer runtime evidence.
 These six targets cover persisted state that a server or daemon reads back from disk before it
 accepts work. They were built with Clang 21 and libFuzzer (ASan and UBSan) on a local WSL
 Ubuntu tree, their corpora replayed clean through the registered CTest smokes, and each ran a
-bounded local campaign of 151 seconds each with no crash, leak or timeout: 1,228,215 inputs
-for the orchestration journal, 104,359 for the store file, 12,019,889 for the character row,
-2,560,352 for the epoch state, 3,525,553 for the RTS snapshot and 1,142,712 for the identity
-state. Every `regression-*` seed was also replayed against a
+bounded local campaign of 151 seconds each with no crash, leak or timeout (rerun at
+`76f3f25b4`): 1,619,467 inputs for the orchestration journal, 152,119 for the store file,
+13,725,069 for the character row, 3,101,649 for the epoch state, 4,743,016 for the RTS snapshot
+and 1,594,853 for the identity state. Every `regression-*` seed was also replayed against a
 harness linked with the pre-fix reader (the base commit's file, or its logic moved verbatim
 behind the new codec API) and aborts there with the matching invariant. None of them has hosted
 runtime evidence yet.
