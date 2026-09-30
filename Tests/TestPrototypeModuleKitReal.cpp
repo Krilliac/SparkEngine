@@ -338,7 +338,7 @@ TEST(PrototypeModuleKit_BoundModuleLogIsNullSafe)
     Spark::ModuleLog::Debug("[Kit] unbound {}", 4);
     Spark::ModuleLog::Print("[Kit] unbound print", "INFO");
     EXPECT_TRUE(capture.Lines().empty());
-    EXPECT_EQ(newestLine(), newestBefore);
+    EXPECT_TRUE(newestLine() == newestBefore);
 
     // A bound host without a console drops Print but still logs through its own logger.
     RecordingLogger recorder;
@@ -348,7 +348,7 @@ TEST(PrototypeModuleKit_BoundModuleLogIsNullSafe)
         Spark::ModuleLog::Print("[Kit] no console", "INFO");
         Spark::ModuleLog::Info("[Kit] routed {}", 5);
     }
-    EXPECT_EQ(newestLine(), newestBefore);
+    EXPECT_TRUE(newestLine() == newestBefore);
     EXPECT_TRUE(recorder.Saw("info", "[Kit] routed 5"));
     EXPECT_EQ(recorder.Count(), static_cast<size_t>(1));
     EXPECT_TRUE(Spark::ModuleLog::BoundContext() == nullptr);
