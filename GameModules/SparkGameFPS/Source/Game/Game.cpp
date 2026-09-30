@@ -318,25 +318,27 @@ void Game::LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) con
     // scene loaded, so a rendered frame alone cannot tell the two apart. Package
     // smokes require this exact marker (Tests/PackageSmoke/CheckFPSVisibleFrame.ps1)
     // as positive evidence that the authored scene, not the fallback, is live.
+    // LOG_TO_CONSOLE_IMMEDIATE narrows wchar_t values byte by byte. The audit
+    // trail is UTF-8, and the smoke compares this path to the package directory.
+    const auto utf8Path = std::filesystem::path(scenePath).u8string();
+    const std::string path(utf8Path.begin(), utf8Path.end());
+    auto& console = Spark::SimpleConsole::GetInstance();
     if (!sceneLoaded || !m_sceneManager)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"FPS scene identity: procedural fallback arena (authored scene failed to load from " +
-                                     scenePath + L")",
-                                 L"WARNING");
+        console.LogWarning("FPS scene identity: procedural fallback arena (authored scene failed to load from " + path +
+                           ")");
         return;
     }
 
-    // The scene name is authored UTF-8; keep the marker ASCII so every log sink
-    // and the smoke's regex see the same bytes.
-    std::wstring sceneName;
+    // Keep the scene label on one line with unambiguous quote delimiters.
+    std::string sceneName;
     for (const char ch : m_sceneManager->GetMetadata().sceneName)
     {
         const auto byte = static_cast<unsigned char>(ch);
-        sceneName.push_back((byte >= 0x20 && byte < 0x7F && byte != '"') ? static_cast<wchar_t>(byte) : L'?');
+        sceneName.push_back((byte >= 0x20 && byte < 0x7F && byte != '"') ? ch : '?');
     }
-    LOG_TO_CONSOLE_IMMEDIATE(std::format(L"FPS scene identity: authored scene \"{}\" ({} nodes) from {}", sceneName,
-                                         m_sceneManager->GetNodeCount(), scenePath),
-                             L"INFO");
+    console.LogInfo(std::format("FPS scene identity: authored scene \"{}\" ({} nodes) from {}", sceneName,
+                                m_sceneManager->GetNodeCount(), path));
 }
 
 void Game::BindSceneMaterialRoots()
