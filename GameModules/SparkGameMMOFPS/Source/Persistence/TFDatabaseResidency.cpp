@@ -85,7 +85,7 @@ namespace Terrafront
                                                 if (!staleOperation.empty())
                                                 {
                                                     row.migrationLastOperation = staleOperation;
-                                                    row.migrationState = "aborted";
+                                                    row.migrationState = "rolled_back";
                                                     row.migrationSource = staleSource;
                                                     row.migrationDestination = staleDestination;
                                                     row.migrationPayload = stalePayload;
@@ -168,7 +168,7 @@ namespace Terrafront
                             return false;
                         }
                         it->migrationLastOperation = it->migrationOperation;
-                        it->migrationState = "aborted";
+                        it->migrationState = "rolled_back";
                         it->migrationOperation.clear();
                     }
                     if (IsHeldByLiveAuthority(it->residentContinent))
@@ -408,7 +408,7 @@ namespace Terrafront
                          if (it->migrationOperation.empty())
                          {
                              alreadyAborted =
-                                 it->migrationLastOperation == operation && it->migrationState == "aborted";
+                                 it->migrationLastOperation == operation && it->migrationState == "rolled_back";
                              return false;
                          }
                          if (it->migrationOperation != operation || it->migrationSource != m_boundContinent ||
@@ -419,7 +419,7 @@ namespace Terrafront
                          matching = true;
                          it->migrationOperation.clear();
                          it->migrationLastOperation = operation;
-                         it->migrationState = "aborted";
+                         it->migrationState = "rolled_back";
                          it->revision = newRevision;
                          resultingRevision = newRevision;
                          return true;

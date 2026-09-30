@@ -298,7 +298,7 @@ TEST(TF120_Migration_SourceRestartRecoveryKeepsGatewayEpoch)
     ASSERT_TRUE(Bind(destinationDb, "beta"));
     TFCharacterRecord row;
     ASSERT_TRUE(sourceDb.FindCharacter(character, row));
-    EXPECT_EQ(row.migrationState, std::string("aborted"));
+    EXPECT_EQ(row.migrationState, std::string("rolled_back"));
     EXPECT_EQ(row.migrationEpoch, reserved.epoch);
     EXPECT_TRUE(row.residentContinent.empty());
 

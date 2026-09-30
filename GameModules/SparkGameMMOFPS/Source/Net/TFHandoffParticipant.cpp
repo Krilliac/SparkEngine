@@ -160,7 +160,7 @@ namespace Terrafront
         {
             return HandoffResult::Rejected;
         }
-        const bool aborted = row.migrationState == "aborted" && row.migrationLastOperation == command.operation &&
+        const bool aborted = row.migrationState == "rolled_back" && row.migrationLastOperation == command.operation &&
                              row.migrationEpoch == request.epoch && row.migrationSource == command.source &&
                              row.migrationDestination == command.destination;
         if (aborted && row.residentContinent.empty())

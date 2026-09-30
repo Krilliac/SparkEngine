@@ -199,7 +199,7 @@ namespace Terrafront
         std::string migrationPayload;       ///< TF-120 bounded opaque participant state captured by the source
         std::string migrationLastOperation; ///< TF-120 last committed operation, for duplicate commit fencing
         uint64_t migrationEpoch = 0; ///< TF-120 gateway epoch of the last reservation; the next one must be larger
-        std::string migrationState;  ///< empty, reserved, committed, or aborted
+        std::string migrationState;  ///< empty, reserved, committed, or rolled_back (never aborted: crash scanners)
 
         // --- W6 progression expansion (additive schema; absent keys on old save
         // files simply load as the empty defaults below) -------------------------

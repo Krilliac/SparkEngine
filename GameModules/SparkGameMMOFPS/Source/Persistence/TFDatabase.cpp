@@ -507,7 +507,7 @@ namespace Terrafront
             if (migrationPayload.size() > 65536 || migrationOperation.size() > 128 ||
                 migrationLastOperation.size() > 128 ||
                 (migrationState != "" && migrationState != "reserved" && migrationState != "committed" &&
-                 migrationState != "aborted"))
+                 migrationState != "rolled_back"))
             {
                 return LoadResult::Corrupt;
             }
@@ -524,7 +524,7 @@ namespace Terrafront
             {
                 return LoadResult::Corrupt;
             }
-            if ((migrationState == "committed" || migrationState == "aborted") &&
+            if ((migrationState == "committed" || migrationState == "rolled_back") &&
                 (!migrationOperation.empty() || migrationLastOperation.empty() ||
                  !SavePaths::IsValidContinentKey(migrationSource) ||
                  !SavePaths::IsValidContinentKey(migrationDestination) || migrationSource == migrationDestination ||
