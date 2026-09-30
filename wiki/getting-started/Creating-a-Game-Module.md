@@ -73,19 +73,21 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
-`SPARK_SDK_VERSION` is **7** (`SparkSDK/Include/Spark/Version.h`): v5 dropped `IEngineContext`'s
+`SPARK_SDK_VERSION` is **8** (`SparkSDK/Include/Spark/Version.h`): v5 dropped `IEngineContext`'s
 `InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle),
-v6 appended `IEngineContext::GetLogger()`, and v7 appended `GetConsole()` (MOD-295).
-`IsSDKCompatible` is exact equality, so a v6 module is refused by a v7 host and a v7 module by a v6
+v6 appended `IEngineContext::GetLogger()`, v7 appended `GetConsole()`, and v8 appended
+`GetStateValidation()` (MOD-295).
+`IsSDKCompatible` is exact equality, so a v7 module is refused by a v8 host and a v8 module by a v7
 host — there is no forward or backward window; rebuild modules against the current SDK.
-`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 90` with a `static_assert` tying
+`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 91` with a `static_assert` tying
 it to the version constant: adding or removing a virtual means updating **both** together, or an old
 host will accept a module that calls off the end of its vtable.
 
 ### Public console, logging and gameplay types
 
-ARPG, RPG, Racing, OpenWorld, RTS and Platformer register commands through the
-host's `IConsole` and log through `Spark::ModuleLog`. FPS's main and headless
+ARPG, RPG, Racing, OpenWorld, RTS, Platformer, the SparkGame showcase and
+VisualScript register commands through the host's `IConsole` and log through
+`Spark::ModuleLog`. FPS's main and headless
 entrypoints also register through `IConsole`. Each module retains only the
 names the host accepted and unregisters them before releasing its state and
 context. A missing optional console leaves no registered callbacks.
@@ -545,6 +547,35 @@ null. A module DLL's own `Utils/SparkConsole.h` / `Utils/LogMacros.h`
 singletons are DLL-local copies of private engine headers, so prefer the SDK
 logger. SparkGameRTS and SparkGamePlatformer log their engine-system wiring
 this way (`PrototypeModuleKit_Helpers` CTest).
+
+### Invalid-state rules
+
+Add ECS invariant rules to the host's invalid-state detector with
+`IEngineContext::GetStateValidation()` (`<Spark/IStateValidation.h>`) instead
+of the private `Utils/InvalidStateDetector.h`, and remove every category you
+added in `OnUnload`:
+
+```cpp
+#include <Spark/IStateValidation.h>
+
+if (Spark::IStateValidation* rules = context->GetStateValidation())
+{
+    rules->AddRule("MyGame.DeadButMoving", "MyGame", Spark::StateViolationSeverity::Warning,
+                   [](World& world, std::vector<Spark::StateViolation>& out) { /* scan components */ });
+}
+// OnUnload:
+if (Spark::IStateValidation* rules = m_context ? m_context->GetStateValidation() : nullptr)
+{
+    rules->RemoveRulesByCategory("MyGame");
+}
+```
+
+`AddRule` refuses an empty name, category or check and returns `false` while the
+host detector is not running. Registrations and removals made during a module's
+`OnLoad`/`OnUnload` are attributed to that module, so removing a category never
+drops another module's rules. Every prototype module registers its rules this
+way (`PrototypeModuleKit_PublicConsoleBoundary` and `PrototypeModuleKit_Helpers`
+CTests).
 
 ## Subscribing to Events
 

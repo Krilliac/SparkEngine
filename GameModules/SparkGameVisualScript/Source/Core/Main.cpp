@@ -17,9 +17,6 @@
 #include "Core/RuntimePackage.h"
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
-#include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 
@@ -28,11 +25,15 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
 
+#include <Spark/IConsole.h>
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
+#include <Spark/ModuleLog.h>
 
 SPARK_IMPLEMENT_MODULE(SparkGameVisualScriptModule)
 
@@ -61,18 +62,17 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
         return true;
 
     m_context = context;
-    auto& console = Spark::SimpleConsole::GetInstance();
-
-    console.LogInfo("[VisualScript] Loading visual-script-only game module...");
-    console.LogInfo("[VisualScript] ALL game logic is defined in visual scripts — zero C++ game code");
+    Spark::ModuleLog::Info(m_context, "[VisualScript] Loading visual-script-only game module...");
+    Spark::ModuleLog::Info(m_context,
+                           "[VisualScript] ALL game logic is defined in visual scripts — zero C++ game code");
 
     const auto runtimeSupport = Spark::VisualScriptDemo::EvaluateRuntimeSupport(
         Spark::VisualScriptDemo::AngelScriptCompiledIn, m_context->GetWorld() != nullptr,
         m_context->GetScriptEngine() != nullptr);
     if (runtimeSupport != Spark::VisualScriptDemo::RuntimeSupport::Ready)
     {
-        console.LogError("[VisualScript] " +
-                         std::string(Spark::VisualScriptDemo::RuntimeSupportMessage(runtimeSupport)));
+        Spark::ModuleLog::Error(m_context, "[VisualScript] {}",
+                                Spark::VisualScriptDemo::RuntimeSupportMessage(runtimeSupport));
         m_context = nullptr;
         return false;
     }
@@ -86,8 +86,8 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
     std::error_code cwdError;
     const std::vector<std::filesystem::path> searchPaths = Spark::VisualScriptDemo::ScriptSearchPaths(
         Spark::RuntimePackage::GetExecutableDirectory(), std::filesystem::current_path(cwdError));
-    auto demo =
-        std::make_unique<Spark::VisualScriptDemo::DemoWorld>(*m_context->GetWorld(), *m_context->GetScriptEngine());
+    auto demo = std::make_unique<Spark::VisualScriptDemo::DemoWorld>(*m_context->GetWorld(),
+                                                                     *m_context->GetScriptEngine(), m_context);
     if (!demo->LoadScripts(searchPaths) || !demo->Spawn())
     {
         m_context = nullptr;
@@ -99,26 +99,32 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     // Register VisualScript state validation rules
-    Spark::InvalidStateDetector::GetInstance().AddRule(
-        {"VS.ScriptEntityHealth", "VisualScript", Spark::StateViolationSeverity::Warning, true,
-         [](World& w, std::vector<Spark::StateViolation>& out)
-         {
-             for (auto entity : w.GetEntitiesWith<HealthComponent, NameComponent>())
-             {
-                 auto* h = w.GetComponent<HealthComponent>(entity);
-                 auto* name = w.GetComponent<NameComponent>(entity);
-                 if (h && name && name->name.starts_with("VS_") &&
-                     (!std::isfinite(h->health) || h->health < 0.0f || h->health > h->maxHealth))
-                 {
-                     out.push_back({"VS.ScriptEntityHealth", static_cast<uint32_t>(entity),
-                                    "Script entity health is non-finite or outside [0, maxHealth]",
-                                    Spark::StateViolationSeverity::Warning});
-                 }
-             }
-         }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("VS.ScriptEntityHealth", "VisualScript", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, NameComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* name = w.GetComponent<NameComponent>(entity);
+                                    if (h && name && name->name.starts_with("VS_") &&
+                                        (!std::isfinite(h->health) || h->health < 0.0f || h->health > h->maxHealth))
+                                    {
+                                        out.push_back({"VS.ScriptEntityHealth", static_cast<uint32_t>(entity),
+                                                       "Script entity health is non-finite or outside [0, maxHealth]",
+                                                       Spark::StateViolationSeverity::Warning});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[VisualScript] Host refused the VisualScript state-validation rules");
+    }
 
     m_initialized = true;
-    console.LogInfo("[VisualScript] Module loaded — game is running entirely on visual scripts");
+    Spark::ModuleLog::Info(m_context, "[VisualScript] Module loaded — game is running entirely on visual scripts");
     return true;
 }
 
@@ -127,11 +133,13 @@ void SparkGameVisualScriptModule::OnUnload()
     if (!m_initialized)
         return;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[VisualScript] Unloading visual script game module");
+    Spark::ModuleLog::Info(m_context, "[VisualScript] Unloading visual script game module");
 
     UnregisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("VisualScript");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("VisualScript");
+    }
     UnloadSoundCues();
     m_demo.reset();
     if (m_context && AngelScriptEngine::GetBoundWorld() == m_context->GetWorld())
@@ -203,21 +211,20 @@ void SparkGameVisualScriptModule::LoadSoundCues()
         return;
     }
 
-    auto& console = Spark::SimpleConsole::GetInstance();
     for (const auto cue : Spark::VisualScriptDemo::SoundCues)
     {
         const std::string name(cue);
         const auto path = Spark::VisualScriptDemo::SoundCuePath(m_demo->GetScriptRoot(), cue);
         if (FAILED(audio->LoadSound(name, path.wstring())))
         {
-            console.LogWarning("[VisualScript] Sound cue '" + name + "' is unavailable; could not load " +
-                               path.generic_string());
+            Spark::ModuleLog::Warn(m_context, "[VisualScript] Sound cue '{}' is unavailable; could not load {}", name,
+                                   path.generic_string());
             continue;
         }
         m_loadedSoundCues.push_back(name);
     }
-    console.LogInfo("[VisualScript] Loaded " + std::to_string(m_loadedSoundCues.size()) + "/" +
-                    std::to_string(Spark::VisualScriptDemo::SoundCues.size()) + " script sound cues");
+    Spark::ModuleLog::Info(m_context, "[VisualScript] Loaded {}/{} script sound cues", m_loadedSoundCues.size(),
+                           Spark::VisualScriptDemo::SoundCues.size());
 }
 
 void SparkGameVisualScriptModule::UnloadSoundCues()
@@ -234,11 +241,30 @@ void SparkGameVisualScriptModule::UnloadSoundCues()
 
 void SparkGameVisualScriptModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.RegisterCommand(
+    Spark::IConsole* host = m_context->GetConsole();
+    if (!host)
+    {
+        Spark::ModuleLog::Warn(m_context, "[VisualScript] Host has no console; vs_* commands are unavailable");
+        return;
+    }
+    // Remember each accepted name so OnUnload removes exactly what this module registered.
+    auto registerCommand =
+        [this, host](std::string_view name, Spark::IConsole::CommandHandler handler, std::string_view help)
+    {
+        if (host->RegisterCommand(name, std::move(handler), help, "VisualScript", ""))
+        {
+            m_consoleCommands.emplace_back(name);
+        }
+        else
+        {
+            Spark::ModuleLog::Warn(m_context, "[VisualScript] Console command '{}' was not registered", name);
+        }
+    };
+
+    registerCommand(
         "vs_status", [this](const std::vector<std::string>&) { return GetStatusString(); },
-        "Show the visual-script demo health, score, and entity status", "VisualScript");
-    console.RegisterCommand(
+        "Show the visual-script demo health, score, and entity status");
+    registerCommand(
         "vs_restart",
         [this](const std::vector<std::string>&)
         {
@@ -250,8 +276,8 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
                 return "Visual-script demo restart failed: " + m_demo->GetLastError();
             return std::string{"Visual-script demo restarted\n"} + GetStatusString();
         },
-        "Recreate the complete visual-script demo", "VisualScript");
-    console.RegisterCommand(
+        "Recreate the complete visual-script demo");
+    registerCommand(
         "vs_reload",
         [this](const std::vector<std::string>&)
         {
@@ -267,8 +293,8 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
             }
             return m_demo->GetReloadSummary();
         },
-        "Hot-reload the generated visual scripts into the running demo, keeping entity state", "VisualScript");
-    console.RegisterCommand(
+        "Hot-reload the generated visual scripts into the running demo, keeping entity state");
+    registerCommand(
         "vs_help",
         [](const std::vector<std::string>&)
         {
@@ -276,16 +302,19 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
                 "Controls: WASD move, Left Shift sprint, Space jump. Collect five gold pickups, "
                 "avoid patrols, and use the green health pickup. Commands: vs_status, vs_restart, vs_reload."};
         },
-        "Show visual-script demo controls", "VisualScript");
+        "Show visual-script demo controls");
 }
 
 void SparkGameVisualScriptModule::UnregisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.UnregisterCommand("vs_status");
-    console.UnregisterCommand("vs_restart");
-    console.UnregisterCommand("vs_reload");
-    console.UnregisterCommand("vs_help");
+    if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
+    {
+        for (const std::string& name : m_consoleCommands)
+        {
+            console->UnregisterCommand(name);
+        }
+    }
+    m_consoleCommands.clear();
 }
 
 std::string SparkGameVisualScriptModule::GetStatusString() const

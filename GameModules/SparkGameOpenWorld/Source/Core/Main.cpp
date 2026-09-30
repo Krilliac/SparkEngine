@@ -18,11 +18,11 @@
 #include "Events/OWDynamicEventSystem.h"
 #include <Spark/ModuleLog.h>
 #include <Spark/IConsole.h>
-#include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
 #include <string_view>
 #include <utility>
@@ -143,39 +143,44 @@ bool SparkGameOpenWorldModule::OnLoad(Spark::IEngineContext* context)
                                    *m_settlementSystem);
 
     // Register OpenWorld-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule(
-        {"OpenWorld.DeadWildlife", "OpenWorld", Spark::StateViolationSeverity::Warning, true,
-         [](World& w, std::vector<Spark::StateViolation>& out)
-         {
-             for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
-             {
-                 auto* h = w.GetComponent<HealthComponent>(entity);
-                 auto* ai = w.GetComponent<AIComponent>(entity);
-                 if (h && ai && h->isDead &&
-                     (ai->state == AIComponent::State::Patrolling || ai->state == AIComponent::State::Alert))
-                 {
-                     out.push_back({"OpenWorld.DeadWildlife", static_cast<uint32_t>(entity),
-                                    "Dead wildlife AI still patrolling/alert", Spark::StateViolationSeverity::Warning});
-                 }
-             }
-         }});
-
-    stateDetector.AddRule({"OpenWorld.MaxHealthZero", "OpenWorld", Spark::StateViolationSeverity::Error, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   if (h && h->maxHealth <= 0.0f)
-                                   {
-                                       out.push_back({"OpenWorld.MaxHealthZero", static_cast<uint32_t>(entity),
-                                                      "maxHealth=" + std::to_string(h->maxHealth) + " is not positive",
-                                                      Spark::StateViolationSeverity::Error});
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule(
+            "OpenWorld.DeadWildlife", "OpenWorld", Spark::StateViolationSeverity::Warning,
+            [](World& w, std::vector<Spark::StateViolation>& out)
+            {
+                for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                {
+                    auto* h = w.GetComponent<HealthComponent>(entity);
+                    auto* ai = w.GetComponent<AIComponent>(entity);
+                    if (h && ai && h->isDead &&
+                        (ai->state == AIComponent::State::Patrolling || ai->state == AIComponent::State::Alert))
+                    {
+                        out.push_back({"OpenWorld.DeadWildlife", static_cast<uint32_t>(entity),
+                                       "Dead wildlife AI still patrolling/alert",
+                                       Spark::StateViolationSeverity::Warning});
+                    }
+                }
+            }) &&
+        stateRules->AddRule("OpenWorld.MaxHealthZero", "OpenWorld", Spark::StateViolationSeverity::Error,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    if (h && h->maxHealth <= 0.0f)
+                                    {
+                                        out.push_back({"OpenWorld.MaxHealthZero", static_cast<uint32_t>(entity),
+                                                       "maxHealth=" + std::to_string(h->maxHealth) + " is not positive",
+                                                       Spark::StateViolationSeverity::Error});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[OpenWorld] Host refused the OpenWorld state-validation rules");
+    }
 
     m_initialized = true;
     RegisterConsoleCommands();
@@ -210,7 +215,10 @@ void SparkGameOpenWorldModule::OnUnload()
 
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them before the module image is unmapped during hot unload/reload.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("OpenWorld");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("OpenWorld");
+    }
 
     Spark::ModuleLog::Info(m_context, "[OpenWorld] Unloading Spark Open World module...");
     Spark::ModuleLog::Info(m_context, "Open World module shutting down");

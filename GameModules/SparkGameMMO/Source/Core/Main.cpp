@@ -28,13 +28,14 @@
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
-#include "Utils/InvalidStateDetector.h"
 #include "Utils/SecureMemory.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/NetworkComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
+#include <Spark/ModuleLog.h>
 
 #include <charconv>
 #include <cmath>
@@ -341,39 +342,47 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
 
 void SparkGameMMOModule::RegisterStateValidationRules()
 {
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-    stateDetector.RemoveRulesByCategory("MMO");
-    stateDetector.AddRule({"MMO.DeadWithNetwork", "MMO", Spark::StateViolationSeverity::Error, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent, NetworkIdentity>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   auto* ni = w.GetComponent<NetworkIdentity>(entity);
-                                   if (h && ni && h->isDead && !h->deathProcessed && ni->isLocalAuthority)
-                                   {
-                                       out.push_back({"MMO.DeadWithNetwork", static_cast<uint32_t>(entity),
-                                                      "Local-authority entity dead but deathProcessed=false",
-                                                      Spark::StateViolationSeverity::Error});
-                                   }
-                               }
-                           }});
-
-    stateDetector.AddRule({"MMO.HealthOverMax", "MMO", Spark::StateViolationSeverity::Warning, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   if (h && !h->isDead && h->health > h->maxHealth * 1.01f)
-                                   {
-                                       out.push_back({"MMO.HealthOverMax", static_cast<uint32_t>(entity),
-                                                      "health=" + std::to_string(h->health) +
-                                                          " exceeds maxHealth=" + std::to_string(h->maxHealth),
-                                                      Spark::StateViolationSeverity::Warning});
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    if (stateRules)
+    {
+        stateRules->RemoveRulesByCategory("MMO");
+    }
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("MMO.DeadWithNetwork", "MMO", Spark::StateViolationSeverity::Error,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, NetworkIdentity>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* ni = w.GetComponent<NetworkIdentity>(entity);
+                                    if (h && ni && h->isDead && !h->deathProcessed && ni->isLocalAuthority)
+                                    {
+                                        out.push_back({"MMO.DeadWithNetwork", static_cast<uint32_t>(entity),
+                                                       "Local-authority entity dead but deathProcessed=false",
+                                                       Spark::StateViolationSeverity::Error});
+                                    }
+                                }
+                            }) &&
+        stateRules->AddRule("MMO.HealthOverMax", "MMO", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    if (h && !h->isDead && h->health > h->maxHealth * 1.01f)
+                                    {
+                                        out.push_back({"MMO.HealthOverMax", static_cast<uint32_t>(entity),
+                                                       "health=" + std::to_string(h->health) +
+                                                           " exceeds maxHealth=" + std::to_string(h->maxHealth),
+                                                       Spark::StateViolationSeverity::Warning});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[MMO] Host refused the MMO state-validation rules");
+    }
     m_stateRulesRegistered = true;
 }
 
@@ -401,7 +410,10 @@ void SparkGameMMOModule::OnUnload()
     }
 
     UnregisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("MMO");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("MMO");
+    }
     m_stateRulesRegistered = false;
     ShutdownSystems();
 

@@ -18,11 +18,11 @@
 #include "NPC/RPGNPCSystem.h"
 #include <Spark/ModuleLog.h>
 #include <Spark/IConsole.h>
-#include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
 
 #include <algorithm>
@@ -179,38 +179,42 @@ bool SparkGameRPGModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     // Register RPG-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule({"RPG.DeadAIPatrolling", "RPG", Spark::StateViolationSeverity::Error, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   auto* ai = w.GetComponent<AIComponent>(entity);
-                                   if (h && ai && h->isDead && ai->state == AIComponent::State::Patrolling)
-                                   {
-                                       out.push_back({"RPG.DeadAIPatrolling", static_cast<uint32_t>(entity),
-                                                      "Dead NPC is still patrolling",
-                                                      Spark::StateViolationSeverity::Error});
-                                   }
-                               }
-                           }});
-
-    stateDetector.AddRule({"RPG.NegativeHealth", "RPG", Spark::StateViolationSeverity::Warning, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   if (h && h->health < 0.0f)
-                                   {
-                                       out.push_back({"RPG.NegativeHealth", static_cast<uint32_t>(entity),
-                                                      "health=" + std::to_string(h->health) + " is negative",
-                                                      Spark::StateViolationSeverity::Warning});
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("RPG.DeadAIPatrolling", "RPG", Spark::StateViolationSeverity::Error,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* ai = w.GetComponent<AIComponent>(entity);
+                                    if (h && ai && h->isDead && ai->state == AIComponent::State::Patrolling)
+                                    {
+                                        out.push_back({"RPG.DeadAIPatrolling", static_cast<uint32_t>(entity),
+                                                       "Dead NPC is still patrolling",
+                                                       Spark::StateViolationSeverity::Error});
+                                    }
+                                }
+                            }) &&
+        stateRules->AddRule("RPG.NegativeHealth", "RPG", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    if (h && h->health < 0.0f)
+                                    {
+                                        out.push_back({"RPG.NegativeHealth", static_cast<uint32_t>(entity),
+                                                       "health=" + std::to_string(h->health) + " is negative",
+                                                       Spark::StateViolationSeverity::Warning});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[RPG] Host refused the RPG state-validation rules");
+    }
 
     m_initialized = true;
     Spark::ModuleLog::Info(m_context, "RPG module loaded successfully — 8 subsystems active");
@@ -231,7 +235,10 @@ void SparkGameRPGModule::OnUnload()
 
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them before the module image is unmapped during hot unload/reload.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("RPG");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("RPG");
+    }
 
     Spark::ModuleLog::Info(m_context, "[RPG] Unloading Spark RPG module...");
     Spark::ModuleLog::Info(m_context, "RPG module shutting down");

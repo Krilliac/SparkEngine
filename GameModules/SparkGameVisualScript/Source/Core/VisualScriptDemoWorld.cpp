@@ -9,7 +9,7 @@
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
-#include "Utils/SparkConsole.h"
+#include "Spark/ModuleLog.h"
 
 #include <algorithm>
 #include <fstream>
@@ -61,7 +61,8 @@ namespace Spark::VisualScriptDemo
         }
     } // namespace
 
-    DemoWorld::DemoWorld(World& world, AngelScriptEngine& scriptEngine) : m_world(world), m_scriptEngine(scriptEngine)
+    DemoWorld::DemoWorld(World& world, AngelScriptEngine& scriptEngine, Spark::IEngineContext* context)
+        : m_world(world), m_scriptEngine(scriptEngine), m_context(context)
     {
     }
 
@@ -73,12 +74,11 @@ namespace Spark::VisualScriptDemo
     void DemoWorld::Fail(const std::string& message)
     {
         m_lastError = message;
-        SimpleConsole::GetInstance().LogError("[VisualScript] " + message);
+        Spark::ModuleLog::Error(m_context, "[VisualScript] {}", message);
     }
 
     bool DemoWorld::LoadScripts(std::span<const std::filesystem::path> searchPaths)
     {
-        auto& console = SimpleConsole::GetInstance();
         m_lastError.clear();
         m_scriptSources.clear();
         m_scriptRoot.clear();
@@ -121,14 +121,13 @@ namespace Spark::VisualScriptDemo
 
         m_scriptRoot = *root;
         m_scriptSources = std::move(sources);
-        console.LogInfo("[VisualScript] Validated 5 visual scripts from " + m_scriptRoot.string());
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Validated 5 visual scripts from {}", m_scriptRoot.string());
         return true;
     }
 
     bool DemoWorld::ReadAndValidateScripts(const std::filesystem::path& root,
                                            std::unordered_map<std::string, std::string>& sources)
     {
-        auto& console = SimpleConsole::GetInstance();
         for (const auto& asset : ScriptManifest)
         {
             const auto path = root / std::filesystem::path(asset.fileName);
@@ -178,7 +177,7 @@ namespace Spark::VisualScriptDemo
             }
 
             sources.emplace(className, text);
-            console.LogSuccess("[VisualScript] Validated: " + className);
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Validated: {}", className);
         }
         return true;
     }
@@ -273,13 +272,12 @@ namespace Spark::VisualScriptDemo
             Fail("Hot reload left entities without a script: " + failures);
             return false;
         }
-        SimpleConsole::GetInstance().LogSuccess("[VisualScript] " + m_reloadSummary);
+        Spark::ModuleLog::Info(m_context, "[VisualScript] {}", m_reloadSummary);
         return true;
     }
 
     bool DemoWorld::Spawn()
     {
-        auto& console = SimpleConsole::GetInstance();
         DestroyEntities();
         m_lastError.clear();
         AngelScriptEngine::BindWorld(&m_world);
@@ -301,7 +299,7 @@ namespace Spark::VisualScriptDemo
             m_world.AddComponent<MeshRenderer>(player).meshPath = "Assets/Models/character.obj";
             if (!AttachScript(player, "PlayerController"))
                 return rollBack();
-            console.LogInfo("[VisualScript] Spawned Player with PlayerController script");
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned Player with PlayerController script");
         }
 
         // --- Collectibles: "Collectible" handles spin, proximity pickup and score increment ---
@@ -319,7 +317,7 @@ namespace Spark::VisualScriptDemo
             if (!AttachScript(coin, "Collectible"))
                 return rollBack();
         }
-        console.LogInfo("[VisualScript] Spawned 5 collectible items with Collectible script");
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned 5 collectible items with Collectible script");
 
         // --- Enemies: "EnemyPatrol" handles waypoint patrol, detection, chase, attack ---
         for (int i = 0; i < 3; i++)
@@ -334,7 +332,7 @@ namespace Spark::VisualScriptDemo
             if (!AttachScript(enemy, "EnemyPatrol"))
                 return rollBack();
         }
-        console.LogInfo("[VisualScript] Spawned 3 enemies with EnemyPatrol script");
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned 3 enemies with EnemyPatrol script");
 
         // --- Game manager: "GameManager" tracks score (in HealthComponent::health) and win/lose ---
         {
@@ -342,7 +340,7 @@ namespace Spark::VisualScriptDemo
             m_world.AddComponent<HealthComponent>(manager, HealthComponent{0.0f, 500.0f});
             if (!AttachScript(manager, "GameManager"))
                 return rollBack();
-            console.LogInfo("[VisualScript] Spawned GameManager with scoring/win-condition script");
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned GameManager with scoring/win-condition script");
         }
 
         // --- Healing pickup: "HealthPickup" handles proximity healing and respawn cooldown ---
@@ -354,7 +352,7 @@ namespace Spark::VisualScriptDemo
             healthMesh.emissive = 0.5f;
             if (!AttachScript(heal, "HealthPickup"))
                 return rollBack();
-            console.LogInfo("[VisualScript] Spawned HealthPack with HealthPickup script");
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned HealthPack with HealthPickup script");
         }
 
         if (m_entities.size() != ExpectedEntityCount)
@@ -365,8 +363,8 @@ namespace Spark::VisualScriptDemo
         }
 
         PlaceKitProps();
-        console.LogInfo("[VisualScript] All game entities spawned — 11 entities, 5 script types, 0 lines of C++ "
-                        "game code");
+        Spark::ModuleLog::Info(m_context, "[VisualScript] All game entities spawned — 11 entities, 5 script types, "
+                                          "0 lines of C++ game code");
         return true;
     }
 
@@ -398,8 +396,7 @@ namespace Spark::VisualScriptDemo
                 prop, Transform{placement.position, {0.0f, placement.yawDegrees, 0.0f}, {1.0f, 1.0f, 1.0f}});
             m_world.AddComponent<MeshRenderer>(prop).meshPath = placement.meshPath;
         }
-        SimpleConsole::GetInstance().LogInfo("[VisualScript] Placed " + std::to_string(m_kitProps.size()) +
-                                             " blueprint-lab kit props");
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Placed {} blueprint-lab kit props", m_kitProps.size());
     }
 
     bool DemoWorld::AttachScript(EntityID entity, const std::string& className)

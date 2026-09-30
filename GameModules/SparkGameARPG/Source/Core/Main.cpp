@@ -21,12 +21,12 @@
 #include "Input/InputManager.h"
 #include <Spark/ModuleLog.h>
 #include <Spark/IConsole.h>
-#include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
 
 #include <unordered_map>
@@ -154,46 +154,50 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     // Register ARPG-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule({"ARPG.DeadMobTargeting", "ARPG", Spark::StateViolationSeverity::Error, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   auto* ai = w.GetComponent<AIComponent>(entity);
-                                   if (h && ai && h->isDead && ai->targetEntity != entt::null)
-                                   {
-                                       out.push_back({"ARPG.DeadMobTargeting", static_cast<uint32_t>(entity),
-                                                      "Dead monster still has a target assigned",
-                                                      Spark::StateViolationSeverity::Error});
-                                   }
-                               }
-                           }});
-
-    stateDetector.AddRule(
-        {"ARPG.StaticBodyDynamic", "ARPG", Spark::StateViolationSeverity::Warning, true,
-         [](World& w, std::vector<Spark::StateViolation>& out)
-         {
-             for (auto entity : w.GetEntitiesWith<RigidBodyComponent, HealthComponent>())
-             {
-                 auto* rb = w.GetComponent<RigidBodyComponent>(entity);
-                 auto* h = w.GetComponent<HealthComponent>(entity);
-                 if (rb && h && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic && rb->mass > 0.0f)
-                 {
-                     float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
-                                     rb->linearVelocity.y * rb->linearVelocity.y +
-                                     rb->linearVelocity.z * rb->linearVelocity.z;
-                     if (speedSq > 25.0f)
-                     {
-                         out.push_back({"ARPG.StaticBodyDynamic", static_cast<uint32_t>(entity),
-                                        "Dead entity moving at high speed (speedSq=" + std::to_string(speedSq) + ")",
-                                        Spark::StateViolationSeverity::Warning});
-                     }
-                 }
-             }
-         }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("ARPG.DeadMobTargeting", "ARPG", Spark::StateViolationSeverity::Error,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* ai = w.GetComponent<AIComponent>(entity);
+                                    if (h && ai && h->isDead && ai->targetEntity != entt::null)
+                                    {
+                                        out.push_back({"ARPG.DeadMobTargeting", static_cast<uint32_t>(entity),
+                                                       "Dead monster still has a target assigned",
+                                                       Spark::StateViolationSeverity::Error});
+                                    }
+                                }
+                            }) &&
+        stateRules->AddRule(
+            "ARPG.StaticBodyDynamic", "ARPG", Spark::StateViolationSeverity::Warning,
+            [](World& w, std::vector<Spark::StateViolation>& out)
+            {
+                for (auto entity : w.GetEntitiesWith<RigidBodyComponent, HealthComponent>())
+                {
+                    auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                    auto* h = w.GetComponent<HealthComponent>(entity);
+                    if (rb && h && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic && rb->mass > 0.0f)
+                    {
+                        float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                        rb->linearVelocity.y * rb->linearVelocity.y +
+                                        rb->linearVelocity.z * rb->linearVelocity.z;
+                        if (speedSq > 25.0f)
+                        {
+                            out.push_back({"ARPG.StaticBodyDynamic", static_cast<uint32_t>(entity),
+                                           "Dead entity moving at high speed (speedSq=" + std::to_string(speedSq) + ")",
+                                           Spark::StateViolationSeverity::Warning});
+                        }
+                    }
+                }
+            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[ARPG] Host refused the ARPG state-validation rules");
+    }
 
     m_initialized = true;
     Spark::ModuleLog::Info(m_context, "ARPG module loaded successfully — 7 subsystems active");
@@ -216,7 +220,10 @@ void SparkGameARPGModule::OnUnload()
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them while the module image is still mapped so hot unload/reload cannot
     // leave the host detector pointing at unmapped code.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("ARPG");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("ARPG");
+    }
 
     UnregisterConsoleCommands();
     Spark::ModuleLog::Info(m_context, "[ARPG] Unloading Spark ARPG module...");
