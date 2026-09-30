@@ -2196,18 +2196,6 @@
       "resolved": false
     },
     {
-      "target": "${_target}",
-      "kind": "unresolved",
-      "file": "FuzzerTests/Replay/CMakeLists.txt",
-      "line": 19,
-      "conditionFrames": [],
-      "definitionScope": [
-        "spark_add_fuzz_replay"
-      ],
-      "origin": "function-template",
-      "resolved": false
-    },
-    {
       "target": "Blank3D",
       "kind": "shared_library",
       "file": "Templates/Blank3D/CMakeLists.txt",
@@ -3246,6 +3234,82 @@
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 2443,
       "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplayArchive",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 43,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplayCrashManifest",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 54,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplayJsonUtils",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 35,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplayNeuralWeights",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 70,
+      "conditionFrames": [
+        {
+          "id": "FuzzerTests/Replay/CMakeLists.txt:69",
+          "branch": 0,
+          "branches": [
+            "NOT WIN32"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplaySceneManifest",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 39,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplayTextureStex",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 72,
+      "conditionFrames": [
+        {
+          "id": "FuzzerTests/Replay/CMakeLists.txt:69",
+          "branch": 0,
+          "branches": [
+            "NOT WIN32"
+          ]
+        }
+      ],
       "definitionScope": [],
       "origin": "declaration",
       "resolved": true
@@ -4436,26 +4500,6 @@
           "origin": "function-template",
           "definitionScope": [
             "spark_add_plugin"
-          ],
-          "resolved": false
-        }
-      ]
-    },
-    {
-      "target": "${_target}",
-      "kind": "unresolved",
-      "buildable": false,
-      "origins": [
-        "function-template"
-      ],
-      "declarations": [
-        {
-          "file": "FuzzerTests/Replay/CMakeLists.txt",
-          "line": 19,
-          "kind": "unresolved",
-          "origin": "function-template",
-          "definitionScope": [
-            "spark_add_fuzz_replay"
           ],
           "resolved": false
         }
@@ -5812,6 +5856,114 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 2443,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplayArchive",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 43,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplayCrashManifest",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 54,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplayJsonUtils",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 35,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplayNeuralWeights",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 70,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplaySceneManifest",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 39,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplayTextureStex",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 72,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

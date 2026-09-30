@@ -3,7 +3,7 @@
   "profile": "stable-v1",
   "state": "blocked",
   "errorCount": 3,
-  "warningCount": 4,
+  "warningCount": 3,
   "findings": [
     {
       "category": "cmake-only",
@@ -21,12 +21,6 @@
       "category": "target-name-unresolved",
       "severity": "warning",
       "message": "Target name '${TARGET_NAME}' at cmake/SparkPlugin.cmake:62 cannot be resolved statically",
-      "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration."
-    },
-    {
-      "category": "target-name-unresolved",
-      "severity": "warning",
-      "message": "Target name '${_target}' at FuzzerTests/Replay/CMakeLists.txt:19 cannot be resolved statically",
       "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration."
     },
     {
