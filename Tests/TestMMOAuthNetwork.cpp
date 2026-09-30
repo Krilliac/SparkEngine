@@ -20,6 +20,7 @@
 #include "Spark/IEngineContext.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <initializer_list>
@@ -302,6 +303,59 @@ TEST(MMOAuthNet_ChatHandlerDefersToGameThread)
     EXPECT_TRUE(relayed);
 
     network.UnregisterHandler(kProbeType);
+    chat.Shutdown();
+    network.Shutdown();
+}
+
+// SEC follow-up: in SparkServer a tick thread pumps NetworkManager while the game thread runs
+// MMOChatSystem::Update and reads the history. Run exactly that split: chat arrives through a
+// pump thread while this thread updates and reads the history. The ThreadSanitizer job reports
+// a data race here if the network handler touches the history.
+TEST(MMOAuthNet_ChatHandlerRacesNoGameThreadState)
+{
+    auto& network = NetworkManager::GetInstance();
+    ASSERT_TRUE(StartLoopbackServer(network));
+    AuthNetContext context;
+    MMO::MMOChatSystem chat;
+    ASSERT_TRUE(chat.Initialize(&context));
+    SecureRawClient speaker;
+    ASSERT_TRUE(speaker.Connect(network, "Racer"));
+
+    std::atomic<bool> stop{false};
+    std::thread pump(
+        [&network, &stop]
+        {
+            while (!stop.load())
+            {
+                network.Update(0.016f);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        });
+
+    constexpr int kMessages = 16;
+    for (int index = 0; index < kMessages; ++index)
+    {
+        const auto payload =
+            MMO::MMOChatSystem::EncodeWirePayload(MMO::ChatChannel::Area, "Racer", "race " + std::to_string(index));
+        EXPECT_TRUE(speaker.SendSealed(SparkTestFixtures::BuildWire(kChatType, payload, ChannelType::Reliable,
+                                                                    static_cast<uint32_t>(index + 1), speaker.Id())));
+    }
+    int received = 0;
+    const auto deadline = std::chrono::steady_clock::now() + kWindow;
+    while (received < kMessages && std::chrono::steady_clock::now() < deadline)
+    {
+        chat.Update(0.016f);
+        received = 0;
+        for (int index = 0; index < kMessages; ++index)
+        {
+            received += HistoryContains(chat, "race " + std::to_string(index)) ? 1 : 0;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    stop.store(true);
+    pump.join();
+    EXPECT_EQ(received, kMessages);
+
     chat.Shutdown();
     network.Shutdown();
 }

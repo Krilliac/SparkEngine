@@ -2558,7 +2558,7 @@ set_tests_properties(MMOAuthHardening PROPERTIES
 if(ENABLE_NETWORKING AND TARGET imgui)
     add_test(NAME MMOAuthNetwork COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(MMOAuthNetwork PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestMMOAuthNetwork.cpp;SPARK_TEST_NAME_PREFIX=MMOAuthNet;SPARK_TEST_EXPECT_COUNT=3"
+        ENVIRONMENT "SPARK_TEST_FILE=TestMMOAuthNetwork.cpp;SPARK_TEST_NAME_PREFIX=MMOAuthNet;SPARK_TEST_EXPECT_COUNT=4"
         LABELS "mmo;network;security;unit"
         RUN_SERIAL TRUE
         TIMEOUT 180)
