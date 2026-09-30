@@ -1370,7 +1370,7 @@
 | `Entry` | struct | SparkDaemon | [ShaderService.h:L118](../../SparkDaemon/src/ShaderService.h#L118) |  |
 | `Entry` | struct | SparkEngine | [D3D12Types.h:L265](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L265) |  |
 | `Entry` | struct | SparkEngine | [EntityEventBus.h:L270](../../SparkEngine/Source/Utils/EntityEventBus.h#L270) |  |
-| `Entry` | struct | SparkEngine | [EventBus.h:L298](../../SparkEngine/Source/Utils/EventBus.h#L298) |  |
+| `Entry` | struct | SparkEngine | [EventBus.h:L315](../../SparkEngine/Source/Utils/EventBus.h#L315) |  |
 | `Entry` | struct | SparkEngine | [Octree.h:L192](../../SparkEngine/Source/Utils/Octree.h#L192) |  |
 | `Entry` | struct | SparkEngine | [ScheduledCallback.h:L176](../../SparkEngine/Source/Utils/ScheduledCallback.h#L176) | Cancel all pending callbacks. |
 | `Entry` | struct | Tests | [TestAdversarialEngine.cpp:L1246](../../Tests/TestAdversarialEngine.cpp#L1246) |  |
@@ -1408,8 +1408,8 @@
 | `EventBus` | class | SparkEngine | [CoroutineTypes.h:L28](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L28) |  |
 | `EventBus` | class | SparkEngine | [AbilitySystem.h:L41](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L41) |  |
 | `EventBus` | class | SparkEngine | [PhysicsSystem.h:L38](../../SparkEngine/Source/Physics/PhysicsSystem.h#L38) |  |
-| `EventBus` | class | SparkEngine | [EventBus.h:L60](../../SparkEngine/Source/Utils/EventBus.h#L60) |  |
-| `EventBus` | class | SparkEngine | [EventBus.h:L147](../../SparkEngine/Source/Utils/EventBus.h#L147) | Type-safe publish/subscribe event bus. |
+| `EventBus` | class | SparkEngine | [EventBus.h:L67](../../SparkEngine/Source/Utils/EventBus.h#L67) |  |
+| `EventBus` | class | SparkEngine | [EventBus.h:L154](../../SparkEngine/Source/Utils/EventBus.h#L154) | Type-safe publish/subscribe event bus. |
 | `EventBus` | class | SparkSDK | [IEngineContext.h:L36](../../SparkSDK/Include/Spark/IEngineContext.h#L36) |  |
 | `EventBus` | class | SparkServer | [ServerApplication.h:L29](../../SparkServer/src/ServerApplication.h#L29) |  |
 | `EventBus` | class | Tests | [TestEventSystem.cpp:L19](../../Tests/TestEventSystem.cpp#L19) |  |
@@ -1951,7 +1951,7 @@
 | `IAuthority` | class | GameModules | [TFHandoffParticipant.h:L22](../../GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.h#L22) | Game-thread pawn operations supplied by the live authoritative simulation. |
 | `IBenchmarkScenario` | class | SparkEngine | [BenchmarkFramework.h:L60](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L60) |  |
 | `IChannel` | struct | SparkEngine | [EntityEventBus.h:L261](../../SparkEngine/Source/Utils/EntityEventBus.h#L261) |  |
-| `IChannel` | struct | SparkEngine | [EventBus.h:L290](../../SparkEngine/Source/Utils/EventBus.h#L290) |  |
+| `IChannel` | struct | SparkEngine | [EventBus.h:L307](../../SparkEngine/Source/Utils/EventBus.h#L307) |  |
 | `ICommand` | class | SparkEditor | [CommandHistory.h:L60](../../SparkEditor/Source/CommandHistory.h#L60) | Interface for a reversible editor command. |
 | `ICommand` | class | Tests | [TestCommandHistory.cpp:L19](../../Tests/TestCommandHistory.cpp#L19) |  |
 | `IConsole` | class | SparkSDK | [IConsole.h:L62](../../SparkSDK/Include/Spark/IConsole.h#L62) | Abstract console command registry for game modules |
@@ -2314,7 +2314,7 @@
 | `LifecycleStage` | class | SparkEngine | [LifecycleStage.h:L33](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L33) |  |
 | `LifecycleSystem` | class | SparkEngine | [ECSystems.h:L317](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L317) |  |
 | `LifecycleSystem` | class | Tests | [TestECSystemOrdering.cpp:L153](../../Tests/TestECSystemOrdering.cpp#L153) |  |
-| `LifetimeToken` | struct | SparkEngine | [EventBus.h:L285](../../SparkEngine/Source/Utils/EventBus.h#L285) |  |
+| `LifetimeToken` | struct | SparkEngine | [EventBus.h:L302](../../SparkEngine/Source/Utils/EventBus.h#L302) |  |
 | `Light` | struct | SparkEditor | [SceneFileTypes.h:L123](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L123) | Light component data |
 | `Light` | class | SparkEngine | [LightingSystem.h:L75](../../SparkEngine/Source/Graphics/LightingSystem.h#L75) | Light component |
 | `Light` | struct | Tests | [TestExtendedSystems.cpp:L626](../../Tests/TestExtendedSystems.cpp#L626) |  |
@@ -3814,7 +3814,7 @@
 | `RngImpl` | class | SparkEngine | [InstabilitySimulator.h:L169](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.h#L169) |  |
 | `RngState` | struct | SparkEngine | [InstabilitySimulator.h:L170](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.h#L170) |  |
 | `Rocket` | class | GameModules | [Rocket.h:L57](../../GameModules/SparkGameFPS/Source/Projectiles/Rocket.h#L57) |  |
-| `RosterSeed` | struct | GameModules | [RacingRaceFlow.cpp:L383](../../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp#L383) |  |
+| `RosterSeed` | struct | GameModules | [RacingRaceFlow.cpp:L387](../../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.cpp#L387) |  |
 | `RosterView` | struct | GameModules | [TFSocialSystem.h:L59](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L59) |  |
 | `RoundResult` | struct | GameModules | [GameModeTypes.h:L139](../../GameModules/SparkGameFPS/Source/Game/GameModeTypes.h#L139) | Round result |
 | `RoutedRun` | struct | Tests | [TestMOD370SkirmishDeterminismReal.cpp:L546](../../Tests/TestMOD370SkirmishDeterminismReal.cpp#L546) |  |
@@ -4592,7 +4592,7 @@
 | `SubmixVoiceRecord` | struct | SparkEngine | [AudioEngine.h:L789](../../SparkEngine/Source/Audio/AudioEngine.h#L789) | One created submix voice plus the parameters needed to recreate it. |
 | `Subscription` | struct | Tests | [TestEventSystem.cpp:L80](../../Tests/TestEventSystem.cpp#L80) |  |
 | `SubscriptionHandle` | class | GameModules | [Game.h:L45](../../GameModules/SparkGameFPS/Source/Game/Game.h#L45) |  |
-| `SubscriptionHandle` | class | SparkEngine | [EventBus.h:L74](../../SparkEngine/Source/Utils/EventBus.h#L74) | RAII handle that automatically unsubscribes from the event bus on destruction. |
+| `SubscriptionHandle` | class | SparkEngine | [EventBus.h:L81](../../SparkEngine/Source/Utils/EventBus.h#L81) | RAII handle that automatically unsubscribes from the event bus on destruction. |
 | `SubsystemDescriptor` | struct | SparkEngine | [EngineBootstrap.h:L43](../../SparkEngine/Source/Core/EngineBootstrap.h#L43) | Describes a single engine subsystem for bootstrap registration |
 | `SubsystemEntry` | struct | SparkEngine | [EngineBootstrap.h:L166](../../SparkEngine/Source/Core/EngineBootstrap.h#L166) | Return the number of registered subsystems |
 | `SubsystemFaultIsolator` | class | SparkEngine | [FaultIsolation.h:L52](../../SparkEngine/Source/Core/FaultIsolation.h#L52) | Tracks runtime faults in engine subsystems and auto-disables repeat offenders |

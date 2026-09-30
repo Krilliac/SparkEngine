@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 342258 |
+| **SparkEngine/Source** | 342281 |
 | **SparkEditor/Source** | 105305 |
-| **GameModules** | 162614 |
+| **GameModules** | 162632 |
 | **External services** | 12696 |
 | **Asset pipeline** | 2524 |
 | **Tests** | 257937 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~904930** |
+| **Total C++ (excl. ThirdParty)** | **~904971** |
 
 ### File Counts
 
@@ -35,7 +35,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 124821 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 124823 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,9 +43,9 @@ Graphics contains 124821 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 124821 | 36.4% |
-| Engine (all subsystems) | 98844 | 28.8% |
-| Utils | 48982 | 14.3% |
+| Graphics | 124823 | 36.4% |
+| Engine (all subsystems) | 98848 | 28.8% |
+| Utils | 48999 | 14.3% |
 | Core | 33095 | 9.6% |
 | Physics | 11077 | 3.2% |
 | Audio | 6961 | 2.0% |
@@ -59,7 +59,7 @@ Graphics contains 124821 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 18845 |
+| Networking | 18849 |
 | AI | 13692 |
 | ECS | 8615 |
 | Scripting | 8059 |
@@ -157,7 +157,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `OpenGLDevice.cpp` | 2586 |
+| `OpenGLDevice.cpp` | 2588 |
 | `ModuleManager.cpp` | 2579 |
 | `CrashHandler.cpp` | 2531 |
 | `NetworkConnection.cpp` | 2499 |
