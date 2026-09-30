@@ -99,7 +99,12 @@ namespace Spark
 
                     const fs::path& entryPath = it->path();
                     std::error_code typeEc;
-                    if (it->is_directory(typeEc) && NativeEqualsAsciiNoCase(entryPath.filename().native(), "scripts"))
+                    const bool isDirectory = it->is_directory(typeEc);
+                    if (typeEc)
+                    {
+                        return ModScriptScan::Unknown;
+                    }
+                    if (isDirectory && NativeEqualsAsciiNoCase(entryPath.filename().native(), "scripts"))
                     {
                         return ModScriptScan::Found;
                     }

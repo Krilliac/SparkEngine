@@ -161,7 +161,16 @@ namespace Spark
                     info.description = std::move(found.description);
                     info.previewImage = std::move(found.previewImage);
                     info.dependencies = std::move(found.dependencies);
-                    info.path = std::move(found.path);
+                    // Keep the path that was validated when the mod became active. A rescan
+                    // can target a different root (or observe a replacement directory), but
+                    // changing the path underneath an active mod would make its eventual
+                    // unload operate on a different resource owner than the one announced to
+                    // subscribers. Metadata can refresh while the active ownership anchor stays
+                    // stable; an inactive mod may adopt the newly discovered path.
+                    if (!info.loaded)
+                    {
+                        info.path = std::move(found.path);
+                    }
                 }
                 ++published;
             }

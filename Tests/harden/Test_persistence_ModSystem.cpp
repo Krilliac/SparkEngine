@@ -117,6 +117,38 @@ TEST(ModSystem_RescanKeepsActiveModLoadedAndUnloadable)
     std::filesystem::remove_all(dir);
 }
 
+TEST(ModSystem_RescanKeepsActiveModPathOwnership)
+{
+    const std::string originalDir = MakeTempModsDir("rescan_path_original");
+    const std::string replacementDir = MakeTempModsDir("rescan_path_replacement");
+    WriteMod(originalDir, "Keep", R"({"id":"Keep","name":"Keep","version":"1.0"})");
+    WriteMod(replacementDir, "Keep", R"({"id":"Keep","name":"Replacement","version":"2.0"})");
+
+    ModSystem mods;
+    EXPECT_EQ(mods.ScanForMods(originalDir), static_cast<size_t>(1));
+    EXPECT_TRUE(mods.EnableMod("Keep"));
+    EXPECT_TRUE(mods.LoadMod("Keep"));
+    const ModInfo* info = mods.GetModInfo("Keep");
+    ASSERT_TRUE(info != nullptr);
+    const std::string originalPath = info->path;
+
+    // A different scan root can discover the same id at a replacement path. The active
+    // resource owner remains anchored to the path used for the successful load.
+    EXPECT_EQ(mods.ScanForMods(replacementDir), static_cast<size_t>(1));
+    info = mods.GetModInfo("Keep");
+    ASSERT_TRUE(info != nullptr);
+    EXPECT_EQ(info->path, originalPath);
+    EXPECT_EQ(info->name, std::string("Replacement"));
+    EXPECT_EQ(info->version, std::string("2.0"));
+    EXPECT_TRUE(mods.IsModActive("Keep"));
+
+    mods.UnloadAll();
+    EXPECT_FALSE(mods.IsModActive("Keep"));
+
+    std::filesystem::remove_all(originalDir);
+    std::filesystem::remove_all(replacementDir);
+}
+
 // Two directories declaring one id used to publish whichever the directory iterator
 // reached last (a dropped-in mod could shadow an installed one), and ScanForMods counted
 // both although only one was registered.
