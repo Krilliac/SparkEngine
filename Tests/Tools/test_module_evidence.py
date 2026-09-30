@@ -54,6 +54,55 @@ PROFILE = "stable-v1"
 PACKAGE_SMOKE_TEST_SHA = "0123456789abcdef0123456789abcdef01234567"
 PACKAGE_SMOKE_TEST_DIGEST = "a" * 64
 
+# The production-source FPSRespawn_* tests the fixture repository defines.  The
+# names are the shipped ones, so the fixture JUnit looks like a real SparkTests
+# run; the validator derives the expected set from the fixture's Tests/ sources.
+FPS_RESPAWN_CASES = (
+    "FPSRespawn_CollectsShippedLevelDefaultSpawnsOnly",
+    "FPSRespawn_CollectSkipsMalformedPriorityAndWaveSpawns",
+    "FPSRespawn_DeathRespawnReportsAuthoredSpawnRotation",
+    "FPSRespawn_SceneReloadRebindKeepsPendingDeathScoreAndSettings",
+    "FPSRespawn_RebindWithoutAuthoredSpawnsRestoresFallbackNotStaleSpawn",
+    "FPSRespawn_LowestIntegerPriorityStillSelectsAuthoredSpawn",
+    "FPSRespawn_DeathScoresAndArmsTheRespawnTimer",
+    "FPSRespawn_UpdatePublishesRespawnEventAfterTheDelay",
+    "FPSRespawn_RespawnWithoutAPendingDeathDoesNothing",
+    "FPSRespawn_ManualRespawnPublishesAndClearsThePendingDeath",
+)
+OTHER_SPARKTESTS_CASES = ("NullRHI_Boots", "ECS_TicksInOrder", "Save_RoundTrips")
+
+
+def sparktests_junit(fps_cases: tuple[str, ...] = FPS_RESPAWN_CASES,
+                     other_cases: tuple[str, ...] = OTHER_SPARKTESTS_CASES) -> str:
+    """SparkTests-shaped JUnit: the module's production cases plus unrelated ones."""
+    names = (*other_cases, *fps_cases)
+    cases = "".join(
+        f'    <testcase name="{name}" classname="SparkEngine" time="0.01"/>\n' for name in names
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<testsuites tests="{len(names)}" failures="0" errors="0">\n'
+        f'  <testsuite name="SparkEngine" tests="{len(names)}" failures="0" errors="0">\n'
+        f"{cases}"
+        '  </testsuite>\n'
+        '</testsuites>\n'
+    )
+
+
+def write_fps_production_tests(root: Path, names: tuple[str, ...] = FPS_RESPAWN_CASES) -> None:
+    """A production-source test file (it includes a real module header)."""
+    header = root / "GameModules" / INCLUDED / "Source" / "Respawn" / "RespawnSystem.h"
+    header.parent.mkdir(parents=True, exist_ok=True)
+    header.write_text("#pragma once\nstruct RespawnSystem {};\n", encoding="utf-8")
+    tests = root / "Tests"
+    tests.mkdir(parents=True, exist_ok=True)
+    body = "".join(f"TEST({name})\n{{\n    EXPECT_EQ(sizeof(RespawnSystem), 1u);\n}}\n\n"
+                   for name in names)
+    (tests / "TestFPSRespawnFixture.cpp").write_text(
+        '#include "TestFramework.h"\n#include "Respawn/RespawnSystem.h"\n\n' + body,
+        encoding="utf-8",
+    )
+
 
 def package_smoke_record(module: str, commit_sha: str) -> str:
     """Hand-authored canonical package evidence; never derived from the parser."""
@@ -71,19 +120,24 @@ def package_smoke_record(module: str, commit_sha: str) -> str:
     )
 
 
-def sanitizer_junit(*, selector_case: str = "FPSRespawn_DeathRespawnReportsAuthoredSpawnRotation",
+def sanitizer_junit(*, selector_cases: tuple[str, ...] = FPS_RESPAWN_CASES,
                     selector_child: str = "",
                     total: int | None = None) -> str:
-    """SparkTests-shaped ASan JUnit with one FPS production-source testcase.
+    """SparkTests-shaped ASan JUnit carrying the FPS production-source testcases.
 
     ``total`` testcases are recorded (default: exactly the full-suite floor),
-    padded with passing non-FPS cases so only the selector case is relevant.
+    padded with passing non-FPS cases so only the selector cases are relevant.
+    ``selector_child`` is placed inside the first selector case.
     """
     if total is None:
         total = artifacts.SANITIZER_MIN_JUNIT_TESTCASES
     filler = "".join(
         f'    <testcase name="NullRHI_Filler_{index:05d}" time="0.001"/>\n'
-        for index in range(total - 1)
+        for index in range(max(0, total - len(selector_cases)))
+    )
+    selected = "".join(
+        f'    <testcase name="{name}" time="0.9">{selector_child if index == 0 else ""}</testcase>\n'
+        for index, name in enumerate(selector_cases)
     )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -91,7 +145,7 @@ def sanitizer_junit(*, selector_case: str = "FPSRespawn_DeathRespawnReportsAutho
         f'  <testsuite name="SparkEngine" tests="{total}" failures="0" skipped="0" flaky="0" '
         'empty="0" time="1.5">\n'
         f"{filler}"
-        f'    <testcase name="{selector_case}" time="0.9">{selector_child}</testcase>\n'
+        f"{selected}"
         '  </testsuite>\n'
         '</testsuites>\n'
     )
@@ -212,19 +266,8 @@ def build_fake_repo(root: Path) -> str:
     # carry semantically valid content.
     junit_path = root / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
     junit_path.parent.mkdir(parents=True, exist_ok=True)
-    junit_path.write_text(
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<testsuites tests="5" failures="0" errors="0">\n'
-        f'  <testsuite name="{INCLUDED}" tests="5" failures="0" errors="0">\n'
-        f'    <testcase name="test_load" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_init" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_update" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_unload" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_shutdown" classname="{INCLUDED}.Module"/>\n'
-        '  </testsuite>\n'
-        '</testsuites>\n',
-        encoding="utf-8",
-    )
+    junit_path.write_text(sparktests_junit(), encoding="utf-8")
+    write_fps_production_tests(root)
     smoke_path = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
     smoke_path.parent.mkdir(parents=True, exist_ok=True)
     _git(root, "init", "-q", "-b", "main")
@@ -1536,14 +1579,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         )
         junit = root / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
         junit.parent.mkdir(parents=True, exist_ok=True)
-        junit.write_text(
-            '<testsuites tests="3"><testsuite tests="3">'
-            '<testcase name="a" classname="SparkGameFPS"/>'
-            '<testcase name="b" classname="SparkGameFPS"/>'
-            '<testcase name="c" classname="SparkGameFPS"/>'
-            '</testsuite></testsuites>',
-            encoding="utf-8",
-        )
+        junit.write_text(sparktests_junit(), encoding="utf-8")
         smoke = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
         smoke.parent.mkdir(parents=True, exist_ok=True)
         smoke.write_text(package_smoke_record(INCLUDED, sha), encoding="utf-8")
@@ -5396,18 +5432,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    VALID_JUNIT = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<testsuites tests="5" failures="0" errors="0">\n'
-        '  <testsuite name="SparkGameFPS" tests="5" failures="0" errors="0">\n'
-        '    <testcase name="test_load" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_init" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_update" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_unload" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_shutdown" classname="SparkGameFPS.Module"/>\n'
-        '  </testsuite>\n'
-        '</testsuites>\n'
-    )
+    VALID_JUNIT = sparktests_junit()
     VALID_SMOKE = package_smoke_record(INCLUDED, PACKAGE_SMOKE_TEST_SHA)
 
     def test_zero_byte_junit_xml_is_rejected(self) -> None:
@@ -5719,6 +5744,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         self.assertEqual(
             artifacts.validate_artifact_bytes(
                 self.VALID_JUNIT.encode("utf-8"), "test-junit.xml", "junit-xml", INCLUDED,
+                selector_prefix="FPSRespawn_", expected_cases=frozenset(FPS_RESPAWN_CASES),
             ),
             [],
         )
@@ -5937,28 +5963,28 @@ class TestSanitizerReportEvidence(FixtureCase):
 
     def test_selector_free_junit_is_rejected(self) -> None:
         write_sanitizer_evidence(
-            self.repo, self.sha, junit=sanitizer_junit(selector_case="WeaponMirror_Fires"))
-        self._assert_rejected_with("executed no passing FPSRespawn_", "sanitizer-no-selector")
+            self.repo, self.sha, junit=sanitizer_junit(selector_cases=("WeaponMirror_Fires",)))
+        self._assert_rejected_with("is missing 10 of 10", "sanitizer-no-selector")
 
     def test_skipped_selector_does_not_count_as_executed(self) -> None:
         write_sanitizer_evidence(
             self.repo, self.sha,
             junit=sanitizer_junit(selector_child='<skipped message="not on this platform"/>'))
-        self._assert_rejected_with("executed no passing FPSRespawn_", "sanitizer-skipped-selector")
+        self._assert_rejected_with("did not run to a clean pass", "sanitizer-skipped-selector")
 
     def test_empty_selector_does_not_count_as_executed(self) -> None:
         write_sanitizer_evidence(
             self.repo, self.sha,
             junit=sanitizer_junit(
                 selector_child='<properties><property name="empty" value="true"/></properties>'))
-        self._assert_rejected_with("executed no passing FPSRespawn_", "sanitizer-empty-selector")
+        self._assert_rejected_with("is marked empty", "sanitizer-empty-selector")
 
     def test_failed_selector_is_rejected(self) -> None:
         write_sanitizer_evidence(
             self.repo, self.sha,
             junit=sanitizer_junit(selector_child='<failure message="leak"/>'))
         errors = self._assert_rejected_with(
-            "executed no passing FPSRespawn_", "sanitizer-failed-selector")
+            "did not run to a clean pass", "sanitizer-failed-selector")
         self.assertTrue(any("<failure>" in e for e in errors), errors)
 
     def test_metadata_reporting_failures_is_rejected(self) -> None:
@@ -5980,7 +6006,8 @@ class TestSanitizerReportEvidence(FixtureCase):
 
     def test_swapped_junit_breaks_the_metadata_digest(self) -> None:
         self._junit_path().write_text(
-            sanitizer_junit(selector_case="FPSRespawn_SubstitutedAfterTheRun"), encoding="utf-8")
+            sanitizer_junit(selector_cases=(*FPS_RESPAWN_CASES[1:], "FPSRespawn_SubstitutedAfterTheRun")),
+            encoding="utf-8")
         self._assert_rejected_with("junitSha256 does not match", "sanitizer-swapped-junit")
 
     def test_clean_run_below_the_full_suite_floor_is_rejected(self) -> None:
@@ -5991,7 +6018,8 @@ class TestSanitizerReportEvidence(FixtureCase):
         self._assert_rejected_with("below the SparkTests floor", "sanitizer-below-floor")
 
     def test_trivially_small_clean_run_is_rejected(self) -> None:
-        write_sanitizer_evidence(self.repo, self.sha, junit=sanitizer_junit(total=4))
+        write_sanitizer_evidence(
+            self.repo, self.sha, junit=sanitizer_junit(selector_cases=FPS_RESPAWN_CASES[:4], total=4))
         self._assert_rejected_with("records 4 testcases", "sanitizer-tiny-run")
 
     def test_floor_matches_the_workflow_verify_published_floor(self) -> None:
@@ -6023,9 +6051,9 @@ class TestSanitizerReportEvidence(FixtureCase):
         self._assert_rejected_with("not strict JSON", "sanitizer-duplicate-key")
 
     def test_module_without_a_selector_fails_policy(self) -> None:
-        with mock.patch.dict(validate_manifest_mod.SANITIZER_MODULE_SELECTORS, clear=True):
+        with mock.patch.dict(validate_manifest_mod.MODULE_TEST_SELECTORS, clear=True):
             errors = ManifestValidator(base_manifest(), self.repo, policy_only=True).validate()
-        self.assertTrue(any("sanitizer test selector" in e for e in errors), errors)
+        self.assertTrue(any("module test selector" in e for e in errors), errors)
 
     def test_present_sanitizer_evidence_trips_a_stale_declared_gap(self) -> None:
         errors = self.assertRejected(
@@ -6047,7 +6075,7 @@ class TestSanitizerReportEvidence(FixtureCase):
         cmake = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
         manifest = load_manifest(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
         source_dirs = {m["name"]: m["sourceDirectory"] for m in manifest["modules"]}
-        for module, prefix in schema_mod.SANITIZER_MODULE_SELECTORS.items():
+        for module, prefix in schema_mod.MODULE_TEST_SELECTORS.items():
             with self.subTest(module=module):
                 pattern = re.compile(rf"^\s*TEST(?:_F)?\s*\(\s*{re.escape(prefix)}\w*", re.M)
                 defining = [
@@ -6071,6 +6099,107 @@ class TestSanitizerReportEvidence(FixtureCase):
                         module_headers,
                         f"{relative} includes no header from {source_dirs[module]}",
                     )
+
+
+
+class TestModuleTestExactSet(FixtureCase):
+    """RDY-010: module JUnit/ASan evidence must name every production test, once, passed.
+
+    Before this gate a SparkTests JUnit with three unrelated passing testcases
+    satisfied SparkGameFPS's junit-xml binding, and one passing FPSRespawn_ case
+    satisfied its sanitizer-report binding, so a filtered or stale run that
+    dropped the module's production tests still counted as module evidence.
+    """
+
+    def setUp(self) -> None:
+        self.junit = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        self.addCleanup(self.junit.write_text, sparktests_junit(), encoding="utf-8")
+        self.addCleanup(write_sanitizer_evidence, self.repo, self.sha)
+
+    def _junit_errors(self, fps_cases: tuple[str, ...]) -> list[str]:
+        self.junit.write_text(sparktests_junit(fps_cases), encoding="utf-8")
+        return self.validate(base_manifest())
+
+    def test_full_production_set_is_accepted(self) -> None:
+        self.assertEqual(self._junit_errors(FPS_RESPAWN_CASES), [])
+
+    def test_junit_without_any_module_test_is_rejected(self) -> None:
+        """(a) Five passing unrelated testcases are not SparkGameFPS evidence."""
+        self.junit.write_text(
+            sparktests_junit((), ("A_One", "B_Two", "C_Three", "D_Four", "E_Five")),
+            encoding="utf-8")
+        errors = self.validate(base_manifest())
+        self.assertTrue(any("is missing 10 of 10" in e for e in errors), errors)
+        self.assertTrue(any(FPS_RESPAWN_CASES[0] in e for e in errors), errors)
+
+    def test_junit_missing_one_module_test_names_it(self) -> None:
+        """(b) Nine of ten is a filtered run, and the gate names the dropped test."""
+        errors = self._junit_errors(FPS_RESPAWN_CASES[:-1])
+        self.assertTrue(
+            any("is missing 1 of 10" in e and FPS_RESPAWN_CASES[-1] in e for e in errors), errors)
+
+    def test_junit_with_undefined_module_test_is_rejected(self) -> None:
+        """(c) A name the production sources do not define comes from a stale binary."""
+        errors = self._junit_errors((*FPS_RESPAWN_CASES, "FPSRespawn_StaleName"))
+        self.assertTrue(
+            any("not defined in the production sources" in e and "FPSRespawn_StaleName" in e
+                for e in errors), errors)
+
+    def test_junit_with_duplicate_module_test_is_rejected(self) -> None:
+        """(d) A test recorded twice is not one deterministic run."""
+        errors = self._junit_errors((*FPS_RESPAWN_CASES, FPS_RESPAWN_CASES[2]))
+        self.assertTrue(
+            any("more than once" in e and FPS_RESPAWN_CASES[2] in e for e in errors), errors)
+
+    def test_junit_with_skipped_module_test_is_rejected(self) -> None:
+        junit = sparktests_junit().replace(
+            f'<testcase name="{FPS_RESPAWN_CASES[0]}" classname="SparkEngine" time="0.01"/>',
+            f'<testcase name="{FPS_RESPAWN_CASES[0]}" classname="SparkEngine" time="0.01">'
+            '<skipped message="filtered"/></testcase>')
+        self.assertIn("<skipped", junit)
+        self.junit.write_text(junit, encoding="utf-8")
+        errors = self.validate(base_manifest())
+        self.assertTrue(any("did not run to a clean pass" in e for e in errors), errors)
+
+    def test_sanitizer_run_with_one_module_test_is_rejected(self) -> None:
+        """(e) One passing FPSRespawn_ case under ASan leaves nine production tests unproven."""
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(selector_cases=("FPSRespawn_DeathRespawnReportsAuthoredSpawnRotation",)))
+        errors = self.validate(base_manifest())
+        self.assertTrue(
+            any("sanitizer-report junit.xml is missing 9 of 10" in e for e in errors), errors)
+
+    def test_derived_set_matches_the_registered_expect_count(self) -> None:
+        """(f) The shipped selector set is exactly what the production-source CTest pins."""
+        cmake = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        match = re.search(
+            r"set_tests_properties\(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES\s+"
+            r'ENVIRONMENT "SPARK_TEST_NAME=([A-Za-z0-9_]+);SPARK_TEST_EXPECT_COUNT=(\d+)"',
+            cmake)
+        self.assertIsNotNone(match, "FPSSinglePlayerSlice_RespawnProductionSource registration moved")
+        assert match is not None
+        self.assertEqual(match.group(1), schema_mod.MODULE_TEST_SELECTORS[INCLUDED])
+        derived = validate_manifest_mod.derive_module_test_cases(REPO_ROOT, match.group(1))
+        self.assertEqual(len(derived), int(match.group(2)), sorted(derived))
+        self.assertEqual(derived, frozenset(FPS_RESPAWN_CASES))
+
+    def test_mirror_definitions_do_not_enter_the_expected_set(self) -> None:
+        """(g) Only production-source files define the tests module evidence must carry."""
+        mirror = self.repo / "Tests" / "TestFPSRespawnMirror.cpp"
+        mirror.write_text(
+            '#include "TestFramework.h"\n\nTEST(FPSRespawn_MirrorOnly)\n{\n    EXPECT_EQ(1, 1);\n}\n',
+            encoding="utf-8")
+        self.addCleanup(mirror.unlink)
+        derived = validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
+        self.assertEqual(derived, frozenset(FPS_RESPAWN_CASES))
+        self.assertEqual(self._junit_errors(FPS_RESPAWN_CASES), [])
+
+    def test_no_production_definition_is_a_policy_failure(self) -> None:
+        with mock.patch.dict(validate_manifest_mod.MODULE_TEST_SELECTORS,
+                             {INCLUDED: "FPSNothingDefinesThis_"}):
+            errors = ManifestValidator(base_manifest(), self.repo, policy_only=True).validate()
+        self.assertTrue(any("no production-source test defines" in e for e in errors), errors)
 
 
 if __name__ == "__main__":

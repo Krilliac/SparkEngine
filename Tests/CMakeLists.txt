@@ -3905,12 +3905,13 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     if(SPARK_GAME_MODULES STREQUAL "SparkGameFPS")
         # ENG-220: a Vulkan-enabled Windows build hard-imports vulkan-1.dll,
         # which only a Vulkan GPU driver provides, so its package fails the PE
-        # import-closure step of the two package tests below. That is an open
+        # import-closure step of the package tests below. That is an open
         # product gap, not a test fault: configure the FPS package tree with
         # ENABLE_VULKAN=OFF, as windows-shipping does.
         if(WIN32 AND SPARK_VULKAN_AVAILABLE)
             message(WARNING
-                "FPSPackage_InstalledRuntime and FPSHeadlessPackage_NullRHISaveReload will fail their import-closure "
+                "FPSPackage_InstalledRuntime, FPSHeadlessPackage_NullRHISaveReload, and "
+                "FPSPackage_RepositoryUnreachable will fail their import-closure "
                 "check: this tree links Vulkan, so SparkEngine.exe/SparkServer.exe hard-import vulkan-1.dll. "
                 "Configure the FPS package tree with -DENABLE_VULKAN=OFF (wiki/gameplay-tools/Game-Packaging.md).")
         endif()
@@ -3943,6 +3944,24 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
                 -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
         set_tests_properties(FPSHeadlessPackage_NullRHISaveReload PROPERTIES
             LABELS "nullrhi-headless;stable-v1;fps;package;save;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+
+        # RDY-020: copies of the same staged package run NullRHI and D3D11/WARP
+        # inside a fresh AppContainer that cannot read this checkout or build
+        # tree (canaries prove it), and scene-less/asset-less copies must fail.
+        # D3D11 needs an interactive desktop, so this runs on a local box.
+        add_test(
+            NAME FPSPackage_RepositoryUnreachable
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/u/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=repository-isolation
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSPackage_RepositoryUnreachable PROPERTIES
+            LABELS "stable-v1;fps;package;asset;nullrhi-headless;d3d11;integration"
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
@@ -4403,6 +4422,13 @@ add_test(NAME PackageAssets_RepositoryIsolationContract
     COMMAND ${Python3_EXECUTABLE} -B
         ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/asset_repository_isolation_tests.py)
 set_tests_properties(PackageAssets_RepositoryIsolationContract PROPERTIES
+    LABELS "stable-v1;asset;package;unit;python"
+    TIMEOUT 60)
+
+add_test(NAME PackageAssets_WindowsRepositoryIsolationContract
+    COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/windows_appcontainer_run_tests.py)
+set_tests_properties(PackageAssets_WindowsRepositoryIsolationContract PROPERTIES
     LABELS "stable-v1;asset;package;unit;python"
     TIMEOUT 60)
 

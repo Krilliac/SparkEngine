@@ -32,7 +32,15 @@ the source/build directories are absent, and audits strace file accesses.
 Repository lookups, asset lookups outside the installed Assets root, and missing
 successful asset opens fail. It requires bubblewrap, strace and user namespaces;
 missing prerequisites fail rather than skip. This is Linux NullRHI evidence;
-Windows D3D11 model/material rendering still needs its installed runtime run.
+On native Windows FPS builds, `FPSPackage_RepositoryUnreachable` stages three
+copies of the installed runtime. A fresh AppContainer runs the positive copy
+on NullRHI and D3D11/WARP while source/build canaries must be unreadable; a
+scene-less NullRHI copy and an asset-less D3D11 copy are negative controls.
+The D3D11 run must audit a successful load of the package copy's `level1.scene`
+and save a visible frame. The AppContainer writes to its own profile folder,
+then the runner copies selected logs and the frame into the test output before
+deleting that profile. This is a Windows-only local test; it does not establish
+same-commit release evidence until the built package actually passes it.
 
 `SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS=ON` registers
 `PackageInstall_Repeatability` on either host. It uses the configured CPack tree's
