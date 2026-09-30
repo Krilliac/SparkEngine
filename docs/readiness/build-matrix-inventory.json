@@ -14458,7 +14458,7 @@
         ],
         "if": "absent",
         "continueOnError": "absent",
-        "timeoutMinutes": 15,
+        "timeoutMinutes": 25,
         "needs": [],
         "failFast": "absent",
         "maxParallel": "absent",

@@ -4843,7 +4843,8 @@ jobs:
   docs-health:
     name: Documentation exact-currentness
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # 9-10 min on a normal runner; a slow hosted runner hit 15 while the final check was already done.
+    timeout-minutes: 25
     steps:
       - name: Checkout exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
