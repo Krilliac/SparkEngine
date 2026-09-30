@@ -2,20 +2,23 @@
 
 #ifdef ENABLE_NETWORKING
 #include <chrono>
+#include <cstdio>
 
 namespace Spark::Net
 {
     AreaHandoffDispatcher::~AreaHandoffDispatcher()
     {
+        // Release pending submitters first; Stop() cannot throw.
+        Stop();
         try
         {
             m_participantEvents.Unsubscribe();
-            Stop();
         }
         catch (...)
         {
-            // A mutex/system error during teardown must not escape a destructor; pending
-            // submitters time out on their own wait.
+            // An exception must not escape a destructor. The engine logger may itself throw,
+            // so report through the C stdio layer, which cannot.
+            std::fputs("AreaHandoffDispatcher: participant event unsubscribe failed during teardown\n", stderr);
         }
     }
 

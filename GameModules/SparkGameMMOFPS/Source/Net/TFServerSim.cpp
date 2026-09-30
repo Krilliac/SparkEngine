@@ -31,6 +31,8 @@
 #include <imgui.h>
 #endif
 
+#include <cstdio>
+
 namespace Terrafront
 {
 
@@ -45,7 +47,10 @@ namespace Terrafront
         }
         catch (...)
         {
-            // Shutdown failure during destruction must not escape; members release on their own.
+            // Shutdown publishes to host event handlers, which may throw; that must not escape a
+            // destructor. Members release on their own. The engine logger may itself throw, so
+            // report through the C stdio layer, which cannot.
+            std::fputs("TFServerSim: Shutdown threw during destruction\n", stderr);
         }
     }
 
