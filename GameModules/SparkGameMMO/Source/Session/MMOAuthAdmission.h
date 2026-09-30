@@ -2,13 +2,12 @@
  * @file MMOAuthAdmission.h
  * @brief Server-time admission budget for credential operations on the MMO session gate.
  *
- * Every Login and Register costs one 600000-round PBKDF2 on the game thread (unknown
- * usernames included: MMOAccountSystem::Login verifies against a dummy hash), so the gate
- * must bound total KDF work. It used to do that with one global 0.25 s cooldown, which let a
- * single client hold every other client at RateLimited simply by sending continuously.
+ * Every wire Login costs one 600000-round PBKDF2 on the game thread (unknown usernames included:
+ * MMOAccountSystem::Login verifies against a dummy hash). A valid, unique Register also costs
+ * one derivation, so the gate must bound total KDF work. The former global 0.25 s cooldown
+ * let one client hold every other client at RateLimited by sending continuously.
  *
- * The budget is now layered so no single peer can starve the others while the aggregate
- * bound is unchanged:
+ * The layered budget prevents one connected peer from consuming the whole aggregate rate:
  *  - Per peer: one credential operation per PeerCooldown seconds and at most
  *    RegistrationsPerPeer registrations per connection.
  *  - Global: a token bucket refilled at GlobalRate operations per second (the old sustained

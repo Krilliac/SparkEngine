@@ -278,8 +278,8 @@ namespace MMO
         {
             return Status::Rejected;
         }
-        // Every Login and Register costs one PBKDF2 (unknown usernames included), so admission is
-        // charged per peer and against the global bucket before any credential work runs.
+        // Every Login costs one PBKDF2 (unknown usernames included); a valid, unique Register
+        // can also cost one. Charge admission before any credential work runs.
         const bool registration = request.operation == Operation::Register;
         if (!m_admission.TryAdmit(session.admission, registration ? AuthAdmissionBudget::Operation::Register
                                                                   : AuthAdmissionBudget::Operation::Login))

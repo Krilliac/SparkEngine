@@ -145,21 +145,22 @@ namespace MMO
         AuthResult result;
         uint64_t now = GetTimestamp();
 
-        // Find account
+        // Scan the complete account set for every username. Stopping at a match would make
+        // lookup work depend on the account's container position, leaving a timing signal before
+        // the equal PBKDF2 verification below.
         AccountData* account = nullptr;
         for (auto& [id, acct] : m_accounts)
         {
             if (acct.username == username)
             {
                 account = &acct;
-                break;
             }
         }
 
-        // Every attempt performs exactly one full PBKDF2 verification before any outcome is
-        // decided, so response time does not reveal whether the username exists or whether the
-        // account is restricted. Unknown usernames verify against a dummy hash with the
-        // production parameters; it can never match because no password derives to it.
+        // For supported password lengths, every attempt performs exactly one full PBKDF2
+        // verification before any outcome is decided. This removes the expensive-work difference
+        // between unknown, active and restricted accounts. Unknown usernames verify against a
+        // dummy hash with production parameters; even a match is never accepted without an account.
         const bool passwordMatches = VerifyPassword(password, account ? account->passwordHash : kDummyPasswordHash);
 
         if (!account)
@@ -550,16 +551,23 @@ namespace MMO
 #endif
     }
 
+#ifdef SPARK_TEST_MMO_AUTH_VERIFIER
     void MMOAccountSystem::SetPasswordVerifier(PasswordVerifier verifier)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         m_passwordVerifier = verifier;
     }
+#endif
 
     bool MMOAccountSystem::VerifyPassword(std::string_view password, std::string_view encodedHash) const
     {
-        return m_passwordVerifier ? m_passwordVerifier(password, encodedHash)
-                                  : Spark::PasswordHash::Verify(password, encodedHash);
+#ifdef SPARK_TEST_MMO_AUTH_VERIFIER
+        if (m_passwordVerifier)
+        {
+            return m_passwordVerifier(password, encodedHash);
+        }
+#endif
+        return Spark::PasswordHash::Verify(password, encodedHash);
     }
 
     size_t MMOAccountSystem::GetOnlineCount() const
