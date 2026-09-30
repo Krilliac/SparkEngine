@@ -35,6 +35,7 @@ import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = REPO_ROOT / "tools" / "ops"
@@ -349,8 +350,11 @@ class HarnessTests(StandInServerCase):
 
     def test_dirty_tree_fails_an_exact_sha_run(self) -> None:
         self.assertFailsWith(self.run_soak("dirty_tree"), "identity: server was built from a 'dirty' tree")
-        # Without an expected SHA the dirty build is reported, not refused.
-        document = self.run_soak("dirty_tree", expected_sha=None)
+        # This case checks identity policy; the healthy and leak cases above
+        # exercise real process RSS independently of Python allocator noise.
+        with mock.patch.object(soak_tool, "read_process_rss", return_value=8 * 1024 * 1024):
+            # Without an expected SHA the dirty build is reported, not refused.
+            document = self.run_soak("dirty_tree", expected_sha=None)
         self.assertEqual(document["failures"], [])
         self.assertEqual(document["server"]["treeState"], "dirty")
 
@@ -364,7 +368,10 @@ class HarnessTests(StandInServerCase):
                 "--sample-interval", "0.1", "--status-interval-ms", "100", "--stall-timeout", "3",
                 "--expected-sha", SHA]
         stdout, stderr = io.StringIO(), io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        # CLI result and output are under test here. The separate healthy and
+        # leak cases retain real RSS sampling against the stand-in process.
+        with redirect_stdout(stdout), redirect_stderr(stderr), \
+                mock.patch.object(soak_tool, "read_process_rss", return_value=8 * 1024 * 1024):
             self.assertEqual(soak_tool.main(argv), 0, stderr.getvalue())
         self.assertEqual(json.loads(stdout.getvalue())["verdict"], "pass")
         os.environ["SOAK_FAULT"] = "slow_p99"

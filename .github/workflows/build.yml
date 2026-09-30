@@ -3532,7 +3532,12 @@ jobs:
         run: |
           # pipefail so a cmake --build failure is not masked by tee
           set -o pipefail
-          cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+          # Coverage executes SparkTests only; building the default target also
+          # compiles unrelated tools and product binaries inside the 45-minute
+          # job budget. SparkTests still brings in every library and module it
+          # links, so the instrumented test corpus and coverage thresholds are
+          # unchanged.
+          cmake --build build --target SparkTests --parallel $(nproc) 2>&1 | tee cmake-build.log
       - name: Print ccache stats
         if: always()
         run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"

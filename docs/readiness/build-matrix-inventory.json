@@ -12487,7 +12487,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "f948e9586f848e63"
+            "runDigest": "f4f8d084e32b2b8a"
           },
           {
             "index": 6,
@@ -16890,16 +16890,16 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log",
+        "command": "cmake --build build --target SparkTests --parallel $(nproc) 2>&1 | tee cmake-build.log",
         "commandProvenance": "literal",
         "targets": [
-          "all"
+          "SparkTests"
         ],
         "configuration": "",
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true,
+        "buildsAllTargets": false,
         "commandIndex": 0
       },
       {
@@ -19262,16 +19262,16 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log",
+        "command": "cmake --build build --target SparkTests --parallel $(nproc) 2>&1 | tee cmake-build.log",
         "commandProvenance": "literal",
         "targets": [
-          "all"
+          "SparkTests"
         ],
         "configuration": "",
         "buildDir": "build",
         "preset": "",
         "parallel": "$(nproc)",
-        "buildsAllTargets": true,
+        "buildsAllTargets": false,
         "commandIndex": 0
       },
       {
@@ -20514,7 +20514,7 @@
       "testCount": 34,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
-      "buildAllTargetCount": 21,
+      "buildAllTargetCount": 20,
       "blockingJobCount": 31,
       "advisoryJobCount": 7,
       "conditionalJobCount": 4,

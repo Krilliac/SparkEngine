@@ -5967,6 +5967,14 @@ if(Python3_Interpreter_FOUND)
             FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
             TIMEOUT 60)
 
+        add_test(
+            NAME site-runtime-test-runner
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/Tools/test_site_runtime_tests.py)
+        set_tests_properties(site-runtime-test-runner PROPERTIES
+            LABELS "readiness;site-data;unit;python"
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 60)
+
         # DOC-400: the reference site runtime verifier (tools/site-data/runtime)
         # checked against a bundle generate.py produces here plus tampered,
         # oversize, malformed, and path-escaping variants, each also fed to
@@ -5984,7 +5992,9 @@ if(Python3_Interpreter_FOUND)
         if(SPARK_NODE_EXECUTABLE AND _spark_node_result EQUAL 0 AND _spark_node_major GREATER_EQUAL 20)
             add_test(
                 NAME runtime-bundle-validation
-                COMMAND ${SPARK_NODE_EXECUTABLE} --test
+                COMMAND ${Python3_EXECUTABLE}
+                    ${CMAKE_SOURCE_DIR}/Tests/Tools/run_site_runtime_tests.py
+                    ${SPARK_NODE_EXECUTABLE}
                     test/verifyBundle.test.mjs
                     test/freshness.test.mjs
                     test/siteDataRuntime.test.mjs

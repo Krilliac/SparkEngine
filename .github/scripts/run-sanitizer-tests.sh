@@ -256,11 +256,25 @@ timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
         marker_path="${SPARK_WRAPPER_TIMEOUT_MARKER:?}"
         marker_token="${SPARK_WRAPPER_TIMEOUT_TOKEN:?}"
         unset SPARK_WRAPPER_TIMEOUT_MARKER SPARK_WRAPPER_TIMEOUT_TOKEN
+        child_pid=""
         on_wrapper_timeout() {
             umask 077
             set -C
             printf "timeout:%s\n" "$marker_token" > "$marker_path" 2>/dev/null || true
             set +C
+            if [[ -z "$child_pid" ]]; then
+                return
+            fi
+            # timeout signals this shell, not the background command.  Keep
+            # the required wall-clock bound while terminating the whole test
+            # process group so a timed-out suite cannot outlive its evidence
+            # capture and finish successfully after the wrapper has failed.
+            kill -TERM -- "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
+            for ((wait_count = 0; wait_count < 100; ++wait_count)); do
+                kill -0 -- "-$child_pid" 2>/dev/null || return
+                sleep 0.1
+            done
+            kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
         }
         trap on_wrapper_timeout TERM
         # Bash reports -f in 1024-byte blocks. Keep the hard limit unchanged so
@@ -274,7 +288,7 @@ timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
         # 34025643171 died here with exit 153 and no completion evidence.
         trap "" XFSZ
         ulimit -S -f 16384
-        "$@" &
+        setsid --wait "$@" &
         child_pid=$!
         wait "$child_pid"
         child_status=$?

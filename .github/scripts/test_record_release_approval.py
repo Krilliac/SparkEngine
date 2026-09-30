@@ -220,7 +220,7 @@ class RecorderTests(unittest.TestCase):
             with self.subTest(arguments=arguments), self.assertRaises(recorder.ApprovalError):
                 recorder.collect(api, **identity)
 
-    def test_cli_publishes_once_and_never_overwrites(self):
+    def test_cli_publishes_once_or_fails_closed_on_macos(self):
         server = Server(default_routes([approval()]))
         with tempfile.TemporaryDirectory() as temporary, \
                 mock.patch.dict(os.environ, {"GH_TOKEN": "token", "GITHUB_API_URL": ROOT}), \
@@ -228,6 +228,12 @@ class RecorderTests(unittest.TestCase):
             output = Path(temporary) / "approval.json"
             arguments = ["--repository", REPOSITORY, "--run-id", str(RUN_ID), "--run-attempt", str(ATTEMPT),
                          "--source-commit", SHA, "--output", str(output)]
+            if sys.platform == "darwin":
+                with mock.patch("sys.stderr", new=io.StringIO()) as error:
+                    self.assertEqual(recorder.main(arguments), 1)
+                self.assertIn("requires Linux O_TMPFILE support", error.getvalue())
+                self.assertFalse(output.exists())
+                return
             with mock.patch("sys.stdout", new=io.StringIO()):
                 self.assertEqual(recorder.main(arguments), 0)
             payload = output.read_bytes()
