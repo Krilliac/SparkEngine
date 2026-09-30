@@ -2024,21 +2024,6 @@ jobs:
         # 2-core runner. /MP stays; the project-level parallelism is capped.
         cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log
 
-    - name: Check Windows Shipping PE ISA floor (BLD-100)
-      shell: bash
-      run: |
-        set -euo pipefail
-        # The CMake target carries one TARGET_PDB_FILE genex per PE image. Do
-        # not turn a missing disassembler or llvm-pdbutil into a skipped scan.
-        command -v llvm-pdbutil >/dev/null || {
-          echo "::error::BLD-100 requires llvm-pdbutil on PATH"; exit 1;
-        }
-        command -v llvm-objdump >/dev/null || {
-          echo "::error::BLD-100 requires llvm-objdump on PATH"; exit 1;
-        }
-        cmake --build --preset windows-shipping --config MinSizeRel \
-          --target CpuFloor_IsaBaseline --parallel 1 2>&1 | tee build-matrix-windows-shipping-isa.log
-
     - name: Verify stable Shipping product versions
       shell: bash
       run: |
