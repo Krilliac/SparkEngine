@@ -9019,7 +9019,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 2,
+        "stepCount": 3,
         "steps": [
           {
             "index": 0,
@@ -9044,6 +9044,20 @@
             "hasRun": true,
             "env": [],
             "runDigest": "f02b79ae5aa2aa33"
+          },
+          {
+            "index": 2,
+            "name": "Check support policy against published releases",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "GH_TOKEN"
+            ],
+            "runDigest": "021e82e1cd6ae96a"
           }
         ],
         "envNames": [],
