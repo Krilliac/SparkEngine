@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4177,
+      "line": 4178,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3682,
+      "line": 3683,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3677",
+          "id": "Tests/CMakeLists.txt:3678",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4215,
+      "line": 4216,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4377,
+      "line": 4378,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1401,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3625,
+      "line": 3626,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3553",
+          "id": "Tests/CMakeLists.txt:3554",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4618,
+      "line": 4619,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2738,10 +2738,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5284,
+      "line": 5285,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5282",
+          "id": "Tests/CMakeLists.txt:5283",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2930,6 +2930,16 @@
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzAnimationBinary",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 2372,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
       "resolved": true
     },
     {
@@ -3187,6 +3197,16 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 940,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReplay",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 2320,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4947,7 +4967,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5284,
+          "line": 5285,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5148,6 +5168,24 @@
           "line": 954,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzAnimationBinary",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 2372,
+          "kind": "executable",
+          "origin": "declaration",
           "definitionScope": [],
           "resolved": true
         }
@@ -5614,6 +5652,24 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 940,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReplay",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 2320,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7636,7 +7692,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "3c08510f5b1d1428"
+            "runDigest": "7b51570d690fa3fe"
           },
           {
             "index": 6,
@@ -14312,9 +14368,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzReplay SparkFuzzAnimationBinary",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzAnimationBinary",
           "SparkFuzzArchive",
           "SparkFuzzAssetServiceProtocol",
           "SparkFuzzBinaryReader",
@@ -14340,6 +14397,7 @@
           "SparkFuzzNeuralWeights",
           "SparkFuzzObjStatic",
           "SparkFuzzReflectedScene",
+          "SparkFuzzReplay",
           "SparkFuzzSaveSystem",
           "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
@@ -18568,9 +18626,10 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzReplay SparkFuzzAnimationBinary",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzAnimationBinary",
           "SparkFuzzArchive",
           "SparkFuzzAssetServiceProtocol",
           "SparkFuzzBinaryReader",
@@ -18596,6 +18655,7 @@
           "SparkFuzzNeuralWeights",
           "SparkFuzzObjStatic",
           "SparkFuzzReflectedScene",
+          "SparkFuzzReplay",
           "SparkFuzzSaveSystem",
           "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
