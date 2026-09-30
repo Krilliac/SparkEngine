@@ -3045,11 +3045,31 @@ jobs:
 
     - name: Install dependencies
       run: |
+        set -euo pipefail
         sudo apt-get update
         # llvmpipe (libgl1-mesa-dri through headless EGL) renders the OpenGL
         # row, Lavapipe (mesa-vulkan-drivers) plus the Khronos validation layer
         # the Vulkan row.
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libegl-dev libegl-mesa0 libgl1-mesa-dri libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
+        # noble-updates moves Mesa independently of the reviewed baselines
+        # (0ubuntu0.24.04.3 replaced .2 there on 2026-09-30 while .2 stayed
+        # published in noble-security), so install every installed Mesa binary
+        # at the reviewed build instead of whatever the newest pocket carries.
+        # They must move together: most depend on mesa-libgallium at the exact
+        # same version. A binary Ubuntu no longer publishes at that build is
+        # left as it is, and the next step then fails on the pin.
+        mesa_pins=()
+        native_arch=$(dpkg --print-architecture)
+        while read -r status package source; do
+          package=${package%":$native_arch"}
+          if [ "$status" = ii ] && [ "$source" = mesa ] \
+            && apt-cache show "$package=$SPARK_GOLDEN_MESA_VERSION" > /dev/null 2>&1; then
+            mesa_pins+=("$package=$SPARK_GOLDEN_MESA_VERSION")
+          fi
+        done < <(dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package} ${source:Package}\n')
+        if [ "${#mesa_pins[@]}" -gt 0 ]; then
+          sudo apt-get install -y --allow-downgrades "${mesa_pins[@]}"
+        fi
 
     - name: Assert the reviewed Mesa build
       run: |
