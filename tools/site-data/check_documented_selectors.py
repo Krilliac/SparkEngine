@@ -56,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import REPO_ROOT, load_contract  # noqa: E402
 from contract_selectors import (_CTEST_PLACEHOLDER, PresetReference, cmake_preset_index, command_tokens,  # noqa: E402
-                                ctest_filter_errors)
+                                ctest_filter_errors, shell_segments)
 from validate import _CTEST_COMMAND_TOKEN, executable_ctest_segments  # noqa: E402
 
 TESTING_PAGE = Path("wiki/advanced/Testing.md")
@@ -97,7 +97,7 @@ class Outcome:
 def configure_defines(command: str) -> dict[str, str]:
     """``-DNAME[:TYPE]=VALUE`` settings passed to a CMake configure step in the same command."""
     defines: dict[str, str] = {}
-    for segment in re.split(r"[;&|\r\n]+", command):
+    for segment in shell_segments(command):
         tokens = command_tokens(segment)
         start = next((index for index, token in enumerate(tokens) if CMAKE_TOOL.match(token)), None)
         if start is None or any(token in ("--build", "--install", "-E", "-P") for token in tokens[start + 1:]):
