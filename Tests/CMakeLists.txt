@@ -1298,6 +1298,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceValidation.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.cpp"

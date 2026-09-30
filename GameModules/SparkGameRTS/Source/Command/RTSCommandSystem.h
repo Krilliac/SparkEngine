@@ -96,6 +96,7 @@ namespace RTS
         /**
          * @brief The acceptance rule for every order: finite targets, and a route (at most
          *        RTSGridPathfinder::MAX_WAYPOINTS finite points) only on a Move or attack-move.
+         *        Defined in Core/RTSPersistenceValidation.cpp beside the snapshot checks that share it.
          */
         [[nodiscard]] static bool IsCommandValid(const UnitCommand& command);
 

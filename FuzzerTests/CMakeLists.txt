@@ -2796,23 +2796,23 @@ set_tests_properties(FuzzOrchestratorIdentitySmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
-# RTSPersistenceCodec.cpp decodes the save slot's custom state and RTSPersistence.cpp
-# validates it; RTSCommandSystem.cpp supplies IsCommandValid. Apply and Capture, which
-# need the live systems, are never referenced and --gc-sections drops them.
+# RTSPersistenceCodec.cpp decodes the save slot's custom state and
+# RTSPersistenceValidation.cpp validates it (RTSPersistence::Validate and
+# RTSCommandSystem::IsCommandValid). Capture and Apply, which drive the live systems,
+# stay in RTSPersistence.cpp: GNU ld reports their undefined references even in
+# sections --gc-sections drops, so that file is not linked here.
 # RTSPersistence.h reaches Spark/Version.h through the RTS system headers, so the
 # target reuses the Spark/GeneratedVersion.h generated for SparkFuzzReflectedScene.
 add_executable(SparkFuzzRTSPersistence
     FuzzRTSPersistence.cpp
     FuzzRTSPersistenceProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
-    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
-    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceValidation.cpp"
 )
 set_source_files_properties(
     FuzzRTSPersistenceProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
-    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
-    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceValidation.cpp"
     PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
 )
 target_include_directories(SparkFuzzRTSPersistence PRIVATE
