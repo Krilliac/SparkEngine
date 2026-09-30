@@ -1838,8 +1838,6 @@ class WorkflowWeakeningTests(unittest.TestCase):
             for entry in record["buildInvocations"]
             if entry.get("job") == "build-windows-shipping"
             and entry.get("preset") == "windows-shipping"
-            # The BLD-100 ISA step is a separate, deliberate single-target build.
-            and entry.get("targets") != ["CpuFloor_IsaBaseline"]
         ]
         self.assertEqual(len(shipping_builds), 1)
         self.assertEqual(shipping_builds[0]["targets"], ["SparkEngine"])
