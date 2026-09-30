@@ -21,6 +21,8 @@ Components with at least one notice file on disk: 17
 Components with attention items: 7
 Tracked font files outside ThirdParty/ with license text: 7
 Font license attention items outside ThirdParty/: 0
+Fonts embedded in third-party code with license text: 2
+Embedded font license attention items: 0
 
 [01] RecastNavigation - zlib - ThirdParty/AI/recastnavigation (submodule)
 [02] miniaudio - Public Domain / MIT-0 - ThirdParty/Audio/miniaudio (vendored) [attention]
@@ -663,6 +665,92 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+===============================================================================
+FONTS EMBEDDED IN THIRD-PARTY CODE (compiled into the binaries that link it)
+===============================================================================
+* ProggyClean.ttf: ProggyClean - MIT - embedded by Dear ImGui
+    Copyright (source declaration): Copyright (c) 2004, 2005 Tristan Grimmer
+    License file: ThirdParty/Licenses/ProggyClean-LICENSE.txt
+    Source: Declaration in ThirdParty/UI/imgui/imgui_draw.cpp section 'Default font data (ProggyClean.ttf)'; upstream https://github.com/bluescan/proggyfonts
+* ProggyForever.ttf: ProggyForever (minimal subset) - MIT - embedded by Dear ImGui
+    Copyright (source declaration): Copyright (c) 2026 Disco Hello, Copyright (c) 2019,2023 Tristan Grimmer
+    License file: ThirdParty/Licenses/ProggyForever-LICENSE.txt
+    Source: Declaration in ThirdParty/UI/imgui/imgui_draw.cpp section 'Default font data (ProggyForever-Regular-minimal.ttf)'; upstream https://github.com/ocornut/proggyforever
+
+-------------------------------------------------------------------------------
+License file: ThirdParty/Licenses/ProggyClean-LICENSE.txt (sha256 of normalized text a65c6957f363b8dd629941548a22e49449f5035ba0fb583bfdb000a2b7ab4cb7)
+-------------------------------------------------------------------------------
+ProggyClean.ttf (embedded in Dear ImGui as its default bitmap font)
+
+MIT License / Copyright (c) 2004, 2005 Tristan Grimmer
+Download and more information at https://github.com/bluescan/proggyfonts
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+----
+Provenance: the two lines between the title and the permission notice are the
+font's declaration, quoted verbatim from the section
+'[SECTION] Default font data (ProggyClean.ttf)'
+of Dear ImGui's imgui_draw.cpp (ThirdParty/UI/imgui, pinned in
+ThirdParty/supply-chain.lock), which embeds the font in every binary that links
+Dear ImGui; docs/FONTS.md at that revision also lists the font as MIT License.
+The permission notice is the MIT License text as distributed with Dear ImGui
+(imgui-LICENSE.txt). The font project's own license file is not vendored in
+this repository.
+
+-------------------------------------------------------------------------------
+License file: ThirdParty/Licenses/ProggyForever-LICENSE.txt (sha256 of normalized text 5c7d01ed037db453b33af1212d2d0373151668ab34d20a7a280adb4518e92d09)
+-------------------------------------------------------------------------------
+ProggyForever.ttf (a minimal subset embedded in Dear ImGui as its scalable default font)
+
+Based on ProggyForever: https://github.com/ocornut/proggyforever
+MIT license / Copyright (c) 2026 Disco Hello, Copyright (c) 2019,2023 Tristan Grimmer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+----
+Provenance: the two lines between the title and the permission notice are the
+font's declaration, quoted verbatim from the section
+'[SECTION] Default font data (ProggyForever-Regular-minimal.ttf)'
+of Dear ImGui's imgui_draw.cpp (ThirdParty/UI/imgui, pinned in
+ThirdParty/supply-chain.lock), which embeds the font in every binary that links
+Dear ImGui; docs/FONTS.md at that revision also lists the font as MIT License.
+The permission notice is the MIT License text as distributed with Dear ImGui
+(imgui-LICENSE.txt). The font project's own license file is not vendored in
+this repository.
 
 ===============================================================================
 PROJECT-OWNED DIRECTORIES UNDER ThirdParty/ (first-party; no third-party notice)

@@ -59,6 +59,13 @@ RULES_TEXT = json.dumps(
             {"pattern": "^lib/(lib)?alpha\\.(a|lib)$", "component": "Alpha"},
             {"pattern": "^(bin|lib)/(lib)?Beta[^/]*$", "component": "Beta"},
         ],
+        # GOV-400 rules must declare the fonts third-party code compiles into binaries; the
+        # fixture package embeds none, so no marker ever matches.
+        "embeddedFonts": {
+            "markers": ["FixtureEmbedded.ttf"],
+            "scanPattern": "^(bin|lib)/",
+            "maximumScanBytes": 1048576,
+        },
     }
 )
 
@@ -204,6 +211,17 @@ class TestReconcileNoticeInventory(ReconcileCase):
     def test_notice_listing_an_unlocked_dependency_fails(self) -> None:
         self.write_notice({**GOOD_NOTICE, "Delta": "1.0"})
         self.assert_error(self.run_reconcile(), "lists 'Delta', which dependencies.lock does not lock")
+
+    def test_notice_font_entries_are_reported_not_failed(self) -> None:
+        # cmake/SparkThirdPartyAudit.cmake adds these; fonts are the GOV-400 notice gate's, not the lock's.
+        fonts = {"Roboto (editor font)": "3.0", "ProggyClean (font embedded in Dear ImGui)": "1"}
+        self.write_notice({**GOOD_NOTICE, **fonts})
+        report = self.run_reconcile()
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["fontEntries"], sorted(fonts))
+        # Only the exact CMake shapes are fonts; anything else unlocked still fails.
+        self.write_notice({**GOOD_NOTICE, "Fonty (editor fonts)": "1"})
+        self.assert_error(self.run_reconcile(), "lists 'Fonty (editor fonts)', which dependencies.lock does not lock")
 
     def test_missing_notice_is_a_failure(self) -> None:
         self.notice.unlink()

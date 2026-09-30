@@ -8,6 +8,9 @@ cmake_minimum_required(VERSION 3.25)
 #   * a font (rules: fontSuffixes) is covered only when an inventory entry names
 #     it on its "Files:" line AND reproduces license text for every notice file
 #     that entry declares;
+#   * a font compiled into a shipped binary (rules: embeddedFonts; a scanned
+#     file whose bytes contain the font's marker name) is covered the same way:
+#     the marker must be named on a licensed entry's "Files:" line;
 #   * a file matching a payload rule is covered when the rule's component has an
 #     inventory entry with license text, or the rule is a documented first-party
 #     exemption;
@@ -132,6 +135,32 @@ function(_spark_notice_split_csv _spark_output _spark_csv)
         endif()
     endforeach()
     set(${_spark_output} "${_spark_items}" PARENT_SCOPE)
+endfunction()
+
+# Why the font named `_spark_font_name` is not covered, or "" when an inventory
+# entry names it on its "Files:" line and reproduces its license text. Reads the
+# parsed inventory (_spark_block_*) from the calling function's scope.
+function(_spark_notice_font_reason _spark_output _spark_font_name)
+    set(_spark_reason "not named on any 'Files:' line of THIRD_PARTY_NOTICES.txt")
+    foreach(_spark_block RANGE 1 ${_spark_block_count})
+        set(_spark_named OFF)
+        foreach(_spark_named_file IN LISTS _spark_block_files_${_spark_block})
+            get_filename_component(_spark_named_name "${_spark_named_file}" NAME)
+            if(_spark_named_name STREQUAL _spark_font_name)
+                set(_spark_named ON)
+            endif()
+        endforeach()
+        if(NOT _spark_named)
+            continue()
+        endif()
+        if(_spark_block_problem_${_spark_block} STREQUAL "")
+            set(_spark_reason "")
+            break()
+        endif()
+        set(_spark_reason
+            "named by '${_spark_block_name_${_spark_block}}' but ${_spark_block_problem_${_spark_block}}")
+    endforeach()
+    set(${_spark_output} "${_spark_reason}" PARENT_SCOPE)
 endfunction()
 
 function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _spark_mode _spark_world)
@@ -267,6 +296,34 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
         set(_spark_asset_text_${_spark_index} "<unread>")
     endforeach()
 
+    # Fonts compiled into binaries: every marker a scanned file contains must be
+    # named on a licensed 'Files:' line, like a font file.
+    set(_spark_embedded_markers "")
+    set(_spark_embedded_regex "")
+    _spark_notice_json_length(_spark_count "${_spark_rules}" embeddedFonts markers)
+    math(EXPR _spark_last "${_spark_count} - 1")
+    foreach(_spark_index RANGE ${_spark_last})
+        _spark_notice_json_get(_spark_marker "${_spark_rules}" embeddedFonts markers ${_spark_index})
+        if(NOT _spark_marker MATCHES "^[A-Za-z0-9][A-Za-z0-9._-]*$" OR _spark_marker IN_LIST _spark_embedded_markers)
+            _spark_notice_fail("embeddedFonts.markers must be distinct non-empty font names")
+        endif()
+        list(APPEND _spark_embedded_markers "${_spark_marker}")
+        string(REPLACE "." "\\." _spark_marker_regex "${_spark_marker}")
+        if(_spark_embedded_regex STREQUAL "")
+            set(_spark_embedded_regex "${_spark_marker_regex}")
+        else()
+            string(APPEND _spark_embedded_regex "|${_spark_marker_regex}")
+        endif()
+    endforeach()
+    _spark_notice_json_get(_spark_embedded_scan_pattern "${_spark_rules}" embeddedFonts scanPattern)
+    _spark_notice_json_get(_spark_embedded_max_bytes "${_spark_rules}" embeddedFonts maximumScanBytes)
+    if(_spark_embedded_scan_pattern STREQUAL "")
+        _spark_notice_fail("embeddedFonts.scanPattern must be a non-empty pattern")
+    endif()
+    if(NOT _spark_embedded_max_bytes MATCHES "^[1-9][0-9]*$")
+        _spark_notice_fail("embeddedFonts.maximumScanBytes must be a positive integer")
+    endif()
+
     # ---- packaged THIRD_PARTY_NOTICES.txt -----------------------------------
     set(_spark_notice_path "${_spark_root}/THIRD_PARTY_NOTICES.txt")
     _spark_notice_read_bounded(_spark_notice "${_spark_notice_path}"
@@ -394,6 +451,7 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
     list(SORT _spark_package_files)
     set(_spark_uncovered "")
     set(_spark_font_count 0)
+    set(_spark_embedded_count 0)
     set(_spark_payload_count 0)
     set(_spark_first_party_files 0)
     set(_spark_asset_files 0)
@@ -404,29 +462,35 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
 
         if(_spark_suffix IN_LIST _spark_font_suffixes)
             math(EXPR _spark_font_count "${_spark_font_count} + 1")
-            set(_spark_reason "not named on any 'Files:' line of THIRD_PARTY_NOTICES.txt")
-            foreach(_spark_block RANGE 1 ${_spark_block_count})
-                set(_spark_named OFF)
-                foreach(_spark_named_file IN LISTS _spark_block_files_${_spark_block})
-                    get_filename_component(_spark_named_name "${_spark_named_file}" NAME)
-                    if(_spark_named_name STREQUAL _spark_name)
-                        set(_spark_named ON)
-                    endif()
-                endforeach()
-                if(NOT _spark_named)
-                    continue()
-                endif()
-                if(_spark_block_problem_${_spark_block} STREQUAL "")
-                    set(_spark_reason "")
-                    break()
-                endif()
-                set(_spark_reason
-                    "named by '${_spark_block_name_${_spark_block}}' but ${_spark_block_problem_${_spark_block}}")
-            endforeach()
+            _spark_notice_font_reason(_spark_reason "${_spark_name}")
             if(NOT _spark_reason STREQUAL "")
                 list(APPEND _spark_uncovered "${_spark_file}: font ${_spark_reason}")
             endif()
             continue()
+        endif()
+
+        set(_spark_path "${_spark_root}/${_spark_file}")
+        if(_spark_file MATCHES "${_spark_embedded_scan_pattern}" AND NOT IS_SYMLINK "${_spark_path}"
+           AND NOT IS_DIRECTORY "${_spark_path}")
+            file(SIZE "${_spark_path}" _spark_size)
+            if(_spark_size GREATER _spark_embedded_max_bytes)
+                _spark_notice_fail(
+                    "${_spark_path} is ${_spark_size} bytes, over the ${_spark_embedded_max_bytes}-byte "
+                    "embedded-font scan limit")
+            endif()
+            file(STRINGS "${_spark_path}" _spark_marker_hits REGEX "${_spark_embedded_regex}")
+            _spark_notice_encode(_spark_marker_hits "${_spark_marker_hits}")
+            foreach(_spark_marker IN LISTS _spark_embedded_markers)
+                string(FIND "${_spark_marker_hits}" "${_spark_marker}" _spark_marker_at)
+                if(_spark_marker_at EQUAL -1)
+                    continue()
+                endif()
+                math(EXPR _spark_embedded_count "${_spark_embedded_count} + 1")
+                _spark_notice_font_reason(_spark_reason "${_spark_marker}")
+                if(NOT _spark_reason STREQUAL "")
+                    list(APPEND _spark_uncovered "${_spark_file}: embeds font ${_spark_marker} ${_spark_reason}")
+                endif()
+            endforeach()
         endif()
 
         set(_spark_matched_rule -1)
@@ -622,7 +686,8 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
             "${_spark_uncovered_count} shipped file(s) are not covered by ${_spark_notice_path}:\n"
             "  ${_spark_uncovered_report}\n"
             "Add each dependency to ThirdParty/dependencies.lock with its on-disk license text "
-            "(fonts must be listed in the entry's required files) or map the path in "
+            "(fonts must be listed in the entry's required files; fonts compiled into binaries in "
+            "ThirdParty/Licenses/embedded-fonts.json) or map the path in "
             "${_spark_rules_path}; never supply license text from memory.")
         if(_spark_mode STREQUAL "enforce")
             _spark_notice_fail("${_spark_report}")
@@ -631,8 +696,8 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
         return()
     endif()
     message(STATUS
-        "Validated notice coverage for ${_spark_font_count} font file(s) and "
-        "${_spark_payload_count} third-party payload file(s) in ${_spark_root}")
+        "Validated notice coverage for ${_spark_font_count} font file(s), ${_spark_embedded_count} embedded "
+        "font(s) and ${_spark_payload_count} third-party payload file(s) in ${_spark_root}")
     if(_spark_world STREQUAL "closed")
         message(STATUS
             "Closed world: ${_spark_first_party_files} first-party file(s), "

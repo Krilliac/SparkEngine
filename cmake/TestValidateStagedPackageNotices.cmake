@@ -352,4 +352,34 @@ if(_spark_error OR _spark_result EQUAL 0 OR NOT _spark_stderr MATCHES "non-empty
 endif()
 message(STATUS "LicenseInventory_FirstPartyRootWithoutJustification: rejected as expected")
 
+# 16. A shipped binary that embeds a font (Dear ImGui compiles ProggyClean.ttf
+#     into every binary that links it) is uncovered until an entry names the
+#     font; the marker is found in the binary's bytes, not its file name.
+string(ASCII 127 1 _spark_nonprint)
+string(CONCAT _spark_fixture_binary
+    "${_spark_nonprint}ELF${_spark_nonprint}code${_spark_nonprint}ProggyClean.ttf${_spark_nonprint}more")
+_spark_new_case(binary_embeds_unlisted_font _spark_root)
+file(WRITE "${_spark_root}/bin/SparkEditor" "${_spark_fixture_binary}")
+_spark_expect_fail(BinaryEmbedsUnlistedFont "${_spark_root}"
+    "bin/SparkEditor: embeds font ProggyClean.ttf not named on any 'Files:' line")
+
+# 17. The same binary passes once an entry names the font and reproduces its
+#     license text, and the pass counts the embedded font.
+_spark_new_case(binary_embeds_listed_font _spark_root)
+file(WRITE "${_spark_root}/bin/SparkEditor" "${_spark_fixture_binary}")
+file(READ "${_spark_root}/THIRD_PARTY_NOTICES.txt" _spark_notice)
+string(CONCAT _spark_embedded_entry
+    "Fixture Pixel (font embedded in Fixture UI)\n  Source: fixture\n  Version: 1\n  License: MIT\n"
+    "  Notice files: ThirdParty/Licenses/FixturePixel-LICENSE.txt\n  Files: ProggyClean.ttf\n\n"
+    "Complete license and notice texts\n")
+string(REPLACE "Complete license and notice texts\n" "${_spark_embedded_entry}" _spark_notice "${_spark_notice}")
+string(APPEND _spark_notice
+    "----- ThirdParty/Licenses/FixturePixel-LICENSE.txt -----\n\n${_spark_fixture_library_license}\n\n")
+file(WRITE "${_spark_root}/THIRD_PARTY_NOTICES.txt" "${_spark_notice}")
+_spark_run_gate("${_spark_root}" enforce _spark_result _spark_log)
+if(NOT _spark_result EQUAL 0 OR NOT _spark_log MATCHES "1 font file\\(s\\), 1 embedded font\\(s\\)")
+    message(FATAL_ERROR "LicenseInventory_BinaryEmbedsListedFont: expected a pass counting the embedded font:\n${_spark_log}")
+endif()
+message(STATUS "LicenseInventory_BinaryEmbedsListedFont: passed")
+
 message(STATUS "LicenseInventory package notice-coverage contract passed")

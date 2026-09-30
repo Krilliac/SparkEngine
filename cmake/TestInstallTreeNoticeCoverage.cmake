@@ -145,19 +145,23 @@ if(NOT _spark_clean_cmake_result EQUAL 0 OR NOT _spark_clean_python_result EQUAL
         "python=${_spark_clean_python_result}).\nCMake gate: ${_spark_clean_cmake_log}\n"
         "Python gate: ${_spark_clean_python_log}")
 endif()
-if(NOT _spark_clean_cmake_log MATCHES
-   "Validated notice coverage for ([0-9]+) font file\\(s\\) and ([0-9]+) third-party payload file\\(s\\)")
+string(CONCAT _spark_summary_regex
+    "Validated notice coverage for ([0-9]+) font file\\(s\\), ([0-9]+) embedded font\\(s\\) and ([0-9]+) "
+    "third-party payload file\\(s\\)")
+if(NOT _spark_clean_cmake_log MATCHES "${_spark_summary_regex}")
     message(FATAL_ERROR "CMake gate passed without a coverage summary: ${_spark_clean_cmake_log}")
 endif()
 set(_spark_fonts "${CMAKE_MATCH_1}")
-set(_spark_payload "${CMAKE_MATCH_2}")
+set(_spark_embedded "${CMAKE_MATCH_2}")
+set(_spark_payload "${CMAKE_MATCH_3}")
 if(NOT _spark_clean_cmake_log MATCHES "Closed world: ([0-9]+) first-party file\\(s\\), ([0-9]+) asset-manifest file\\(s\\)")
     message(FATAL_ERROR "CMake gate passed without a closed-world summary: ${_spark_clean_cmake_log}")
 endif()
 set(_spark_first_party "${CMAKE_MATCH_1}")
 set(_spark_assets "${CMAKE_MATCH_2}")
 string(CONCAT _spark_expected_python
-    "notice coverage ok: ${_spark_fonts} font file(s) and ${_spark_payload} third-party payload file(s)")
+    "notice coverage ok: ${_spark_fonts} font file(s), ${_spark_embedded} embedded font(s) and "
+    "${_spark_payload} third-party payload file(s)")
 string(FIND "${_spark_clean_python_log}" "${_spark_expected_python}" _spark_at)
 string(FIND "${_spark_clean_python_log}"
     "closed world: ${_spark_first_party} first-party file(s), ${_spark_assets} asset-manifest file(s)" _spark_world_at)

@@ -215,6 +215,79 @@ function(_spark_thirdparty_append_editor_fonts root output_file notice_files_var
     set(${notice_files_var} "${_notice_files}" PARENT_SCOPE)
 endfunction()
 
+# Append one inventory block per font that third-party code compiles into the
+# binaries, from ThirdParty/Licenses/embedded-fonts.json, and add each license
+# text to the list named by `notice_files_var`. The embedding component must be
+# an entry of SPARK_THIRDPARTY_AUDIT_ENTRIES (the caller's included
+# dependencies.lock), whose version the block records. The "Files:" line
+# names the font as the staged-package gate finds it inside shipped binaries
+# (cmake/PackageNoticeCoverageRules.json embeddedFonts.markers).
+# tools/governance/generate_third_party_notices.py checks the same inventory
+# against the embedding sources.
+function(_spark_thirdparty_append_embedded_fonts root output_file notice_files_var)
+    set(_inventory "${root}/ThirdParty/Licenses/embedded-fonts.json")
+    if(NOT EXISTS "${_inventory}")
+        message(FATAL_ERROR "[ThirdParty Audit] Embedded font license inventory not found: ${_inventory}")
+    endif()
+    file(READ "${_inventory}" _json)
+    string(JSON _fonts ERROR_VARIABLE _error GET "${_json}" fonts)
+    if(_error)
+        message(FATAL_ERROR "[ThirdParty Audit] ${_inventory}: no 'fonts' object: ${_error}")
+    endif()
+    string(JSON _count ERROR_VARIABLE _error LENGTH "${_fonts}")
+    if(_error OR _count EQUAL 0)
+        message(FATAL_ERROR "[ThirdParty Audit] ${_inventory}: 'fonts' is empty or malformed")
+    endif()
+
+    set(_notice_files ${${notice_files_var}})
+    math(EXPR _last "${_count} - 1")
+    foreach(_index RANGE ${_last})
+        string(JSON _font MEMBER "${_fonts}" ${_index})
+        foreach(_field IN ITEMS component family license license_file license_source)
+            string(JSON _value ERROR_VARIABLE _error GET "${_fonts}" "${_font}" ${_field})
+            if(_error OR _value STREQUAL "")
+                message(FATAL_ERROR "[ThirdParty Audit] ${_inventory}: ${_font} has no '${_field}'")
+            endif()
+            set(_${_field} "${_value}")
+        endforeach()
+        if(_font MATCHES "[/\\\\,]" OR _font MATCHES "^\\.")
+            message(FATAL_ERROR "[ThirdParty Audit] ${_inventory}: font name '${_font}' must be a bare file name")
+        endif()
+        set(_component_version "")
+        foreach(_entry IN LISTS SPARK_THIRDPARTY_AUDIT_ENTRIES)
+            string(REPLACE "|" ";" _fields "${_entry}")
+            list(GET _fields 0 _entry_name)
+            if(_entry_name STREQUAL _component)
+                list(GET _fields 2 _component_version)
+                break()
+            endif()
+        endforeach()
+        if(_component_version STREQUAL "")
+            message(FATAL_ERROR
+                "[ThirdParty Audit] ${_inventory}: ${_font} names component '${_component}', which is not in "
+                "ThirdParty/dependencies.lock")
+        endif()
+        if(_license_file MATCHES "[/\\\\]" OR _license_file MATCHES "^\\.")
+            message(FATAL_ERROR
+                "[ThirdParty Audit] ${_inventory}: ${_font} license_file must name a file in ThirdParty/Licenses/")
+        endif()
+        set(_notice_rel "ThirdParty/Licenses/${_license_file}")
+        _spark_thirdparty_check_notice_file("embedded font ${_font}" "${_notice_rel}" "${root}")
+        file(APPEND "${output_file}"
+            "${_family} (font embedded in ${_component})\n"
+            "  Source: ${_license_source}\n"
+            "  Version: as embedded in ${_component} ${_component_version}\n"
+            "  License: ${_license}\n"
+            "  Notice files: ${_notice_rel}\n"
+            "  Files: ${_font}\n\n")
+        list(FIND _notice_files "${_notice_rel}" _notice_index)
+        if(_notice_index EQUAL -1)
+            list(APPEND _notice_files "${_notice_rel}")
+        endif()
+    endforeach()
+    set(${notice_files_var} "${_notice_files}" PARENT_SCOPE)
+endfunction()
+
 function(spark_thirdparty_validate_manifest_schema manifest_file)
     if(NOT EXISTS "${manifest_file}")
         message(FATAL_ERROR "[ThirdParty Audit] Manifest not found: ${manifest_file}")
@@ -358,6 +431,7 @@ function(spark_thirdparty_generate_notice manifest_file output_file)
     get_filename_component(_manifest_directory "${manifest_file}" DIRECTORY)
     get_filename_component(_manifest_root "${_manifest_directory}/.." REALPATH)
     _spark_thirdparty_append_editor_fonts("${_manifest_root}" "${output_file}" _all_notice_files)
+    _spark_thirdparty_append_embedded_fonts("${_manifest_root}" "${output_file}" _all_notice_files)
     if(_notice_SYSTEM_RUNTIME_LIBS)
         _spark_thirdparty_append_system_runtime("${output_file}" "${_notice_SYSTEM_RUNTIME_LIBS}"
             "${_notice_SYSTEM_RUNTIME_VERSION}")

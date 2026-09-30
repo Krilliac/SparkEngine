@@ -5334,7 +5334,7 @@ Progress: 1 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every distributed dependency/file has an identified license and fulfilled notice obligation
    - Evidence: `Tests/Tools/test_third_party_notices.py`, `cmake/ValidateStagedPackageNotices.cmake`
-   - Out of scope by OD-28 (2026-09-30): depends on legal review of notice obligations (the editor-font notice gap is still repo work), outside this repository's control. The notice gate exists, but the editor fonts are not covered. Notice obligations also need legal review.
+   - Out of scope by OD-28 (2026-09-30): depends on legal review of notice obligations, outside this repository's control. Locally, the notice generator and package gate now cover the editor font files and the two fonts Dear ImGui compiles into binaries; the latter's license texts are assembled from the vendored source declarations. Notice obligations still need legal review.
 2. **[unmet]** Website terminology matches reviewed classification
    - Out of scope by OD-28 (2026-09-30): depends on a reviewed legal classification, outside this repository's control. Needs a legal classification that someone has reviewed.
 3. **[implemented]** Packages include root license, notices, and required third-party texts
