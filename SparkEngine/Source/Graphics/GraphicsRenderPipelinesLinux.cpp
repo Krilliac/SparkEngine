@@ -249,17 +249,47 @@ void GraphicsEngine::RenderPostProcessing()
 {
     m_postProcessStartTime = std::chrono::high_resolution_clock::now();
 
-    // PostProcessingPipeline is the only post-process path on Linux. Its pass
-    // count includes only passes that actually executed (a bound shader and a
-    // recorded draw); the engine-level Bloom/SSAO/tone-mapping settings have
-    // no Linux RHI pipeline, so they add no passes of their own.
+    // The PostProcessingPipeline's CPU state advances once per frame in EndFrame; its effect
+    // shaders are D3D11-only, so on this path it executes no pass itself. The one post pass
+    // the Linux RHI path records is tone mapping (PostProcessPass::Tonemapping), and only for a
+    // frame BeginFrame routed into the HDR scene target. The engine-level Bloom/SSAO settings
+    // have no Linux RHI pipeline and add no passes of their own.
     uint32_t executedPasses = 0;
-    if (m_postProcessing)
+    auto& rhi = GetRHI();
+    Spark::RHI::IRHICommandList* cmd = rhi.initialized ? rhi.bridge.GetCommandList() : nullptr;
+    Spark::RHI::IRHIDevice* device = rhi.initialized ? rhi.bridge.GetDevice() : nullptr;
+    Spark::RHI::IRHITexture* backBuffer = rhi.initialized ? rhi.bridge.GetBackBuffer() : nullptr;
+    Spark::RHI::IRHITexture* hdrScene = rhi.hdrLighting.get();
+    if (cmd && device && backBuffer && m_postProcessing && hdrScene && rhi.sceneTarget == hdrScene &&
+        rhi.tonemap.pipeline)
     {
-        float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
-        m_postProcessing->Process(deltaTime);
-        m_postProcessing->Render();
-        executedPasses = static_cast<uint32_t>(m_postProcessing->GetActivePassCount());
+        const auto& settings = m_postProcessing->GetTonemappingSettings();
+        PostProcessConstants constants{};
+        constants.screenSize =
+            XMFLOAT2(static_cast<float>(backBuffer->GetWidth()), static_cast<float>(backBuffer->GetHeight()));
+        constants.invScreenSize = XMFLOAT2(1.0f / constants.screenSize.x, 1.0f / constants.screenSize.y);
+        constants.exposure = settings.exposure;
+        // The D3D11 tonemap pass writes the operator's output without a gamma curve.
+        constants.gamma = 1.0f;
+        constants.vignetteRadius = 0.75f;
+        constants.saturation = settings.saturation;
+        device->UpdateBuffer(rhi.tonemap.constants.get(), &constants, sizeof(constants));
+
+        cmd->BeginEvent("Tonemapping");
+        // Bind the input first: a sampled-image layout change cannot be recorded while the
+        // back buffer is open for rendering (Vulkan dynamic rendering).
+        cmd->SetShaderResource(Spark::RHI::RHIShaderStage::Pixel, 0, hdrScene);
+        cmd->SetSampler(Spark::RHI::RHIShaderStage::Pixel, 0, rhi.tonemap.sampler.get());
+        cmd->SetRenderTargets(&backBuffer, 1, nullptr);
+        cmd->SetPipelineState(rhi.tonemap.pipeline.get());
+        cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Pixel, 1, rhi.tonemap.constants.get());
+        cmd->Draw(3, 0);
+        cmd->EndEvent();
+
+        // Anything drawn after post-processing (debug overlays, UI) lands on the back buffer.
+        cmd->SetRenderTargets(&backBuffer, 1, rhi.bridge.GetDepthBuffer());
+        rhi.sceneTarget = backBuffer;
+        executedPasses = 1;
     }
     m_statistics.postProcessPasses = executedPasses;
 

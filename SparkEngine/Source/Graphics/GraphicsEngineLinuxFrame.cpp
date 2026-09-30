@@ -27,6 +27,52 @@
 
 using namespace Spark::Graphics::Detail;
 
+namespace
+{
+    /**
+     * Whether this frame's scene renders into hdrLighting for the tone-mapping pass. A frame
+     * asks for it by enabling PostProcessPass::Tonemapping; the pass runs only the variant the
+     * shipped PostProcess shader implements (ACES, contrast 1) and only with its resources.
+     * Otherwise the frame renders straight to the back buffer and, if tone mapping was asked
+     * for, is counted as rejected instead of being reported as tone-mapped.
+     */
+    bool RouteSceneThroughTonemap(LinuxRHIState& rhi, const Spark::Graphics::PostProcessingPipeline* post,
+                                  const Spark::RHI::IRHITexture* backBuffer)
+    {
+        using Spark::Graphics::PostProcessPass;
+        using Spark::Graphics::TonemapOperator;
+        if (!post || !post->IsInitialized() || !post->IsEffectEnabled(PostProcessPass::Tonemapping))
+        {
+            return false;
+        }
+
+        const auto& settings = post->GetTonemappingSettings();
+        const char* reason = nullptr;
+        if (settings.op != TonemapOperator::ACES || settings.contrast != 1.0f)
+        {
+            reason = "only the ACES operator with contrast 1 is implemented by the shipped PostProcess shader";
+        }
+        else if (!rhi.tonemap.pipeline || !rhi.basicForward.hdrPipeline || !rhi.hdrLighting || !backBuffer)
+        {
+            reason = "the tone-mapping pass resources are unavailable";
+        }
+        else if (rhi.hdrLighting->GetWidth() != backBuffer->GetWidth() ||
+                 rhi.hdrLighting->GetHeight() != backBuffer->GetHeight())
+        {
+            reason = "the HDR scene target does not match the back buffer size";
+        }
+
+        if (reason != nullptr)
+        {
+            ++rhi.tonemap.rejectedFrames;
+            SPARK_LOG_ONCE(Spark::LogLevel::Error, Spark::LogCategory::Graphics,
+                           "Tone mapping requested but not performed: %s", reason);
+            return false;
+        }
+        return true;
+    }
+} // namespace
+
 // ============================================================================
 // Frame Management
 // ============================================================================
@@ -88,10 +134,22 @@ void GraphicsEngine::BeginFrame()
         Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
         Spark::RHI::IRHITexture* depthBuffer = rhi.bridge.GetDepthBuffer();
 
+        // With tone mapping the scene renders into the HDR target and RenderPostProcessing
+        // resolves it into the back buffer; the back buffer is still cleared so a frame that
+        // never reaches RenderScene presents the clear colour, not stale contents.
+        rhi.sceneTarget =
+            RouteSceneThroughTonemap(rhi, m_postProcessing.get(), backBuffer) ? rhi.hdrLighting.get() : backBuffer;
         if (backBuffer)
         {
-            cmd->SetRenderTargets(&backBuffer, 1, depthBuffer);
             cmd->ClearRenderTarget(backBuffer, m_settings.clearColor);
+        }
+        if (rhi.sceneTarget)
+        {
+            cmd->SetRenderTargets(&rhi.sceneTarget, 1, depthBuffer);
+            if (rhi.sceneTarget != backBuffer)
+            {
+                cmd->ClearRenderTarget(rhi.sceneTarget, m_settings.clearColor);
+            }
         }
         if (depthBuffer)
         {
@@ -129,9 +187,9 @@ void GraphicsEngine::EndFrame()
     if (!m_frameInProgress.load())
         return;
 
-    // Post-processing runs after scene rendering and before Present.
-    // Without this call, all 16 effect passes (Bloom, DoF, Tonemapping,
-    // ColorGrading, etc.) were silently skipped on Linux.
+    // Advances the PostProcessingPipeline's CPU-side state (volumes, timers) once per frame.
+    // Its effect shaders are D3D11-only, so it records no GPU pass here; the Linux RHI
+    // tone-mapping pass is recorded by RenderScene through RenderPostProcessing.
     if (m_postProcessing && m_postProcessing->IsInitialized())
     {
         m_postProcessing->Process(1.0f / 60.0f);
@@ -208,6 +266,10 @@ void GraphicsEngine::RenderScene(const DirectX::XMMATRIX& viewMatrix, const Dire
     // Draw and drain the ECS draw list (SubmitMeshForRendering) through the forward pass, as
     // the Windows RenderScene does. Without the drain the list grows every frame.
     ProcessDrawList(viewMatrix, projMatrix);
+
+    // Post-processing after the scene, as the Windows RenderScene does: resolves the HDR scene
+    // target into the back buffer when BeginFrame routed this frame through tone mapping.
+    RenderPostProcessing();
 
     cmd->EndEvent();
 }
