@@ -81,6 +81,9 @@ SPDX_VERSION = "SPDX-2.3"
 TOOL_NAME = "SparkEngine-generate-sbom-1"
 ROOT_SPDX_ID = "SPDXRef-SparkEngine"
 RECONCILE_SCHEMA = "spark-package-inventory-reconciliation-v1"
+# Font entries cmake/SparkThirdPartyAudit.cmake writes into the packaged inventory. Fonts are
+# covered by the GOV-400 notice gate, not dependencies.lock, so they are reported, not failed.
+FONT_ENTRY_PATTERN = re.compile(r"^.+ \((?:editor font|font embedded in .+)\)$")
 SOURCE_LICENSE_PATH = "LICENSE"
 ENGINE_VERSION_RE = re.compile(r'^set\(SPARK_ENGINE_VERSION "([0-9]+\.[0-9]+\.[0-9]+)" CACHE', re.MULTILINE)
 GITHUB_URL_RE = re.compile(r"^https://github\.com/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+?)(?:\.git)?/?$")
@@ -574,7 +577,8 @@ def reconcile(
             errors.append(
                 f"{NOTICE_NAME} lists '{name}' at version {listed[name]!r}; the lock pins {dep.version!r}"
             )
-    for name in sorted(set(listed) - set(dependencies)):
+    font_entries = sorted(name for name in set(listed) - set(dependencies) if FONT_ENTRY_PATTERN.match(name))
+    for name in sorted(set(listed) - set(dependencies) - set(font_entries)):
         errors.append(f"{NOTICE_NAME} lists '{name}', which dependencies.lock does not lock")
 
     return {
@@ -584,6 +588,7 @@ def reconcile(
         "components": {name: present[name] for name in sorted(present)},
         "notConfigured": declared_absent,
         "compiledInOnly": sorted(name for name in dependencies if name not in rule_components),
+        "fontEntries": font_entries,
         "errors": errors,
     }
 
