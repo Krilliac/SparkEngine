@@ -456,7 +456,7 @@ class PackageCoverage:
 
 
 UNCLASSIFIED = "unclassified: no font, payload, system-runtime or first-party rule covers it"
-UNIDENTIFIED_ASSET_LICENSES = frozenset({"", "NOASSERTION"})
+UNIDENTIFIED_ASSET_LICENSES = frozenset({"", "NONE", "NOASSERTION"})
 
 
 def _asset_manifest_licenses(package_root: Path, manifest: str) -> dict[str, str]:
@@ -469,9 +469,20 @@ def _asset_manifest_licenses(package_root: Path, manifest: str) -> dict[str, str
     try:
         data = json.loads(path.read_bytes().decode("utf-8"))
         entries = data["entries"]
-        return {str(entry["path"]): str(entry.get("license", "")) for entry in entries}
     except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise NoticeInputError(f"{path}: not an asset integrity manifest: {exc}") from exc
+    if not isinstance(entries, list):
+        raise NoticeInputError(f"{path}: asset manifest entries must be an array")
+    licenses: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or not entry["path"]:
+            raise NoticeInputError(f"{path}: asset manifest entries must name a non-empty string path")
+        rel = entry["path"]
+        if rel in licenses:
+            raise NoticeInputError(f"{path}: duplicate asset manifest path: {rel}")
+        license_id = entry.get("license")
+        licenses[rel] = license_id.strip() if isinstance(license_id, str) else ""
+    return licenses
 
 
 def check_package_coverage(package_root: Path, rules: PackageRules, closed_world: bool = False) -> PackageCoverage:

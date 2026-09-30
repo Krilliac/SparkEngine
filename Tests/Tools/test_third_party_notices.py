@@ -712,6 +712,66 @@ class LicenseInventoryPackageTests(unittest.TestCase):
                 if shutil.which("cmake"):
                     self._assert_cmake_agrees(root, coverage, "closed")
 
+    def test_asset_manifest_json_layout_does_not_change_coverage(self) -> None:
+        """The installed JSON contract does not prescribe whitespace or key order."""
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        data = json.loads(self.ASSET_MANIFEST)
+        for label, manifest in (
+            ("compact", json.dumps(data, separators=(",", ":"))),
+            ("sorted", json.dumps(data, indent=2, sort_keys=True)),
+        ):
+            with self.subTest(label):
+                root, _ = self._run_case(notice, {
+                    "bin/Assets/assets.integrity.json": manifest,
+                    "bin/Assets/Audio/a.wav": "wav\n",
+                })
+                coverage = notices.check_package_coverage(root, notices.load_package_rules(), closed_world=True)
+                self.assertEqual(coverage.uncovered, [])
+                self._assert_cmake_agrees(root, coverage, "closed")
+
+    def test_asset_manifest_unidentified_licenses_fail_closed(self) -> None:
+        """A JSON scalar/container or an SPDX sentinel is not an identified license."""
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        for license_id in (None, False, 7, [], {}, "  ", "NONE", " NOASSERTION "):
+            with self.subTest(license_id=license_id):
+                data = json.loads(self.ASSET_MANIFEST)
+                data["entries"][0]["license"] = license_id
+                root, _ = self._run_case(notice, {
+                    "bin/Assets/assets.integrity.json": json.dumps(data, indent=2),
+                    "bin/Assets/Audio/a.wav": "wav\n",
+                })
+                coverage = notices.check_package_coverage(root, notices.load_package_rules(), closed_world=True)
+                self.assertEqual(coverage.uncovered, [
+                    "bin/Assets/Audio/a.wav: asset manifest bin/Assets/assets.integrity.json "
+                    "records no identified license"
+                ])
+                self._assert_cmake_agrees(root, coverage, "closed")
+
+    def test_malformed_asset_manifest_is_not_textually_licensed(self) -> None:
+        """License-looking text and duplicate paths must not become package evidence."""
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        data = json.loads(self.ASSET_MANIFEST)
+        duplicate = {**data, "entries": [data["entries"][0], data["entries"][0]]}
+        cases = (
+            'not JSON {"path": "Audio/a.wav", "license": "CC0-1.0"}',
+            json.dumps(duplicate, indent=2),
+            json.dumps({"entries": {}}),
+        )
+        for manifest in cases:
+            with self.subTest(manifest=manifest):
+                root, _ = self._run_case(notice, {
+                    "bin/Assets/assets.integrity.json": manifest,
+                    "bin/Assets/Audio/a.wav": "wav\n",
+                })
+                with self.assertRaises(notices.NoticeInputError):
+                    notices.check_package_coverage(root, notices.load_package_rules(), closed_world=True)
+                result = subprocess.run(
+                    ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", "-DSPARK_PACKAGE_NOTICE_CLASSIFICATION=closed",
+                     "-P", str(PACKAGE_GATE)], capture_output=True, text=True, timeout=120,
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("asset manifest", (result.stdout + result.stderr).lower())
+
     def test_closed_world_cli(self) -> None:
         notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
         root, _ = self._run_case(notice, {"bin/foo.dll": "pe\n"})

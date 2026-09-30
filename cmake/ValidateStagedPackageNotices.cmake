@@ -457,13 +457,10 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
                 endforeach()
             endif()
             if(NOT _spark_asset_rule EQUAL -1)
-                # The manifest is the canonical json.dumps(indent=2) output of
-                # tools/asset-integrity/verify_asset_integrity.py. CMake's JSON
-                # parser re-reads the whole document per query, which is too slow
-                # for a thousand entries, so each entry is located textually by
-                # its "path" member and its "license" member is read from the
-                # same object. A manifest in any other layout lists nothing, so
-                # the gate fails closed.
+                # Parse the manifest once into a path-indexed license map. A
+                # textual search could accept malformed JSON or associate the
+                # wrong license when keys are reordered. Hashing each path keeps
+                # filenames out of CMake variable names and makes lookups cheap.
                 set(_spark_manifest "${_spark_asset_manifest_${_spark_asset_rule}}")
                 if(_spark_asset_text_${_spark_asset_rule} STREQUAL "<unread>")
                     set(_spark_asset_text_${_spark_asset_rule} "")
@@ -471,6 +468,41 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
                     if(EXISTS "${_spark_manifest_path}" AND NOT IS_DIRECTORY "${_spark_manifest_path}")
                         _spark_notice_read_bounded(_spark_asset_text_${_spark_asset_rule} "${_spark_manifest_path}"
                             ${_SPARK_NOTICE_MAX_BYTES} "Asset manifest")
+                        string(JSON _spark_entries_type ERROR_VARIABLE _spark_json_error
+                            TYPE "${_spark_asset_text_${_spark_asset_rule}}" entries)
+                        if(_spark_json_error OR NOT _spark_entries_type STREQUAL "ARRAY")
+                            _spark_notice_fail("Asset manifest ${_spark_manifest} must contain an entries array")
+                        endif()
+                        string(JSON _spark_entries GET "${_spark_asset_text_${_spark_asset_rule}}" entries)
+                        string(JSON _spark_entry_count LENGTH "${_spark_entries}")
+                        if(_spark_entry_count GREATER 0)
+                            math(EXPR _spark_entry_last "${_spark_entry_count} - 1")
+                            foreach(_spark_entry_index RANGE ${_spark_entry_last})
+                                string(JSON _spark_entry GET "${_spark_entries}" ${_spark_entry_index})
+                                string(JSON _spark_path_type ERROR_VARIABLE _spark_json_error
+                                    TYPE "${_spark_entry}" path)
+                                if(_spark_json_error OR NOT _spark_path_type STREQUAL "STRING")
+                                    _spark_notice_fail("Asset manifest ${_spark_manifest} entry must name a string path")
+                                endif()
+                                string(JSON _spark_entry_path GET "${_spark_entry}" path)
+                                if(_spark_entry_path STREQUAL "")
+                                    _spark_notice_fail("Asset manifest ${_spark_manifest} entry has an empty path")
+                                endif()
+                                string(SHA256 _spark_path_key "${_spark_entry_path}")
+                                set(_spark_license_key "_spark_asset_license_${_spark_asset_rule}_${_spark_path_key}")
+                                if(DEFINED ${_spark_license_key})
+                                    _spark_notice_fail(
+                                        "Duplicate asset manifest path in ${_spark_manifest}: ${_spark_entry_path}")
+                                endif()
+                                string(JSON _spark_license_type ERROR_VARIABLE _spark_json_error
+                                    TYPE "${_spark_entry}" license)
+                                set(${_spark_license_key} "")
+                                if(NOT _spark_json_error AND _spark_license_type STREQUAL "STRING")
+                                    string(JSON _spark_entry_license GET "${_spark_entry}" license)
+                                    string(STRIP "${_spark_entry_license}" ${_spark_license_key})
+                                endif()
+                            endforeach()
+                        endif()
                     endif()
                 endif()
                 get_filename_component(_spark_manifest_dir "${_spark_manifest}" DIRECTORY)
@@ -480,21 +512,15 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
                     string(LENGTH "${_spark_manifest_dir}/" _spark_prefix_length)
                     string(SUBSTRING "${_spark_file}" ${_spark_prefix_length} -1 _spark_listed)
                 endif()
-                string(FIND "${_spark_asset_text_${_spark_asset_rule}}" "\"path\": \"${_spark_listed}\"," _spark_at)
-                set(_spark_license "")
-                if(NOT _spark_at EQUAL -1)
-                    string(SUBSTRING "${_spark_asset_text_${_spark_asset_rule}}" ${_spark_at} -1 _spark_entry)
-                    string(FIND "${_spark_entry}" "}" _spark_entry_end)
-                    string(SUBSTRING "${_spark_entry}" 0 ${_spark_entry_end} _spark_entry)
-                    if(_spark_entry MATCHES "\"license\": \"([^\"]*)\"")
-                        set(_spark_license "${CMAKE_MATCH_1}")
-                    endif()
-                endif()
+                string(SHA256 _spark_path_key "${_spark_listed}")
+                set(_spark_license_key "_spark_asset_license_${_spark_asset_rule}_${_spark_path_key}")
+                set(_spark_license "${${_spark_license_key}}")
                 if(_spark_file STREQUAL _spark_manifest)
                     math(EXPR _spark_asset_files "${_spark_asset_files} + 1")
-                elseif(_spark_at EQUAL -1)
+                elseif(NOT DEFINED ${_spark_license_key})
                     list(APPEND _spark_uncovered "${_spark_file}: not listed in asset manifest ${_spark_manifest}")
-                elseif(_spark_license STREQUAL "" OR _spark_license STREQUAL "NOASSERTION")
+                elseif(_spark_license STREQUAL "" OR _spark_license STREQUAL "NONE" OR
+                       _spark_license STREQUAL "NOASSERTION")
                     list(APPEND _spark_uncovered
                         "${_spark_file}: asset manifest ${_spark_manifest} records no identified license")
                 else()
