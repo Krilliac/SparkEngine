@@ -4,10 +4,13 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * Implements GTAO: for each pixel, marches in multiple directions along
- * the depth buffer to find the horizon angle. AO is computed as
- * 1 - average(cos(horizon_angle)). Includes spatial denoising via a
- * 3x3 cross-bilateral filter that preserves depth edges.
+ * Implements GTAO (Jimenez et al. 2016, "Practical Realtime Strategies for
+ * Accurate Indirect Occlusion"): for each pixel, marches in multiple slice
+ * directions along the depth buffer to find the two horizon angles, measured
+ * from the view vector, then integrates the cosine-weighted visibility of the
+ * arc between them analytically, using the normal projected into the slice.
+ * An unoccluded plane integrates to exactly 1. Includes spatial denoising via
+ * a 3x3 cross-bilateral filter that preserves depth edges.
  *
  * Features:
  * - Configurable number of directions (4-8) and steps per direction (4-8)
@@ -39,6 +42,7 @@ namespace Spark::Graphics
 {
 
     static constexpr float GTAO_PI = 3.14159265358979323846f;
+    static constexpr float GTAO_HALF_PI = 0.5f * GTAO_PI;
 
     // =========================================================================
     // GTAO Settings
@@ -99,11 +103,13 @@ namespace Spark::Graphics
          *
          * For each pixel, marches in m_settings.directions evenly-spaced
          * directions. Along each direction, samples the depth buffer at
-         * m_settings.stepsPerDirection intervals to find the maximum
-         * horizon angle. AO = 1 - mean(cos(maxHorizon)).
+         * m_settings.stepsPerDirection intervals on both sides to find the
+         * highest horizon, and integrates the slice visibility with
+         * SliceVisibility(). AO = pow(mean slice visibility, power).
          *
          * @param depthBuffer   Linearized depth buffer (width * height)
-         * @param normalBuffer  World-space normals (width * height * 3, interleaved XYZ)
+         * @param normalBuffer  View-space normals (width * height * 3, interleaved XYZ);
+         *                      +Z faces the camera, X/Y follow the buffer's +x/+y axes
          * @param projScale     Projection scale factor (focal_length / viewport_height)
          */
         void ComputeGTAO(const float* depthBuffer, const float* normalBuffer, float projScale)
@@ -137,6 +143,10 @@ namespace Spark::Graphics
                     int dirs = m_settings.directions;
                     int steps = m_settings.stepsPerDirection;
 
+                    // Horizon vectors use +Z toward the camera, like the normal buffer,
+                    // so the view vector (surface to camera) is +Z.
+                    const float nLen = std::sqrt(nx * nx + ny * ny + nz * nz);
+
                     // March in evenly-spaced directions around the pixel
                     for (int d = 0; d < dirs; ++d)
                     {
@@ -144,8 +154,21 @@ namespace Spark::Graphics
                         float dirX = std::cos(angle);
                         float dirY = std::sin(angle);
 
+                        // Project the normal into the slice spanned by (dirX, dirY, 0) and
+                        // the view vector (0, 0, 1); n is its signed angle from the view vector.
+                        const float nAlongDir = nLen > 0.0f ? (nx * dirX + ny * dirY) / nLen : 0.0f;
+                        const float nAlongView = nLen > 0.0f ? nz / nLen : 1.0f;
+                        const float projLen = std::sqrt(nAlongDir * nAlongDir + nAlongView * nAlongView);
+                        const float cosN = std::clamp(nAlongView / std::max(projLen, 0.0001f), 0.0f, 1.0f);
+                        const float n = (nAlongDir < 0.0f ? -1.0f : 1.0f) * std::acos(cosN);
+
+                        // Horizon cosines (from the view vector) start at the tangent plane:
+                        // unoccluded. Faded samples blend back toward it.
+                        const float lowCos = std::cos(n + GTAO_HALF_PI);
+                        const float lowCosNeg = std::cos(n - GTAO_HALF_PI);
+
                         // Find maximum horizon angle in this direction
-                        float maxHorizonCos = -1.0f;
+                        float maxHorizonCos = lowCos;
 
                         for (int s = 1; s <= steps; ++s)
                         {
@@ -168,17 +191,17 @@ namespace Spark::Graphics
                             if (sampleDepth <= 0.0f)
                                 continue;
 
-                            // Compute horizon vector in view space
+                            // Compute horizon vector in view space (+Z toward the camera)
                             float deltaX = (sampleX - static_cast<float>(x)) / projScale * centerDepth;
                             float deltaY = (sampleY - static_cast<float>(y)) / projScale * centerDepth;
-                            float deltaZ = sampleDepth - centerDepth;
+                            float deltaZ = centerDepth - sampleDepth;
 
                             float horizLen = std::sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
                             if (horizLen < 0.0001f)
                                 continue;
 
-                            // Horizon angle cosine relative to surface normal
-                            float horizCos = (deltaX * nx + deltaY * ny + deltaZ * nz) / horizLen;
+                            // Horizon angle cosine relative to the view vector
+                            float horizCos = deltaZ / horizLen;
 
                             // Distance falloff
                             float dist = horizLen;
@@ -192,12 +215,12 @@ namespace Spark::Graphics
                                                       0.0f, 1.0f);
                             }
 
-                            float weightedCos = horizCos * falloff;
+                            float weightedCos = lowCos + (horizCos - lowCos) * falloff;
                             maxHorizonCos = std::max(maxHorizonCos, weightedCos);
                         }
 
                         // Also search negative direction
-                        float maxHorizonCosNeg = -1.0f;
+                        float maxHorizonCosNeg = lowCosNeg;
 
                         for (int s = 1; s <= steps; ++s)
                         {
@@ -221,13 +244,13 @@ namespace Spark::Graphics
 
                             float deltaX = (sampleX - static_cast<float>(x)) / projScale * centerDepth;
                             float deltaY = (sampleY - static_cast<float>(y)) / projScale * centerDepth;
-                            float deltaZ = sampleDepth - centerDepth;
+                            float deltaZ = centerDepth - sampleDepth;
 
                             float horizLen = std::sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
                             if (horizLen < 0.0001f)
                                 continue;
 
-                            float horizCos = (deltaX * nx + deltaY * ny + deltaZ * nz) / horizLen;
+                            float horizCos = deltaZ / horizLen;
 
                             float dist = horizLen;
                             float falloff = 1.0f;
@@ -240,20 +263,15 @@ namespace Spark::Graphics
                                                       0.0f, 1.0f);
                             }
 
-                            float weightedCos = horizCos * falloff;
+                            float weightedCos = lowCosNeg + (horizCos - lowCosNeg) * falloff;
                             maxHorizonCosNeg = std::max(maxHorizonCosNeg, weightedCos);
                         }
 
-                        // Integrate both hemispheres for this slice
+                        // Signed horizon angles (the negative direction is negative)
                         float h1 = std::acos(std::clamp(maxHorizonCos, -1.0f, 1.0f));
-                        float h2 = std::acos(std::clamp(maxHorizonCosNeg, -1.0f, 1.0f));
+                        float h0 = -std::acos(std::clamp(maxHorizonCosNeg, -1.0f, 1.0f));
 
-                        // GTAO visibility: integral of cos over the unoccluded arc
-                        float visibility =
-                            0.25f * (-std::cos(2.0f * h1) + 2.0f * h1 + -std::cos(2.0f * h2) + 2.0f * h2);
-                        visibility /= GTAO_PI;
-
-                        totalAO += std::clamp(visibility, 0.0f, 1.0f);
+                        totalAO += SliceVisibility(n, projLen, h0, h1);
                     }
 
                     float ao = totalAO / static_cast<float>(dirs);
@@ -317,6 +335,30 @@ namespace Spark::Graphics
             }
         }
 
+        /**
+         * @brief Cosine-weighted visibility of one GTAO slice
+         *
+         * Angles are measured from the view vector inside the slice. The horizons
+         * are clamped to the normal's hemisphere [n - pi/2, n + pi/2], then
+         * a(h) = (-cos(2h - n) + cos(n) + 2 h sin(n)) / 4 is integrated over both
+         * sides and scaled by the projected normal length. An open plane facing
+         * the viewer (n = 0, projLen = 1, h0 = -pi/2, h1 = pi/2) gives exactly 1.
+         *
+         * @param n        Signed angle of the projected normal from the view vector
+         * @param projLen  Length of the normal projected into the slice plane
+         * @param h0       Horizon angle on the negative side (<= 0 before clamping)
+         * @param h1       Horizon angle on the positive side (>= 0 before clamping)
+         */
+        static float SliceVisibility(float n, float projLen, float h0, float h1)
+        {
+            h0 = n + std::clamp(h0 - n, -GTAO_HALF_PI, GTAO_HALF_PI);
+            h1 = n + std::clamp(h1 - n, -GTAO_HALF_PI, GTAO_HALF_PI);
+            const float cosN = std::cos(n);
+            const float sinN = std::sin(n);
+            auto arc = [&](float h) { return 0.25f * (-std::cos(2.0f * h - n) + cosN + 2.0f * h * sinN); };
+            return std::max(projLen * (arc(h0) + arc(h1)), 0.0f);
+        }
+
         /// @brief Get the raw (non-denoised) AO buffer
         const std::vector<float>& GetAOBuffer() const { return m_aoBuffer; }
 
@@ -359,6 +401,14 @@ Texture2D<float3> NormalTex  : register(t1);
 RWTexture2D<float> AOOutput  : register(u0);
 
 static const float PI = 3.14159265;
+static const float HALF_PI = 1.57079633;
+
+// Cosine-weighted arc integral of one slice side (Jimenez et al. 2016); angles
+// from the view vector, n = projected normal angle. Same as SliceVisibility().
+float SliceArc(float h, float n)
+{
+    return 0.25 * (-cos(2.0 * h - n) + cos(n) + 2.0 * h * sin(n));
+}
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 DTid : SV_DispatchThreadID)
@@ -378,13 +428,22 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     float screenRadius = max(1.0, min(Radius * ProjScale / depth, 256.0));
     float totalAO = 0.0;
+    // +Z faces the camera (as in the normal texture), so the view vector is +Z.
+    normal = normalize(normal);
 
     for (int d = 0; d < Directions; d++)
     {
         float angle = PI * d / (float)Directions;
         float2 dir = float2(cos(angle), sin(angle));
 
-        float maxH = -1.0;
+        float nAlongDir = dot(normal.xy, dir);
+        float projLen = length(float2(nAlongDir, normal.z));
+        float cosN = saturate(normal.z / max(projLen, 0.0001));
+        float n = (nAlongDir < 0.0 ? -1.0 : 1.0) * acos(cosN);
+        float lowCos = cos(n + HALF_PI);
+        float lowCosNeg = cos(n - HALF_PI);
+
+        float maxH = lowCos;
         for (int s = 1; s <= StepsPerDir; s++)
         {
             float2 samplePos = DTid.xy + dir * (s / (float)StepsPerDir * screenRadius);
@@ -395,17 +454,17 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
             float sd = DepthTex[sp];
             if (sd <= 0.0) continue;
 
-            float3 delta = float3((sp - (int2)DTid.xy) / ProjScale * depth, sd - depth);
+            float3 delta = float3((sp - (int2)DTid.xy) / ProjScale * depth, depth - sd);
             float len = length(delta);
             if (len < 0.0001) continue;
 
-            float hc = dot(delta, normal) / len;
+            float hc = delta.z / len;
             float falloff = 1.0 - saturate((len - FalloffStart * Radius) /
                                             (FalloffEnd * Radius - FalloffStart * Radius + 0.001));
-            maxH = max(maxH, hc * falloff);
+            maxH = max(maxH, lerp(lowCos, hc, falloff));
         }
 
-        float maxHNeg = -1.0;
+        float maxHNeg = lowCosNeg;
         for (int s = 1; s <= StepsPerDir; s++)
         {
             float2 samplePos = DTid.xy - dir * (s / (float)StepsPerDir * screenRadius);
@@ -416,20 +475,19 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
             float sd = DepthTex[sp];
             if (sd <= 0.0) continue;
 
-            float3 delta = float3((sp - (int2)DTid.xy) / ProjScale * depth, sd - depth);
+            float3 delta = float3((sp - (int2)DTid.xy) / ProjScale * depth, depth - sd);
             float len = length(delta);
             if (len < 0.0001) continue;
 
-            float hc = dot(delta, normal) / len;
+            float hc = delta.z / len;
             float falloff = 1.0 - saturate((len - FalloffStart * Radius) /
                                             (FalloffEnd * Radius - FalloffStart * Radius + 0.001));
-            maxHNeg = max(maxHNeg, hc * falloff);
+            maxHNeg = max(maxHNeg, lerp(lowCosNeg, hc, falloff));
         }
 
-        float h1 = acos(clamp(maxH, -1.0, 1.0));
-        float h2 = acos(clamp(maxHNeg, -1.0, 1.0));
-        float vis = 0.25 * (-cos(2.0 * h1) + 2.0 * h1 + -cos(2.0 * h2) + 2.0 * h2) / PI;
-        totalAO += saturate(vis);
+        float h0 = n + clamp(-acos(clamp(maxHNeg, -1.0, 1.0)) - n, -HALF_PI, HALF_PI);
+        float h1 = n + clamp(acos(clamp(maxH, -1.0, 1.0)) - n, -HALF_PI, HALF_PI);
+        totalAO += max(projLen * (SliceArc(h0, n) + SliceArc(h1, n)), 0.0);
     }
 
     float ao = pow(saturate(totalAO / (float)Directions), Power);

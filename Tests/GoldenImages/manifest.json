@@ -133,8 +133,8 @@
       "software": true,
       "perPixelThreshold": 2,
       "tolerancePercent": 0.5,
-      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; Krilliac approved 2026-09-29 from the first-capture review packet)",
-      "baselineSha256": "d15241aa15b839be8b9185ad51bfc549b6ce89f5a346a17e6444cf781ab43392"
+      "reviewer": "Claude agent, RHI-210 GTAO normalization fix (WARP 10.0.26100.x; open plane now ~204; owner review pending)",
+      "baselineSha256": "2bde35c70f03bc0dc4a5b460380c3b592f5772d3fda74d3ce9cc951de0423353"
     }
   ]
 }

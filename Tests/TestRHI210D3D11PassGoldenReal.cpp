@@ -252,12 +252,24 @@ namespace
         return (lumB < lumMin || lumB > lumMax) ? rgbA : rgbB;
     }
 
-    /// gtaoPS on a flat plane whose every horizon sample stays on the plane: each
-    /// horizon is at pi/2, so vis = (1 + pi) / (2 pi) per direction, raised to power.
-    float GtaoFlatPlaneFactor(float power)
+    /// Cosine-weighted visibility of one GTAO slice (Jimenez et al. 2016): the
+    /// arc integral a(h) = (-cos(2h - n) + cos(n) + 2 h sin(n)) / 4 over both
+    /// horizons, scaled by the length of the normal projected into the slice.
+    /// Angles are measured from the view vector; n is the projected normal angle.
+    float GtaoSliceVisibility(float n, float projLen, float h0, float h1)
     {
-        constexpr float kPi = 3.14159265f;
-        return std::pow((1.0f + kPi) / (2.0f * kPi), power);
+        auto arc = [n](float h) { return 0.25f * (-std::cos(2.0f * h - n) + std::cos(n) + 2.0f * h * std::sin(n)); };
+        return projLen * (arc(h0) + arc(h1));
+    }
+
+    /// gtaoPS on an open plane facing the viewer: every horizon sample stays on
+    /// the plane, so both horizons lie at -pi/2 and +pi/2 from the view vector,
+    /// the normal is the view vector (n = 0, projected length 1) and each slice
+    /// integrates to (2 + 2) / 4 = 1, raised to power. Unoccluded means unchanged.
+    float GtaoOpenPlaneFactor(float power)
+    {
+        constexpr float kHalfPi = 1.57079633f;
+        return std::pow(GtaoSliceVisibility(0.0f, 1.0f, -kHalfPi, kHalfPi), power);
     }
 
     // ------------------------------------------------------------------------
@@ -574,24 +586,44 @@ TEST(D3D11PassGolden_FXAA)
 }
 
 // ----------------------------------------------------------------------------
-// GTAO: sky passes through, the flat plane gets the flat-horizon factor, and
-// the plane next to the raised block is occluded further.
+// GTAO: sky passes through, open surfaces (the ground plane and the top of the
+// raised block) keep their full brightness, and the plane next to the raised
+// block is occluded.
 // ----------------------------------------------------------------------------
 TEST(D3D11PassGolden_GTAO)
 {
     const Spark::Graphics::GTAOSettings defaults;
     const auto frame = RunSinglePass(PostProcessPass::GTAO, true, [](PostProcessingPipeline&) {});
-    EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame, 0.8));
+    // Correct AO leaves every open surface unchanged, so about 90% of this frame
+    // keeps the input grey; the occluded texels around the block are the content.
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame, 0.95));
 
-    const float flat = GtaoFlatPlaneFactor(defaults.power);
-    const Color3 flatColor = {kGrey[0] * flat, kGrey[1] * flat, kGrey[2] * flat};
+    const float open = GtaoOpenPlaneFactor(defaults.power);
+    EXPECT_NEAR(open, 1.0f, 1e-5f);
+    const Color3 openColor = {kGrey[0] * open, kGrey[1] * open, kGrey[2] * open};
+    const int openLevel = ToUnorm8(openColor[0]);
     EXPECT_TRUE(PixelMatches(frame, 32, 4, kGrey));
-    EXPECT_TRUE(PixelMatches(frame, 56, 56, flatColor));
-    EXPECT_TRUE(PixelMatches(frame, 8, 56, flatColor));
-    // The plane texel beside the raised block sees it as an occluder.
-    const int nextToBlock = PixelAt(frame, kBlockMin - 1, 32)[0];
-    std::printf("[RHI-210 PASS GOLDEN] GTAO flat plane %d, next to block %d\n", ToUnorm8(flatColor[0]), nextToBlock);
-    EXPECT_LT(nextToBlock, ToUnorm8(flatColor[0]) - 20);
+    // Open ground plane, away from the block and the sky edge.
+    EXPECT_TRUE(PixelMatches(frame, 56, 56, openColor));
+    EXPECT_TRUE(PixelMatches(frame, 8, 56, openColor));
+    EXPECT_TRUE(PixelMatches(frame, 56, 24, openColor));
+    // Top of the raised block: its neighbours are farther away, so nothing occludes it.
+    EXPECT_TRUE(PixelMatches(frame, 32, 32, openColor));
+    // The plane texels beside the raised block see it as an occluder.
+    const int nextToBlockLeft = PixelAt(frame, kBlockMin - 1, 32)[0];
+    const int nextToBlockBelow = PixelAt(frame, 32, kBlockMax)[0];
+    std::printf("[RHI-210 PASS GOLDEN] GTAO open plane %d (measured %d), block top %d, next to block left %d, "
+                "below %d\n",
+                openLevel, PixelAt(frame, 56, 56)[0], PixelAt(frame, 32, 32)[0], nextToBlockLeft, nextToBlockBelow);
+    EXPECT_LT(nextToBlockLeft, openLevel - 20);
+    EXPECT_LT(nextToBlockBelow, openLevel - 20);
+    // Occlusion is confined to the creases around the block, not spread over the plane.
+    int occluded = 0;
+    for (size_t i = 0; i < frame.size(); i += 4)
+        occluded += frame[i] < openLevel - 20 ? 1 : 0;
+    std::printf("[RHI-210 PASS GOLDEN] GTAO occluded texels %d/%u\n", occluded, kSize * kSize);
+    EXPECT_GT(occluded, 64);
+    EXPECT_LT(occluded, 512);
     EXPECT_TRUE(MatchesGolden("PostPass_GTAO", frame));
 }
 
