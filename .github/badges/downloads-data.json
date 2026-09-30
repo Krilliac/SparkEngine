@@ -3,8 +3,8 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 68,
-    "installerTotal": 39,
+    "total": 69,
+    "installerTotal": 40,
     "assets": [
         {
             "id": 530455809,
@@ -114,7 +114,7 @@
             "id": 538826338,
             "releaseId": 376952823,
             "name": "SparkEngine-Windows-x64-Release-Installer.exe",
-            "downloadCount": 9,
+            "downloadCount": 10,
             "digest": "sha256:ce0db59259ba56a4f9e538bc754180ab6aa10711366be6c5f8f51ba2654c0419",
             "state": "uploaded"
         },
@@ -163,5 +163,5 @@
         538847551
     ],
     "pending": null,
-    "updated": "2026-09-29T21:58:29Z"
+    "updated": "2026-09-30T04:38:23Z"
 }
