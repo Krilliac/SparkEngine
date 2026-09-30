@@ -15,6 +15,8 @@
 #if !defined(_WIN32) && defined(SPARK_TEST_SPARK_GAME_MODULE_PATH)
 
 #include "Fixtures/ScopedUnboundedFileSize.h"
+#include "Core/EngineSdkConsole.h"
+#include "Core/EngineSdkStateValidation.h"
 #include "Core/ModuleManager.h"
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/ECS/Components.h"
@@ -87,10 +89,16 @@ namespace
         const Spark::WeatherSystem* GetWeather() const override { return m_weather; }
         Spark::TimeOfDaySystem* GetTimeOfDay() override { return m_timeOfDay; }
         const Spark::TimeOfDaySystem* GetTimeOfDay() const override { return m_timeOfDay; }
+        // The SDK adapters a real host exposes: the module registers its commands and state rules through
+        // them, and they forward to this process's SimpleConsole and InvalidStateDetector.
+        Spark::IConsole* GetConsole() override { return &m_console; }
+        Spark::IStateValidation* GetStateValidation() override { return &m_stateValidation; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
       private:
+        EngineSdkConsole m_console;
+        EngineSdkStateValidation m_stateValidation;
         World* m_world;
         Spark::EventBus* m_eventBus;
         Spark::CoroutineScheduler* m_scheduler;
