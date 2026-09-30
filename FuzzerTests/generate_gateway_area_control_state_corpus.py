@@ -23,7 +23,7 @@ def main() -> int:
 
     seeds = {
         "valid-two-sessions.state": b'v2\n"handoff-7" 3 4 1 2\n"with \\"quote\\" and space" 18446744073709551615 5 2 1\n',
-        "valid-empty.state": b"",
+        "valid-whitespace-only.state": b" \n\t\r\n",
         "valid-version-only.state": b"v2\n",
         "unknown-version.state": b'v1\n"handoff-7" 3 4 1 2\n',
         "repeated-session.state": b'v2\n"a" 1 1 1 2\n"a" 2 1 1 2\n',

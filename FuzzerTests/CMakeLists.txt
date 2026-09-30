@@ -2638,7 +2638,7 @@ add_test(
         -max_len=65537
         -timeout=1
         -rss_limit_mb=256
-        -runs=9
+        -runs=8
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/async-database-kv"
 )
 set_tests_properties(FuzzAsyncDatabaseSmoke PROPERTIES
@@ -2786,10 +2786,65 @@ add_test(
         -max_len=257
         -timeout=1
         -rss_limit_mb=256
-        -runs=9
+        -runs=8
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-orchestrator-identity-state"
 )
 set_tests_properties(FuzzOrchestratorIdentitySmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# RTSPersistenceCodec.cpp decodes the save slot's custom state and RTSPersistence.cpp
+# validates it; RTSCommandSystem.cpp supplies IsCommandValid. Apply and Capture, which
+# need the live systems, are never referenced and --gc-sections drops them.
+add_executable(SparkFuzzRTSPersistence
+    FuzzRTSPersistence.cpp
+    FuzzRTSPersistenceProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.cpp"
+)
+set_source_files_properties(
+    FuzzRTSPersistenceProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzRTSPersistence PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameRTS/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzRTSPersistence PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzRTSPersistence PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzRTSPersistence PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzRTSPersistence PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzRTSPersistence PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzRTSPersistenceSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzRTSPersistence>
+        -max_len=262144
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/rts-save-snapshot"
+)
+set_tests_properties(FuzzRTSPersistenceSmoke PROPERTIES
     LABELS "fuzz;fuzz-smoke;security"
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"

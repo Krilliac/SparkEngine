@@ -1052,6 +1052,202 @@
           "guard_test": "Animation_LoadAnimations_RejectsDecreasingKeyTimes"
         }
       ]
+    },
+    {
+      "id": "daemon-orchestration-journal-corpus",
+      "parser_id": "daemon-orchestration-journal",
+      "corpus_dir": "FuzzerTests/corpora/daemon-orchestration-journal",
+      "last_verified": "2026-09-30",
+      "content_digest": "c0d4a635c8377792e0cf3771e7547018c42f7199d1bcd932058b1f21f79f77e6",
+      "budget": {
+        "max_input_bytes": 262144,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-duplicate-client-instance.bin",
+          "finding": "LoadOrchestrationJournal accepted two committed mutations for one client instance, which the service's keyed replay table silently collapsed to whichever came last.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests"
+        },
+        {
+          "file": "regression-duplicate-process-id.bin",
+          "finding": "LoadOrchestrationJournal accepted two snapshot records for one process id; the writer serializes a keyed map and cannot produce that.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests"
+        },
+        {
+          "file": "regression-empty-client-instance.bin",
+          "finding": "LoadOrchestrationJournal accepted a committed mutation with an empty client instance, a key ReadMutationKey refuses everywhere else.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests"
+        },
+        {
+          "file": "regression-unrepresentable-crash-timestamp.bin",
+          "finding": "LoadOrchestrationJournal accepted an INT64_MIN crash timestamp, and OrchestrationService's conversion to a system_clock time point overflowed (signed-overflow UB).",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests"
+        },
+        {
+          "file": "regression-unrepresentable-drain-deadline.bin",
+          "finding": "LoadOrchestrationJournal accepted an INT64_MAX drain deadline, which overflows the same system_clock conversion when a draining process is reconciled.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests"
+        }
+      ]
+    },
+    {
+      "id": "async-database-kv-corpus",
+      "parser_id": "async-database-kv",
+      "corpus_dir": "FuzzerTests/corpora/async-database-kv",
+      "last_verified": "2026-09-30",
+      "content_digest": "f3e46877eb61c15ebc2b5264f24c4f2aad19ae414d8af381ffb25847fbbf6905",
+      "budget": {
+        "max_input_bytes": 65537,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-legacy-rewrite-over-budget.db",
+          "finding": "SQLiteConnection::Open accepted a legacy store whose escaped rewrite exceeds the store budget, so every later SET, DELETE and commit failed to publish.",
+          "found_by": "review",
+          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish"
+        },
+        {
+          "file": "regression-raw-tab-rewrite-over-budget.db",
+          "finding": "SQLiteConnection::Open accepted an escaped-format store whose raw tabs double when rewritten, past the store budget, leaving the store unwritable.",
+          "found_by": "review",
+          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish"
+        }
+      ]
+    },
+    {
+      "id": "mmo-character-record-corpus",
+      "parser_id": "mmo-character-record",
+      "corpus_dir": "FuzzerTests/corpora/mmo-character-record",
+      "last_verified": "2026-09-30",
+      "content_digest": "8f82961f0b9b03cf66ba0a916e4a6dc5afb446ee792d7833df5b7c994275d1d0",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-extra-fields.row",
+          "finding": "The character row reader accepted rows with more than 15 fields and silently ignored the extra ones.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+        },
+        {
+          "file": "regression-lossy-float.row",
+          "finding": "BuildCharacterSave wrote positions and stats with iostream's 6 significant digits, so a load-save cycle moved the character and changed its stats.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowKeepsExactFloatsThroughColdRestart"
+        },
+        {
+          "file": "regression-negative-account.row",
+          "finding": "std::stoul accepted -1 for the account id and wrapped it to 4294967295.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+        },
+        {
+          "file": "regression-nonfinite-stat.row",
+          "finding": "std::stof accepted nan for a position, so a NaN location reached gameplay on login.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+        },
+        {
+          "file": "regression-trailing-text.row",
+          "finding": "std::stoi stopped at the first non-digit, so a level of 12abc loaded as 12.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+        }
+      ]
+    },
+    {
+      "id": "gateway-area-control-state-corpus",
+      "parser_id": "gateway-area-control-state",
+      "corpus_dir": "FuzzerTests/corpora/gateway-area-control-state",
+      "last_verified": "2026-09-30",
+      "content_digest": "ce885fc47cedf132ab7099afd5d03a98161079a5de451ac4150c79fb914195c1",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-negative-epoch.state",
+          "finding": "std::istream negated -1 into the unsigned epoch, loading UINT64_MAX so no later Prepare could ever advance that session's fence.",
+          "found_by": "review",
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers"
+        },
+        {
+          "file": "regression-signed-area.state",
+          "finding": "The epoch state reader accepted a leading plus sign on an area id.",
+          "found_by": "review",
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers"
+        },
+        {
+          "file": "regression-wrapped-phase.state",
+          "finding": "std::istream wrapped -4294967295 to phase 1, restoring a Prepare fence the file never recorded.",
+          "found_by": "review",
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers"
+        }
+      ]
+    },
+    {
+      "id": "rts-save-snapshot-corpus",
+      "parser_id": "rts-save-snapshot",
+      "corpus_dir": "FuzzerTests/corpora/rts-save-snapshot",
+      "last_verified": "2026-09-30",
+      "content_digest": "d0252b46c8a4e48925c5821ad96c011fbdfdbed8f5c02b6d80090ff57d32a712",
+      "budget": {
+        "max_input_bytes": 262144,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "daemon-orchestrator-identity-state-corpus",
+      "parser_id": "daemon-orchestrator-identity-state",
+      "corpus_dir": "FuzzerTests/corpora/daemon-orchestrator-identity-state",
+      "last_verified": "2026-09-30",
+      "content_digest": "17b7adcf56b8174cb7f513cca2b780346a3f69db7bcfed279355ed2d43699038",
+      "budget": {
+        "max_input_bytes": 257,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

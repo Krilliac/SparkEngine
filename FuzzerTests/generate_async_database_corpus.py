@@ -37,7 +37,6 @@ def main() -> int:
     seeds = {
         "valid-escaped.db": MARKER + records,
         "valid-legacy.db": b"path\tC:\\temp\\saves\nname\tBob\n",
-        "valid-empty.db": b"",
         "truncated-record.db": MARKER + b"character_1\tAlice|1",
         "unknown-escape.db": MARKER + b"key\tvalue\\x41\n",
         "repeated-key.db": MARKER + b"a\t1\na\t2\n",

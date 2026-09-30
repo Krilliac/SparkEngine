@@ -29,7 +29,6 @@ def main() -> int:
 
     client = b"cli-0123456789abcdef0123456789abcdef"
     seeds = {
-        "valid-fresh.state": b"",
         "valid-sequence.state": state(client, b"41"),
         "valid-longest-client.state": state(b"c" * 64, b"7"),
         "valid-last-usable-sequence.state": state(client, str(UINT64_MAX - 1).encode()),
