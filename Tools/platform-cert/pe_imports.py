@@ -589,6 +589,18 @@ def closure_errors(graph: dict[str, Any], closure: Any, authority: da.Authority)
     return errors
 
 
+def package_image_errors(graph: dict[str, Any], authority: da.Authority) -> list[str]:
+    """OS-owned images cannot be distributed, even when nothing imports them."""
+    platform = platform_sources(authority)
+    errors: list[str] = []
+    for image in graph["images"]:
+        name = PurePosixPath(image["path"]).name.casefold()
+        reason = os_owned_reason(name, platform)
+        if reason is not None:
+            errors.append(f"shipped image {image['path']!r} {reason}; the package must not ship it")
+    return errors
+
+
 # ── Graph documents ────────────────────────────────────────────────────────
 
 
@@ -800,6 +812,17 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.buffer.write(encode_graph(graph))
     sys.stdout.flush()
     errors = closure_errors(graph, declaration.closure, authority)
+    errors.extend(package_image_errors(graph, authority))
+    if "rowId" in plan:
+        # Import here because the bundle validator also consumes this module.
+        # The direct package gate must enforce the same authority/version and
+        # duplicate-name rules as an eventual certification bundle.
+        from bundle_verify import check_dependency_closure
+
+        if not isinstance(plan["rowId"], str) or not plan["rowId"]:
+            errors.append("rowId must be a non-empty string")
+        else:
+            errors.extend(check_dependency_closure(plan["rowId"], declaration.closure, authority))
     for error in errors:
         print(f"ERROR: {error}", file=sys.stderr)
     counts = {

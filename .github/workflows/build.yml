@@ -2073,6 +2073,31 @@ jobs:
           --symbols build/shipping-symbols/symbols \
           --output build/shipping-symbols/shipping-symbol-manifest.json
 
+    - name: Verify Shipping runtime dependency closure (PLT-200)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Use the same fresh install and both checks as the CTest entry. This
+        # runs even when the Shipping preset has BUILD_TESTS=OFF.
+        cmake \
+          "-DSPARK_ENGINE_BUILD_DIR=${{ github.workspace }}/build/windows-shipping" \
+          "-DSPARK_SOURCE_ROOT=${{ github.workspace }}" \
+          -DSPARK_CONFIG=MinSizeRel \
+          "-DSPARK_TEST_ROOT=${{ github.workspace }}/build/shipping-closure" \
+          "-DSPARK_PYTHON_EXECUTABLE=$(python -c 'import sys; print(sys.executable)')" \
+          -P Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake
+
+    - name: Upload Windows Shipping dependency closure
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-closure-${{ github.sha }}
+        path: |
+          build/shipping-closure/run-*/*.json
+          build/shipping-closure/run-*/*.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
     - name: Upload Windows Shipping private symbols
       # A separate artifact from the MSI: symbols never enter a package. Hosting
       # them on a symbol server is OPS-100 scope.

@@ -3896,6 +3896,29 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
+        # PLT-200: the Windows row plans declare the import closure of the
+        # windows-shipping MSI component set, so the walk is offered only in a
+        # MinSizeRel tree that builds exactly that product set; any other set
+        # of backends or tools ships a different graph by design.
+        if(Python3_FOUND AND NOT ENABLE_VULKAN AND NOT ENABLE_OPENGL AND NOT ENABLE_NETWORKING
+           AND NOT ENABLE_SERVER_PROCESSES AND ENABLE_EDITOR AND ENABLE_LAUNCHER AND ENABLE_SPARKBUILD
+           AND ENABLE_INSTALLER AND ENABLE_ASSET_PIPELINE_TOOLS AND ENABLE_AUTOMATION_HOST)
+            add_test(
+                NAME WindowsCertification_PackageDependencyClosure
+                CONFIGURATIONS MinSizeRel
+                COMMAND ${CMAKE_COMMAND}
+                    "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                    "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                    "-DSPARK_CONFIG=$<CONFIG>"
+                    "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/package-closure/$<CONFIG>"
+                    "-DSPARK_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
+                    -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake)
+            set_tests_properties(WindowsCertification_PackageDependencyClosure PROPERTIES
+                LABELS "certification;package"
+                RUN_SERIAL TRUE
+                TIMEOUT 900)
+        endif()
+
         # HEAD-220: the same staged package's NullRHI writer/reader save/reload
         # (the headless counterpart of the WARP phase above). Local evidence
         # still runs on a host with a GPU and display; the clean no-GPU host is
