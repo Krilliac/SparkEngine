@@ -296,12 +296,16 @@ namespace
     };
 
 #ifdef SPARK_OPENGL_SUPPORT
-    /// GL executes immediately, so the back buffer can be read before EndFrame presents it.
+    /// GL executes immediately, so the rendered default buffer can be read before EndFrame presents it.
     std::vector<uint8_t> ReadOpenGLBackBuffer()
     {
         glFinish();
         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glReadBuffer(GL_BACK);
+        // SDL's offscreen EGL surface can be single-buffered despite the double-buffer request.
+        // Read the same attachment GLDevice selects for its default-framebuffer draws and clears.
+        GLint doubleBuffered = GL_TRUE;
+        glGetNamedFramebufferParameteriv(0, GL_DOUBLEBUFFER, &doubleBuffered);
+        glReadBuffer(doubleBuffered != GL_FALSE ? GL_BACK : GL_FRONT);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         std::vector<uint8_t> bottomUp(size_t(kWidth) * kHeight * 4);
         glReadPixels(0, 0, kWidth, kHeight, GL_RGBA, GL_UNSIGNED_BYTE, bottomUp.data());
