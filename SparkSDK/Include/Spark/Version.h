@@ -28,7 +28,11 @@
 // v7: Appended IEngineContext::GetConsole() (one vtable slot, MOD-295) and the
 //     IConsole interface, so modules register console commands through the host
 //     instead of the private Utils/SparkConsole.h.
-#define SPARK_SDK_VERSION 7
+// v8: Appended IConsole::Print() (one IConsole vtable slot, MOD-310) so modules
+//     write to the host's in-game console instead of the private LOG_TO_CONSOLE
+//     macros. Migration: rebuild every module against v8; a module that
+//     implements IConsole itself must add Print.
+#define SPARK_SDK_VERSION 8
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

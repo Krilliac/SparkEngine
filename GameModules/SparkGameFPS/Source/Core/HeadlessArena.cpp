@@ -11,12 +11,12 @@
  */
 
 #include "SparkGameFPS.h"
+#include "Core/FPSLog.h"
 #include "Game/FPSAssetPaths.h"
 #include "Game/GameMechanics.h"
 #include "Game/GameMode.h"
 #include "Game/ProgressionSystem.h"
 #include "SceneManager/SceneManager.h"
-#include "Utils/LogMacros.h"
 
 #include <cstdio>
 
@@ -29,8 +29,8 @@ bool SparkGameModule::LoadHeadlessArena()
 {
     if (!Spark::FPSAssets::RootExists())
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "SparkGameFPS headless arena: asset root '%s' does not exist",
-                        Spark::FPSAssets::Root().string().c_str());
+        FPS_LOG_ERROR("SparkGameFPS headless arena: asset root '{}' does not exist",
+                      Spark::FPSAssets::Root().string().c_str());
         return false;
     }
 
@@ -40,8 +40,8 @@ bool SparkGameModule::LoadHeadlessArena()
     const std::wstring scenePath = Spark::FPSAssets::Resolve(kHeadlessArenaScene);
     if (!scene.LoadScene(scenePath))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "SparkGameFPS headless arena: failed to load '%s'",
-                        Spark::FPSAssets::ResolveUtf8("Scenes/level1.scene").c_str());
+        FPS_LOG_ERROR("SparkGameFPS headless arena: failed to load '{}'",
+                      Spark::FPSAssets::ResolveUtf8("Scenes/level1.scene").c_str());
         return false;
     }
 
@@ -50,7 +50,7 @@ bool SparkGameModule::LoadHeadlessArena()
     {
         // The respawn fallback would keep the match playable, but it is not the
         // authored arena, so a headless run must not report it as one.
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "SparkGameFPS headless arena: scene has no default spawn points");
+        FPS_LOG_ERROR("SparkGameFPS headless arena: scene has no default spawn points");
         return false;
     }
 
@@ -62,7 +62,7 @@ bool SparkGameModule::LoadHeadlessArena()
     auto mode = std::make_unique<Spark::GameMode>();
     if (!mode->Initialize(Spark::GameMode::GetPreset(Spark::GameModeType::Deathmatch)))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "SparkGameFPS headless arena: Deathmatch rules were rejected");
+        FPS_LOG_ERROR("SparkGameFPS headless arena: Deathmatch rules were rejected");
         return false;
     }
     for (const Spark::RespawnPoint& authored : authoredSpawns)
@@ -82,8 +82,8 @@ bool SparkGameModule::LoadHeadlessArena()
     m_headlessRespawn = std::move(respawn);
     m_headlessMode = std::move(mode);
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "SparkGameFPS headless arena loaded: %d scene nodes, %d authored spawns",
-                   m_headlessArenaObjects, m_headlessArenaSpawns);
+    FPS_LOG_INFO("SparkGameFPS headless arena loaded: {} scene nodes, {} authored spawns", m_headlessArenaObjects,
+                 m_headlessArenaSpawns);
     return true;
 }
 

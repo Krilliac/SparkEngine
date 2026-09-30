@@ -16,7 +16,6 @@
 #include "Spark/SparkExport.h"
 #include "Spark/IEngineContext.h"
 #include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
-#include "Utils/Assert.h"
 #include "ClassSystem.h"
 #include "VehicleSystem.h"
 #include "GravitySystem.h"

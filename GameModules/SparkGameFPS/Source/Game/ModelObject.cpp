@@ -1,4 +1,5 @@
 #include "ModelObject.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 /**
  * @file ModelObject.cpp
@@ -6,23 +7,20 @@
  * @author Spark Engine Team
  * @date 2025
  */
+#include "Core/FPSAssert.h"
 
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
 #include <iostream>
-#include "Utils/LogMacros.h"
 
 ModelObject::ModelObject(const std::wstring& modelPath) : m_modelPath(modelPath), m_model(std::make_unique<Model>())
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "ModelObject constructed");
+    FPS_LOG_INFO("ModelObject constructed");
     SetName("ModelObject");
 }
 
 HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
+    FPS_REQUIRE_NOT_NULL(device);
+    FPS_REQUIRE_NOT_NULL(context);
 
     // Load the model
     HRESULT hr = m_model->LoadObj(m_modelPath, device);
@@ -30,7 +28,7 @@ HRESULT ModelObject::Initialize(ID3D11Device* device, ID3D11DeviceContext* conte
     {
         // Convert wstring to string for logging
         std::string modelPathStr(m_modelPath.begin(), m_modelPath.end());
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to load model");
+        FPS_LOG_ERROR("Failed to load model");
         std::wcout << L"Warning: Failed to load model: " << m_modelPath << std::endl;
         return hr;
     }
@@ -46,7 +44,11 @@ void ModelObject::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATRIX&
         return;
     }
 
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_context);
+    if (m_context == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'm_context' must not be null", __func__);
+        return;
+    }
 
     // Build full world matrix with scale, rotation, and translation
     DirectX::XMFLOAT3 pos = GetPosition();
@@ -90,7 +92,11 @@ void ModelObject::OnHit(GameObject* target)
 {
     // Handle collision with another game object
     // For now, just do nothing - override in derived classes for specific behavior
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, target);
+    if (target == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'target' must not be null", __func__);
+        return;
+    }
 }
 
 void ModelObject::OnHitWorld(const DirectX::XMFLOAT3& hitPoint, const DirectX::XMFLOAT3& normal)

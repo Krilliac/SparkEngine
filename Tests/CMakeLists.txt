@@ -5266,11 +5266,12 @@ set_tests_properties(PrototypeModuleKit_PrivateDependencyRatchet PROPERTIES
 # MOD-295: IEngineContext::GetLogger() and the Spark::ModuleLog helpers reach the
 # engine Logger, IEngineContext::GetConsole() registers into the host SimpleConsole,
 # and SparkGameRTS's engine-system wiring logs through them. The RTS case needs the
-# module sources, which SparkTests compiles only with ImGui.
+# module sources, which SparkTests compiles only with ImGui. MOD-310: IConsole::Print
+# and a bound ModuleLog reach the host console history, and unbound helpers are no-ops.
 if(TARGET imgui)
-    set(_spark_prototype_kit_count 4)
+    set(_spark_prototype_kit_count 6)
 else()
-    set(_spark_prototype_kit_count 3)
+    set(_spark_prototype_kit_count 5)
 endif()
 add_test(NAME PrototypeModuleKit_Helpers COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(PrototypeModuleKit_Helpers PROPERTIES

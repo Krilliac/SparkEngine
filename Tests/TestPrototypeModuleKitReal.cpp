@@ -8,6 +8,10 @@
  * the host's Spark::IConsole (EngineSdkConsole), which registers into the host
  * SimpleConsole. SparkGameRTS and SparkGamePlatformer use both instead of the
  * private Utils/SparkConsole.h and Utils/LogMacros.h.
+ *
+ * MOD-310: IConsole::Print (SDK v8) writes the host's in-game console, and
+ * Spark::ModuleLog::Bind lets SparkGameFPS's gameplay code log and print through
+ * the context its OnLoad received.
  */
 
 #include "ScopedLoggerBaseline.h"
@@ -269,6 +273,86 @@ TEST(PrototypeModuleKit_ConsoleRegistersThroughSdkContext)
     EXPECT_TRUE(received.empty());
     console->UnregisterCommand("kit_never_registered");
     EXPECT_TRUE(host.HasCommand("kit_taken"));
+}
+
+namespace
+{
+    /// Unbinds Spark::ModuleLog on scope exit, so a failing test cannot leave a dangling context bound.
+    struct ScopedModuleLogBinding final
+    {
+        explicit ScopedModuleLogBinding(Spark::IEngineContext* context) { Spark::ModuleLog::Bind(context); }
+        ~ScopedModuleLogBinding() { Spark::ModuleLog::Bind(nullptr); }
+        ScopedModuleLogBinding(const ScopedModuleLogBinding&) = delete;
+        ScopedModuleLogBinding& operator=(const ScopedModuleLogBinding&) = delete;
+    };
+
+    /// True when the host console's newest history line is exactly @p message with severity tag @p type.
+    bool NewestConsoleLineIs(const Spark::SimpleConsole& console, const std::string& message, const std::string& type)
+    {
+        const auto history = console.GetLogHistory();
+        return !history.empty() && history.back().message == message && history.back().type == type;
+    }
+} // namespace
+
+TEST(PrototypeModuleKit_ConsolePrintReachesHostConsole)
+{
+    ProbeConsoleScope scope;
+    EngineContext context;
+    Spark::IEngineContext* moduleView = &context;
+    Spark::IConsole* console = moduleView->GetConsole();
+    ASSERT_TRUE(console != nullptr);
+
+    // IConsole::Print lands in the host console history with the severity tag the module chose.
+    console->Print("[Kit] print probe", "SUCCESS");
+    EXPECT_TRUE(NewestConsoleLineIs(scope.console, "[Kit] print probe", "SUCCESS"));
+
+    // A module that bound its context prints and logs without passing it around.
+    ScopedLoggerCapture capture;
+    ScopedModuleLogBinding binding(moduleView);
+    EXPECT_TRUE(Spark::ModuleLog::BoundContext() == moduleView);
+    Spark::ModuleLog::Print("[Kit] bound print", "WARNING");
+    EXPECT_TRUE(NewestConsoleLineIs(scope.console, "[Kit] bound print", "WARNING"));
+    Spark::ModuleLog::Error("[Kit] bound error {}", 7);
+    ASSERT_EQ(capture.Lines().size(), static_cast<size_t>(1));
+    EXPECT_TRUE(capture.Lines().front().level == Spark::LogLevel::Error);
+    EXPECT_EQ(capture.Lines().front().message, std::string("[Kit] bound error 7"));
+}
+
+TEST(PrototypeModuleKit_BoundModuleLogIsNullSafe)
+{
+    ProbeConsoleScope scope;
+    ScopedLoggerCapture capture;
+    // The history is capped, so compare its newest line rather than its size.
+    const auto newestLine = [&scope]() -> std::string
+    {
+        const auto history = scope.console.GetLogHistory();
+        return history.empty() ? std::string() : history.back().message;
+    };
+    const std::string newestBefore = newestLine();
+
+    // Nothing bound: every context-free helper is a silent no-op.
+    Spark::ModuleLog::Bind(nullptr);
+    Spark::ModuleLog::Info("[Kit] unbound {}", 1);
+    Spark::ModuleLog::Warn("[Kit] unbound {}", 2);
+    Spark::ModuleLog::Error("[Kit] unbound {}", 3);
+    Spark::ModuleLog::Debug("[Kit] unbound {}", 4);
+    Spark::ModuleLog::Print("[Kit] unbound print", "INFO");
+    EXPECT_TRUE(capture.Lines().empty());
+    EXPECT_TRUE(newestLine() == newestBefore);
+
+    // A bound host without a console drops Print but still logs through its own logger.
+    RecordingLogger recorder;
+    LoggerOnlyContext noConsole(&recorder);
+    {
+        ScopedModuleLogBinding binding(&noConsole);
+        Spark::ModuleLog::Print("[Kit] no console", "INFO");
+        Spark::ModuleLog::Info("[Kit] routed {}", 5);
+    }
+    EXPECT_TRUE(newestLine() == newestBefore);
+    EXPECT_TRUE(recorder.Saw("info", "[Kit] routed 5"));
+    EXPECT_EQ(recorder.Count(), static_cast<size_t>(1));
+    EXPECT_TRUE(Spark::ModuleLog::BoundContext() == nullptr);
+    EXPECT_TRUE(capture.Lines().empty());
 }
 
 #ifdef SPARK_TEST_HAS_IMGUI

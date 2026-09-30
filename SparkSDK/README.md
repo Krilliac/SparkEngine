@@ -49,15 +49,30 @@ Use `SPARK_IMPLEMENT_MODULE` in exactly one source file to provide the exported
 `Spark/GameTypes.h` owns the shared gameplay enum declarations. FPS consumes
 these public types directly; `Enums/GameSystemEnums.h` in the engine is only a
 compatibility include. Do not copy the declarations into a module. Their names,
-underlying types and numeric values are unchanged, so this extraction does not
-change SDK ABI v7.
+underlying types and numeric values are unchanged, so this extraction did not
+change the SDK ABI.
+
+`Spark/StateMachine.h` (the `Spark::StateMachine<StateID>` template) and
+`Spark/AngleUtils.h` (constexpr radian helpers) follow the same rule: the SDK
+owns the header-only definitions and the engine's `Utils/StateMachine.h` and
+`Utils/AngleUtils.h` only include them. Neither has virtual functions or crosses
+the module boundary, so they are outside the pinned ABI surface.
 
 Use `IEngineContext::GetConsole()` for module command registration and
-`Spark/ModuleLog.h` for logging. Track only successful registrations and remove
-them in `OnUnload()` before releasing module state or its context. ARPG, RPG,
-Racing, OpenWorld, RTS and Platformer use these public services. FPS uses the
-public command service in its main and headless entrypoints; other FPS
-implementation files still depend on private logging and engine systems.
+in-game console output (`IConsole::Print`, SDK v8), and `Spark/ModuleLog.h` for
+logging. Track only successful registrations and remove them in `OnUnload()`
+before releasing module state or its context. Code without the context at hand
+can use `Spark::ModuleLog::Bind(context)` from `OnLoad` (unbind at the end of
+`OnUnload`) and the context-free `ModuleLog` helpers. ARPG, RPG, Racing,
+OpenWorld, RTS, Platformer and FPS use these public services for commands and
+logging; FPS implementation files still depend on other private engine systems.
+The bound context is borrowed: stop module worker callbacks before unbinding it;
+an atomic pointer does not extend the host context's lifetime. The SDK-only
+package consumers check binding across translation units and separate shared
+libraries. FPS's always-on preconditions also use this logger, with a stderr
+diagnostic and unconditional termination even when the logger is unavailable.
+Engine fault isolation and other concrete service implementations remain private
+dependencies; this migration does not certify a complete SDK-only FPS build.
 
 ### Changing the SDK ABI (maintainers)
 

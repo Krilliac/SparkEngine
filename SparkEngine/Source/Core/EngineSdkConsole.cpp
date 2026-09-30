@@ -1,6 +1,6 @@
 /**
  * @file EngineSdkConsole.cpp
- * @brief Routes SDK IConsole calls from game modules to the host SimpleConsole.
+ * @brief Routes SDK IConsole calls (registration and printing) from game modules to the host SimpleConsole.
  */
 
 #include "EngineSdkConsole.h"
@@ -25,4 +25,9 @@ bool EngineSdkConsole::RegisterCommand(std::string_view name, CommandHandler han
 void EngineSdkConsole::UnregisterCommand(std::string_view name)
 {
     Spark::SimpleConsole::GetInstance().UnregisterCommand(std::string(name));
+}
+
+void EngineSdkConsole::Print(std::string_view message, std::string_view type)
+{
+    Spark::SimpleConsole::GetInstance().Log(std::string(message), std::string(type));
 }

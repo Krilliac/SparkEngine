@@ -127,6 +127,9 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         self.assertEqual(len(slots), pinned)
         for name in ("Spark::IModule", "Spark::ILogger", "Spark::INetworkService"):
             self.assertIn(name, golden["surface"]["interfaces"])
+        # SDK v8 appended IConsole::Print; its slot is the console's last.
+        console = golden["surface"]["interfaces"]["Spark::IConsole"]["virtuals"]
+        self.assertEqual(console[-1], "void Print(std::string_view message, std::string_view type)")
         info = golden["surface"]["structs"]["Spark::ModuleInfo"]
         self.assertEqual([field["name"] for field in info["fields"]],
                          ["name", "version", "sdkVersion", "loadOrder", "dependencies", "dependencyCount", "kind"])

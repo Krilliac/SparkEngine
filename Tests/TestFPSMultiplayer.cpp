@@ -19,6 +19,9 @@
 #include "Fixtures/NetworkTestSecurity.h"
 #include "Fixtures/SecureTestPeer.h"
 #include "Utils/SparkConsole.h"
+#include "Core/EngineContext.h"
+
+#include <Spark/ModuleLog.h>
 
 #include <array>
 #include <chrono>
@@ -1382,6 +1385,17 @@ TEST(FPSMultiplayerProduction_NetworkPathClientAppliesSnapshotBatches)
 
 namespace
 {
+    /// Binds Spark::ModuleLog to a real EngineContext for one test, as SparkGameModule::OnLoad does, so the
+    /// system's FPS_CONSOLE lines reach the host SimpleConsole through IConsole::Print. Unbinds on scope exit.
+    struct ScopedHostConsoleBinding
+    {
+        EngineContext context;
+        ScopedHostConsoleBinding() { Spark::ModuleLog::Bind(&context); }
+        ~ScopedHostConsoleBinding() { Spark::ModuleLog::Bind(nullptr); }
+        ScopedHostConsoleBinding(const ScopedHostConsoleBinding&) = delete;
+        ScopedHostConsoleBinding& operator=(const ScopedHostConsoleBinding&) = delete;
+    };
+
     /// True when SimpleConsole's history holds a message containing @p text.
     bool ConsoleLogContains(const std::string& text)
     {
@@ -1421,6 +1435,7 @@ TEST(FPSMultiplayerProduction_RejectedConnectEndsSession)
 {
     LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
     FPSSessionGuard guard;
+    ScopedHostConsoleBinding hostConsole;
     ASSERT_TRUE(fakeServer.IsReady());
 
     auto& client = FPSMultiplayerSystem::GetInstance();
