@@ -2218,6 +2218,18 @@
       "resolved": true
     },
     {
+      "target": "CpuFloor_IsaBaseline",
+      "kind": "utility",
+      "file": "cmake/SparkIsaBaseline.cmake",
+      "line": 49,
+      "conditionFrames": [],
+      "definitionScope": [
+        "spark_register_isa_baseline_scan"
+      ],
+      "origin": "function-template",
+      "resolved": true
+    },
+    {
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
@@ -4367,6 +4379,26 @@
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "CpuFloor_IsaBaseline",
+      "kind": "utility",
+      "buildable": false,
+      "origins": [
+        "function-template"
+      ],
+      "declarations": [
+        {
+          "file": "cmake/SparkIsaBaseline.cmake",
+          "line": 49,
+          "kind": "utility",
+          "origin": "function-template",
+          "definitionScope": [
+            "spark_register_isa_baseline_scan"
+          ],
           "resolved": true
         }
       ]
