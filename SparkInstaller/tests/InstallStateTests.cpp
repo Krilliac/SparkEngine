@@ -266,6 +266,40 @@ namespace
         return failures;
     }
 
+    int RunStateSizeAndEncodingBoundTest()
+    {
+        std::string compact = "{\"schema\":1,\"ref\":\"@\",\"commit\":\"0123456789abcdef\",\"destination\":\"d\","
+                              "\"generator\":\"Ninja\",\"build_type\":\"Release\",\"built_at\":\"t\","
+                              "\"installer_version\":\"v\",\"options\":{}}";
+        compact.replace(compact.find('@'), 1, std::string(64 * 1024 - compact.size() + 1, 'x'));
+        int failures = Check(compact.size() == 64 * 1024, "compact state fixture did not reach the read bound");
+        failures += ExpectDocument("state expands past write bound", compact, false);
+
+        const auto root = MakeTestRoot();
+        std::error_code error;
+        std::filesystem::create_directories(root, error);
+        failures += Check(!error, "could not create state-size test root");
+        if (error)
+        {
+            return failures;
+        }
+        auto state = StateWithCommit("old-commit");
+        failures += Check(state.Save(root.string()), "could not create state-size baseline marker");
+        state.ref = std::string(64 * 1024, 'x');
+        failures += Check(!state.Save(root.string()), "oversized state was written");
+        state.ref = "bad\x01ref";
+        failures += Check(!state.Save(root.string()), "state with a raw control byte was written");
+        state.ref = "Working";
+        state.options[std::string("bad\0option", 10)] = true;
+        failures += Check(!state.Save(root.string()), "option key with a NUL was written");
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(root.string(), loaded),
+                          "rejected state replaced the previous valid marker");
+        failures += Check(loaded.commit == "old-commit", "rejected state changed the previous valid marker");
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
     int RunDuplicateKeyRejectedTest()
     {
         int failures =
@@ -306,6 +340,13 @@ namespace
         failures += Check(ref == "stable-v1" && commit == "0123456789abcdef", "pending marker did not round-trip");
         failures += Check(!InstallState::WritePendingMarker(root.string(), "bad\nref", "0123"),
                           "a ref holding a newline was written");
+        const std::string maxRef(4096 - 13 - 1, 'r');
+        failures += Check(InstallState::WritePendingMarker(root.string(), maxRef, "c"),
+                          "maximum-size pending marker was rejected");
+        failures += Check(InstallState::ReadPendingMarker(root.string(), ref, commit) && ref == maxRef && commit == "c",
+                          "maximum-size pending marker did not round-trip");
+        failures += Check(!InstallState::WritePendingMarker(root.string(), maxRef + "r", "c"),
+                          "oversized pending marker was written");
 
         const auto marker = root / InstallState::PendingFileName();
         const auto expectRejected = [&](const std::string& name, const std::string& text)
@@ -341,6 +382,7 @@ int main()
         RunOversizedMarkerRejectedBeforeParsingTest(),
         RunEscapedValueRoundTripTest(),
         RunSchemaOverflowRejectedTest(),
+        RunStateSizeAndEncodingBoundTest(),
         RunDuplicateKeyRejectedTest(),
         RunPendingMarkerRoundTripAndBoundTest(),
     };

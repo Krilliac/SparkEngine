@@ -84,7 +84,10 @@ namespace
     bool WriteBytes(const fs::path& path, std::string_view bytes)
     {
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
-        file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        if (!bytes.empty())
+        {
+            file.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        }
         file.close();
         return static_cast<bool>(file);
     }
@@ -182,21 +185,16 @@ namespace
             InvariantFailure("an install state whose schema member is not the integer 1 was accepted");
         }
 
-        ScopedDirectory rewritten;
-        if (!rewritten.Created())
-        {
-            return;
-        }
-        if (!loaded.Save(rewritten.Path().string()))
+        if (!loaded.Save(directory.Path().string()))
         {
             InvariantFailure("an accepted install state could not be saved again");
         }
         InstallState reloaded = sentinel;
-        if (!InstallState::Load(rewritten.Path().string(), reloaded))
+        if (!InstallState::Load(directory.Path().string(), reloaded))
         {
             InvariantFailure("Load rejected the file Save wrote for an accepted install state");
         }
-        if (!SameExceptDestination(loaded, reloaded) || reloaded.destination != rewritten.Path().string())
+        if (!SameExceptDestination(loaded, reloaded) || reloaded.destination != directory.Path().string())
         {
             InvariantFailure("an accepted install state changed across Save -> Load");
         }

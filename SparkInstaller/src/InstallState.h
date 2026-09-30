@@ -11,10 +11,12 @@ namespace SparkInstaller
     // Both markers live in an install tree the user (or anything else) can edit,
     // so their readers are strict and bounded: Load accepts only the flat object
     // Save writes (at most 64 KiB, each key once, schema exactly 1, only the
-    // escapes Save produces) and ReadPendingMarker only the two lines
-    // WritePendingMarker writes (at most 4 KiB). A rejected read leaves its
-    // outputs unchanged. The functions keep no shared state; the installer calls
-    // them from the one thread that runs Installer::Run.
+    // escapes Save produces). Save refuses output above that same limit or
+    // strings containing controls it cannot encode. ReadPendingMarker reads
+    // the ref and commit values WritePendingMarker writes (at most 4 KiB),
+    // rejecting duplicate or unknown nonempty lines. A rejected read leaves
+    // its outputs unchanged. The functions keep no shared state; the installer
+    // calls them from the one thread that runs Installer::Run.
     struct InstallState
     {
         int schema = 1;

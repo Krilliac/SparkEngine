@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <sstream>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -327,6 +328,18 @@ namespace SparkInstaller
             return !value.empty() && value.find_first_of(std::string_view("\r\n\0", 3)) == std::string_view::npos;
         }
 
+        bool CanEncodeString(std::string_view value)
+        {
+            for (const unsigned char c : value)
+            {
+                if (c < 0x20u && c != '\n' && c != '\r' && c != '\t')
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         std::string NowUtcIso8601()
         {
             auto now = std::chrono::system_clock::now();
@@ -340,6 +353,61 @@ namespace SparkInstaller
             char buf[32];
             std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm);
             return buf;
+        }
+
+        // Keep the writer and reader on one byte limit. The bounded raw-size
+        // preflight also bounds the temporary serialization before escapes expand.
+        bool Serialize(const InstallState& state, const std::string& destination, std::string& contents)
+        {
+            const std::string timestamp = state.builtAt.empty() ? NowUtcIso8601() : state.builtAt;
+            std::size_t rawBytes = 0;
+            const auto add = [&rawBytes](std::string_view value)
+            {
+                if (!CanEncodeString(value) || value.size() > kMaxInstallStateBytes - rawBytes)
+                {
+                    return false;
+                }
+                rawBytes += value.size();
+                return true;
+            };
+            if (!add(destination) || !add(state.ref) || !add(state.commit) || !add(state.generator) ||
+                !add(state.buildType) || !add(timestamp) || !add(state.installerVersion))
+            {
+                return false;
+            }
+            for (const auto& option : state.options)
+            {
+                if (!add(option.first))
+                {
+                    return false;
+                }
+            }
+
+            std::ostringstream out;
+            out << "{\n";
+            out << "  \"schema\": " << state.schema << ",\n";
+            out << "  \"ref\": \"" << Escape(state.ref) << "\",\n";
+            out << "  \"commit\": \"" << Escape(state.commit) << "\",\n";
+            out << "  \"destination\": \"" << Escape(destination) << "\",\n";
+            out << "  \"generator\": \"" << Escape(state.generator) << "\",\n";
+            out << "  \"build_type\": \"" << Escape(state.buildType) << "\",\n";
+            out << "  \"built_at\": \"" << Escape(timestamp) << "\",\n";
+            out << "  \"installer_version\": \"" << Escape(state.installerVersion) << "\",\n";
+            out << "  \"options\": {\n";
+            size_t i = 0;
+            for (const auto& kv : state.options)
+            {
+                out << "    \"" << Escape(kv.first) << "\": " << (kv.second ? "true" : "false");
+                if (++i < state.options.size())
+                {
+                    out << ",";
+                }
+                out << "\n";
+            }
+            out << "  }\n";
+            out << "}\n";
+            contents = out.str();
+            return contents.size() <= kMaxInstallStateBytes;
         }
     } // namespace
 
@@ -360,7 +428,8 @@ namespace SparkInstaller
 
         // Parse into a local and publish only a complete, valid state.
         InstallState parsed;
-        if (!StateReader(json).Parse(parsed))
+        std::string normalized;
+        if (!StateReader(json).Parse(parsed) || !Serialize(parsed, destination, normalized))
         {
             return false;
         }
@@ -372,8 +441,9 @@ namespace SparkInstaller
     {
         // "ref=" + ref + '\n' + "commit=" + commit + '\n' must fit the reader's bound.
         constexpr std::size_t kFramingBytes = 13;
-        if (!IsPendingMarkerValue(ref) || !IsPendingMarkerValue(commit) ||
-            ref.size() + commit.size() > kMaxPendingMarkerBytes - kFramingBytes)
+        constexpr std::size_t kValueBytes = kMaxPendingMarkerBytes - kFramingBytes;
+        if (!IsPendingMarkerValue(ref) || !IsPendingMarkerValue(commit) || ref.size() > kValueBytes ||
+            commit.size() > kValueBytes - ref.size())
         {
             return false;
         }
@@ -401,7 +471,7 @@ namespace SparkInstaller
         std::string contents(kMaxPendingMarkerBytes + 1, '\0');
         in.read(contents.data(), static_cast<std::streamsize>(contents.size()));
         contents.resize(static_cast<std::size_t>(in.gcount()));
-        if (contents.size() > kMaxPendingMarkerBytes)
+        if (in.bad() || contents.size() > kMaxPendingMarkerBytes)
         {
             return false;
         }
@@ -457,6 +527,12 @@ namespace SparkInstaller
             return false;
         }
 
+        std::string contents;
+        if (!Serialize(*this, destination, contents))
+        {
+            return false;
+        }
+
         fs::path path = fs::path(destination) / FileName();
         fs::path temporaryPath = path;
         temporaryPath += ".tmp";
@@ -472,30 +548,7 @@ namespace SparkInstaller
             return false;
         }
 
-        std::string timestamp = builtAt.empty() ? NowUtcIso8601() : builtAt;
-
-        out << "{\n";
-        out << "  \"schema\": " << schema << ",\n";
-        out << "  \"ref\": \"" << Escape(ref) << "\",\n";
-        out << "  \"commit\": \"" << Escape(commit) << "\",\n";
-        out << "  \"destination\": \"" << Escape(destination) << "\",\n";
-        out << "  \"generator\": \"" << Escape(generator) << "\",\n";
-        out << "  \"build_type\": \"" << Escape(buildType) << "\",\n";
-        out << "  \"built_at\": \"" << Escape(timestamp) << "\",\n";
-        out << "  \"installer_version\": \"" << Escape(installerVersion) << "\",\n";
-        out << "  \"options\": {\n";
-        size_t i = 0;
-        for (const auto& kv : options)
-        {
-            out << "    \"" << Escape(kv.first) << "\": " << (kv.second ? "true" : "false");
-            if (++i < options.size())
-            {
-                out << ",";
-            }
-            out << "\n";
-        }
-        out << "  }\n";
-        out << "}\n";
+        out.write(contents.data(), static_cast<std::streamsize>(contents.size()));
         out.flush();
         if (!out)
         {
