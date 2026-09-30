@@ -66,7 +66,7 @@ def reference_mask_cpp(text: str, *, strings: bool) -> str:
 
 
 class MaskCppEquivalenceTests(unittest.TestCase):
-    """`_mask_cpp` is a regex tokenizer; it must stay byte-identical to the scanner."""
+    """`_mask_cpp` must preserve the scanner's output, including malformed C++."""
 
     ADVERSARIAL = (
         "", "/", "*", "/*", "/*/", "/**/", "/***/", "/* a **", "/* a *", "/*\n*/x", "/*/ */",
@@ -77,13 +77,15 @@ class MaskCppEquivalenceTests(unittest.TestCase):
         "/**/**/", "/*****", "/* ** / */", "/* *\n/ */", "x/*/y*/z",
     )
 
-    def assert_equivalent(self, text: str) -> None:
+    def assert_equivalent(self, text: str, *, label: str = "generated input") -> None:
         for strings in (False, True):
-            self.assertEqual(
-                boundary._mask_cpp(text, strings=strings),
-                reference_mask_cpp(text, strings=strings),
-                f"strings={strings} text={text!r}",
-            )
+            actual = boundary._mask_cpp(text, strings=strings)
+            expected = reference_mask_cpp(text, strings=strings)
+            if actual != expected:
+                # Avoid constructing/dumping whole source-file diffs on failure.
+                offset = next((index for index, pair in enumerate(zip(actual, expected))
+                               if pair[0] != pair[1]), min(len(actual), len(expected)))
+                self.fail(f"{label}: strings={strings}, first mismatch at offset {offset}")
 
     def test_adversarial_inputs_match_reference_scanner(self) -> None:
         for text in self.ADVERSARIAL:
@@ -101,11 +103,24 @@ class MaskCppEquivalenceTests(unittest.TestCase):
         for _ in range(20000):
             self.assert_equivalent("".join(generator.choice(alphabet) for _ in range(generator.randint(0, 48))))
 
+    def test_long_tokens_match_reference_scanner(self) -> None:
+        for length in (1, 32, 32768):
+            for text in (
+                "/" * length, "/*" + "*" * length, "/*" + "*" * length + "/socket()",
+                "/*" + "*a" * length, "/*" + "*a" * length + "*/socket()",
+                '"' + "\\" * length, '"' + "\\" * length + '"socket()',
+                "'" + "\\\n" * length + "'socket()", "//" + "a" * length + "\r\nsocket()",
+                '"' + "\x00\r\n\u00e9\U0001f600" * length + '"/*tail*/socket()',
+            ):
+                self.assert_equivalent(text, label=f"long token ({length})")
+
     def test_shipped_sources_match_reference_scanner(self) -> None:
-        paths = sorted(boundary._source_files(boundary.SOURCE_ROOTS))
+        paths = set(boundary._source_files(boundary.SOURCE_ROOTS))
+        paths.update(boundary.ROOT / check.path for check in boundary.CONTROL_PATH_CHECKS)
         self.assertGreater(len(paths), 100, "boundary source inventory unexpectedly small")
-        for path in paths[::25]:
-            self.assert_equivalent(path.read_text(encoding="utf-8", errors="replace"))
+        for path in sorted(paths):
+            self.assert_equivalent(path.read_text(encoding="utf-8", errors="replace"),
+                                   label=path.relative_to(boundary.ROOT).as_posix())
 
 
 class NetworkBoundaryMutationTests(unittest.TestCase):

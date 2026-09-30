@@ -40,6 +40,25 @@ run excludes. The preset-tree `DocumentedTestCommands_SelectBuiltTests`
 registration remains a discovery check; execution is called directly by CI to
 avoid recursively running its own CTest.
 
+## Network boundary tooling
+
+`SparkNetworkBoundaryStatic` runs `Tools/check_network_boundary.py` with a 30-second
+CTest timeout. Its C++ masker scans whole comment and literal tokens with a regex,
+preserving the original scanner's offsets, newlines, and behavior on malformed
+input. This is a performance change, not a change to the network policy or C++
+lexical rules (including the existing handling of raw strings and line splicing).
+
+`SparkNetworkBoundaryMutation` runs `Tests/Tools/test_check_network_boundary.py`.
+The masker tests compare both masking modes with the original per-character
+scanner over every inventory and control-path source file, exhaustive short token
+sequences, seeded random inputs, and long malformed comments and literals. Run
+these Python checks directly without building the engine:
+
+```bash
+python3 Tests/Tools/test_check_network_boundary.py -v
+python3 Tools/check_network_boundary.py
+```
+
 ## Test Framework
 
 The engine uses its own lightweight test framework (no external test library dependencies). The framework is defined entirely in `Tests/TestFramework.h` and uses a static registry pattern for automatic test discovery.
