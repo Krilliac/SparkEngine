@@ -2190,10 +2190,10 @@
     },
     {
       "id": "tf-world-setup-terrain-params",
-      "description": "Terrafront terrain-parameter reader over the INI .scene file named by the world setup.",
+      "description": "Terrafront terrain-parameter reader (TFLoadTerrainParams) over the INI .scene file named by the world setup.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp"
+        "GameModules/SparkGameMMOFPS/Source/World/TFTerrainModel.cpp"
       ],
       "formats": [
         ".scene"
@@ -2858,11 +2858,11 @@
       ]
     },
     {
-      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h",
+      "source_file": "GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.cpp",
       "classification": "delegating-call-site",
-      "justification": "Declares TFWorldSetup::ParseTerrainParams, implemented in the inventoried TFWorldSetup.cpp.",
+      "justification": "TFWorldSetup::LoadSceneAndTerrain passes the continent .scene path to TFLoadTerrainParams, implemented in the inventoried TFTerrainModel.cpp.",
       "detected_by": [
-        "load-format-entry"
+        "parse-entry"
       ],
       "delegates_to": [
         "tf-world-setup-terrain-params"
