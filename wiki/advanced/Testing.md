@@ -1039,7 +1039,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*725 test-bearing `.cpp`/`.mm` files, 8399 source-level test definitions*
+*728 test-bearing `.cpp`/`.mm` files, 8430 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1164,6 +1164,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestCrossSystemIntegration` | 4 |
 | `TestD3D11DeviceContractsReal` | 17 |
 | `TestDATA120BackupRestore` | 16 |
+| `TestDATA120Idempotency` | 6 |
 | `TestDATA120PersistenceReal` | 18 |
 | `TestDATA120SecretsAtRest` | 5 |
 | `TestDXRSupport` | 13 |
@@ -1380,6 +1381,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLoggerSinksReal` | 4 |
 | `TestLootAndCrafting` | 11 |
 | `TestMMOAssetImport` | 16 |
+| `TestMMOAuthHardening` | 5 |
+| `TestMMOAuthNetwork` | 4 |
 | `TestMMOCredentialSecurity` | 3 |
 | `TestMOD300ShowcaseLocalizationReal` | 2 |
 | `TestMOD310FPSArenaAutopilotReal` | 5 |
@@ -1434,7 +1437,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMultiISADispatch` | 14 |
 | `TestMusicManager` | 9 |
 | `TestNET100Handshake` | 12 |
-| `TestNET100Libsodium` | 1 |
+| `TestNET100Libsodium` | 2 |
 | `TestNET100TransportReal` | 16 |
 | `TestNET100TrustStore` | 6 |
 | `TestNavMesh` | 11 |
@@ -1509,7 +1512,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProcess` | 20 |
 | `TestProcessDrawListLinux` | 10 |
 | `TestProfiler` | 19 |
-| `TestPrototypeModuleKitReal` | 4 |
+| `TestPrototypeModuleKitReal` | 6 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuaternionStubsReal` | 14 |
 | `TestQuestSystem` | 11 |
@@ -1563,7 +1566,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSEC2GameModules` | 15 |
 | `TestSEC2PersistenceHardening` | 13 |
 | `TestSEC2RenderingHardeningReal` | 8 |
-| `TestSEC3GameplayHardening` | 13 |
+| `TestSEC3GameplayHardening` | 18 |
 | `TestSEC3ScriptingHardening` | 11 |
 | `TestSEC4NarrowPathsReal` | 13 |
 | `TestSEC4SoundEffectWav` | 8 |
@@ -1737,7 +1740,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestWorldOriginSystem` | 12 |
 | `TestWorldServerConcurrency` | 3 |
 | `TestWorldServerRouting` | 22 |
-| `Test_ai-anim_animation` | 3 |
+| `Test_ai-anim_animation` | 7 |
 | `Test_ai-anim_navmesh` | 2 |
 | `Test_core_hardening` | 5 |
 | `Test_ecs_ai_pathfollow` | 4 |
@@ -1758,7 +1761,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_net-world_migration` | 2 |
 | `Test_persistence_AsyncDatabaseParams` | 2 |
 | `Test_persistence_AsyncDatabasePool` | 4 |
-| `Test_persistence_ModSystem` | 2 |
+| `Test_persistence_ModSystem` | 6 |
 | `Test_persistence_ReplaySystem` | 3 |
 | `Test_persistence_SaveSystem` | 43 |
 | `Test_scripting_hardening` | 8 |

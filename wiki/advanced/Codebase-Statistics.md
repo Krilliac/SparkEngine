@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 342386 |
+| **SparkEngine/Source** | 343153 |
 | **SparkEditor/Source** | 105305 |
-| **GameModules** | 162637 |
+| **GameModules** | 163026 |
 | **External services** | 12696 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 257977 |
+| **Tests** | 261681 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~905121** |
+| **Total C++ (excl. ThirdParty)** | **~910465** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1186 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1878 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1198 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1899 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 725 |
+| Test-bearing implementation files (.cpp/.mm) | 728 |
 | Wiki pages (.md) | 205 |
 
 ### Largest Top-Level Source Section
@@ -44,9 +44,9 @@ Graphics contains 124925 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 124925 | 36.4% |
-| Engine (all subsystems) | 98851 | 28.8% |
-| Utils | 48999 | 14.3% |
-| Core | 33095 | 9.6% |
+| Engine (all subsystems) | 99220 | 28.9% |
+| Utils | 48859 | 14.2% |
+| Core | 33104 | 9.6% |
 | Physics | 11077 | 3.2% |
 | Audio | 6961 | 2.0% |
 | Input | 3938 | 1.1% |
@@ -64,18 +64,18 @@ Graphics contains 124925 lines, or 36% of `SparkEngine/Source`. This is a source
 | ECS | 8615 |
 | Scripting | 8059 |
 | Gameplay | 7925 |
-| Animation | 6852 |
+| Animation | 6959 |
 | SaveSystem | 4348 |
 | UI | 2522 |
 | Streaming | 2236 |
-| Modding | 1887 |
+| Modding | 2033 |
 | Editor | 1737 |
 | Cinematic | 1652 |
 | World | 1604 |
 | Persistence | 1567 |
 | Dialogue | 1485 |
 | 2D | 1015 |
-| Replay | 843 |
+| Replay | 959 |
 | Coroutine | 841 |
 | Localization | 651 |
 | Destruction | 591 |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 725 |
-| TEST() definitions | 8399 |
+| Test files | 728 |
+| TEST() definitions | 8430 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -121,7 +121,7 @@ It does not measure registration, runtime use, support, or readiness.
 | CMake option() declarations | 33 |
 | ENABLE_* feature toggles | 24 |
 | Game modules | 11 |
-| SDK public headers | 20 |
+| SDK public headers | 22 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
@@ -159,7 +159,7 @@ inventory is implementation evidence, not support certification.
 |------|------:|
 | `OpenGLDevice.cpp` | 2588 |
 | `ModuleManager.cpp` | 2579 |
-| `CrashHandler.cpp` | 2531 |
+| `CrashHandler.cpp` | 2532 |
 | `NetworkConnection.cpp` | 2499 |
 | `D3D11Device.cpp` | 2139 |
 | `VulkanDevice.cpp` | 1983 |
