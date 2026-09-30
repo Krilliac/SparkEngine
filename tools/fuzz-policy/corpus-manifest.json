@@ -980,6 +980,78 @@
           "guard_test": "ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished"
         }
       ]
+    },
+    {
+      "id": "replay-system-corpus",
+      "parser_id": "replay-system",
+      "corpus_dir": "FuzzerTests/corpora/replay-system",
+      "last_verified": "2026-09-29",
+      "content_digest": "bf954daebe680c5ea97fac23b359118e122b2203edfc5a8cebc0d8bb89492d5d",
+      "budget": {
+        "max_input_bytes": 1048577,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-duration.replay",
+          "finding": "LoadFromFile accepted a NaN duration, so UpdatePlayback never reached the end, and a negative one broke the std::clamp precondition in SeekTo and the kill cam.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_ReplayRejectsNonFiniteOrNegativeDuration"
+        },
+        {
+          "file": "regression-descending-timestamps.replay",
+          "finding": "LoadFromFile accepted descending frame timestamps, breaking the sorted-range precondition of the std::lower_bound in FindFrameIndex so playback jumped backwards.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_ReplayRejectsOutOfOrderFrameTimestamps"
+        },
+        {
+          "file": "regression-unknown-version.replay",
+          "finding": "LoadFromFile read the version field and never checked it, decoding any future or corrupt layout as version 1.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_ReplayRejectsUnknownVersion"
+        }
+      ]
+    },
+    {
+      "id": "animation-skel-sanim-corpus",
+      "parser_id": "animation-skel-sanim",
+      "corpus_dir": "FuzzerTests/corpora/animation-skel-sanim",
+      "last_verified": "2026-09-29",
+      "content_digest": "8e9dac8e346d14362d78519aca8a399eb6a87dda2f54dd96cb8357ce157b929b",
+      "budget": {
+        "max_input_bytes": 1048577,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-key-count-amplification.sanim",
+          "finding": "The streaming .sanim loader resized a track to its declared key count before reading any key, so a 60-byte file forced a 20 MB allocation before truncation was detected.",
+          "found_by": "review",
+          "guard_test": "Animation_DecodeClips_RejectsKeyCountBeyondInput"
+        },
+        {
+          "file": "regression-nonfinite-clip-timing.sanim",
+          "finding": "The .sanim loader accepted a NaN clip duration, which playback feeds to fmod and divides by.",
+          "found_by": "review",
+          "guard_test": "Animation_LoadAnimations_RejectsNonFiniteClipTiming"
+        },
+        {
+          "file": "regression-decreasing-key-times.sanim",
+          "finding": "The .sanim loader accepted decreasing key times, which the key search assumes are sorted ascending.",
+          "found_by": "review",
+          "guard_test": "Animation_LoadAnimations_RejectsDecreasingKeyTimes"
+        }
+      ]
     }
   ]
 }

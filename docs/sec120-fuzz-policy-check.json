@@ -1,23 +1,23 @@
 {
   "closure_blockers": [
-    "94 inventoried parsers have no fuzz target"
+    "92 inventoried parsers have no fuzz target"
   ],
   "corpus": {
-    "bound_target_count": 42,
-    "corpus_count": 42,
+    "bound_target_count": 44,
+    "corpus_count": 44,
     "max_staleness_days": 90,
-    "regression_count": 40,
-    "seed_bytes": 17046631,
-    "seed_count": 331
+    "regression_count": 46,
+    "seed_bytes": 17048608,
+    "seed_count": 345
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "0c32cb7d4a27d57395ddb8ee81250c1830174e4e194ee559495b1a6442290faf",
-    "inventory": "ab0150f8df93fd5cb3139e93a2c44be5be7977bd35610879bff9a4d44483f855"
+    "corpus_manifest": "d30420cea574a181e5c18999c8d5b2d339afcd937e5529c31d3a4372e570ec34",
+    "inventory": "9c2d2b37980ae5c41073c4f06fe5fbadbeb58f021f278eae76bc5a653d2b92d5"
   },
   "inventory": {
-    "blocked_count": 94,
-    "candidate_count": 299,
+    "blocked_count": 92,
+    "candidate_count": 301,
     "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -44,7 +44,7 @@
       "same-process-data": 6
     },
     "exempt_candidate_count": 120,
-    "fuzzed_count": 42,
+    "fuzzed_count": 44,
     "parser_count": 136,
     "scan_roots": [
       "SparkEngine/Source",
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2141,
+    "scanned_file_count": 2144,
     "unclassified_candidate_count": 0
   },
   "passed": false,

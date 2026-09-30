@@ -8,7 +8,10 @@
 //   #11 ModSystem::LoadMod reported a mod Active even when it shipped scripts that no
 //       sandboxed loader runs.
 //   #12 ReplaySystem::LoadFromFile resized frames/entities/events to header counts before
-//       checking that the file actually held them.
+//       checking that the file actually held them. It also accepted any version, a NaN or
+//       negative duration, unsorted frame timestamps and non-finite entity/event values,
+//       and SaveToFile wrote files that the loader then refused
+//       (SEC-120 replay-system fuzz target).
 //   #13 StringTable::LoadFromFile read files of any size and scanned them with a recursive
 //       std::regex that a single long value could drive into stack exhaustion.
 //   #15 ModSystem accepted a symlinked mod.json and read manifests with an unbounded read
@@ -32,6 +35,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <system_error>
@@ -139,6 +143,41 @@ namespace
         PutBytes(buf, uint32_t{0}); // gameMode length
         PutBytes(buf, 1.0f);        // duration
         return buf;
+    }
+
+    /// A complete replay file: no metadata strings, one entity-less frame per timestamp and no events.
+    std::vector<char> ReplayTimeline(uint32_t version, float duration, const std::vector<float>& frameTimestamps)
+    {
+        std::vector<char> buf;
+        PutBytes(buf, Spark::kReplayMagic);
+        PutBytes(buf, version);
+        PutBytes(buf, uint32_t{0}); // mapName length
+        PutBytes(buf, uint32_t{0}); // gameMode length
+        PutBytes(buf, duration);
+        PutBytes(buf, static_cast<uint32_t>(frameTimestamps.size()));
+        for (size_t i = 0; i < frameTimestamps.size(); ++i)
+        {
+            PutBytes(buf, frameTimestamps[i]);
+            PutBytes(buf, static_cast<uint32_t>(i)); // frameNumber
+            PutBytes(buf, uint32_t{0});              // entityCount
+        }
+        PutBytes(buf, uint32_t{0}); // eventCount
+        return buf;
+    }
+
+    /// Loads a known-good three-frame, 3-second replay so a later rejection can be shown to keep it.
+    void LoadSentinelReplay(Spark::ReplaySystem& replay, const fs::path& dir)
+    {
+        const fs::path path = dir / "sentinel.replay";
+        WriteFile(path, ReplayTimeline(1, 3.0f, {0.0f, 1.5f, 3.0f}));
+        ASSERT_TRUE(replay.LoadFromFile(path.string()));
+        ASSERT_EQ(replay.GetFrameCount(), size_t{3});
+    }
+
+    /// True while `replay` still holds the sentinel from LoadSentinelReplay.
+    bool HoldsSentinelReplay(const Spark::ReplaySystem& replay)
+    {
+        return replay.GetFrameCount() == size_t{3} && replay.GetDuration() == 3.0f;
     }
 } // namespace
 
@@ -409,6 +448,29 @@ TEST(SEC3Gameplay_ReplayRejectsCountsBeyondFileSize)
     }
 }
 
+TEST(SEC3Gameplay_ReplayWriterRejectsUnreloadableMetadata)
+{
+    ScratchDir dir("replay_write_limit");
+    const fs::path path = dir.path / "metadata.replay";
+    Spark::ReplaySystem writer;
+    writer.SetMetadata(std::string(Spark::kMaxStringLength + 1, 'm'), "mode");
+    writer.StartRecording();
+    writer.RecordFrame({}, 0.0f);
+    writer.StopRecording();
+
+    // The old writer reported success even though the loader refused this string length.
+    LogCapture log;
+    EXPECT_FALSE(writer.SaveToFile(path.string()));
+    EXPECT_FALSE(fs::exists(path));
+    EXPECT_TRUE(log.Contains("loadable version-1 format limits"));
+
+    writer.SetMetadata("map", "mode");
+    ASSERT_TRUE(writer.SaveToFile(path.string()));
+    Spark::ReplaySystem reader;
+    ASSERT_TRUE(reader.LoadFromFile(path.string()));
+    EXPECT_EQ(reader.GetFrameCount(), size_t{1});
+}
+
 TEST(SEC3Gameplay_ReplayRoundTripStillLoads)
 {
     ScratchDir dir("replay_ok");
@@ -435,6 +497,121 @@ TEST(SEC3Gameplay_ReplayRoundTripStillLoads)
     Spark::ReplaySystem reader;
     ASSERT_TRUE(reader.LoadFromFile(path.string()));
     EXPECT_EQ(reader.GetFrameCount(), size_t{2});
+    // The timeline checks must accept what recording writes: duration is the last frame's timestamp.
+    EXPECT_EQ(reader.GetDuration(), 1.0f);
+}
+
+TEST(SEC3Gameplay_ReplayRejectsNonFiniteOrNegativeDuration)
+{
+    // A negative duration made SeekTo and the kill cam call std::clamp(t, 0, duration) with
+    // hi < lo (undefined behaviour), and a NaN duration kept UpdatePlayback from ever stopping.
+    ScratchDir dir("replay_duration");
+    Spark::ReplaySystem replay;
+    LoadSentinelReplay(replay, dir.path);
+
+    const fs::path nanPath = dir.path / "nan.replay";
+    WriteFile(nanPath, ReplayTimeline(1, std::numeric_limits<float>::quiet_NaN(), {}));
+    EXPECT_FALSE(replay.LoadFromFile(nanPath.string()));
+    EXPECT_TRUE(HoldsSentinelReplay(replay));
+
+    const fs::path infinitePath = dir.path / "infinite.replay";
+    WriteFile(infinitePath, ReplayTimeline(1, std::numeric_limits<float>::infinity(), {}));
+    EXPECT_FALSE(replay.LoadFromFile(infinitePath.string()));
+    EXPECT_TRUE(HoldsSentinelReplay(replay));
+
+    const fs::path negativePath = dir.path / "negative.replay";
+    WriteFile(negativePath, ReplayTimeline(1, -5.0f, {}));
+    EXPECT_FALSE(replay.LoadFromFile(negativePath.string()));
+    EXPECT_TRUE(HoldsSentinelReplay(replay));
+}
+
+TEST(SEC3Gameplay_ReplayRejectsOutOfOrderFrameTimestamps)
+{
+    // FindFrameIndex binary-searches frame timestamps with std::lower_bound, which requires
+    // them sorted; a frame past the duration is unreachable by playback.
+    ScratchDir dir("replay_order");
+    Spark::ReplaySystem replay;
+    LoadSentinelReplay(replay, dir.path);
+
+    const fs::path descendingPath = dir.path / "descending.replay";
+    WriteFile(descendingPath, ReplayTimeline(1, 2.0f, {2.0f, 1.0f}));
+    EXPECT_FALSE(replay.LoadFromFile(descendingPath.string()));
+    EXPECT_TRUE(HoldsSentinelReplay(replay));
+
+    const fs::path pastEndPath = dir.path / "past_end.replay";
+    WriteFile(pastEndPath, ReplayTimeline(1, 2.0f, {0.0f, 5.0f}));
+    EXPECT_FALSE(replay.LoadFromFile(pastEndPath.string()));
+    EXPECT_TRUE(HoldsSentinelReplay(replay));
+
+    const fs::path nanFramePath = dir.path / "nan_frame.replay";
+    WriteFile(nanFramePath, ReplayTimeline(1, 2.0f, {0.0f, std::numeric_limits<float>::quiet_NaN()}));
+    EXPECT_FALSE(replay.LoadFromFile(nanFramePath.string()));
+    EXPECT_TRUE(HoldsSentinelReplay(replay));
+
+    // Equal timestamps are sorted and stay loadable.
+    const fs::path equalPath = dir.path / "equal.replay";
+    WriteFile(equalPath, ReplayTimeline(1, 2.0f, {1.0f, 1.0f, 2.0f}));
+    EXPECT_TRUE(replay.LoadFromFile(equalPath.string()));
+    EXPECT_EQ(replay.GetFrameCount(), size_t{3});
+}
+
+TEST(SEC3Gameplay_ReplayRejectsUnknownVersion)
+{
+    ScratchDir dir("replay_version");
+    Spark::ReplaySystem replay;
+    LoadSentinelReplay(replay, dir.path);
+
+    for (const uint32_t version : {uint32_t{0}, uint32_t{2}, uint32_t{0xFFFFFFFFu}})
+    {
+        const fs::path path = dir.path / ("version_" + std::to_string(version) + ".replay");
+        WriteFile(path, ReplayTimeline(version, 1.0f, {0.0f, 1.0f}));
+        EXPECT_FALSE(replay.LoadFromFile(path.string()));
+        EXPECT_TRUE(HoldsSentinelReplay(replay));
+    }
+}
+
+TEST(SEC3Gameplay_ReplayRejectsNonFiniteEntityAndEventValues)
+{
+    // Entity transforms feed the replay camera and renderer; event positions feed the kill cam.
+    ScratchDir dir("replay_values");
+    Spark::ReplaySystem replay;
+    LoadSentinelReplay(replay, dir.path);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    {
+        std::vector<char> buf = ReplayHeader();
+        PutBytes(buf, uint32_t{1}); // frames
+        PutBytes(buf, 0.0f);        // timestamp
+        PutBytes(buf, uint32_t{0}); // frameNumber
+        PutBytes(buf, uint32_t{1}); // entities
+        PutBytes(buf, uint32_t{7}); // entityId
+        PutBytes(buf, XMFLOAT3{nan, 0.0f, 0.0f});
+        PutBytes(buf, XMFLOAT4{0.0f, 0.0f, 0.0f, 1.0f});
+        PutBytes(buf, XMFLOAT3{0.0f, 0.0f, 0.0f});
+        PutBytes(buf, 100.0f);      // health
+        PutBytes(buf, int{0});      // animationState
+        PutBytes(buf, uint32_t{0}); // flags
+        PutBytes(buf, uint32_t{0}); // events
+        const fs::path path = dir.path / "nan_entity.replay";
+        WriteFile(path, buf);
+        EXPECT_FALSE(replay.LoadFromFile(path.string()));
+        EXPECT_TRUE(HoldsSentinelReplay(replay));
+    }
+    {
+        std::vector<char> buf = ReplayHeader();
+        PutBytes(buf, uint32_t{0}); // frames
+        PutBytes(buf, uint32_t{1}); // events
+        PutBytes(buf, nan);         // timestamp
+        PutBytes(buf, uint32_t{0}); // type length
+        PutBytes(buf, uint32_t{1}); // sourceEntity
+        PutBytes(buf, uint32_t{2}); // targetEntity
+        PutBytes(buf, XMFLOAT3{0.0f, 0.0f, 0.0f});
+        PutBytes(buf, uint32_t{0}); // data length
+        const fs::path path = dir.path / "nan_event.replay";
+        WriteFile(path, buf);
+        EXPECT_FALSE(replay.LoadFromFile(path.string()));
+        EXPECT_TRUE(HoldsSentinelReplay(replay));
+    }
 }
 
 // ----------------------------------------------------------------------------

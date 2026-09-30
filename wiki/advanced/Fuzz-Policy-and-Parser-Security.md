@@ -283,6 +283,25 @@ target has hosted runtime evidence yet.
   `ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished` and
   `ModSystem_RejectsIdWithControlOrSeparatorBytes` pin these fixes.
 
+### Replay and animation binary targets
+
+These targets are registered for the Linux Clang libFuzzer smoke. They have no hosted runtime
+evidence yet, and structural policy results are not sanitizer runtime evidence.
+
+- **`replay-system`** (`SparkFuzzReplay`, `FuzzReplaySmoke`, `-runs=7`) writes each input
+  to a temporary file and calls `ReplaySystem::LoadFromFile`. Rejected input must preserve
+  the previously recorded replay; accepted input must have version 1 and allow bounded
+  seeking, playback, event queries and kill-cam updates with finite, ordered frame data.
+  The loader checks declared counts against remaining bytes and rejects unplayable
+  timeline values; `SaveToFile` refuses to write a replay that loader would reject. The
+  corpus pins unknown version, NaN duration and descending timestamp regressions.
+- **`animation-skel-sanim`** (`SparkFuzzAnimationBinary`, `FuzzAnimationBinarySmoke`,
+  `-runs=7`) feeds the extracted `DecodeSkeletonBinary` and `DecodeAnimationClipsBinary`
+  functions called by `AnimationManager`. Rejection must leave the caller's object intact;
+  accepted data must match its header count and version, keep parents before children and
+  carry finite matrices, clip timing and keys with ordered key times. The corpus pins a
+  key-count allocation amplification, NaN clip duration and decreasing key-time regression.
+
 ### Retired and reclassified records
 
 Five blocked records described code that decodes no untrusted bytes. Each now carries its

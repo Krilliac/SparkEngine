@@ -2437,3 +2437,107 @@ set_tests_properties(FuzzModManifestSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# ReplaySystem.cpp is the same translation unit the editor's ReplayPanel loads
+# shared .replay files through; the adapter drives seek, playback and kill cam.
+add_executable(SparkFuzzReplay
+    FuzzReplay.cpp
+    FuzzReplayProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Replay/ReplaySystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzReplayProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Replay/ReplaySystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzReplay PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzReplay PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzReplay PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzReplay PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzReplay PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzReplay PRIVATE Threads::Threads c++ c++abi)
+
+# The regression seeds (NaN duration, descending frame timestamps, unknown
+# version) were accepted before LoadFromFile validated the decoded timeline.
+add_test(
+    NAME FuzzReplaySmoke
+    COMMAND $<TARGET_FILE:SparkFuzzReplay>
+        -max_len=1048577
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/replay-system"
+)
+set_tests_properties(FuzzReplaySmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# AnimationBinaryFormat.cpp holds the decoders AnimationManager::LoadSkeleton and
+# LoadAnimations call for .skel/.sanim; glTF, EnTT and the runtime are outside it.
+add_executable(SparkFuzzAnimationBinary
+    FuzzAnimationBinary.cpp
+    FuzzAnimationBinaryProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Animation/AnimationBinaryFormat.cpp"
+)
+set_source_files_properties(
+    FuzzAnimationBinaryProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Animation/AnimationBinaryFormat.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzAnimationBinary PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzAnimationBinary PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzAnimationBinary PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzAnimationBinary PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzAnimationBinary PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzAnimationBinary PRIVATE Threads::Threads c++ c++abi)
+
+# -malloc_limit_mb turns a declared key count the file cannot hold into a
+# deterministic failure: regression-key-count-amplification.sanim forced a
+# 20 MB key vector from 60 bytes before counts were checked against the input.
+add_test(
+    NAME FuzzAnimationBinarySmoke
+    COMMAND $<TARGET_FILE:SparkFuzzAnimationBinary>
+        -max_len=1048577
+        -timeout=1
+        -rss_limit_mb=256
+        -malloc_limit_mb=16
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/animation-skel-sanim"
+)
+set_tests_properties(FuzzAnimationBinarySmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

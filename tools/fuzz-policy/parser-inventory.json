@@ -380,10 +380,16 @@
       "formats": [
         ".replay"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzReplay.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzReplay",
+        "test_selector": "FuzzReplaySmoke",
+        "corpus_id": "replay-system-corpus",
+        "entry_symbol": "Spark::ReplaySystem::LoadFromFile",
+        "binding_source": "FuzzerTests/FuzzReplayProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadReplay"
       }
     },
     {
@@ -1302,16 +1308,24 @@
       "description": "Binary SKEL/ANIM skeleton and clip readers.",
       "trust_boundary": "untrusted-file",
       "source_files": [
+        "SparkEngine/Source/Engine/Animation/AnimationBinaryFormat.cpp",
+        "SparkEngine/Source/Engine/Animation/AnimationBinaryFormat.h",
         "SparkEngine/Source/Engine/Animation/AnimationSystem.cpp"
       ],
       "formats": [
         ".skel",
         ".sanim"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzAnimationBinary.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzAnimationBinary",
+        "test_selector": "FuzzAnimationBinarySmoke",
+        "corpus_id": "animation-skel-sanim-corpus",
+        "entry_symbol": "Spark::Animation::DecodeAnimationClipsBinary",
+        "binding_source": "FuzzerTests/FuzzAnimationBinaryProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeAnimationBinary"
       }
     },
     {

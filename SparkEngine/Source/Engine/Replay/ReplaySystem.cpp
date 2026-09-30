@@ -7,8 +7,10 @@
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -377,11 +379,95 @@ namespace Spark
             return false;
         }
 
+        bool IsFinite(const XMFLOAT3& value)
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+
+        bool IsFinite(const XMFLOAT4& value)
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
+        }
+
+        /// Values the byte layout can carry but playback cannot use. A negative or NaN duration
+        /// breaks std::clamp's precondition in SeekTo and the kill cam and keeps UpdatePlayback
+        /// from ever reaching the end; unsorted or NaN frame timestamps break FindFrameIndex's
+        /// std::lower_bound; non-finite entity and event values would reach the renderer and
+        /// camera. SaveToFile also checks this before writing.
+        bool IsPlayableReplay(const ReplayData& data)
+        {
+            if (!std::isfinite(data.duration) || data.duration < 0.0f)
+            {
+                return false;
+            }
+            float previousTimestamp = -std::numeric_limits<float>::infinity();
+            for (const ReplayFrame& frame : data.frames)
+            {
+                if (!std::isfinite(frame.timestamp) || frame.timestamp < previousTimestamp ||
+                    frame.timestamp > data.duration)
+                {
+                    return false;
+                }
+                previousTimestamp = frame.timestamp;
+                for (const ReplayEntityState& entity : frame.entities)
+                {
+                    if (!IsFinite(entity.position) || !IsFinite(entity.rotation) || !IsFinite(entity.velocity) ||
+                        !std::isfinite(entity.health))
+                    {
+                        return false;
+                    }
+                }
+            }
+            for (const ReplayEvent& event : data.events)
+            {
+                if (!std::isfinite(event.timestamp) || !IsFinite(event.position))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// Refuse to write a file that the bounded version-1 loader would reject (version, string
+        /// lengths, counts, timeline and values). Checked before opening the destination, so a
+        /// refused save leaves any existing file alone.
+        bool IsWritableReplay(const ReplayData& data)
+        {
+            if (data.version != kReplayVersion || data.mapName.size() > kMaxStringLength ||
+                data.gameMode.size() > kMaxStringLength || data.frames.size() > kMaxFrameCount ||
+                data.events.size() > kMaxEventCount)
+            {
+                return false;
+            }
+            for (const ReplayFrame& frame : data.frames)
+            {
+                if (frame.entities.size() > kMaxEntityCount)
+                {
+                    return false;
+                }
+            }
+            for (const ReplayEvent& event : data.events)
+            {
+                if (event.type.size() > kMaxStringLength || event.data.size() > kMaxStringLength)
+                {
+                    return false;
+                }
+            }
+            return IsPlayableReplay(data);
+        }
+
     } // anonymous namespace
 
     bool ReplaySystem::SaveToFile(const std::string& filePath) const
     {
         std::lock_guard lock(m_mutex);
+
+        if (!IsWritableReplay(m_data))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::SaveToFile: replay exceeds the loadable version-1 format limits");
+            return false;
+        }
 
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open())
@@ -477,6 +563,13 @@ namespace Spark
         file.read(reinterpret_cast<char*>(&loaded.version), sizeof(loaded.version));
         if (!file)
             return false;
+        if (loaded.version != kReplayVersion)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::LoadFromFile: '%s' has unsupported version %u (expected %u)",
+                           filePath.c_str(), loaded.version, kReplayVersion);
+            return false;
+        }
 
         // Metadata
         if (!ReadString(file, loaded.mapName))
@@ -551,6 +644,14 @@ namespace Spark
             file.read(reinterpret_cast<char*>(&event.position), sizeof(event.position));
             if (!ReadString(file, event.data))
                 return false;
+        }
+
+        if (!IsPlayableReplay(loaded))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core,
+                           "ReplaySystem::LoadFromFile: '%s' has a non-finite, negative or out-of-order timeline",
+                           filePath.c_str());
+            return false;
         }
 
         // Commit and reset playback state
