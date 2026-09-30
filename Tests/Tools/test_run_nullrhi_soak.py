@@ -461,7 +461,14 @@ class SoakNullRHIHeadlessSmoke(unittest.TestCase):
                 [sys.executable, "-B", str(TOOL_DIR / "run_nullrhi_soak.py"), "--engine", str(engine),
                  "--module", str(module), "--duration", f"{duration:g}", "--report", str(report_path)],
                 capture_output=True, text=True, timeout=duration * 1.5 + 300)
-            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            rss_diagnostic = ""
+            if run.returncode != 0 and report_path.is_file():
+                try:
+                    failed_report = json.loads(report_path.read_text(encoding="utf-8"))
+                    rss_diagnostic = f"\nrssSamples={failed_report.get('rssSamples')!r}"
+                except (OSError, ValueError) as error:
+                    rss_diagnostic = f"\nsoak report unreadable: {error}"
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr + rss_diagnostic)
             report = json.loads(report_path.read_text(encoding="utf-8"))
 
         self.assertEqual(report["failures"], [])
