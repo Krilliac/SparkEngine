@@ -82,6 +82,15 @@ namespace Spark
                 {
                     return ModScriptScan::Unknown;
                 }
+                // ScanForMods accepted a plain directory, but the stored path can be swapped for
+                // a link (a junction on Windows) afterwards, and the iterator below would follow
+                // it out of the mods tree. An exact type match refuses symlinks and MSVC's
+                // file_type::junction; the mod is then never announced with that path.
+                const fs::file_status rootStatus = fs::symlink_status(root, ec);
+                if (ec || rootStatus.type() != fs::file_type::directory)
+                {
+                    return ModScriptScan::Unknown;
+                }
                 fs::recursive_directory_iterator it(root, fs::directory_options::none, ec);
                 if (ec)
                 {
@@ -278,7 +287,8 @@ namespace Spark
             return false;
         case ModScriptScan::Unknown:
             SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "LoadMod '%s' refused — its directory '%s' could not be fully inspected for script content",
+                            "LoadMod '%s' refused — its directory '%s' is no longer a plain directory or could not "
+                            "be fully inspected for script content",
                             modId.c_str(), it->second.path.c_str());
             m_modStates[modId] = ModState::Error;
             return false;

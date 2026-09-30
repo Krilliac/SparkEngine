@@ -26,6 +26,7 @@
 #include <vector>
 #include <unordered_map>
 #include <functional>
+#include <cstddef>
 #include <cstdint>
 
 namespace Spark
@@ -91,7 +92,11 @@ namespace Spark
      *          preview image, dependencies, path) of a known mod but never its load
      *          state: enabled, loaded, loadOrder and ModState are kept, so an Active mod
      *          stays Active and UnloadAll still unloads it. Mods absent from the
-     *          directory stay registered.
+     *          directory stay registered. The mods root is held open for the whole scan
+     *          and each manifest is opened relative to it without following links; the
+     *          checks that decide acceptance are made on the opened handles, so a mod
+     *          directory or mod.json swapped for a link after the path checks is refused
+     *          rather than read through.
      * @param modsDirectory Path to scan (e.g. "Data/Mods/").
      * @return Number of mod ids this scan published.
      */
@@ -215,8 +220,14 @@ namespace Spark
      */
         void SetManifestOpenProbeForTesting(std::function<void(const std::string&)> probe);
 
+        /// Upper bound on a mod manifest or mod config file. A manifest is a hand-written
+        /// document; 64 KB matches DynamicPluginHost's kMaximumMetadataBytes.
+        static constexpr std::size_t kMaxManifestBytes = 64u * 1024u;
+
       private:
-        bool ParseModJson(const std::string& path, ModInfo& info);
+        /// Parses manifest bytes already read from the mod directory. @p path only labels
+        /// log messages; nothing is reopened by it.
+        bool ParseModJson(const std::string& content, const std::string& path, ModInfo& info);
 
         std::function<void(const std::string&)> m_manifestOpenProbe;
         std::unordered_map<std::string, ModInfo> m_mods;
