@@ -67,5 +67,5 @@ The validator's 50 MiB aggregate, 1 MiB file, 1,000-entry, seven-day retention, 
 
 - No network backend or controlled relay exists, so no hosted outage/recovery evidence exists. The bounds above are local, test-proven behavior only.
 - Exported `telemetry_*.json` files have no runtime retention or deletion policy.
-- `telemetry-integration` has no successful exact-SHA hosted record on the Working branch yet.
+- The TelemetrySpool step of the required `security-runtime` job has no successful exact-SHA hosted record on the Working branch yet.
 - The privacy/retention policy and operations runbook still need review.
