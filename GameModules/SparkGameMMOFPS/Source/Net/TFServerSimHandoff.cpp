@@ -8,6 +8,7 @@
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFProgressionSystem.h"
 #include "Game/TFVehicleSystem.h"
+#include "Net/TFHandoffContinuity.h"
 #include "World/TFTravelSystem.h"
 #include "World/TFWorldSetup.h"
 
@@ -51,15 +52,16 @@ namespace Terrafront
             state.shield = pawn.shield;
             state.lastSequence = move->second.lastSeq;
             state.grounded = move->second.grounded;
-            return state.IsValid();
+            // Only from the pad every continent shares: elsewhere the destination's ground is not this one.
+            return TFHandoff_CanCarry(state);
         }
         return false;
     }
 
     bool TFServerSim::CanInstall(uint64_t character, const TFHandoffState& state) const
     {
-        if (!m_ctx || !m_ctx->players || !m_ctx->world || !state.IsValid() ||
-            !TFTravel_IsInSanctuary(state.position[0], state.position[2]))
+        // Never place a pawn on ground this process did not load (defaults are another continent's terrain).
+        if (!m_ctx || !m_ctx->players || !m_ctx->world || !m_ctx->world->TerrainLoaded() || !TFHandoff_CanCarry(state))
         {
             return false;
         }
@@ -149,13 +151,10 @@ namespace Terrafront
         {
             return true;
         }
-        float position[3];
-        float velocity[3];
-        std::copy_n(state.position, 3, position);
-        std::copy_n(state.velocity, 3, velocity);
-        bool grounded = state.grounded;
         // Resolve against THIS authority's loaded scene bodies and terrain, never the source's collision world.
-        m_ctx->world->ResolveMoveCollision(state.position, position, velocity, &grounded);
+        const TFHandoffArrival arrival =
+            TFHandoff_Arrive(state, [this](const float prev[3], float pos[3], float vel[3], bool* grounded)
+                             { m_ctx->world->ResolveMoveCollision(prev, pos, vel, grounded); });
         m_activeCharacter[state.player] = character.id;
         SetPlayerFaction(state.player, character.faction);
         if (m_ctx->progression)
@@ -163,7 +162,7 @@ namespace Terrafront
             m_ctx->progression->ServerLoadCharacter(state.player, character.xp, character.rank, character.flux);
         }
         const EntityId pawn =
-            m_ctx->players->ServerSpawnPawn(state.player, character.faction, state.cls, position, state.yaw);
+            m_ctx->players->ServerSpawnPawn(state.player, character.faction, state.cls, arrival.position, state.yaw);
         if (pawn == 0)
         {
             return false;
@@ -176,11 +175,11 @@ namespace Terrafront
         MoveState& move = m_move[state.player];
         move.pawn = pawn;
         move.cls = state.cls;
-        std::copy_n(position, 3, move.pos);
-        std::copy_n(velocity, 3, move.vel);
+        std::copy_n(arrival.position, 3, move.pos);
+        std::copy_n(arrival.velocity, 3, move.vel);
         move.yaw = state.yaw;
         move.pitch = state.pitch;
-        move.grounded = grounded;
+        move.grounded = arrival.grounded;
         move.lastSeq = state.lastSequence;
         WritePawnTransform(move);
         m_ctx->players->ServerSetPawnHealth(pawn, state.health, state.shield);
