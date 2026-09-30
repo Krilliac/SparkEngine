@@ -1368,6 +1368,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                         "--output-on-failure",
                         "--no-tests=error",
                         "-R '^TelemetrySpool$'",
+                        "2>&1 | tee telemetry-tests.log",
                     ),
                 ),
             ),
@@ -1445,6 +1446,22 @@ def required_workflow_errors(workflow: str) -> list[str]:
             errors.append(f"{lane} must run on ubuntu-24.04")
         if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", section):
             errors.append(f"{lane} has a bypassing job-level directive")
+        if lane == "security-runtime":
+            # Folding telemetry must reuse the existing build and budget, and
+            # preserve its diagnostics in the shared failure artifact.
+            if not exact_field(section, "timeout-minutes", "60"):
+                errors.append("security-runtime must have exactly timeout-minutes: 60")
+            for command in ("cmake --preset linux-shipping", "cmake --build --preset linux-shipping"):
+                if section.count(command) != 1:
+                    errors.append(f"security-runtime must run {command} exactly once")
+            try:
+                error_extract = named_step(section, "Extract security runtime error summary")
+            except AssertionError as exc:
+                errors.append(str(exc))
+            else:
+                for fragment in ("if: failure()", ".github/scripts/extract-errors.sh", "telemetry-tests.log"):
+                    if error_extract.count(fragment) != 1:
+                        errors.append(f"security-runtime error extraction is missing/duplicating {fragment}")
         for step_name, fragments in lane_steps:
             try:
                 step = named_step(section, step_name)
@@ -2785,6 +2802,38 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         mutated = self.build.replace(harness, "", 1)
         self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
         self.assertTrue(required_workflow_errors(mutated))
+
+    def test_telemetry_fold_preserves_build_budget_and_diagnostics(self) -> None:
+        security = yaml_section(self.build, "security-runtime", indent=2)
+        configure = named_step(security, "Configure Linux Shipping security tests")
+        build = named_step(security, "Build security runtime targets")
+        telemetry = named_step(security, "Run telemetry spool integration test")
+        extract = named_step(security, "Extract security runtime error summary")
+        mutations = {
+            "budget raised": security.replace("timeout-minutes: 60", "timeout-minutes: 61", 1),
+            "budget removed": security.replace("    timeout-minutes: 60\n", "", 1),
+            "duplicate configure": security.replace(
+                configure, configure + configure.replace("name: Configure", "name: Reconfigure", 1), 1
+            ),
+            "duplicate build": security.replace(
+                build, build + build.replace("name: Build", "name: Rebuild", 1), 1
+            ),
+            "telemetry log lost": security.replace(
+                telemetry, telemetry.replace("tee telemetry-tests.log", "tee discarded.log", 1), 1
+            ),
+            "telemetry diagnostic input lost": security.replace(
+                extract, extract.replace("telemetry-tests.log", "unrelated-tests.log", 1), 1
+            ),
+            "telemetry diagnostic extraction lost": security.replace(extract, "", 1),
+            "telemetry diagnostic extraction only on success": security.replace(
+                extract, extract.replace("if: failure()", "if: success()", 1), 1
+            ),
+        }
+        self.assertEqual(required_workflow_errors(self.build), [])
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, security, "mutation fixture did not alter YAML")
+                self.assertTrue(required_workflow_errors(self.build.replace(security, mutated, 1)), label)
 
     def test_telemetry_ctest_selector_is_fail_closed(self) -> None:
         self.assertEqual(telemetry_ctest_contract_errors(self.tests_cmake), [])
