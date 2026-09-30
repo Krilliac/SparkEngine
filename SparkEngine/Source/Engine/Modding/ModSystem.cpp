@@ -215,6 +215,10 @@ namespace Spark
             try
             {
                 const std::optional<fs::path> manifestPath = AcceptedModManifest(*it, canonicalRoot);
+                if (manifestPath && m_manifestOpenProbe)
+                {
+                    m_manifestOpenProbe(PathToUtf8(it->path()));
+                }
                 ModInfo info;
                 if (manifestPath && ParseModJson(PathToUtf8(*manifestPath), info))
                 {
@@ -346,6 +350,11 @@ namespace Spark
     void ModSystem::OnModUnloaded(std::function<void(const std::string&)> callback)
     {
         m_unloadCallbacks.push_back(std::move(callback));
+    }
+
+    void ModSystem::SetManifestOpenProbeForTesting(std::function<void(const std::string&)> probe)
+    {
+        m_manifestOpenProbe = std::move(probe);
     }
 
 } // namespace Spark

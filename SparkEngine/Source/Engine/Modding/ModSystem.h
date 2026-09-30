@@ -202,9 +202,23 @@ namespace Spark
         /** @brief List all mods (console integration). */
         std::string Console_ListMods() const;
 
+        // --- Test seam ---
+
+        /**
+     * @brief Install a probe ScanForMods calls for each candidate mod directory after the
+     *        directory and its mod.json passed the path-level checks and immediately before
+     *        the manifest is opened.
+     * @details The probe receives the UTF-8 path of the mod directory. It exists so a test
+     *          can replay a concurrent swap of the directory or its mod.json inside the
+     *          check-to-use window deterministically instead of racing a second thread.
+     *          Production code never installs one. Pass an empty function to remove it.
+     */
+        void SetManifestOpenProbeForTesting(std::function<void(const std::string&)> probe);
+
       private:
         bool ParseModJson(const std::string& path, ModInfo& info);
 
+        std::function<void(const std::string&)> m_manifestOpenProbe;
         std::unordered_map<std::string, ModInfo> m_mods;
         std::unordered_map<std::string, ModState> m_modStates;
         std::vector<std::function<void(const std::string&)>> m_loadCallbacks;

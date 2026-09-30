@@ -781,3 +781,150 @@ TEST(SEC3Gameplay_ModScanHandlesNonAnsiModDirectoryName)
     EXPECT_TRUE(mods.LoadMod("snow"));
     EXPECT_TRUE(mods.IsModActive("snow"));
 }
+
+// ----------------------------------------------------------------------------
+// SEC-120 mod-json-swap-race: ScanForMods validated a mod directory and its mod.json by
+// path (symlink_status, canonical) and then reopened the manifest by path, so an entry
+// swapped for a link inside that window was followed and a file outside the mods tree was
+// read and published. The manifest-open probe replays the swap at exactly that point, so
+// these tests are deterministic rather than timing-dependent.
+// ----------------------------------------------------------------------------
+
+namespace
+{
+    bool EndsWith(const std::string& text, const std::string& suffix)
+    {
+        return text.size() >= suffix.size() && text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+} // namespace
+
+TEST(SEC3Gameplay_ModScanRefusesManifestSwappedForSymlinkAfterCheck)
+{
+    ScratchDir dir("mods_manifest_swap");
+    const fs::path modsRoot = dir.path / "Mods";
+    const fs::path victim = modsRoot / "Victim";
+    const fs::path outside = dir.path / "outside.json";
+    fs::create_directories(victim);
+    fs::create_directories(modsRoot / "Plain");
+    WriteText(modsRoot / "Plain" / "mod.json", R"({"id":"plain","name":"Plain","version":"1.0"})");
+    WriteText(victim / "mod.json", R"({"id":"victim","name":"Victim","version":"1.0"})");
+    WriteText(outside, R"({"id":"escaped","name":"Escaped","version":"1.0"})");
+
+    // Control: untouched, both mods publish, so a refusal below is caused by the swap.
+    {
+        Spark::ModSystem control;
+        ASSERT_EQ(control.ScanForMods(Utf8(modsRoot)), size_t{2});
+        ASSERT_TRUE(control.GetModInfo("victim") != nullptr);
+    }
+
+    // The replacement link is staged before the scan, so a platform that cannot create
+    // file symlinks stops here and never inside the probe.
+    const fs::path staged = dir.path / "staged-link";
+    std::error_code linkError;
+    fs::create_symlink(outside, staged, linkError);
+    if (linkError)
+    {
+        SKIP_TEST("cannot create a file symlink here (Windows without Developer Mode): " + linkError.message());
+    }
+
+    bool swapped = false;
+    size_t probeCalls = 0;
+    Spark::ModSystem mods;
+    mods.SetManifestOpenProbeForTesting(
+        [&](const std::string& modDirectory)
+        {
+            ++probeCalls;
+            if (!swapped && EndsWith(modDirectory, "Victim"))
+            {
+                // rename() replaces mod.json atomically, as a concurrent attacker would.
+                std::error_code swapError;
+                fs::rename(staged, victim / "mod.json", swapError);
+                swapped = !swapError;
+            }
+        });
+    const size_t published = mods.ScanForMods(Utf8(modsRoot));
+
+    ASSERT_TRUE(swapped);
+    EXPECT_EQ(probeCalls, size_t{2});
+    EXPECT_TRUE(mods.GetModInfo("escaped") == nullptr);
+    EXPECT_TRUE(mods.GetModInfo("victim") == nullptr);
+    EXPECT_TRUE(mods.GetModInfo("plain") != nullptr);
+    EXPECT_EQ(published, size_t{1});
+}
+
+// The same window for the mod directory itself: a plain directory that passed the checks is
+// replaced by a link (a junction on Windows, which needs no privilege, so this never skips)
+// to a directory outside the mods tree holding a valid manifest.
+TEST(SEC3Gameplay_ModScanRefusesModDirectorySwappedForLinkAfterCheck)
+{
+    ScratchDir dir("mods_directory_swap");
+    const fs::path modsRoot = dir.path / "Mods";
+    const fs::path victim = modsRoot / "Victim";
+    const fs::path parked = dir.path / "Parked";
+    const fs::path outside = dir.path / "Outside";
+    fs::create_directories(victim);
+    fs::create_directories(modsRoot / "Plain");
+    fs::create_directories(outside);
+    WriteText(modsRoot / "Plain" / "mod.json", R"({"id":"plain","name":"Plain","version":"1.0"})");
+    WriteText(victim / "mod.json", R"({"id":"victim","name":"Victim","version":"1.0"})");
+    WriteText(outside / "mod.json", R"({"id":"escaped","name":"Escaped","version":"1.0"})");
+
+    bool swapped = false;
+    Spark::ModSystem mods;
+    mods.SetManifestOpenProbeForTesting(
+        [&](const std::string& modDirectory)
+        {
+            if (!swapped && EndsWith(modDirectory, "Victim"))
+            {
+                std::error_code moveError;
+                fs::rename(victim, parked, moveError);
+                swapped = !moveError && SparkTestLinks::MakeDirectoryLink(outside, victim);
+            }
+        });
+    const size_t published = mods.ScanForMods(Utf8(modsRoot));
+
+    ASSERT_TRUE(swapped);
+    // The link really resolves to the outside manifest, so only the open itself can refuse it.
+    ASSERT_TRUE(SparkTestLinks::IsDirectoryLink(victim));
+    ASSERT_TRUE(fs::is_regular_file(victim / "mod.json"));
+    EXPECT_TRUE(mods.GetModInfo("escaped") == nullptr);
+    EXPECT_TRUE(mods.GetModInfo("victim") == nullptr);
+    EXPECT_TRUE(mods.GetModInfo("plain") != nullptr);
+    EXPECT_EQ(published, size_t{1});
+
+    // Remove the link itself before ScratchDir's remove_all walks the tree.
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(victim));
+}
+
+// After a clean scan the published mod directory is swapped for a link to a script-free
+// directory outside the mods tree. LoadMod walked the stored path, followed the link and
+// announced the mod Active, handing subscribers a path that now resolves outside the tree.
+TEST(SEC3Gameplay_LoadModRefusesModDirectorySwappedForLinkAfterScan)
+{
+    ScratchDir dir("mods_load_swap");
+    const fs::path modsRoot = dir.path / "Mods";
+    const fs::path victim = modsRoot / "Victim";
+    const fs::path parked = dir.path / "Parked";
+    const fs::path outside = dir.path / "Outside";
+    fs::create_directories(victim / "Assets");
+    fs::create_directories(outside / "Assets");
+    WriteText(victim / "mod.json", R"({"id":"victim","name":"Victim","version":"1.0"})");
+    WriteText(outside / "Assets" / "readme.txt", "outside the mods tree\n");
+
+    Spark::ModSystem mods;
+    ASSERT_EQ(mods.ScanForMods(Utf8(modsRoot)), size_t{1});
+    ASSERT_TRUE(mods.GetModInfo("victim") != nullptr);
+
+    fs::rename(victim, parked);
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(outside, victim));
+    ASSERT_TRUE(SparkTestLinks::IsDirectoryLink(victim));
+
+    std::vector<std::string> announced;
+    mods.OnModLoaded([&announced](const std::string& id) { announced.push_back(id); });
+    EXPECT_FALSE(mods.LoadMod("victim"));
+    EXPECT_FALSE(mods.IsModActive("victim"));
+    EXPECT_TRUE(mods.GetModState("victim") == Spark::ModState::Error);
+    EXPECT_TRUE(announced.empty());
+
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(victim));
+}
