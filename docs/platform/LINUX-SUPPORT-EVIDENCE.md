@@ -299,6 +299,39 @@ available. They follow the libstdc++ ABI history, in which GCC 14.1 added
 engine copy produced **no** violation at all, because `ldd` on this host
 accepts it. The self test then failed only on the new case.
 
+**libc++ lanes (2026-09-29).** The `GLIBCXX` case assumed a libstdc++ engine.
+`build-linux-clang` links libc++ (`-stdlib=libc++ -lc++abi`), whose
+`libc++.so.1` carries no symbol versions, so both clang jobs of Build
+SparkEngine run 36584055785 failed with `toolchain-ceiling: the fixture engine
+names no GLIBCXX_3.4.NN version`. The self test now picks its patch cases from
+the engine's own `readelf -d`/`-V` output:
+
+* always, a copy with one two-digit `GLIBC_2.NN` need on `libc.so.6` rewritten
+  to `GLIBC_2.40`, which must fail with `requires GLIBC_2.40 from libc.so.6,
+  above the Ubuntu 24.04 (OD-10) ceiling`;
+* when the engine NEEDs `libstdc++.so.6`, the `GLIBCXX_3.4.34` case above,
+  unchanged;
+* when it NEEDs neither `libstdc++.so.6` nor `libc++.so.1`, a failure, never a
+  skip.
+
+`ldd` prints a missing version on stderr but exits 0 with the full closure, so
+on a noble runner (glibc 2.39) only the ceiling rule rejects the `GLIBC_2.40`
+copy. A variant patched to `GLIBC_2.99`, above this host's glibc 2.43, gave the
+same single ceiling violation.
+
+Evidence, WSL Ubuntu 26.04 (glibc 2.43), 2026-09-29. The fixtures were a small
+engine plus module and `.sparkabi`, built once with `g++` and once with
+`clang++ -stdlib=libc++ -lc++abi`, not the real SparkEngine:
+
+* **RED:** the previous script passed on the libstdc++ fixture and failed on
+  the libc++ fixture with the CI message above.
+* **GREEN:** the new script passed on both. The libc++ run rejected the
+  `GLIBC_2.40` copy; the libstdc++ run rejected both the `GLIBC_2.40` and the
+  `GLIBCXX_3.4.34` copies.
+* **Load-bearing:** with the rule's violation append removed, `glibc-above-ceiling`
+  failed on both fixtures and `toolchain-above-ceiling` failed on the libstdc++
+  one.
+
 Local run, 2026-09-28:
 
 * **Head:** `wave7/plt210-linux-toolchain-ceiling-and-gov400-notices`.

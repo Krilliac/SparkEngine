@@ -648,27 +648,92 @@ if(SPARK_LINUX_RUNTIME_CLOSURE_SELF_TEST)
     file(CREATE_LINK "${_fixture_bin}" "${_test_root}/symlink/lib/outside" SYMBOLIC)
     _spark_expect_closure(symlink-out-of-prefix "${_test_root}/symlink" "symlink leaves the prefix")
 
-    # An image built by a newer toolchain: rewrite one two-digit GLIBCXX_3.4.NN
-    # version-need string in the engine's .dynstr to one tag above the OD-10
-    # ceiling (same length). On a host whose libstdc++ defines that tag, ldd
-    # still accepts the image; only the ceiling rule rejects it.
-    _spark_stage_engine("${_test_root}/toolchain" "$ORIGIN/../lib" TRUE)
-    set(_patched_engine "${_test_root}/toolchain/bin/SparkEngine")
-    execute_process(COMMAND ${_spark_clean_env} grep -obaE "GLIBCXX_3\\.4\\.[1-9][0-9]" "${_patched_engine}"
-        RESULT_VARIABLE _grep_result OUTPUT_VARIABLE _glibcxx_hits ERROR_VARIABLE _grep_error TIMEOUT 60)
-    if(NOT _grep_result EQUAL 0 OR NOT _glibcxx_hits MATCHES "^([0-9]+):GLIBCXX_3\\.4\\.[0-9][0-9]")
-        list(APPEND _failures "toolchain-ceiling: the fixture engine names no GLIBCXX_3.4.NN version ${_grep_error}")
+    # An image built by a newer toolchain: in a copy of the engine, rewrite one
+    # two-digit version-need string in .dynstr to a tag above the OD-10 ceiling
+    # (same length) and require the ceiling diagnostic for exactly that need.
+    # ldd prints a missing version on stderr but still exits 0 and lists the
+    # full closure, so whatever the host defines, only the ceiling rule rejects
+    # the copy. The case family follows what the image really links, so the
+    # rule is proved on every C++ runtime the build can use:
+    #   * glibc, every image: a libc.so.6 GLIBC_2.NN need becomes GLIBC_2.40.
+    #   * libstdc++, when NEEDED: a GLIBCXX_3.4.NN need becomes GLIBCXX_3.4.34.
+    # A libc++ build (clang -stdlib=libc++) does not need libstdc++.so.6, and
+    # its libc++.so.1 carries no symbol versions, so it has no GLIBCXX case; an
+    # engine that links neither C++ runtime fails rather than skipping one.
+    execute_process(COMMAND ${_spark_clean_env} "${SPARK_READELF}" -d --wide "${SPARK_FIXTURE_ENGINE}"
+        RESULT_VARIABLE _fixture_dynamic_result OUTPUT_VARIABLE _fixture_dynamic
+        ERROR_VARIABLE _fixture_dynamic_error TIMEOUT 60)
+    execute_process(COMMAND ${_spark_clean_env} "${SPARK_READELF}" -V --wide "${SPARK_FIXTURE_ENGINE}"
+        RESULT_VARIABLE _fixture_versions_result OUTPUT_VARIABLE _fixture_versions
+        ERROR_VARIABLE _fixture_versions_error TIMEOUT 60)
+    if(NOT _fixture_dynamic_result EQUAL 0 OR NOT _fixture_versions_result EQUAL 0)
+        list(APPEND _failures
+            "toolchain-ceiling: readelf of the fixture engine failed: ${_fixture_dynamic_error}${_fixture_versions_error}")
     else()
-        math(EXPR _patch_offset "${CMAKE_MATCH_1} + 12")
-        file(WRITE "${_test_root}/glibcxx-minor" "34")
-        execute_process(COMMAND ${_spark_clean_env} dd "if=${_test_root}/glibcxx-minor" "of=${_patched_engine}"
-                bs=1 "seek=${_patch_offset}" conv=notrunc
-            RESULT_VARIABLE _dd_result ERROR_VARIABLE _dd_error TIMEOUT 60)
-        if(NOT _dd_result EQUAL 0)
-            list(APPEND _failures "toolchain-ceiling: could not patch the fixture copy: ${_dd_error}")
-        else()
-            _spark_expect_closure(toolchain-above-ceiling "${_test_root}/toolchain"
-                "bin/SparkEngine: requires GLIBCXX_3.4.34 from libstdc++.so.6, above the Ubuntu 24.04 (OD-10) ceiling")
+        _spark_parse_version_needs("${_fixture_versions}" _fixture_needs)
+        string(REGEX MATCHALL "\\(NEEDED\\)[^\n]*\\[[^]\n]+\\]" _fixture_needed_records "${_fixture_dynamic}")
+        set(_fixture_needed)
+        foreach(_record IN LISTS _fixture_needed_records)
+            string(REGEX REPLACE "^[^[]*\\[(.*)\\]$" "\\1" _soname "${_record}")
+            list(APPEND _fixture_needed "${_soname}")
+        endforeach()
+
+        # CASE_NAME: fixture prefix and case label. LIBRARY: the need's file.
+        # TAG_REGEX: the need tags that may be patched, ending in two digits.
+        # NEW_MINOR: the two digits that put the tag above its ceiling.
+        function(_spark_expect_patched_need case_name library tag_regex new_minor)
+            set(_tag "")
+            foreach(_need IN LISTS _fixture_needs)
+                string(REPLACE "|" ";" _need_fields "${_need}")
+                list(GET _need_fields 0 _need_file)
+                list(GET _need_fields 1 _need_tag)
+                if(_need_file STREQUAL library AND _need_tag MATCHES "${tag_regex}")
+                    set(_tag "${_need_tag}")
+                    break()
+                endif()
+            endforeach()
+            if(_tag STREQUAL "")
+                set(_failures ${_failures}
+                    "${case_name}: the fixture engine names no ${library} version need matching ${tag_regex}"
+                    PARENT_SCOPE)
+                return()
+            endif()
+            string(REGEX REPLACE "[0-9][0-9]$" "${new_minor}" _new_tag "${_tag}")
+            set(_prefix "${_test_root}/${case_name}")
+            _spark_stage_engine("${_prefix}" "$ORIGIN/../lib" TRUE)
+            set(_patched_engine "${_prefix}/bin/SparkEngine")
+            # The NUL terminator pins the match to the whole .dynstr string.
+            string(REPLACE "." "\\." _tag_pattern "${_tag}")
+            execute_process(COMMAND ${_spark_clean_env} grep -m1 -obaP "${_tag_pattern}\\x00" "${_patched_engine}"
+                RESULT_VARIABLE _grep_result OUTPUT_VARIABLE _hits ERROR_VARIABLE _grep_error TIMEOUT 60)
+            if(NOT _grep_result EQUAL 0 OR NOT _hits MATCHES "^([0-9]+):")
+                set(_failures ${_failures}
+                    "${case_name}: could not locate the ${_tag} string in the fixture copy ${_grep_error}" PARENT_SCOPE)
+                return()
+            endif()
+            string(LENGTH "${_tag}" _tag_length)
+            math(EXPR _patch_offset "${CMAKE_MATCH_1} + ${_tag_length} - 2")
+            file(WRITE "${_test_root}/${case_name}-minor" "${new_minor}")
+            execute_process(COMMAND ${_spark_clean_env} dd "if=${_test_root}/${case_name}-minor"
+                    "of=${_patched_engine}" bs=1 "seek=${_patch_offset}" conv=notrunc
+                RESULT_VARIABLE _dd_result ERROR_VARIABLE _dd_error TIMEOUT 60)
+            file(REMOVE "${_test_root}/${case_name}-minor")
+            if(NOT _dd_result EQUAL 0)
+                set(_failures ${_failures} "${case_name}: could not patch the fixture copy: ${_dd_error}" PARENT_SCOPE)
+                return()
+            endif()
+            _spark_expect_closure(${case_name} "${_prefix}"
+                "bin/SparkEngine: requires ${_new_tag} from ${library}, above the Ubuntu 24.04 (OD-10) ceiling")
+            set(_failures ${_failures} PARENT_SCOPE)
+        endfunction()
+
+        _spark_expect_patched_need(glibc-above-ceiling libc.so.6 "^GLIBC_2\\.[1-9][0-9]$" 40)
+        if("libstdc++.so.6" IN_LIST _fixture_needed)
+            _spark_expect_patched_need(toolchain-above-ceiling libstdc++.so.6 "^GLIBCXX_3\\.4\\.[1-9][0-9]$" 34)
+        elseif(NOT "libc++.so.1" IN_LIST _fixture_needed)
+            list(JOIN _fixture_needed ", " _fixture_needed_text)
+            list(APPEND _failures
+                "toolchain-ceiling: the fixture engine links neither libstdc++.so.6 nor libc++.so.1 (NEEDED: ${_fixture_needed_text})")
         endif()
     endif()
 
