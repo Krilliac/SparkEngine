@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 342104 |
+| **SparkEngine/Source** | 342258 |
 | **SparkEditor/Source** | 105305 |
-| **GameModules** | 162413 |
+| **GameModules** | 162614 |
 | **External services** | 12696 |
 | **Asset pipeline** | 2524 |
-| **Tests** | 257743 |
+| **Tests** | 257937 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~904381** |
+| **Total C++ (excl. ThirdParty)** | **~904930** |
 
 ### File Counts
 
@@ -35,7 +35,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 124803 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 124821 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,9 +43,9 @@ Graphics contains 124803 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 124803 | 36.4% |
-| Engine (all subsystems) | 98836 | 28.8% |
-| Utils | 48854 | 14.2% |
+| Graphics | 124821 | 36.4% |
+| Engine (all subsystems) | 98844 | 28.8% |
+| Utils | 48982 | 14.3% |
 | Core | 33095 | 9.6% |
 | Physics | 11077 | 3.2% |
 | Audio | 6961 | 2.0% |
@@ -59,7 +59,7 @@ Graphics contains 124803 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines |
 |-----------|------:|
-| Networking | 18837 |
+| Networking | 18845 |
 | AI | 13692 |
 | ECS | 8615 |
 | Scripting | 8059 |
@@ -111,7 +111,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 725 |
-| TEST() definitions | 8398 |
+| TEST() definitions | 8399 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -157,9 +157,9 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
+| `OpenGLDevice.cpp` | 2586 |
 | `ModuleManager.cpp` | 2579 |
-| `OpenGLDevice.cpp` | 2568 |
-| `CrashHandler.cpp` | 2530 |
+| `CrashHandler.cpp` | 2531 |
 | `NetworkConnection.cpp` | 2499 |
 | `D3D11Device.cpp` | 2139 |
 | `VulkanDevice.cpp` | 1983 |
@@ -176,7 +176,7 @@ inventory is implementation evidence, not support certification.
 | `Telemetry.h` | 1424 |
 | `JsonUtils.h` | 1365 |
 | `GraphicsEngine.h` | 1350 |
-| `NetworkManager.h` | 1265 |
+| `NetworkManager.h` | 1270 |
 | `OnlineServices.h` | 1225 |
 | `EngineSettings.h` | 1149 |
 | `DataTableSystem.h` | 948 |
