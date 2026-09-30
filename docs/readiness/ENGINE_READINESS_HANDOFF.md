@@ -3182,7 +3182,8 @@ Shared save storage, client scene/collision reload, topology-driven migration, t
 Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Cross-continent travel is visually/physically correct
-   - No committed test proves cross-continent travel is visually and physically correct.
+   - Evidence: `Tests/TestTF120Travel.cpp`, `GameModules/SparkGameMMOFPS/Source/Net/TFHandoffContinuity.h`, `GameModules/SparkGameMMOFPS/Source/World/TFTerrainModel.cpp`, `Tests/CMakeLists.txt`
+   - Physical half only: TerrafrontMigration_Travel carries a running, jumping pawn from a peer process over real continent terrain and matches the source's trajectory tick for tick; off-pad checkpoints are refused. Pawn stores are test doubles, no Jolt bodies. Unmet: the client never reloads the destination scene, so visual travel is unproven.
 2. **[implemented]** Duplicate/lost migration messages do not duplicate/lose entities
    - Evidence: `GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabaseResidency.cpp`, `GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.cpp`, `SparkEngine/Source/Engine/Networking/AreaHandoffDispatcher.cpp`, `SparkGateway/src/GatewayAreaControl.cpp`, `SparkServer/src/ServerApplication.cpp`, `Tests/TestHandoffParticipant.cpp`, `Tests/TestGatewayAreaControl.cpp`, `Tests/CMakeLists.txt`
    - TerrafrontMigration_* (pinned 3/6/4/1) pass on local Windows Release, RED-proven by mutation: duplicate, reordered, lost-request/reply and source-restart cases keep one durable owner; forged/replayed/stale frames never reach the participant. Pawn authority is a test double; no live SparkServer+gateway+TF run; no exact-commit CI.

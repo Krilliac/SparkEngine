@@ -2333,8 +2333,8 @@ if(ENABLE_NETWORKING)
         TIMEOUT 240)
     # Cross-continent travel: a running, jumping pawn reserved by a peer SparkTests process (the source
     # continent) is installed here on the other continent's real ground and continues the source's trajectory
-    # tick for tick; an off-pad checkpoint is refused by both sides. A peer that cannot spawn SKIPs the
-    # process case, which the runner does not count as a failure, so the skip fails the CTest here.
+    # tick for tick; an off-pad checkpoint is refused by both sides. A peer that cannot spawn fails the
+    # process case (it never skips); the regex also fails the CTest on any skip.
     add_test(NAME TerrafrontMigration_Travel COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(TerrafrontMigration_Travel PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME_PREFIX=TF120_Travel_;SPARK_TEST_EXPECT_COUNT=3"

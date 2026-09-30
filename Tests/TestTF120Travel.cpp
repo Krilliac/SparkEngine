@@ -408,8 +408,10 @@ TEST(TF120_Travel_RunningJumpCarriedAcrossProcessesKeepsPoseVelocityAndGround)
                                           std::string(TF120Peer::kCharEnv) + "=" + std::to_string(character)});
     if (!launched)
     {
-        SKIP_TEST("cannot spawn a peer test process: " + launched.error());
+        // Not a skip: without the second process this case proves nothing about a cross-process handoff.
+        std::fprintf(stderr, "cannot spawn a peer test process: %s\n", launched.error().c_str());
     }
+    ASSERT_TRUE(launched.has_value());
     Spark::Process& sourceProcess = *launched;
     std::string log;
     const bool ready = TF120Peer::WaitPeerReady(sourceProcess, log, kPeerReady, std::chrono::seconds(60));
