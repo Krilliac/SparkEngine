@@ -47,7 +47,7 @@ result for those inputs. A build that really enables BMI also emits the BMI1
 instructions above, and SparkCpuFloor.cmake rejects -mbmi at configure time.
 
 ELF functions selected only after a CPUID check may be exempted with
---allow-symbol REGEX. The one reviewed ELF exemption built in is XSAVE (only)
+--allow-symbol REGEX. The one reviewed ELF exemption built in is XGETBV (only)
 inside Spark::Detail::ReadXcr0(), which Utils/MultiISA.h runs after its
 CPUID.1:ECX.OSXSAVE check and keeps out of line.
 
@@ -59,7 +59,7 @@ feature-scoped mechanisms; anything else fails closed until reviewed:
 * Section contributions (DBI stream) of the MSVC STL's vector_algorithms.obj,
   identified by its exact Microsoft build path and a library from the reviewed
   MSVC 14.44.35207 toolset: AVX, AVX2 and LZCNT only (review below).
-* The exact PDB procedure/module pairs memcpy/memset (AVX/AVX2), and XSAVE in
+* The exact PDB procedure/module pairs memcpy/memset (AVX/AVX2), and XGETBV in
   vcruntime's __isa_available_init and in Spark::Detail::ReadXcr0.
 * Guard dominance for code the MSVC headers inline into arbitrary procedures:
   the instruction is reachable from its procedure's entry, and unreachable once
@@ -109,8 +109,8 @@ XSAVE = "XSAVE"
 _XSAVE_MNEMONICS = ("xsave", "xsaveopt", "xsavec", "xsaves", "xrstor", "xrstors")
 
 # Legacy-encoded (non-VEX) extensions that are not part of x86-64-v2, matched as
-# whole mnemonics. Their VEX forms (vaesenc, vpclmulqdq, vgf2p8affineqb) are
-# already caught as AVX.
+# whole mnemonics. VEX VAES/VPCLMULQDQ/GFNI have independent feature classes
+# so they cannot inherit AVX/AVX2 exemptions.
 LEGACY_EXTENSION_MNEMONICS = {
     "adcx": "ADX",
     "adox": "ADX",
@@ -197,7 +197,7 @@ BRANCH_TARGET_RE = re.compile(r"^(?:0x)?([0-9a-fA-F]+)\b")
 RAW_BYTES_RE = re.compile(r"^((?:[0-9a-fA-F]{2} )+)\s*\t(.*)$")
 VECTOR_REG_RE = re.compile(r"%?\b([xyz])mm\d+\b")
 WIDE_REG_RE = re.compile(r"%?\b([yz])mm\d+\b")
-OPMASK_RE = re.compile(r"%k[1-7]\b|\{%?k[1-7]\}")
+OPMASK_RE = re.compile(r"%k[0-7]\b|\{%?k[0-7]\}")
 SIZE_SUFFIX_RE = re.compile(r"^([a-z]+?)[bwlq]?$")
 
 
@@ -331,10 +331,17 @@ class PdbInfo:
     def __post_init__(self) -> None:
         self.procedures.sort(key=lambda proc: (proc.start, proc.end))
         self._starts = [proc.start for proc in self.procedures]
+        # A gap must not search every earlier procedure for every instruction.
+        # Prefix maxima preserve overlapping extents while bounding that search.
+        self._max_ends = []
+        maximum = 0
+        for proc in self.procedures:
+            maximum = max(maximum, proc.end)
+            self._max_ends.append(maximum)
 
     def procedure_at(self, address: int) -> Procedure | None:
         index = bisect.bisect_right(self._starts, address) - 1
-        while index >= 0 and self.procedures[index].start <= address:
+        while index >= 0 and self._max_ends[index] > address:
             proc = self.procedures[index]
             if address < proc.end:
                 return proc
@@ -381,7 +388,11 @@ def _pe_sections(path: str) -> tuple[int, list[tuple[int, int, bool]]]:
             raise RuntimeError(f"{path} has a truncated PE section table")
         virtual_size, rva, raw_size = struct.unpack_from("<III", data, offset + 8)
         characteristics = struct.unpack_from("<I", data, offset + 36)[0]
-        sections.append((rva, min(virtual_size, raw_size), bool(characteristics & 0x20000000)))
+        executable = bool(characteristics & 0x20000000)
+        # Instructions must have file bytes; data guards can live in the
+        # loader's zero-filled tail (VirtualSize may exceed SizeOfRawData).
+        size = min(virtual_size, raw_size) if executable else virtual_size
+        sections.append((rva, size, executable))
     occupied = sorted((rva, rva + size) for rva, size, executable in sections if executable and size)
     if any(start < previous_end for (start, _), (_, previous_end) in zip(occupied[1:], occupied)):
         raise RuntimeError(f"{path} has overlapping executable PE sections")
@@ -601,9 +612,11 @@ def _parse_pdb_guards(lines, image_base: int, sections: list[tuple[int, int, boo
         addr_match = addr_re.search(line)
         if pending and addr_match:
             section = int(addr_match.group(1), 10)
-            if 1 <= section <= len(sections):
-                address = image_base + sections[section - 1][0] + int(addr_match.group(2), 10)
-                found.setdefault(pending, set()).add(address)
+            offset = int(addr_match.group(2), 10)
+            if not 1 <= section <= len(sections) or offset + 4 > sections[section - 1][1]:
+                raise RuntimeError(f"PDB guard {pending} is outside its section")
+            address = image_base + sections[section - 1][0] + offset
+            found.setdefault(pending, set()).add(address)
             pending = None
     guards: dict[int, GuardSpec] = {}
     conflicts = set()
@@ -763,6 +776,8 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
     start, end = extent
     for i, insn in enumerate(insns):
         mnemonic = insn.mnemonic
+        if mnemonic == "<undecodable>":
+            return set()  # unknown bytes may change flags or control flow
         edges: list[tuple[int, str]] = []
         is_jump = mnemonic in ("jmp", "jmpq") or mnemonic in _CONDITIONS or mnemonic in _OTHER_CONDITIONAL
         if is_jump or mnemonic in ("call", "callq"):
@@ -844,6 +859,12 @@ def classify(mnemonic: str, operands: str, evex: bool = False) -> str | None:
         if mnemonic in VEX_WITHOUT_VECTOR_OPERAND or VECTOR_REG_RE.search(operands):
             if OPMASK_RE.search(operands) or re.search(r"%?\bzmm\d+", operands):
                 return "AVX-512"
+            # These extensions have independent CPUID bits. Neither an AVX2
+            # guard nor a reviewed AVX runtime range authorizes them.
+            for prefix, feature in (("vaes", "VAES"), ("vpclmul", "VPCLMULQDQ"), ("vgf2p8", "GFNI"),
+                                    ("vprot", "XOP")):
+                if mnemonic.startswith(prefix):
+                    return feature
             if re.match(r"^vf(n)?m(add|sub)", mnemonic):
                 return "FMA"
             if mnemonic in ("vcvtph2ps", "vcvtps2ph"):
@@ -919,6 +940,36 @@ def image_is_x86_64(tool: list[str], path: str) -> bool:
     return "x86-64" in header or "x86_64" in header or "pe-x86-64" in header or "coff-x86-64" in header
 
 
+def _join_split_prefixes(lines):
+    """LLVM prints some prefixes (notably LOCK) as separate address records.
+
+    Join only contiguous raw bytes, retaining the prefix's entry address for
+    branch analysis. An orphan prefix still reaches the undecodable check.
+    """
+    pending = None
+    for line in lines:
+        row = INSN_RE.match(line)
+        raw = RAW_BYTES_RE.match(row.group(2)) if row else None
+        if pending is not None:
+            address, encoding, prefix, original = pending
+            pending = None
+            if (row and raw and int(row.group(1), 16) == address + len(encoding.split())
+                    and len(encoding.split()) + len(raw.group(1).split()) <= 15):
+                line = f"{address:x}: {encoding}{raw.group(1)}\t{prefix} {raw.group(2)}"
+                row = INSN_RE.match(line)
+                raw = RAW_BYTES_RE.match(row.group(2))
+            else:
+                yield original
+        if raw:
+            tokens = raw.group(2).lower().split()
+            if tokens and all(token in PREFIXES for token in tokens):
+                pending = (int(row.group(1), 16), raw.group(1), raw.group(2), line)
+                continue
+        yield line
+    if pending is not None:
+        yield pending[3]
+
+
 def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None) -> ScanResult:
     """Classify disassembly lines; PE findings go through the reviewed PDB mechanisms."""
     result = ScanResult(path=path)
@@ -941,7 +992,7 @@ def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | No
         buffered.clear()
         pending.clear()
 
-    for line in lines:
+    for line in _join_split_prefixes(lines):
         header = SYMBOL_RE.match(line)
         if header:
             symbol = header.group(2)
@@ -956,9 +1007,7 @@ def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | No
             continue
         evex, text = split_raw_bytes(insn.group(2))
         mnemonic, operands = split_instruction(text)
-        if not mnemonic or mnemonic.startswith(("(", "<")):
-            continue  # undecodable bytes: GNU "(bad)", llvm "<unknown>"
-        result.instructions += 1
+        undecodable = not mnemonic or mnemonic.startswith(("(", "<", "."))
         address = int(insn.group(1), 16)
         if pdb is not None:
             current = pdb.procedure_at(address)
@@ -967,8 +1016,15 @@ def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | No
                 procedure = current
             if procedure is not None:
                 annotation = ANNOTATION_ADDRESS_RE.search(text)
-                buffered.append(Instruction(address, mnemonic.lower(), operands,
+                buffered.append(Instruction(address, "<undecodable>" if undecodable else mnemonic.lower(), operands,
                                             int(annotation.group(1), 16) if annotation else None))
+        if undecodable:
+            # This can be data in .text or an instruction unknown to the tool.
+            # Neither is a proof of floor safety; never silently discard it.
+            result.violations.append(Finding("undecodable", insn.group(1),
+                                             procedure.name if procedure else symbol, text.strip()))
+            continue
+        result.instructions += 1
         feature = classify(mnemonic, operands, evex)
         if feature is None:
             continue
@@ -977,12 +1033,14 @@ def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | No
             continue
         where = procedure.name if procedure is not None else symbol
         finding = Finding(feature, insn.group(1), where, text.strip())
+        # The OSXSAVE review covers XGETBV(0), not every member of XSAVE.
+        reviewed_instruction = feature != XSAVE or mnemonic.lower() == "xgetbv"
         if pdb is None:
-            if symbol_allowed or feature in ELF_REVIEWED_PROCEDURES.get(symbol, ()):
+            if symbol_allowed or (reviewed_instruction and feature in ELF_REVIEWED_PROCEDURES.get(symbol, ())):
                 result.allowed[feature] += 1
             else:
                 result.violations.append(finding)
-        elif _pdb_allows(feature, address, pdb.ranges):
+        elif reviewed_instruction and _pdb_allows(feature, address, pdb.ranges):
             result.allowed[feature] += 1
         elif procedure is not None and any(feature in spec.features for spec in pdb.guards.values()):
             pending.append((len(buffered) - 1, feature, finding))
@@ -1013,7 +1071,9 @@ def scan(tool: list[str], path: str, allow: list[re.Pattern[str]], pdb: PdbInfo 
 def report(result: ScanResult, max_report: int) -> None:
     counts = Counter(finding.feature for finding in result.violations)
     status = "FAIL" if result.violations else "OK"
-    print(f"{status} {result.path}: {result.instructions} instructions, {len(result.violations)} above-floor")
+    unknown = counts.get("undecodable", 0)
+    print(f"{status} {result.path}: {result.instructions} instructions, "
+          f"{len(result.violations) - unknown} above-floor, {unknown} undecodable")
     for feature, count in sorted(counts.items()):
         print(f"  violation {feature}: {count}")
     for feature, count in sorted(result.allowed.items()):

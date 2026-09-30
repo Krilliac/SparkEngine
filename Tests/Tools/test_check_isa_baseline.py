@@ -154,7 +154,7 @@ class ClassifierTests(unittest.TestCase):
             "rdseed %rax": "RDSEED",
             "adcx %rsi,%rax": "ADX",
             "adoxq %rsi,%rax": "ADX",
-            "vaesenc %xmm2,%xmm1,%xmm0": "AVX (VEX)",
+            "vaesenc %xmm2,%xmm1,%xmm0": "VAES",
         }
         for text, feature in cases.items():
             with self.subTest(text=text):
@@ -216,13 +216,14 @@ class ClassifierTests(unittest.TestCase):
                 evex, instruction = checker.split_raw_bytes(text)
                 self.assertEqual(checker.classify(*checker.split_instruction(instruction), evex), feature)
 
-    def test_undecodable_bytes_are_not_instructions(self) -> None:
-        # Jump tables inside MSVC .text decode as "<unknown>" (llvm) or "(bad)" (GNU).
+    def test_undecodable_bytes_are_violations_not_instructions(self) -> None:
+        # These may be data or newer instructions. Neither proves floor safety.
         lines = ["140001000: 62 f2 ff        \t<unknown>", "  140001003:\t62 ff    \t(bad)",
                  "140001005: c5 f9 6f c1     \tvmovdqa\t%xmm1, %xmm0"]
         result = checker.scan_lines("image", lines, [])
         self.assertEqual(result.instructions, 1)
-        self.assertEqual([finding.feature for finding in result.violations], ["AVX (VEX)"])
+        self.assertEqual([finding.feature for finding in result.violations],
+                         ["undecodable", "undecodable", "AVX (VEX)"])
 
     def test_tzcnt_is_informational(self) -> None:
         self.assertEqual(self._classify("tzcnt %edi,%eax"), "TZCNT")
