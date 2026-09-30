@@ -325,6 +325,28 @@ and named 67 `tools/` files as unclassified. The 8 runtime DLLs covered were
 Not measured: a stable-v1 (`SparkGameFPS`) tree with tests enabled, the CPack
 archive and the native installers.
 
+#### Port review (2026-09-30)
+
+The manifest readers now parse JSON independently of key order and whitespace,
+reject duplicate paths and malformed manifests, and treat non-string, blank,
+`NONE` and `NOASSERTION` license values as unidentified. The CMake reader builds
+a path-indexed map once instead of searching for license-looking text.
+
+Script-only fixtures reproduced the previous CMake acceptance of malformed
+JSON, both readers' acceptance of duplicate paths, and the Python reader's
+coercion of null/numeric/container license fields into strings. The corrected
+readers agree on all twelve fixtures, including compact and reordered valid
+JSON.
+
+The repository notice currentness/completeness check passes. The full Python
+suite is pending because this sandbox denies access inside temporary fixture
+directories. No C++ build, CTest, real install-tree run, or hosted evidence was
+produced for this port review. The default package still ships 475
+`NOASSERTION` assets (OD-09); the install-tree test keeps them as the exact
+accounted residual described above rather than failing the default
+windows-release CTest run that `build-windows-vs2022` executes. No exception or
+readiness promotion was added.
+
 ## Regenerating and checking the notices
 
 ```bash

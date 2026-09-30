@@ -200,3 +200,24 @@ linux-gcc-release (GCC 14.3) scans 94 targets and 4072 sources. No ThirdParty so
 
 Not done: no hosted run, no MinSizeRel windows-shipping image scan, and no run
 on below-floor hardware or an emulator. No work-item JSON was edited.
+
+## 2026-09-30 port review
+
+The eight existing lane commits are present on `rel/w8-bld100-gov400`, based on
+`aecd0356343c20535c59807c9438c0409f9a34d1`. The libsodium force-include and its
+vendored macro/dispatch guards were reviewed without a C++ build. The earlier
+build measurements above are historical evidence, not validation of this port.
+
+The inventory was regenerated against the new base and is byte-identical to
+the checked-in result. Jolt's declaration moved from line 1771 to 1770 and
+AngelScript's from 1052 to 1051; their reviewed command bodies and condition
+blocks remain byte-identical, with only the corresponding line pins changed.
+
+The configure-time source-property scan still skips generator-expression
+source entries. `$<TARGET_OBJECTS:...>` is covered through its owning target;
+other conditional source expressions are a remaining inspection gap. Do not
+treat this scan alone as proof that every compiled object meets the floor.
+The Python CMake-fixture suite is pending because temporary fixture directories
+are inaccessible in this sandbox. MSVC `spark_sodium`/`SparkTests` builds,
+runtime tests and exact-commit CI remain for the integrating session. No
+readiness status was promoted.
