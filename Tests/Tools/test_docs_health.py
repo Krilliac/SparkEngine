@@ -806,6 +806,43 @@ class DocsLinksHostileTests(unittest.TestCase):
             )
             self.assertTrue(any("escapes repository" in error["error"] for error in errors), errors)
 
+    def test_wrong_case_link_is_rejected_on_every_filesystem(self) -> None:
+        with LinkFixture() as fixture:
+            write(fixture.docs / "Target.md", "# Target\n")
+            write(fixture.docs / "Guide.md", "# Guide\n\n[wrong case](target.md)\n")
+            case_insensitive = (fixture.docs / "target.md").exists()
+            errors = links.validate_docs_links(
+                fixture.catalog,
+                generated_root=fixture.api,
+                source_sha=EXACT_SHA,
+            )
+            expected = "target path casing is not exact" if case_insensitive else "target does not exist"
+            self.assertTrue(
+                any(error["target"] == "target.md" and expected in error["error"] for error in errors),
+                errors,
+            )
+
+    def test_tracked_index_decides_case_when_directories_differ_only_by_case(self) -> None:
+        # A case-insensitive checkout merges tracked Tools/ and tools/ into one
+        # on-disk directory, so only the index knows each file's exact spelling.
+        with tempfile.TemporaryDirectory(prefix="docs-link-case-") as temporary:
+            root = Path(temporary)
+            write(root / "Tools" / "x.c", "")
+            write(root / "Tools" / "y.c", "")
+            tracked = links.TrackedTree(
+                frozenset({"tools", "tools/x.c", "Tools", "Tools/y.c"}),
+                frozenset({"tools", "tools/x.c", "tools/y.c"}),
+            )
+            self.assertTrue(links.exact_case(root / "tools" / "x.c", root, tracked))
+            self.assertTrue(links.exact_case(root / "Tools" / "y.c", root, tracked))
+            self.assertFalse(links.exact_case(root / "TOOLS" / "x.c", root, tracked))
+            self.assertFalse(links.exact_case(root / "tools" / "y.c", root, tracked))
+            self.assertFalse(links.exact_case(root / "Tools" / "x.c", root, tracked))
+
+    def test_tracked_tree_is_not_loaded_outside_a_repository_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-link-untracked-") as temporary:
+            self.assertIsNone(links.load_tracked_tree(Path(temporary)))
+
 
 class RepositoryEvidenceTests(unittest.TestCase):
     def test_manifest_declares_every_generator_exactly_once(self) -> None:

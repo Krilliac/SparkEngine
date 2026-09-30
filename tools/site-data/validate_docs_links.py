@@ -10,6 +10,7 @@ import html
 import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -304,11 +305,63 @@ def is_external(target: str) -> tuple[bool, str | None]:
     return False, None
 
 
-def exact_case(path: Path, root: Path) -> bool:
+@dataclass(frozen=True)
+class TrackedTree:
+    """Exact-case repository paths recorded in the git index.
+
+    On a case-insensitive checkout (default APFS, NTFS) two tracked
+    directories that differ only by case (for example ``Tools/`` and
+    ``tools/``) share one on-disk directory whose stored spelling is
+    whichever was created first, so a directory listing cannot tell a
+    correctly cased link from a wrong-case one. The index can.
+    """
+
+    entries: frozenset[str]
+    folded: frozenset[str]
+
+
+def load_tracked_tree(repo_root: Path) -> TrackedTree | None:
+    """Return the index paths of *repo_root*, or None when it is not a git work tree root."""
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            check=False, capture_output=True, timeout=60,
+        )
+        if top.returncode or not top.stdout.strip():
+            return None
+        if Path(os.fsdecode(top.stdout.strip())).resolve() != repo_root.resolve():
+            return None
+        listed = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--cached"],
+            check=False, capture_output=True, timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if listed.returncode:
+        return None
+    entries: set[str] = set()
+    for raw in listed.stdout.split(b"\x00"):
+        if not raw:
+            continue
+        logical = raw.decode("utf-8", errors="surrogateescape")
+        parts = logical.split("/")
+        for index in range(1, len(parts) + 1):
+            entries.add("/".join(parts[:index]))
+    return TrackedTree(frozenset(entries), frozenset(entry.casefold() for entry in entries))
+
+
+def exact_case(path: Path, root: Path, tracked: TrackedTree | None = None) -> bool:
+    """True when *path* (lexical, never case-canonicalized) is spelled exactly as stored."""
     try:
         relative = path.relative_to(root)
     except ValueError:
         return False
+    if tracked is not None and relative.parts:
+        logical = relative.as_posix()
+        if logical in tracked.entries:
+            return True
+        if logical.casefold() in tracked.folded:
+            return False
     current = root
     for part in relative.parts:
         try:
@@ -360,6 +413,7 @@ def resolve_link(
     filesystem_cache: dict[str, str | None],
     line_count_cache: dict[str, int],
     repo_root: Path = REPO_ROOT,
+    tracked: TrackedTree | None = None,
 ) -> str | None:
     external, scheme_error = is_external(target)
     if scheme_error:
@@ -403,13 +457,16 @@ def resolve_link(
             except ValueError:
                 path_cache[path_key] = (None, "link escapes repository root")
                 return "link escapes repository root"
-            filesystem_key = str(normalized)
+            # Key on the spelling as written: Windows resolve() rewrites every
+            # component to its stored case, which would make the casing check
+            # below compare the filesystem with itself.
+            filesystem_key = str(lexical)
             if filesystem_key in filesystem_cache:
                 cached_error = filesystem_cache[filesystem_key]
             elif not normalized.exists():
                 cached_error = f"target does not exist: {raw_path}"
                 filesystem_cache[filesystem_key] = cached_error
-            elif not exact_case(normalized, root_resolved):
+            elif not exact_case(lexical, root_resolved, tracked):
                 cached_error = f"target path casing is not exact: {raw_path}"
                 filesystem_cache[filesystem_key] = cached_error
             else:
@@ -480,6 +537,7 @@ def validate_docs_links(
     path_cache: dict[tuple[str, str], tuple[Path | None, str | None]] = {}
     filesystem_cache: dict[str, str | None] = {}
     line_count_cache: dict[str, int] = {}
+    tracked = load_tracked_tree(REPO_ROOT)
     total_links = 0
     for document in documents:
         try:
@@ -510,6 +568,7 @@ def validate_docs_links(
                 filesystem_cache,
                 line_count_cache,
                 repo_root=REPO_ROOT,
+                tracked=tracked,
             )
             if error:
                 errors.append({**link, "error": error})

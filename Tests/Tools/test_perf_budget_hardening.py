@@ -761,16 +761,48 @@ class TestFinalAuditClosure(unittest.TestCase):
             errors = validate_suite(root)
         self.assertTrue(any("filename case" in error for error in errors))
 
-        if os.path.normcase("Budget.JSON") != os.path.normcase("budget.json"):
-            with tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                _write_suite(root)
-                (root / "Budget.JSON").write_text(
-                    json.dumps(budget), encoding="utf-8",
-                )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root)
+            (root / "Budget.JSON").write_text(
+                json.dumps(budget), encoding="utf-8",
+            )
+            with os.scandir(root) as listing:
+                on_disk = {entry.name for entry in listing}
+            if {"budget.json", "Budget.JSON"} <= on_disk:
                 errors = validate_suite(root)
-            self.assertTrue(any("ambiguous case alias" in error
-                                for error in errors))
+            else:
+                # Case-insensitive filesystem (NTFS, default APFS): the second
+                # write reused the existing directory entry, so two spellings
+                # cannot coexist on disk. os.path.normcase is not a filesystem
+                # probe (it is the identity on macOS). Present the enumeration
+                # a case-sensitive volume would return so the ambiguous-alias
+                # branch is exercised on every host.
+                real_scandir = os.scandir
+
+                class _AliasEntry:
+                    name = "Budget.JSON"
+
+                class _AliasListing:
+                    def __init__(self, directory: Any) -> None:
+                        self._inner = real_scandir(directory)
+                        self._alias = Path(directory) == root
+
+                    def __enter__(self) -> "_AliasListing":
+                        return self
+
+                    def __exit__(self, *exc: object) -> None:
+                        self._inner.close()
+
+                    def __iter__(self) -> Any:
+                        yield from self._inner
+                        if self._alias:
+                            yield _AliasEntry()
+
+                with mock.patch("validate_budget.os.scandir", _AliasListing):
+                    errors = validate_suite(root)
+        self.assertTrue(any("ambiguous case alias" in error
+                            for error in errors), errors)
 
     def test_hard_linked_governance_file_is_rejected(self) -> None:
         hardware = _hardware()

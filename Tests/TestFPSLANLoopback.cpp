@@ -362,7 +362,13 @@ namespace
             [&] { return shooter.Find("event=done").has_value() && target.Find("event=done").has_value(); },
             kScenarioTimeout);
         if (!finished)
+        {
+            // Diagnostics only: ask each still-running peer for its player views and `stats`
+            // refusal counters so the dump shows where the round stalled, not just the events.
+            for (Peer* peer : {&server, &shooter, &target})
+                static_cast<void>(RequestReport(*peer));
             session.DumpAll();
+        }
         ASSERT_TRUE(finished);
 
         const uint32_t shooterId = static_cast<uint32_t>(FieldInt(*shooter.Find("event=done"), "id"));
