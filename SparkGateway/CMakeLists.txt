@@ -23,6 +23,8 @@ endif()
 add_library(SparkGatewayCore STATIC
     src/GatewayAreaControl.cpp
     src/GatewayAreaControl.h
+    src/GatewayAreaControlState.cpp
+    src/GatewayAreaControlState.h
     src/GatewayApplication.cpp
     src/GatewayApplication.h
     src/GatewayCoordinator.cpp

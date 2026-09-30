@@ -1269,55 +1269,19 @@ namespace Spark::Gateway
         std::error_code error;
         if (!std::filesystem::exists(m_epochStateFile, error))
             return !error;
-        std::ifstream input(m_epochStateFile);
+        std::ifstream input(m_epochStateFile, std::ios::binary);
         if (!input)
             return false;
-        input >> std::ws;
-        if (input.peek() == std::char_traits<char>::eof())
-        {
-            return true;
-        }
-        std::unordered_map<std::string, SessionFence> loaded;
-        std::string version;
-        input >> version;
-        if (!input || version != "v2")
-        {
-            return false;
-        }
-        std::string session;
-        uint64_t epoch = 0;
-        unsigned int phase = 0;
-        while (true)
-        {
-            input >> std::ws;
-            if (input.peek() == std::char_traits<char>::eof())
-                break;
-            uint32_t source = 0;
-            uint32_t target = 0;
-            if (!(input >> std::quoted(session) >> epoch >> phase >> source >> target) || session.empty() ||
-                session.size() > 128 || epoch == 0 || phase < 1 || phase > 5 || source == Net::INVALID_AREA ||
-                target == Net::INVALID_AREA || loaded.contains(session))
-            {
-                return false;
-            }
-            loaded.emplace(session, SessionFence{epoch, static_cast<AreaControlPhase>(phase), source, target});
-        }
+        std::ostringstream contents;
+        contents << input.rdbuf();
         if (input.bad())
             return false;
-        m_sessions.swap(loaded);
-        return true;
+        return ParseAreaControlState(contents.str(), m_sessions);
     }
 
     bool LocalAreaControlService::SaveState() const
     {
-        std::ostringstream output;
-        output << "v2\n";
-        for (const auto& [session, fence] : m_sessions)
-        {
-            output << std::quoted(session) << ' ' << fence.epoch << ' ' << static_cast<unsigned int>(fence.phase) << ' '
-                   << fence.sourceArea << ' ' << fence.targetArea << '\n';
-        }
-        return AtomicWriteText(m_epochStateFile, output.str());
+        return AtomicWriteText(m_epochStateFile, SerializeAreaControlState(m_sessions));
     }
 
     namespace

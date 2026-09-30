@@ -269,7 +269,9 @@ namespace MMO
         void RegisterPreparedStatements();
         void CreateSchema();
         void SeedCharacterIdCounter();
-        Transaction BuildCharacterSave(const CharacterSaveData& data);
+        /// nullopt (nothing is written) when the character row could not be loaded back:
+        /// an unstorable name or a non-finite location or stat.
+        std::optional<Transaction> BuildCharacterSave(const CharacterSaveData& data);
         /// Text after @p keyPrefix of every key @p listStmt lists; nullopt on a store error.
         std::optional<std::vector<std::string>> ListKeySuffixes(MMOStmtId listStmt, Params params,
                                                                 const std::string& keyPrefix);

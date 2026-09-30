@@ -2646,3 +2646,151 @@ set_tests_properties(FuzzAsyncDatabaseSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# MMOCharacterRecord.cpp is the row codec MMOPersistenceSystem::LoadCharacter,
+# ListCharacters and BuildCharacterSave call; the persistence system itself needs the
+# engine context and database pool and is outside the target.
+add_executable(SparkFuzzMMOCharacterRecord
+    FuzzMMOCharacterRecord.cpp
+    FuzzMMOCharacterRecordProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp"
+)
+set_source_files_properties(
+    FuzzMMOCharacterRecordProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzMMOCharacterRecord PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/GameModules/SparkGameMMO/Source"
+)
+target_compile_features(SparkFuzzMMOCharacterRecord PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzMMOCharacterRecord PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzMMOCharacterRecord PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzMMOCharacterRecord PRIVATE Threads::Threads c++ c++abi)
+
+# The regression seeds (a negative account id, trailing text, a NaN stat, extra
+# fields, a float the 6-digit writer could not reproduce) all loaded before the row
+# codec parsed whole tokens and wrote shortest round-trip floats.
+add_test(
+    NAME FuzzMMOCharacterRecordSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzMMOCharacterRecord>
+        -max_len=4096
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mmo-character-record"
+)
+set_tests_properties(FuzzMMOCharacterRecordSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# GatewayAreaControlState.cpp is the epoch-state codec LocalAreaControlService::LoadState
+# and SaveState call; sockets, keys and the service thread are outside the target.
+add_executable(SparkFuzzGatewayAreaControlState
+    FuzzGatewayAreaControlState.cpp
+    FuzzGatewayAreaControlStateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkGateway/src/GatewayAreaControlState.cpp"
+)
+set_source_files_properties(
+    FuzzGatewayAreaControlStateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkGateway/src/GatewayAreaControlState.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzGatewayAreaControlState PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkGateway/src"
+)
+target_compile_features(SparkFuzzGatewayAreaControlState PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzGatewayAreaControlState PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzGatewayAreaControlState PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzGatewayAreaControlState PRIVATE Threads::Threads c++ c++abi)
+
+# The regression seeds (a negative epoch, a wrapped phase, a signed area id) were
+# accepted while the reader used std::istream's signed-tolerant unsigned extraction.
+add_test(
+    NAME FuzzGatewayAreaControlStateSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzGatewayAreaControlState>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/gateway-area-control-state"
+)
+set_tests_properties(FuzzGatewayAreaControlStateSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# OrchestratorIdentity.cpp is the lease every SparkOrchestrator mutation takes before
+# it is sent; the adapter drives the real lock, private-file checks and atomic rewrite.
+add_executable(SparkFuzzOrchestratorIdentity
+    FuzzOrchestratorIdentity.cpp
+    FuzzOrchestratorIdentityProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src/OrchestratorIdentity.cpp"
+)
+set_source_files_properties(
+    FuzzOrchestratorIdentityProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src/OrchestratorIdentity.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzOrchestratorIdentity PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkDaemon/src"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzOrchestratorIdentity PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzOrchestratorIdentity PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzOrchestratorIdentity PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzOrchestratorIdentity PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzOrchestratorIdentitySmoke
+    COMMAND $<TARGET_FILE:SparkFuzzOrchestratorIdentity>
+        -max_len=257
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/daemon-orchestrator-identity-state"
+)
+set_tests_properties(FuzzOrchestratorIdentitySmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

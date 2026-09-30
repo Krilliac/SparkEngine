@@ -1335,3 +1335,44 @@ TEST(SparkGateway_GuardedAuthenticator_GatewayHealthReportsCircuit)
     areaService.Stop();
     std::filesystem::remove(areaState, error);
 }
+
+TEST(GatewayAreaControl_EpochStateRejectsSignedNumbers)
+{
+    // SparkFuzzGatewayAreaControlState's regression seeds: std::istream numeric extraction
+    // accepted a sign and negated it into the unsigned field, so "-1" loaded as the largest
+    // epoch (no later Prepare could ever pass the fence) and "-4294967295" as phase 1.
+    AreaControlSessions sessions;
+    sessions["kept"] = AreaControlSessionFence{3, AreaControlPhase::Commit, 1, 2};
+    const AreaControlSessions before = sessions;
+    for (const std::string_view damaged : {
+             "v2\n\"s\" -1 1 1 2\n",
+             "v2\n\"s\" 1 -4294967295 1 2\n",
+             "v2\n\"s\" +7 1 1 2\n",
+             "v2\n\"s\" 7 1 -4294967295 2\n",
+             "v2\n\"s\" 7 1 1 2x\n",
+             "v2\n\"s\" 18446744073709551616 1 1 2\n",
+         })
+    {
+        EXPECT_FALSE(ParseAreaControlState(damaged, sessions));
+        EXPECT_EQ(sessions.size(), before.size());
+        EXPECT_EQ(sessions.at("kept").epoch, uint64_t{3});
+    }
+
+    // What SaveState writes loads back unchanged, including quotes and spaces in an id.
+    AreaControlSessions written;
+    written["plain"] = AreaControlSessionFence{18446744073709551615ull, AreaControlPhase::Acknowledge, 7, 9};
+    written["with \"quote\" and space"] = AreaControlSessionFence{1, AreaControlPhase::Prepare, 4294967295u, 1};
+    AreaControlSessions reloaded;
+    ASSERT_TRUE(ParseAreaControlState(SerializeAreaControlState(written), reloaded));
+    ASSERT_EQ(reloaded.size(), written.size());
+    for (const auto& [session, fence] : written)
+    {
+        ASSERT_TRUE(reloaded.contains(session));
+        EXPECT_EQ(reloaded.at(session).epoch, fence.epoch);
+        EXPECT_TRUE(reloaded.at(session).phase == fence.phase);
+        EXPECT_EQ(reloaded.at(session).sourceArea, fence.sourceArea);
+        EXPECT_EQ(reloaded.at(session).targetArea, fence.targetArea);
+    }
+    EXPECT_TRUE(ParseAreaControlState(" \n\t", reloaded));
+    EXPECT_TRUE(reloaded.empty());
+}
