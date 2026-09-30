@@ -73,7 +73,10 @@ class DocumentedSelectorTests(unittest.TestCase):
                                     for index, command in enumerate(commands)]), encoding="utf-8")
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            arguments = ["--build-dir", str(build_dir or self.build_dir), "--commands-json", str(spec)]
+            # The default generator on a Windows host is multi-config Visual Studio, whose
+            # tests are unavailable without ctest -C; a single-config tree ignores it.
+            arguments = ["--build-dir", str(build_dir or self.build_dir), "--commands-json", str(spec),
+                         "--config", "Debug"]
             if execute:
                 arguments.append("--execute")
             for label in label_exclude or []:
@@ -127,7 +130,7 @@ class DocumentedSelectorTests(unittest.TestCase):
         spec = checker.DocumentedCommand(
             "fixture[ci-map]", f"ctest --test-dir {TREE} -L alpha", ["--test-dir", TREE, "-L", "alpha"]
         )
-        outcome = checker.evaluate(spec, "ctest", self.build_dir, None, documented_tree=TREE)
+        outcome = checker.evaluate(spec, "ctest", self.build_dir, "Debug", documented_tree=TREE)
         self.assertEqual(outcome.status, "pass", outcome.detail)
         mismatched = checker.evaluate(spec, "ctest", self.build_dir, None, documented_tree="build/other")
         self.assertEqual(mismatched.status, "not-applicable")

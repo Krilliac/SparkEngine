@@ -32,6 +32,11 @@ from validate_budget import (  # noqa: E402
     validate_suite,
 )
 
+# validate_directory_path refuses aliased governance roots, and hosted Windows
+# runners set TEMP to an 8.3 short path (C:\Users\RUNNER~1\...). Build every
+# fixture under the canonical long-name spelling instead.
+tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
+
 RESULT_SHA = "c" * 40
 BASELINE_SHA = "a" * 40
 APPROVAL_SHA = "b" * 40
