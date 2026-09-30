@@ -2186,6 +2186,25 @@ set_tests_properties(CrashArtifactRetention PROPERTIES
     LABELS "crash-security;security;unit"
     TIMEOUT 30)
 
+# The private crash-artifact root must be creatable, pinnable and writable from a
+# real AppContainer and from a low-integrity process, keeping its protected
+# owner-only DACL. The probe is header-only and links the static CRT so the copy
+# it relaunches inside the AppContainer needs nothing but system DLLs.
+if(MSVC AND NOT CMAKE_CROSSCOMPILING)
+    add_executable(SparkCrashArtifactSandboxProbe Fixtures/CrashArtifactSandboxProbe.cpp)
+    target_compile_features(SparkCrashArtifactSandboxProbe PRIVATE cxx_std_23)
+    target_include_directories(SparkCrashArtifactSandboxProbe PRIVATE "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
+    target_link_libraries(SparkCrashArtifactSandboxProbe PRIVATE advapi32 bcrypt ole32 userenv)
+    set_property(TARGET SparkCrashArtifactSandboxProbe PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    add_dependencies(SparkTests SparkCrashArtifactSandboxProbe)
+    add_test(NAME CrashArtifactSandbox COMMAND $<TARGET_FILE:SparkCrashArtifactSandboxProbe>)
+    set_tests_properties(CrashArtifactSandbox PROPERTIES
+        LABELS "crash-security;security;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 180)
+endif()
+
 # SEC4: the shared directory-link helper creates a real NTFS junction on Windows
 # (no privilege needed) and a symlink elsewhere, so the link-refusal tests that use
 # it run on every host instead of skipping where create_symlink needs Developer Mode.

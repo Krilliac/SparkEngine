@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4228,
+      "line": 4247,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3714,
+      "line": 3733,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3709",
+          "id": "Tests/CMakeLists.txt:3728",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4266,
+      "line": 4285,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4435,
+      "line": 4454,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1401,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3657,
+      "line": 3676,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3585",
+          "id": "Tests/CMakeLists.txt:3604",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4676,
+      "line": 4695,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2617,6 +2617,24 @@
       "resolved": true
     },
     {
+      "target": "SparkCrashArtifactSandboxProbe",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt",
+      "line": 2194,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:2193",
+          "branch": 0,
+          "branches": [
+            "MSVC AND NOT CMAKE_CROSSCOMPILING"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkCrashReporter",
       "kind": "executable",
       "file": "SparkCrashReporter/CMakeLists.txt",
@@ -2738,10 +2756,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5342,
+      "line": 5361,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5340",
+          "id": "Tests/CMakeLists.txt:5359",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4888,6 +4906,24 @@
       ]
     },
     {
+      "target": "SparkCrashArtifactSandboxProbe",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 2194,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkCrashReporter",
       "kind": "executable",
       "buildable": true,
@@ -4987,7 +5023,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5342,
+          "line": 5361,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
