@@ -201,7 +201,11 @@ def load_releases(path: Path) -> Any:
     from common import decode_json_bytes, read_bytes_stable
 
     limit = 8 * 1024 * 1024
-    return decode_json_bytes(read_bytes_stable(path, limit, "published releases"), "published releases", limit)
+    releases = decode_json_bytes(read_bytes_stable(path, limit, "published releases"), "published releases", limit)
+    # JSON null must not become validate()'s offline sentinel. Check the fetched
+    # schema before selecting the published-release path, including empty lists.
+    published_releases(releases)
+    return releases
 
 
 def main(argv: list[str] | None = None) -> int:

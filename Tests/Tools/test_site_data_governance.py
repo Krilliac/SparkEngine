@@ -173,17 +173,24 @@ class PublishedReleasePolicyTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("match the published releases", result.stdout)
 
+    def test_cli_rejects_null_release_payload_instead_of_running_offline(self) -> None:
+        with mock.patch("common.read_bytes_stable", return_value=b"null"):
+            self.assertEqual(1, policy.main(["--published-releases", "releases.json"]))
+
     def test_cli_rejects_stale_tables_and_unusable_release_files(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             empty = Path(raw) / "empty.json"
             empty.write_bytes(b"")
             broken = Path(raw) / "broken.json"
             broken.write_text('{"message": "API rate limit exceeded"}', encoding="utf-8")
+            null = Path(raw) / "null.json"
+            null.write_text("null", encoding="utf-8")
             for path, fragment in (
                 (FIXTURES / "releases-none.json", "names an unpublished channel nightly"),
                 (FIXTURES / "releases-stable-published.json", "does not name published release v1.0.0"),
                 (empty, "cannot check the policy tables against published releases"),
                 (broken, "published releases must be a JSON array"),
+                (null, "published releases must be a JSON array"),
                 (Path(raw) / "missing.json", "cannot check the policy tables against published releases"),
             ):
                 with self.subTest(releases=path.name):
@@ -192,10 +199,7 @@ class PublishedReleasePolicyTests(unittest.TestCase):
                     self.assertIn(fragment, result.stdout)
 
     def test_license_compliance_job_feeds_the_live_release_list(self) -> None:
-        try:
-            import yaml  # noqa: PLC0415
-        except ImportError:
-            self.skipTest("PyYAML is not installed")
+        import yaml  # noqa: PLC0415
         workflow = yaml.safe_load((ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8"))
         job = workflow["jobs"]["license-compliance"]
         self.assertEqual({"contents": "read"}, job["permissions"])
