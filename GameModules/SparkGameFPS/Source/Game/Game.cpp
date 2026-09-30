@@ -103,9 +103,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     // SceneManager setup
     m_sceneManager = std::make_unique<SceneManager>(graphics, input);
-    bool sceneLoaded = m_sceneManager->LoadScene(Spark::FPSAssets::Resolve(L"Scenes/level1.scene"));
+    const std::wstring authoredScenePath = Spark::FPSAssets::Resolve(L"Scenes/level1.scene");
+    bool sceneLoaded = m_sceneManager->LoadScene(authoredScenePath);
     std::wstring sceneMsg = L"SceneManager::LoadScene returned: " + std::wstring(sceneLoaded ? L"SUCCESS" : L"FAILURE");
     LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"INFO");
+    LogSceneIdentity(sceneLoaded, authoredScenePath);
 
     // Scene material paths are authored data, but the project root is trusted
     // module state. Bind that root immediately after scene construction so
@@ -308,6 +310,33 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
                              L"SUCCESS");
 
     return S_OK;
+}
+
+void Game::LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) const
+{
+    // CreateCombatArena() renders a plausible arena whether or not the authored
+    // scene loaded, so a rendered frame alone cannot tell the two apart. Package
+    // smokes require this exact marker (Tests/PackageSmoke/CheckFPSVisibleFrame.ps1)
+    // as positive evidence that the authored scene, not the fallback, is live.
+    if (!sceneLoaded || !m_sceneManager)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"FPS scene identity: procedural fallback arena (authored scene failed to load from " +
+                                     scenePath + L")",
+                                 L"WARNING");
+        return;
+    }
+
+    // The scene name is authored UTF-8; keep the marker ASCII so every log sink
+    // and the smoke's regex see the same bytes.
+    std::wstring sceneName;
+    for (const char ch : m_sceneManager->GetMetadata().sceneName)
+    {
+        const auto byte = static_cast<unsigned char>(ch);
+        sceneName.push_back((byte >= 0x20 && byte < 0x7F && byte != '"') ? static_cast<wchar_t>(byte) : L'?');
+    }
+    LOG_TO_CONSOLE_IMMEDIATE(std::format(L"FPS scene identity: authored scene \"{}\" ({} nodes) from {}", sceneName,
+                                         m_sceneManager->GetNodeCount(), scenePath),
+                             L"INFO");
 }
 
 void Game::BindSceneMaterialRoots()

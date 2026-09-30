@@ -1,10 +1,50 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$ImagePath
+    [string]$ImagePath,
+
+    # Console log (exec_audit.log) of the run that produced the image. The
+    # procedural fallback arena renders a frame that passes every pixel test
+    # below, so the pixels alone cannot prove the authored scene loaded.
+    [Parameter(Mandatory = $true)]
+    [string]$LogPath,
+
+    [string]$ExpectedSceneName = 'FPS Arena',
+
+    # When set, the authored scene must have been loaded from this directory
+    # (e.g. the package's own Assets/Scenes), not from a parent-directory
+    # asset root the module's search path could otherwise fall back to.
+    [string]$ExpectedSceneDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
+
+$logText = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $LogPath).ProviderPath)
+if ($logText -match 'FPS scene identity: procedural fallback arena[^\r\n]*') {
+    throw "FPS run used the procedural fallback arena instead of the authored scene: $($Matches[0])"
+}
+$identities = [regex]::Matches($logText,
+    'FPS scene identity: authored scene "(?<name>[^"\r\n]*)" \((?<nodes>\d+) nodes\) from (?<path>[^\r\n]+)')
+if ($identities.Count -ne 1) {
+    throw "FPS run log must carry exactly one authored scene identity marker; found $($identities.Count) in $LogPath"
+}
+$identity = $identities[0]
+$sceneName = $identity.Groups['name'].Value
+$sceneNodes = [int]$identity.Groups['nodes'].Value
+$scenePath = $identity.Groups['path'].Value.Trim()
+if ($sceneName -cne $ExpectedSceneName) {
+    throw "FPS run loaded scene '$sceneName', expected authored scene '$ExpectedSceneName'"
+}
+if ($sceneNodes -lt 1) {
+    throw "FPS authored scene '$sceneName' loaded with no nodes"
+}
+if ($ExpectedSceneDirectory -ne '') {
+    $expectedDirectory = [System.IO.Path]::GetFullPath($ExpectedSceneDirectory).TrimEnd('\', '/')
+    $actualDirectory = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($scenePath)).TrimEnd('\', '/')
+    if (-not [string]::Equals($expectedDirectory, $actualDirectory, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "FPS authored scene loaded from '$actualDirectory', expected '$expectedDirectory'"
+    }
+}
 
 $resolved = (Resolve-Path -LiteralPath $ImagePath).ProviderPath
 $bitmap = [System.Drawing.Bitmap]::FromFile($resolved)
@@ -50,7 +90,7 @@ try {
         throw "FPS play area lacks central geometry boundaries ($transitions strong horizontal transitions)"
     }
 
-    Write-Output "FPS visible-frame smoke passed: $($colors.Count) sampled colors and $transitions central geometry transitions in $($bitmap.Width)x$($bitmap.Height)"
+    Write-Output "FPS visible-frame smoke passed: authored scene '$sceneName' ($sceneNodes nodes), $($colors.Count) sampled colors and $transitions central geometry transitions in $($bitmap.Width)x$($bitmap.Height)"
 }
 finally {
     $bitmap.Dispose()

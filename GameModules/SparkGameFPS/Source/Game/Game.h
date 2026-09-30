@@ -614,6 +614,11 @@ class SPARK_GAME_API Game
     // material paths remain functional for both startup and console reloads.
     void BindSceneMaterialRoots();
 
+    // Log the startup scene identity marker: the authored scene's name and node
+    // count, or that only the procedural fallback arena is live. Package smokes
+    // read this marker because the fallback arena renders a plausible frame.
+    void LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) const;
+
     // Invalidate cached authored/procedural BasicMaterials after a successful
     // scene replacement so the next render observes on-disk material edits.
     void InvalidateSceneBasicMaterials();
