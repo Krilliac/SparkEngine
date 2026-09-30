@@ -31,6 +31,12 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 using namespace Spark::Net;
 using namespace SparkTestFixtures;
 
@@ -707,7 +713,9 @@ namespace
                  {Terrafront::TFMsg::RegisterRequest, Terrafront::TFMsg::LoginRequest, Terrafront::TFMsg::LoginProof})
                 m_manager.UnregisterHandler(TFType(id));
             m_db.Close();
-            std::filesystem::remove(m_path);
+            std::error_code ignored;
+            std::filesystem::remove(m_path, ignored);
+            std::filesystem::remove(m_path + ".lock", ignored); // per-process name: do not litter Saves/
         }
         TFLoginServer(const TFLoginServer&) = delete;
         TFLoginServer& operator=(const TFLoginServer&) = delete;
@@ -768,7 +776,15 @@ namespace
 
       private:
         NetworkManager& m_manager;
-        std::string m_path = "Saves/test_net100_tflogin_capture.db";
+        // Per-process name: ctest runs this file both in NetworkSecureTransportWired and inside the
+        // full SparkEngineTests suite, concurrently and from the same working directory. A shared
+        // name lets one process's constructor/destructor remove() the other's committed database
+        // between its register and login, which TFDatabase rightly fails closed on.
+#ifdef _WIN32
+        std::string m_path = "Saves/test_net100_tflogin_capture-" + std::to_string(_getpid()) + ".db";
+#else
+        std::string m_path = "Saves/test_net100_tflogin_capture-" + std::to_string(getpid()) + ".db";
+#endif
         Terrafront::TFDatabase m_db;
         Terrafront::TFAccountSystem m_accounts;
     };
