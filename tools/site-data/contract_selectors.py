@@ -491,6 +491,37 @@ def command_tokens(segment: str) -> list[str]:
         return segment.split()
 
 
+_SHELL_CONTROL_OPERATORS = frozenset(";&|\r\n")
+
+
+def shell_segments(command: str) -> list[str]:
+    """Split ``command`` on the shell control operators ``; & |`` and newlines outside quotes.
+
+    A regex alternation inside a quoted filter (``-R '^A_(B|C)$'``) is one
+    argument, not a pipeline. A command with an unbalanced quote is split on
+    every operator, so a malformed command is never split less than before.
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    quote = None
+    for character in command:
+        if quote:
+            quote = None if character == quote else quote
+        elif character in "'\"":
+            quote = character
+        elif character in _SHELL_CONTROL_OPERATORS:
+            if current:
+                segments.append("".join(current))
+            current = []
+            continue
+        current.append(character)
+    if quote:
+        return [segment for segment in re.split(r"[;&|\r\n]+", command) if segment]
+    if current:
+        segments.append("".join(current))
+    return segments
+
+
 def _build_tree(value: str) -> str | None:
     """Return ``build/<dir>`` when ``value`` points into the repository build root."""
     normalized = value.replace("\\", "/")
@@ -509,7 +540,7 @@ def preset_references(command: str) -> list[PresetReference]:
     check, so a later invocation cannot hide behind an earlier valid one.
     """
     references: list[PresetReference] = []
-    for segment in re.split(r"[;&|\r\n]+", command):
+    for segment in shell_segments(command):
         tokens = [token.lstrip("$(!").rstrip(")") for token in command_tokens(segment)]
         start = next((index for index, token in enumerate(tokens) if _CMAKE_TOOL.match(token)), None)
         if start is None:

@@ -156,6 +156,14 @@ class DocumentedSelectorTests(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("2 applicable command(s): 1 pass, 1 fail", output)
 
+    def test_quoted_regex_alternation_is_one_selection(self) -> None:
+        # wiki/advanced/Testing.md documents -R '^FPSVisibleFrame_(CheckerContract|AuthoredAndFallback)$'.
+        # The '|' inside the quoted filter is regex alternation, not a pipeline.
+        code, output = self.run_checker([f"ctest --test-dir {TREE} -R '^(alpha_runs|epsilon_runs)$' --no-tests=error"],
+                                        execute=True)
+        self.assertEqual(code, 0, output)
+        self.assertIn("executed 2 enabled test(s)", output)
+
     def test_other_preset_tree_is_not_applicable_and_never_counts(self) -> None:
         code, output = self.run_checker([f"ctest --test-dir {TREE} -L alpha --no-tests=error",
                                          "ctest --test-dir build/windows-release -C Release -L gamma --no-tests=error",
@@ -276,6 +284,23 @@ class DocumentedCommandInventoryTests(unittest.TestCase):
             outcome = checker.evaluate(command, "ctest", Path("build"), None,
                                        documented_tree="build/linux-gcc-release")
         self.assertEqual(outcome.status, "pass", outcome.detail)
+
+
+class ShellSegmentTests(unittest.TestCase):
+    """Commands split on shell control operators outside quotes only."""
+
+    def test_quoted_operators_stay_inside_their_invocation(self) -> None:
+        commands = checker._invocations(
+            "quoted", "ctest -R '^A_(B|C)$' --no-tests=error; ctest -L \"x;y\" && echo ok", [])
+        self.assertEqual([command.arguments for command in commands],
+                         [["-R", "^A_(B|C)$", "--no-tests=error"], ["-L", "x;y"]])
+
+    def test_unquoted_operators_still_split(self) -> None:
+        self.assertEqual(checker.shell_segments("ctest -N | grep x; ctest -L y && ctest -L z"),
+                         ["ctest -N ", " grep x", " ctest -L y ", " ctest -L z"])
+
+    def test_unbalanced_quote_splits_on_every_operator(self) -> None:
+        self.assertEqual(checker.shell_segments("ctest -R 'a|b"), ["ctest -R 'a", "b"])
 
 
 if __name__ == "__main__":
