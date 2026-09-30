@@ -90,7 +90,7 @@ namespace Racing
         // One strip of triangles along a segment through `stations`, between the lateral edges
         // leftScale * halfWidth + leftOffset and rightScale * halfWidth + rightOffset, `drop` below the road.
         auto addGrid = [&](SurfaceMesh& mesh, const TrackWaypoint& from, const TrackWaypoint& to,
-                           const float (&stations)[3], float leftScale, float leftOffset, float rightScale,
+                           const float(&stations)[3], float leftScale, float leftOffset, float rightScale,
                            float rightOffset, float drop)
         {
             const float segX = to.x - from.x;
@@ -152,7 +152,7 @@ namespace Racing
         // end waypoint's (matching GetSurfaceAt). Both ends are extended by the half-width with caps, so the
         // strips of adjacent segments overlap at every waypoint and a corner leaves no gap in the road.
         auto addStrip =
-            [&](SurfaceType surface, const TrackWaypoint& from, const TrackWaypoint& to, const float (&stations)[3])
+            [&](SurfaceType surface, const TrackWaypoint& from, const TrackWaypoint& to, const float(&stations)[3])
         { addGrid(meshes[static_cast<size_t>(surface)], from, to, stations, -1.0f, 0.0f, 1.0f, 0.0f, 0.0f); };
 
         // Verge: run-off from each road edge out past the barrier line (under the barrier's full thickness).
@@ -161,7 +161,7 @@ namespace Racing
         // so that where a verge overlaps a road (the inside of a bend) the road is what the wheel rays report.
         constexpr float kVergeDrop = 0.02f;
         constexpr float kVergeWidth = kBarrierClearance + 1.0f;
-        auto addVerges = [&](const TrackWaypoint& from, const TrackWaypoint& to, const float (&stations)[3])
+        auto addVerges = [&](const TrackWaypoint& from, const TrackWaypoint& to, const float(&stations)[3])
         {
             SurfaceMesh& mesh = meshes[static_cast<size_t>(SurfaceType::Grass)];
             addGrid(mesh, from, to, stations, -1.0f, -kVergeWidth, -1.0f, 0.0f, kVergeDrop); // left

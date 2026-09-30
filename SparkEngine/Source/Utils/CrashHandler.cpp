@@ -180,7 +180,9 @@ static bool PinArtifactRoot(const std::filesystem::path& root)
     flags |= O_CLOEXEC;
 #endif
     const int handle = open(absoluteRoot.c_str(), flags);
-    struct stat info{};
+    struct stat info
+    {
+    };
     if (handle < 0 || fstat(handle, &info) != 0 || !S_ISDIR(info.st_mode) || info.st_uid != geteuid() ||
         (info.st_mode & (S_IRWXG | S_IRWXO)) != 0)
     {
@@ -340,7 +342,9 @@ static PinnedFile OpenPinnedInputFile(const std::string& path)
     if (descriptor < 0)
         return result;
 
-    struct stat info{};
+    struct stat info
+    {
+    };
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -403,7 +407,9 @@ static PinnedFile CreateExclusiveOutputFile(const std::string& path)
     const int descriptor = openat(g_artifactRootHandle, name.c_str(), flags, S_IRUSR | S_IWUSR);
     if (descriptor < 0)
         return result;
-    struct stat info{};
+    struct stat info
+    {
+    };
     if (fstat(descriptor, &info) != 0 || !S_ISREG(info.st_mode) || info.st_nlink != 1)
     {
         close(descriptor);
@@ -1827,7 +1833,7 @@ namespace
         std::uintptr_t highest = 0;
         for (ElfW(Half) index = 0; index < info->dlpi_phnum; ++index)
         {
-            const ElfW(Phdr) & header = info->dlpi_phdr[index];
+            const ElfW(Phdr)& header = info->dlpi_phdr[index];
             const std::uintptr_t runtimeAddress = module.loadBias + static_cast<std::uintptr_t>(header.p_vaddr);
             if (header.p_type == PT_LOAD && header.p_memsz > 0)
             {
