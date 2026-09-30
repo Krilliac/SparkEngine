@@ -1,12 +1,12 @@
 /**
  * @file TestDATA120Idempotency.cpp
- * @brief DATA-120: retried TERRAFRONT persistence writes apply exactly once.
+ * @brief DATA-120: snapshot retries preserve values and handoff retries preserve operation fences.
  *
  * Each case drives the production TFDatabase, TFPlayerMetaStore and
  * TFCharacterSystem against a real file and replays a write the way a real
  * caller retries it: the save sweep after a Locked or failed commit, the save
  * tick that re-sends every player's progress, a character create whose
- * acknowledgement was lost, and a handoff commit from a restarted destination.
+ * acknowledgement was lost, and handoff phases retried after failed writes or authority restarts.
  * docs/specs/persistence.md ("Retries and idempotency") states the contract
  * these cases pin and lists the families that already cover the other paths.
  */
@@ -16,6 +16,7 @@
 #include "Persistence/TFPlayerMeta.h"
 #include "Persistence/TFSavePaths.h"
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -69,8 +70,10 @@ namespace
     std::string ReadFile(const fs::path& path)
     {
         std::ifstream in(path, std::ios::binary);
+        ASSERT_TRUE(in.is_open());
         std::ostringstream ss;
         ss << in.rdbuf();
+        ASSERT_FALSE(in.bad());
         return ss.str();
     }
 
@@ -299,5 +302,142 @@ TEST(Persistence_Idempotency_RestartedDestinationCannotReplayCommittedHandoff)
     EXPECT_TRUE(after.migrationOperation.empty());
     EXPECT_TRUE(destination.Close());
     EXPECT_TRUE(source.Close());
+    fs::remove(path);
+}
+
+// Recovery rolls a dead source's reservation back and preserves an already completed rollback. Both must
+// reload with the same operation/epoch/payload fence, reject old phases, and still allow a newer handoff.
+TEST(Persistence_Idempotency_RestartedSourcePreservesRollbackFence)
+{
+    for (const bool finishRollback : std::array{false, true})
+    {
+        const fs::path path =
+            FreshIdempotencyDb(finishRollback ? "test_data120_idem_rollback.db" : "test_data120_idem_reserved.db");
+        uint64_t charId = 0;
+        TFCharacterRecord row;
+        {
+            TFDatabase source;
+            ASSERT_TRUE(source.Open(path) && source.BindAuthority("alpha"));
+            charId = SeedCharacter(source, "source_replay", "Source Replay", 0);
+            ASSERT_TRUE(charId != 0);
+            ASSERT_TRUE(source.ClaimCharacter(charId, row));
+            ASSERT_TRUE(source.ReserveMigration(charId, "op-old", 23, "beta", "saved-payload", row));
+            if (finishRollback)
+            {
+                ASSERT_TRUE(source.AbortMigration(charId, "op-old"));
+                const std::string afterRollback = ReadFile(path);
+                ASSERT_TRUE(source.AbortMigration(charId, "op-old"));
+                EXPECT_EQ(ReadFile(path), afterRollback);
+            }
+            ASSERT_TRUE(source.Close()); // release the lifetime lock with the character still resident
+        }
+
+        TFDatabase source;
+        ASSERT_TRUE(source.Open(path) && source.BindAuthority("alpha"));
+        ASSERT_TRUE(source.FindCharacter(charId, row)); // reload validates the file written by the bind
+        EXPECT_TRUE(row.residentContinent.empty());
+        EXPECT_TRUE(row.migrationOperation.empty());
+        EXPECT_EQ(row.migrationLastOperation, std::string("op-old"));
+        EXPECT_EQ(row.migrationState, std::string("rolled_back"));
+        EXPECT_EQ(row.migrationSource, std::string("alpha"));
+        EXPECT_EQ(row.migrationDestination, std::string("beta"));
+        EXPECT_EQ(row.migrationPayload, std::string("saved-payload"));
+        EXPECT_EQ(row.migrationEpoch, uint64_t{23});
+
+        TFDatabase destination;
+        ASSERT_TRUE(destination.Open(path) && destination.BindAuthority("beta"));
+        const std::string afterRecovery = ReadFile(path);
+        EXPECT_FALSE(destination.CommitMigration(charId, "op-old", row));
+        EXPECT_TRUE(destination.LastStatus() == TFDatabaseStatus::Conflict);
+        EXPECT_FALSE(source.AbortMigration(charId, "op-old")); // no ownership until a fresh claim
+        EXPECT_TRUE(source.LastStatus() == TFDatabaseStatus::Conflict);
+        EXPECT_EQ(ReadFile(path), afterRecovery);
+
+        ASSERT_TRUE(source.ClaimCharacter(charId, row));
+        const std::string afterClaim = ReadFile(path);
+        EXPECT_FALSE(source.ReserveMigration(charId, "op-old", 23, "beta", "saved-payload", row));
+        EXPECT_TRUE(source.LastStatus() == TFDatabaseStatus::Conflict);
+        EXPECT_FALSE(source.ReserveMigration(charId, "op-different", 23, "beta", "saved-payload", row));
+        EXPECT_TRUE(source.LastStatus() == TFDatabaseStatus::Conflict);
+        ASSERT_TRUE(source.AbortMigration(charId, "op-old")); // terminal acknowledgement, no new write
+        EXPECT_EQ(ReadFile(path), afterClaim);
+
+        ASSERT_TRUE(source.ReserveMigration(charId, "op-new", 24, "beta", "new-payload", row));
+        const std::string newReservation = ReadFile(path);
+        EXPECT_FALSE(source.AbortMigration(charId, "op-old"));
+        EXPECT_FALSE(destination.CommitMigration(charId, "op-old", row));
+        EXPECT_EQ(ReadFile(path), newReservation);
+        ASSERT_TRUE(destination.CommitMigration(charId, "op-new", row));
+        EXPECT_EQ(row.residentContinent, std::string("beta"));
+        EXPECT_EQ(row.migrationEpoch, uint64_t{24});
+        EXPECT_EQ(row.migrationPayload, std::string("new-payload"));
+        EXPECT_TRUE(destination.Close());
+        EXPECT_TRUE(source.Close());
+        fs::remove(path);
+    }
+}
+
+// Failed reservation/commit writes must not consume the operation. The next delivery lands once, and
+// subsequent deliveries acknowledge that same row without another durable write or ownership transition.
+TEST(Persistence_Idempotency_HandoffWriteFailureRemainsRetryable)
+{
+    const fs::path path = FreshIdempotencyDb("test_data120_idem_handoff_retry.db");
+    TFDatabase source;
+    TFDatabase destination;
+    ASSERT_TRUE(source.Open(path) && source.BindAuthority("alpha"));
+    const uint64_t charId = SeedCharacter(source, "handoff_retry", "Handoff Retry", 0);
+    ASSERT_TRUE(charId != 0);
+    TFCharacterRecord row;
+    ASSERT_TRUE(source.ClaimCharacter(charId, row));
+    const uint64_t claimedRevision = row.revision;
+    ASSERT_TRUE(destination.Open(path) && destination.BindAuthority("beta"));
+    const std::string beforeReserve = ReadFile(path);
+
+    TFCharacterRecord output;
+    output.id = 9999;
+    ASSERT_TRUE(fs::create_directory(StagingBlocker(path)));
+    EXPECT_FALSE(source.ReserveMigration(charId, "op-retry", 31, "beta", "retry-payload", output));
+    EXPECT_TRUE(source.LastStatus() == TFDatabaseStatus::WriteFailed);
+    EXPECT_EQ(output.id, uint64_t{9999});
+    EXPECT_EQ(ReadFile(path), beforeReserve);
+    ASSERT_TRUE(fs::remove(StagingBlocker(path)));
+
+    ASSERT_TRUE(source.ReserveMigration(charId, "op-retry", 31, "beta", "retry-payload", row));
+    EXPECT_EQ(row.revision, claimedRevision + 1);
+    const uint64_t reservedRevision = row.revision;
+    const std::string afterReserve = ReadFile(path);
+    EXPECT_FALSE(source.ReserveMigration(charId, "op-retry", 31, "beta", "different-payload", output));
+    EXPECT_TRUE(source.LastStatus() == TFDatabaseStatus::Conflict);
+    ASSERT_TRUE(source.ReserveMigration(charId, "op-retry", 31, "beta", "retry-payload", row));
+    EXPECT_EQ(row.revision, reservedRevision);
+    EXPECT_EQ(ReadFile(path), afterReserve);
+
+    ASSERT_TRUE(fs::create_directory(StagingBlocker(path)));
+    EXPECT_FALSE(destination.CommitMigration(charId, "op-retry", output));
+    EXPECT_TRUE(destination.LastStatus() == TFDatabaseStatus::WriteFailed);
+    EXPECT_EQ(output.id, uint64_t{9999});
+    EXPECT_EQ(ReadFile(path), afterReserve);
+    ASSERT_TRUE(fs::remove(StagingBlocker(path)));
+
+    ASSERT_TRUE(destination.CommitMigration(charId, "op-retry", row));
+    EXPECT_EQ(row.revision, reservedRevision + 1);
+    const uint64_t committedRevision = row.revision;
+    const std::string afterCommit = ReadFile(path);
+    ASSERT_TRUE(destination.CommitMigration(charId, "op-retry", row));
+    EXPECT_EQ(row.revision, committedRevision);
+    EXPECT_FALSE(source.AbortMigration(charId, "op-retry"));
+    EXPECT_TRUE(source.LastStatus() == TFDatabaseStatus::Conflict);
+    EXPECT_EQ(ReadFile(path), afterCommit);
+    EXPECT_TRUE(destination.Close());
+    EXPECT_TRUE(source.Close());
+
+    TFDatabase observer;
+    ASSERT_TRUE(observer.Open(path) && observer.FindCharacter(charId, row));
+    EXPECT_EQ(row.revision, committedRevision);
+    EXPECT_EQ(row.residentContinent, std::string("beta"));
+    EXPECT_EQ(row.migrationLastOperation, std::string("op-retry"));
+    EXPECT_EQ(row.migrationState, std::string("committed"));
+    EXPECT_EQ(row.migrationPayload, std::string("retry-payload"));
+    EXPECT_TRUE(observer.Close());
     fs::remove(path);
 }
