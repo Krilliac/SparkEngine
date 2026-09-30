@@ -124,6 +124,7 @@ add_executable(SparkTests
     TestHash.cpp
     TestPasswordHash.cpp
     TestMMOCredentialSecurity.cpp
+    TestMMOAuthHardening.cpp
     TestSessionGateProtocol.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Session/MMOSessionGateProtocol.cpp"
     TestSecureRandom.cpp
@@ -2535,6 +2536,21 @@ set_tests_properties(MMOSessionGateProtocol PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SessionGateProtocol_;SPARK_TEST_EXPECT_COUNT=4"
     LABELS "mmo;network;security;unit"
     TIMEOUT 30)
+
+# MMO auth hardening: equal-work login, per-peer admission and registration budgets
+# (4 policy/account cases everywhere), plus 3 cases that drive the real session gate and
+# chat system over secured loopback (networking + the ImGui-gated MMO sources).
+set(_spark_mmo_auth_count 4)
+if(ENABLE_NETWORKING AND TARGET imgui)
+    math(EXPR _spark_mmo_auth_count "${_spark_mmo_auth_count} + 3")
+endif()
+add_test(NAME MMOAuthHardening COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(MMOAuthHardening PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestMMOAuthHardening.cpp;SPARK_TEST_NAME_PREFIX=MMOAuth;SPARK_TEST_EXPECT_COUNT=${_spark_mmo_auth_count}"
+    LABELS "mmo;network;security;unit"
+    # Each gate case runs one or two 600000-round PBKDF2 derivations (seconds in Debug).
+    RUN_SERIAL TRUE
+    TIMEOUT 180)
 
 # SEC-net-transport finding 35: the MMO server binds client-authored player state
 # to the sender's own server entity instead of relaying it (MMO sources need ImGui).

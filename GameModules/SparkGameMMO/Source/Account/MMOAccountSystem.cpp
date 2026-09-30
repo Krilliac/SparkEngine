@@ -19,6 +19,15 @@
 
 namespace MMO
 {
+    namespace
+    {
+        /// Verification target for unknown usernames: the production scheme, iteration count,
+        /// salt length and key length of Spark::PasswordHash::Create, so Verify performs the same
+        /// derivation work. The derived key is arbitrary; no known password produces it.
+        constexpr std::string_view kDummyPasswordHash =
+            "pbkdf2-sha256$600000$5f0c3a9e71d24b86a0e4c7b21d9f3e58$"
+            "8c1e4f7a02b95d36e7a1c0f48b2d69e53a7f1c04d8e6b92a5c3f07e1d4a86b29";
+    } // namespace
 
     bool MMOAccountSystem::Initialize(Spark::IEngineContext* context)
     {
@@ -147,13 +156,19 @@ namespace MMO
             }
         }
 
+        // Every attempt performs exactly one full PBKDF2 verification before any outcome is
+        // decided, so response time does not reveal whether the username exists or whether the
+        // account is restricted. Unknown usernames verify against a dummy hash with the
+        // production parameters; it can never match because no password derives to it.
+        const bool passwordMatches = VerifyPassword(password, account ? account->passwordHash : kDummyPasswordHash);
+
         if (!account)
         {
             result.errorMessage = "Invalid username or password";
             return result;
         }
 
-        // Check account status
+        // Check account status. A restricted account is refused without counting a failure.
         if (account->status == AccountStatus::Banned)
         {
             if (account->banExpiry == 0 || account->banExpiry > now)
@@ -179,8 +194,7 @@ namespace MMO
             return result;
         }
 
-        // Verify password
-        if (!Spark::PasswordHash::Verify(password, account->passwordHash))
+        if (!passwordMatches)
         {
             account->failedLoginAttempts++;
             if (account->failedLoginAttempts >= MAX_FAILED_LOGINS)
@@ -534,6 +548,18 @@ namespace MMO
             ImGui::TreePop();
         }
 #endif
+    }
+
+    void MMOAccountSystem::SetPasswordVerifier(PasswordVerifier verifier)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        m_passwordVerifier = verifier;
+    }
+
+    bool MMOAccountSystem::VerifyPassword(std::string_view password, std::string_view encodedHash) const
+    {
+        return m_passwordVerifier ? m_passwordVerifier(password, encodedHash)
+                                  : Spark::PasswordHash::Verify(password, encodedHash);
     }
 
     size_t MMOAccountSystem::GetOnlineCount() const

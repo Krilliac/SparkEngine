@@ -83,15 +83,45 @@ namespace MMO
                                                                           .allowedFromServer = true,
                                                                           .stringFieldOffset = 1});
 
-        netMgr->RegisterHandler(kMMOChatMessageType, [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
-                                { HandleNetworkChat(*netMgr, netMsg); });
+        netMgr->RegisterHandler(kMMOChatMessageType,
+                                [this](const Spark::Net::NetworkMessage& netMsg) { EnqueueNetworkChat(netMsg); });
 #endif
     }
 
 #ifdef ENABLE_NETWORKING
-    void MMOChatSystem::HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const Spark::Net::NetworkMessage& netMsg)
+    void MMOChatSystem::EnqueueNetworkChat(const Spark::Net::NetworkMessage& netMsg)
     {
-        std::optional<WirePayload> decoded = DecodeWirePayload(netMsg.payload);
+        // Any thread (the DedicatedServer tick thread pumps NetworkManager): copy only.
+        std::lock_guard lock(m_pendingMutex);
+        if (m_pending.size() >= MAX_PENDING_NETWORK)
+        {
+            return;
+        }
+        m_pending.push_back({netMsg.senderID, netMsg.channel, netMsg.payload});
+    }
+
+    void MMOChatSystem::DrainNetworkChat()
+    {
+        std::deque<PendingNetworkChat> pending;
+        {
+            std::lock_guard lock(m_pendingMutex);
+            pending.swap(m_pending);
+        }
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (!netMgr)
+        {
+            return;
+        }
+        for (const auto& item : pending)
+        {
+            HandleNetworkChat(*netMgr, item);
+        }
+    }
+
+    void MMOChatSystem::HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const PendingNetworkChat& received)
+    {
+        const uint32_t senderId = received.senderId;
+        std::optional<WirePayload> decoded = DecodeWirePayload(received.payload);
         if (!decoded)
         {
             return;
@@ -104,7 +134,7 @@ namespace MMO
             std::string connectionName;
             {
                 const auto clients = netMgr.GetClients();
-                const auto client = clients.find(netMsg.senderID);
+                const auto client = clients.find(senderId);
                 if (client == clients.end())
                 {
                     return;
@@ -112,23 +142,26 @@ namespace MMO
                 connectionName = client->second.name;
             }
             std::optional<std::vector<uint8_t>> relayPayload =
-                BuildServerRelayPayload(netMsg.payload, connectionName, netMsg.senderID);
+                BuildServerRelayPayload(received.payload, connectionName, senderId);
             if (!relayPayload)
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Network,
                                "MMO chat: dropped %s message from client %u (no server-side routing for it)",
-                               ChannelToString(decoded->channel), static_cast<unsigned>(netMsg.senderID));
+                               ChannelToString(decoded->channel), static_cast<unsigned>(senderId));
                 return;
             }
-            Spark::Net::NetworkMessage relay = netMsg;
+            Spark::Net::NetworkMessage relay;
+            relay.type = kMMOChatMessageType;
+            relay.channel = received.channel;
+            relay.senderID = senderId;
             relay.payload = std::move(*relayPayload);
-            netMgr.SendToAllExcept(netMsg.senderID, relay);
-            decoded->senderName = ServerAttributedSenderName(connectionName, netMsg.senderID);
+            netMgr.SendToAllExcept(senderId, relay);
+            decoded->senderName = ServerAttributedSenderName(connectionName, senderId);
         }
 
         ChatMessage msg{};
         msg.channel = decoded->channel;
-        msg.senderClientId = netMsg.senderID;
+        msg.senderClientId = senderId;
         msg.senderName = decoded->senderName;
         msg.text = decoded->text;
         msg.timestamp = m_time;
@@ -211,6 +244,10 @@ namespace MMO
 
         if (deltaTime > 0.0f)
             m_time += deltaTime;
+
+#ifdef ENABLE_NETWORKING
+        DrainNetworkChat();
+#endif
     }
 
     void MMOChatSystem::Shutdown()
@@ -223,6 +260,10 @@ namespace MMO
             // handler. Inside the module's teardown scope NetworkManager leaves a slot the
             // replacement already owns untouched.
             netMgr->UnregisterHandler(kMMOChatMessageType);
+        }
+        {
+            std::lock_guard lock(m_pendingMutex);
+            m_pending.clear();
         }
 #endif
         m_history.clear();

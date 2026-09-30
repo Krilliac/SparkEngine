@@ -145,13 +145,21 @@ namespace MMO
         std::string GetAccountInfoString(uint32_t accountId) const;
         std::string GetOnlineListString() const;
 
+        /// Signature of Spark::PasswordHash::Verify: the only PBKDF2 work Login performs.
+        using PasswordVerifier = bool (*)(std::string_view password, std::string_view encodedHash);
+        /// Replace the verifier Login uses (null restores Spark::PasswordHash::Verify). Tests use
+        /// this to observe how much key-derivation work each Login path performs.
+        void SetPasswordVerifier(PasswordVerifier verifier);
+
       private:
         static std::string GenerateSessionToken();
         static uint64_t GetTimestamp();
         void CleanExpiredSessions();
         void CleanExpiredBans();
+        bool VerifyPassword(std::string_view password, std::string_view encodedHash) const;
 
         Spark::IEngineContext* m_context{nullptr};
+        PasswordVerifier m_passwordVerifier{nullptr};
         std::unordered_map<uint32_t, AccountData> m_accounts;
         std::unordered_map<std::string, SessionData> m_sessions;
         mutable std::recursive_mutex m_mutex;

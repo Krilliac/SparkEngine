@@ -500,7 +500,15 @@ TEST(ReliableOrderedSeq_MMOChatFromClientReachesServer)
     {
         peer.SendSealed(frame);
     }
-    PumpUntil(server, [&] { return HistoryContains(serverChat, text + " again"); }, kWindow);
+    // The network handler only queues; the game thread's Update records the history.
+    PumpUntil(
+        server,
+        [&]
+        {
+            serverChat.Update(0.016f);
+            return HistoryContains(serverChat, text + " again");
+        },
+        kWindow);
 
     EXPECT_TRUE(HistoryContains(serverChat, text));
     EXPECT_TRUE(HistoryContains(serverChat, text + " again"));
