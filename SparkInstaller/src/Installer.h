@@ -24,11 +24,14 @@ namespace SparkInstaller
 
     namespace detail
     {
-        // Move a fully cloned staging tree to destination, which must be absent
-        // or an empty directory. Never overwrites: on failure both trees are
-        // left as they were (an emptied destination is recreated) and error
-        // says why.
+        // Without previous, destination must be absent or empty. For updates,
+        // previous names an absent sibling: retain the live tree there before
+        // activating the verified staging tree. A failed activation restores it.
+        // The caller serializes activation/recovery for this destination.
         bool ActivateStagedTree(const std::filesystem::path& staging, const std::filesystem::path& destination,
-                                std::string& error);
+                                std::string& error, const std::filesystem::path& previous = {});
+        // Recover a process interrupted between the two activation renames.
+        // When both trees exist, archive the previous tree without deleting it.
+        bool RecoverPreviousTree(const std::filesystem::path& destination, std::string& error);
     } // namespace detail
 } // namespace SparkInstaller

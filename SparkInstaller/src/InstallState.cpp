@@ -525,7 +525,7 @@ namespace SparkInstaller
         return true;
     }
 
-    bool InstallState::Save(const std::string& destination) const
+    bool InstallState::Save(const std::string& destination, const std::string& recordedDestination) const
     {
         if (destination.empty() || schema != 1 || ref.empty() || commit.empty() || generator.empty() ||
             buildType.empty() || installerVersion.empty())
@@ -534,7 +534,7 @@ namespace SparkInstaller
         }
 
         std::string contents;
-        if (!Serialize(*this, destination, contents))
+        if (!Serialize(*this, recordedDestination.empty() ? destination : recordedDestination, contents))
         {
             return false;
         }

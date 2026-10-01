@@ -13,10 +13,9 @@ namespace SparkInstaller::Preflight
     // checkout); a windows-release tree with the default options (tests and
     // game modules on) is ~40 GiB.
     inline constexpr std::uintmax_t kGiB = 1024ull * 1024ull * 1024ull;
-    // Clone/fetch only: Install with --skip-build, or Update (the existing
-    // build tree is rewritten in place rather than duplicated).
+    // Clone/fetch only, including an update staged with --skip-build.
     inline constexpr std::uintmax_t kDefaultMinFreeBytesSource = 2 * kGiB;
-    // Clone plus a full first build.
+    // Clone plus a full build, including updates built beside the live tree.
     inline constexpr std::uintmax_t kDefaultMinFreeBytesBuild = 40 * kGiB;
 
     struct PreflightFailure
@@ -36,4 +35,8 @@ namespace SparkInstaller::Preflight
     // marker parses. ctx.destination must already be absolute and ctx.mode
     // detected. An empty result means every check passed.
     std::vector<PreflightFailure> Run(const InstallerContext& ctx);
+    // Path/link/writability checks before restoring a retained tree. This does
+    // not authorize a new build: Run must still pass after recovery. Restoring
+    // a rename needs neither CMake nor another full build's free-space budget.
+    std::vector<PreflightFailure> RunRecovery(const InstallerContext& ctx);
 } // namespace SparkInstaller::Preflight

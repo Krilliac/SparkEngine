@@ -47,32 +47,57 @@ pending marker.
    (default `Working`) and the default build options.
 2. Verify the existing checkout has no tracked or untracked changes; refuse the
    update when local changes could make rollback ambiguous.
-3. Record the rollback target: the current `HEAD`, or the commit in
-   `.sparkengine-install.json` when the two differ. A difference means an
-   earlier update was interrupted after its checkout and before its build was
-   recorded, so only the recorded commit is a verified build.
-4. `git fetch` + `git checkout <ref>` + `git submodule update --init --recursive`.
-5. Re-run configure + build with the chosen options (the stored ones when a
-   wizard recovered them).
-6. Update `.sparkengine-install.json` with the new commit + timestamp, and
-   remove any `.sparkengine-install.repair-required` marker.
+3. Refuse an already inconsistent legacy install whose `HEAD` differs from its
+   recorded build; preserve it for explicit repair rather than rebuilding it in place.
+4. Clone the requested ref into a unique sibling, then fetch, check out the ref,
+   and update submodules there. The live checkout is not fetched or checked out.
+5. Configure and build in that sibling. Build paths must be below the install
+   root and are remapped into staging; an explicit `-B` also overrides a preset's
+   binary directory. Verify that `HEAD` still matches the staged commit, then
+   preserve Git-listed ignored regular user files outside the build directories,
+   then write and reload the install state with the final destination recorded.
+   Linked files, special files, or collisions with the new tree refuse the update
+   without replacing the working install.
+6. Under an OS-held destination lock, rename the live tree to
+   `<dest>.sparkinstall-previous-pending`, then rename staging to the destination.
+   A failed second rename attempts to restore the previous tree immediately.
+   A successful swap retains the previous tree under a unique
+   `<dest>.sparkinstall-previous-*` name, including its original build outputs
+   and ignored user files. It is never automatically deleted.
 
-If any step after the fetch fails, the installer restores the rollback target
-(`git checkout --detach` + submodule update), rebuilds it, and verifies that
-`HEAD` is that commit again. The run then exits with the original failure code
-and the install is the verified build it was before. If the restore, the
-rebuild or the verification fails, the installer writes
-`.sparkengine-install.repair-required` (with the reason) and exits **9**; a
-later successful update clears it.
+A fetch, checkout, configure, build, commit-verification or state-write failure
+before activation leaves the existing install and its binaries unchanged; no
+rollback rebuild runs. A process killed during staging can leave a staging
+sibling, but it cannot replace the live install. On the next run, a pending
+previous tree is restored if the destination is absent, or archived if a
+verified replacement is already present. Ambiguous recovery exits **9** and
+preserves both trees. The two renames are recoverable, not one atomic filesystem
+operation; there can be a brief interval with no destination directory.
+
+An update with `--skip-build` keeps its clone in staging and reports its path;
+it never activates unverified source over a working install. Each later update
+builds a fresh sibling. CMake's cache still names the original staging directory
+after activation and must not be reused for an in-place rebuild. Build RPATHs
+use origin-relative entries where CMake supports them. Runtime relocation still
+requires native qualification. Git's ignored-file inventory determines retained
+user files; the configured build directory, root `build/`, Git metadata, and
+installer markers are excluded from copying. The complete previous tree also
+retains these files for rollback. Active applications should be stopped during
+an update so they cannot write user data while it is being copied. Retained
+previous trees consume disk space until the owner deliberately removes them.
 
 The same binary handles all three modes — it picks automatically based on
 what's in the destination.
 
 ## Preflight
 
-Before it bootstraps Git, creates a directory, clones or fetches, the installer
-runs read-only checks and reports every failure at once. Any failure exits with
-code **10** and leaves the destination exactly as it was.
+Before a new clone, fetch or build, the installer runs preflight checks and
+reports failures with code **10**. Ordinary preflight refusals leave the
+destination unchanged. When a previous tree awaits recovery, path/link and
+writability checks run first; the retained working tree is restored before
+checking CMake and the new-build disk budget. Recovery therefore still works
+when build tools are missing or the volume has insufficient space for another
+build. Those normal build gates remain mandatory after recovery.
 
 | Check | Failure code |
 |---|---|
@@ -93,7 +118,8 @@ tree built with the default options (tests and game modules on) takes about
 |---|---|
 | Install with a build | 40 GiB |
 | Install with `--skip-build` | 2 GiB |
-| Update (the existing build tree is rebuilt in place) | 2 GiB |
+| Update with a build (new sibling build; previous tree retained) | 40 GiB |
+| Update with `--skip-build` (staged source only) | 2 GiB |
 
 ### Exit codes
 
@@ -102,12 +128,12 @@ tree built with the default options (tests and game modules on) takes about
 | 0 | Success. |
 | 2 | Invalid arguments or unresolvable destination. |
 | 3 | Git is unavailable and could not be bootstrapped. |
-| 4 | Install destination exists and is not empty (the staged clone is kept and reported when it appeared during the clone), or a pending install was started for a different ref. |
+| 4 | Destination is unavailable, nonempty for a fresh install, locked by another installer, or a pending install was started for a different ref. |
 | 5 | Clone, fetch, checkout or submodule update failed, the existing install has local changes, or a pending install is no longer at its cloned commit. |
-| 6 | CMake configure failed. |
+| 6 | CMake configure failed, or an update build path is outside the install tree. |
 | 7 | CMake build failed. |
 | 8 | The installed commit, the install marker or the pending-install marker could not be recorded, read or removed. |
-| 9 | An update failed and its rollback could not restore and rebuild the previous commit; the install requires repair (see `.sparkengine-install.repair-required`). |
+| 9 | Update activation or recovery failed or is ambiguous; the reported staged and previous trees are retained for recovery. |
 | 10 | Preflight refused the run; nothing was changed. |
 
 ## Usage
@@ -128,7 +154,7 @@ sparkinstaller --headless \
 | `--repo <url>` | Override repo URL (defaults to `Krilliac/SparkEngine` on GitHub). |
 | `--gui` | Launch the ImGui wizard instead of the terminal UI. Source-build only: compiled when `SPARKINSTALLER_ENABLE_GUI=ON`. The published installer is built with it OFF and answers `--gui` with exit 2. |
 | `--headless` | Non-interactive; fails if required inputs are missing. |
-| `--skip-build` | Clone only; do not configure or build. A fresh install stays pending and the next run without it resumes the build. |
+| `--skip-build` | Clone only; do not configure or build. A fresh install stays pending; an update stays in a sibling without replacing the live tree. |
 | `--skip-submodules` | Skip submodule update step in Update mode. |
 | `--help`, `--version` | Help / version. |
 
@@ -149,9 +175,10 @@ install to a new ref.
 ### Recovery and package-tree repeatability evidence
 
 The installer transaction tests cover activation refusal when a destination
-contains user data, pending-install resume after a failed build, interrupted
-update rollback to the last recorded commit, and preservation of a user-data
-file during that rollback. Install-state replacement uses a temporary file and
+contains user data, pending-install resume after a failed build, byte-identical
+live build outputs after a failed staged update, and a real installer process
+killed after fake git checkout. Recovery fixtures cover the activation rename
+gap and preservation of the previous tree and its user data. Install-state replacement uses a temporary file and
 atomic rename on supported filesystems, and refuses non-regular marker targets.
 
 `Tests/PackageSmoke/installer_repeatability.cmake` is the local package-tree

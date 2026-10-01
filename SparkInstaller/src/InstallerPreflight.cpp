@@ -56,11 +56,15 @@ namespace SparkInstaller::Preflight
             // std::filesystem does not portably report NTFS junctions (mount
             // points), which redirect writes exactly like a directory symlink.
             if (path == path.root_path())
+            {
                 return false;
+            }
             WIN32_FIND_DATAW data{};
             const HANDLE find = ::FindFirstFileW(path.wstring().c_str(), &data);
             if (find == INVALID_HANDLE_VALUE)
+            {
                 return false;
+            }
             ::FindClose(find);
             return (data.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
                    (data.dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT || data.dwReserved0 == IO_REPARSE_TAG_SYMLINK);
@@ -157,10 +161,10 @@ namespace SparkInstaller::Preflight
 
     std::uintmax_t DefaultMinFreeBytes(const InstallerContext& ctx)
     {
-        return ctx.skipBuild || ctx.mode == Mode::Update ? kDefaultMinFreeBytesSource : kDefaultMinFreeBytesBuild;
+        return ctx.skipBuild ? kDefaultMinFreeBytesSource : kDefaultMinFreeBytesBuild;
     }
 
-    std::vector<PreflightFailure> Run(const InstallerContext& ctx)
+    static std::vector<PreflightFailure> RunChecks(const InstallerContext& ctx, bool recoveryOnly)
     {
         std::vector<PreflightFailure> failures;
         const fs::path destination = fs::path(ctx.destination);
@@ -191,22 +195,24 @@ namespace SparkInstaller::Preflight
                 failures.push_back({"destination-not-writable", detail});
             }
 
-            const std::uintmax_t required = ctx.minFreeBytes.value_or(DefaultMinFreeBytes(ctx));
-            const fs::space_info space = fs::space(ancestor, error);
-            if (error)
+            if (!recoveryOnly)
             {
-                failures.push_back(
-                    {"free-space-unknown", "cannot query free space on " + ancestor.string() + ": " + error.message()});
-            }
-            else if (space.available < required)
-            {
-                failures.push_back({"insufficient-free-space", FormatGiB(space.available) + " free on " +
-                                                                   ancestor.string() + ", " + FormatGiB(required) +
-                                                                   " required"});
+                const std::uintmax_t required = ctx.minFreeBytes.value_or(DefaultMinFreeBytes(ctx));
+                const fs::space_info space = fs::space(ancestor, error);
+                if (error)
+                {
+                    failures.push_back({"free-space-unknown",
+                                        "cannot query free space on " + ancestor.string() + ": " + error.message()});
+                }
+                else if (space.available < required)
+                {
+                    failures.push_back({"insufficient-free-space", FormatGiB(space.available) + " free on " +
+                                                                       ancestor.string() + ", " + FormatGiB(required) +
+                                                                       " required"});
+                }
             }
         }
-
-        if (!ctx.skipBuild)
+        if (!recoveryOnly && !ctx.skipBuild)
         {
             const std::string& cmakePath = ctx.configManager.config.cmakePath;
             const std::string cmake = cmakePath.empty() ? "cmake" : GitRunner::EncodeProcessRunnerArgument(cmakePath);
@@ -221,7 +227,7 @@ namespace SparkInstaller::Preflight
             }
         }
 
-        if (ctx.mode == Mode::Update)
+        if (!recoveryOnly && ctx.mode == Mode::Update)
         {
             const fs::path marker = destination / InstallState::FileName();
             InstallState ignored;
@@ -235,5 +241,15 @@ namespace SparkInstaller::Preflight
         }
 
         return failures;
+    }
+
+    std::vector<PreflightFailure> Run(const InstallerContext& ctx)
+    {
+        return RunChecks(ctx, false);
+    }
+
+    std::vector<PreflightFailure> RunRecovery(const InstallerContext& ctx)
+    {
+        return RunChecks(ctx, true);
     }
 } // namespace SparkInstaller::Preflight

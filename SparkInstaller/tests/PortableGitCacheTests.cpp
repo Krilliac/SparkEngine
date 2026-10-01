@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -28,7 +29,9 @@ namespace
     int Check(bool condition, const std::string& message)
     {
         if (condition)
+        {
             return 0;
+        }
         std::cerr << "FAIL: " << message << '\n';
         return 1;
     }
@@ -43,7 +46,9 @@ namespace
         std::error_code error;
         fs::create_directories(path.parent_path(), error);
         if (error)
+        {
             return false;
+        }
         std::ofstream out(path, std::ios::binary | std::ios::trunc);
         out << text;
         out.close();
@@ -63,7 +68,9 @@ namespace
         for (fs::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
         {
             if (it->path().filename().string().compare(0, prefix.size(), prefix) == 0)
+            {
                 ++count;
+            }
         }
         return count;
     }
@@ -74,7 +81,9 @@ namespace
         for (fs::directory_iterator it(directory, error), end; !error && it != end; it.increment(error))
         {
             if (it->path().filename().string().compare(0, prefix.size(), prefix) == 0)
+            {
                 return it->path();
+            }
         }
         return {};
     }
@@ -123,7 +132,9 @@ namespace
         TestRoot root("interrupted");
         int failures = Check(root.Ok(), "could not create interrupted-population test root");
         if (failures != 0)
+        {
             return failures;
+        }
 
         int calls = 0;
         const auto result = Ensure(root.Cache(), kPinnedSha,
@@ -152,7 +163,9 @@ namespace
         TestRoot root("repair");
         int failures = Check(root.Ok(), "could not create repair test root");
         if (failures != 0)
+        {
             return failures;
+        }
         failures += Check(WriteText(root.Active() / ExeRelative(), "stale-partial"),
                           "could not create unverified cache fixture");
 
@@ -198,7 +211,9 @@ namespace
         for (char& character : upperSha)
         {
             if (character >= 'a' && character <= 'f')
+            {
                 character = static_cast<char>(character - 'a' + 'A');
+            }
         }
         const auto upper = Ensure(root.Cache(), upperSha,
                                   [&upperCalls](const std::string&)
@@ -232,7 +247,9 @@ namespace
         TestRoot root("wrong_archive");
         int failures = Check(root.Ok(), "could not create wrong-archive test root");
         if (failures != 0)
+        {
             return failures;
+        }
         failures += Check(WriteText(root.Active() / ExeRelative(), "existing"), "could not create existing tree");
 
         const auto result = Ensure(root.Cache(), kPinnedSha, [](const std::string& staging)
@@ -255,7 +272,9 @@ namespace
         TestRoot root("invalid");
         int failures = Check(root.Ok(), "could not create invalid-request test root");
         if (failures != 0)
+        {
             return failures;
+        }
 
         int calls = 0;
         const SparkInstaller::PortableGitPopulator counting = [&calls](const std::string&)
@@ -284,7 +303,9 @@ namespace
         TestRoot root("planted_link");
         int failures = Check(root.Ok(), "could not create planted-link test root");
         if (failures != 0)
+        {
             return failures;
+        }
         const fs::path elsewhere = root.Root() / "elsewhere";
         failures += Check(WriteText(elsewhere / ExeRelative(), "outside"), "could not create link target tree");
         failures += Check(WriteText(elsewhere / kMarkerName, std::string(kPinnedSha) + "\n"),
@@ -295,7 +316,13 @@ namespace
         if (linkError)
         {
             // Unprivileged Windows hosts without Developer Mode cannot create
-            // symlinks; the remaining cases still cover the activation contract.
+            // symlinks. CI must fail closed instead of silently dropping this
+            // tamper case; local developer hosts may still report a skip.
+            const char* ci = std::getenv("CI");
+            if (ci && *ci)
+            {
+                return Check(false, "planted-link case could not create a symlink in CI: " + linkError.message());
+            }
             std::cout << "SKIP: planted-link case (" << linkError.message() << ")\n";
             return failures;
         }
@@ -330,6 +357,8 @@ int RunPortableGitCacheTests()
     failures += RunInvalidRequestTest();
     failures += RunPlantedLinkTest();
     if (failures == 0)
+    {
         std::cout << "SparkInstaller portable Git cache tests passed\n";
+    }
     return failures;
 }
