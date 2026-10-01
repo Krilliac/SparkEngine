@@ -13,9 +13,9 @@ PACKAGE (ZIP or TGZ) must:
   (cmake/SparkWindowsVersionInfo.rc.in). The shipped set is read from
   ``spark_attach_shipped_windows_version_info`` in
   cmake/SparkWindowsVersionInfo.cmake; any other ``Spark*.exe`` must carry the
-  same resource, and an archive with no shipped executable is refused. DLLs
-  (game modules, third-party runtime libraries) carry no engine version
-  resource and are not checked;
+  same resource, and an archive with no shipped executable is refused. Engine
+  first-party ``SparkEngine*.dll`` and ``SparkGame*.dll`` carry the same
+  resource; third-party runtime libraries are not engine-owned;
 * hold exactly one ``lib/cmake/SparkEngine/SparkEngineConfigVersion.cmake``
   that sets ``PACKAGE_VERSION "X.Y.Z"``.
 
@@ -209,17 +209,32 @@ def _bounded(name: str, size: int, read: Callable, member: object) -> bytes:
     return read(member)
 
 
+def _direct_installer(package: Path) -> Iterator[tuple[str, Callable[[], bytes]]]:
+    """Yield a direct NSIS installer image for version-resource inspection."""
+    if package.suffix.lower() == ".exe":
+        yield package.name, lambda: _bounded(package.name, package.stat().st_size, lambda _: package.read_bytes(), None)
+
+
 def package_errors(package: Path, version: str, shipped: frozenset[str]) -> list[str]:
     errors: list[str] = []
     if f"-{version}-" not in package.name:
         errors.append(f"file name does not carry -{version}-")
     config_versions: list[bytes] = []
     checked: list[str] = []
-    for member, read in _members(package):
+    direct_installer = package.suffix.lower() == ".exe"
+    shipped_lower = {name.lower() for name in shipped}
+    members = _direct_installer(package) if package.suffix.lower() == ".exe" else _members(package)
+    for member, read in members:
         path = PurePosixPath(member)
         if member.endswith(CONFIG_VERSION_SUFFIX):
             config_versions.append(read())
-        if path.suffix.lower() != ".exe" or not (path.name in shipped or path.name.startswith("Spark")):
+        is_shipped_executable = path.suffix.lower() == ".exe" and (
+            direct_installer or path.name.lower() in shipped_lower or path.name.lower().startswith("spark")
+        )
+        is_first_party_dll = path.suffix.lower() == ".dll" and (
+            path.name.lower().startswith("sparkengine") or path.name.lower().startswith("sparkgame")
+        )
+        if not (is_shipped_executable or is_first_party_dll):
             continue
         checked.append(path.name)
         try:
@@ -230,8 +245,12 @@ def package_errors(package: Path, version: str, shipped: frozenset[str]) -> list
                 errors.extend(f"{member}: {error}" for error in version_errors(resource, version))
         except PackageVersionError as error:
             errors.append(f"{member}: {error}")
-    if not set(checked) & shipped:
+    if not direct_installer and not {name.lower() for name in checked} & shipped_lower:
         errors.append("no shipped Spark executable was found")
+    if direct_installer:
+        if not checked:
+            errors.append("installer has no version resource")
+        return errors
     if len(config_versions) != 1:
         errors.append(f"expected one {CONFIG_VERSION_SUFFIX}, found {len(config_versions)}")
     else:

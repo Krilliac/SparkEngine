@@ -285,6 +285,13 @@ function(spark_add_game_module TARGET_NAME)
 
     spark_configure_module_abi(${TARGET_NAME})
 
+    # Stable-v1 packages bind first-party game-module DLLs to the engine
+    # release version. Standalone consumers without the Windows resource helper
+    # retain the existing ABI-only behavior.
+    if(WIN32 AND COMMAND spark_target_windows_version_info)
+        spark_target_windows_version_info(${TARGET_NAME})
+    endif()
+
     message(STATUS
         "spark_add_game_module: ${TARGET_NAME} configured with ${_spark_module_link_target}")
 endfunction()

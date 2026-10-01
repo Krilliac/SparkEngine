@@ -1284,6 +1284,22 @@ def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | 
             errors.append(
                 f"{location}: finalization gate {finalization.get('gateId')} must be passing with evidence"
             )
+        else:
+            gate_commits: set[str] = set()
+            for evidence in gate.get("evidence", []):
+                reference = evidence.get("reference") if isinstance(evidence, dict) else evidence
+                if (isinstance(reference, str) and ACCEPTANCE_CI_REFERENCE.fullmatch(reference)
+                        and reference[len("ci:"):].split("/", 1)[0] in workflows):
+                    gate_commits.add(reference.rsplit("@", 1)[1])
+            if not gate_commits:
+                errors.append(
+                    f"{location}: finalization gate {finalization.get('gateId')} must carry exact-commit CI evidence"
+                )
+            elif commits and gate_commits != commits:
+                errors.append(
+                    f"{location}: finalization gate {finalization.get('gateId')} evidence commits "
+                    f"{sorted(gate_commits)} do not match publication evidence {sorted(commits)}"
+                )
     if global_ready and len(release_commits) > 1:
         errors.append(
             "publicationEvidence: publication evidence cites different commits across profiles "

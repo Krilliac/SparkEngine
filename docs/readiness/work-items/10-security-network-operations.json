@@ -228,18 +228,26 @@
             "tools/generate-sbom.py",
             ".github/workflows/release.yml",
             "Tests/Tools/test_release_supply_chain_wiring.py",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "tools/release_package_reconciliation.py",
+            "Tests/Tools/test_release_package_reconciliation.py"
           ],
-          "note": "Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence."
+          "note": "Stage reconciliation is wired. Required Shipping reconciles its final ZIP; release archives now bind extracted inventories to final bytes/source lock. Final-byte coverage blocks publication of native MSI/NSIS and standalone installers lacking verified payload inventories. Native reconciliation remains incomplete; no hosted proof."
         },
         {
           "criterionDigest": "sha256:a0dafc5583e3",
           "state": "implemented",
           "evidence": [
             ".github/workflows/release.yml",
-            "Tests/Tools/test_release_supply_chain_wiring.py"
+            "Tests/Tools/test_release_supply_chain_wiring.py",
+            ".github/scripts/verify_published_stable_release.py",
+            ".github/scripts/test_verify_published_stable_release.py",
+            ".github/scripts/test_workflow_privilege_boundaries.py",
+            ".github/scripts/test-workflow-failure-propagation.py",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "Needs published release artifacts carrying verified SBOM and provenance. No such release exists."
+          "note": "Release collection includes lock-bound SBOM, reconciliation reports and toolchain records in expected assets, SHA256SUMS and attestations. Stable consumer requires the evidence; nightly also runs gh release verify. Required CTest covers privilege wiring. No published verification; native inventory gap blocks publication."
         }
       ],
       "commands": [

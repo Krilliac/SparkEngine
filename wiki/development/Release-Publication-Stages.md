@@ -377,6 +377,36 @@ blockers stand until that evidence and the 30-day nightly pruning job exist.
 
 ## Independent verification and final readiness
 
+### Final package and durable evidence boundaries
+
+The required Windows Shipping job creates and checks a real portable ZIP and
+NSIS package, checks executable and first-party module DLL release versions,
+and records/verifies stable-v1 toolchain provenance from the configured tree.
+The archive reconciler extracts final ZIP/TGZ contents under bounded path rules
+and binds the inventory to the artifact digest and committed dependency lock.
+
+Release publication retains the lock-derived SPDX SBOM, reconciliation reports,
+and per-build toolchain records as release assets. They participate in the
+expected asset inventory, checksums, signatures for stable releases, and build
+attestations. The independent stable consumer requires them. Consumer release
+attestation verification also runs for nightly releases.
+
+Native runtime MSI/NSIS packages and standalone bootstrap installers do not yet
+have verified final payload inventories. SDK header/library reconciliation
+cannot be applied to their different layouts by inventing not-configured
+declarations. The final-package gate records this gap and refuses publication;
+an outer installer digest or pre-CPack stage does not satisfy it. Completing
+native extraction and the runtime/standalone inventory contract remains required,
+unless the owner explicitly changes the criterion's scope. No scope exemption
+is introduced by these tools.
+
+The ready-site gate checks publication evidence against GitHub's completed
+release run and its attempt-specific jobs, the immutable stable tag, and the
+released commit's ancestry to the deployed source. Evidence-recording descendant
+commits are allowed. Offline validation separately requires the finalization gate
+and every profile's finalizer evidence to name the same released commit. These
+checks are tested locally; they do not constitute hosted publication evidence.
+
 After publication, `verify-stable-publication` runs on a fresh runner with only
 Actions, contents, and attestations read permissions. It obtains the exact
 published asset IDs through GitHub, downloads the stable assets and the

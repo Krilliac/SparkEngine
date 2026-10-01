@@ -244,6 +244,54 @@ class ReleaseStageTests(unittest.TestCase):
         contract["readiness"]["predecessorRelease"]["state"] = "published"
         self.assertNotIn(expected, predecessor_evidence_reuse_errors(contract))
 
+    def test_published_predecessor_requires_reviewed_baseline_and_signoff(self):
+        contract = ledger_predecessor_candidate()
+        stage = contract["readiness"]["predecessorRelease"]
+        stage["state"] = "published"
+        stage["sourceCommitEvidence"]["baselineCommit"] = ""
+        items = {item["id"]: item for item in contract["workItems"]}
+        status_for(items["REL-192"], "Upgrade and rollback evidence")["state"] = "evidenced"
+        errors = predecessor_evidence_reuse_errors(contract)
+        self.assertIn(
+            "predecessorRelease: published state requires a reviewed baselineCommit and signOffEvidence",
+            errors,
+        )
+        self.assertIn(
+            "REL-192: N-1 work cannot be evidenced or done before a real predecessor is published",
+            errors,
+        )
+
+    def test_substituted_work_cannot_reuse_predecessor_signoff_run_or_sha(self):
+        contract = ledger_predecessor_candidate()
+        stage = contract["readiness"]["predecessorRelease"]
+        stage["state"] = "published"
+        stage["signOffEvidence"] = ["ci:release.yml/91@" + "f" * 40]
+        items = {item["id"]: item for item in contract["workItems"]}
+        status = status_for(items["REL-192"], "Upgrade and rollback evidence")
+        status["state"] = "evidenced"
+        status["evidence"] = ["ci:release.yml/91@" + "e" * 40]
+        errors = predecessor_evidence_reuse_errors(contract)
+        self.assertTrue(any("reuses predecessor sign-off CI evidence" in error for error in errors), errors)
+
+    def test_substituted_work_cannot_reuse_predecessor_only_acceptance_run(self):
+        contract = ledger_predecessor_candidate()
+        stage = contract["readiness"]["predecessorRelease"]
+        stage["state"] = "published"
+        stage["signOffEvidence"] = [{"label": "review", "path": "README.md"}]
+        items = {item["id"]: item for item in contract["workItems"]}
+        predecessor_status = items["REL-191"]["acceptanceStatus"][0]
+        predecessor_status["state"] = "evidenced"
+        predecessor_status["evidence"] = ["ci:release.yml/93@" + "f" * 40]
+        status = status_for(items["REL-192"], "Upgrade and rollback evidence")
+        status["state"] = "evidenced"
+        status["evidence"] = ["ci:other.yml/94@" + "f" * 40]
+        errors = predecessor_evidence_reuse_errors(contract)
+        self.assertTrue(any("reuses predecessor sign-off CI evidence" in error for error in errors), errors)
+
+        status["evidence"] = ["ci:other.yml/92@" + "f" * 40]
+        errors = predecessor_evidence_reuse_errors(contract)
+        self.assertTrue(any("reuses predecessor sign-off CI evidence" in error for error in errors), errors)
+
     def test_v1_candidate_never_treats_the_predecessor_as_n_minus_one(self):
         # REL-191 done cannot stand in for REL-192 outside the predecessor stage.
         contract = ledger_predecessor_candidate()

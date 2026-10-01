@@ -17,6 +17,7 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 import yaml
 
@@ -125,7 +126,7 @@ class PackagedVersionTests(unittest.TestCase):
         members = {
             "bin/SparkEngine.exe": pe_image(version_resource()),
             "bin/SparkConsole.exe": pe_image(version_resource()),
-            "bin/SparkGameFPS.dll": pe_image(None),
+            "bin/SparkGameFPS.dll": pe_image(version_resource()),
             "bin/SDL2.dll": b"not inspected",
             vpv.CONFIG_VERSION_SUFFIX: CONFIG_VERSION.format(version=VERSION).encode(),
         }
@@ -147,6 +148,33 @@ class PackagedVersionTests(unittest.TestCase):
         self.assertEqual(self.errors(zip_package), [])
         self.assertEqual(self.errors(tgz_package), [])
         self.assertEqual(self.run_main(zip_package, tgz_package), (0, ""))
+
+    def test_matching_nsis_installer_image_passes(self) -> None:
+        installer = self.temp / f"SparkEngine-{VERSION}-Windows-AMD64.exe"
+        installer.write_bytes(pe_image(version_resource()))
+        self.assertEqual(self.errors(installer), [])
+        self.assertEqual(self.run_main(installer), (0, ""))
+
+    def test_nsis_installer_version_resource_is_required(self) -> None:
+        installer = self.temp / f"SparkEngine-{VERSION}-Windows-AMD64.exe"
+        installer.write_bytes(pe_image(None))
+        self.assertEqual(self.errors(installer), [f"{installer.name}: no version resource"])
+
+    def test_non_spark_nsis_installer_is_still_checked(self) -> None:
+        installer = self.temp / f"Other-{VERSION}-Runtime.exe"
+        installer.write_bytes(pe_image(None))
+        self.assertEqual(self.errors(installer), [f"{installer.name}: no version resource"])
+
+    def test_nsis_installer_obeys_inspection_size_limit(self) -> None:
+        installer = self.temp / f"SparkEngine-{VERSION}-Windows-AMD64.exe"
+        installer.write_bytes(b"MZ" + b"x" * 32)
+        with mock.patch.object(vpv, "MAX_MEMBER_BYTES", 1):
+            self.assertEqual(self.errors(installer), [f"{installer.name}: {installer.name} is too large to inspect"])
+
+    def test_first_party_game_dll_version_resource_is_checked(self) -> None:
+        members = self.members(**{"bin/SparkGameFPS.dll": pe_image(None)})
+        self.assertEqual(self.errors(self.package(members=members)),
+                         [f"{PACKAGE[:-4]}/bin/SparkGameFPS.dll: no version resource"])
 
     def test_wrong_fixed_file_version_fails(self) -> None:
         path = self.package(members=self.members(**{"bin/SparkEngine.exe": pe_image(version_resource(fixed=(1, 2, 4, 0)))}))
@@ -210,7 +238,44 @@ class PackagedVersionTests(unittest.TestCase):
             vpv.shipped_executables(module)
 
 
+class VersionResourceInMemoryTests(unittest.TestCase):
+    def test_direct_installer_checks_pe_bytes_and_enforces_the_read_bound(self):
+        path = Path(f"Other-{VERSION}-Runtime.exe")
+        image = pe_image(version_resource())
+        with mock.patch.object(Path, "stat", return_value=mock.Mock(st_size=len(image))), \
+                mock.patch.object(Path, "read_bytes", return_value=image):
+            self.assertEqual(vpv.package_errors(path, VERSION, frozenset()), [])
+        with mock.patch.object(Path, "stat", return_value=mock.Mock(st_size=len(image))), \
+                mock.patch.object(Path, "read_bytes", return_value=pe_image(None)):
+            self.assertEqual(vpv.package_errors(path, VERSION, frozenset()), [f"{path.name}: no version resource"])
+        with mock.patch.object(Path, "stat", return_value=mock.Mock(st_size=vpv.MAX_MEMBER_BYTES + 1)), \
+                mock.patch.object(Path, "read_bytes") as read:
+            self.assertIn("too large to inspect", " ".join(vpv.package_errors(path, VERSION, frozenset())))
+            read.assert_not_called()
+
+    def test_first_party_dlls_cannot_skip_missing_or_wrong_version_resources(self):
+        for dll in ("SparkGameFPS.dll", "sparkgame.dll", "SparkEngineFeature.dll"):
+            for resource in (None, version_resource(fixed=(9, 9, 9, 0))):
+                data = {"bin/SparkEngine.exe": pe_image(version_resource()),
+                        f"bin/{dll}": pe_image(resource),
+                        vpv.CONFIG_VERSION_SUFFIX: CONFIG_VERSION.format(version=VERSION).encode()}
+                with self.subTest(dll=dll, missing=resource is None), mock.patch.object(
+                        vpv, "_members", return_value=[(name, lambda content=content: content) for name, content in data.items()]):
+                    errors = vpv.package_errors(Path(PACKAGE), VERSION, frozenset({"SparkEngine.exe"}))
+                    self.assertTrue(any(dll in error for error in errors), errors)
+
+
 class WorkflowWiringTests(unittest.TestCase):
+    def test_first_party_game_modules_receive_engine_version_resources(self) -> None:
+        module = (ROOT / "cmake" / "SparkGameModule.cmake").read_text(encoding="utf-8")
+        version_info = (ROOT / "cmake" / "SparkWindowsVersionInfo.cmake").read_text(encoding="utf-8")
+        resource = (ROOT / "cmake" / "SparkWindowsVersionInfo.rc.in").read_text(encoding="utf-8")
+        self.assertIn("spark_target_windows_version_info(${TARGET_NAME})", module)
+        self.assertIn("if(WIN32 AND COMMAND spark_target_windows_version_info)", module)
+        self.assertIn('NOT _spark_target_type STREQUAL "SHARED_LIBRARY"', version_info)
+        self.assertIn("set(SPARK_VERSION_FILE_TYPE VFT_DLL)", version_info)
+        self.assertIn("FILETYPE @SPARK_VERSION_FILE_TYPE@", resource)
+
     def test_windows_package_job_checks_the_archive_before_extracting_it(self) -> None:
         workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))
         step = next(step for step in workflow["jobs"]["build-windows"]["steps"]
@@ -221,6 +286,24 @@ class WorkflowWiringTests(unittest.TestCase):
                    '"$($archives[0].FullName)"\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }')
         self.assertIn(command, step["run"])
         self.assertLess(step["run"].index(command), step["run"].index("Expand-Archive"))
+
+    def test_windows_shipping_checks_final_zip_nsis_and_provenance(self) -> None:
+        workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8"))
+        steps = workflow["jobs"]["build-windows-shipping"]["steps"]
+        step = next(step for step in steps if step.get("name") ==
+                    "Package and verify Windows Shipping ZIP and NSIS artifacts")
+        run = step["run"]
+        for fragment in ("-G ZIP", "-G NSIS", "tools/verify_package_versions.py",
+                         "tools/generate-sbom.py reconcile --archive",
+                         "tools/release_build_provenance.py record",
+                         "tools/release_build_provenance.py verify", "--stable"):
+            self.assertIn(fragment, run)
+        upload = next(step for step in steps if step.get("name") ==
+                      "Upload Windows Shipping package reconciliation and provenance")
+        self.assertIn("build/ci-shipping-packages/*.zip", upload["with"]["path"])
+        self.assertIn("build/ci-shipping-packages/*.exe", upload["with"]["path"])
+        self.assertIn("build/ci-shipping-provenance/build-provenance-Windows-MinSizeRel.json",
+                      upload["with"]["path"])
 
 
 if __name__ == "__main__":

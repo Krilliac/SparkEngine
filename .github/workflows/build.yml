@@ -2241,6 +2241,66 @@ jobs:
           --commit-sha "${{ github.sha }}" --out "$packageRoot/shipping-package-manifest.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+    - name: Package and verify Windows Shipping ZIP and NSIS artifacts
+      shell: pwsh
+      # Keep all final CPack distributables together so the version, provenance,
+      # and supply-chain checks inspect the exact bytes retained by this job.
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $versions = @(Get-Content -LiteralPath build/windows-shipping/CMakeCache.txt | Select-String -Pattern '^SPARK_ENGINE_VERSION:STRING=([0-9]+\.[0-9]+\.[0-9]+)$')
+        if ($versions.Count -ne 1) { throw "Expected one configured Shipping version" }
+        $version = $versions[0].Matches[0].Groups[1].Value
+        $packageRoot = Join-Path "${{ github.workspace }}" "build/ci-shipping-packages"
+        if (Test-Path -LiteralPath $packageRoot) { throw "Shipping package directory must be fresh" }
+        New-Item -ItemType Directory -Path $packageRoot | Out-Null
+        cpack --config build/windows-shipping/CPackConfig.cmake -G ZIP -C MinSizeRel -B "$packageRoot" 2>&1 | Tee-Object -FilePath shipping-zip-cpack.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cpack --config build/windows-shipping/CPackConfig.cmake -G NSIS -C MinSizeRel -B "$packageRoot" 2>&1 | Tee-Object -FilePath shipping-nsis-cpack.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $zip = @(Get-ChildItem -LiteralPath $packageRoot -Filter '*.zip' -File)
+        $nsis = @(Get-ChildItem -LiteralPath $packageRoot -Filter '*.exe' -File)
+        if ($zip.Count -ne 1) { throw "Expected exactly one Shipping ZIP, found $($zip.Count)" }
+        if ($nsis.Count -ne 1) { throw "Expected exactly one Shipping NSIS installer, found $($nsis.Count)" }
+        python tools/verify_package_versions.py --version $version $zip[0].FullName $nsis[0].FullName
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python tools/generate-sbom.py reconcile --archive $zip[0].FullName `
+          --not-configured SDL2 --not-configured AngelScript --not-configured glad `
+          --json-report (Join-Path $packageRoot 'spark-package-inventory-reconciliation-v1.json')
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $msi = @(Get-ChildItem -LiteralPath "${{ github.workspace }}\build\ci-msi-package" -Filter '*.msi' -File)
+        if ($msi.Count -ne 1) { throw "Expected exactly one Shipping MSI, found $($msi.Count)" }
+        Copy-Item -LiteralPath $msi[0].FullName -Destination $packageRoot
+        $assets = @(Get-ChildItem -LiteralPath $packageRoot -File | Where-Object { $_.Extension -in '.zip', '.exe', '.msi' })
+        if ($assets.Count -ne 3) { throw "Expected ZIP, NSIS, and MSI in the provenance set, found $($assets.Count)" }
+        $assetNames = $assets.Name | Sort-Object
+        Set-Content -LiteralPath (Join-Path $packageRoot 'expected-release-assets.txt') -Value $assetNames
+        python tools/release_build_provenance.py record `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --version $version --profile stable-v1 --platform Windows --configuration MinSizeRel `
+          --build-dir build/windows-shipping --packages $packageRoot `
+          --out build/ci-shipping-provenance/build-provenance-Windows-MinSizeRel.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python tools/release_build_provenance.py verify `
+          --records-dir build/ci-shipping-provenance --assets-dir $packageRoot `
+          --assets-file (Join-Path $packageRoot 'expected-release-assets.txt') `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --version $version --stable
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload Windows Shipping package reconciliation and provenance
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-package-integrity-${{ github.sha }}
+        path: |
+          build/ci-shipping-packages/*.zip
+          build/ci-shipping-packages/*.exe
+          build/ci-shipping-packages/*.msi
+          build/ci-shipping-packages/*.json
+          build/ci-shipping-packages/expected-release-assets.txt
+          build/ci-shipping-provenance/build-provenance-Windows-MinSizeRel.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
     - name: Upload exact Windows Shipping MSI for package smoke
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:

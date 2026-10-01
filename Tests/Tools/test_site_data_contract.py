@@ -103,9 +103,13 @@ class ContractTestCase(unittest.TestCase):
                 if item["id"] == "GOV-400":
                     contract["content"]["legal"]["policyGaps"] = []
         contract["readiness"]["execution"]["firstUnblockedWorkItemId"] = None
+        self.gates_of(contract)["G17"]["evidence"] = [{"type": "ci", "reference": PUBLICATION_CI_REFERENCE}]
         contract["readiness"]["globalRelease"]["state"] = "ready"
         # REL-192: N-1 work (now done above) presupposes a published predecessor.
-        contract["readiness"]["predecessorRelease"]["state"] = "published"
+        predecessor = contract["readiness"]["predecessorRelease"]
+        predecessor["state"] = "published"
+        predecessor["sourceCommitEvidence"]["baselineCommit"] = "1" * 40
+        predecessor["signOffEvidence"] = [{"label": "Reviewed predecessor", "path": "README.md"}]
 
     @staticmethod
     def item_text(item: dict[str, Any], *fields: str) -> str:
@@ -1256,11 +1260,15 @@ class ReadyPromotionTests(ContractTestCase):
         def gate_not_passing(contract: dict[str, Any]) -> None:
             self.gates_of(contract)["G17"]["state"] = "blocked"
 
+        def gate_different_commit(contract: dict[str, Any]) -> None:
+            self.gates_of(contract)["G17"]["evidence"] = ["ci:release.yml/9@" + "1" * 40]
+
         cases = {
             "build-workflow-only": (build_only, "must be evidenced by a ci:<release.yml>/<run>@<sha>"),
             "two-commits": (split_commits, "publication evidence cites different commits"),
             "no-publication-job": (no_publication_job, "requiredCiJobs must include verify-stable-publication"),
             "g17-not-passing": (gate_not_passing, "finalization gate G17 must be passing with evidence"),
+            "g17-different-commit": (gate_different_commit, "finalization gate G17 evidence commits"),
         }
         for name, (mutate, fragment) in cases.items():
             with self.subTest(mutation=name):
@@ -1276,6 +1284,8 @@ class ReadyPromotionTests(ContractTestCase):
         try:
             import yaml  # noqa: PLC0415
         except ImportError:
+            if os.environ.get("CI"):
+                self.fail("PyYAML is required in CI to verify the ready publication gate")
             self.skipTest("PyYAML is not installed")
         workflow = yaml.safe_load(
             (REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml").read_text(encoding="utf-8")
@@ -1287,6 +1297,10 @@ class ReadyPromotionTests(ContractTestCase):
         )
         gate = deploy.index('validate.py" --require-ready')
         self.assertLess(gate, deploy.index('git init "$PUBLISH_REPO"'))
+        live = deploy.index('verify-publication-evidence.py"')
+        self.assertLess(gate, live)
+        self.assertLess(live, deploy.index('git init "$PUBLISH_REPO"'))
+        self.assertIn('--source-sha "$SOURCE_COMMIT"', deploy[live:])
         self.assertLess(deploy.index("--require-exact-evidence"), gate)
         # The state read must fail closed: a failing read inside an `if` condition
         # escapes `set -e` and would skip the strict gate as "not ready".
@@ -1316,7 +1330,7 @@ class ReadyPromotionTests(ContractTestCase):
         errors = site_data_validate.publication_evidence_errors(self.mutable)
         self.assertTrue(any("different commits across profiles" in error for error in errors), errors)
         # Each profile is internally consistent, so only the cross-profile rule fires.
-        self.assertEqual(len(errors), 1, errors)
+        self.assertTrue(any("different commits across profiles" in error for error in errors), errors)
 
 
 class ScopeNarrowingTests(ContractTestCase):

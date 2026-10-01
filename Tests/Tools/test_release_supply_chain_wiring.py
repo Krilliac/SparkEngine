@@ -18,13 +18,16 @@ Run:  python3 Tests/Tools/test_release_supply_chain_wiring.py
 from __future__ import annotations
 
 import json
+import contextlib
+import hashlib
+import io
 import os
 import re
 import subprocess
 import sys
-import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -72,6 +75,12 @@ def wiring_errors(workflow: str) -> list[str]:
         reconcile = step_index(steps, lambda name, body, n=reconcile_name: name == n)
         cpack = step_index(steps, lambda name, body: name == "Generate CPack packages")
         upload = step_index(steps, lambda name, body: name == "Upload package reconciliation report")
+        final = step_index(steps, lambda name, body: name == "Reconcile final package inventories with the source lock")
+        if not 0 <= cpack < final < upload:
+            errors.append(f"{job_name}: final inventory must follow CPack and precede its upload")
+        elif ("tools/release_package_reconciliation.py record" not in steps[final][1]
+              or "continue-on-error" in steps[final][1] or "|| true" in steps[final][1]):
+            errors.append(f"{job_name}: final inventory gate is missing or suppresses failure")
         if reconcile < 0:
             errors.append(f"{job_name}: no '{reconcile_name}' step")
             continue
@@ -123,12 +132,23 @@ def wiring_errors(workflow: str) -> list[str]:
     verify_body = release[verify][1]
     for required in ('generate-sbom.py --source-sha "$GITHUB_SHA" --out supply-chain/SparkEngine-Lock-SBOM.spdx.json',
                      "generate-sbom.py --check supply-chain/SparkEngine-Lock-SBOM.spdx.json",
-                     "set -euo pipefail"):
+                     "set -euo pipefail",
+                     'artifact.get("sha256")',
+                     'artifact.get("name")',
+                     'source.get("sha")',
+                     'source.get("dependencyLockSha256")'):
         if required not in verify_body:
             errors.append(f"release: verification step lacks {required!r}")
     retain_body = release[retain][1]
     if "path: supply-chain/" not in retain_body or "if-no-files-found: error" not in retain_body:
         errors.append("release: supply-chain evidence is not retained fail-closed")
+    workflow_text = job_section(workflow, "release")
+    for required in (
+        "tools/release_package_reconciliation.py verify",
+        "--reports-dir supply-chain/reconciliation",
+    ):
+        if required not in workflow_text:
+            errors.append(f"release: final package reconciliation wiring lacks {required!r}")
     return errors
 
 
@@ -198,38 +218,77 @@ class ReleaseSupplyChainWiringTests(unittest.TestCase):
         self.assertIn("release: supply-chain evidence is not verified and retained before assets are collected",
                       wiring_errors(mutated))
 
+    def test_final_inventory_cannot_be_replaced_with_staging_evidence(self) -> None:
+        for job_name in PACKAGE_JOBS:
+            job = job_section(self.workflow, job_name)
+            step = dict(steps_of(job))["Reconcile final package inventories with the source lock"]
+            changed = self.workflow.replace(job, job.replace(step, ""), 1)
+            with self.subTest(job=job_name):
+                self.assertIn(f"{job_name}: final inventory must follow CPack and precede its upload",
+                              wiring_errors(changed))
+
+    def test_durable_evidence_and_final_byte_gate_precede_publication(self) -> None:
+        release = dict(steps_of(job_section(self.workflow, "release")))
+        collect = release["Collect release assets"]
+        for token in ("supply-chain/SparkEngine-Lock-SBOM.spdx.json", "reconcile-*.json", "build-provenance-*.json"):
+            self.assertIn(token, collect)
+        final = release["Verify final package inventories against every published artifact"]
+        for token in ("tools/release_package_reconciliation.py verify", "--assets-file expected-release-assets.txt",
+                      "--reports-dir supply-chain/reconciliation", "--source-sha", "set -euo pipefail"):
+            self.assertIn(token, final)
+        self.assertLess(self.workflow.index(final), self.workflow.index("    - name: Inspect existing release before mutation"))
+        self.assertNotIn("continue-on-error", final)
+        self.assertIn("subject-path: ${{ steps.assets.outputs.files }}", release["Attest release build provenance"])
+        consumer = release["Verify published release attestation as a consumer"]
+        self.assertNotIn("\n      if:", consumer)
+        self.assertIn('gh release verify "$RELEASE_TAG"', consumer)
+        standalone = job_section(self.workflow, "build-installer")
+        self.assertIn("tools/release_package_reconciliation.py record", standalone)
+        self.assertIn("--packages staging", standalone)
+
     def run_verifier(self, reports: dict[str, dict], *, versioned: bool) -> subprocess.CompletedProcess:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw) / "supply-chain" / "reconciliation"
-            root.mkdir(parents=True)
-            for name, report in reports.items():
-                (root / f"reconcile-{name}.json").write_text(json.dumps(report), encoding="utf-8")
-            return subprocess.run(
-                [sys.executable, "-c", embedded_verifier(self.workflow)], cwd=raw, text=True, capture_output=True,
-                env={**os.environ, "IS_VERSIONED": "true" if versioned else "false",
-                     "BUILD_CONFIGS": '["Debug","Release"]'},
-            )
+        # The embedded gate only reads a report set and lock blob. Inject those
+        # inputs while executing its real source, without a platform temp-dir dependency.
+        paths = {f"reconcile-{name}.json": json.dumps(report) for name, report in reports.items()}
+        stdout, stderr, code = io.StringIO(), io.StringIO(), 0
+        with patch.object(Path, "glob", return_value=[Path(name) for name in paths]), \
+                patch.object(Path, "read_text", autospec=True, side_effect=lambda path, **kw: paths[path.name]), \
+                patch.object(Path, "read_bytes", return_value=b"fixture lock"), \
+                patch.dict(os.environ, {"IS_VERSIONED": "true" if versioned else "false",
+                                        "BUILD_CONFIGS": '["Debug","Release"]', "GITHUB_SHA": "b" * 40}), \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            try:
+                exec(compile(embedded_verifier(self.workflow), str(RELEASE_WORKFLOW), "exec"), {})
+            except SystemExit as error:
+                code = error.code if type(error.code) is int else 1
+                stderr.write(str(error))
+        return subprocess.CompletedProcess([sys.executable, "<workflow embedded verifier>"], code,
+                                           stdout.getvalue(), stderr.getvalue())
 
     @staticmethod
     def passing() -> dict:
-        return {"schema": "spark-package-inventory-reconciliation-v1", "packageFiles": 12,
-                "components": {"Jolt Physics": 3}, "errors": []}
+        return {"schema": "spark-package-inventory-reconciliation-v2", "errors": [],
+                "artifacts": [{"name": "SparkEngine-1.2.3.zip", "sha256": "a" * 64,
+                               "inventory": {"schema": "spark-package-inventory-reconciliation-v1"}}],
+                "source": {"sha": "b" * 40, "dependencyLockSha256": hashlib.sha256(b"fixture lock").hexdigest()}}
 
     def test_embedded_verifier_accepts_complete_passing_channel(self) -> None:
         stable = self.run_verifier({"Windows-MinSizeRel": self.passing()}, versioned=True)
         self.assertEqual(stable.returncode, 0, stable.stderr)
         nightly_names = ["Windows-Debug", "Windows-Release", "Linux-Debug", "Linux-Release",
-                         "macOS-Debug", "macOS-Release"]
+                         "macOS-Debug", "macOS-Release", "Installer-Windows-Release",
+                         "Installer-Linux-Release", "Installer-macOS-Release"]
         nightly = self.run_verifier({name: self.passing() for name in nightly_names}, versioned=False)
         self.assertEqual(nightly.returncode, 0, nightly.stderr)
 
     def test_embedded_verifier_rejects_failed_missing_extra_or_foreign_reports(self) -> None:
         failed = dict(self.passing(), errors=["x: unmapped third-party payload"])
-        empty = dict(self.passing(), components={})
+        empty = dict(self.passing(), artifacts=[])
         foreign = dict(self.passing(), schema="something-else")
         cases = {
             "failed": {"Windows-MinSizeRel": failed},
-            "no components": {"Windows-MinSizeRel": empty},
+            "no artifacts": {"Windows-MinSizeRel": empty},
+            "source drift": {"Windows-MinSizeRel": dict(self.passing(), source={})},
             "foreign schema": {"Windows-MinSizeRel": foreign},
             "missing": {},
             "extra": {"Windows-MinSizeRel": self.passing(), "Linux-Release": self.passing()},

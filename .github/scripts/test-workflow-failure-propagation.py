@@ -4920,6 +4920,15 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 for name in ("SparkInstaller-Windows-x64.exe", "SparkEngine-7.8.9-Linux-x86_64-Release.tar.gz",
                              "SparkEngine-7.8.9-Windows-AMD64-Release.zip"):
                     (extras / name).write_bytes(b"not a Shipping package")
+                evidence = {
+                    "supply-chain/SparkEngine-Lock-SBOM.spdx.json",
+                    "supply-chain/reconciliation/reconcile-Windows-MinSizeRel.json",
+                    "build-provenance/build-provenance-Windows-MinSizeRel.json",
+                }
+                for path in evidence:
+                    target = root / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("{}", encoding="utf-8")
                 completed = subprocess.run(
                     [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "IS_VERSIONED": "true", "RELEASE_VERSION": "7.8.9",
@@ -4930,7 +4939,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 else:
                     self.assertEqual(completed.returncode, 0, completed.stderr)
                     assets = (root / "expected-release-assets.txt").read_text().splitlines()
-                    self.assertEqual(set(assets), {*names, "SHA256SUMS"})
+                    self.assertEqual(set(assets), {*names, "SHA256SUMS", *(Path(p).name for p in evidence)})
                     self.assertEqual(assets.count("shipping-package-manifest.json"), 1)
 
     def test_release_binaries_bind_and_verify_the_requested_cmake_version(self) -> None:

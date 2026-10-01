@@ -449,6 +449,9 @@ jobs:
           case "$release_state" in
             ready)
               python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/validate.py" --require-ready
+              python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-publication-evidence.py" \
+                --repository "$GITHUB_REPOSITORY" \
+                --source-sha "$SOURCE_COMMIT"
               ;;
             blocked|candidate)
               ;;

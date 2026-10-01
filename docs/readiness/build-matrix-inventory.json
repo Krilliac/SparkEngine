@@ -11520,7 +11520,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 23,
+        "stepCount": 25,
         "steps": [
           {
             "index": 0,
@@ -11752,6 +11752,30 @@
           },
           {
             "index": 19,
+            "name": "Package and verify Windows Shipping ZIP and NSIS artifacts",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "740efca49939e821"
+          },
+          {
+            "index": 20,
+            "name": "Upload Windows Shipping package reconciliation and provenance",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 21,
             "name": "Upload exact Windows Shipping MSI for package smoke",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11763,7 +11787,7 @@
             "runDigest": ""
           },
           {
-            "index": 20,
+            "index": 22,
             "name": "Upload Windows Shipping MSI packaging diagnostics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11775,7 +11799,7 @@
             "runDigest": ""
           },
           {
-            "index": 21,
+            "index": 23,
             "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11787,7 +11811,7 @@
             "runDigest": ""
           },
           {
-            "index": 22,
+            "index": 24,
             "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",
@@ -16544,6 +16568,44 @@
         "command": "cpack --config build/windows-shipping/CPackConfig.cmake -G WIX -C MinSizeRel -B \"$packageRoot\" 2>&1 | Tee-Object -FilePath msi-cpack.log",
         "commandProvenance": "literal",
         "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Package and verify Windows Shipping ZIP and NSIS artifacts",
+        "stepIndex": 19,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "pwsh",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cpack",
+        "kind": "package",
+        "command": "cpack --config build/windows-shipping/CPackConfig.cmake -G ZIP -C MinSizeRel -B \"$packageRoot\" 2>&1 | Tee-Object -FilePath shipping-zip-cpack.log",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-shipping",
+        "step": "Package and verify Windows Shipping ZIP and NSIS artifacts",
+        "stepIndex": 19,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "pwsh",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "cpack",
+        "kind": "package",
+        "command": "cpack --config build/windows-shipping/CPackConfig.cmake -G NSIS -C MinSizeRel -B \"$packageRoot\" 2>&1 | Tee-Object -FilePath shipping-nsis-cpack.log",
+        "commandProvenance": "literal",
+        "commandIndex": 1
       },
       {
         "job": "reproducibility-windows",

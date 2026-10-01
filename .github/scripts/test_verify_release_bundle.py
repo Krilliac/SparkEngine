@@ -10,8 +10,35 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
-from verify_release_bundle import BundleError, verify_release_bundle
+from verify_release_bundle import BundleError, _verify_signatures, verify_release_bundle
+
+
+class SignatureResultTests(unittest.TestCase):
+    """Exercise the CLI-result trust boundary without filesystem fixtures."""
+
+    def test_crypto_failure_cannot_be_hidden_by_valid_manifest_metadata(self) -> None:
+        der = b"fixture public key DER"
+        fingerprint = hashlib.sha256(der).hexdigest()
+        manifest = {"schemaVersion": 1, "algorithm": "detached-sha256", "sourceCommit": "a" * 40,
+                    "signerFingerprint": fingerprint,
+                    "artifacts": [{"name": "package.zip", "signature": "package.zip.sig",
+                                   "artifactSha256": "b" * 64, "signerFingerprint": fingerprint}]}
+        for code, stdout in ((1, "Verification failure"), (1, "Verified OK"), (0, "Verification failure")):
+            with self.subTest(code=code, stdout=stdout), \
+                    patch("verify_release_bundle._load_json", return_value=manifest), \
+                    patch("verify_release_bundle._digest", return_value="b" * 64), \
+                    patch.object(Path, "is_file", return_value=True), \
+                    patch.object(Path, "is_symlink", return_value=False), \
+                    patch.object(Path, "stat", return_value=SimpleNamespace(st_size=256)), \
+                    patch.object(Path, "iterdir", return_value=iter(())), \
+                    patch("verify_release_bundle.subprocess.run", side_effect=[
+                        SimpleNamespace(stdout=der), SimpleNamespace(returncode=code, stdout=stdout)]):
+                with self.assertRaisesRegex(BundleError, "cryptographic verification failed"):
+                    _verify_signatures(Path("signatures.json"), Path("bundle"), Path("signatures"),
+                                       {"package.zip"}, Path("public.pem"), fingerprint, "a" * 40, "openssl")
 
 
 class ReleaseBundleTests(unittest.TestCase):
@@ -118,6 +145,26 @@ class ReleaseBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(BundleError, "binding drifted"):
             self._verify()
 
+    def test_rejects_signature_from_another_key_over_unchanged_payload(self) -> None:
+        # Keep checksums, manifest and payload valid so only crypto can reject it.
+        other_key = self.root / "untrusted-fixture-key.pem"
+        subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048",
+                        "-out", str(other_key)], check=True, capture_output=True)
+        name = self.names[0]
+        subprocess.run(["openssl", "dgst", "-sha256", "-sign", str(other_key),
+                        "-out", str(self.root / (name + ".sig")), str(self.root / name)],
+                       check=True, capture_output=True)
+        with self.assertRaisesRegex(BundleError, "cryptographic verification failed"):
+            self._verify()
+
+    def test_rejects_corrupted_signature_over_unchanged_payload(self) -> None:
+        signature = self.root / (self.names[0] + ".sig")
+        data = bytearray(signature.read_bytes())
+        data[len(data) // 2] ^= 1
+        signature.write_bytes(data)
+        with self.assertRaisesRegex(BundleError, "cryptographic verification failed"):
+            self._verify()
+
     def test_rejects_extra_promotable_signature(self) -> None:
         (self.root / "unreferenced.sig").write_bytes(b"stray")
         with self.assertRaisesRegex(BundleError, "unreferenced"):
@@ -132,6 +179,17 @@ class ReleaseBundleTests(unittest.TestCase):
         (self.root / "SparkEngine-rogue.zip").write_bytes(b"rogue")
         with self.assertRaisesRegex(BundleError, "extra promotable"):
             self._verify()
+
+    def test_rejects_unlisted_supply_chain_evidence(self) -> None:
+        for name in ("reconcile-unlisted.json", "build-provenance-unlisted.json"):
+            with self.subTest(name=name):
+                path = self.root / name
+                path.write_text("{}", encoding="utf-8")
+                try:
+                    with self.assertRaisesRegex(BundleError, "extra promotable"):
+                        self._verify()
+                finally:
+                    path.unlink()
 
     def test_rejects_checksum_drift_and_missing_sbom(self) -> None:
         original = (self.root / self.names[0]).read_bytes()

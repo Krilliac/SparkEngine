@@ -54,6 +54,7 @@ Usage:
   python3 tools/generate-sbom.py --check sbom.spdx.json
   python3 tools/generate-sbom.py reconcile --install-manifest build/linux-gcc-release/install_manifest.txt
   python3 tools/generate-sbom.py reconcile --package-root stage --not-configured SDL2
+  python3 tools/generate-sbom.py reconcile --archive SparkEngine-1.2.3.zip --json-report reconcile-final.json
 """
 
 from __future__ import annotations
@@ -66,7 +67,9 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -93,6 +96,9 @@ MAX_INSTALL_MANIFEST_BYTES = 64 << 20
 MAX_INSTALL_MANIFEST_LINES = 1_000_000
 MAX_PACKAGE_FILES = 1_000_000
 MAX_NOTICE_BYTES = 8 << 20
+MAX_ARCHIVE_BYTES = 8 << 30
+MAX_ARCHIVE_MEMBER_BYTES = 4 << 30
+MAX_ARCHIVE_MEMBERS = 1_000_000
 
 
 class SbomError(Exception):
@@ -489,6 +495,184 @@ def _walk_package(package_root: Path) -> list[str]:
     return sorted(files)
 
 
+WINDOWS_RESERVED_NAMES = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+
+
+def _archive_member_path(name: str) -> tuple[Path, str]:
+    """Return a safe relative extraction path and case-folded collision key."""
+    if "\\" in name or any(ord(character) < 32 for character in name):
+        raise InputError(f"archive member {name!r} contains an unsafe path character")
+    normalized = name
+    raw_parts = normalized.split("/")
+    if raw_parts and raw_parts[-1] == "":
+        raw_parts.pop()
+    if not normalized or normalized.startswith("/") or any(part in ("", ".", "..") for part in raw_parts):
+        raise InputError(f"archive member {name!r} is not a normalized relative path")
+    for part in raw_parts:
+        if ":" in part or part.endswith((".", " ")):
+            raise InputError(f"archive member {name!r} contains an unsafe Windows path component")
+        if part.split(".", 1)[0].casefold() in WINDOWS_RESERVED_NAMES:
+            raise InputError(f"archive member {name!r} uses a reserved Windows path component")
+    path = Path(*raw_parts)
+    return path, "/".join(raw_parts).casefold()
+
+
+def _safe_archive_target(root: Path, member: Path) -> Path:
+    target = (root / member).resolve()
+    if root.resolve() not in target.parents:
+        raise InputError(f"archive member {member.as_posix()!r} escapes extraction root")
+    return target
+
+
+def _archive_package_root(extracted: Path) -> Path:
+    """Find the package root containing the generated notices inventory."""
+    if (extracted / NOTICE_NAME).is_file():
+        return extracted
+    children = list(extracted.iterdir())
+    if len(children) != 1 or not children[0].is_dir() or children[0].is_symlink():
+        raise InputError(f"archive must be flat or contain exactly one top-level package directory with {NOTICE_NAME}")
+    package_root = children[0]
+    if not (package_root / NOTICE_NAME).is_file() or (package_root / NOTICE_NAME).is_symlink():
+        raise InputError(f"archive package directory must contain {NOTICE_NAME} directly")
+    return package_root
+
+
+def _extract_zip(archive: Path, destination: Path) -> None:
+    with zipfile.ZipFile(archive) as bundle:
+        members = bundle.infolist()
+        if len(members) > MAX_ARCHIVE_MEMBERS:
+            raise InputError(f"{archive} contains more than {MAX_ARCHIVE_MEMBERS} members")
+        total = 0
+        seen: set[str] = set()
+        for info in members:
+            member, key = _archive_member_path(info.filename)
+            if key in seen:
+                raise InputError(f"archive contains duplicate path {info.filename!r}")
+            seen.add(key)
+            mode = (info.external_attr >> 16) & 0o170000
+            if info.is_dir():
+                if mode not in (0, 0o040000):
+                    raise InputError(f"archive member {info.filename!r} is not a regular directory")
+                _safe_archive_target(destination, member).mkdir(parents=True, exist_ok=True)
+                continue
+            if mode not in (0, 0o100000):
+                raise InputError(f"archive member {info.filename!r} is not a regular file")
+            if info.file_size > MAX_ARCHIVE_MEMBER_BYTES:
+                raise InputError(f"archive member {info.filename!r} exceeds {MAX_ARCHIVE_MEMBER_BYTES} bytes")
+            total += info.file_size
+            if total > MAX_ARCHIVE_BYTES:
+                raise InputError(f"archive expands beyond {MAX_ARCHIVE_BYTES} bytes")
+            target = _safe_archive_target(destination, member)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with bundle.open(info) as source, target.open("xb") as output:
+                while chunk := source.read(1024 * 1024):
+                    output.write(chunk)
+
+
+def _extract_tar(archive: Path, destination: Path) -> None:
+    with tarfile.open(archive, mode="r:*") as bundle:
+        total = 0
+        seen: set[str] = set()
+        for index, info in enumerate(bundle):
+            if index >= MAX_ARCHIVE_MEMBERS:
+                raise InputError(f"{archive} contains more than {MAX_ARCHIVE_MEMBERS} members")
+            member, key = _archive_member_path(info.name)
+            if key in seen:
+                raise InputError(f"archive contains duplicate path {info.name!r}")
+            seen.add(key)
+            target = _safe_archive_target(destination, member)
+            if info.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            if not info.isfile():
+                raise InputError(f"archive member {info.name!r} is not a regular file or directory")
+            if info.size > MAX_ARCHIVE_MEMBER_BYTES:
+                raise InputError(f"archive member {info.name!r} exceeds {MAX_ARCHIVE_MEMBER_BYTES} bytes")
+            total += info.size
+            if total > MAX_ARCHIVE_BYTES:
+                raise InputError(f"archive expands beyond {MAX_ARCHIVE_BYTES} bytes")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = bundle.extractfile(info)
+            if source is None:
+                raise InputError(f"archive member {info.name!r} cannot be read")
+            with source, target.open("xb") as output:
+                while chunk := source.read(1024 * 1024):
+                    output.write(chunk)
+
+
+def _archive_format(archive: Path) -> str:
+    lowered = archive.name.lower()
+    if lowered.endswith(".zip"):
+        return "zip"
+    if lowered.endswith((".tar.gz", ".tgz")):
+        return "tar.gz"
+    raise InputError(f"{archive}: final archive must use .zip, .tar.gz, or .tgz")
+
+
+def _archive_report(
+    report: dict[str, Any], archive: Path, source_root: Path, artifact_digest: str | None = None
+) -> dict[str, Any]:
+    try:
+        source_sha = _git_text(source_root, "rev-parse", "HEAD").strip()
+        lock_sha = provenance._committed_lock_digest(source_root, source_sha)
+    except (InputError, provenance.ProvenanceError) as error:
+        raise InputError(f"cannot bind archive report to source lock: {error}") from error
+    digest = artifact_digest
+    if digest is None:
+        digest_builder = hashlib.sha256()
+        with archive.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest_builder.update(chunk)
+        digest = digest_builder.hexdigest()
+    report["artifact"] = {
+        "name": archive.name,
+        "format": _archive_format(archive),
+        "sha256": digest,
+    }
+    report["source"] = {"sha": source_sha, "dependencyLockSha256": lock_sha}
+    return report
+
+
+def reconcile_archive(
+    inventory: list[Dependency],
+    rules: Any,
+    archive: Path,
+    not_configured: list[str],
+    source_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    """Extract and reconcile one final archive, binding the result to its bytes and source lock."""
+    if not archive.is_file() or archive.is_symlink():
+        raise InputError(f"{archive} is missing or is not a regular non-link file")
+    if archive.stat().st_size > MAX_ARCHIVE_BYTES:
+        raise InputError(f"{archive} exceeds {MAX_ARCHIVE_BYTES} bytes")
+    format_name = _archive_format(archive)
+    archive_digest = hashlib.sha256()
+    with archive.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            archive_digest.update(chunk)
+    before_digest = archive_digest.hexdigest()
+    with tempfile.TemporaryDirectory(prefix="spark-sbom-archive-") as raw:
+        extracted = Path(raw)
+        try:
+            if format_name == "zip":
+                _extract_zip(archive, extracted)
+            else:
+                _extract_tar(archive, extracted)
+        except (OSError, tarfile.TarError, zipfile.BadZipFile) as error:
+            raise InputError(f"cannot safely extract {archive}: {error}") from error
+        package_root = _archive_package_root(extracted)
+        report = reconcile(
+            inventory, rules, _walk_package(package_root), package_root / NOTICE_NAME, not_configured
+        )
+    after_digest = hashlib.sha256()
+    with archive.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            after_digest.update(chunk)
+    if after_digest.hexdigest() != before_digest:
+        raise InputError(f"{archive} changed while it was being reconciled")
+    return _archive_report(report, archive, source_root, after_digest.hexdigest())
+
+
 def _notice_inventory(path: Path) -> dict[str, str]:
     """Map each THIRD_PARTY_NOTICES.txt inventory entry name to its Version line."""
     if not path.is_file() or path.is_symlink():
@@ -621,15 +805,24 @@ def _generate_main(args: argparse.Namespace) -> int:
 
 
 def _reconcile_main(args: argparse.Namespace) -> int:
-    if args.install_manifest is not None:
+    if args.archive is not None:
+        report = reconcile_archive(
+            load_inventory(args.source_root),
+            load_rules(),
+            args.archive,
+            args.not_configured or [],
+            args.source_root,
+        )
+    elif args.install_manifest is not None:
         files, prefix = _read_install_manifest(args.install_manifest, args.install_prefix)
         notice_path = prefix / NOTICE_NAME
         if NOTICE_NAME not in files:
             raise SbomError(f"the install manifest does not install {NOTICE_NAME} at {prefix}")
+        report = reconcile(load_inventory(args.source_root), load_rules(), files, notice_path, args.not_configured or [])
     else:
         files = _walk_package(args.package_root)
         notice_path = args.package_root / NOTICE_NAME
-    report = reconcile(load_inventory(args.source_root), load_rules(), files, notice_path, args.not_configured or [])
+        report = reconcile(load_inventory(args.source_root), load_rules(), files, notice_path, args.not_configured or [])
     if args.json_report is not None:
         _write_atomic(args.json_report, json.dumps(report, indent=2, sort_keys=True) + "\n")
     components = ", ".join(f"{name} ({count})" for name, count in report["components"].items())
@@ -661,6 +854,9 @@ def main(argv: list[str] | None = None) -> int:
     source = rec.add_mutually_exclusive_group(required=True)
     source.add_argument("--install-manifest", type=Path, help="CMake install_manifest.txt of the package")
     source.add_argument("--package-root", type=Path, help="staged or extracted package tree")
+    source.add_argument(
+        "--archive", type=Path, help="final .zip, .tar.gz, or .tgz package archive; extract and reconcile safely"
+    )
     rec.add_argument("--install-prefix", help="install prefix of --install-manifest (default: its notice's directory)")
     rec.add_argument(
         "--not-configured",

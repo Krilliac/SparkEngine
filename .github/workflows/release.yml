@@ -333,15 +333,6 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Package reconciliation report was not written" }
 
-    - name: Upload package reconciliation report
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: package-reconciliation-Windows-${{ matrix.config }}
-        path: package-reconciliation/reconcile-Windows-${{ matrix.config }}.json
-        retention-days: 90
-        if-no-files-found: ignore
-
     - name: Generate CPack packages
       shell: pwsh
       run: |
@@ -669,7 +660,29 @@ jobs:
     # Schema v2 also records the Windows SDK, exact MSVC tools version, VS
     # instance, linker/archiver, and CPU ISA baseline; a stable-v1 record fails
     # closed here when any is missing or the baseline is above the OD-04 floor.
-    # The record is a separate artifact so the stable asset boundary is unchanged.
+    # The publisher also attaches this record to the immutable release.
+    - name: Reconcile final package inventories with the source lock
+      shell: pwsh
+      env:
+        SPARK_NOT_CONFIGURED: ${{ matrix.profile == 'stable-v1' && 'SDL2 AngelScript glad' || 'SDL2' }}
+      run: |
+        $notConfigured = @($env:SPARK_NOT_CONFIGURED -split ' ' | Where-Object { $_ } | ForEach-Object { '--not-configured'; $_ })
+        python tools/release_package_reconciliation.py record `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --platform Windows --configuration "${{ matrix.config }}" @notConfigured `
+          --report "final-package-reconciliation/reconcile-Windows-${{ matrix.config }}.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload package reconciliation report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-reconciliation-Windows-${{ matrix.config }}
+        path: final-package-reconciliation/reconcile-Windows-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
+
     - name: Record per-artifact build provenance
       shell: pwsh
       run: |
@@ -792,15 +805,6 @@ jobs:
           --json-report "package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
         test -f "package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
 
-    - name: Upload package reconciliation report
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: package-reconciliation-Linux-${{ matrix.config }}
-        path: package-reconciliation/reconcile-Linux-${{ matrix.config }}.json
-        retention-days: 90
-        if-no-files-found: ignore
-
     - name: Generate CPack packages
       run: |
         cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
@@ -846,6 +850,23 @@ jobs:
           -DSPARK_C_COMPILER=gcc-14 \
           -DSPARK_CXX_COMPILER=g++-14 \
           -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Reconcile final package inventories with the source lock
+      run: |
+        set -euo pipefail
+        python3 tools/release_package_reconciliation.py record \
+          --packages build/packages --source-root . --source-sha "${{ github.sha }}" \
+          --platform Linux --configuration "${{ matrix.config }}" \
+          --report "final-package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
+
+    - name: Upload package reconciliation report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-reconciliation-Linux-${{ matrix.config }}
+        path: final-package-reconciliation/reconcile-Linux-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
 
     - name: Record per-artifact build provenance
       run: |
@@ -956,15 +977,6 @@ jobs:
           --json-report "package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
         test -f "package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
 
-    - name: Upload package reconciliation report
-      if: always()
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: package-reconciliation-macOS-${{ matrix.config }}
-        path: package-reconciliation/reconcile-macOS-${{ matrix.config }}.json
-        retention-days: 90
-        if-no-files-found: ignore
-
     - name: Generate CPack packages
       run: cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
@@ -1007,6 +1019,23 @@ jobs:
           -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Reconcile final package inventories with the source lock
+      run: |
+        set -euo pipefail
+        python3 tools/release_package_reconciliation.py record \
+          --packages build/packages --source-root . --source-sha "${{ github.sha }}" \
+          --platform macOS --configuration "${{ matrix.config }}" \
+          --report "final-package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
+
+    - name: Upload package reconciliation report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-reconciliation-macOS-${{ matrix.config }}
+        path: final-package-reconciliation/reconcile-macOS-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
 
     - name: Record per-artifact build provenance
       run: |
@@ -1111,6 +1140,24 @@ jobs:
           "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
           sed $'s/\r$//' installer-version.txt | grep -Fqx -- "SparkInstaller ${EXPECTED_VERSION} (${EXPECTED_PLATFORM})"
           grep -Fq "Usage:" installer-help.txt
+
+      - name: Reconcile final standalone installer inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/release_package_reconciliation.py record \
+            --packages staging --source-root . --source-sha "${{ github.sha }}" \
+            --platform "Installer-${{ matrix.platform_name }}" --configuration Release \
+            --report "final-package-reconciliation/reconcile-Installer-${{ matrix.platform_name }}-Release.json"
+
+      - name: Upload standalone installer reconciliation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-reconciliation-Installer-${{ matrix.platform_name }}-Release
+          path: final-package-reconciliation/reconcile-Installer-${{ matrix.platform_name }}-Release.json
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Record per-artifact build provenance
         shell: bash
@@ -1523,6 +1570,7 @@ jobs:
       run: |
         set -euo pipefail
         python3 - <<'PY'
+        import hashlib
         import json
         import os
         from pathlib import Path
@@ -1534,16 +1582,23 @@ jobs:
             configs = json.loads(os.environ["BUILD_CONFIGS"])
             expected = {"Windows-Debug", "Windows-Release"}
             expected |= {f"{platform}-{config}" for platform in ("Linux", "macOS") for config in configs}
+            expected |= {f"Installer-{platform}-Release" for platform in ("Windows", "Linux", "macOS")}
         found = {path.name[len("reconcile-"):-len(".json")] for path in root.glob("reconcile-*.json")}
         if found != expected:
             raise SystemExit(f"package reconciliation reports {sorted(found)} != expected {sorted(expected)}")
         for name in sorted(expected):
             report = json.loads((root / f"reconcile-{name}.json").read_text(encoding="utf-8"))
-            if report.get("schema") != "spark-package-inventory-reconciliation-v1":
+            if report.get("schema") != "spark-package-inventory-reconciliation-v2":
                 raise SystemExit(f"reconcile-{name}.json has an unexpected schema")
-            if report.get("errors") != [] or not report.get("components"):
+            if report.get("errors") != [] or not report.get("artifacts"):
                 raise SystemExit(f"reconcile-{name}.json does not record a passing reconciliation")
-            print(f"{name}: {report['packageFiles']} files, components {sorted(report['components'])}")
+            source = report.get("source", {})
+            if source.get("sha") != os.environ["GITHUB_SHA"] or source.get("dependencyLockSha256") != hashlib.sha256(Path("ThirdParty/dependencies.lock").read_bytes()).hexdigest():
+                raise SystemExit(f"reconcile-{name}.json source or dependency lock drifted")
+            for artifact in report["artifacts"]:
+                if not artifact.get("name") or not artifact.get("sha256") or not artifact.get("inventory"):
+                    raise SystemExit(f"reconcile-{name}.json lacks a final artifact inventory")
+            print(f"{name}: final artifact inventory present; byte binding is verified after asset collection")
         PY
         python3 tools/generate-sbom.py --source-sha "$GITHUB_SHA" --out supply-chain/SparkEngine-Lock-SBOM.spdx.json
         python3 tools/generate-sbom.py --check supply-chain/SparkEngine-Lock-SBOM.spdx.json
@@ -1640,6 +1695,22 @@ jobs:
                -o -name "SparkInstaller-*" -o -name "shipping-package-manifest.json" \) -print0
         )
 
+        # Publish lock binding and exact toolchain records for the lifetime of
+        # the release. Actions artifact retention alone is not durable evidence.
+        test -f supply-chain/SparkEngine-Lock-SBOM.spdx.json
+        cp supply-chain/SparkEngine-Lock-SBOM.spdx.json .
+        while IFS= read -r -d '' evidence; do
+          name=$(basename "$evidence")
+          if [[ -e "$name" || -L "$evidence" ]]; then
+            echo "Duplicate or link-like release evidence: $name" >&2
+            exit 1
+          fi
+          cp -- "$evidence" "$name"
+        done < <(
+          find supply-chain/reconciliation build-provenance -type f \
+            \( -name 'reconcile-*.json' -o -name 'build-provenance-*.json' \) -print0
+        )
+
         # Publish version-independent aliases for direct README downloads.
         # Keep the versioned packages alongside them for archival clarity.
         alias_configs=()
@@ -1717,6 +1788,7 @@ jobs:
           find . -maxdepth 1 -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
                -o -name "SparkInstaller-*" -o -name "*.spdx.json" \
+               -o -name "reconcile-*.json" -o -name "build-provenance-*.json" \
                -o -name "shipping-package-manifest.json" \
                -o -name "SparkEngine-Exact-CI-Evidence.json" \) -print0 | sort -z
         )
@@ -1757,6 +1829,13 @@ jobs:
     # REL-100: every published distributable (aliases included) must be covered
     # by a build record from this exact source SHA whose dependency-lock digest
     # equals the committed lock, and every recorded artifact must be published.
+    - name: Verify final package inventories against every published artifact
+      run: |
+        set -euo pipefail
+        python3 tools/release_package_reconciliation.py verify \
+          --reports-dir supply-chain/reconciliation --assets-dir . \
+          --assets-file expected-release-assets.txt --source-root . --source-sha "${{ github.sha }}"
+
     - name: Verify per-artifact build provenance before publication mutation
       env:
         IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
@@ -3152,7 +3231,6 @@ jobs:
         fi
 
     - name: Verify published release attestation as a consumer
-      if: needs.prepare.outputs.is_versioned == 'true'
       env:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}

@@ -1265,11 +1265,11 @@ CMake, SDK generated headers, installer, and launcher consume the requested engi
 Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** A vX.Y.Z tag embeds exactly X.Y.Z in every stable-v1 product and artifact
-   - Evidence: `Tests/Tools/test_rel100_product_versions.py`, `.github/scripts/stable_release_tag.py`, `.github/scripts/test_stable_release_tag.py`, `tools/verify_package_versions.py`, `Tests/Tools/test_verify_package_versions.py`, `.github/workflows/release.yml`, `Tests/CMakeLists.txt`
-   - build-windows verifies archive name, executable VS_VERSIONINFO and SparkEngineConfigVersion.cmake on the portable ZIP (CTest TagReleaseContract_PackagedVersions; checked locally against a real 0.9.0 ZIP). DLLs are not checked. No hosted tagged run.
+   - Evidence: `Tests/Tools/test_rel100_product_versions.py`, `.github/scripts/stable_release_tag.py`, `.github/scripts/test_stable_release_tag.py`, `tools/verify_package_versions.py`, `Tests/Tools/test_verify_package_versions.py`, `.github/workflows/release.yml`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `cmake/SparkGameModule.cmake`, `cmake/SparkWindowsVersionInfo.cmake`, `cmake/TestSparkWindowsVersionInfo.cmake`
+   - Required Shipping packages ZIP/NSIS and checks product/SDK versions, executable and first-party DLL VERSIONINFO. Module resource wiring is covered by CMake and Python contracts. No hosted tagged package run; release-metadata job debt remains outside this lane's permitted note/evidence edits.
 2. **[implemented]** Every stable-v1 artifact records source SHA, dependency-lock digest, exact toolchain, and configuration
-   - Evidence: `tools/release_build_provenance.py`, `Tests/Tools/test_release_build_provenance.py`, `.github/workflows/release.yml`, `Tests/CMakeLists.txt`
-   - ArtifactIntegrity_BuildProvenance drives record/verify: each package job records source SHA, committed dependency-lock digest, toolchain (v2: Windows SDK, MSVC tools, linker, ISA floor) and configuration; verify rejects unrecorded published bytes and stable without one v2 Windows Shipping record. Fixture-only; no hosted Windows release run.
+   - Evidence: `tools/release_build_provenance.py`, `Tests/Tools/test_release_build_provenance.py`, `.github/workflows/release.yml`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `.github/scripts/verify_published_stable_release.py`, `.github/scripts/test_verify_published_stable_release.py`
+   - Required Shipping records and verifies stable-v1 toolchain/source/lock/configuration provenance from its real tree. Release collection durably publishes those records with checksums and attestations; the independent consumer requires them. Real package execution and hosted stable publication remain unverified.
 3. **[implemented]** Stable publication requires every qualification gate and dependency; only explicitly typed publication-finalization work may remain pending in candidate state
    - Evidence: `Tests/Tools/test_release_stages.py`, `tools/site-data/release_stages.py`, `.github/workflows/release.yml`
    - Tests run candidate_readiness_errors and finalization_contract_errors, rejecting open technical or transitive work and non-finalizer exemptions. release.yml runs validate.py --require-candidate-ready.
@@ -1365,8 +1365,8 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `.github/scripts/test_record_release_approval.py`, `.github/scripts/record_release_approval.py`
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The recorder is tested only with an injected urlopen. No hosted protected stable-release approval has ever been recorded.
 4. **[implemented]** Unsigned artifacts cannot be promoted
-   - Evidence: `.github/scripts/test_verify_release_bundle.py`, `.github/scripts/verify_release_bundle.py`, `.github/scripts/test_verify_release_bundle_workflow.py`, `.github/workflows/release.yml`
-   - ArtifactIntegrity_ReleaseBundle rejects unsigned or uncovered artifacts in the real verifier. The workflow test checks release.yml re-verifies right before promotion. Windows Authenticode is not covered locally.
+   - Evidence: `.github/scripts/test_verify_release_bundle.py`, `.github/scripts/verify_release_bundle.py`, `.github/scripts/test_verify_release_bundle_workflow.py`, `.github/workflows/release.yml`, `.github/scripts/test_verify_windows_package_signatures.py`, `.github/workflows/build.yml`, `Tests/CMakeLists.txt`
+   - Wrong-key and corrupted-signature regressions plus promotion-order/condition checks protect the signature gate. Mocked crypto-result mutation is rejected locally; real OpenSSL fixtures are sandbox-blocked. Required CI also wires native unsigned EXE/MSI rejection. Protected stable signing remains unverified.
 
 **Required commands**
 
@@ -1550,11 +1550,11 @@ Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `.github/scripts/verify_vulnerability_findings.py`, `.github/workflows/build.yml`, `.github/scripts/test_verify_vulnerability_findings.py`, `.github/scripts/fixtures/vulnerability/lock-sbom.spdx.json`, `.github/scripts/fixtures/vulnerability/grype-lock-sbom-high.json`, `tools/generate-sbom.py`, `Tests/Tools/test_generate_sbom.py`, `ThirdParty/supply-chain.lock`, `.github/scripts/test-workflow-failure-propagation.py`
    - The PR-time dependency-policy job over the lock SBOM, plus the existing release gate. Hosted exact-SHA evidence is still needed.
 3. **[implemented]** Final package inventory reconciles with source lock
-   - Evidence: `Tests/Tools/test_generate_sbom.py`, `tools/generate-sbom.py`, `.github/workflows/release.yml`, `Tests/Tools/test_release_supply_chain_wiring.py`, `Tests/CMakeLists.txt`
-   - Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence.
+   - Evidence: `Tests/Tools/test_generate_sbom.py`, `tools/generate-sbom.py`, `.github/workflows/release.yml`, `Tests/Tools/test_release_supply_chain_wiring.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `tools/release_package_reconciliation.py`, `Tests/Tools/test_release_package_reconciliation.py`
+   - Stage reconciliation is wired. Required Shipping reconciles its final ZIP; release archives now bind extracted inventories to final bytes/source lock. Final-byte coverage blocks publication of native MSI/NSIS and standalone installers lacking verified payload inventories. Native reconciliation remains incomplete; no hosted proof.
 4. **[implemented]** Release artifacts include verifiable supply-chain evidence
-   - Evidence: `.github/workflows/release.yml`, `Tests/Tools/test_release_supply_chain_wiring.py`
-   - Needs published release artifacts carrying verified SBOM and provenance. No such release exists.
+   - Evidence: `.github/workflows/release.yml`, `Tests/Tools/test_release_supply_chain_wiring.py`, `.github/scripts/verify_published_stable_release.py`, `.github/scripts/test_verify_published_stable_release.py`, `.github/scripts/test_workflow_privilege_boundaries.py`, `.github/scripts/test-workflow-failure-propagation.py`, `Tests/CMakeLists.txt`
+   - Release collection includes lock-bound SBOM, reconciliation reports and toolchain records in expected assets, SHA256SUMS and attestations. Stable consumer requires the evidence; nightly also runs gh release verify. Required CTest covers privilege wiring. No published verification; native inventory gap blocks publication.
 
 **Required commands**
 
@@ -5681,7 +5681,7 @@ Progress: 4 of 6 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Every technical qualification item, transitive dependency, and qualification requirement from requiredGateIds has passing exact-SHA evidence before publication
    - Evidence: `tools/release_qualification.py`, `Tests/Tools/test_release_qualification.py`, `Tests/CMakeLists.txt`, `.github/workflows/release.yml`
-   - The check exists and runs in profile-required-gates, and it refuses the current contract. There is still no passing exact-SHA evidence, so the criterion cannot be evidenced. If the dispatcher needs a stricter reading, leave it unmet.
+   - Qualification requires every checked acceptance entry to be evidenced at the candidate SHA, in addition to dependency/gate/job and exact-CI checks. The real contract remains refused. Only a qualified hosted versioned release run can prove the outcome; no such run was performed.
 2. **[implemented]** Excluded gates may remain blocked and cannot be presented as supported
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - CTest site-data-contract drives the production validator. It checks gates are required or excluded with a reason, excluded gates may stay blocked, and misclassified or scope-widening support claims are rejected.
@@ -5843,8 +5843,8 @@ Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 2. **[unmet]** Upgrade and rollback evidence is independently retained
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No upgrade or rollback evidence has been retained. The N-1 rehearsal selectors are still planned.
 3. **[implemented]** The first predecessor path cannot satisfy this item
-   - Evidence: `tools/site-data/release_stages.py`, `tools/site-data/validate.py`, `Tests/Tools/test_release_stages.py`, `Tests/Tools/test_site_data_contract.py`
-   - predecessor_evidence_reuse_errors() refuses substituted v1 work that cites the predecessor baseline commit, predecessor-only selectors or digests, or the bootstrap qualifier mode, and refuses REL-192 evidenced or done before the predecessor is published. Local only; no exact-commit CI yet.
+   - Evidence: `tools/site-data/release_stages.py`, `tools/site-data/validate.py`, `Tests/Tools/test_release_stages.py`
+   - Published predecessor state requires a baseline SHA and sign-off evidence. N-1/substituted work cannot reuse predecessor baseline, sign-off or predecessor-only item run/SHA evidence, selectors or bootstrap mode. Pure ledger tests pass locally; exact-commit hosted evidence remains pending.
 
 **Required commands**
 
@@ -5990,8 +5990,8 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 3. **[unmet]** Published artifacts are immutable and independently verify against the exact qualified candidate
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No published immutable artifacts, and no independent verification against a qualified candidate.
 4. **[implemented]** Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists
-   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `.github/workflows/site-data-publish.yml`
-   - Already implemented before this lane. This lane hardens it: the deploy gate reads globalRelease.state by assignment and dispatches with a case whose unknown-state branch exits 1. Global-ready publication evidence citing different commits across profiles is rejected. Proven by site-data-contract locally only; no hosted CI evidence.
+   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `.github/workflows/site-data-publish.yml`, `.github/scripts/verify-publication-evidence.py`, `.github/scripts/test-verify-publication-evidence.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`
+   - Ready publication binds finalizer/G17 evidence to one released SHA. The deploy gate verifies live release run/attempt/job success, immutable stable tag and ancestry to site SOURCE_COMMIT. Missing PyYAML fails CI. Mocked boundary tests pass; deployment evidence requires post-merge site-data-publish.
 
 **Required commands**
 

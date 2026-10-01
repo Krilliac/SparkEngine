@@ -5761,6 +5761,35 @@ if(Python3_Interpreter_FOUND)
             TIMEOUT 120)
     endif()
 
+    add_test(
+        NAME ArtifactIntegrity_ReleaseBundleWorkflow
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/.github/scripts/test_verify_release_bundle_workflow.py)
+    set_tests_properties(ArtifactIntegrity_ReleaseBundleWorkflow PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;integrity;python"
+        TIMEOUT 60)
+    add_test(
+        NAME ArtifactIntegrity_WorkflowPrivilegeBoundaries
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/.github/scripts/test_workflow_privilege_boundaries.py)
+    set_tests_properties(ArtifactIntegrity_WorkflowPrivilegeBoundaries PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;integrity;python"
+        TIMEOUT 60)
+    add_test(
+        NAME ArtifactIntegrity_PublicationEvidence
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/.github/scripts/test-verify-publication-evidence.py)
+    set_tests_properties(ArtifactIntegrity_PublicationEvidence PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;integrity;python"
+        TIMEOUT 60)
+    add_test(
+        NAME SupplyChain_FinalPackageReconciliation
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_release_package_reconciliation.py)
+    set_tests_properties(SupplyChain_FinalPackageReconciliation PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;supply-chain;python"
+        TIMEOUT 60)
+
     # REL-190: tools/release_qualification.py, which profile-required-gates runs
     # for a versioned candidate: stage readiness, every required item's CI jobs
     # able to block publication, and a well-formed exact-SHA record. The real

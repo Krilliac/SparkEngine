@@ -602,10 +602,14 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("--stable", run)
         self.assertIn("set -euo pipefail", run)
 
-    def test_stable_asset_download_excludes_provenance_records(self) -> None:
+    def test_stable_asset_download_includes_provenance_records(self) -> None:
         steps = self.jobs["release"]["steps"]
         packages = steps[_step_index(steps, _named("Download channel build artifacts"))]
         self.assertIn("'SparkEngine-Windows-MinSizeRel-packages'", packages["with"]["pattern"])
+        provenance = steps[_step_index(steps, _named("Download build provenance records"))]
+        self.assertIn("'build-provenance-Windows-MinSizeRel'", provenance["with"]["pattern"])
+        collect = steps[_step_index(steps, _named("Collect release assets"))]
+        self.assertIn("build-provenance-*.json", collect["run"])
 
     def test_workflow_tool_and_test_are_not_git_ignored(self) -> None:
         for path in (TOOL, Path(__file__).resolve()):
