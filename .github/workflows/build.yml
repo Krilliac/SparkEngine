@@ -824,7 +824,8 @@ jobs:
   # ===========================================================================
   build-linux-tsan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # 120/3000: the hosted 4-vCPU runner needs ~2,400-2,700 s for the full TSan suite (run 36811181228).
+    timeout-minutes: 120
     steps:
     - name: Define TSan evidence directory
       shell: bash
@@ -898,7 +899,7 @@ jobs:
           --job "${{ github.job }}" \
           --expected-selector all \
           --minimum-tests 6900 \
-          --timeout-seconds 1800 \
+          --timeout-seconds 3000 \
           --runtime-env TSAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
 
@@ -922,7 +923,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-tsan \
           --minimum-tests 6900 \
-          --timeout-seconds 1800
+          --timeout-seconds 3000
 
     - name: Extract error summary
       if: failure()
@@ -3543,7 +3544,8 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # 60: the build takes ~23 min and the instrumented suite ~17-20 min on the hosted runner.
+    timeout-minutes: 60
     env:
       # Instrumented objects plus one .gcno per compile outgrow the workflow's
       # 1G cache (the plain GCC Debug lane alone fills 0.8G); evicting during a

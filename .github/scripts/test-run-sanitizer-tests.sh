@@ -1327,14 +1327,16 @@ done
 [[ "$(grep -Fc 'bash .github/scripts/run-sanitizer-tests.sh' "$WORKFLOW")" -eq 3 ]] && \
     pass "exactly three sanitizer runner invocations" || fail "sanitizer runner invocation count"
 grep -Fq -- '--warn-is-error --shuffle 123' "$WORKFLOW" && pass "workflow hardens flaky warnings and shuffle seed" || fail "workflow warn/shuffle contract"
-for sanitizer in asan tsan; do
+# TSan needs ~2,400-2,700 s on the 4-vCPU hosted runner (owner decision 2026-10-01).
+for bounds in asan:90:1800 tsan:120:3000; do
+    IFS=: read -r sanitizer minutes seconds <<< "$bounds"
     section="$(awk -v job="build-linux-${sanitizer}" '
         $0 == "  " job ":" { found = 1 }
         found && $0 ~ /^  [A-Za-z0-9_-]+:$/ && $0 != "  " job ":" { exit }
         found { print }
     ' "$WORKFLOW")"
-    [[ "$section" == *"timeout-minutes: 90"* && "$section" == *"--timeout-seconds 1800"* ]] && \
-        pass "${sanitizer} uses the required 90-minute/1800-second bounds" || \
+    [[ "$section" == *"timeout-minutes: ${minutes}"* && "$section" == *"--timeout-seconds ${seconds}"* ]] && \
+        pass "${sanitizer} uses the required ${minutes}-minute/${seconds}-second bounds" || \
         fail "${sanitizer} timeout policy"
 done
 msan_section="$(awk '

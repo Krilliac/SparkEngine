@@ -1230,9 +1230,11 @@ def required_workflow_errors(workflow: str) -> list[str]:
         ):
             errors.append("SparkTests wrapper recovery harness command is not exact")
 
-    for sanitizer, run_name, verify_name in (
-        ("asan", "Run Tests under ASan + UBSan + LSan", "Verify published ASan exact-commit evidence"),
-        ("tsan", "Run Tests under TSan", "Verify published TSan exact-commit evidence"),
+    # TSan's budget is larger: on the 4-vCPU hosted runner its full suite needs ~2,400-2,700 s (owner
+    # decision 2026-10-01, run 36811181228 timed out at 1800 s with 6,895 tests done); ASan fits 1800 s.
+    for sanitizer, run_name, verify_name, job_minutes, process_seconds in (
+        ("asan", "Run Tests under ASan + UBSan + LSan", "Verify published ASan exact-commit evidence", "90", "1800"),
+        ("tsan", "Run Tests under TSan", "Verify published TSan exact-commit evidence", "120", "3000"),
     ):
         job_name = f"build-linux-{sanitizer}"
         try:
@@ -1240,8 +1242,8 @@ def required_workflow_errors(workflow: str) -> list[str]:
         except AssertionError as exc:
             errors.append(str(exc))
             continue
-        if not exact_field(job, "timeout-minutes", "90"):
-            errors.append(f"{job_name} must have exactly timeout-minutes: 90")
+        if not exact_field(job, "timeout-minutes", job_minutes):
+            errors.append(f"{job_name} must have exactly timeout-minutes: {job_minutes}")
         if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", job):
             errors.append(f"{job_name} has a bypassing job-level directive")
         if re.search(r"(?m)^\s+['\"]?matrix['\"]?:\s*", job):
@@ -1259,7 +1261,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append(f"{run_name} suppresses a runner failure")
             if (
                 len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", runner)) != 1
-                or runner.count("--timeout-seconds 1800") != 1
+                or runner.count(f"--timeout-seconds {process_seconds}") != 1
             ):
                 errors.append(f"{run_name} must use one exact process timeout")
             if len(re.findall(r"(?<![A-Za-z0-9_-])--warn-is-error(?![=A-Za-z0-9_-])", runner)) != 1:
@@ -1279,7 +1281,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--job "${{ github.job }}"',
                 "--expected-selector all",
                 "--minimum-tests 6900",
-                "--timeout-seconds 1800",
+                f"--timeout-seconds {process_seconds}",
             ):
                 if runner.count(fragment) != 1:
                     errors.append(f"{run_name} is missing/duplicating {fragment}")
@@ -1300,7 +1302,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--expected-sha "${{ github.sha }}"',
                 '--run-id "${{ github.run_id }}"',
                 '--run-attempt "${{ github.run_attempt }}"',
-                "--timeout-seconds 1800",
+                f"--timeout-seconds {process_seconds}",
                 "--minimum-tests 6900",
             )
             for fragment in expected_fragments:
@@ -4114,12 +4116,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", asan_section)
 
     def test_sanitizer_jobs_and_test_processes_have_policy_specific_timeouts(self) -> None:
-        for sanitizer in ("asan", "tsan"):
+        for sanitizer, minutes, seconds in (("asan", 90, 1800), ("tsan", 120, 3000)):
             start = self.build.index(f"build-linux-{sanitizer}:")
             next_job = self.build.index("\n  build-", start + 1)
             section = self.build[start:next_job]
-            self.assertIn("timeout-minutes: 90", section)
-            self.assertIn("--timeout-seconds 1800", section)
+            self.assertIn(f"timeout-minutes: {minutes}", section)
+            self.assertIn(f"--timeout-seconds {seconds}", section)
 
         msan_start = self.build.index("build-linux-msan:")
         msan_next_job = self.build.index("\n  build-", msan_start + 1)
