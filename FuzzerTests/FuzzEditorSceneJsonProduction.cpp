@@ -178,33 +178,34 @@ extern "C" int SparkFuzzDecodeEditorSceneJson(const std::uint8_t* data, std::siz
     if (SparkEditor::DecodeSceneJSONDocument(content, again, againResult) != accepted ||
         againResult.errorMessage != result.errorMessage ||
         SparkFuzzEditorScene::Fingerprint(again, &SparkEditor::IsValidSceneUTF8) != print)
+    {
         InvariantFailure("decoding the same bytes twice gave different results");
-}
-if (accepted != result.success)
-{
-    InvariantFailure("the return value disagrees with result.success");
-}
+    }
+    if (accepted != result.success)
+    {
+        InvariantFailure("the return value disagrees with result.success");
+    }
 
-if (!accepted)
-{
-    if (print != sentinelPrint)
+    if (!accepted)
     {
-        InvariantFailure("a rejected document changed the caller's scene");
+        if (print != sentinelPrint)
+        {
+            InvariantFailure("a rejected document changed the caller's scene");
+        }
+        if (result.errorMessage.empty())
+        {
+            InvariantFailure("a rejected document carries no error message");
+        }
+        return 0;
     }
-    if (result.errorMessage.empty())
+    if (!result.errorMessage.empty())
     {
-        InvariantFailure("a rejected document carries no error message");
+        InvariantFailure("an accepted document reports an error");
     }
+    if (result.bytesProcessed != content.size())
+    {
+        InvariantFailure("an accepted document reports a different byte count");
+    }
+    CheckAccepted(scene);
     return 0;
-}
-if (!result.errorMessage.empty())
-{
-    InvariantFailure("an accepted document reports an error");
-}
-if (result.bytesProcessed != content.size())
-{
-    InvariantFailure("an accepted document reports a different byte count");
-}
-CheckAccepted(scene);
-return 0;
 }
