@@ -62,7 +62,7 @@ class SelectionTests(unittest.TestCase):
                      "-DSPARK_HEADLESS_SUPPORT=ON", "--target SparkEngine SparkGameMMOFPS SparkTests"):
             self.assertIn(flag, runs)
         for label in check_selection.EXPECTED:
-            self.assertIn(f"--show-only=json-v1 -L '^{label}$'", runs)
+            self.assertIn(f"--show-only=json-v1 --no-tests=error -L '^{label}$'", runs)
             self.assertIn(f"check_selection.py {label}-selection.json --label {label}", runs)
             run = next(step["run"] for step in steps if f"-L '^{label}$'" in step.get("run", "")
                        and "--show-only" not in step["run"])

@@ -1129,9 +1129,9 @@ jobs:
       id: selection
       run: |
         set -euo pipefail
-        ctest --test-dir build/linux-gcc-release --show-only=json-v1 -L '^terrafront-multiclient$' > terrafront-multiclient-selection.json
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-multiclient$' > terrafront-multiclient-selection.json
         python3 Tools/Terrafront/check_selection.py terrafront-multiclient-selection.json --label terrafront-multiclient
-        ctest --test-dir build/linux-gcc-release --show-only=json-v1 -L '^terrafront-soak$' > terrafront-soak-selection.json
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-soak$' > terrafront-soak-selection.json
         python3 Tools/Terrafront/check_selection.py terrafront-soak-selection.json --label terrafront-soak
 
     - name: Run Terrafront multi-client selection
