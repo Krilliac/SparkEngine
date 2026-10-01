@@ -269,8 +269,17 @@ def execute_selected(ctest: str, build_dir: Path, config: str | None, selection:
                      "SPARK_TEST_EXPECT_COUNT", "SPARK_TEST_LIMIT"):
         environment.pop(variable, None)
     environment["SPARK_TEST_LIMIT"] = str(test_limit)
-    completed = subprocess.run(argv, capture_output=True, text=True, timeout=CTEST_EXECUTION_TIMEOUT_SECONDS,
-                               check=False, env=environment)
+    try:
+        completed = subprocess.run(argv, capture_output=True, text=True, timeout=CTEST_EXECUTION_TIMEOUT_SECONDS,
+                                   check=False, env=environment)
+    except subprocess.TimeoutExpired as error:
+        # Keep CTest's per-test completion lines: without them a timed-out
+        # selection cannot say which of its tests consumed the budget.
+        partial = error.stdout or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", errors="replace")
+        raise RuntimeError(f"timed out after {CTEST_EXECUTION_TIMEOUT_SECONDS} seconds; CTest output so far:\n"
+                           f"{partial.strip()[-4000:]}") from error
     if completed.returncode != 0:
         detail = (completed.stdout.strip() + "\n" + completed.stderr.strip()).strip()
         raise RuntimeError(f"ctest exited {completed.returncode}: {detail[-600:]}")
