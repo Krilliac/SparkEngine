@@ -26,6 +26,7 @@
 #include <cstring>
 #include <cwchar>
 #include <filesystem>
+#include <format>
 #include <string>
 #include <vector>
 
@@ -55,8 +56,11 @@ namespace
 
     int Fail(int code, const char* step)
     {
-        std::fprintf(stderr, "[CrashArtifactSandboxProbe] FAIL %s (exit %d, GetLastError=%lu)\n", step, code,
-                     static_cast<unsigned long>(GetLastError()));
+        // std::format, not printf: the probe's Windows types must not depend on a format-string match.
+        std::fputs(std::format("[CrashArtifactSandboxProbe] FAIL {} (exit {}, GetLastError={})\n", step, code,
+                               static_cast<unsigned long>(GetLastError()))
+                       .c_str(),
+                   stderr);
         return code;
     }
 
@@ -232,7 +236,10 @@ namespace
             }
             LPWSTR text = nullptr;
             ConvertSidToStringSidW(sid, &text);
-            std::fwprintf(stderr, L"[CrashArtifactSandboxProbe] foreign ACE for %ls\n", text ? text : L"?");
+            std::fputws(std::format(L"[CrashArtifactSandboxProbe] foreign ACE for {}\n",
+                                    text ? std::wstring_view(text) : std::wstring_view(L"?"))
+                            .c_str(),
+                        stderr);
             if (text)
             {
                 LocalFree(text);
@@ -259,8 +266,10 @@ namespace
     int RunChecks(const char* kind, bool requireSandbox)
     {
         const TokenFacts facts = ReadTokenFacts();
-        std::fprintf(stdout, "[CrashArtifactSandboxProbe] %s: appContainer=%d integrity=0x%lx\n", kind,
-                     facts.appContainer ? 1 : 0, static_cast<unsigned long>(facts.integrityRid));
+        std::fputs(std::format("[CrashArtifactSandboxProbe] {}: appContainer={} integrity=0x{:x}\n", kind,
+                               facts.appContainer ? 1 : 0, static_cast<unsigned long>(facts.integrityRid))
+                       .c_str(),
+                   stdout);
         if (requireSandbox && (!facts.tokenQueryValid || !facts.appContainerQueryValid || !facts.integrityQueryValid))
         {
             return Fail(kNotSandboxed, "child token identity queries did not complete");
@@ -317,7 +326,7 @@ namespace
         }
 
         const fs::path base = Detail::ResolveCrashArtifactBaseDirectory();
-        std::fwprintf(stdout, L"[CrashArtifactSandboxProbe] base=%ls\n", base.c_str());
+        std::fputws(std::format(L"[CrashArtifactSandboxProbe] base={}\n", base).c_str(), stdout);
         if (base.empty())
         {
             return Fail(kNoBaseDirectory, "ResolveCrashArtifactBaseDirectory");
@@ -355,7 +364,7 @@ namespace
         {
             return Fail(kCreateFailed, "CreatePrivateCrashArtifactDirectory");
         }
-        std::fwprintf(stdout, L"[CrashArtifactSandboxProbe] root=%ls\n", root.c_str());
+        std::fputws(std::format(L"[CrashArtifactSandboxProbe] root={}\n", root).c_str(), stdout);
 
         // PinArtifactRoot's open, with its exact access and flags.
         HANDLE pinned =
@@ -410,7 +419,7 @@ namespace
         }
         if (result == kPass)
         {
-            std::fprintf(stdout, "[CrashArtifactSandboxProbe] %s: PASS\n", kind);
+            std::fputs(std::format("[CrashArtifactSandboxProbe] {}: PASS\n", kind).c_str(), stdout);
         }
         return result;
     }
@@ -430,8 +439,10 @@ namespace
             exitCode = kChildLaunchFailed;
         }
         CloseHandle(process.hProcess);
-        std::fprintf(stdout, "[CrashArtifactSandboxProbe] %s child exit=%lu\n", kind,
-                     static_cast<unsigned long>(exitCode));
+        std::fputs(
+            std::format("[CrashArtifactSandboxProbe] {} child exit={}\n", kind, static_cast<unsigned long>(exitCode))
+                .c_str(),
+            stdout);
         return static_cast<int>(exitCode);
     }
 
@@ -612,7 +623,7 @@ int main(int argc, char** argv)
     }
     if (argc != 1)
     {
-        std::fprintf(stderr, "usage: %s [--inside appcontainer|lowil]\n", argv[0]);
+        std::fputs(std::format("usage: {} [--inside appcontainer|lowil]\n", argv[0]).c_str(), stderr);
         return 2;
     }
 
@@ -635,6 +646,6 @@ int main(int argc, char** argv)
     {
         ++failures;
     }
-    std::fprintf(stdout, "[CrashArtifactSandboxProbe] %d of 3 scenarios failed\n", failures);
+    std::fputs(std::format("[CrashArtifactSandboxProbe] {} of 3 scenarios failed\n", failures).c_str(), stdout);
     return failures == 0 ? 0 : 1;
 }
