@@ -69,7 +69,12 @@ struct CrashConfig
  * and generates minidumps without thread-stack memory (registers, modules and the exception record stay,
  * and the report's text call stack is walked at crash time), so no stack-resident secret (password, key,
  * session token) reaches the .dmp unless CrashConfig::includeStackMemory opts in. On Linux:
- * installs signal handlers for SIGSEGV, SIGFPE, SIGABRT, etc. On other platforms: a no-op stub.
+ * installs signal handlers for SIGSEGV, SIGFPE, SIGABRT, etc. POSIX installs also disable
+ * kernel core dumps (RLIMIT_CORE=0; additionally PR_SET_DUMPABLE=0 on Linux) unless
+ * includeStackMemory explicitly opts in before the first install. Opt-in preserves
+ * the inherited OS policy; it does not restore a previously lowered hard limit.
+ * Failure to enforce the default kernel policy terminates startup.
+ * On unsupported platforms: a no-op stub.
  *
  * @param cfg Configuration controlling crash report behavior
  */

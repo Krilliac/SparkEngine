@@ -669,7 +669,9 @@
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.console"
       ],
-      "testSelectors": ["PublicWording_ConsoleCertification"],
+      "testSelectors": [
+        "PublicWording_ConsoleCertification"
+      ],
       "requiredCiJobs": [],
       "performanceBudgets": [],
       "documentationUpdates": [
@@ -749,7 +751,21 @@
           ],
           "note": "Only a uniform frame and a triangle golden are checked. No primary-pass or representative-content goldens with reviewed thresholds."
         },
-        {"criterionDigest": "sha256:745ccd700288", "state": "implemented", "evidence": ["Tests/TestRHI210D3D11DeviceLossReal.cpp", "Tests/TestRHI210D3D11ValidationReal.cpp", "Tests/RHI210D3D11EngineFixture.h", "Tests/CMakeLists.txt", "SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp", "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp", "SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp", "wiki/subsystems/Rendering-and-Graphics.md"], "note": "D3D11_DeviceLoss (2, WARP) and D3D11_Resource (3, includes the 1x1/1920x1080/320x240 resize) lanes, plus the 2,000-cycle create/destroy live-object baseline in the debug-layer lane (D3D11_Validation_CreateDestroyStressReturnsToBaseline). Local Windows run only; no exact-commit CI yet."},
+        {
+          "criterionDigest": "sha256:745ccd700288",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI210D3D11DeviceLossReal.cpp",
+            "Tests/TestRHI210D3D11ValidationReal.cpp",
+            "Tests/RHI210D3D11EngineFixture.h",
+            "Tests/CMakeLists.txt",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp",
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp",
+            "SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp",
+            "wiki/subsystems/Rendering-and-Graphics.md"
+          ],
+          "note": "D3D11_DeviceLoss (2, WARP) and D3D11_Resource (3, includes the 1x1/1920x1080/320x240 resize) lanes, plus the 2,000-cycle create/destroy live-object baseline in the debug-layer lane (D3D11_Validation_CreateDestroyStressReturnsToBaseline). Local Windows run only; no exact-commit CI yet."
+        },
         {
           "criterionDigest": "sha256:ab52617664c9",
           "state": "implemented",
@@ -1944,8 +1960,7 @@
         "editor-integration",
         "editor-package-roundtrip"
       ],
-      "plannedTestSelectors": [
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ASSET-220",
@@ -2157,9 +2172,14 @@
             "Tests/TestPrefabCompatibility.cpp",
             "Tests/Fixtures/Compatibility/Prefab/v1-guard-tower.sparkprefab",
             "Tests/Fixtures/Compatibility/Prefab/README.md",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "Tests/harden/Test_persistence_SaveSystem.cpp",
+            "Tests/Fixtures/Compatibility/SaveSystem/v3-fps-profile.spark_save.hex",
+            "Tests/TestSceneSerializerReal.cpp",
+            "Tests/Fixtures/Compatibility/SceneFile/v1-hierarchy.sparkscene",
+            "wiki/gameplay-tools/Asset-Migration.md"
           ],
-          "note": "Prefab: PrefabMigration_* (SparkPrefabCompatibilityTests) load the v1 fixture with its declared state without rewriting the source; v1 resaves as v2. Editor state: .sparkproject has only ever been version 1, so no N-1 exists; the v1 fixture loads without rewrite and v2 fails closed (EditorStateMigration_*). Promotion needs an owner decision."
+          "note": "Save v3 and SceneFile v1 fixtures retain declared state; prefab v1 and legacy reflected fixtures document their hand-authored provenance. SparkSaveCompatibilityTests pins 31 tests. Assets have no production MigrateAsset caller, and editor projects have no N-1 format: owner decisions remain pending. No status promotion or hosted proof is claimed."
         },
         {
           "criterionDigest": "sha256:8d9be8a2494e",
@@ -2172,9 +2192,13 @@
             "Tests/TestPrefabPersistence.cpp",
             "Tests/TestEditorStateCompatibility.cpp",
             "SparkEditor/Source/Core/EditorUI.cpp",
-            "SparkEditor/Source/Core/EditorLayoutManager.cpp"
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+            "Tests/TestSaveSystemRoundTripReal.cpp",
+            "Tests/TestSAVE230NewerFormatSlotReal.cpp",
+            "Tests/harden/Test_persistence_SaveSystem.cpp",
+            "Tests/TestReflectedScene.cpp"
           ],
-          "note": "A damaged prefab or project file falls back to its retained .bak and reports both reasons, and a later save keeps the good .bak (PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons, EditorStateMigration_CorruptProjectLoadsRetainedBackup). A rejected prefab keeps the loaded one; a rejected layout leaves applied panels unchanged. Asset-migration rollback is not covered."
+          "note": "Production save rollback, newer-format corruption recovery, reflected-scene .bak recovery, prefab and project backup recovery are directly tested. Failed loads preserve live data; repairing saves retain the usable backup. Asset-migration rollback lacks a production load path and needs an owner decision. C++ execution of this lane remains pending."
         },
         {
           "criterionDigest": "sha256:33b4700b3cfc",
@@ -2193,9 +2217,12 @@
             "Tests/TestEditorLayoutManager.cpp",
             "SparkEditor/Source/Prefabs/PrefabManager.cpp",
             "Tests/TestDocumentInterruptionReal.cpp",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "Tests/TestSaveSystemRoundTripReal.cpp",
+            "Tests/TestReflectedScene.cpp",
+            ".github/workflows/build.yml"
           ],
-          "note": "SparkDocumentInterruptionTests: killed scene/prefab/project writers (Spark::Process::Kill, SIGKILL/TerminateProcess) must leave generation D or D+1 loadable. Linux evidence needs hosted CI."
+          "note": "SparkSaveInterruptionTests and SparkDocumentInterruptionTests use Spark::Process::Kill for save/scene/prefab/project writers (TerminateProcess on Windows, SIGKILL on POSIX), retaining complete generations and backups. New Windows save-port execution is pending in build-windows-vs2022; Linux proof belongs to build-linux-gcc. Power loss and kernel crashes are not simulated."
         },
         {
           "criterionDigest": "sha256:333b592702f6",
@@ -2213,9 +2240,11 @@
             "Tests/TestEditorLayoutManager.cpp",
             "Tests/Fixtures/Compatibility/EditorState/Layouts/v2-future-layout.json",
             "Tests/Fixtures/Compatibility/Prefab/v3-future.sparkprefab",
-            "Tests/TestPrefabCompatibility.cpp"
+            "Tests/TestPrefabCompatibility.cpp",
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
+            "Tests/TestSAVE230NewerFormatSlotReal.cpp"
           ],
-          "note": "Newer SPARKPREFAB (v3 fixture), projectFileVersion and layout v2 fail closed, naming the version and supported window. Malformed prefabs name component, property and line; RuntimePrefab::Deserialize rejects bad magic or version. Since 6cd1ed6d1 a layout value named like a header key cannot bypass the gate (EditorLayoutMgr_ValuesNamedLikeKeysDoNotShadowKeys)."
+          "note": "RuntimePrefab returns actionable magic/version/truncation errors; tests assert them and unchanged targets. Save Load logs are checked for the slot, newer format, supported read window and recovery action. Scene/prefab/project/layout diagnostics remain covered. Assets lack a production migration path and require an owner decision; C++ execution is pending."
         }
       ],
       "commands": [
@@ -2352,9 +2381,13 @@
             "Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake",
             "Tests/CMakeLists.txt",
             "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
-            "SparkSDK/README.md"
+            "SparkSDK/README.md",
+            "CMakeLists.txt",
+            "Tests/Tools/test_sdk_component_completeness.py",
+            "SparkSDK/API-REFERENCE.md",
+            "SparkSDK/MIGRATION.md"
           ],
-          "note": "SparkSDKComponentCompleteness fails if an sdk-only install lacks the SDK header, Config/Targets, README, LICENSE, THIRD_PARTY_NOTICES or EmptyProject. It also builds EmptyProject from that install in the engine config: one module image whose .sparkabi matches the installed Version.h, is hashed, and equals SparkGameFPS's sidecar in every other field."
+          "note": "SparkSDKComponentCompleteness checks public/version/ABI headers, ConfigVersion/targets, legal files, API/migration guidance and EmptyProject. SDKConsumer_InstalledEmptyProjectTemplate builds the installed sdk+tools example and checks its hashed sidecar against SparkGameFPS on Windows and Linux. New Linux execution and exact-SHA CI remain pending."
         }
       ],
       "commands": [

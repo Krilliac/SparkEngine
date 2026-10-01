@@ -484,14 +484,16 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - name: Run OPS-100 policy and adversarial tests
+    - name: Run OPS-100 policy and SDK package adversarial tests
       env:
         PYTHONDONTWRITEBYTECODE: "1"
       run: |
         set -euo pipefail
-        # The five source files are test_ops100_redaction.py,
+        # The source files are test_ops100_redaction.py,
         # test_ops100_crash_security.py, test_ops100_telemetry_spool.py,
-        # test_ops100_adversarial.py, and test_ops100_symbolication.py (which
+        # test_ops100_adversarial.py, test_crash_capture_security.py,
+        # test_sdk_component_completeness.py (compiler-free CMake install fixtures),
+        # and test_ops100_symbolication.py (which
         # compiles a small ELF with the runner's cc/objcopy/addr2line);
         # unittest runs their native test classes without requiring an
         # unpinned third-party pytest installation.
@@ -499,6 +501,8 @@ jobs:
         python3 -m unittest \
           test_ops100_redaction \
           test_ops100_crash_security \
+          test_crash_capture_security \
+          test_sdk_component_completeness \
           test_ops100_telemetry_spool \
           test_ops100_adversarial \
           test_ops100_symbolication \

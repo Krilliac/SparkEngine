@@ -843,7 +843,16 @@
           ],
           "note": "Persistence_Migration_* (11, pinned) covers N-1 and newer-schema rollback fixtures for TFDatabase (v0, retired v3, v2 -> v4), the territory file (WorldSave::DecodeTerritory), TFOutfitStore and the TFSocialSystem store. The progression world file is deliberately unversioned (session-scoped; persistence.md says why). Pending the central build/run: nothing was compiled in this lane."
         },
-        {"criterionDigest": "sha256:824bc738ee74", "state": "implemented", "evidence": ["Tests/TestDATA120BackupRestore.cpp", "docs/specs/persistence.md", "Tests/CMakeLists.txt"], "note": "Persistence_RecoveryDrill_* (9, pinned on every host) now also run on Windows (write-through flush and rename, ExclusiveFileLock, TerminateProcess) and cover TFOutfitStore, the social store and a territory write besides TFDatabase; docs/specs/persistence.md has the per-store recovery table. Power loss is not simulated (no fault-injecting filesystem). Local only; no exact-commit CI yet."},
+        {
+          "criterionDigest": "sha256:824bc738ee74",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestDATA120BackupRestore.cpp",
+            "docs/specs/persistence.md",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Persistence_RecoveryDrill_* (9, pinned on every host) now also run on Windows (write-through flush and rename, ExclusiveFileLock, TerminateProcess) and cover TFOutfitStore, the social store and a territory write besides TFDatabase; docs/specs/persistence.md has the per-store recovery table. Power loss is not simulated (no fault-injecting filesystem). Local only; no exact-commit CI yet."
+        },
         {
           "criterionDigest": "sha256:d2d86202a7f2",
           "state": "implemented",
@@ -966,13 +975,17 @@
             "SparkEngine/Source/Utils/CrashHandler.h",
             "SparkEngine/Source/Utils/CrashHandler.cpp",
             "Tests/TestCrashHandlerGatingReal.cpp",
-            "Tests/TestCoreAndBuildSystems.cpp",
             "Tests/Tools/run_crash_capture_security.py",
             "Tests/Tools/test_crash_capture_security.py",
             "SECURITY.md",
-            "wiki/advanced/Crash-Reporting.md"
+            "wiki/advanced/Crash-Reporting.md",
+            "Tests/TestEngineSettingsReal.cpp",
+            "Tests/Tools/test_ops100_crash_security.py",
+            "SparkEngine/Source/Utils/MiniDumpWithoutStacks.h",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml"
           ],
-          "note": "Commit 8d249f919."
+          "note": "CrashCapturePackageSecurity, CrashSettingsCredentials, CrashManifest_SecretRedaction and Linux CrashCoreDumpPolicy cover the default policy. Jobs: security-runtime, build-windows-vs2022 and validate-ops100. POSIX core suppression and a real signal canary are added; full dumps need opt-in. C++ execution/hosted proof pending; item requiredCiJobs still needs correction."
         },
         {
           "criterionDigest": "sha256:2f215b96fa7c",

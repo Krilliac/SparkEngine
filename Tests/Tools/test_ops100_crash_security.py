@@ -74,6 +74,24 @@ class CrashSecurityTests(unittest.TestCase):
         )
         self.assertIn("if (!g_cfg.headlessMode)", source)
 
+    def test_posix_crash_handler_disables_kernel_core_files_by_default(self) -> None:
+        source = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertIn("setrlimit(RLIMIT_CORE", source)
+        self.assertIn("const struct rlimit disabledCore = {0, 0};", source)
+        self.assertIn("prctl(PR_SET_DUMPABLE, 0L", source)
+        self.assertIn("ApplyPosixCoreDumpPolicy(cfg.includeStackMemory)", source)
+        self.assertIn("if (allowFullDump)", source)
+        self.assertIn("if (!g_posixCoreDumpPolicyEnforced)", source)
+        self.assertIn("Cannot enforce kernel core-dump privacy; terminating startup.", source)
+        self.assertIn("_exit(EXIT_FAILURE);", source)
+
+    def test_full_dump_opt_in_is_explicit_and_source_anchored(self) -> None:
+        engine = (ROOT / "SparkEngine" / "Source" / "Core" / "SparkEngine.cpp").read_text(encoding="utf-8")
+        handler = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertIn('std::getenv("SPARK_CRASH_FULL_DUMP")', engine)
+        self.assertIn('std::string_view(envFullDump) == "1"', engine)
+        self.assertIn("if (g_cfg.includeStackMemory)", handler)
+
     def test_engine_accepts_no_reusable_crash_transport_credentials(self) -> None:
         # The in-process uploader (GitHub PAT, SMTP, FTP, Dropbox, HTTP, relay)
         # is gone; nothing in the engine may reintroduce a credential-bearing

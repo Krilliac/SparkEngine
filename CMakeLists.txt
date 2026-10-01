@@ -2903,7 +2903,7 @@ spark_install_tracked_directory(
     SOURCE SparkSDK
     DESTINATION share/SparkEngine/sdk
     COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
-    INCLUDE_REGEXES "/README[.]md$"
+    INCLUDE_REGEXES "/(README|API-REFERENCE|MIGRATION)[.]md$"
 )
 install(FILES "${CMAKE_BINARY_DIR}/SparkEngineLicense.txt"
     DESTINATION share/SparkEngine/sdk

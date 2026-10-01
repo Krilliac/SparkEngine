@@ -2007,25 +2007,24 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         spark_exclude_from_main_suite(LinuxTonemapPass_OpenGL)
     endif()
 endif()
-add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
+add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
 set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=SaveMigration_"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SaveMigration_;SPARK_TEST_EXPECT_COUNT=31"
     LABELS "compatibility;save;unit"
     RUN_SERIAL TRUE
     TIMEOUT 30)
 
-# SAVE-230: AtomicWrite_ SIGKILLs an exec'd SparkTests writer child at seeded, randomized
+# SAVE-230: AtomicWrite_ kills a Spark::Process writer child at seeded, randomized
 # offsets while it saves successive generations through the real SaveSystem, then requires
 # the slot to load the last completed (or in-flight) generation with a valid CRC, an intact
 # .bak and no promoted .tmp; two deterministic AtomicWrite_ tests pin the staged .bak refresh.
-# POSIX only; Windows needs a TerminateProcess variant.
-if(NOT WIN32)
-    add_test(NAME SparkSaveInterruptionTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
-    set_tests_properties(SparkSaveInterruptionTests PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AtomicWrite_;SPARK_TEST_EXPECT_COUNT=3"
-        LABELS "compatibility;save;process"
-        TIMEOUT 300)
-endif()
+# Spark::Process::Kill uses SIGKILL on POSIX and TerminateProcess on Windows.
+add_test(NAME SparkSaveInterruptionTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+set_tests_properties(SparkSaveInterruptionTests PROPERTIES
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AtomicWrite_;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "compatibility;save;process"
+    RUN_SERIAL TRUE
+    TIMEOUT 300)
 
 # SEC-assets: untrusted asset-parser regressions (SparkPak TOC binding and bounds,
 # the repo-authored stb_image stub BMP/TGA decoders, OBJ face-index validation,
@@ -2198,6 +2197,15 @@ set_tests_properties(SparkTerrainFormat PROPERTIES
     TIMEOUT 60)
 
 # OPS-100: retired crash-transport credentials are dropped on settings load and never saved.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND)
+    add_test(NAME CrashCoreDumpPolicy COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+    set_tests_properties(CrashCoreDumpPolicy PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=CrashPolicy_;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "crash-security;security;process"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+endif()
+
 add_test(NAME CrashSettingsCredentials COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(CrashSettingsCredentials PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME=CrashSettings_;SPARK_TEST_EXPECT_COUNT=1"
@@ -4316,6 +4324,31 @@ set_tests_properties(SparkSDKComponentCompleteness PROPERTIES
 
 # SDK-240: the installed-template runner's sidecar and boundary checks must
 # reject every broken fixture by name (runs everywhere, no install or build).
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkGameFPS)
+    # Exercise the same installed sdk+tools EmptyProject consumer as Windows.
+    # Its boundary proof requires Ninja's dependency log, independent of the
+    # generator used to build the host. Do not silently skip a missing tool.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    find_program(_spark_sdk_template_ninja NAMES ninja ninja-build REQUIRED)
+    add_test(NAME SDKConsumer_InstalledEmptyProjectTemplate
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TEST_ROOT=${CMAKE_BINARY_DIR}/sdk-installed-template/$<CONFIG>"
+            "-DSPARK_CONSUMER_GENERATOR=Ninja Multi-Config"
+            "-DSPARK_CONSUMER_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DSPARK_CONSUMER_MAKE_PROGRAM=${_spark_sdk_template_ninja}"
+            "-DSPARK_CONSUMER_TOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+            "-DSPARK_REFERENCE_SIDECAR=$<TARGET_FILE:SparkGameFPS>.sparkabi"
+            "-DSPARK_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
+            -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledSDKTemplate.cmake)
+    set_tests_properties(SDKConsumer_InstalledEmptyProjectTemplate PROPERTIES
+        LABELS "sdk;package;installed-sdk;integration"
+        RUN_SERIAL TRUE
+        TIMEOUT 1800)
+endif()
+
 add_test(
     NAME SDKConsumer_TemplateRunnerContract
     COMMAND ${CMAKE_COMMAND}

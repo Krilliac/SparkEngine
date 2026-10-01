@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4345,
+      "line": 4378,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3781,
+      "line": 3789,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3776",
+          "id": "Tests/CMakeLists.txt:3784",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4383,
+      "line": 4416,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4552,
+      "line": 4585,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1401,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3724,
+      "line": 3732,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3652",
+          "id": "Tests/CMakeLists.txt:3660",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4810,
+      "line": 4843,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2620,10 +2620,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2221,
+      "line": 2229,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2220",
+          "id": "Tests/CMakeLists.txt:2228",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2756,10 +2756,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5503,
+      "line": 5536,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5501",
+          "id": "Tests/CMakeLists.txt:5534",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -5181,7 +5181,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2221,
+          "line": 2229,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5289,7 +5289,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5503,
+          "line": 5536,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -9512,7 +9512,7 @@
           },
           {
             "index": 1,
-            "name": "Run OPS-100 policy and adversarial tests",
+            "name": "Run OPS-100 policy and SDK package adversarial tests",
             "id": "",
             "uses": "",
             "shell": "",
@@ -9522,7 +9522,7 @@
             "env": [
               "PYTHONDONTWRITEBYTECODE"
             ],
-            "runDigest": "a0c4de0bdd49658b"
+            "runDigest": "ad53f5196b1ed61e"
           },
           {
             "index": 2,
