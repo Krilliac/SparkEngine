@@ -140,6 +140,11 @@ class InstallerClaimsInMemoryTests(unittest.TestCase):
             (claims.README, "`destination-link`", "`destination-link`, `extra-code`", "preflight codes"),
             (claims.README, "| Install with a build | 40 GiB |", "| Install with a build | 41 GiB |", "disk budget"),
             (claims.README, "| Install with `--skip-build` | 2 GiB |", "| Install with `--skip-build` | 3 GiB |", "disk budget"),
+            (claims.README, "| Update with a build (new sibling build; previous tree retained) | 40 GiB |",
+             "| Update with a build (new sibling build; previous tree retained) | 2 GiB |", "update-with-build value"),
+            (claims.README, "| Update with `--skip-build` (staged source only) | 2 GiB |",
+             "| Update with `--skip-build` (staged source only) | 40 GiB |", "update skip-build value"),
+            (claims.README, "`<dest>.sparkinstall-previous-pending`", "`<dest>.previous`", "Update mode"),
             (claims.ROOT_README, "[installer documentation]", "SparkInstaller --nonexistent [installer documentation]", "root README"),
         )
         for relative, before, after, error in mutations:

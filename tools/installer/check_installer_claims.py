@@ -189,7 +189,8 @@ def preflight_budgets(readme: str, header: str) -> tuple[dict[str, int], dict[st
             raise ClaimsError("disk budget: duplicate documented mode")
         documented[cells[0]] = int(cells[1].split()[0])
     if set(documented) != {"install with a build", "install with `--skip-build`",
-                           "update (the existing build tree is rebuilt in place)"}:
+                           "update with a build (new sibling build; previous tree retained)",
+                           "update with `--skip-build` (staged source only)"}:
         raise ClaimsError("disk budget: unknown or missing documented mode")
     implemented = {name: int(value) for name, value in _BUDGET_LITERAL.findall(header)}
     if not re.search(r"\bkGiB\s*=\s*1024ull\s*\*\s*1024ull\s*\*\s*1024ull\s*;", header):
@@ -203,7 +204,9 @@ def check_documentation_semantics(readme: str) -> list[str]:
     """Check capability prose that is easy to accidentally drift."""
     errors: list[str] = []
     required_phrases = {
-        "Update mode": ("git fetch", "git checkout", "rollback", "repair-required"),
+        # An update clones into a unique sibling and keeps the previous tree under the
+        # pending name Installer.cpp uses until the swap commits, so it can roll back.
+        "Update mode": ("unique sibling", "fetch", "check out", "rollback", "sparkinstall-previous-pending"),
         "Windows MinGit": ("MinGit", "SHA-256-pinned"),
     }
     for label, phrases in required_phrases.items():
@@ -281,13 +284,16 @@ def check(root: Path) -> list[str]:
     documented_budgets, implemented_budgets = preflight_budgets(readme, preflight_header)
     expected_build = documented_budgets.get("install with a build")
     expected_source = documented_budgets.get("install with `--skip-build`")
-    expected_update = documented_budgets.get("update (the existing build tree is rebuilt in place)")
+    expected_update_build = documented_budgets.get("update with a build (new sibling build; previous tree retained)")
+    expected_update_source = documented_budgets.get("update with `--skip-build` (staged source only)")
     if expected_build != implemented_budgets["kDefaultMinFreeBytesBuild"]:
         errors.append("disk budget: README install-with-build value does not match kDefaultMinFreeBytesBuild")
     if expected_source != implemented_budgets["kDefaultMinFreeBytesSource"]:
         errors.append("disk budget: README skip-build value does not match kDefaultMinFreeBytesSource")
-    if expected_update != implemented_budgets["kDefaultMinFreeBytesSource"]:
-        errors.append("disk budget: README update value does not match kDefaultMinFreeBytesSource")
+    if expected_update_build != implemented_budgets["kDefaultMinFreeBytesBuild"]:
+        errors.append("disk budget: README update-with-build value does not match kDefaultMinFreeBytesBuild")
+    if expected_update_source != implemented_budgets["kDefaultMinFreeBytesSource"]:
+        errors.append("disk budget: README update skip-build value does not match kDefaultMinFreeBytesSource")
     errors.extend(check_documentation_semantics(readme))
     return errors
 
