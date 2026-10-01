@@ -616,6 +616,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
+| `ScriptRuntimeSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ShaderVariantSystem` | `SparkEngine/Source/Graphics/ShaderVariantSystem.h` |
 | `SplineFollowerSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |
