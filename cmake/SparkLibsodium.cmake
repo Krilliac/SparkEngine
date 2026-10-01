@@ -17,7 +17,7 @@
 # so a missing submodule fails configuration instead of silently building an
 # engine whose transport cannot encrypt.
 
-set(SPARK_LIBSODIUM_ROOT "${CMAKE_SOURCE_DIR}/ThirdParty/Security/libsodium")
+get_filename_component(SPARK_LIBSODIUM_ROOT "${CMAKE_CURRENT_LIST_DIR}/../ThirdParty/Security/libsodium" ABSOLUTE)
 set(_spark_sodium_src "${SPARK_LIBSODIUM_ROOT}/src/libsodium")
 
 if(NOT EXISTS "${_spark_sodium_src}/include/sodium.h")

@@ -1,17 +1,21 @@
 /**
  * @file PasswordHash.cpp
- * @brief Self-contained SHA-256, HMAC-SHA256, and PBKDF2 password hashing.
+ * @brief libsodium HMAC-SHA256 and PBKDF2 password hashing.
  */
 #include "PasswordHash.h"
 #include "ScopeGuard.h"
 #include "SecureRandom.h"
 #include "SecureMemory.h"
 
+#include <sodium.h>
+
+#ifndef SPARK_HAS_LIBSODIUM
+#error "PasswordHash requires libsodium"
+#endif
+
 #include <algorithm>
-#include <array>
 #include <charconv>
-#include <cstring>
-#include <limits>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -29,182 +33,40 @@ namespace Spark::PasswordHash
         constexpr size_t kMaximumEncodedBytes = 256;
         constexpr std::string_view kScheme = "pbkdf2-sha256";
 
-        constexpr uint32_t kRoundConstants[64] = {
-            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-            0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-            0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-            0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-            0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-            0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-            0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+        // The keyed libsodium state contains both pre-absorbed HMAC pads. Copying it for
+        // each PBKDF2 round avoids rebuilding the key schedule and leaves only the two
+        // SHA-256 compressions needed for a 32-byte round input.
+        using HmacSha256Key = crypto_auth_hmacsha256_state;
 
-        constexpr uint32_t RotateRight(uint32_t value, uint32_t count)
+        void RequireSodium(int result)
         {
-            return (value >> count) | (value << (32 - count));
+            if (result < 0)
+            {
+                throw std::runtime_error("libsodium HMAC-SHA256 operation failed");
+            }
         }
 
-        struct Sha256State
+        void PrepareHmacSha256Key(HmacSha256Key& prepared, const uint8_t* key, size_t keyLength)
         {
-            uint32_t hash[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-            uint8_t buffer[64] = {};
-            size_t bufferLength = 0;
-            uint64_t totalLength = 0;
-
-            void Transform(const uint8_t block[64])
-            {
-                uint32_t words[64];
-                for (size_t i = 0; i < 16; ++i)
-                {
-                    words[i] = (uint32_t(block[i * 4]) << 24) | (uint32_t(block[i * 4 + 1]) << 16) |
-                               (uint32_t(block[i * 4 + 2]) << 8) | uint32_t(block[i * 4 + 3]);
-                }
-                for (size_t i = 16; i < 64; ++i)
-                {
-                    const uint32_t s0 =
-                        RotateRight(words[i - 15], 7) ^ RotateRight(words[i - 15], 18) ^ (words[i - 15] >> 3);
-                    const uint32_t s1 =
-                        RotateRight(words[i - 2], 17) ^ RotateRight(words[i - 2], 19) ^ (words[i - 2] >> 10);
-                    words[i] = words[i - 16] + s0 + words[i - 7] + s1;
-                }
-
-                uint32_t a = hash[0], b = hash[1], c = hash[2], d = hash[3];
-                uint32_t e = hash[4], f = hash[5], g = hash[6], h = hash[7];
-                for (size_t i = 0; i < 64; ++i)
-                {
-                    const uint32_t sum1 = RotateRight(e, 6) ^ RotateRight(e, 11) ^ RotateRight(e, 25);
-                    const uint32_t choice = (e & f) ^ (~e & g);
-                    const uint32_t temp1 = h + sum1 + choice + kRoundConstants[i] + words[i];
-                    const uint32_t sum0 = RotateRight(a, 2) ^ RotateRight(a, 13) ^ RotateRight(a, 22);
-                    const uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
-                    const uint32_t temp2 = sum0 + majority;
-                    h = g;
-                    g = f;
-                    f = e;
-                    e = d + temp1;
-                    d = c;
-                    c = b;
-                    b = a;
-                    a = temp1 + temp2;
-                }
-                hash[0] += a;
-                hash[1] += b;
-                hash[2] += c;
-                hash[3] += d;
-                hash[4] += e;
-                hash[5] += f;
-                hash[6] += g;
-                hash[7] += h;
-                SecureErase(words, sizeof(words));
-            }
-
-            void Update(const uint8_t* data, size_t length)
-            {
-                totalLength += length;
-                while (length > 0)
-                {
-                    const size_t count = std::min(length, sizeof(buffer) - bufferLength);
-                    std::memcpy(buffer + bufferLength, data, count);
-                    bufferLength += count;
-                    data += count;
-                    length -= count;
-                    if (bufferLength == sizeof(buffer))
-                    {
-                        Transform(buffer);
-                        bufferLength = 0;
-                    }
-                }
-            }
-
-            Digest Finalize()
-            {
-                const uint64_t bitLength = totalLength * 8;
-                const uint8_t marker = 0x80;
-                static constexpr uint8_t zeros[64] = {};
-                Update(&marker, 1);
-                if (bufferLength <= 56)
-                    Update(zeros, 56 - bufferLength);
-                else
-                {
-                    Update(zeros, 64 - bufferLength);
-                    Update(zeros, 56);
-                }
-                uint8_t encodedLength[8];
-                for (size_t i = 0; i < 8; ++i)
-                    encodedLength[i] = static_cast<uint8_t>(bitLength >> (56 - 8 * i));
-                Update(encodedLength, sizeof(encodedLength));
-
-                Digest output{};
-                for (size_t i = 0; i < 8; ++i)
-                {
-                    output[i * 4] = static_cast<uint8_t>(hash[i] >> 24);
-                    output[i * 4 + 1] = static_cast<uint8_t>(hash[i] >> 16);
-                    output[i * 4 + 2] = static_cast<uint8_t>(hash[i] >> 8);
-                    output[i * 4 + 3] = static_cast<uint8_t>(hash[i]);
-                }
-                return output;
-            }
-        };
-
-        Digest Sha256(const uint8_t* data, size_t length)
-        {
-            Sha256State state;
-            const auto clearState = Spark::MakeScopeExit([&] { SecureErase(&state, sizeof(state)); });
-            state.Update(data, length);
-            return state.Finalize();
-        }
-
-        // HMAC-SHA256 key schedule (RFC 2104): the SHA-256 states after absorbing K ^ ipad and
-        // K ^ opad. PBKDF2 derives every round from one schedule, so a round costs two
-        // compression-function calls instead of re-absorbing both pad blocks (four calls).
-        struct HmacSha256Key
-        {
-            Sha256State inner;
-            Sha256State outer;
-        };
-
-        HmacSha256Key PrepareHmacSha256Key(const uint8_t* key, size_t keyLength)
-        {
-            HmacSha256Key prepared;
-            std::array<uint8_t, 64> keyBlock{};
-            const auto clearKeyBlock = Spark::MakeScopeExit([&] { SecureErase(keyBlock.data(), keyBlock.size()); });
-            if (keyLength > keyBlock.size())
-            {
-                Digest hashedKey = Sha256(key, keyLength);
-                const auto clearHashedKey =
-                    Spark::MakeScopeExit([&] { SecureErase(hashedKey.data(), hashedKey.size()); });
-                std::memcpy(keyBlock.data(), hashedKey.data(), hashedKey.size());
-            }
-            else if (keyLength > 0)
-                std::memcpy(keyBlock.data(), key, keyLength);
-
-            std::array<uint8_t, 64> pad{};
-            const auto clearPad = Spark::MakeScopeExit([&] { SecureErase(pad.data(), pad.size()); });
-            for (size_t i = 0; i < keyBlock.size(); ++i)
-            {
-                pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
-            }
-            prepared.inner.Update(pad.data(), pad.size());
-            for (size_t i = 0; i < keyBlock.size(); ++i)
-            {
-                pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
-            }
-            prepared.outer.Update(pad.data(), pad.size());
-            return prepared;
+            RequireSodium(sodium_init());
+            RequireSodium(crypto_auth_hmacsha256_init(&prepared, key, keyLength));
         }
 
         Digest HmacSha256(const HmacSha256Key& key, const uint8_t* data, size_t dataLength)
         {
-            Sha256State inner = key.inner;
-            const auto clearInner = Spark::MakeScopeExit([&] { SecureErase(&inner, sizeof(inner)); });
-            inner.Update(data, dataLength);
-            Digest innerHash = inner.Finalize();
-            const auto clearInnerHash = Spark::MakeScopeExit([&] { SecureErase(innerHash.data(), innerHash.size()); });
-            Sha256State outer = key.outer;
-            const auto clearOuter = Spark::MakeScopeExit([&] { SecureErase(&outer, sizeof(outer)); });
-            outer.Update(innerHash.data(), innerHash.size());
-            return outer.Finalize();
+            HmacSha256Key state = key;
+            const auto clearState = Spark::MakeScopeExit([&] { SecureErase(&state, sizeof(state)); });
+            if (dataLength > 0)
+            {
+                RequireSodium(crypto_auth_hmacsha256_update(&state, data, dataLength));
+            }
+            Digest output{};
+            if (crypto_auth_hmacsha256_final(&state, output.data()) < 0)
+            {
+                SecureErase(output.data(), output.size());
+                throw std::runtime_error("libsodium HMAC-SHA256 operation failed");
+            }
+            return output;
         }
 
         std::vector<uint8_t> Derive(std::string_view password, const std::vector<uint8_t>& salt, uint32_t iterations,
@@ -212,13 +74,16 @@ namespace Spark::PasswordHash
         {
             constexpr size_t hashLength = 32;
             std::vector<uint8_t> derived;
+            const auto clearDerivedOnFailure =
+                Spark::MakeScopeFail([&] { SecureErase(derived.data(), derived.size()); });
             derived.reserve(derivedLength);
             const auto* key = reinterpret_cast<const uint8_t*>(password.data());
             // PBKDF2's HMAC key normalization must happen once, not once per
             // iteration. Re-hashing long passwords in every round creates a
             // password-length-amplified denial-of-service path.
-            HmacSha256Key preparedKey = PrepareHmacSha256Key(key, password.size());
+            HmacSha256Key preparedKey{};
             const auto clearPreparedKey = Spark::MakeScopeExit([&] { SecureErase(&preparedKey, sizeof(preparedKey)); });
+            PrepareHmacSha256Key(preparedKey, key, password.size());
             for (uint32_t block = 1; derived.size() < derivedLength; ++block)
             {
                 std::vector<uint8_t> input = salt;
@@ -312,8 +177,9 @@ namespace Spark::PasswordHash
 
     Sha256Digest ComputeHmacSha256(std::span<const uint8_t> key, std::span<const uint8_t> data)
     {
-        HmacSha256Key prepared = PrepareHmacSha256Key(key.data(), key.size());
+        HmacSha256Key prepared{};
         const auto clearPrepared = Spark::MakeScopeExit([&] { SecureErase(&prepared, sizeof(prepared)); });
+        PrepareHmacSha256Key(prepared, key.data(), key.size());
         return HmacSha256(prepared, data.data(), data.size());
     }
 

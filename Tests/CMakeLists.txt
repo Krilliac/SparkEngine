@@ -1018,6 +1018,7 @@ if(TARGET miniz)
 endif()
 # NET-100 tests call libsodium directly (RFC known-answer vectors, handshake peers).
 target_link_libraries(SparkTests PRIVATE spark_sodium)
+target_compile_definitions(SparkTests PRIVATE SPARK_HAS_LIBSODIUM=1)
 
 # SparkBuild command generation is part of the supported first-party build
 # surface. Keep these tests conditional so minimal engine configurations can

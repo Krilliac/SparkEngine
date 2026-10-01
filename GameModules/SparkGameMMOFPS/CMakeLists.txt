@@ -16,7 +16,7 @@ cmake_minimum_required(VERSION 3.25)
 # ================================================================
 
 if(NOT CMAKE_PROJECT_NAME OR CMAKE_PROJECT_NAME STREQUAL "SparkGameMMOFPS")
-    project(SparkGameMMOFPS LANGUAGES CXX)
+    project(SparkGameMMOFPS LANGUAGES C CXX)
     set(SPARK_GAME_MMOFPS_STANDALONE TRUE)
 else()
     set(SPARK_GAME_MMOFPS_STANDALONE FALSE)
@@ -41,7 +41,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------
 if(SPARK_GAME_MMOFPS_STANDALONE)
     if(NOT SPARK_ENGINE_DIR)
-        set(SPARK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." CACHE PATH
+        set(SPARK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH
             "Path to SparkEngine root directory")
     endif()
 
@@ -79,6 +79,13 @@ else()
     set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
 endif()
 
+# TFCrypto uses the libsodium SHA-256 and HMAC state APIs directly.  The
+# standalone module has no root project to create spark_sodium, so reuse the
+# engine's canonical wrapper against the configured engine source tree.
+if(SPARK_GAME_MMOFPS_STANDALONE AND NOT TARGET spark_sodium)
+    include("${SPARK_ENGINE_DIR}/cmake/SparkLibsodium.cmake")
+endif()
+
 # ---------------------------------------------------------------------
 # Collect SparkGameMMOFPS source files
 # ---------------------------------------------------------------------
@@ -110,6 +117,13 @@ endif()
 spark_configure_module_abi(SparkGameMMOFPS)
 
 target_compile_definitions(SparkGameMMOFPS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
+
+if(TARGET spark_sodium)
+    target_link_libraries(SparkGameMMOFPS PRIVATE spark_sodium)
+    target_compile_definitions(SparkGameMMOFPS PRIVATE SPARK_HAS_LIBSODIUM=1)
+else()
+    message(FATAL_ERROR "SparkGameMMOFPS requires the spark_sodium target")
+endif()
 
 # ---------------------------------------------------------------------
 # Link against SparkEngineLib

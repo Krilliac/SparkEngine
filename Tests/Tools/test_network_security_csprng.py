@@ -46,14 +46,24 @@ REMOVED_XOR_API = (
     "enableEncryption",
 )
 
-# Fingerprints of a hand-written ChaCha20, Poly1305 or HMAC. Any of them in the
-# networking code means a primitive is being implemented instead of called.
+# Fingerprints of a hand-written ChaCha20, Poly1305, HMAC, or SHA-256. Any of
+# them in the advertised crypto surface means a primitive is being implemented
+# instead of called. Public wrapper names such as ComputeHmacSha256 are not
+# fingerprints: the implementation is allowed to preserve that API.
 IN_HOUSE_PRIMITIVE_MARKERS = (
     ("ChaCha quarter round", re.compile(r"QuarterRound", re.IGNORECASE)),
     ("ChaCha 'expand 32-byte k' constant", re.compile(r"0x61707865", re.IGNORECASE)),
     ("Poly1305 block function", re.compile(r"poly1305_block", re.IGNORECASE)),
     ("Poly1305 accumulator type", re.compile(r"\b(?:class|struct)\s+Poly1305\b")),
-    ("in-house HMAC", re.compile(r"ComputeHmacSha256")),
+    ("in-house HMAC ipad/opad", re.compile(r"\^\s*0x(?:36|5c)\b", re.IGNORECASE)),
+    ("SHA-256 IV constant", re.compile(r"\b0x6a09e667\b", re.IGNORECASE)),
+    (
+        "SHA-256 64-byte block transform",
+        re.compile(
+            r"\bTransform\s*\(\s*(?:const\s+)?(?:std::uint8_t|uint8_t|unsigned\s+char)"
+            r"\s+\w+\s*\[\s*64\s*\]\s*\)"
+        ),
+    ),
 )
 
 # libsodium entry points NetworkEncryption.cpp must use for each job.
@@ -114,6 +124,28 @@ def submodule_paths_ps1(text: str) -> set[str]:
 TERRAFRONT_NET = ROOT / "GameModules" / "SparkGameMMOFPS" / "Source" / "Net"
 
 
+def advertised_crypto_sources() -> list[Path]:
+    """Return C++ sources on the advertised transport/authentication surface."""
+    roots = [NETWORKING, ROOT / "SparkGateway" / "src"]
+    for source_root in (ROOT / "GameModules").glob("*/Source"):
+        roots.extend(source_root / name for name in ("Net", "Account"))
+
+    sources = [
+        path
+        for root in roots
+        if root.is_dir()
+        for path in root.rglob("*")
+        if path.suffix in {".h", ".hpp", ".cpp"}
+    ]
+    password_hash = ROOT / "SparkEngine" / "Source" / "Utils"
+    sources.extend(
+        path
+        for path in password_hash.glob("PasswordHash.*")
+        if path.suffix in {".h", ".hpp", ".cpp"}
+    )
+    return sorted(set(sources))
+
+
 def password_field_findings(source: str) -> list[str]:
     """Fixed-size password fields (char pass[N] / char password[N]) declared in C++ code."""
     return re.findall(r"\bchar\s+(pass(?:word)?)\s*\[", strip_comments(source))
@@ -152,6 +184,16 @@ class NetworkSecurityCsprngContractTests(unittest.TestCase):
             with self.subTest(path=path.relative_to(ROOT).as_posix()):
                 self.assertEqual(in_house_primitive_findings(path.read_text(encoding="utf-8")), [])
 
+    def test_no_in_house_primitive_remains_on_advertised_crypto_surface(self) -> None:
+        sources = advertised_crypto_sources()
+        self.assertTrue(sources, "no advertised crypto sources found")
+        self.assertIn(ROOT / "SparkEngine" / "Source" / "Utils" / "PasswordHash.cpp", sources)
+        self.assertIn(ROOT / "GameModules" / "SparkGameMMOFPS" / "Source" / "Account" / "TFCrypto.cpp", sources)
+        self.assertIn(ROOT / "SparkGateway" / "src" / "GatewaySecurity.cpp", sources)
+        for path in sources:
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                self.assertEqual(in_house_primitive_findings(path.read_text(encoding="utf-8")), [])
+
     def test_scanner_flags_a_reintroduced_quarter_round(self) -> None:
         # Mutation case: the scanner itself must catch a primitive coming back,
         # otherwise the check above passes vacuously.
@@ -166,6 +208,22 @@ class NetworkSecurityCsprngContractTests(unittest.TestCase):
             ["ChaCha quarter round", "ChaCha 'expand 32-byte k' constant", "Poly1305 accumulator type"],
         )
         self.assertEqual(in_house_primitive_findings("// QuarterRound was deleted\n"), [])
+
+    def test_scanner_flags_reintroduced_sha256_core(self) -> None:
+        # Mutation cases: both distinctive parts of the old handwritten core
+        # must be rejected, while ordinary buffers and API names remain valid.
+        mutated = (
+            "struct Sha256State { uint32_t h[8] = {0x6a09e667}; "
+            "void Transform(const uint8_t block[64]); };\n"
+        )
+        findings = in_house_primitive_findings(mutated)
+        self.assertIn("SHA-256 IV constant", findings)
+        self.assertIn("SHA-256 64-byte block transform", findings)
+        self.assertIn(
+            "in-house HMAC ipad/opad",
+            in_house_primitive_findings("pad[i] = key[i] ^ 0x36; pad[i] ^= 0x5c;"),
+        )
+        self.assertEqual(in_house_primitive_findings("uint8_t block[64]; ComputeHmacSha256();"), [])
 
     def test_posix_libsodium_build_defines_upstream_hardening_macros(self) -> None:
         text = LIBSODIUM_CMAKE.read_text(encoding="utf-8")
