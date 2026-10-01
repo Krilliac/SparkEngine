@@ -1039,7 +1039,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*729 test-bearing `.cpp`/`.mm` files, 8446 source-level test definitions*
+*729 test-bearing `.cpp`/`.mm` files, 8454 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1230,7 +1230,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestEditorAutomation` | 9 |
 | `TestEditorCommands` | 8 |
 | `TestEditorCookPackageReal` | 2 |
-| `TestEditorCrashHandlerFilterReal` | 12 |
+| `TestEditorCrashHandlerFilterReal` | 13 |
 | `TestEditorDocumentReal` | 5 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorGizmoTransformReal` | 6 |
@@ -1599,7 +1599,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSecDaemonPipeIdentity` | 5 |
 | `TestSecureRandom` | 3 |
 | `TestSecureTransportWired` | 20 |
-| `TestSecurityParsersReal` | 26 |
+| `TestSecurityParsersReal` | 31 |
 | `TestSelectionManager` | 23 |
 | `TestSelfRecovery` | 16 |
 | `TestSequencer` | 10 |
@@ -1616,7 +1616,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestShaderCrossCompilerPhaseW` | 21 |
 | `TestShaderDiskCache` | 6 |
 | `TestShaderDiskCacheDaemon` | 9 |
-| `TestShaderDiskCachePhaseV` | 17 |
+| `TestShaderDiskCachePhaseV` | 19 |
 | `TestShaderGraphCompiler` | 8 |
 | `TestShaderHotReload` | 11 |
 | `TestShaderHotReloadCompilation` | 11 |

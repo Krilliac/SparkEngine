@@ -242,7 +242,7 @@
 | `DirectorPhase` | enum | SparkEngine | [AIDirector.h:L59](../../SparkEngine/Source/Engine/AI/AIDirector.h#L59) | Phases of the AI Director's intensity cycle. |
 | `DirtyFlag` | enum | SparkEngine | [UIDirtyTracking.h:L35](../../SparkEngine/Source/Engine/UI/UIDirtyTracking.h#L35) | Bitfield flags indicating what changed on a widget |
 | `DirtyFlag` | enum | SparkEngine | [PipelineStateCache.h:L61](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L61) | Dirty flags for tracking which pipeline state categories need flushing. |
-| `DiscoveryMode` | enum | SparkEngine | [ModuleManager.h:L133](../../SparkEngine/Source/Core/ModuleManager.h#L133) |  |
+| `DiscoveryMode` | enum | SparkEngine | [ModuleManager.h:L115](../../SparkEngine/Source/Core/ModuleManager.h#L115) |  |
 | `DiscoveryState` | enum | GameModules | [OpenWorldEnums.h:L119](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L119) | Discovery state for map fog / exploration progress |
 | `DockPosition` | enum | SparkEditor | [CoreEditorEnums.h:L19](../../SparkEditor/Source/Enums/CoreEditorEnums.h#L19) | Dock position enumeration for panel docking |
 | `DocumentTransitionAction` | enum | SparkEditor | [EditorUI.h:L51](../../SparkEditor/Source/Core/EditorUI.h#L51) |  |
@@ -454,7 +454,7 @@
 | `LoopType` | enum | Tests | [TestTween.cpp:L106](../../Tests/TestTween.cpp#L106) |  |
 | `LootRule` | enum | GameModules | [MMOEnums.h:L47](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L47) | Loot distribution rules for party/raid content |
 | `LossType` | enum | SparkEngine | [CpuNeuralTraining.h:L59](../../SparkEngine/Source/Graphics/Neural/CpuNeuralTraining.h#L59) |  |
-| `ManifestRead` | enum | SparkEngine | [ModSystem.cpp:L46](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L46) |  |
+| `ManifestRead` | enum | SparkEngine | [ModSystem.cpp:L47](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L47) |  |
 | `MatchPhase` | enum | Templates | [GameModule.h:L49](../../Templates/MultiplayerArena/Source/GameModule.h#L49) |  |
 | `MaterialBlendMode` | enum | SparkEngine | [MaterialDefinition.h:L61](../../SparkEngine/Source/Graphics/MaterialDefinition.h#L61) | Blend mode presets for material render state |
 | `MaterialTextureType` | enum | SparkEngine | [MaterialSystem.h:L80](../../SparkEngine/Source/Graphics/MaterialSystem.h#L80) | Texture types for material slots |
@@ -489,7 +489,7 @@
 | `ModuleChangeType` | enum | SparkEngine | [ModuleHotReload.h:L26](../../SparkEngine/Source/Core/ModuleHotReload.h#L26) |  |
 | `ModuleCompatibilityStatus` | enum | SparkSDK | [ModuleABI.h:L130](../../SparkSDK/Include/Spark/ModuleABI.h#L130) |  |
 | `ModuleKind` | enum | SparkSDK | [IModule.h:L47](../../SparkSDK/Include/Spark/IModule.h#L47) |  |
-| `ModuleRegistrationPhase` | enum | SparkEngine | [ModuleManager.cpp:L76](../../SparkEngine/Source/Core/ModuleManager.cpp#L76) |  |
+| `ModuleRegistrationPhase` | enum | SparkEngine | [ModuleManager.cpp:L77](../../SparkEngine/Source/Core/ModuleManager.cpp#L77) |  |
 | `MotionBlurType` | enum | SparkEngine | [TemporalEffectsTypes.h:L80](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L80) | Motion blur technique types |
 | `MotionBlurType` | enum | SparkEngine | [TemporalTypes.h:L83](../../SparkEngine/Source/Graphics/TemporalTypes.h#L83) | Motion blur technique types |
 | `MotionQuality` | enum | SparkEngine | [PhysicsComponents.h:L39](../../SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h#L39) |  |
@@ -605,7 +605,7 @@
 | `PreviewShape` | enum | SparkEditor | [MaterialEditorPanel.h:L255](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L255) |  |
 | `PrimitiveTopology` | enum | SparkEditor | [RenderingEnums.h:L124](../../SparkEditor/Source/Enums/RenderingEnums.h#L124) | Primitive topology types |
 | `Priority` | enum | SparkEditor | [ProfilerTypes.h:L231](../../SparkEditor/Source/Profiler/ProfilerTypes.h#L231) | Automated optimization suggestion |
-| `ProbeExit` | enum | Tests | [CrashArtifactSandboxProbe.cpp:L38](../../Tests/Fixtures/CrashArtifactSandboxProbe.cpp#L38) |  |
+| `ProbeExit` | enum | Tests | [CrashArtifactSandboxProbe.cpp:L39](../../Tests/Fixtures/CrashArtifactSandboxProbe.cpp#L39) |  |
 | `ProcessHealth` | enum | SparkDaemon | [OrchestrationProtocol.h:L67](../../SparkDaemon/src/OrchestrationProtocol.h#L67) |  |
 | `ProcessingStatus` | enum | SparkEditor | [AssetPipelineTypes.h:L64](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L64) | Asset processing status |
 | `ProcTrigger` | enum | SparkEngine | [AbilitySystem.h:L195](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L195) |  |
