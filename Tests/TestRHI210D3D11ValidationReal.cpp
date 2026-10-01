@@ -73,7 +73,9 @@ TEST(D3D11_Validation_EngineFramesAreClean)
     GraphicsEngine engine;
     const HRESULT hr = engine.Initialize(window.Get());
     if (FAILED(hr))
+    {
         std::cerr << "  " << kMissingLayer << "\n";
+    }
     ASSERT_TRUE(SUCCEEDED(hr));
 
     // The layer must actually be observing, or "zero errors" means nothing.
@@ -82,10 +84,14 @@ TEST(D3D11_Validation_EngineFramesAreClean)
 
     RHI210::Frame last;
     for (int frame = 0; frame < 8; ++frame)
+    {
         last = RHI210::RenderCubeFrame(engine);
+    }
     engine.OnResize(400, 300);
     for (int frame = 0; frame < 8; ++frame)
+    {
         last = RHI210::RenderCubeFrame(engine);
+    }
 
     // The frames were real: the resized back buffer holds a drawn cube.
     EXPECT_EQ(last.width, 400u);
@@ -96,6 +102,7 @@ TEST(D3D11_Validation_EngineFramesAreClean)
     ASSERT_TRUE(counts.has_value());
     EXPECT_EQ(counts->corruption, 0u);
     EXPECT_EQ(counts->errors, 0u);
+    EXPECT_EQ(counts->warnings, 0u);
     engine.Shutdown();
 }
 
@@ -109,11 +116,18 @@ TEST(D3D11_Validation_CounterSeesInjectedError)
     GraphicsEngine engine;
     const HRESULT hr = engine.Initialize(window.Get());
     if (FAILED(hr))
+    {
         std::cerr << "  " << kMissingLayer << "\n";
+    }
     ASSERT_TRUE(SUCCEEDED(hr));
 
     const std::optional<GraphicsEngine::ValidationCounts> before = engine.GetValidationCounts();
     ASSERT_TRUE(before.has_value());
+
+    Microsoft::WRL::ComPtr<ID3D11InfoQueue> queue;
+    ASSERT_TRUE(SUCCEEDED(engine.GetDevice()->QueryInterface(IID_PPV_ARGS(&queue))));
+    ASSERT_TRUE(SUCCEEDED(
+        queue->AddApplicationMessage(D3D11_MESSAGE_SEVERITY_WARNING, "RHI-210 warning counter negative control")));
 
     // A zero-sized vertex buffer is invalid; the runtime refuses it and the debug
     // layer reports CREATEBUFFER_INVALIDDIMENSIONS at ERROR severity.
@@ -126,6 +140,7 @@ TEST(D3D11_Validation_CounterSeesInjectedError)
 
     const std::optional<GraphicsEngine::ValidationCounts> after = engine.GetValidationCounts();
     ASSERT_TRUE(after.has_value());
+    EXPECT_GE(after->warnings, before->warnings + 1);
     EXPECT_GE(after->errors, before->errors + 1);
     engine.Shutdown();
 }
@@ -141,7 +156,9 @@ TEST(D3D11_Validation_RHIGoldenTriangleIsClean)
     deviceDesc.applicationName = "SparkTests_RHI210_Validation";
     const bool initialized = device.Initialize(deviceDesc);
     if (!initialized)
+    {
         std::cerr << "  D3D11Device::Initialize failed with enableDebugLayer; is the D3D11 debug layer installed?\n";
+    }
     ASSERT_TRUE(initialized);
     ID3D11InfoQueue* queue = device.GetInfoQueue();
     ASSERT_TRUE(queue != nullptr);
@@ -237,6 +254,7 @@ TEST(D3D11_Validation_RHIGoldenTriangleIsClean)
     GraphicsEngine::AccumulateValidationMessages(queue, counts);
     EXPECT_EQ(counts.corruption, 0u);
     EXPECT_EQ(counts.errors, 0u);
+    EXPECT_EQ(counts.warnings, 0u);
 
     vb.reset();
     pipeline.reset();
@@ -257,7 +275,9 @@ TEST(D3D11_Validation_CreateDestroyStressReturnsToBaseline)
     deviceDesc.applicationName = "SparkTests_RHI210_Stress";
     const bool initialized = device.Initialize(deviceDesc);
     if (!initialized)
+    {
         std::cerr << "  D3D11Device::Initialize failed with enableDebugLayer; is the D3D11 debug layer installed?\n";
+    }
     ASSERT_TRUE(initialized);
     ASSERT_TRUE(device.GetInfoQueue() != nullptr);
     Microsoft::WRL::ComPtr<ID3D11Debug> debug;
@@ -320,7 +340,9 @@ TEST(D3D11_Validation_CreateDestroyStressReturnsToBaseline)
         auto buffer = device.CreateBuffer(bufferDesc);
         auto pipeline = device.CreatePipelineState(pipelineDesc, vs.get(), ps.get());
         if (texture && buffer && pipeline)
+        {
             ++created;
+        }
         // Drain every cycle: the queue keeps its default storage limit, and a
         // message dropped by it would never be classified.
         GraphicsEngine::AccumulateValidationMessages(device.GetInfoQueue(), counts);
@@ -329,6 +351,7 @@ TEST(D3D11_Validation_CreateDestroyStressReturnsToBaseline)
     EXPECT_EQ(device.GetInfoQueue()->GetNumMessagesDiscardedByMessageCountLimit(), 0u);
     EXPECT_EQ(counts.corruption, 0u);
     EXPECT_EQ(counts.errors, 0u);
+    EXPECT_EQ(counts.warnings, 0u);
 
     EXPECT_EQ(CountLiveObjects(device, debug.Get()), baseline);
 

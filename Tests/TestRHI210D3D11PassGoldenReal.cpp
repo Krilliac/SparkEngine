@@ -35,11 +35,13 @@
 
 #ifdef _WIN32
 
+#include "Graphics/GraphicsEngine.h"
 #include "Graphics/PostProcessingPipeline.h"
 #include "Utils/GoldenImageManifest.h"
 #include "Utils/GoldenImageTest.h"
 
 #include <d3d11.h>
+#include <d3d11sdklayers.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -80,7 +82,9 @@ namespace
     {
         const char* overrideDir = std::getenv("SPARK_GOLDEN_OUTPUT_DIR");
         if (overrideDir != nullptr && overrideDir[0] != '\0')
+        {
             return overrideDir;
+        }
         return std::filesystem::current_path() / "Tests" / "Output";
     }
 
@@ -124,14 +128,18 @@ namespace
         const float dx = float(x) + 0.5f - 32.0f;
         const float dy = float(y) + 0.5f - 32.0f;
         if (dx * dx + dy * dy <= kDiscRadius * kDiscRadius)
+        {
             return kDisc;
+        }
         return kTiles[(y / 16) * 4 + (x / 16)];
     }
 
     float GtaoDepth(uint32_t x, uint32_t y)
     {
         if (y < kSkyRows)
+        {
             return 0.0f;
+        }
         const bool inBlock = x >= kBlockMin && x < kBlockMax && y >= kBlockMin && y < kBlockMax;
         return inBlock ? kBlockDepth : kGroundDepth;
     }
@@ -175,7 +183,9 @@ namespace
         const float contribution = std::max(0.0f, lum - threshold) / std::max(lum, 0.00001f);
         Color3 out{};
         for (int i = 0; i < 3; ++i)
+        {
             out[i] = c[i] + c[i] * contribution * intensity * scatter;
+        }
         return out;
     }
 
@@ -235,7 +245,9 @@ namespace
         const float lumMax = std::max(lumM, std::max(std::max(lumNW, lumNE), std::max(lumSW, lumSE)));
         tookEdgePath = !(lumMax - lumMin < std::max(settings.edgeThresholdMin, lumMax * settings.edgeThreshold));
         if (!tookEdgePath)
+        {
             return m;
+        }
 
         float dirX = -((lumNW + lumNE) - (lumSW + lumSE));
         float dirY = (lumNW + lumSW) - (lumNE + lumSE);
@@ -294,10 +306,14 @@ namespace
         const auto px = PixelAt(rgba, x, y);
         bool ok = true;
         for (int c = 0; c < 3; ++c)
+        {
             ok = ok && std::abs(px[c] - ToUnorm8(expected[c])) <= tolerance;
+        }
         if (!ok)
+        {
             std::printf("[RHI-210 PASS GOLDEN] pixel (%u,%u) = (%d,%d,%d), expected (%d,%d,%d) +/-%d\n", x, y, px[0],
                         px[1], px[2], ToUnorm8(expected[0]), ToUnorm8(expected[1]), ToUnorm8(expected[2]), tolerance);
+        }
         return ok;
     }
 
@@ -315,7 +331,9 @@ namespace
         {
             // A size other than the rendered one fails the runner's size check.
             if (width != kSize || height != kSize)
+            {
                 return {};
+            }
             return m_pixels;
         }
 
@@ -351,7 +369,9 @@ namespace
             std::error_code ec;
             std::filesystem::create_directories(actual.parent_path(), ec);
             if (Spark::GoldenImageTestRunner::SavePNG(actual.string(), pixels.data(), kSize, kSize))
+            {
                 std::printf("[RHI-210 PASS GOLDEN] actual frame written to %s\n", actual.string().c_str());
+            }
         }
         return result.matched;
     }
@@ -364,6 +384,7 @@ namespace
     {
         ComPtr<ID3D11Device> device;
         ComPtr<ID3D11DeviceContext> context;
+        ComPtr<ID3D11InfoQueue> infoQueue;
         ComPtr<ID3D11ShaderResourceView> colorSRV;
         ComPtr<ID3D11ShaderResourceView> depthSRV;
         ComPtr<ID3D11Texture2D> outputTexture;
@@ -393,9 +414,15 @@ namespace
     bool CreateWarpScene(WarpScene& scene, bool gtaoInput)
     {
         const D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
-        if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, &level, 1, D3D11_SDK_VERSION,
-                                     &scene.device, nullptr, &scene.context)))
+        if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_DEBUG, &level, 1,
+                                     D3D11_SDK_VERSION, &scene.device, nullptr, &scene.context)))
+        {
             return false;
+        }
+        if (FAILED(scene.device.As(&scene.infoQueue)))
+        {
+            return false;
+        }
 
         std::vector<float> color(size_t(kSize) * kSize * 4);
         std::vector<float> depth(size_t(kSize) * kSize);
@@ -415,7 +442,9 @@ namespace
         if (!CreateTexture(scene.device.Get(), DXGI_FORMAT_R32G32B32A32_FLOAT, color.data(), kSize * 16,
                            scene.colorSRV) ||
             !CreateTexture(scene.device.Get(), DXGI_FORMAT_R32_FLOAT, depth.data(), kSize * 4, scene.depthSRV))
+        {
             return false;
+        }
 
         D3D11_TEXTURE2D_DESC desc{};
         desc.Width = kSize;
@@ -440,11 +469,15 @@ namespace
         ComPtr<ID3D11Texture2D> staging;
         std::vector<uint8_t> pixels;
         if (FAILED(scene.device->CreateTexture2D(&desc, nullptr, &staging)))
+        {
             return pixels;
+        }
         scene.context->CopyResource(staging.Get(), scene.outputTexture.Get());
         D3D11_MAPPED_SUBRESOURCE mapped{};
         if (FAILED(scene.context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+        {
             return pixels;
+        }
         pixels.resize(size_t(kSize) * kSize * 4);
         for (uint32_t y = 0; y < kSize; ++y)
         {
@@ -462,7 +495,9 @@ namespace
     {
         WarpScene scene;
         if (!CreateWarpScene(scene, gtaoInput))
+        {
             throw std::runtime_error("could not create the WARP device or the scene textures");
+        }
 
         D3D11_VIEWPORT viewport{};
         viewport.Width = float(kSize);
@@ -473,7 +508,9 @@ namespace
         PostProcessingPipeline pipeline;
         pipeline.SetDevice(scene.device.Get(), scene.context.Get());
         if (!pipeline.Initialize(kSize, kSize))
+        {
             throw std::runtime_error("PostProcessingPipeline::Initialize failed on WARP");
+        }
         pipeline.SetEffectEnabled(pass, true);
         configure(pipeline);
 
@@ -485,14 +522,24 @@ namespace
         pipeline.Render();
         std::vector<uint8_t> pixels = ReadOutput(scene);
         pipeline.Shutdown();
+        GraphicsEngine::ValidationCounts validationCounts;
+        GraphicsEngine::AccumulateValidationMessages(scene.infoQueue.Get(), validationCounts);
+        EXPECT_EQ(validationCounts.corruption, 0u);
+        EXPECT_EQ(validationCounts.errors, 0u);
+        EXPECT_EQ(validationCounts.warnings, 0u);
+        EXPECT_EQ(scene.infoQueue->GetNumMessagesDiscardedByMessageCountLimit(), 0u);
 
         // A pass whose shader failed to compile or bind is skipped silently by
         // Process(); the output would then be a plain copy of the input.
         if (activePasses != 1)
+        {
             throw std::runtime_error(
                 "the enabled pass did not execute (active passes: " + std::to_string(activePasses) + ")");
+        }
         if (pixels.size() != size_t(kSize) * kSize * 4)
+        {
             throw std::runtime_error("output readback failed");
+        }
         return pixels;
     }
 } // namespace
@@ -510,7 +557,9 @@ TEST(D3D11PassGolden_ManifestHasEveryScene)
         const auto entry = std::find_if(entries.begin(), entries.end(), [&](const Spark::GoldenManifestEntry& e)
                                         { return e.backendRow == kRow && e.scene == scene; });
         if (entry == entries.end())
+        {
             std::printf("[RHI-210 PASS GOLDEN] scene without a manifest entry: %s\n", scene);
+        }
         ASSERT_TRUE(entry != entries.end());
         EXPECT_TRUE(entry->software);
         EXPECT_TRUE(std::filesystem::is_regular_file(GoldenDir() / kRow / (std::string(scene) + ".png")));
@@ -620,7 +669,9 @@ TEST(D3D11PassGolden_GTAO)
     // Occlusion is confined to the creases around the block, not spread over the plane.
     int occluded = 0;
     for (size_t i = 0; i < frame.size(); i += 4)
+    {
         occluded += frame[i] < openLevel - 20 ? 1 : 0;
+    }
     std::printf("[RHI-210 PASS GOLDEN] GTAO occluded texels %d/%u\n", occluded, kSize * kSize);
     EXPECT_GT(occluded, 64);
     EXPECT_LT(occluded, 512);
