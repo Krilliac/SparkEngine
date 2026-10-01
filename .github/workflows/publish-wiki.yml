@@ -90,6 +90,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The GOV-400 font-notice test reads the embedding source in the ImGui
+      # submodule and fails closed when it is absent; only that one is needed.
+      - name: Initialise the font-embedding submodule
+        run: git submodule update --init --depth 1 ThirdParty/UI/imgui
+
       - name: Generate exact-commit API documentation
         env:
           SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
