@@ -469,11 +469,28 @@ def source_revision(root: Path) -> str | None:
     return completed.stdout.decode().strip() or None
 
 
+def campaign_seconds(target_count: int, requested_seconds: int | None, max_campaign_seconds: int | None) -> int:
+    """Fit the default per-target mutation budget to the discovered target set."""
+    if requested_seconds is None:
+        if max_campaign_seconds is None:
+            raise CampaignError("--max-campaign-seconds is required when --seconds is omitted")
+        requested_seconds = max_campaign_seconds // target_count
+    if not MIN_SECONDS <= requested_seconds <= MAX_SECONDS:
+        raise CampaignError(f"--seconds must be between {MIN_SECONDS} and {MAX_SECONDS}")
+    planned = requested_seconds * target_count
+    if max_campaign_seconds is not None and planned > max_campaign_seconds:
+        raise CampaignError(
+            f"--seconds {requested_seconds} x {target_count} target(s) = {planned}s exceeds "
+            f"--max-campaign-seconds {max_campaign_seconds}"
+        )
+    return requested_seconds
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--build-dir", required=True, type=Path, help="configured tools/fuzz-policy build tree")
     parser.add_argument("--output", required=True, type=Path, help="new directory for logs, reproducers, summary")
-    parser.add_argument("--seconds", required=True, type=int, help="mutation budget per target")
+    parser.add_argument("--seconds", type=int, help="mutation budget per target; default is total budget / target count")
     parser.add_argument(
         "--minimize-seconds", type=int, default=60, help="-minimize_crash budget per reproducer (default 60)"
     )
@@ -482,7 +499,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--max-campaign-seconds",
         type=int,
-        help="refuse to start when --seconds times the selected target count exceeds this (fit a job timeout)",
+        help="total mutation cap; derive --seconds from this when omitted",
     )
     return parser.parse_args(argv)
 
@@ -543,7 +560,7 @@ def exit_status(results: list[TargetResult]) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
-        for label, value in (("--seconds", args.seconds), ("--minimize-seconds", args.minimize_seconds)):
+        for label, value in (("--minimize-seconds", args.minimize_seconds),):
             if not MIN_SECONDS <= value <= MAX_SECONDS:
                 raise CampaignError(f"{label} must be between {MIN_SECONDS} and {MAX_SECONDS}")
         if args.max_campaign_seconds is not None and args.max_campaign_seconds < MIN_SECONDS:
@@ -559,12 +576,7 @@ def main(argv: list[str] | None = None) -> int:
             targets = [t for t in targets if t.name in set(args.target)]
         if not targets:
             raise CampaignError(f"no CTest tests labelled '{FUZZ_LABEL}' in {args.build_dir}")
-        planned = args.seconds * len(targets)
-        if args.max_campaign_seconds is not None and planned > args.max_campaign_seconds:
-            raise CampaignError(
-                f"--seconds {args.seconds} x {len(targets)} target(s) = {planned}s exceeds "
-                f"--max-campaign-seconds {args.max_campaign_seconds}"
-            )
+        args.seconds = campaign_seconds(len(targets), args.seconds, args.max_campaign_seconds)
         for target in targets:
             for committed in (target.corpus, generated_corpus(target.corpus)):
                 if committed is not None and _is_inside(args.output, committed):

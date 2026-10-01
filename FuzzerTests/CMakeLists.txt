@@ -30,6 +30,7 @@ target_compile_features(SparkFuzzJsonUtils PRIVATE cxx_std_23)
 target_compile_definitions(SparkFuzzJsonUtils PRIVATE SPARK_SHIPPING=1)
 target_compile_options(SparkFuzzJsonUtils PRIVATE
     -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
     -fno-omit-frame-pointer
     -O1
     -ffunction-sections
@@ -37,6 +38,7 @@ target_compile_options(SparkFuzzJsonUtils PRIVATE
 )
 target_link_options(SparkFuzzJsonUtils PRIVATE
     -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
     -fno-omit-frame-pointer
     -Wl,--gc-sections
 )

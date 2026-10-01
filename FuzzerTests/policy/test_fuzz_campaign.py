@@ -474,7 +474,7 @@ class ImportRegressionRoundTrip(unittest.TestCase):
         corpus = self.manifest()["corpora"][0]
         self.assertEqual(corpus["content_digest"], corpus_digest(self.root, "FuzzerTests/corpora/example"))
         self.assertEqual(corpus["regressions"], [{"file": "regression-deep-nesting.json", "finding": "TODO",
-                                                  "found_by": "campaign", "guard_test": "TODO"}])
+                                                  "found_by": "campaign", "guard_test": "TODO", "fixed_commit": "TODO"}])
         self.assertIn(f"-runs={len(SEEDS) + 1}", self.fixture.fuzz_cmake.read_text(encoding="utf-8"))
 
         # The import cannot land half-done: the placeholders fail the gate...
@@ -483,7 +483,8 @@ class ImportRegressionRoundTrip(unittest.TestCase):
         # ...and recording the finding and its guard test is all that remains.
         document = self.manifest()
         document["corpora"][0]["regressions"][0].update(
-            finding="Ten nested arrays exhausted the parser stack.", guard_test="FuzzExampleParserSmoke"
+            finding="Ten nested arrays exhausted the parser stack.", guard_test="FuzzExampleParserSmoke",
+            fixed_commit="0" * 40,
         )
         self.fixture.write_corpus(json.dumps(document))
         (corpus_record,) = self.fixture.load_corpora()

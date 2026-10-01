@@ -374,16 +374,20 @@
         "Required fuzz smoke is deterministic and blocking"
       ],
       "acceptanceStatus": [
-        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "Partial progress: 58 of 137 inventoried parsers have libFuzzer targets with seed corpora and minimized regressions (docs/sec120-fuzz-policy-check.json); 79 parsers remain blocked and no target has exact-commit sanitizer evidence, so the criterion stays open.", "evidence": []},
+        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "58 of 137 inventoried parsers have targets; 79 remain blocked. All registered fuzz targets now require fatal UBSan at compile and link, but Linux smoke and exact-commit sanitizer proof remain pending. Counts come from the generated policy report.", "evidence": ["docs/sec120-fuzz-policy-check.json", "tools/fuzz-policy/build_binding.py", "FuzzerTests/CMakeLists.txt"]},
         {
           "criterionDigest": "sha256:f3d43da4661a",
           "state": "implemented",
           "evidence": [
             "tools/fuzz-policy/corpus_manifest.py",
+            "tools/fuzz-policy/check_fuzz_policy.py",
             "tools/fuzz-policy/import_regression.py",
-            "FuzzerTests/policy/test_fuzz_policy.py"
+            "tools/fuzz-policy/run_campaign.py",
+            "FuzzerTests/policy/test_fuzz_policy.py",
+            "FuzzerTests/policy/test_fuzz_campaign.py",
+            ".github/workflows/fuzz-scheduled.yml"
           ],
-          "note": "corpus_manifest.py _require_declared_regressions rejects any regression-* seed without a declared finding and minimized fixture, and import_regression.py is the only intake path; the fuzz-policy unittests pin both. Local only; no exact-commit CI yet."
+          "note": "The gate requires each regression seed, guard and source-touching fixed_commit. Scheduled default time now scales with target count. Imports are not the only intake path; review and smoke records can be added manually. Historical minimization and guard RED proof remain unverified. Empty input lacks an approved regression record type."
         },
         {
           "criterionDigest": "sha256:f4d1e4691985",
@@ -391,9 +395,13 @@
           "evidence": [
             "FuzzerTests/CMakeLists.txt",
             "tools/fuzz-policy/corpus_manifest.py",
-            "FuzzerTests/policy/test_fuzz_policy.py"
+            "tools/fuzz-policy/build_binding.py",
+            "tools/fuzz-policy/check_fuzz_policy.py",
+            "FuzzerTests/policy/test_fuzz_policy.py",
+            ".github/workflows/build.yml",
+            "cmake/SparkFuzzPolicy.cmake"
           ],
-          "note": "No blocking smoke passes -max_total_time any more, and the policy rejects time- or worker-bounded smoke flags. test_smoke_replay_may_not_be_time_or_worker_bounded pins this."
+          "note": "The required build.yml/fuzz-policy job builds every target and runs bounded seed replays. Binding now requires address, undefined and fatal UBSan in compile and link options. Policy tests cover missing flags and nondeterministic replay options. Linux replay and exact-commit hosted CI are pending."
         }
       ],
       "commands": [

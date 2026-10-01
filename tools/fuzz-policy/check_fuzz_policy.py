@@ -183,6 +183,16 @@ def validate_ci_and_cmake_binding(
     workflow = _decode(root, WORKFLOW, "build workflow")
     fuzz_job = _job_block(workflow, FUZZ_JOB)
     _assert_job_is_live(fuzz_job, FUZZ_JOB)
+    checkout = next((index for index, line in enumerate(fuzz_job) if line == "    - name: Checkout repository"), None)
+    if checkout is None:
+        raise PolicyError(f"{FUZZ_JOB} CI job must check out the repository")
+    next_step = next(
+        (index for index in range(checkout + 1, len(fuzz_job)) if fuzz_job[index].startswith("    - name: ")),
+        len(fuzz_job),
+    )
+    checkout_lines = [_strip_yaml_comment(line).rstrip() for line in fuzz_job[checkout:next_step]]
+    if "        fetch-depth: 0" not in checkout_lines:
+        raise PolicyError(f"{FUZZ_JOB} CI checkout must fetch full history for fixed_commit verification")
     if "    runs-on: ubuntu-24.04" not in [_strip_yaml_comment(line).rstrip() for line in fuzz_job]:
         raise PolicyError(f"{FUZZ_JOB} job must run on ubuntu-24.04")
     ordered_commands = _run_commands_in_order(fuzz_job)

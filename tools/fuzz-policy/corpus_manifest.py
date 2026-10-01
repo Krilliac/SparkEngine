@@ -9,6 +9,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -105,7 +106,7 @@ class RegressionRecord:
     finding: str
     found_by: str
     guard_test: str
-    fixed_commit: str | None
+    fixed_commit: str
 
 
 @dataclass(frozen=True)
@@ -234,7 +235,7 @@ def _parse_regressions(value: Any, field: str) -> tuple[RegressionRecord, ...]:
     records: list[RegressionRecord] = []
     for index, item in enumerate(require_list(value, field, maximum=MAX_REGRESSIONS_PER_CORPUS)):
         item_field = f"{field}[{index}]"
-        item = require_exact_keys(item, item_field, {"file", "finding", "found_by", "guard_test"}, {"fixed_commit"})
+        item = require_exact_keys(item, item_field, {"file", "finding", "found_by", "guard_test", "fixed_commit"})
         file_name = require_token(item["file"], f"{item_field}.file", REGRESSION_FILE_PATTERN)
         finding = _require_not_placeholder(
             require_string(item["finding"], f"{item_field}.finding", maximum=MAX_FINDING_CHARS),
@@ -249,14 +250,43 @@ def _parse_regressions(value: Any, field: str) -> tuple[RegressionRecord, ...]:
             require_token(item["guard_test"], f"{item_field}.guard_test", GUARD_TEST_PATTERN),
             f"{item_field}.guard_test",
         )
-        fixed_commit = None
-        if "fixed_commit" in item:
-            fixed_commit = require_token(item["fixed_commit"], f"{item_field}.fixed_commit", COMMIT_PATTERN, maximum=40)
+        fixed_commit = require_token(item["fixed_commit"], f"{item_field}.fixed_commit", COMMIT_PATTERN, maximum=40)
         records.append(RegressionRecord(file_name, finding, found_by, guard_test, fixed_commit))
     files = [record.file for record in records]
     if len(files) != len(set(files)):
         raise PolicyError(f"{field} declares a regression file twice")
     return tuple(records)
+
+
+def validate_regression_fix_commits(root: Path, inventory: Inventory, corpora: tuple[CorpusRecord, ...]) -> None:
+    """A recorded fix must exist in this checkout and change the parser it guards."""
+    sources = {parser.parser_id: set(parser.source_files) for parser in inventory.parsers}
+    changed_by_commit: dict[str, set[str]] = {}
+    for corpus in corpora:
+        for record in corpus.regressions:
+            commit = record.fixed_commit
+            if commit not in changed_by_commit:
+                try:
+                    kind = subprocess.run(
+                        ["git", "-C", str(root), "cat-file", "-t", commit],
+                        capture_output=True, text=True, timeout=30, check=False,
+                    )
+                    if kind.returncode != 0 or kind.stdout.strip() != "commit":
+                        raise PolicyError(f"{corpus.corpus_id} regression {record.file} fixed_commit is not a commit: {commit}")
+                    diff = subprocess.run(
+                        ["git", "-C", str(root), "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", commit],
+                        capture_output=True, text=True, timeout=30, check=False,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise PolicyError(f"cannot verify fixed_commit {commit}: {exc}") from exc
+                if diff.returncode != 0:
+                    raise PolicyError(f"cannot inspect fixed_commit {commit}: {diff.stderr.strip()}")
+                changed_by_commit[commit] = set(diff.stdout.splitlines())
+            if not (sources[corpus.parser_id] & changed_by_commit[commit]):
+                raise PolicyError(
+                    f"{corpus.corpus_id} regression {record.file} fixed_commit {commit} "
+                    "does not touch an inventoried parser source"
+                )
 
 
 def _require_declared_regressions(
@@ -518,6 +548,7 @@ def build_corpus_report(
     deadline: Deadline | None = None,
 ) -> dict[str, Any]:
     corpora = load_corpora(root, inventory, corpus_path, as_of=as_of, deadline=deadline)
+    validate_regression_fix_commits(root, inventory, corpora)
     return {
         "schema_version": 1,
         "corpus_count": len(corpora),
