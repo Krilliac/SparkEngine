@@ -79,8 +79,11 @@ TEST(D3D11_DeviceLoss_RecoveryRecreatesDeviceAndRendersAgain)
     EXPECT_TRUE(engine.GetSwapChain() != nullptr);
     lostDevice.Reset();
 
-    // Do not reload the mesh here. The first post-recovery draw must exercise
-    // the production draw-list lazy reload on the new device.
+    // Recovery rebuilds the AssetPipeline empty; mesh owners load their meshes
+    // again (the documented contract). The CPU draw-list path only binds meshes,
+    // and the lazy LoadMesh exists only in the GPU-driven branch, which is
+    // compiled out (SupportsProductionDrawListInstanceContract() is false).
+    ASSERT_TRUE(RHI210::LoadCube(engine));
     RHI210::Frame after;
     for (int frame = 0; frame < 4; ++frame)
     {
@@ -120,6 +123,7 @@ TEST(D3D11_DeviceLoss_RepeatedResetRecoversAndResetsBudget)
         EXPECT_TRUE(engine.GetDevice() != previousDevice.Get());
         EXPECT_EQ(engine.GetDevice()->GetDeviceRemovedReason(), S_OK);
         EXPECT_EQ(RHI210PassAccess::RecoveryAttempts(engine), 0U);
+        ASSERT_TRUE(RHI210::LoadCube(engine));
 
         const RHI210::Frame frame = RHI210::RenderCubeFrame(engine);
         ASSERT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame.rgba, 0.95));
@@ -144,6 +148,7 @@ TEST(D3D11_DeviceLoss_DeviceRemovedBranchRecoversAndRenders)
     EXPECT_TRUE(engine.GetDevice() != previousDevice.Get());
     EXPECT_EQ(engine.GetDevice()->GetDeviceRemovedReason(), S_OK);
     EXPECT_EQ(RHI210PassAccess::RecoveryAttempts(engine), 0U);
+    ASSERT_TRUE(RHI210::LoadCube(engine));
     const RHI210::Frame frame = RHI210::RenderCubeFrame(engine);
     EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame.rgba, 0.95));
     engine.Shutdown();

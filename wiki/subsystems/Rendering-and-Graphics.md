@@ -716,7 +716,7 @@ The `AssetPipeline` is rebuilt empty on the new device, so mesh owners must load
 | CTest | Tests | Needs |
 |-------|-------|-------|
 | `D3D11_Validation` | `D3D11_Validation_*` (4): 16 WARP engine frames around a resize are clean, the counter sees an injected `CreateBuffer` error, the RHI golden triangle is clean, and 2,000 texture, buffer and pipeline create/destroy cycles raise no errors and return to the debug layer's live-object baseline | Graphics Tools debug layer |
-| `D3D11_DeviceLoss` | `D3D11_DeviceLoss_*` (2): the reset creates a new, healthy device that renders the same frame again; attach mode refuses without teardown | WARP |
+| `D3D11_DeviceLoss` | `D3D11_DeviceLoss_*` (4): a reset or an injected DEVICE_REMOVED creates a new, healthy device that renders the same frame again once the mesh owner reloads its mesh; repeated resets return the failure budget to zero; attach mode refuses without teardown | WARP |
 | `D3D11_Resource` | `D3D11_Resource_*` (3): the render-target contracts and rendering after a resize to 1x1, 1920x1080 and 320x240 | a D3D11 device (the render-target contracts fail when unavailable); WARP for the resize |
 
 Only `D3D11_Validation_` is excluded from the main `SparkEngineTests` run: on a host without the debug layer it fails in its own lane (label `d3d11-debug-layer`) and nowhere else. `build-windows-vs2022` installs the Graphics Tools feature (`Tools.Graphics.DirectX~~~~0.0.1.0`) before running ctest and fails that step if `d3d11_3SDKLayers.dll` is still missing. The fixture lives in `Tests/RHI210D3D11EngineFixture.h`.
@@ -856,13 +856,18 @@ from the installed Mesa/runtime configuration and are not release-certified.
 
 ### RHI-210 continuation (2026-10-01)
 
-New reset/removal tests exercise lazy draw-list loading after recovery and the
-consecutive-failure budget returning to zero across separate successful resets.
-The DEVICE_REMOVED injection uses a test friend at HandleDeviceLost; it does not
-force a driver TDR. These additions are unbuilt in the editing sandbox.
-Module-owned mesh rehydration and allocation-pressure recovery remain unresolved.
-Post-pass and new frame/FPS/world/primary golden fixtures require the debug layer
-and zero warnings as well as errors, corruption and discarded messages; the
-counter negative control injects both a warning and an invalid-buffer error.
+New reset/removal tests cover the consecutive-failure budget returning to zero
+across separate successful resets and an injected DEVICE_REMOVED (a test friend at
+HandleDeviceLost; it does not force a driver TDR). Recovery rebuilds the
+AssetPipeline empty, so mesh owners load their meshes again: the CPU draw-list path
+only binds meshes, and the lazy reload exists only in the GPU-driven branch, which
+is compiled out. Module-owned mesh rehydration and allocation-pressure recovery
+remain unresolved. Golden fixtures require the debug layer and zero warnings as
+well as errors, corruption and discarded messages; the counter negative control
+injects both a warning and an invalid-buffer error. `GPUTimestampQuery` brackets
+only frames that time a pass, so a frame without timers no longer abandons an
+unread disjoint query (debug-layer warning #408). The frame/FPS/world/primary
+golden suites are registered but disabled until the renderer defects they exposed
+are fixed and their captures reviewed (`Tests/GoldenImages/RHI210-CAPTURE.md`).
 See [the capture handoff](../../Tests/GoldenImages/RHI210-CAPTURE.md) for exact
 commands, deferred-pass gaps, pending captures and owner review.
