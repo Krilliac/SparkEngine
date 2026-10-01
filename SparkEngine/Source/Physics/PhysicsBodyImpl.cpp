@@ -217,21 +217,20 @@ void PhysicsBody::StoreCurrentState()
     m_previousRotation = m_currentRotation;
 }
 
-JPH::BodyInterface* PhysicsBody::ContextBodyInterface()
+JPH::PhysicsSystem* PhysicsBody::ContextJoltSystem()
 {
-    return GetBodyInterfacePtr();
+    auto* sys = GetPhysicsSystem();
+    return sys ? sys->GetJoltSystem() : nullptr;
 }
 
-void PhysicsBody::UpdateCurrentState(JPH::BodyInterface* bodyInterface)
+void PhysicsBody::UpdateCurrentState(const JPH::Body* lockedBody)
 {
-    const JPH::BodyID id(m_joltBodyID);
-    if (!bodyInterface || !bodyInterface->IsAdded(id))
+    // Same guard as HasValidJoltBody(): the body exists and is added to the broadphase.
+    if (!lockedBody || !lockedBody->IsInBroadPhase())
         return;
 
-    // One body lock for both reads.
-    JPH::RVec3 pos;
-    JPH::Quat rot;
-    bodyInterface->GetPositionAndRotation(id, pos, rot);
+    const JPH::RVec3 pos = lockedBody->GetPosition();
+    const JPH::Quat rot = lockedBody->GetRotation();
     m_currentPosition =
         XMFLOAT3(static_cast<float>(pos.GetX()), static_cast<float>(pos.GetY()), static_cast<float>(pos.GetZ()));
     m_currentRotation = XMFLOAT4(rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW());
