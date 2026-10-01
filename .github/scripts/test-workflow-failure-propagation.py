@@ -1606,6 +1606,11 @@ def required_workflow_errors(workflow: str) -> list[str]:
                     errors.append(f"{step_name} is missing/duplicating {fragment}")
             if len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", block)) != 1:
                 errors.append(f"{step_name} duplicates or ambiguously overrides its timeout")
+            # The footer records the producing job's per-process budget (OD-29), so
+            # the consumer must verify that exact value, not a stale one.
+            producer_seconds = {"asan": "1800", "tsan": "3000"}[sanitizer]
+            if not re.search(rf"--timeout-seconds {producer_seconds}(?![0-9])", block):
+                errors.append(f"{step_name} must verify the producer's --timeout-seconds {producer_seconds}")
         for dependency in ("build-linux-asan", "build-linux-tsan"):
             if len(re.findall(rf"(?m)^      - {dependency}$", aggregate)) != 1:
                 errors.append(f"aggregate-test-stats must need {dependency} exactly once")

@@ -4503,7 +4503,7 @@ jobs:
             --allow-prior-attempt \
             --job build-linux-tsan \
             --minimum-tests 6900 \
-            --timeout-seconds 1800
+            --timeout-seconds 3000
 
       - name: Collect deterministic repository metrics
         run: python3 docs/codebase-metrics.py > repository-metrics.json
