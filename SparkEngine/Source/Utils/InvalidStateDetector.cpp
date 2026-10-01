@@ -102,10 +102,9 @@ namespace Spark
 
     void InvalidStateDetector::Shutdown()
     {
-        if (!m_initialized)
-            return;
-
-        if (m_totalViolations > 0)
+        // Clear even when never started: rules added before start hold callbacks into module images, and a
+        // module unloaded ahead of the host start must not leave them for the next Initialize().
+        if (m_initialized && m_totalViolations > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core,
                            "InvalidStateDetector: %u total violations detected across %u checks", m_totalViolations,

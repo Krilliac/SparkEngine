@@ -99,7 +99,8 @@ namespace Spark
          * @brief Register an enabled validation rule with the host detector
          * @param name     Rule identifier reported with each violation, e.g. "RTS.DeadUnitMoving"
          * @param category Grouping the module removes its rules by, usually the module name
-         * @param severity Severity the host reports the rule's violations with
+         * @param severity Severity recorded on the rule; each violation is reported with the
+         *                 severity its StateViolation carries, so set that field in @p check
          * @param check    Scans the world and appends a StateViolation per offending entity
          * @return true when the rule is registered; false when the name, category or
          *         check is empty. A rule added before the host detector starts is kept

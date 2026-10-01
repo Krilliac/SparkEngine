@@ -328,6 +328,11 @@ TEST(PrototypeModuleKit_StateRulesRegisterThroughSdkContext)
         const uint32_t rulesBeforeStart = detector.GetRuleCount();
         EXPECT_TRUE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
         EXPECT_EQ(detector.GetRuleCount(), rulesBeforeStart + 1u);
+        // Shutdown() before start must still drop it: a module unloaded ahead of the host start would otherwise
+        // leave a callback into its unloaded image for the next Initialize().
+        detector.Shutdown();
+        EXPECT_FALSE(detector.HasRule("Kit.Early"));
+        EXPECT_TRUE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
         detector.Initialize();
         EXPECT_TRUE(detector.HasRule("Kit.Early"));
         detector.SetWorld(&world);
