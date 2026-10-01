@@ -629,6 +629,36 @@
       ]
     },
     {
+      "name": "Intel SDE 10.13.1 Windows CI archive",
+      "class": "downloads",
+      "license_spdx": "LicenseRef-Intel-Simplified-Software-License",
+      "owner": "Krilliac",
+      "justification": "Owner-approved Intel Software Development Emulator runs the required Windows below-floor CPU startup test. CI tool only; no SDE files enter SparkEngine packages.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "Invoke-WebRequest -Uri $url -OutFile $archive",
+      "source_url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz",
+      "url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz",
+      "sha256": "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651",
+      "output": "archive",
+      "verification": "get-file-hash"
+    },
+    {
+      "name": "Intel SDE 10.13.1 Linux CI archive",
+      "class": "downloads",
+      "license_spdx": "LicenseRef-Intel-Simplified-Software-License",
+      "owner": "Krilliac",
+      "justification": "Owner-approved Intel Software Development Emulator runs the required Linux below-floor CPU startup test. CI tool only; no SDE files enter SparkEngine packages.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "curl --fail --location --retry 3 \"$url\" --output \"$archive\"",
+      "source_url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz",
+      "url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz",
+      "sha256": "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50",
+      "output": "archive",
+      "verification": "sha256sum"
+    },
+    {
       "name": "CI Linux graphics development packages",
       "class": "ci_packages",
       "license_spdx": "NOASSERTION",

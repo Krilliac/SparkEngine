@@ -31,6 +31,13 @@ is follow-up work for decision D8.
 notice file on disk. Several have attention items. The editor fonts
 outside `ThirdParty/` have their upstream license text on disk (item 4).
 
+Intel Software Development Emulator (SDE) 10.13.1, released 2026-07-28, is an
+owner-approved CI-only test tool under the Intel Simplified Software License
+(August 23, 2023). The Windows and Linux archives are URL and SHA-256 pinned in
+`ThirdParty/supply-chain.lock`; `.github/workflows/build.yml` verifies each
+archive before extraction. SDE is neither linked into nor shipped with any
+SparkEngine artifact, so it is outside the packaged third-party notices.
+
 | License family (as declared) | Components | Duty the on-disk text states |
 |---|---|---|
 | MIT | Jolt Physics, EnTT, Dear ImGui, miniz, cgltf, nlohmann/json, tinyobjloader, VulkanMemoryAllocator | Include the copyright notice and permission notice in all copies or substantial portions |

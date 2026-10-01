@@ -2756,10 +2756,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5486,
+      "line": 5502,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5484",
+          "id": "Tests/CMakeLists.txt:5500",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -5289,7 +5289,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5486,
+          "line": 5502,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -11147,7 +11147,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 28,
+        "stepCount": 30,
         "steps": [
           {
             "index": 0,
@@ -11238,6 +11238,18 @@
           },
           {
             "index": 7,
+            "name": "Install Intel SDE 10.13.1 for CPU-floor process test",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "8577567674208e5b"
+          },
+          {
+            "index": 8,
             "name": "Test native Windows signature rejection",
             "id": "",
             "uses": "",
@@ -11249,7 +11261,7 @@
             "runDigest": "a7edef8470b5d4fd"
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Test native Windows package evidence producers",
             "id": "",
             "uses": "",
@@ -11261,7 +11273,7 @@
             "runDigest": "8ce18cbe77ef8f82"
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Configure CMake (VS 2022 / v143)",
             "id": "",
             "uses": "",
@@ -11270,10 +11282,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "16cee9c384035edb"
+            "runDigest": "56135fb3aa91dba0"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Install hash-pinned PyYAML into the configured test interpreter",
             "id": "",
             "uses": "",
@@ -11285,7 +11297,7 @@
             "runDigest": "84a19288c94dc190"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Enforce configured-tree CTest policy",
             "id": "",
             "uses": "",
@@ -11297,7 +11309,7 @@
             "runDigest": "f00c28008e2dcb49"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Build",
             "id": "",
             "uses": "",
@@ -11309,7 +11321,19 @@
             "runDigest": "07847ccc2fa9f873"
           },
           {
-            "index": 13,
+            "index": 14,
+            "name": "Refuse a below-floor CPU under Intel SDE",
+            "id": "",
+            "uses": "",
+            "shell": "bash",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "eaa622a3440b8582"
+          },
+          {
+            "index": 15,
             "name": "Print sccache stats",
             "id": "",
             "uses": "",
@@ -11323,7 +11347,7 @@
             "runDigest": "ac023990345bb5e5"
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Save sccache cache",
             "id": "",
             "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -11335,7 +11359,7 @@
             "runDigest": ""
           },
           {
-            "index": 15,
+            "index": 17,
             "name": "Install D3D11 debug layer (Graphics Tools)",
             "id": "",
             "uses": "",
@@ -11347,7 +11371,7 @@
             "runDigest": "5000f15b9866d810"
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Install D3D12 debug layer",
             "id": "",
             "uses": "",
@@ -11359,7 +11383,7 @@
             "runDigest": "463c86d8fa05240e"
           },
           {
-            "index": 17,
+            "index": 19,
             "name": "Execute documented subsystem commands",
             "id": "",
             "uses": "",
@@ -11371,7 +11395,7 @@
             "runDigest": "cc3332ce6767bb2f"
           },
           {
-            "index": 18,
+            "index": 20,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -11383,7 +11407,7 @@
             "runDigest": "5db485c42c212495"
           },
           {
-            "index": 19,
+            "index": 21,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -11395,7 +11419,7 @@
             "runDigest": "04d1482b4a194b41"
           },
           {
-            "index": 20,
+            "index": 22,
             "name": "Census of production-source vs mirror tests",
             "id": "",
             "uses": "",
@@ -11407,7 +11431,7 @@
             "runDigest": "dcf673dbd92d4a69"
           },
           {
-            "index": 21,
+            "index": 23,
             "name": "Upload exact-commit CTest report",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11419,7 +11443,7 @@
             "runDigest": ""
           },
           {
-            "index": 22,
+            "index": 24,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11431,7 +11455,7 @@
             "runDigest": ""
           },
           {
-            "index": 23,
+            "index": 25,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -11443,7 +11467,7 @@
             "runDigest": "fe715c78b7a4aa4e"
           },
           {
-            "index": 24,
+            "index": 26,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11455,7 +11479,7 @@
             "runDigest": ""
           },
           {
-            "index": 25,
+            "index": 27,
             "name": "Upload sccache server log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -11467,7 +11491,7 @@
             "runDigest": ""
           },
           {
-            "index": 26,
+            "index": 28,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -11479,7 +11503,7 @@
             "runDigest": "2eb3edeb34e3cec9"
           },
           {
-            "index": 27,
+            "index": 29,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12217,7 +12241,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 19,
+        "stepCount": 21,
         "steps": [
           {
             "index": 0,
@@ -12281,6 +12305,18 @@
           },
           {
             "index": 5,
+            "name": "Install Intel SDE 10.13.1 for CPU-floor process test",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "d1790381f4f14d5e"
+          },
+          {
+            "index": 6,
             "name": "Configure CMake",
             "id": "",
             "uses": "",
@@ -12289,10 +12325,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "39b3a267ec6aedc2"
+            "runDigest": "5a12ae1f1a0de1ce"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Enforce configured-tree CTest policy",
             "id": "",
             "uses": "",
@@ -12304,7 +12340,7 @@
             "runDigest": "ec15b0167b4fc534"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Build all targets",
             "id": "",
             "uses": "",
@@ -12316,7 +12352,19 @@
             "runDigest": "8cbb4339854162af"
           },
           {
-            "index": 8,
+            "index": 9,
+            "name": "Refuse a below-floor CPU under Intel SDE",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "matrix.config == 'Release'",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "eaa622a3440b8582"
+          },
+          {
+            "index": 10,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -12328,7 +12376,7 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 9,
+            "index": 11,
             "name": "Execute documented subsystem commands",
             "id": "",
             "uses": "",
@@ -12340,7 +12388,7 @@
             "runDigest": "4346425f292cc9b8"
           },
           {
-            "index": 10,
+            "index": 12,
             "name": "Run Tests",
             "id": "",
             "uses": "",
@@ -12352,7 +12400,7 @@
             "runDigest": "579e1945c3f11982"
           },
           {
-            "index": 11,
+            "index": 13,
             "name": "Validate and summarize test statistics",
             "id": "",
             "uses": "",
@@ -12364,7 +12412,7 @@
             "runDigest": "8d7518b4302271f9"
           },
           {
-            "index": 12,
+            "index": 14,
             "name": "Upload machine-readable test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12376,7 +12424,7 @@
             "runDigest": ""
           },
           {
-            "index": 13,
+            "index": 15,
             "name": "Assert Vulkan preset is enabled (Release gate)",
             "id": "",
             "uses": "",
@@ -12388,7 +12436,7 @@
             "runDigest": "4057c17ae774e6c1"
           },
           {
-            "index": 14,
+            "index": 16,
             "name": "Assert Vulkan backend tests are compiled in (Release gate)",
             "id": "",
             "uses": "",
@@ -12400,7 +12448,7 @@
             "runDigest": "0cac91df58caa9a0"
           },
           {
-            "index": 15,
+            "index": 17,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -12412,7 +12460,7 @@
             "runDigest": "216085f38b450ddc"
           },
           {
-            "index": 16,
+            "index": 18,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12424,7 +12472,7 @@
             "runDigest": ""
           },
           {
-            "index": 17,
+            "index": 19,
             "name": "Package build output",
             "id": "",
             "uses": "",
@@ -12436,7 +12484,7 @@
             "runDigest": "d59243a20fca28e4"
           },
           {
-            "index": 18,
+            "index": 20,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -15942,7 +15990,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Debug"
         },
@@ -15956,7 +16004,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_C_COMPILER": "cl",
@@ -15967,6 +16015,7 @@
           "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
           "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
           "GENERATE_DEBUG_SYMBOLS": "OFF",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
@@ -15978,7 +16027,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -16003,7 +16052,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {
           "config": "Debug"
         },
@@ -16031,8 +16080,33 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 14,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 18,
+        "stepIndex": 20,
         "matrix": {
           "config": "Debug"
         },
@@ -16057,7 +16131,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 20,
+        "stepIndex": 22,
         "matrix": {
           "config": "Debug"
         },
@@ -16103,7 +16177,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Release"
         },
@@ -16117,7 +16191,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_C_COMPILER": "cl",
@@ -16128,6 +16202,7 @@
           "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
           "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
           "GENERATE_DEBUG_SYMBOLS": "OFF",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
@@ -16139,7 +16214,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -16164,7 +16239,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {
           "config": "Release"
         },
@@ -16192,8 +16267,33 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 14,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 18,
+        "stepIndex": 20,
         "matrix": {
           "config": "Release"
         },
@@ -16218,7 +16318,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 20,
+        "stepIndex": 22,
         "matrix": {
           "config": "Release"
         },
@@ -16908,7 +17008,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -16922,7 +17022,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -16931,7 +17031,8 @@
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}"
         },
         "buildDir": "build",
         "commandIndex": 0
@@ -16939,7 +17040,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -16964,7 +17065,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -16992,8 +17093,33 @@
       },
       {
         "job": "build-linux-gcc",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 9,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 10,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -17018,7 +17144,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -17032,7 +17158,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -17041,7 +17167,8 @@
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}"
         },
         "buildDir": "build",
         "commandIndex": 0
@@ -17049,7 +17176,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -17074,7 +17201,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -17102,8 +17229,33 @@
       },
       {
         "job": "build-linux-gcc",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 9,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 10,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -18570,7 +18722,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Debug"
         },
@@ -18584,7 +18736,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_C_COMPILER": "cl",
@@ -18595,6 +18747,7 @@
           "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
           "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
           "GENERATE_DEBUG_SYMBOLS": "OFF",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
@@ -18606,7 +18759,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Configure CMake (VS 2022 / v143)",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {
           "config": "Release"
         },
@@ -18620,7 +18773,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+        "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "CMAKE_C_COMPILER": "cl",
@@ -18631,6 +18784,7 @@
           "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
           "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
           "GENERATE_DEBUG_SYMBOLS": "OFF",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}",
           "BUILD_TESTS": "ON",
           "BUILD_GAME_MODULES": "ON"
         },
@@ -18824,7 +18978,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Debug"
         },
@@ -18838,7 +18992,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -18847,7 +19001,8 @@
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}"
         },
         "buildDir": "build",
         "commandIndex": 0
@@ -18855,7 +19010,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Configure CMake",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {
           "config": "Release"
         },
@@ -18869,7 +19024,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\" 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -18878,7 +19033,8 @@
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+          "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+          "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}"
         },
         "buildDir": "build",
         "commandIndex": 0
@@ -19703,7 +19859,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {
           "config": "Debug"
         },
@@ -19732,7 +19888,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Build",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {
           "config": "Release"
         },
@@ -19981,7 +20137,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Debug"
         },
@@ -20010,7 +20166,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Build all targets",
-        "stepIndex": 7,
+        "stepIndex": 8,
         "matrix": {
           "config": "Release"
         },
@@ -20673,7 +20829,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -20697,8 +20853,33 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 14,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 18,
+        "stepIndex": 20,
         "matrix": {
           "config": "Debug"
         },
@@ -20723,7 +20904,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 20,
+        "stepIndex": 22,
         "matrix": {
           "config": "Debug"
         },
@@ -20748,7 +20929,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -20772,8 +20953,33 @@
       },
       {
         "job": "build-windows-vs2022",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 14,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-windows-vs2022",
         "step": "Run Tests",
-        "stepIndex": 18,
+        "stepIndex": 20,
         "matrix": {
           "config": "Release"
         },
@@ -20798,7 +21004,7 @@
       {
         "job": "build-windows-vs2022",
         "step": "Census of production-source vs mirror tests",
-        "stepIndex": 20,
+        "stepIndex": 22,
         "matrix": {
           "config": "Release"
         },
@@ -20896,7 +21102,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Debug"
         },
@@ -20920,8 +21126,33 @@
       },
       {
         "job": "build-linux-gcc",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 9,
+        "matrix": {
+          "config": "Debug"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 10,
+        "stepIndex": 12,
         "matrix": {
           "config": "Debug"
         },
@@ -20946,7 +21177,7 @@
       {
         "job": "build-linux-gcc",
         "step": "Enforce configured-tree CTest policy",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {
           "config": "Release"
         },
@@ -20970,8 +21201,33 @@
       },
       {
         "job": "build-linux-gcc",
+        "step": "Refuse a below-floor CPU under Intel SDE",
+        "stepIndex": 9,
+        "matrix": {
+          "config": "Release"
+        },
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "matrix.config == 'Release'",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$'  --output-on-failure --no-tests=error",
+        "commandProvenance": "literal",
+        "configuration": "Release",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-gcc",
         "step": "Run Tests",
-        "stepIndex": 10,
+        "stepIndex": 12,
         "matrix": {
           "config": "Release"
         },
@@ -21534,7 +21790,7 @@
       "pathFilteredEventCount": 0,
       "configureCount": 34,
       "buildCount": 37,
-      "testCount": 34,
+      "testCount": 38,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 20,
@@ -21814,7 +22070,7 @@
     {
       "job": "build-windows-vs2022",
       "step": "Configure CMake (VS 2022 / v143)",
-      "stepIndex": 9,
+      "stepIndex": 10,
       "matrix": {
         "config": "Debug"
       },
@@ -21828,7 +22084,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_C_COMPILER": "cl",
@@ -21839,6 +22095,7 @@
         "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
         "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
         "GENERATE_DEBUG_SYMBOLS": "OFF",
+        "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}",
         "BUILD_TESTS": "ON",
         "BUILD_GAME_MODULES": "ON"
       },
@@ -21850,7 +22107,7 @@
     {
       "job": "build-windows-vs2022",
       "step": "Configure CMake (VS 2022 / v143)",
-      "stepIndex": 9,
+      "stepIndex": 10,
       "matrix": {
         "config": "Release"
       },
@@ -21864,7 +22121,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
+      "command": "cmake --fresh -B build -G \"Ninja Multi-Config\"  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl  -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache  -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON  -DCMAKE_CXX_SCAN_FOR_MODULES=OFF  -DGENERATE_DEBUG_SYMBOLS=OFF  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\"  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
         "CMAKE_C_COMPILER": "cl",
@@ -21875,6 +22132,7 @@
         "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
         "CMAKE_CXX_SCAN_FOR_MODULES": "OFF",
         "GENERATE_DEBUG_SYMBOLS": "OFF",
+        "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}",
         "BUILD_TESTS": "ON",
         "BUILD_GAME_MODULES": "ON"
       },
@@ -22068,7 +22326,7 @@
     {
       "job": "build-linux-gcc",
       "step": "Configure CMake",
-      "stepIndex": 5,
+      "stepIndex": 6,
       "matrix": {
         "config": "Debug"
       },
@@ -22082,7 +22340,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\" 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -22091,7 +22349,8 @@
         "CMAKE_C_COMPILER": "gcc-14",
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}"
       },
       "buildDir": "build",
       "commandIndex": 0
@@ -22099,7 +22358,7 @@
     {
       "job": "build-linux-gcc",
       "step": "Configure CMake",
-      "stepIndex": 5,
+      "stepIndex": 6,
       "matrix": {
         "config": "Release"
       },
@@ -22113,7 +22372,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DSPARK_SDE_EXECUTABLE=\"${SPARK_SDE_EXECUTABLE:-}\" 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -22122,7 +22381,8 @@
         "CMAKE_C_COMPILER": "gcc-14",
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
-        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "SPARK_SDE_EXECUTABLE": "${SPARK_SDE_EXECUTABLE:-}"
       },
       "buildDir": "build",
       "commandIndex": 0

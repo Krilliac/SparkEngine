@@ -1068,15 +1068,19 @@
         },
         {
           "criterionDigest": "sha256:efd875760a6e",
-          "state": "unmet",
+          "state": "implemented",
           "evidence": [
             "Tests/Tools/test_cpu_floor.py",
             "Tests/Tools/test_check_isa_baseline.py",
             "tools/isa_code_map.py",
             "Tests/Tools/test_isa_code_map.py",
-            "cmake/SparkIsaBaseline.cmake"
+            "cmake/SparkIsaBaseline.cmake",
+            "Tests/Tools/check_sde_cpu_floor.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "ThirdParty/supply-chain.lock"
           ],
-          "note": "PE scan re-enforced: all 12 first-party images (with build PDBs) pass locally and a temporary AVX2 function fails it; redist Microsoft DLLs are not scanned. Resolves direct, structural and basic-block computed flow; CRT/STL exemptions pinned to toolset 14.44.35207; interprocedural computed targets are outside the threat model. Unmet: below-floor refusal never ran; no hosted run."
+          "note": "PE scan is enforced. Owner's local Windows Release run under SDE 10.13.1: -pnr refused with SSE4.2 and POPCNT named; -nhm printed version. CTest now repeats both models in required Windows and Linux Release jobs. Final-tree local rerun and exact-SHA hosted CI are pending; interprocedural computed targets remain outside the PE scanner threat model."
         }
       ],
       "commands": [

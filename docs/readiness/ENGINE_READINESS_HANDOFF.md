@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **173 implemented** (67%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **174 implemented** (67%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -260,7 +260,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 |---|---|---|---|---|---|
 | [`CI-110`](#ci-110--enforce-deterministic-test-coverage-sanitizer-and-static-analysis-policy) Enforce deterministic test, coverage, sanitizer, and static-analysis policy | P0 | **in-progress** | 5/5 · 0/5 | `CI-100`, `RDY-000` | `CI-120`, `BLD-100`, `SEC-110` |
 | [`CI-120`](#ci-120--build-every-stable-v1-product-and-reconcile-configuration-surfaces) Build every stable-v1 product and reconcile configuration surfaces | P0 | **in-progress** | 5/8 · 0/8 | `CI-100` | `CI-110`, `BLD-100`, `SEC-110` |
-| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 3/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
+| [`BLD-100`](#bld-100--create-strict-reproducible-shipping-configurations) Create strict reproducible Shipping configurations | P0 | **in-progress** | 4/4 · 0/4 | `CI-100`, `CI-120` | `REL-100`, `REL-110` |
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 3/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **in-progress** | 4/4 · 0/4 | — | `CI-100`, `OPS-100`, `RDY-000` |
@@ -1170,7 +1170,7 @@ Versioned Windows publication now selects the authoritative windows-shipping pre
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Shipping is distinct from Debug and Release
    - Evidence: `Tests/Tools/test_build_shipping_contract.py`, `CMakePresets.json`, `tools/check_shipping_configuration.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `CMakeLists.txt`
@@ -1181,9 +1181,9 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 3. **[implemented]** Every artifact includes private-symbol mapping and build ID
    - Evidence: `cmake/SparkStagePrivateSymbols.cmake`, `tools/shipping_symbol_manifest.py`, `Tests/Tools/test_shipping_symbol_manifest.py`, `Tests/CMakeLists.txt`
    - ShippingManifest_PrivateSymbols and ShippingManifest_SymbolManifestTool map installed Linux ELF images to split .debug files by build-id, and clang/lld-link PE fixtures to PDBs. No MSVC Windows Shipping artifact has been mapped; that needs a Windows run.
-4. **[unmet]** Unsupported CPU features are not silently required
-   - Evidence: `Tests/Tools/test_cpu_floor.py`, `Tests/Tools/test_check_isa_baseline.py`, `tools/isa_code_map.py`, `Tests/Tools/test_isa_code_map.py`, `cmake/SparkIsaBaseline.cmake`
-   - PE scan re-enforced: all 12 first-party images (with build PDBs) pass locally and a temporary AVX2 function fails it; redist Microsoft DLLs are not scanned. Resolves direct, structural and basic-block computed flow; CRT/STL exemptions pinned to toolset 14.44.35207; interprocedural computed targets are outside the threat model. Unmet: below-floor refusal never ran; no hosted run.
+4. **[implemented]** Unsupported CPU features are not silently required
+   - Evidence: `Tests/Tools/test_cpu_floor.py`, `Tests/Tools/test_check_isa_baseline.py`, `tools/isa_code_map.py`, `Tests/Tools/test_isa_code_map.py`, `cmake/SparkIsaBaseline.cmake`, `Tests/Tools/check_sde_cpu_floor.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `ThirdParty/supply-chain.lock`
+   - PE scan is enforced. Owner's local Windows Release run under SDE 10.13.1: -pnr refused with SSE4.2 and POPCNT named; -nhm printed version. CTest now repeats both models in required Windows and Linux Release jobs. Final-tree local rerun and exact-SHA hosted CI are pending; interprocedural computed targets remain outside the PE scanner threat model.
 
 **Required commands**
 

@@ -191,6 +191,13 @@ may already use SSE4.2 instructions, so a CPU below the floor can still fault
 before the message appears. No Shipping binary has yet been run on an SSE4.2-only
 CPU or emulator.
 
+`CpuFloor_BelowFloorStartupRefused` uses Intel SDE's Penryn (below floor)
+and Nehalem (at floor) models to execute the built `SparkEngine --version`
+entry point. The required Windows VS2022 and Linux GCC Release jobs download
+SDE 10.13.1 with checked SHA-256 archives, then run this CTest. SDE is a CI
+tool and is not part of a SparkEngine package. This checks the real startup
+path for those two CPU models; it does not replace a Shipping package run.
+
 Core-count guidance below is an unverified planning estimate. `PERF-100` remains
 open; no same-commit benchmark artifact establishes a release minimum.
 
