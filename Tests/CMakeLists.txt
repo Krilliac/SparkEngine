@@ -4966,6 +4966,22 @@ set_tests_properties(CpuFloor_LibsodiumVariants PROPERTIES
     LABELS "build;shipping;unit"
     TIMEOUT 30)
 
+# Intel SDE is a CI/local test tool, not a runtime dependency. Both Windows
+# and Linux SparkEngine entry points reject a below-floor CPU before --version.
+set(SPARK_SDE_EXECUTABLE "" CACHE FILEPATH "Optional Intel SDE executable for CPU-floor process testing")
+if(SPARK_SDE_EXECUTABLE AND TARGET SparkEngine)
+    if(NOT EXISTS "${SPARK_SDE_EXECUTABLE}")
+        message(FATAL_ERROR "SPARK_SDE_EXECUTABLE does not exist: ${SPARK_SDE_EXECUTABLE}")
+    endif()
+    add_test(
+        NAME CpuFloor_BelowFloorStartupRefused
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/check_sde_cpu_floor.py
+            --sde "${SPARK_SDE_EXECUTABLE}" --engine "$<TARGET_FILE:SparkEngine>")
+    set_tests_properties(CpuFloor_BelowFloorStartupRefused PROPERTIES
+        LABELS "bld100;cpu-floor;process"
+        TIMEOUT 240)
+endif()
+
 # ENG-220: tools/pe_import_closure.py fails a staged Windows package whose
 # EXE/DLL imports or delay-imports a DLL that is neither beside it, an API set,
 # nor an allowlisted System32 DLL. Synthetic in-memory PE fixtures, so it runs

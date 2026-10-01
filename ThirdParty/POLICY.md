@@ -45,9 +45,13 @@ the normal case. Every record must contain exactly these fields: `id`, `scope`,
 owners must name a maintainer, justifications must explain the temporary
 exception, and `expires` must be a valid `YYYY-MM-DD` date. Missing, malformed,
 duplicate, placeholder-owned, or unknown fields are checker errors (exit 2),
-and an expired record is a policy violation (exit 1). Exception records document
-reviewed risk; they never waive an inventory, hash, license, action-pin, or
-manifest check. The checker bounds the collection at 256 records.
+and an expired or more-than-366-day record is a policy violation (exit 1).
+Exception records document reviewed risk; they do not waive container,
+license, action-pin, or manifest checks. The checker bounds the collection at
+256 records. A `download-<command digest>` record may temporarily waive only
+that exact raw-download call in its `scope` script; an edited call makes the
+exception unused and fails the check. The MinGW/Wine exceptions expire on
+2026-10-08 and must be removed as its pinned downloads land.
 
 The same records are the only way to accept a Critical or High vulnerability in
 a release. The release job scans the generated SPDX SBOM with grype, and
@@ -246,6 +250,7 @@ dependency that does not live in a `ThirdParty/` container. Each record has a
 | `ci_packages` | `identifiers`: `apt:<package>`, `brew:<formula>`, or `pip:<project>` | `apt-get install`, `apt install`, `brew install`, and `pip install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. A `pip install` must read a repository-relative requirements file (`-r`) whose every line is an exact `name==version` pin with `--hash=sha256:` digests; a package named on the command line cannot carry a hash and fails. |
 | `web_runtime` | `url` with an exact version (`name@1.2.3/`), and `sri` (`sha384-` or `sha512-`) | `<script src>`, import maps, and module `import` statements in tracked `.html`, `.js`, and `.mjs` files. Import-map specifiers are resolved first. |
 | `vendored_outside_thirdparty` | `paths`: tracked files, or directories ending in `/` | Tracked files outside `ThirdParty/` that contain an MIT, Apache-2.0, or BSD license grant phrase. The scan reads the index with `git grep --cached`, so binary files are included. |
+| `downloads` | `path`, `pin_path`, normalized `command`, `source_url`, resolved `url`, `sha256`, `output`, and `verification` | Artifact fetches in tracked shell/PowerShell scripts, workflow `run:` blocks, and CMake `file(DOWNLOAD)`, `FetchContent_Declare`, or `ExternalProject_Add` calls outside `ThirdParty/`. The fetching file must tie the locked URL and SHA-256 to the fetched output; CMake's `URL_HASH` and `EXPECTED_HASH` count as built-in verification. GitHub API JSON reads for publication are not third-party artifacts. |
 
 The rules:
 
@@ -265,8 +270,9 @@ The rules:
   owner decision (GOV-400).
 - Record names, identifiers, URLs, and paths are unique without regard to case.
   A duplicate or a case collision is a schema error (exit 2).
-- A declared identifier or URL that nothing uses is a warning. A declared
-  vendored path with no tracked file is an error.
+- A declared system/package identifier or web runtime URL that nothing uses is
+  a warning. An unused declared download or temporary download exception is an
+  error. A declared vendored path with no tracked file is also an error.
 - Some files may contain license phrases because they quote license text
   rather than vendor code. The checker exempts them, and each exemption has a
   recorded reason in `FOREIGN_LICENSE_EXEMPTIONS`: `Tests/**`,

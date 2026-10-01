@@ -31,7 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -85,6 +85,7 @@ MAX_WORKFLOW_FILES = 512
 MAX_ACTION_PIN_KEYS = 512
 MAX_ACTION_PIN_SHAS = 32
 MAX_EXCEPTIONS = 256
+MAX_EXCEPTION_HORIZON_DAYS = 366
 MAX_VIOLATIONS = 500
 
 MIN_LICENSE_SIZE = 200
@@ -186,6 +187,7 @@ EXTERNAL_CLASS_FIELDS = {
     "ci_packages": frozenset({"identifiers"}),
     "web_runtime": frozenset({"url", "sri"}),
     "vendored_outside_thirdparty": frozenset({"paths"}),
+    "downloads": frozenset({"path", "pin_path", "command", "source_url", "url", "sha256", "verification", "output"}),
 }
 EXTERNAL_IDENTIFIER_NAMESPACES = {
     "system_libraries": frozenset({"cmake", "pkg-config"}),
@@ -228,6 +230,13 @@ REMOTE_URL_RE = re.compile(r"^(?:https?:)?//", re.IGNORECASE)
 # An exact package version in a CDN path: name@1.2.3/ (no ranges, tags, or latest).
 PINNED_WEB_VERSION_RE = re.compile(r"@[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?/")
 SRI_RE = re.compile(r"^sha(?:384|512)-[A-Za-z0-9+/]+={0,2}$")
+DOWNLOAD_VERIFICATIONS = frozenset({
+    "sha256sum", "get-file-hash", "cmake-sha256", "cmake-url-hash", "cmake-expected-hash",
+})
+MUTABLE_DOWNLOAD_URL_RE = re.compile(
+    r"/(?:main|master|HEAD|latest)(?:/|$)|/refs/heads/|@latest(?:/|$)|"
+    r"[?&](?:ref|branch|rev)=", re.I,
+)
 JS_STATIC_IMPORT_RE = re.compile(
     r"""\b(?:import|export)\b[^'";]*?\bfrom\s*(['"])([^'"]+)\1"""
     r"""|\bimport\s*\(?\s*(['"])([^'"]+)\3""",
@@ -1164,6 +1173,27 @@ def _validate_external_dependencies_schema(data: dict[str, Any]) -> None:
             if not isinstance(sri, str) or not SRI_RE.fullmatch(sri):
                 _fatal(f"{label}.sri: expected a sha384-/sha512- subresource-integrity value")
             claim("url", url, label)
+        elif kind == "downloads":
+            for field_name in ("path", "pin_path"):
+                path = record[field_name]
+                if not isinstance(path, str) or validate_repo_relative_path(path) or _under_root(path, AUTHORITATIVE_ROOT):
+                    _fatal(f"{label}.{field_name}: expected a tracked path outside ThirdParty/")
+            command = record["command"]
+            if not isinstance(command, str) or not command.strip() or len(command) > 1024 or "\n" in command:
+                _fatal(f"{label}.command: expected one bounded, normalized command")
+            claim("download-command", f"{record['path']}:{command}", label)
+            output = record["output"]
+            if not isinstance(output, str) or not output or len(output) > 256 or any(char.isspace() for char in output):
+                _fatal(f"{label}.output: expected a bounded destination name or variable")
+            for field_name in ("url", "source_url"):
+                url = record[field_name]
+                if (not isinstance(url, str) or not url.startswith("https://") or len(url) > 1024
+                        or any(char.isspace() for char in url) or MUTABLE_DOWNLOAD_URL_RE.search(url)):
+                    _fatal(f"{label}.{field_name}: expected an immutable https URL, got {url!r}")
+            if not isinstance(record["sha256"], str) or not SHA256_HEX_RE.fullmatch(record["sha256"]):
+                _fatal(f"{label}.sha256: expected lowercase SHA-256")
+            if record["verification"] not in DOWNLOAD_VERIFICATIONS:
+                _fatal(f"{label}.verification: expected one of {sorted(DOWNLOAD_VERIFICATIONS)}")
         else:
             for path in _external_string_list(f"{label}.paths", record["paths"]):
                 err = validate_repo_relative_path(path.removesuffix("/"))
@@ -1335,6 +1365,7 @@ def check_license_policy(
 def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> None:
     # UTC, the same day boundary the release vulnerability gate applies.
     today = datetime.now(timezone.utc).date()
+    latest = today + timedelta(days=MAX_EXCEPTION_HORIZON_DAYS)
     for index, exception in enumerate(lockfile["exceptions"]):
         expiry = date.fromisoformat(exception["expires"])
         if expiry < today:
@@ -1342,6 +1373,13 @@ def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> Non
                 "exception",
                 f"{LOCKFILE_REL}:exceptions[{index}]",
                 f"exception {exception['id']!r} expired on {exception['expires']}",
+            )
+        elif expiry > latest:
+            result.error(
+                "exception",
+                f"{LOCKFILE_REL}:exceptions[{index}]",
+                f"exception {exception['id']!r} expires beyond the "
+                f"{MAX_EXCEPTION_HORIZON_DAYS}-day maximum on {exception['expires']}",
             )
 
 
@@ -2426,6 +2464,271 @@ def _external_records(lockfile: dict[str, Any], kind: str) -> list[dict[str, Any
     return [r for r in lockfile.get("external_dependencies", []) if r["class"] == kind]
 
 
+def _raw_download_commands(text: str, *, cmake: bool = False) -> list[str]:
+    """Return normalized artifact-fetch calls, including shell line continuations."""
+    if cmake:
+        source = _strip_cmake_comments(text)
+        pattern = re.compile(r"\b(?:file\s*\(\s*DOWNLOAD|FetchContent_Declare\s*\(|ExternalProject_Add\s*\()"
+                             r"[^)]*\)", re.IGNORECASE | re.DOTALL)
+        return [" ".join(match.group().split()) for match in pattern.finditer(source)]
+    else:
+        source = re.sub(r"\\\r?\n\s*", " ", text)
+        pattern = re.compile(r"(?<![\w\"'])\b(?:curl|wget|Invoke-WebRequest|iwr)\b(?![\"'])", re.IGNORECASE)
+    commands = []
+    for line in source.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "\"", "'")) or not pattern.search(stripped):
+            continue
+        if "GITHUB_API_URL" in stripped or "$api_url" in stripped:
+            # The publication workflows fetch GitHub API JSON, then validate its
+            # fields. These responses are not executable third-party inputs.
+            if ("application/vnd.github+json" in stripped and
+                    ("GITHUB_API_URL" in stripped or "https://api.github.com/" in source)):
+                continue
+        commands.append(" ".join(stripped.split()))
+    return commands
+
+
+def _resolved_download_url(template: str, source: str) -> set[str]:
+    """Resolve only static shell/PowerShell variables used in reviewed URL pins."""
+    token = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$env:([A-Za-z_][A-Za-z0-9_]*)|"
+                       r"\$([A-Za-z_][A-Za-z0-9_]*)", re.IGNORECASE)
+
+    def lookup(name: str, depth: int, anchor: int) -> str:
+        if depth > 6:
+            raise ValueError(f"download URL variable {name} is recursive")
+        escaped = re.escape(name)
+        expressions = (
+            rf"(?m)^\s*{escaped}:\s*([^#\r\n]+)",
+            rf"(?m)^\s*(?:local\s+)?{escaped}=(?:\"([^\"]*)\"|'([^']*)'|([^\s#]+))",
+            rf"(?m)^\s*\${escaped}\s*=\s*\"([^\"]*)\"",
+        )
+        values: list[tuple[int, str]] = []
+        for expression in expressions:
+            for match in re.finditer(expression, source, re.IGNORECASE):
+                if match.start() >= anchor:
+                    continue
+                value = next(group for group in match.groups() if group is not None).strip().strip("\"'")
+                values.append((match.start(), value))
+        if not values:
+            raise ValueError(f"download URL variable {name} has no preceding static value")
+        return expand(max(values)[1], depth + 1, anchor)
+
+    def expand(value: str, depth: int, anchor: int) -> str:
+        return token.sub(lambda match: lookup(next(part for part in match.groups() if part), depth, anchor), value)
+
+    return {expand(template, 0, match.start()) for match in re.finditer(re.escape(template), source)}
+
+
+def _artifact_name(value: str) -> str:
+    value = value.strip("\"';")
+    match = re.fullmatch(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", value)
+    return match.group(1) if match else value
+
+
+def _command_output(command: str) -> str | None:
+    if re.match(r"^(?:FetchContent_Declare|ExternalProject_Add)\s*\(", command, re.IGNORECASE):
+        return "cmake-managed"
+    patterns = (
+        r"\bfile\s*\(\s*DOWNLOAD\s+\S+\s+(\S+)",
+        r"\bInvoke-WebRequest\b[^\n]*?-OutFile\s+(\S+)",
+        r"\bwget\b[^\n]*?-O\s+(\S+)",
+        r"\bcurl\b[^\n]*?(?:--output|-o|-[A-Za-z]*o)\s+(\S+)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, command, re.IGNORECASE)
+        if match:
+            return _artifact_name(match.group(1))
+    return None
+
+
+def _hash_reference_matches(reference: str, source: str, sha256: str) -> bool:
+    reference = reference.strip("\"'")
+    if reference.startswith("${") and reference.endswith("}"):
+        reference = "$" + reference[2:-1]
+    if reference == sha256:
+        return True
+    match = re.fullmatch(r"\$(?:env:)?([A-Za-z_][A-Za-z0-9_]*)", reference, re.IGNORECASE)
+    if not match:
+        return False
+    name = re.escape(match.group(1))
+    return any(re.search(pattern, source, re.IGNORECASE) for pattern in (
+        rf"(?m)^\s*{name}:\s*[\"']?{sha256}[\"']?\s*$",
+        rf"(?m)^\s*(?:local\s+)?{name}=[\"']?{sha256}[\"']?\s*$",
+        rf"(?m)^\s*\${name}\s*=\s*[\"']{sha256}[\"']\s*$",
+    ))
+
+
+def _url_consumed(command: str, context: str, record: dict[str, Any], pin_text: str) -> bool:
+    source_url = record["source_url"]
+    literal_urls = re.findall(r"https?://[^\s\"']+", command)
+    if literal_urls:
+        return literal_urls == [source_url]
+    if record["verification"] == "cmake-sha256":
+        if '"${url}"' not in command:
+            return False
+        calls = re.findall(r"\bspark_fetch_verified_directxmath\s*\((.*?)\)", pin_text,
+                           re.IGNORECASE | re.DOTALL)
+        if not calls:
+            return False
+        args = [re.findall(r'"([^"]+)"', body) for body in calls]
+        return all(len(parts) >= 3 and parts[1:3] == [record["url"], record["sha256"]] for parts in args)
+    if not re.search(r"\$url\b", command, re.IGNORECASE):
+        return False
+    position = context.find(command)
+    if position < 0:
+        return False
+    prefix = context[:position]
+    assignments = list(re.finditer(r"(?m)^\s*(?:local\s+)?\$?url\s*=\s*[\"']([^\"']+)[\"']",
+                                  prefix, re.IGNORECASE))
+    return bool(assignments) and assignments[-1].group(1) == source_url
+
+
+def _download_verified(context: str, record: dict[str, Any], pin_text: str) -> bool:
+    output = record["output"]
+    if _command_output(record["command"]) != output:
+        return False
+    verification = record["verification"]
+    if verification.startswith("cmake-"):
+        context = _strip_cmake_comments(context)
+    else:
+        context = "\n".join(line for line in context.splitlines() if not line.lstrip().startswith("#"))
+    if verification == "cmake-expected-hash":
+        return re.search(rf"\bEXPECTED_HASH\s+SHA256={re.escape(record['sha256'])}\b",
+                         record["command"], re.IGNORECASE) is not None
+    if verification == "cmake-url-hash":
+        return (output == "cmake-managed" and re.search(
+            rf"\bURL_HASH\s+SHA256={re.escape(record['sha256'])}\b", record["command"], re.IGNORECASE
+        ) is not None)
+    if verification == "sha256sum":
+        for line in context.splitlines():
+            if not re.search(r"\bsha256sum\s+-c\s+-\s*$", line):
+                continue
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", output):
+                target_found = re.search(rf"\$(?:\{{{re.escape(output)}\}}|{re.escape(output)}\b)", line) is not None
+            else:
+                target_found = re.search(rf"(?<![\w./-]){re.escape(output)}(?![\w./-])", line) is not None
+            if not target_found:
+                continue
+            references = re.findall(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|[0-9a-f]{64}", line)
+            if any(_hash_reference_matches(reference, pin_text, record["sha256"]) for reference in references):
+                return True
+        return False
+    if verification == "get-file-hash":
+        hash_line = re.search(r"(?m)^\s*\$(\w+)\s*=\s*\(Get-FileHash\s+-Algorithm\s+SHA256\s+"
+                              r"-Path\s+([^\s)]+)\).*?$", context, re.IGNORECASE)
+        if not hash_line or _artifact_name(hash_line.group(2)) != output:
+            return False
+        comparison = re.search(rf"\bif\s*\(\s*\${re.escape(hash_line.group(1))}\s+-ne\s+([^\s)]+)\s*\)"
+                               r"\s*\{\s*throw\b", context, re.IGNORECASE)
+        return bool(comparison) and _hash_reference_matches(comparison.group(1), pin_text, record["sha256"])
+    hashes = re.finditer(r"\bfile\s*\(\s*SHA256\s+(\S+)\s+(\w+)\s*\)", context, re.IGNORECASE)
+    hash_line = next((match for match in hashes if _artifact_name(match.group(1)) == output), None)
+    if not hash_line:
+        return False
+    return (re.search(rf"\bif\s*\(\s*NOT\s+{re.escape(hash_line.group(2))}\s+STREQUAL\s+_expected\s*\)",
+                      context, re.IGNORECASE) is not None and "FATAL_ERROR" in context
+            and "expected_sha256" in context)
+
+
+def check_raw_downloads(
+    root: Path, root_resolved: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> set[str]:
+    """Require each executable artifact fetch to match a reviewed URL and hash."""
+    yaml = _load_yaml_module()
+    tracked_set = set(tracked)
+    workflow_set = set(_workflow_and_action_files(root))
+    selected = [path for path in tracked if not _under_root(path, AUTHORITATIVE_ROOT)
+                and (path in workflow_set or path.endswith((".sh", ".ps1"))
+                     or CMAKE_PACKAGE_FILE_RE.search(path))]
+    texts: dict[str, str] = {}
+    observed: list[tuple[str, str, str]] = []
+    for path in selected:
+        reason = assert_regular_file_no_escape(root / path, root_resolved)
+        if reason:
+            result.error("download", path, f"cannot scan tracked source: {reason}")
+            continue
+        _bounded_size(root / path, MAX_SCANNED_SOURCE_BYTES, f"download source {path}")
+        try:
+            source = (root / path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            result.error("download", path, f"cannot decode tracked source: {error}")
+            continue
+        texts[path] = source
+        if path in workflow_set:
+            try:
+                for document in yaml.safe_load_all(source):
+                    for _, script in _iter_key(document, "run"):
+                        if isinstance(script, str):
+                            observed.extend((path, call, script) for call in _raw_download_commands(script))
+            except yaml.YAMLError as error:
+                result.error("download", path, f"cannot parse workflow YAML: {error}")
+        elif CMAKE_PACKAGE_FILE_RE.search(path):
+            observed.extend((path, call, source) for call in _raw_download_commands(source, cmake=True))
+        else:
+            observed.extend((path, call, source) for call in _raw_download_commands(source))
+
+    declared = {(record["path"], record["command"]): record
+                for record in _external_records(lockfile, "downloads")}
+    exception_keys = {(record["scope"], record["id"]): record for record in lockfile["exceptions"]
+                      if record["id"].startswith("download-")}
+    used_exceptions: set[tuple[str, str]] = set()
+    used_downloads: set[tuple[str, str]] = set()
+    for path, command, context in observed:
+        key = (path, command)
+        record = declared.get(key)
+        if record is None:
+            exception_id = "download-" + hashlib.sha256(f"{path}\0{command}".encode()).hexdigest()[:16]
+            exception_key = (path, exception_id)
+            if exception_key in exception_keys:
+                used_exceptions.add(exception_key)
+                result.warn("download", path, f"temporary owned exception {exception_id} covers {command!r}")
+            else:
+                result.error("download", path, f"unmanaged raw download {command!r}; declare URL and SHA-256 "
+                             f"(temporary exception id {exception_id})")
+            continue
+        used_downloads.add(key)
+        pin_path = record["pin_path"]
+        if pin_path not in tracked_set:
+            result.error("download", pin_path, "download pin source is not tracked")
+            continue
+        if pin_path not in texts:
+            reason = assert_regular_file_no_escape(root / pin_path, root_resolved)
+            if reason:
+                result.error("download", pin_path, f"cannot read pin source: {reason}")
+                continue
+            _bounded_size(root / pin_path, MAX_SCANNED_SOURCE_BYTES, f"download pin {pin_path}")
+            try:
+                texts[pin_path] = (root / pin_path).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                result.error("download", pin_path, f"cannot decode pin source: {error}")
+                continue
+        pin_text = texts[pin_path]
+        if record["source_url"] not in pin_text or (pin_path == path and record["source_url"] not in context):
+            result.error("download", pin_path, f"download URL expression for {record['name']!r} changed")
+        else:
+            try:
+                resolved_urls = _resolved_download_url(record["source_url"], pin_text)
+            except ValueError as error:
+                result.error("download", pin_path, str(error))
+            else:
+                if resolved_urls != {record["url"]}:
+                    result.error("download", pin_path, f"download URL for {record['name']!r} is not lock-pinned")
+        if record["sha256"] not in pin_text:
+            result.error("download", pin_path, f"download SHA-256 for {record['name']!r} is not in pin source")
+        if not _url_consumed(command, context, record, pin_text):
+            result.error("download", path, f"download {record['name']!r} does not consume its locked URL")
+        if not _download_verified(context, record, pin_text):
+            result.error("download", path, f"download {record['name']!r} has no in-file SHA-256 comparison")
+    for key, record in declared.items():
+        if key not in used_downloads:
+            result.error("download", record["path"], f"declared download {record['name']!r} has no matching command")
+    for key in exception_keys:
+        if key not in used_exceptions:
+            result.error("download", key[0], f"temporary download exception {key[1]!r} is unused; remove it")
+    return {record["url"] for key, record in declared.items() if key in used_downloads}
+
+
 def _declared_identifiers(lockfile: dict[str, Any], kind: str) -> dict[str, str]:
     return {i: r["name"] for r in _external_records(lockfile, kind) for i in r["identifiers"]}
 
@@ -2793,6 +3096,7 @@ def check_external_dependencies(
         check_cmake_external_packages(root, lockfile, tracked, result)
         | check_ci_system_packages(root, root_resolved, lockfile, result)
         | check_web_runtime_urls(root, lockfile, tracked, result)
+        | check_raw_downloads(root, root_resolved, lockfile, tracked, result)
     )
     check_vendored_outside_thirdparty(root, lockfile, tracked, result)
     for record in lockfile.get("external_dependencies", []):

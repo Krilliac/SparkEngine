@@ -1327,6 +1327,12 @@ class TestExceptionSchema(FakeRepoCase):
         self.set_lock(data)
         self.assert_violation("expired", "SEC-110-EX-001")
 
+    def test_far_future_exception_is_a_policy_violation(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="9999-12-31")]
+        self.set_lock(data)
+        self.assert_violation("366-day maximum", "SEC-110-EX-001")
+
     def test_missing_exception_owner_is_a_schema_failure(self) -> None:
         data = self.lock()
         record = self._exception()
@@ -1542,6 +1548,154 @@ class TestExternalDependencies(FakeRepoCase):
     def assert_passes(self) -> None:
         done = self.check("--json")
         self.assertEqual(done.returncode, 0, f"{done.stdout}\n{done.stderr}")
+
+    _DOWNLOAD_URL = "https://example.invalid/releases/download/v1.2.3/demo.tar.gz"
+    _DOWNLOAD_SHA = "a" * 64
+    _CURL_COMMAND = 'curl -fLo demo.tar.gz "https://example.invalid/releases/download/v1.2.3/demo.tar.gz"'
+
+    def _download(self, **overrides) -> dict:
+        record = self._record(
+            "demo archive", "downloads", path="tools/fetch.sh", pin_path="tools/fetch.sh",
+            command=self._CURL_COMMAND, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="sha256sum", output="demo.tar.gz",
+        )
+        record.update(overrides)
+        return record
+
+    def test_undeclared_curl_archive_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n")
+        self.commit()
+        self.assert_violation("unmanaged raw download", "declare URL and SHA-256")
+
+    def test_undeclared_wget_archive_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\nwget -O demo.tar.gz {self._DOWNLOAD_URL}\n")
+        self.commit()
+        self.assert_violation("unmanaged raw download", "wget")
+
+    def test_declared_download_without_hash_comparison_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\nEXPECTED={self._DOWNLOAD_SHA}\n{self._CURL_COMMAND}\n")
+        self.commit()
+        self.declare(self._download())
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_commented_hash_comparison_does_not_verify_archive(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'# echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_declared_url_not_used_by_download_fails(self) -> None:
+        other = "https://attacker.invalid/releases/download/v1.2.3/demo.tar.gz"
+        command = self._CURL_COMMAND.replace(self._DOWNLOAD_URL, other)
+        self.write("tools/fetch.sh", f"#!/bin/sh\npinned_url='{self._DOWNLOAD_URL}'\n{command}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download(command=command))
+        self.assert_violation("does not consume its locked URL")
+
+    def test_unrelated_hash_comparison_does_not_verify_archive(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  other-demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_declared_curl_with_hash_comparison_passes(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.assert_passes()
+
+    def test_mutable_branch_url_is_rejected(self) -> None:
+        mutable = "https://raw.githubusercontent.com/example/demo/main/demo.h"
+        self.declare(self._download(source_url=mutable, url=mutable))
+        self.assert_fatal("immutable https URL")
+
+    def test_mutable_ref_query_is_rejected(self) -> None:
+        for mutable in ("https://example.invalid/archive.zip?ref=main",
+                        "https://example.invalid/archive.zip?branch=feature/security-fix"):
+            with self.subTest(url=mutable):
+                self.declare(self._download(source_url=mutable, url=mutable))
+                self.assert_fatal("immutable https URL")
+
+    def test_changed_download_hash_or_url_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.write("tools/fetch.sh", (self.repo / "tools/fetch.sh").read_text(encoding="utf-8")
+                   .replace(self._DOWNLOAD_SHA, "b" * 64))
+        self.assert_violation("download SHA-256")
+
+    def test_declared_download_without_call_fails(self) -> None:
+        self.declare(self._download())
+        self.assert_violation("has no matching command")
+
+    def test_cmake_file_download_is_inventory_checked(self) -> None:
+        self.write("cmake/Fetch.cmake", 'file(DOWNLOAD "${url}" "${archive}" TLS_VERIFY ON)\n')
+        self.commit()
+        self.assert_violation("unmanaged raw download", "file(DOWNLOAD")
+
+    def test_multiline_cmake_download_is_inventory_checked(self) -> None:
+        self.write("cmake/Fetch.cmake", 'file(\n    DOWNLOAD "https://example.invalid/a.tar.gz"\n    "${out}"\n)\n')
+        self.commit()
+        self.assert_violation("unmanaged raw download", "file( DOWNLOAD")
+
+    def test_multiline_cmake_expected_hash_passes(self) -> None:
+        command = (f'file( DOWNLOAD "{self._DOWNLOAD_URL}" "demo.tar.gz" '
+                   f'EXPECTED_HASH SHA256={self._DOWNLOAD_SHA} )')
+        self.write("cmake/Fetch.cmake", f'file(\n DOWNLOAD "{self._DOWNLOAD_URL}"\n "demo.tar.gz"\n'
+                   f' EXPECTED_HASH SHA256={self._DOWNLOAD_SHA}\n)\n')
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="cmake/Fetch.cmake", pin_path="cmake/Fetch.cmake",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="cmake-expected-hash", output="demo.tar.gz",
+        ))
+        self.assert_passes()
+
+    def test_cmake_fetchcontent_url_hash_passes(self) -> None:
+        command = (f'FetchContent_Declare( widget URL "{self._DOWNLOAD_URL}" '
+                   f'URL_HASH SHA256={self._DOWNLOAD_SHA} )')
+        self.write("cmake/Fetch.cmake", f'FetchContent_Declare(\n widget URL "{self._DOWNLOAD_URL}"\n'
+                   f' URL_HASH SHA256={self._DOWNLOAD_SHA}\n)\n')
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="cmake/Fetch.cmake", pin_path="cmake/Fetch.cmake",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="cmake-url-hash", output="cmake-managed",
+        ))
+        self.assert_passes()
+
+    def test_cmake_externalproject_url_hash_passes(self) -> None:
+        command = (f'ExternalProject_Add( widget URL "{self._DOWNLOAD_URL}" '
+                   f'URL_HASH SHA256={self._DOWNLOAD_SHA} )')
+        self.write("cmake/Fetch.cmake", f'ExternalProject_Add(\n widget URL "{self._DOWNLOAD_URL}"\n'
+                   f' URL_HASH SHA256={self._DOWNLOAD_SHA}\n)\n')
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="cmake/Fetch.cmake", pin_path="cmake/Fetch.cmake",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="cmake-url-hash", output="cmake-managed",
+        ))
+        self.assert_passes()
+
+    def test_powershell_download_with_comparison_passes(self) -> None:
+        command = "Invoke-WebRequest -Uri $url -OutFile $archive"
+        script = (f'$url = "{self._DOWNLOAD_URL}"\n$archive = "demo.tar.gz"\n'
+                  f"$expected = \"{self._DOWNLOAD_SHA}\"\n{command}\n"
+                  "$actual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()\n"
+                  "if ($actual -ne $expected) { throw 'hash mismatch' }\n")
+        self.write("tools/fetch.ps1", script)
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="tools/fetch.ps1", pin_path="tools/fetch.ps1",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="get-file-hash", output="archive",
+        ))
+        self.assert_passes()
 
     # ── CMake system packages ────────────────────────────────────────
 

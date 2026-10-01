@@ -193,7 +193,7 @@
       "acceptanceStatus": [
         {
           "criterionDigest": "sha256:1d1411824831",
-          "state": "implemented",
+          "state": "unmet",
           "evidence": [
             "Tests/test_check_supply_chain.py",
             "tools/check-supply-chain.py",
@@ -202,11 +202,11 @@
             "tools/architecture-viz/code_city_template.html",
             "SECURITY.md"
           ],
-          "note": "external_dependencies policy for code outside ThirdParty/. Owner review of the declared records is still pending."
+          "note": "Raw-download inventory pins LLVM, sccache and DirectXMath. Two exact MinGW wget calls have expiring exceptions until the parallel lane fixes them. DXVK hash and owner review of external dependencies remain open; local policy checks cannot prove the universal claim."
         },
         {
           "criterionDigest": "sha256:1fa25e25f1e1",
-          "state": "implemented",
+          "state": "unmet",
           "evidence": [
             ".github/scripts/verify_vulnerability_findings.py",
             ".github/workflows/build.yml",
@@ -216,9 +216,12 @@
             "tools/generate-sbom.py",
             "Tests/Tools/test_generate_sbom.py",
             "ThirdParty/supply-chain.lock",
-            ".github/scripts/test-workflow-failure-propagation.py"
+            ".github/scripts/test-workflow-failure-propagation.py",
+            "tools/check-secret-scan.py",
+            "SECURITY.md",
+            ".github/scripts/check-analysis-results.py"
           ],
-          "note": "The PR-time dependency-policy job over the lock SBOM, plus the existing release gate. Hosted exact-SHA evidence is still needed."
+          "note": "Exceptions now have a 366-day horizon and secret-scan blocks findings. CPE-less dependencies lack proved advisory matching; CodeQL baseline entries lack owner/expiry. Universal Critical/High coverage and hosted exact-SHA evidence remain open. requiredCiJobs still names obsolete analyze/license-scan jobs."
         },
         {
           "criterionDigest": "sha256:b70931523204",

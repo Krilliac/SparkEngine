@@ -1183,6 +1183,78 @@ def standard_test_evidence_errors(workflow: str) -> list[str]:
     return errors
 
 
+def sde_cpu_floor_contract_errors(workflow: str) -> list[str]:
+    """The required Release jobs must run the pinned below-floor process test."""
+
+    errors: list[str] = []
+    try:
+        jobs = parse_workflow_yaml(workflow)["jobs"]
+    except (ValueError, KeyError) as error:
+        return [f"cannot parse CPU-floor workflow: {error}"]
+    for job_name, platform, sha256, hash_command in (
+        (
+            "build-windows-vs2022",
+            "win",
+            "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651",
+            "Get-FileHash -Algorithm SHA256",
+        ),
+        (
+            "build-linux-gcc",
+            "lin",
+            "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50",
+            "sha256sum -c -",
+        ),
+    ):
+        job = jobs.get(job_name)
+        if not isinstance(job, dict) or job.get("continue-on-error"):
+            errors.append(f"{job_name} is missing or advisory")
+            continue
+        steps = [step for step in job.get("steps", []) if isinstance(step, dict)]
+        names = [step.get("name") for step in steps]
+        install_name = "Install Intel SDE 10.13.1 for CPU-floor process test"
+        test_name = "Refuse a below-floor CPU under Intel SDE"
+        if names.count(install_name) != 1 or names.count(test_name) != 1:
+            errors.append(f"{job_name} must install SDE and run exactly one process test")
+            continue
+        install = steps[names.index(install_name)]
+        run = steps[names.index(test_name)]
+        configure_name = "Configure CMake (VS 2022 / v143)" if platform == "win" else "Configure CMake"
+        build_name = "Build" if platform == "win" else "Build all targets"
+        if names.count(configure_name) != 1 or names.count(build_name) != 1:
+            errors.append(f"{job_name} configure/build steps are missing or duplicated")
+            continue
+        configure_index = names.index(configure_name)
+        build_index = names.index(build_name)
+        if not (names.index(install_name) < configure_index < build_index < names.index(test_name)):
+            errors.append(f"{job_name} SDE install/test order changed")
+        if install.get("if") != "matrix.config == 'Release'" or run.get("if") != "matrix.config == 'Release'":
+            errors.append(f"{job_name} SDE gate is not bound to Release")
+        if install.get("continue-on-error") or run.get("continue-on-error"):
+            errors.append(f"{job_name} suppresses an SDE failure")
+        install_script = str(install.get("run", ""))
+        test_script = str(run.get("run", ""))
+        configure_script = str(steps[configure_index].get("run", ""))
+        url = f"https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-{platform}.tar.xz"
+        if url not in install_script or sha256 not in install_script:
+            errors.append(f"{job_name} SDE URL or archive hash changed")
+        extraction = "tar.exe" if platform == "win" else "tar -xf"
+        if (
+            hash_command not in install_script
+            or extraction not in install_script
+            or install_script.index(hash_command) > install_script.index(extraction)
+        ):
+            errors.append(f"{job_name} does not verify SDE before extraction")
+        if "-DSPARK_SDE_EXECUTABLE=" not in configure_script:
+            errors.append(f"{job_name} does not register the SDE CTest")
+        if (
+            "^CpuFloor_BelowFloorStartupRefused$" not in test_script
+            or "--no-tests=error" not in test_script
+            or "--output-on-failure" not in test_script
+        ):
+            errors.append(f"{job_name} SDE CTest selector is not fail-closed")
+    return errors
+
+
 def required_workflow_errors(workflow: str) -> list[str]:
     """Conservatively parse the fail-closed sanitizer/aggregation YAML contract."""
 
@@ -1209,6 +1281,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
             errors.append("workflow concurrency group is not bound to the pushed SHA")
 
     errors.extend(standard_test_evidence_errors(workflow))
+    errors.extend(sde_cpu_floor_contract_errors(workflow))
 
     try:
         validation = yaml_section(workflow, "validate-ci-tools", indent=2)
@@ -2340,6 +2413,28 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
+
+    def test_both_required_sde_process_gates_propagate_failures(self) -> None:
+        self.assertEqual(sde_cpu_floor_contract_errors(self.build), [])
+        self.assertIn('NAME CpuFloor_BelowFloorStartupRefused', self.tests_cmake)
+        self.assertIn('LABELS "bld100;cpu-floor;process"', self.tests_cmake)
+        for job_name, archive_hash in (
+            ("build-windows-vs2022", "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651"),
+            ("build-linux-gcc", "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50"),
+        ):
+            job = yaml_section(self.build, job_name, indent=2)
+            test_step = named_step(job, "Refuse a below-floor CPU under Intel SDE")
+            install_step = named_step(job, "Install Intel SDE 10.13.1 for CPU-floor process test")
+            mutations = {
+                "missing test": job.replace(test_step, "", 1),
+                "empty selection accepted": job.replace(test_step, test_step.replace("--no-tests=error", "--no-tests=ignore"), 1),
+                "hash drift": job.replace(install_step, install_step.replace(archive_hash, "0" * 64), 1),
+                "disabled test": job.replace(test_step, test_step.replace("matrix.config == 'Release'", "false"), 1),
+            }
+            for label, changed_job in mutations.items():
+                with self.subTest(job=job_name, mutation=label):
+                    self.assertNotEqual(changed_job, job)
+                    self.assertTrue(sde_cpu_floor_contract_errors(self.build.replace(job, changed_job, 1)), label)
 
     def test_todo_count_threshold_failure_is_fail_closed(self) -> None:
         job = yaml_section(self.build, "todo-count", indent=2)
