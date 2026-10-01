@@ -2113,9 +2113,14 @@ elseif(ENABLE_EDITOR AND NOT SPARK_EDITOR_DEPS_OK)
     endif()
 endif()
 
-if(ENABLE_LAUNCHER AND EXISTS "${CMAKE_SOURCE_DIR}/SparkLauncher/CMakeLists.txt")
+# SparkLauncher's UI is the editor's (Dear ImGui; SDL2 + OpenGL off Windows), so it has the
+# same dependencies and is skipped for the same reason instead of failing the configure
+# of a build that turned SDL2 off and has no system SDL2 (a headless runtime).
+if(ENABLE_LAUNCHER AND EXISTS "${CMAKE_SOURCE_DIR}/SparkLauncher/CMakeLists.txt" AND SPARK_EDITOR_DEPS_OK)
     message(STATUS "Adding SparkLauncher to build...")
     add_subdirectory(SparkLauncher)
+elseif(ENABLE_LAUNCHER AND NOT SPARK_EDITOR_DEPS_OK)
+    message(STATUS "SparkLauncher skipped — ${SPARK_EDITOR_SKIP_REASON}")
 endif()
 
 if(ENABLE_SPARKBUILD AND EXISTS "${CMAKE_SOURCE_DIR}/SparkBuild/CMakeLists.txt")

@@ -589,7 +589,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2745,
+      "line": 2750,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3711,
+      "line": 3716,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1369,7 +1369,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2745,
+      "line": 2750,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1378,7 +1378,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4456,
+      "line": 4466,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1387,10 +1387,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3867,
+      "line": 3877,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3862",
+          "id": "Tests/CMakeLists.txt:3872",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1404,7 +1404,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4494,
+      "line": 4504,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1413,7 +1413,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4663,
+      "line": 4673,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1422,10 +1422,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3810,
+      "line": 3820,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3738",
+          "id": "Tests/CMakeLists.txt:3748",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1439,7 +1439,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4927,
+      "line": 4937,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1508,7 +1508,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3711,
+      "line": 3716,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2787,10 +2787,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5639,
+      "line": 5649,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5637",
+          "id": "Tests/CMakeLists.txt:5647",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -4444,17 +4444,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2462,
+      "line": 2467,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2457",
+          "id": "CMakeLists.txt:2462",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2461",
+          "id": "CMakeLists.txt:2466",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4792,7 +4792,7 @@
       "target": "uninstall",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 2808,
+      "line": 2813,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5480,7 +5480,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5639,
+          "line": 5649,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -8072,7 +8072,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2462,
+          "line": 2467,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8494,7 +8494,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2808,
+          "line": 2813,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
