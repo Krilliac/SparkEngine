@@ -237,6 +237,19 @@ MUTABLE_DOWNLOAD_URL_RE = re.compile(
     r"/(?:main|master|HEAD|latest)(?:/|$)|/refs/heads/|@latest(?:/|$)|"
     r"[?&](?:ref|branch|rev)=", re.I,
 )
+# A package-manager install command, up to the next shell separator: the
+# packages it names (`curl`, `wget`) are not fetches.
+PACKAGE_INSTALL_SEGMENT_RE = re.compile(
+    r"\b(?:apt-get|apt|apk|dnf|yum|zypper|pacman|brew|choco|winget|pip3?)\b[^;&|\n]*?\binstall\b[^;&|\n]*",
+    re.IGNORECASE,
+)
+# sha256sum checking "<sha>  <file>" lines read from stdin. Its verdict must end
+# the line, end an `if` condition (`; then`) or gate the next command (`&&`);
+# `|| true` or a bare `;` would discard it.
+SHA256SUM_STDIN_CHECK_RE = re.compile(
+    r"\bsha256sum\s+(?:--(?:strict|quiet|status|warn)\s+)*(?:-c|--check)"
+    r"(?:\s+--(?:strict|quiet|status|warn))*\s+-(?=\s*$|\s*;\s*then\b|\s*&&)"
+)
 JS_STATIC_IMPORT_RE = re.compile(
     r"""\b(?:import|export)\b[^'";]*?\bfrom\s*(['"])([^'"]+)\1"""
     r"""|\bimport\s*\(?\s*(['"])([^'"]+)\3""",
@@ -2477,7 +2490,11 @@ def _raw_download_commands(text: str, *, cmake: bool = False) -> list[str]:
     commands = []
     for line in source.splitlines():
         stripped = line.strip()
-        if not stripped or stripped.startswith(("#", "\"", "'")) or not pattern.search(stripped):
+        # A package-manager install that merely names a fetch tool as a package
+        # (`apt-get install -y curl`) is not a download; drop that segment before
+        # matching, so a fetch chained after it with ; && || | still counts.
+        scanned = PACKAGE_INSTALL_SEGMENT_RE.sub(" ", stripped) if not cmake else stripped
+        if not stripped or stripped.startswith(("#", "\"", "'")) or not pattern.search(scanned):
             continue
         if "GITHUB_API_URL" in stripped or "$api_url" in stripped:
             # The publication workflows fetch GitHub API JSON, then validate its
@@ -2532,8 +2549,10 @@ def _command_output(command: str) -> str | None:
     patterns = (
         r"\bfile\s*\(\s*DOWNLOAD\s+\S+\s+(\S+)",
         r"\bInvoke-WebRequest\b[^\n]*?-OutFile\s+(\S+)",
-        r"\bwget\b[^\n]*?-O\s+(\S+)",
-        r"\bcurl\b[^\n]*?(?:--output|-o|-[A-Za-z]*o)\s+(\S+)",
+        # Flags are case-sensitive (wget -o names its log, curl -O keeps the remote
+        # name), and a short-flag cluster starts with one dash (not --proto).
+        r"\bwget\b[^\n]*?(?-i:-O)\s+(\S+)",
+        r"\bcurl\b[^\n]*?(?:--output|(?<![\w-])(?-i:-[A-Za-z]*o))\s+(\S+)",
     )
     for pattern in patterns:
         match = re.search(pattern, command, re.IGNORECASE)
@@ -2573,15 +2592,22 @@ def _url_consumed(command: str, context: str, record: dict[str, Any], pin_text: 
             return False
         args = [re.findall(r'"([^"]+)"', body) for body in calls]
         return all(len(parts) >= 3 and parts[1:3] == [record["url"], record["sha256"]] for parts in args)
-    if not re.search(r"\$url\b", command, re.IGNORECASE):
-        return False
-    position = context.find(command)
+    # Otherwise the command passes a variable whose latest static assignment
+    # before the call is the locked URL expression (`url=...`, `$url = "..."`,
+    # `DXVK_URL="..."`). Search the text the way commands were extracted
+    # (continuations joined, whitespace collapsed) so a wrapped call is found.
+    joined = re.sub(r"\\\r?\n\s*", " ", context)
+    normalized = "\n".join(" ".join(line.split()) for line in joined.splitlines())
+    position = normalized.find(command)
     if position < 0:
         return False
-    prefix = context[:position]
-    assignments = list(re.finditer(r"(?m)^\s*(?:local\s+)?\$?url\s*=\s*[\"']([^\"']+)[\"']",
-                                  prefix, re.IGNORECASE))
-    return bool(assignments) and assignments[-1].group(1) == source_url
+    prefix = normalized[:position]
+    for name in dict.fromkeys(re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", command)):
+        assignments = list(re.finditer(
+            rf"(?m)^\s*(?:local\s+)?\$?{re.escape(name)}\s*=\s*[\"']([^\"']+)[\"']", prefix, re.IGNORECASE))
+        if assignments and assignments[-1].group(1) == source_url:
+            return True
+    return False
 
 
 def _download_verified(context: str, record: dict[str, Any], pin_text: str) -> bool:
@@ -2602,7 +2628,7 @@ def _download_verified(context: str, record: dict[str, Any], pin_text: str) -> b
         ) is not None)
     if verification == "sha256sum":
         for line in context.splitlines():
-            if not re.search(r"\bsha256sum\s+-c\s+-\s*$", line):
+            if not SHA256SUM_STDIN_CHECK_RE.search(line):
                 continue
             if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", output):
                 target_found = re.search(rf"\$(?:\{{{re.escape(output)}\}}|{re.escape(output)}\b)", line) is not None

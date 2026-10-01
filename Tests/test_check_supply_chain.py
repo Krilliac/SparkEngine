@@ -1697,6 +1697,48 @@ class TestExternalDependencies(FakeRepoCase):
         ))
         self.assert_passes()
 
+    def test_package_install_naming_a_fetch_tool_is_not_a_download(self) -> None:
+        self.write("tools/setup.sh", "#!/bin/sh\nsudo apt-get install -y curl wget ca-certificates\n")
+        self.commit()
+        self.assert_passes()
+
+    def test_fetch_chained_after_a_package_install_is_still_a_download(self) -> None:
+        self.write("tools/setup.sh", f"#!/bin/sh\napt-get install -y curl && {self._CURL_COMMAND}\n")
+        self.commit()
+        self.assert_violation("unmanaged raw download")
+
+    _VAR_CURL = "if ! curl --fail --proto '=https' \"$DEMO_URL\" --output \"$tmp/demo.tar.gz\"; then"
+
+    def _variable_url_script(self, check_line: str, url_value: str | None = None) -> None:
+        self.write("tools/fetch.sh", (
+            f'#!/bin/sh\npinned_url="{self._DOWNLOAD_URL}"\nDEMO_URL="{url_value or self._DOWNLOAD_URL}"\n'
+            f'DEMO_SHA256="{self._DOWNLOAD_SHA}"\n'
+            f"{self._VAR_CURL}\n    exit 1\nfi\n{check_line}\n"))
+        self.commit()
+        self.declare(self._download(command=self._VAR_CURL, output="$tmp/demo.tar.gz"))
+
+    def test_url_variable_with_strict_check_in_if_condition_passes(self) -> None:
+        self._variable_url_script(
+            "if ! printf '%s  %s\\n' \"$DEMO_SHA256\" \"$tmp/demo.tar.gz\" | sha256sum --check --strict -; then exit 1; fi")
+        self.assert_passes()
+
+    def test_sha256sum_verdict_discarded_by_or_true_does_not_verify(self) -> None:
+        self._variable_url_script(
+            "printf '%s  %s\\n' \"$DEMO_SHA256\" \"$tmp/demo.tar.gz\" | sha256sum --check - || true")
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_url_variable_bound_to_another_url_is_not_consumed(self) -> None:
+        self._variable_url_script(
+            "if ! printf '%s  %s\\n' \"$DEMO_SHA256\" \"$tmp/demo.tar.gz\" | sha256sum --check --strict -; then exit 1; fi",
+            url_value="https://attacker.invalid/releases/download/v1.2.3/demo.tar.gz")
+        self.assert_violation("does not consume its locked URL")
+
+    def test_fetch_output_flags_are_parsed_exactly(self) -> None:
+        self.assertEqual(sc._command_output("curl --proto '=https' \"$u\" --output \"$tmp/a.tgz\"; then"), "$tmp/a.tgz")
+        self.assertEqual(sc._command_output('curl -fLo demo.tar.gz "https://x.invalid/a"'), "demo.tar.gz")
+        self.assertIsNone(sc._command_output("curl -O https://x.invalid/a.tgz"))
+        self.assertEqual(sc._command_output("wget -o fetch.log https://x.invalid/a -O out.tgz"), "out.tgz")
+
     # ── CMake system packages ────────────────────────────────────────
 
     def test_undeclared_find_package_fails(self) -> None:

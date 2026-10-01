@@ -1,22 +1,7 @@
 {
   "version": 2,
   "description": "Authoritative supply-chain content lockfile. Verified by tools/check-supply-chain.py on every CI run. Update with: python tools/check-supply-chain.py --update",
-  "exceptions": [
-    {
-      "id": "download-fdb788aab26c1a00",
-      "scope": "tools/setup-mingw-wine.sh",
-      "owner": "Krilliac",
-      "justification": "Owner-directed temporary exception for the existing DXVK wget call while the MinGW/Wine lane pins its archive hash; no new download call is covered.",
-      "expires": "2026-10-08"
-    },
-    {
-      "id": "download-083b6172ad16cb66",
-      "scope": "tools/setup-mingw-wine.sh",
-      "owner": "Krilliac",
-      "justification": "Owner-directed temporary exception for the existing mutable DirectXMath wget loop while the MinGW/Wine lane replaces it with the known pinned archive; no new call is covered.",
-      "expires": "2026-10-08"
-    }
-  ],
+  "exceptions": [],
   "submodule_gitlinks": {
     "ThirdParty/AI/recastnavigation": "9f4ce64458dfae86e1239c525ddc219c4e9e06f1",
     "ThirdParty/ECS/entt": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
@@ -806,6 +791,21 @@
       "sha256": "b215087ddd085381839c6fc6f51185579f3a1c55804190b2ccc5969e9520b0bd",
       "output": "_partial",
       "verification": "cmake-sha256"
+    },
+    {
+      "name": "DXVK 2.5.3 release archive",
+      "class": "downloads",
+      "license_spdx": "Zlib",
+      "owner": "Krilliac",
+      "justification": "The advisory MinGW/Wine lane installs DXVK into a disposable Wine prefix for the D3D11-on-Lavapipe smoke; CI-only, never shipped. sha256sum checks the pin before extraction. The pin matches the GitHub asset size (9881540 bytes) but no independent SHA-256 is published; first download confirms it.",
+      "path": "tools/setup-mingw-wine.sh",
+      "pin_path": "tools/setup-mingw-wine.sh",
+      "command": "if ! curl --fail --location --proto '=https' --tlsv1.2 --retry 3 \"$DXVK_URL\" --output \"$tmp_dir/dxvk.tar.gz\"; then",
+      "source_url": "https://github.com/doitsujin/dxvk/releases/download/v2.5.3/dxvk-2.5.3.tar.gz",
+      "url": "https://github.com/doitsujin/dxvk/releases/download/v2.5.3/dxvk-2.5.3.tar.gz",
+      "sha256": "d8e6ef7d1168095165e1f8a98c7d5a4485b080467bb573d2a9ef3e3d79ea1eb8",
+      "output": "$tmp_dir/dxvk.tar.gz",
+      "verification": "sha256sum"
     }
   ]
 }
