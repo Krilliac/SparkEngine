@@ -12825,7 +12825,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 12,
+        "stepCount": 16,
         "steps": [
           {
             "index": 0,
@@ -12849,7 +12849,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "fd40abfd1370a213"
+            "runDigest": "1f90a6055d35e96d"
           },
           {
             "index": 2,
@@ -12865,42 +12865,54 @@
           },
           {
             "index": 3,
-            "name": "Restore build directory",
-            "id": "",
-            "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "name": "Configure CMake (MinGW cross-compilation)",
+            "id": "mingw-configure",
+            "uses": "",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
-            "hasRun": false,
+            "hasRun": true,
             "env": [],
-            "runDigest": ""
+            "runDigest": "5d16a4d28507a674"
           },
           {
             "index": 4,
-            "name": "Configure CMake (MinGW cross-compilation)",
-            "id": "",
+            "name": "Build engine (Windows .exe via MinGW)",
+            "id": "mingw-engine",
             "uses": "",
             "shell": "",
             "if": "absent",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "debe2c4991e457e7"
+            "runDigest": "99b40c1386b59905"
           },
           {
             "index": 5,
-            "name": "Build (Windows .exe via MinGW)",
-            "id": "",
+            "name": "Build editor (Windows .exe via MinGW)",
+            "id": "mingw-editor",
             "uses": "",
             "shell": "",
-            "if": "absent",
+            "if": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "6a31babe442b496c"
+            "runDigest": "ae4cda880a3b9817"
           },
           {
             "index": 6,
+            "name": "Build tests and remaining targets (MinGW)",
+            "id": "mingw-tests-build",
+            "uses": "",
+            "shell": "",
+            "if": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "80461a7ce595a1eb"
+          },
+          {
+            "index": 7,
             "name": "Print ccache stats",
             "id": "",
             "uses": "",
@@ -12912,36 +12924,72 @@
             "runDigest": "09e0dc05b951a397"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Setup Wine prefix and DXVK",
-            "id": "",
+            "id": "mingw-setup",
             "uses": "",
             "shell": "",
-            "if": "absent",
+            "if": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b83a2c8a0f76544d"
-          },
-          {
-            "index": 8,
-            "name": "Run Tests under Wine",
-            "id": "",
-            "uses": "",
-            "shell": "",
-            "if": "absent",
-            "continueOnError": "absent",
-            "hasRun": true,
-            "env": [
-              "LIBGL_ALWAYS_SOFTWARE",
-              "SPARK_TEST_EXCLUDE",
-              "WINEDEBUG",
-              "WINEPREFIX"
-            ],
-            "runDigest": "8c984e9431543a46"
+            "runDigest": "39d0db555c87c70b"
           },
           {
             "index": 9,
+            "name": "Engine CPU-render agent-control smoke",
+            "id": "mingw-engine-smoke",
+            "uses": "",
+            "shell": "",
+            "if": "${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-engine.outcome == 'success' }}",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "6286eea10ebf2fc7"
+          },
+          {
+            "index": 10,
+            "name": "Editor CPU-render agent-control smoke",
+            "id": "mingw-editor-smoke",
+            "uses": "",
+            "shell": "",
+            "if": "${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-editor.outcome == 'success' }}",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "0d06129f32486fe1"
+          },
+          {
+            "index": 11,
+            "name": "Run Tests under Wine",
+            "id": "mingw-tests",
+            "uses": "",
+            "shell": "",
+            "if": "${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-tests-build.outcome == 'success' }}",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "1f9a0c56968dc37a"
+          },
+          {
+            "index": 12,
+            "name": "Summarize experimental MinGW execution",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "MINGW_CONFIGURED",
+              "MINGW_EDITOR_BUILT",
+              "MINGW_ENGINE_BUILT",
+              "MINGW_TESTS_BUILT"
+            ],
+            "runDigest": "f383e6f4d90493a0"
+          },
+          {
+            "index": 13,
             "name": "Extract error summary",
             "id": "",
             "uses": "",
@@ -12950,10 +12998,10 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "f758f4f53ae5083c"
+            "runDigest": "08ae3001eb405dbd"
           },
           {
-            "index": 10,
+            "index": 14,
             "name": "Upload error summary",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12965,7 +13013,7 @@
             "runDigest": ""
           },
           {
-            "index": 11,
+            "index": 15,
             "name": "Upload test results",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -17407,7 +17455,7 @@
       {
         "job": "build-linux-mingw-wine",
         "step": "Configure CMake (MinGW cross-compilation)",
-        "stepIndex": 4,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -17419,26 +17467,27 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake --preset linux-mingw-release  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_EDITOR=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
+          "ENABLE_EDITOR": "ON",
           "ENABLE_VULKAN": "OFF",
           "ENABLE_OPENGL": "OFF",
           "ENABLE_SDL2": "OFF",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build",
+        "preset": "linux-mingw-release",
         "commandIndex": 0
       },
       {
         "job": "build-linux-mingw-wine",
-        "step": "Build (Windows .exe via MinGW)",
-        "stepIndex": 5,
+        "step": "Build engine (Windows .exe via MinGW)",
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -17450,13 +17499,67 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log",
+        "command": "cmake --build build/linux-mingw-release --target SparkEngine --parallel $(nproc) 2>&1 | tee cmake-engine.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkEngine"
+        ],
+        "configuration": "",
+        "buildDir": "build/linux-mingw-release",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-mingw-wine",
+        "step": "Build editor (Windows .exe via MinGW)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/linux-mingw-release --target SparkEditor --parallel $(nproc) 2>&1 | tee cmake-editor.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkEditor"
+        ],
+        "configuration": "",
+        "buildDir": "build/linux-mingw-release",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-mingw-wine",
+        "step": "Build tests and remaining targets (MinGW)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/linux-mingw-release --parallel $(nproc) 2>&1 | tee cmake-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
         ],
         "configuration": "",
-        "buildDir": "build",
+        "buildDir": "build/linux-mingw-release",
         "preset": "",
         "parallel": "$(nproc)",
         "buildsAllTargets": true,
@@ -18982,7 +19085,7 @@
       {
         "job": "build-linux-mingw-wine",
         "step": "Configure CMake (MinGW cross-compilation)",
-        "stepIndex": 4,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -18994,20 +19097,21 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+        "command": "cmake --preset linux-mingw-release  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_EDITOR=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
           "CMAKE_BUILD_TYPE": "Release",
           "BUILD_TESTS": "ON",
+          "ENABLE_EDITOR": "ON",
           "ENABLE_VULKAN": "OFF",
           "ENABLE_OPENGL": "OFF",
           "ENABLE_SDL2": "OFF",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
         },
-        "buildDir": "build",
+        "preset": "linux-mingw-release",
         "commandIndex": 0
       },
       {
@@ -20125,8 +20229,8 @@
       },
       {
         "job": "build-linux-mingw-wine",
-        "step": "Build (Windows .exe via MinGW)",
-        "stepIndex": 5,
+        "step": "Build engine (Windows .exe via MinGW)",
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -20138,13 +20242,67 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log",
+        "command": "cmake --build build/linux-mingw-release --target SparkEngine --parallel $(nproc) 2>&1 | tee cmake-engine.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkEngine"
+        ],
+        "configuration": "",
+        "buildDir": "build/linux-mingw-release",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-mingw-wine",
+        "step": "Build editor (Windows .exe via MinGW)",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/linux-mingw-release --target SparkEditor --parallel $(nproc) 2>&1 | tee cmake-editor.log",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkEditor"
+        ],
+        "configuration": "",
+        "buildDir": "build/linux-mingw-release",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-mingw-wine",
+        "step": "Build tests and remaining targets (MinGW)",
+        "stepIndex": 6,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "github.event_name == 'workflow_dispatch'",
+        "jobContinueOnError": true,
+        "stepIf": "${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/linux-mingw-release --parallel $(nproc) 2>&1 | tee cmake-build.log",
         "commandProvenance": "literal",
         "targets": [
           "all"
         ],
         "configuration": "",
-        "buildDir": "build",
+        "buildDir": "build/linux-mingw-release",
         "preset": "",
         "parallel": "$(nproc)",
         "buildsAllTargets": true,
@@ -21533,7 +21691,7 @@
       "matrixLegCount": 52,
       "pathFilteredEventCount": 0,
       "configureCount": 34,
-      "buildCount": 37,
+      "buildCount": 39,
       "testCount": 34,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
@@ -21563,6 +21721,7 @@
   },
   "workflowPresets": [
     "linux-gcc-release",
+    "linux-mingw-release",
     "linux-shipping",
     "macos-shipping",
     "windows-release",
@@ -22226,7 +22385,7 @@
     {
       "job": "build-linux-mingw-wine",
       "step": "Configure CMake (MinGW cross-compilation)",
-      "stepIndex": 4,
+      "stepIndex": 3,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "linux",
@@ -22238,20 +22397,21 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
+      "command": "cmake --preset linux-mingw-release  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake  -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON  -DENABLE_EDITOR=ON  -DENABLE_VULKAN=OFF  -DENABLE_OPENGL=OFF  -DENABLE_SDL2=OFF  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_TOOLCHAIN_FILE": "cmake/toolchains/mingw-w64-x86_64.cmake",
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
+        "ENABLE_EDITOR": "ON",
         "ENABLE_VULKAN": "OFF",
         "ENABLE_OPENGL": "OFF",
         "ENABLE_SDL2": "OFF",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache"
       },
-      "buildDir": "build",
+      "preset": "linux-mingw-release",
       "commandIndex": 0
     },
     {

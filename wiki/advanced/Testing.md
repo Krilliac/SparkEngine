@@ -494,21 +494,26 @@ ctest --test-dir build -C Release --output-on-failure --no-tests=error -j$(nproc
 
 ### Run Windows Tests Under Wine (Cross-Compilation)
 
-Cross-compile with MinGW and run the exact same Windows D3D11 code paths under Wine on Linux:
+MinGW/Wine is experimental; its advisory lane is manual `workflow_dispatch` only.
+The capability targets CPU rendering on GPU-less servers for agents controlling
+both the engine and editor. Current runtime proof is pending and the last
+documented hosted Wine tests failed.
+
+After the build/prefix/DXVK setup in the
+[MinGW guide](../development/MinGW-Wine-Cross-Compilation.md), run:
 
 ```bash
-# Build Windows .exe
-cmake --preset linux-mingw-release
-cmake --build build/linux-mingw-release --parallel $(nproc)
-
-# Run the full SparkTests suite under Wine
-tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
-
-# Or run the full automated test suite (unit tests + live engine + stress + break tests)
-python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
+python3 .github/scripts/mingw-wine-smoke.py engine
+python3 .github/scripts/mingw-wine-smoke.py editor
+export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+python3 .github/scripts/mingw-wine-smoke.py tests
+python3 .github/scripts/mingw-wine-smoke.py summary
 ```
 
-Results vary by branch and platform image. See [Cross-Compilation: Wine Testing](../platform/Cross-Compilation-Wine-Testing.md) for full setup and troubleshooting.
+The tests use named Wine limitations only, `--warn-is-error`, the pinned passing-test floor (`MINIMUM_TESTS=7500`) and exit 0. Native Windows tests remain intact. Engine
+screenshots/audits and editor project/scene/presentation receipts are separate
+from the unit-test run; process startup alone is insufficient. The old
+`test-windows-wine.py` suite is diagnostic, not readiness evidence.
 
 ### Engine/Editor Test Mode Flags
 

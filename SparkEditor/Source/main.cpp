@@ -27,6 +27,7 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
+#include <cstdint>
 #include <system_error>
 
 #ifdef _WIN32
@@ -95,7 +96,8 @@ static void WriteCommandOutput(const std::string& text)
 }
 
 static bool WriteSmokeResult(const std::string& path, const char* status, bool projectLoaded, int runResult,
-                             std::string& error)
+                             std::string& error, uint64_t renderedFrames = 0, uint64_t presentFailures = 0,
+                             const std::string& graphicsBackend = "unknown")
 {
     if (path.empty())
         return true;
@@ -119,7 +121,8 @@ static bool WriteSmokeResult(const std::string& path, const char* status, bool p
     }
     result << "{\n  \"schema\": 1,\n  \"status\": \"" << status
            << "\",\n  \"projectLoaded\": " << (projectLoaded ? "true" : "false") << ",\n  \"runResult\": " << runResult
-           << "\n}\n";
+           << ",\n  \"renderedFrames\": " << renderedFrames << ",\n  \"presentFailures\": " << presentFailures
+           << ",\n  \"graphicsBackend\": \"" << graphicsBackend << "\"\n}\n";
     result.close();
     if (!result.good())
     {
@@ -469,9 +472,13 @@ int main(int argc, char* argv[])
         if (!smokeResultPath.empty() && !smokeProjectLoaded)
         {
             console.LogError("SparkEditor smoke requested a project, but no project is open");
+            const uint64_t renderedFrames = app->GetRenderedFrameCount();
+            const uint64_t presentFailures = app->GetPresentFailureCount();
+            const std::string graphicsBackend = app->GetGraphicsBackend();
             app->Shutdown();
             std::string smokeResultError;
-            if (!WriteSmokeResult(smokeResultPath, "project-load-failed", false, -1, smokeResultError))
+            if (!WriteSmokeResult(smokeResultPath, "project-load-failed", false, -1, smokeResultError, renderedFrames,
+                                  presentFailures, graphicsBackend))
                 console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
             console.Shutdown();
             return -1;
@@ -592,12 +599,15 @@ int main(int argc, char* argv[])
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down SparkEditor application");
         console.LogInfo("Shutting down SparkEditor application...");
         // Cleanup
+        const uint64_t renderedFrames = app->GetRenderedFrameCount();
+        const uint64_t presentFailures = app->GetPresentFailureCount();
+        const std::string graphicsBackend = app->GetGraphicsBackend();
         app->Shutdown();
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor shutdown complete");
         console.LogSuccess("SparkEditor application shutdown complete");
         std::string smokeResultError;
         if (!WriteSmokeResult(smokeResultPath, result == 0 ? "passed" : "run-failed", smokeProjectLoaded, result,
-                              smokeResultError) &&
+                              smokeResultError, renderedFrames, presentFailures, graphicsBackend) &&
             !smokeResultPath.empty())
         {
             console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);

@@ -656,10 +656,14 @@
       "class": "ci_packages",
       "license_spdx": "NOASSERTION",
       "owner": "Krilliac",
-      "justification": "Wine runs the MinGW-built Windows test binaries on the Linux cross-compile job; test time only.",
+      "justification": "Wine runs the MinGW-built Windows engine, editor and test binaries on the Linux cross-compile job under a virtual X display (xvfb, xauth); curl and ca-certificates fetch the hash-pinned DXVK release that tools/setup-mingw-wine.sh verifies before extracting; test time only.",
       "identifiers": [
         "apt:wine",
-        "apt:wine64"
+        "apt:wine64",
+        "apt:xvfb",
+        "apt:xauth",
+        "apt:curl",
+        "apt:ca-certificates"
       ]
     },
     {

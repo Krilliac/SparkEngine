@@ -36,7 +36,10 @@ int main(int argc, char** argv)
 {
 #if defined(_WIN32)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#if defined(_MSC_VER)
+    // MSVC CRT only: MinGW's runtime has no _set_abort_behavior.
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
 #else
     const rlimit noCoreDump{0, 0};
     if (setrlimit(RLIMIT_CORE, &noCoreDump) != 0)

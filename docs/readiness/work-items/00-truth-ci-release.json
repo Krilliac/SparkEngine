@@ -535,16 +535,21 @@
         },
         {
           "criterionDigest": "sha256:709caf31c8a5",
-          "state": "implemented",
+          "state": "unmet",
           "evidence": [
             ".github/scripts/test-workflow-failure-propagation.py",
             ".github/workflows/build.yml",
             ".github/scripts/test-ci-perf-contract.py",
             "README.md",
             "wiki/development/MinGW-Wine-Cross-Compilation.md",
-            "wiki/platform/Cross-Compilation-Wine-Testing.md"
+            "wiki/platform/Cross-Compilation-Wine-Testing.md",
+            ".github/scripts/mingw-wine-smoke.py",
+            ".github/scripts/mingw-wine-exclusions.json",
+            "tools/setup-mingw-wine.sh",
+            ".github/scripts/test-mingw-wine-contract.py",
+            "docs/readiness/OWNER-DECISIONS.md"
           ],
-          "note": "Claims now match the workflow_dispatch-only, continue-on-error experimental lane and disclose the last documented Wine failure; a claims test with mutations guards them. No hosted MinGW dispatch since the relabel; no exact-commit CI."
+          "note": "OD-30 preserves the experimental CPU-rendering path for engine and editor. Pinned setup, named Wine exclusions, frame/control smokes and stage artifacts are in the repo. Local Wine execution is unavailable in this sandbox; both applications must run on CPU before implemented. Exact-commit hosted dispatch remains pending."
         },
         {
           "criterionDigest": "sha256:3918ed579816",

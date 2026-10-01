@@ -310,7 +310,15 @@ namespace SparkEditor
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
         // Present frame
-        m_swapChain->Present(1, 0); // VSync enabled
+        const HRESULT presentResult = m_swapChain->Present(1, 0); // VSync enabled
+        if (presentResult == S_OK)
+        {
+            ++m_renderedFrameCount;
+        }
+        else
+        {
+            ++m_presentFailureCount;
+        }
     }
 
     void EditorApplication::OnWindowResize(int width, int height)

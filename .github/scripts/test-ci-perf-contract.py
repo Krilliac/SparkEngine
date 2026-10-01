@@ -23,6 +23,14 @@ def load(name):
 
 GATE = load("verify-required-jobs")
 POLICY = load("test-workflow-failure-propagation")
+MINGW = load("test-mingw-wine-contract")
+
+
+def load_tests(loader, tests, pattern):
+    # The required CI/performance contract command also exercises Wine evidence
+    # rejection and the setup script's corrupt-download negative control.
+    tests.addTests(loader.loadTestsFromModule(MINGW))
+    return tests
 
 
 def coverage_errors(job):
