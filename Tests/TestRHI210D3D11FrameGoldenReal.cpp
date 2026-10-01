@@ -53,6 +53,7 @@
 #include "Graphics/AssetPipeline.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/PostProcessingPipeline.h"
+#include "Utils/GoldenImageManifest.h"
 
 #include <DirectXMath.h>
 

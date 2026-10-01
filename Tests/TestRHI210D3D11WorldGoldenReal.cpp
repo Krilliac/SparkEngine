@@ -33,6 +33,7 @@
 #include "Engine/ECS/Components/CoreComponents.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/WorldBasicRenderer.h"
+#include "Utils/GoldenImageManifest.h"
 
 #include <DirectXMath.h>
 #include <d3d11.h>

@@ -41,6 +41,7 @@
 #include "Game/GameObject.h"
 #include "Graphics/GraphicsEngine.h"
 #include "SceneManager/SceneManager.h"
+#include "Utils/GoldenImageManifest.h"
 
 #include <DirectXMath.h>
 

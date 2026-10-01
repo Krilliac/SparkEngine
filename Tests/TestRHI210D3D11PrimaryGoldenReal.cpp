@@ -14,6 +14,7 @@
 #include "RHI210D3D11GoldenSupport.h"
 #include "Game/CubeObject.h"
 #include "Graphics/GraphicsRenderPipelinesShadowPass.h"
+#include "Utils/GoldenImageManifest.h"
 #include <d3d11sdklayers.h>
 #include <array>
 #include <cstring>
