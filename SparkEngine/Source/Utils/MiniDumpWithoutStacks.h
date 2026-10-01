@@ -11,13 +11,22 @@
  * record stay in the dump.
  *
  * DbgHelp never runs on the requesting thread. Microsoft documents in-process MiniDumpWriteDump as
- * unreliable on the calling thread, and on the Windows Server 2022 DbgHelp that path failed with
- * ERROR_PARTIAL_COPY and put a stack-resident secret in the file outside every memory range. A
- * dedicated writer thread whose fresh stack never held a caller secret runs it instead; the
- * IncludeThreadCallback keeps that thread out of the dump, and a memory read that fails because
- * the page vanished while the process kept running is omitted rather than failing the dump.
+ * unreliable on the calling thread. A dedicated writer thread whose fresh stack never held a caller
+ * secret runs it instead; the IncludeThreadCallback keeps that thread out of the dump, and a
+ * memory read that fails because the page vanished while the process kept running is omitted
+ * rather than failing the dump.
  *
- * Contract: Windows only. Crash-path safe: the job lives in fixed static storage (1024 threads);
+ * DbgHelp never reads the caller's exception structures either. Some DbgHelp builds read the
+ * exception ContextRecord at the full size of every extended state the processor enables (several
+ * KiB past a plain CONTEXT, or past a kernel context sized for the state the thread had in use)
+ * and write those bytes into the dump's exception context, where RemoveMemoryCallback cannot reach
+ * them. A caller's CONTEXT sits in a stack frame next to live locals, so the record, the pointers
+ * and the context are copied into writer-owned static storage first; the context goes at the start
+ * of a 64 KiB zero-filled buffer, larger than any XSAVE layout, so every byte DbgHelp reads there
+ * is the writer's.
+ *
+ * Contract: Windows only. Crash-path safe: the job and the exception copy live in fixed static
+ * storage (1024 threads, a 64 KiB context buffer);
  * the only new resource is the writer thread. If that thread has not started within
  * kWriterStartTimeoutMs (for example because the requester holds the loader lock) the write fails
  * closed with ERROR_TIMEOUT and no dump; there is no same-thread fallback. Once started, the
