@@ -22821,7 +22821,7 @@
 | `MakeAssetDragReference` | function | SparkEditor | [EditorAssetDrag.cpp:L29](../../SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp#L29) |  |
 | `MakeAssetDragReference` | function | SparkEditor | [EditorAssetDrag.h:L36](../../SparkEditor/Source/AssetPipeline/EditorAssetDrag.h#L36) |  |
 | `MakeBlob` | function | Tests | [TestPrefabPersistence.cpp:L133](../../Tests/TestPrefabPersistence.cpp#L133) |  |
-| `MakeBlob` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L61](../../Tests/TestShaderDiskCachePhaseV.cpp#L61) |  |
+| `MakeBlob` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L63](../../Tests/TestShaderDiskCachePhaseV.cpp#L63) |  |
 | `MakeBlockoutName` | function | SparkEditor | [PrototypingSystem.h:L137](../../SparkEditor/Source/Prototyping/PrototypingSystem.h#L137) |  |
 | `MakeBlurInput` | function | Tests | [TestRHI230VulkanGoldenReal.cpp:L256](../../Tests/TestRHI230VulkanGoldenReal.cpp#L256) |  |
 | `MakeBlurInput` | function | Tests | [TestRHI240OpenGLGoldenReal.cpp:L288](../../Tests/TestRHI240OpenGLGoldenReal.cpp#L288) |  |
@@ -22830,7 +22830,7 @@
 | `MakeBuffer` | function | Tests | [TestDenoiserInterface.cpp:L109](../../Tests/TestDenoiserInterface.cpp#L109) |  |
 | `MakeBuffer` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L431](../../Tests/TestRHI225D3D12ParityReal.cpp#L431) |  |
 | `MakeBuffer` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L451](../../Tests/TestRHI225D3D12ParityReal.cpp#L451) |  |
-| `MakeCacheDir` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L38](../../Tests/TestShaderDiskCachePhaseV.cpp#L38) |  |
+| `MakeCacheDir` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L40](../../Tests/TestShaderDiskCachePhaseV.cpp#L40) |  |
 | `MakeCacheSource` | function | SparkEngine | [ShaderCompilationLinux.cpp:L75](../../SparkEngine/Source/Graphics/ShaderCompilationLinux.cpp#L75) |  |
 | `MakeCarDesc` | function | Tests | [TestMOD380VehiclePhysicsReal.cpp:L66](../../Tests/TestMOD380VehiclePhysicsReal.cpp#L66) |  |
 | `MakeCfg` | function | Tests | [TestSeamlessAreaManager.cpp:L230](../../Tests/TestSeamlessAreaManager.cpp#L230) |  |
@@ -23010,7 +23010,7 @@
 | `MakeSilentWav` | function | Tests | [TestAudioECSBindingReal.cpp:L27](../../Tests/TestAudioECSBindingReal.cpp#L27) | Build a minimal 16-bit PCM WAV holding 50 ms of silence. |
 | `MakeSilentWav` | function | Tests | [TestAudioEngineReal.cpp:L50](../../Tests/TestAudioEngineReal.cpp#L50) | Build a minimal 16-bit PCM WAV holding 50 ms of silence. |
 | `MakeSource` | function | Tests | [TestShaderCrossCompilerPhaseW.cpp:L53](../../Tests/TestShaderCrossCompilerPhaseW.cpp#L53) |  |
-| `MakeSource` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L48](../../Tests/TestShaderDiskCachePhaseV.cpp#L48) |  |
+| `MakeSource` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L50](../../Tests/TestShaderDiskCachePhaseV.cpp#L50) |  |
 | `MakeSpecies` | function | Tests | [TestFoliageSystem.cpp:L20](../../Tests/TestFoliageSystem.cpp#L20) |  |
 | `MakeSpoolConfig` | function | Tests | [TestTelemetrySpool.cpp:L142](../../Tests/TestTelemetrySpool.cpp#L142) |  |
 | `MakeStagePath` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L228](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L228) |  |
@@ -23053,7 +23053,7 @@
 | `MakeTriangleJson` | function | Tests | [TestGLTFStaticMeshLoader.cpp:L84](../../Tests/TestGLTFStaticMeshLoader.cpp#L84) |  |
 | `MakeTrigger` | function | Templates | [GameModule.h:L256](../../Templates/PlatformerKit/Source/GameModule.h#L256) |  |
 | `MakeTriggerEnterEvent` | function | SparkEngine | [PhysicsSystem.cpp:L732](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L732) |  |
-| `MakeUnicodeCacheDir` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L78](../../Tests/TestShaderDiskCachePhaseV.cpp#L78) |  |
+| `MakeUnicodeCacheDir` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L80](../../Tests/TestShaderDiskCachePhaseV.cpp#L80) |  |
 | `MakeUniqueDirectory` | function | Tests | [TestConsoleProcessPipeReal.cpp:L16](../../Tests/TestConsoleProcessPipeReal.cpp#L16) |  |
 | `MakeUniqueLogDirectory` | function | Tests | [TestLoggerSinksReal.cpp:L18](../../Tests/TestLoggerSinksReal.cpp#L18) |  |
 | `MakeUniqueTemporaryPath` | function | SparkEngine | [SceneManager.cpp:L158](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L158) |  |
@@ -30526,7 +30526,7 @@
 | `RemoveTree` | function | Tests | [TestSparkGameFPSLoopReal.cpp:L59](../../Tests/TestSparkGameFPSLoopReal.cpp#L59) |  |
 | `RemoveTrigger` | function | SparkEngine | [ProximityTriggerSystem.h:L133](../../SparkEngine/Source/Engine/World/ProximityTriggerSystem.h#L133) | Remove a trigger volume by ID. |
 | `RemoveTrigger` | function | Tests | [TestProximityTriggerSystem.cpp:L56](../../Tests/TestProximityTriggerSystem.cpp#L56) |  |
-| `RemoveUnicodeCacheDir` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L99](../../Tests/TestShaderDiskCachePhaseV.cpp#L99) |  |
+| `RemoveUnicodeCacheDir` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L101](../../Tests/TestShaderDiskCachePhaseV.cpp#L101) |  |
 | `RemoveVehicle` | function | GameModules | [VehicleSystem.h:L317](../../GameModules/SparkGameFPS/Source/Game/VehicleSystem.h#L317) | Remove a destroyed vehicle |
 | `RemoveVehicle` | function | GameModules | [RacingVehicleSystem.h:L137](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleSystem.h#L137) |  |
 | `RemoveVolume` | function | SparkEngine | [FoliageSystem.h:L187](../../SparkEngine/Source/Graphics/FoliageSystem.h#L187) | Remove a volume and its instances. No-op if the ID is unknown. |
@@ -31780,7 +31780,7 @@
 | `ResetDebugger` | function | Tests | [TestThreadDebugger.cpp:L9](../../Tests/TestThreadDebugger.cpp#L9) |  |
 | `ResetDemo` | function | GameModules | [MMOGameplaySession.h:L45](../../GameModules/SparkGameMMO/Source/Gameplay/MMOGameplaySession.h#L45) |  |
 | `ResetDirtyCount` | function | SparkEngine | [ReactiveSystem.h:L218](../../SparkEngine/Source/Engine/ECS/ReactiveSystem.h#L218) |  |
-| `ResetDiskCache` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L73](../../Tests/TestShaderDiskCachePhaseV.cpp#L73) |  |
+| `ResetDiskCache` | function | Tests | [TestShaderDiskCachePhaseV.cpp:L75](../../Tests/TestShaderDiskCachePhaseV.cpp#L75) |  |
 | `ResetEncounter` | function | SparkEngine | [InstanceManager.h:L212](../../SparkEngine/Source/Engine/Gameplay/InstanceManager.h#L212) |  |
 | `ResetEncounter` | function | Tests | [TestInstanceManager.cpp:L147](../../Tests/TestInstanceManager.cpp#L147) |  |
 | `ResetEntityHandles` | function | Templates | [GameModule.h:L849](../../Templates/FPSStarter/Source/GameModule.h#L849) |  |
@@ -38676,8 +38676,8 @@
 | `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L176](../../Tests/TestEngineMonitor.cpp#L176) |  |
 | `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L177](../../Tests/TestEngineMonitor.cpp#L177) |  |
 | `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L178](../../Tests/TestEngineMonitor.cpp#L178) |  |
-| `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L551](../../Tests/TestEngineMonitor.cpp#L551) |  |
-| `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L552](../../Tests/TestEngineMonitor.cpp#L552) |  |
+| `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L557](../../Tests/TestEngineMonitor.cpp#L557) |  |
+| `std::setprecision` | method | Tests | [TestEngineMonitor.cpp:L558](../../Tests/TestEngineMonitor.cpp#L558) |  |
 | `std::setprecision` | method | Tests | [TestFullEngineDiagnostics.cpp:L358](../../Tests/TestFullEngineDiagnostics.cpp#L358) |  |
 | `std::setprecision` | method | Tests | [TestFullEngineDiagnostics.cpp:L359](../../Tests/TestFullEngineDiagnostics.cpp#L359) |  |
 | `std::setprecision` | method | Tests | [TestFullEngineDiagnostics.cpp:L360](../../Tests/TestFullEngineDiagnostics.cpp#L360) |  |
@@ -44115,7 +44115,7 @@
 | `ValueOr` | function | SparkEngine | [Result.h:L79](../../SparkEngine/Source/Utils/Result.h#L79) |  |
 | `values` | function | SparkEngine | [SceneTextFormat.cpp:L115](../../SparkEngine/Source/SceneManager/SceneTextFormat.cpp#L115) |  |
 | `values` | function | SparkEngine | [SceneTextFormat.cpp:L140](../../SparkEngine/Source/SceneManager/SceneTextFormat.cpp#L140) |  |
-| `values` | function | Tests | [TestEngineMonitor.cpp:L576](../../Tests/TestEngineMonitor.cpp#L576) |  |
+| `values` | function | Tests | [TestEngineMonitor.cpp:L582](../../Tests/TestEngineMonitor.cpp#L582) |  |
 | `VarianceClip` | function | SparkEngine | [TemporalEffectsTypes.h:L341](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L341) |  |
 | `VarianceClip` | function | SparkEngine | [TemporalTypes.h:L331](../../SparkEngine/Source/Graphics/TemporalTypes.h#L331) | Variance-based clip (more accurate than AABB clamp) |
 | `VarName` | function | SparkEngine | [VisualScriptCodegen.cpp:L132](../../SparkEngine/Source/Engine/Scripting/VisualScriptCodegen.cpp#L132) |  |
