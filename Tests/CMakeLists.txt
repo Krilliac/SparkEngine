@@ -624,6 +624,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/ServiceTopologyController.cpp"
     TestLauncherProcess.cpp
     "${CMAKE_SOURCE_DIR}/SparkLauncher/src/LauncherProcess.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkLauncher/src/LauncherTemplates.cpp"
     TestLauncherPaths.cpp
     "${CMAKE_SOURCE_DIR}/SparkLauncher/src/LauncherPaths.cpp"
     TestCoreAndBuildSystems.cpp

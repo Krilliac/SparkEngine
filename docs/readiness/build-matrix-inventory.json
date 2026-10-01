@@ -1357,7 +1357,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4427,
+      "line": 4428,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1366,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3838,
+      "line": 3839,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3833",
+          "id": "Tests/CMakeLists.txt:3834",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1383,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4465,
+      "line": 4466,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1392,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4634,
+      "line": 4635,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1401,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3781,
+      "line": 3782,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3709",
+          "id": "Tests/CMakeLists.txt:3710",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1418,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4898,
+      "line": 4899,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1427,7 +1427,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1887,
+      "line": 1888,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1505,7 +1505,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1749,
+      "line": 1750,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2570,7 +2570,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 851,
+      "line": 852,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2620,10 +2620,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2237,
+      "line": 2238,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2236",
+          "id": "Tests/CMakeLists.txt:2237",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2756,10 +2756,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5610,
+      "line": 5611,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5608",
+          "id": "Tests/CMakeLists.txt:5609",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2802,7 +2802,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 813,
+      "line": 814,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2926,10 +2926,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1496,
+      "line": 1497,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1458",
+          "id": "Tests/CMakeLists.txt:1459",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2944,10 +2944,20 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 967,
+      "line": 968,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzAchievement",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3713,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
       "resolved": true
     },
     {
@@ -2965,6 +2975,26 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 293,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzAssetCooker",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3725,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzAssetMigration",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3711,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3181,6 +3211,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzEventResponse",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3715,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzExecScript",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3255,6 +3295,26 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 10,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzLauncherModuleManifest",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3732,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzLauncherTemplate",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3728,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3527,6 +3587,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzRuntimePrefab",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3709,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzSaveSystem",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3661,6 +3731,16 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 146,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzUILayout",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3719,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3840,10 +3920,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 835,
+      "line": 836,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:834",
+          "id": "Tests/CMakeLists.txt:835",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -3934,10 +4014,10 @@
       "target": "SparkLauncher",
       "kind": "executable",
       "file": "SparkLauncher/CMakeLists.txt",
-      "line": 32,
+      "line": 34,
       "conditionFrames": [
         {
-          "id": "SparkLauncher/CMakeLists.txt:30",
+          "id": "SparkLauncher/CMakeLists.txt:32",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -3952,10 +4032,10 @@
       "target": "SparkLauncher",
       "kind": "executable",
       "file": "SparkLauncher/CMakeLists.txt",
-      "line": 36,
+      "line": 38,
       "conditionFrames": [
         {
-          "id": "SparkLauncher/CMakeLists.txt:30",
+          "id": "SparkLauncher/CMakeLists.txt:32",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -3971,7 +4051,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 855,
+      "line": 856,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3981,10 +4061,10 @@
       "target": "SparkMMOSessionGatePeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1465,
+      "line": 1466,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1458",
+          "id": "Tests/CMakeLists.txt:1459",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -3999,7 +4079,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 846,
+      "line": 847,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4009,7 +4089,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 857,
+      "line": 858,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4039,10 +4119,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 826,
+      "line": 827,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:825",
+          "id": "Tests/CMakeLists.txt:826",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -4079,7 +4159,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 849,
+      "line": 850,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4089,7 +4169,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 853,
+      "line": 854,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4099,7 +4179,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 972,
+      "line": 973,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -4159,7 +4239,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 859,
+      "line": 860,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4209,7 +4289,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 962,
+      "line": 963,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -4219,7 +4299,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 802,
+      "line": 803,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5187,7 +5267,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 851,
+          "line": 852,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5261,7 +5341,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2237,
+          "line": 2238,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5369,7 +5449,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5610,
+          "line": 5611,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5423,7 +5503,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 813,
+          "line": 814,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5549,7 +5629,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1496,
+          "line": 1497,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5567,9 +5647,27 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 967,
+          "line": 968,
           "kind": "shared_library",
           "origin": "wrapper-call",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzAchievement",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3713,
+          "kind": "executable",
+          "origin": "declaration",
           "definitionScope": [],
           "resolved": true
         }
@@ -5604,6 +5702,42 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 293,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzAssetCooker",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3725,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzAssetMigration",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3711,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5990,6 +6124,24 @@
       ]
     },
     {
+      "target": "SparkFuzzEventResponse",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3715,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzExecScript",
       "kind": "executable",
       "buildable": true,
@@ -6126,6 +6278,42 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 10,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzLauncherModuleManifest",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3732,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzLauncherTemplate",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3728,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6584,6 +6772,24 @@
       ]
     },
     {
+      "target": "SparkFuzzRuntimePrefab",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3709,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzSaveSystem",
       "kind": "executable",
       "buildable": true,
@@ -6828,6 +7034,24 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 146,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzUILayout",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3719,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7151,7 +7375,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 835,
+          "line": 836,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7261,7 +7485,7 @@
       "declarations": [
         {
           "file": "SparkLauncher/CMakeLists.txt",
-          "line": 32,
+          "line": 34,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7269,7 +7493,7 @@
         },
         {
           "file": "SparkLauncher/CMakeLists.txt",
-          "line": 36,
+          "line": 38,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7287,7 +7511,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 855,
+          "line": 856,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7305,7 +7529,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1465,
+          "line": 1466,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7323,7 +7547,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 846,
+          "line": 847,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7341,7 +7565,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 857,
+          "line": 858,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7379,7 +7603,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 826,
+          "line": 827,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7435,7 +7659,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 849,
+          "line": 850,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7453,7 +7677,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 853,
+          "line": 854,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7471,7 +7695,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 972,
+          "line": 973,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7579,7 +7803,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 859,
+          "line": 860,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7653,7 +7877,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 962,
+          "line": 963,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7671,7 +7895,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 802,
+          "line": 803,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8724,7 +8948,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "82f05fe5b6f16b23"
+            "runDigest": "20f965da492c2364"
           },
           {
             "index": 6,
@@ -15657,11 +15881,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzAchievement",
           "SparkFuzzAnimationBinary",
           "SparkFuzzArchive",
+          "SparkFuzzAssetCooker",
+          "SparkFuzzAssetMigration",
           "SparkFuzzAssetServiceProtocol",
           "SparkFuzzAsyncDatabase",
           "SparkFuzzBinaryReader",
@@ -15683,6 +15910,7 @@
           "SparkFuzzEditorWindowLayout",
           "SparkFuzzEngineSettings",
           "SparkFuzzEntityArchetype",
+          "SparkFuzzEventResponse",
           "SparkFuzzExecScript",
           "SparkFuzzExr",
           "SparkFuzzFbx",
@@ -15691,6 +15919,8 @@
           "SparkFuzzGltf",
           "SparkFuzzInstallState",
           "SparkFuzzJsonUtils",
+          "SparkFuzzLauncherModuleManifest",
+          "SparkFuzzLauncherTemplate",
           "SparkFuzzLocalization",
           "SparkFuzzMMOCharacterRecord",
           "SparkFuzzMMOChatWire",
@@ -15709,6 +15939,7 @@
           "SparkFuzzReflectedScene",
           "SparkFuzzReflectionBinary",
           "SparkFuzzReplay",
+          "SparkFuzzRuntimePrefab",
           "SparkFuzzSaveSystem",
           "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
@@ -15723,6 +15954,7 @@
           "SparkFuzzTelemetrySpool",
           "SparkFuzzTextureLinux",
           "SparkFuzzTextureStex",
+          "SparkFuzzUILayout",
           "SparkFuzzVirtualFileSystem",
           "SparkFuzzVisualScriptGraph",
           "SparkFuzzZipListing"
@@ -20289,11 +20521,14 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest",
         "commandProvenance": "literal",
         "targets": [
+          "SparkFuzzAchievement",
           "SparkFuzzAnimationBinary",
           "SparkFuzzArchive",
+          "SparkFuzzAssetCooker",
+          "SparkFuzzAssetMigration",
           "SparkFuzzAssetServiceProtocol",
           "SparkFuzzAsyncDatabase",
           "SparkFuzzBinaryReader",
@@ -20315,6 +20550,7 @@
           "SparkFuzzEditorWindowLayout",
           "SparkFuzzEngineSettings",
           "SparkFuzzEntityArchetype",
+          "SparkFuzzEventResponse",
           "SparkFuzzExecScript",
           "SparkFuzzExr",
           "SparkFuzzFbx",
@@ -20323,6 +20559,8 @@
           "SparkFuzzGltf",
           "SparkFuzzInstallState",
           "SparkFuzzJsonUtils",
+          "SparkFuzzLauncherModuleManifest",
+          "SparkFuzzLauncherTemplate",
           "SparkFuzzLocalization",
           "SparkFuzzMMOCharacterRecord",
           "SparkFuzzMMOChatWire",
@@ -20341,6 +20579,7 @@
           "SparkFuzzReflectedScene",
           "SparkFuzzReflectionBinary",
           "SparkFuzzReplay",
+          "SparkFuzzRuntimePrefab",
           "SparkFuzzSaveSystem",
           "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
@@ -20355,6 +20594,7 @@
           "SparkFuzzTelemetrySpool",
           "SparkFuzzTextureLinux",
           "SparkFuzzTextureStex",
+          "SparkFuzzUILayout",
           "SparkFuzzVirtualFileSystem",
           "SparkFuzzVisualScriptGraph",
           "SparkFuzzZipListing"

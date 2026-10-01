@@ -1667,6 +1667,142 @@
           "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
         }
       ]
+    },
+    {
+      "id": "runtime-prefab-corpus",
+      "parser_id": "runtime-prefab",
+      "corpus_dir": "FuzzerTests/corpora/runtime-prefab",
+      "last_verified": "2026-10-01",
+      "content_digest": "1412a2c05029e2ac81c569d53ac1e51541e62b093a83f93dcca55f8d91f0a572",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "asset-migration-corpus",
+      "parser_id": "asset-migration",
+      "corpus_dir": "FuzzerTests/corpora/asset-migration",
+      "last_verified": "2026-10-01",
+      "content_digest": "34fd5aee40f2f4ce8587c67a454729965060b09af8f93b528ba52e34c8e41ed5",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "ui-layout-corpus",
+      "parser_id": "ui-layout",
+      "corpus_dir": "FuzzerTests/corpora/ui-layout",
+      "last_verified": "2026-10-01",
+      "content_digest": "0b45365658408fccbe874f1a0af0e05bc84958032ed7679d94599edd7ff2b643",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 64,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "event-response-definitions-corpus",
+      "parser_id": "event-response-definitions",
+      "corpus_dir": "FuzzerTests/corpora/event-response-definitions",
+      "last_verified": "2026-10-01",
+      "content_digest": "e2ed7a74553bad670a525530e9483d964153f96bd6cae6e5f4c1ced35d5af2cc",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 8192,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "achievement-definitions-corpus",
+      "parser_id": "achievement-definitions",
+      "corpus_dir": "FuzzerTests/corpora/achievement-definitions",
+      "last_verified": "2026-10-01",
+      "content_digest": "a43d28aec1121a7594b71bf2de2ffc40da2a0fbfa7a254c95844f32ebece4d94",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "asset-cooker-input-corpus",
+      "parser_id": "asset-cooker-input",
+      "corpus_dir": "FuzzerTests/corpora/asset-cooker-input",
+      "last_verified": "2026-10-01",
+      "content_digest": "24dc941882b260b17bfa26f2e9dda32e10d4f5246be4cb11c7bcfaf862978486",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 6,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "launcher-template-json-corpus",
+      "parser_id": "launcher-template-json",
+      "corpus_dir": "FuzzerTests/corpora/launcher-template-json",
+      "last_verified": "2026-10-01",
+      "content_digest": "8d97895241dc7fa9ef9747fbffc535f673fd386652a2a333cf3000254cd6a6bf",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "launcher-module-manifest-corpus",
+      "parser_id": "launcher-module-manifest",
+      "corpus_dir": "FuzzerTests/corpora/launcher-module-manifest",
+      "last_verified": "2026-10-01",
+      "content_digest": "8545316ca801e26539734ebedae069ce945fdc8c19eb041293dd509391163db6",
+      "budget": {
+        "max_input_bytes": 1048576,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

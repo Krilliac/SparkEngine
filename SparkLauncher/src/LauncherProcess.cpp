@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -22,6 +23,8 @@
 #else
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -134,12 +137,15 @@ namespace SparkLauncher
             return stem;
         }
 
-        std::filesystem::path ManifestPath(std::string path)
+        // std::filesystem::u8path threw on invalid UTF-8 on Windows (nothing catches it on the
+        // launch path) and kept an embedded NUL everywhere, which the OS then reads as the end
+        // of the name: "Game\u0000.so" resolved to a file named "Game".
+        std::expected<std::filesystem::path, std::string> ManifestPath(std::string path)
         {
 #ifndef _WIN32
             std::replace(path.begin(), path.end(), '\\', '/');
 #endif
-            return std::filesystem::u8path(path);
+            return PathFromUtf8(path);
         }
 
         void AppendUniqueDirectory(std::vector<std::filesystem::path>& directories,
@@ -216,7 +222,13 @@ namespace SparkLauncher
             const std::filesystem::path& manifestDirectory, const std::string& declaredPath,
             const std::vector<std::filesystem::path>& searchDirectories)
         {
-            const auto declared = ManifestPath(declaredPath);
+            const auto declaredOrError = ManifestPath(declaredPath);
+            if (!declaredOrError)
+            {
+                return std::unexpected("Project module path is unusable (" + declaredOrError.error() +
+                                       "): " + declaredPath);
+            }
+            const std::filesystem::path& declared = *declaredOrError;
             const std::string extension = Lowercase(PathToUtf8(declared.extension()));
             if (!IsSharedLibraryExtension(extension))
                 return std::unexpected("Manifest uses an unsupported shared-library extension: " + declaredPath);
@@ -256,32 +268,20 @@ namespace SparkLauncher
         std::expected<Spark::Json::Value, std::string> ReadAndResolveManifest(
             const std::filesystem::path& manifest, const std::vector<std::filesystem::path>& searchDirectories)
         {
-            std::ifstream input(manifest, std::ios::binary);
-            if (!input)
-                return std::unexpected("Could not open project module manifest: " + PathToUtf8(manifest));
-            // The manifest comes from whatever project the user opens, so it is
-            // read with a hard cap instead of whole: one byte past the limit is
-            // enough to refuse it, and a file that grows while it is read cannot
-            // push the allocation further.
-            std::string content(kMaxModuleManifestBytes + 1, '\0');
-            input.read(content.data(), static_cast<std::streamsize>(content.size()));
-            if (input.bad())
+            // The manifest comes from whatever project the user opens. The caller's
+            // is_regular_file check named a path; the read decides on the opened handle, so a
+            // FIFO swapped in afterwards cannot block the launcher and the size cap holds.
+            const auto content = ReadBoundedRegularFile(manifest, kMaxModuleManifestBytes);
+            if (!content)
             {
-                return std::unexpected("Could not read project module manifest: " + PathToUtf8(manifest));
-            }
-            content.resize(static_cast<size_t>(input.gcount()));
-            if (content.size() > kMaxModuleManifestBytes)
-            {
-                return std::unexpected("Project module manifest exceeds the " +
-                                       std::to_string(kMaxModuleManifestBytes) +
-                                       "-byte limit: " + PathToUtf8(manifest));
+                return std::unexpected("Project module manifest " + content.error() + ": " + PathToUtf8(manifest));
             }
 
             Spark::Json::JsonLimits limits;
             limits.maxBytes = kMaxModuleManifestBytes;
             Spark::Json::Value root;
             std::string parseError;
-            if (!Spark::Json::ParseBounded(content, limits, &root, &parseError) || !root.IsObject())
+            if (!Spark::Json::ParseBounded(*content, limits, &root, &parseError) || !root.IsObject())
                 return std::unexpected("Project module manifest is not valid JSON: " + PathToUtf8(manifest) +
                                        (parseError.empty() ? std::string{} : " (" + parseError + ")"));
 
@@ -435,6 +435,133 @@ namespace SparkLauncher
 #else
         return std::filesystem::path(std::string(text));
 #endif
+    }
+
+    std::expected<std::string, std::string> ReadBoundedRegularFile(const std::filesystem::path& path,
+                                                                   std::size_t maxBytes, bool* opened, bool* missing)
+    {
+        if (opened != nullptr)
+        {
+            *opened = false;
+        }
+        if (missing != nullptr)
+        {
+            *missing = false;
+        }
+        const std::string tooLarge = "exceeds the " + std::to_string(maxBytes) + "-byte limit";
+#ifdef _WIN32
+        const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                        OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            if (missing != nullptr)
+            {
+                const DWORD error = GetLastError();
+                *missing = error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+            }
+            return std::unexpected("could not be opened");
+        }
+        if (opened != nullptr)
+        {
+            *opened = true;
+        }
+        struct HandleCloser
+        {
+            HANDLE handle;
+            ~HandleCloser() { CloseHandle(handle); }
+        } closer{file};
+
+        // A pipe, console or other device is not FILE_TYPE_DISK; a directory needs
+        // FILE_FLAG_BACKUP_SEMANTICS to open at all, and is refused here if it did.
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (GetFileType(file) != FILE_TYPE_DISK || !GetFileInformationByHandle(file, &info) ||
+            (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            return std::unexpected("is not a regular file");
+        }
+        const std::uint64_t size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) | info.nFileSizeLow;
+        if (size > maxBytes)
+        {
+            return std::unexpected(tooLarge);
+        }
+
+        std::string bytes(static_cast<std::size_t>(size), '\0');
+        std::size_t total = 0;
+        while (total < bytes.size())
+        {
+            DWORD got = 0;
+            const DWORD request = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - total, 1U << 30));
+            if (!ReadFile(file, bytes.data() + total, request, &got, nullptr) || got == 0)
+            {
+                break;
+            }
+            total += got;
+        }
+        char extra = 0;
+        DWORD extraRead = 0;
+        const bool atEnd = ReadFile(file, &extra, 1, &extraRead, nullptr) && extraRead == 0;
+#else
+        // O_NONBLOCK keeps a FIFO from blocking the open; fstat then refuses it, a directory, a
+        // device and every other non-regular file.
+        const int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+        if (fd < 0)
+        {
+            if (missing != nullptr)
+            {
+                *missing = errno == ENOENT || errno == ENOTDIR;
+            }
+            return std::unexpected("could not be opened");
+        }
+        if (opened != nullptr)
+        {
+            *opened = true;
+        }
+        struct FdCloser
+        {
+            int fd;
+            ~FdCloser() { ::close(fd); }
+        } closer{fd};
+
+        struct stat info = {};
+        if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode))
+        {
+            return std::unexpected("is not a regular file");
+        }
+        if (info.st_size < 0 || static_cast<std::uint64_t>(info.st_size) > maxBytes)
+        {
+            return std::unexpected(tooLarge);
+        }
+
+        std::string bytes(static_cast<std::size_t>(info.st_size), '\0');
+        std::size_t total = 0;
+        while (total < bytes.size())
+        {
+            const ssize_t got = ::read(fd, bytes.data() + total, bytes.size() - total);
+            if (got < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            if (got <= 0)
+            {
+                break;
+            }
+            total += static_cast<std::size_t>(got);
+        }
+        char extra = 0;
+        ssize_t extraRead = 0;
+        do
+        {
+            extraRead = ::read(fd, &extra, 1);
+        } while (extraRead < 0 && errno == EINTR);
+        const bool atEnd = extraRead == 0;
+#endif
+        // Exactly the size the handle reported, and then end of file: a file that shrank or
+        // grew while it was read is not the file that was measured.
+        if (total != bytes.size() || !atEnd)
+        {
+            return std::unexpected("changed size while it was read");
+        }
+        return bytes;
     }
 
     std::expected<LaunchRequest, std::string> BuildLaunchRequest(const std::filesystem::path& binaryDirectory,

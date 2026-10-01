@@ -159,6 +159,14 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzEditorThemeImport",
     "SparkFuzzEditorWindowLayout",
     "SparkFuzzEditorLayout",
+    "SparkFuzzRuntimePrefab",
+    "SparkFuzzAssetMigration",
+    "SparkFuzzAchievement",
+    "SparkFuzzEventResponse",
+    "SparkFuzzUILayout",
+    "SparkFuzzAssetCooker",
+    "SparkFuzzLauncherTemplate",
+    "SparkFuzzLauncherModuleManifest",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2418,6 +2426,45 @@ class TestRepositoryIntegration(unittest.TestCase):
                 self.assertIn(f"Fuzz{stem}Production.cpp", target)
                 self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', target)
                 self.assertIn("Threads::Threads c++ c++abi", target)
+    def test_sec120_batch3_targets_keep_exact_bindings(self) -> None:
+        expected = {
+            "runtime-prefab": ("FuzzRuntimePrefab", "SparkFuzzDeserializeRuntimePrefab", "SparkFuzzRuntimePrefab", "FuzzRuntimePrefabSmoke", "Spark::ECS::RuntimePrefab::Deserialize", 12),
+            "asset-migration": ("FuzzAssetMigration", "SparkFuzzMigrateAsset", "SparkFuzzAssetMigration", "FuzzAssetMigrationSmoke", "Spark::AssetMigrationRegistry::MigrateAsset", 18),
+            "ui-layout": ("FuzzUILayout", "SparkFuzzLoadUILayout", "SparkFuzzUILayout", "FuzzUILayoutSmoke", "UILayoutLoader::LoadFromJSON", 14),
+            "event-response-definitions": ("FuzzEventResponse", "SparkFuzzParseEventResponseRules", "SparkFuzzEventResponse", "FuzzEventResponseSmoke", "Spark::Gameplay::ParseEventResponseRules", 17),
+            "achievement-definitions": ("FuzzAchievementProgress", "SparkFuzzLoadAchievementProgress", "SparkFuzzAchievement", "FuzzAchievementSmoke", "Spark::Gameplay::AchievementSystem::LoadFromReader", 13),
+            "asset-cooker-input": ("FuzzAssetCooker", "SparkFuzzCookAssetTree", "SparkFuzzAssetCooker", "FuzzAssetCookerSmoke", "Spark::AssetPipeline::CookAssets", 7),
+            "launcher-template-json": ("FuzzLauncherTemplate", "SparkFuzzReadLauncherTemplate", "SparkFuzzLauncherTemplate", "FuzzLauncherTemplateSmoke", "SparkLauncher::ReadTemplateEntry", 14),
+            "launcher-module-manifest": ("FuzzLauncherModuleManifest", "SparkFuzzResolveLauncherManifest", "SparkFuzzLauncherModuleManifest", "FuzzLauncherModuleManifestSmoke", "SparkLauncher::BuildLaunchRequest", 8),
+        }
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        corpora = {corpus.parser_id: corpus for corpus in corpus_manifest.load_corpora(REPO_ROOT, inventory)}
+        cmake = (REPO_ROOT / "FuzzerTests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        for parser_id, (harness_stem, adapter_symbol, cmake_target, selector, entry_symbol, seeds) in expected.items():
+            with self.subTest(parser=parser_id):
+                parser = next(item for item in inventory.parsers if item.parser_id == parser_id)
+                self.assertEqual(parser.status, "fuzzed")
+                self.assertEqual(parser.target["harness"], f"FuzzerTests/{harness_stem}.cpp")
+                self.assertEqual(parser.target["binding_source"], f"FuzzerTests/{harness_stem}Production.cpp")
+                self.assertEqual(parser.target["cmake_target"], cmake_target)
+                self.assertEqual(parser.target["test_selector"], selector)
+                self.assertEqual(parser.target["entry_symbol"], entry_symbol)
+                self.assertEqual(parser.target["harness_entry_symbol"], adapter_symbol)
+                self.assertEqual(corpora[parser_id].seed_count, seeds)
+                self.assertTrue((REPO_ROOT / "FuzzerTests" / f"{harness_stem}.cpp").is_file())
+                self.assertIn(f"add_executable({cmake_target}\n", cmake)
+                smoke = cmake.split(f"add_test(NAME {selector}", 1)[1].split("set_tests_properties", 1)[0]
+                self.assertIn(f"-runs={seeds}", smoke)
+        for source in (
+            "Engine/Gameplay/EventResponseRules.cpp",
+            "Engine/UI/UIWidgets.cpp",
+            "Engine/UI/UIFactory.cpp",
+            "SparkAssetPipelineCore/src/AssetCooker.cpp",
+            "SparkLauncher/src/LauncherTemplates.cpp",
+            "SparkLauncher/src/LauncherProcess.cpp",
+        ):
+            with self.subTest(source=source):
+                self.assertIn(source, cmake)
 
     def test_openal_wav_loader_delegates_to_the_fuzzed_sound_effect_parser(self) -> None:
         # OpenALAudioEngine used to walk RIFF chunks itself (audio-openal-wav). It now

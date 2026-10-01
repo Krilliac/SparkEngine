@@ -2,13 +2,20 @@
 #include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "../SparkLauncher/src/LauncherProcess.h"
+#include "../SparkLauncher/src/LauncherTemplates.h"
 #include "Utils/JsonUtils.h"
 
 #include <chrono>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <string>
 #include <utility>
+
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 namespace
 {
@@ -449,4 +456,174 @@ TEST(SEC4Launcher_InvalidUtf8AndEmbeddedNulFailClosedWithoutThrowing)
         EXPECT_TRUE(launched.error().find("UTF-8") != std::string::npos);
     }
 #endif
+}
+
+// ============================================================================
+// SEC-120 launcher-module-manifest and launcher-template-json targets
+// ============================================================================
+
+namespace
+{
+    void WriteBytes(const std::filesystem::path& path, const std::string& bytes)
+    {
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream(path, std::ios::binary | std::ios::trunc) << bytes;
+    }
+} // namespace
+
+TEST(LauncherProcess_BoundedReadDecidesOnTheOpenedFile)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    const auto file = root / "data.json";
+
+    WriteBytes(file, std::string(16, 'x'));
+    const auto atLimit = ReadBoundedRegularFile(file, 16);
+    EXPECT_TRUE(atLimit.has_value() && *atLimit == std::string(16, 'x'));
+
+    const auto oversized = ReadBoundedRegularFile(file, 15);
+    EXPECT_FALSE(oversized.has_value());
+    if (!oversized)
+    {
+        EXPECT_TRUE(oversized.error().find("exceeds the 15-byte limit") != std::string::npos);
+    }
+
+    const auto directory = ReadBoundedRegularFile(root / "bin", 1024);
+    EXPECT_FALSE(directory.has_value());
+    const auto missing = ReadBoundedRegularFile(root / "missing.json", 1024);
+    EXPECT_FALSE(missing.has_value());
+
+#ifndef _WIN32
+    // Opening a FIFO by name blocked until a writer appeared; the read must refuse it at once.
+    const auto fifo = root / "fifo.json";
+    ASSERT_TRUE(::mkfifo(fifo.c_str(), 0600) == 0);
+    const auto fromFifo = ReadBoundedRegularFile(fifo, 1024);
+    EXPECT_FALSE(fromFifo.has_value());
+    if (!fromFifo)
+    {
+        EXPECT_TRUE(fromFifo.error().find("not a regular file") != std::string::npos);
+    }
+#endif
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+}
+
+TEST(LauncherProcess_GameLaunchRefusesManifestPathWithEmbeddedNul)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    const auto binaries = root / "bin";
+    const auto projectRoot = root / "project";
+    const auto project = projectRoot / "Sample.sparkproject";
+    Touch(project);
+    Touch(Executable(binaries, "SparkEngine"));
+    // A plain file whose name is the part before the NUL.
+    Touch(projectRoot / "Game");
+
+    // "Game\u0000.so" kept its NUL through std::filesystem::u8path, and the OS read the name
+    // only up to it, so the module and its .sparkabi sidecar both resolved to the file "Game".
+    const std::string nativeExtension = NativeModule(projectRoot, "x").extension().string();
+    WriteBytes(projectRoot / "spark.modules.json", "{\"modules\":[{\"path\":\"Game\u0000" + nativeExtension + "\"}]}");
+    const auto request = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_FALSE(request.has_value());
+    if (!request)
+    {
+        EXPECT_TRUE(request.error().find("NUL") != std::string::npos);
+    }
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+}
+
+TEST(LauncherProcess_GameLaunchRefusesUndecodableManifestPathWithoutThrowing)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    const auto binaries = root / "bin";
+    const auto projectRoot = root / "project";
+    const auto project = projectRoot / "Sample.sparkproject";
+    Touch(project);
+    Touch(Executable(binaries, "SparkEngine"));
+
+    // std::filesystem::u8path threw on these bytes on Windows, and nothing on the launch
+    // path catches it. Every platform must answer with an error instead.
+    WriteBytes(projectRoot / "spark.modules.json", "{\"modules\":[{\"path\":\"\xFF\xFEGame.dll\"}]}");
+    bool threw = false;
+    std::expected<LaunchRequest, std::string> request;
+    try
+    {
+        request = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    }
+    catch (...)
+    {
+        threw = true;
+    }
+    EXPECT_FALSE(threw);
+    EXPECT_FALSE(request.has_value());
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+}
+
+TEST(LauncherTemplates_ReadsFieldsAndFallsBackToTheDirectoryName)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    WriteBytes(root / "Templates" / "Arena" / "template.json",
+               R"({"name": "Arena Kit", "description": "A small arena.", "genre": "FPS", "gameModule": "ArenaKit"})");
+    WriteBytes(root / "Templates" / "Nameless" / "template.json", R"({"description": "no name"})");
+    std::filesystem::create_directories(root / "Templates" / "Empty");
+
+    const auto arena = ReadTemplateEntry(root / "Templates" / "Arena");
+    ASSERT_TRUE(arena.has_value());
+    EXPECT_TRUE(arena->directoryName == "Arena");
+    EXPECT_TRUE(arena->displayName == "Arena Kit");
+    EXPECT_TRUE(arena->description == "A small arena.");
+    EXPECT_TRUE(arena->genre == "FPS");
+    EXPECT_TRUE(arena->gameModule == "ArenaKit");
+
+    const auto nameless = ReadTemplateEntry(root / "Templates" / "Nameless");
+    ASSERT_TRUE(nameless.has_value());
+    EXPECT_TRUE(nameless->displayName == "Nameless");
+    EXPECT_TRUE(nameless->description == "no name");
+
+    EXPECT_FALSE(ReadTemplateEntry(root / "Templates" / "Empty").has_value());
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+}
+
+TEST(LauncherTemplates_RefusedManifestReadsAsEmptyWithoutBlocking)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+
+    // Past the cap the file is not read at all, so its fields are not shown.
+    const std::string body = R"({"name": "Huge Kit", "description": "padded"})";
+    WriteBytes(root / "Templates" / "Oversized" / "template.json",
+               body + std::string(kMaxTemplateManifestBytes + 1 - body.size(), ' '));
+    const auto huge = ReadTemplateEntry(root / "Templates" / "Oversized");
+    ASSERT_TRUE(huge.has_value());
+    EXPECT_TRUE(huge->displayName == "Oversized"); // the directory name, not the file's
+    EXPECT_TRUE(huge->description.empty());
+    WriteBytes(root / "Templates" / "Oversized" / "template.json",
+               body + std::string(kMaxTemplateManifestBytes - body.size(), ' '));
+    const auto atCap = ReadTemplateEntry(root / "Templates" / "Oversized");
+    ASSERT_TRUE(atCap.has_value());
+    EXPECT_TRUE(atCap->displayName == "Huge Kit");
+
+#ifndef _WIN32
+    // The launcher read template.json through an ifstream opened by name, which blocked
+    // forever when a FIFO sat there.
+    std::filesystem::create_directories(root / "Templates" / "Fifo");
+    ASSERT_TRUE(::mkfifo((root / "Templates" / "Fifo" / "template.json").c_str(), 0600) == 0);
+    const auto fifo = ReadTemplateEntry(root / "Templates" / "Fifo");
+    ASSERT_TRUE(fifo.has_value());
+    EXPECT_TRUE(fifo->displayName == "Fifo");
+    EXPECT_TRUE(fifo->gameModule.empty());
+#endif
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
 }

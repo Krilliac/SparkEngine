@@ -331,6 +331,9 @@ namespace Spark::UI
         /** @brief Remove a child widget by name. */
         void RemoveWidget(const std::string& name);
 
+        /** @brief Direct children in creation order (non-owning view; the panel owns them). */
+        [[nodiscard]] const std::vector<std::unique_ptr<UIWidget>>& GetChildren() const { return m_children; }
+
         void Update(float deltaTime) override;
         void Render() const override;
         bool HandleClick(float x, float y) override;

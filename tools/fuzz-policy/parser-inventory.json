@@ -522,35 +522,44 @@
     },
     {
       "id": "achievement-definitions",
-      "description": "Achievement definition reader.",
+      "description": "Achievement progress binary reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Gameplay/AchievementSystem.h"
       ],
-      "formats": [
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": [".bin"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzAchievementProgress.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzAchievement",
+        "test_selector": "FuzzAchievementSmoke",
+        "corpus_id": "achievement-definitions-corpus",
+        "entry_symbol": "Spark::Gameplay::AchievementSystem::LoadFromReader",
+        "binding_source": "FuzzerTests/FuzzAchievementProgressProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadAchievementProgress"
       }
     },
     {
       "id": "event-response-definitions",
-      "description": "Event-response definition reader.",
+      "description": "Event-response definition JSON reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp",
-        "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h"
+        "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h",
+        "SparkEngine/Source/Engine/Gameplay/EventResponseRules.cpp"
       ],
-      "formats": [
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": [".json"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEventResponse.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEventResponse",
+        "test_selector": "FuzzEventResponseSmoke",
+        "corpus_id": "event-response-definitions-corpus",
+        "entry_symbol": "Spark::Gameplay::ParseEventResponseRules",
+        "binding_source": "FuzzerTests/FuzzEventResponseProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseEventResponseRules"
       }
     },
     {
@@ -626,19 +635,22 @@
     },
     {
       "id": "runtime-prefab",
-      "description": "Runtime prefab JSON reader.",
+      "description": "Runtime prefab binary reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/ECS/RuntimePrefab.h"
       ],
-      "formats": [
-        ".prefab",
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": [".prefab"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzRuntimePrefab.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzRuntimePrefab",
+        "test_selector": "FuzzRuntimePrefabSmoke",
+        "corpus_id": "runtime-prefab-corpus",
+        "entry_symbol": "Spark::ECS::RuntimePrefab::Deserialize",
+        "binding_source": "FuzzerTests/FuzzRuntimePrefabProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDeserializeRuntimePrefab"
       }
     },
     {
@@ -710,18 +722,22 @@
     },
     {
       "id": "asset-migration",
-      "description": "Asset migration manifest reader.",
+      "description": "Asset migration binary manifest reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Core/AssetMigration.h"
       ],
-      "formats": [
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": [".bin"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzAssetMigration.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzAssetMigration",
+        "test_selector": "FuzzAssetMigrationSmoke",
+        "corpus_id": "asset-migration-corpus",
+        "entry_symbol": "Spark::AssetMigrationRegistry::MigrateAsset",
+        "binding_source": "FuzzerTests/FuzzAssetMigrationProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzMigrateAsset"
       }
     },
     {
@@ -751,7 +767,7 @@
     },
     {
       "id": "ui-layout",
-      "description": "UI layout and factory JSON readers.",
+      "description": "UI layout JSON and factory line-config readers.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp",
@@ -759,14 +775,17 @@
         "SparkEngine/Source/Engine/UI/UIFactory.cpp",
         "SparkEngine/Source/Engine/UI/UIFactory.h"
       ],
-      "formats": [
-        ".uilayout",
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": [".uilayout", ".json", ".uicfg"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzUILayout.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzUILayout",
+        "test_selector": "FuzzUILayoutSmoke",
+        "corpus_id": "ui-layout-corpus",
+        "entry_symbol": "UILayoutLoader::LoadFromJSON",
+        "binding_source": "FuzzerTests/FuzzUILayoutProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadUILayout"
       }
     },
     {
@@ -902,19 +921,22 @@
     },
     {
       "id": "asset-cooker-input",
-      "description": "Asset-cooker recipe and source metadata reader.",
+      "description": "Asset cooker source-tree and manifest reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkAssetPipelineCore/src/AssetCooker.cpp"
       ],
-      "formats": [
-        "asset-source",
-        ".json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": ["asset-source", ".json"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzAssetCooker.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzAssetCooker",
+        "test_selector": "FuzzAssetCookerSmoke",
+        "corpus_id": "asset-cooker-input-corpus",
+        "entry_symbol": "Spark::AssetPipeline::CookAssets",
+        "binding_source": "FuzzerTests/FuzzAssetCookerProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzCookAssetTree"
       }
     },
     {
@@ -1428,18 +1450,23 @@
     },
     {
       "id": "launcher-template-json",
-      "description": "Project template.json reader with a hand-rolled JSON extractor.",
+      "description": "Launcher template.json reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkLauncher/src/LauncherApp.cpp"
+        "SparkLauncher/src/LauncherApp.cpp",
+        "SparkLauncher/src/LauncherTemplates.cpp"
       ],
-      "formats": [
-        "template.json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": ["template.json"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzLauncherTemplate.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzLauncherTemplate",
+        "test_selector": "FuzzLauncherTemplateSmoke",
+        "corpus_id": "launcher-template-json-corpus",
+        "entry_symbol": "SparkLauncher::ReadTemplateEntry",
+        "binding_source": "FuzzerTests/FuzzLauncherTemplateProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzReadLauncherTemplate"
       }
     },
     {
@@ -1449,13 +1476,17 @@
       "source_files": [
         "SparkLauncher/src/LauncherProcess.cpp"
       ],
-      "formats": [
-        "spark.modules.json"
-      ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "formats": ["spark.modules.json"],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzLauncherModuleManifest.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzLauncherModuleManifest",
+        "test_selector": "FuzzLauncherModuleManifestSmoke",
+        "corpus_id": "launcher-module-manifest-corpus",
+        "entry_symbol": "SparkLauncher::BuildLaunchRequest",
+        "binding_source": "FuzzerTests/FuzzLauncherModuleManifestProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzResolveLauncherManifest"
       }
     },
     {
