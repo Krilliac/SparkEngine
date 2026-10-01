@@ -517,7 +517,9 @@ namespace
         thread_local std::vector<JPH::BodyID> ids;
         ids.clear();
         for (const auto& body : bodies)
+        {
             ids.emplace_back(body ? JPH::BodyID(body->GetJoltBodyID()) : JPH::BodyID());
+        }
         return ids;
     }
 
@@ -529,13 +531,17 @@ namespace
     {
         JPH::PhysicsSystem* const jolt = PhysicsBody::ContextJoltSystem();
         if (!jolt || bodies.empty())
+        {
             return;
+        }
         const std::vector<JPH::BodyID>& ids = CollectBodyIds(bodies);
         const JPH::BodyLockMultiRead lock(jolt->GetBodyLockInterface(), ids.data(), static_cast<int>(ids.size()));
         for (size_t index = 0; index < bodies.size(); ++index)
         {
             if (bodies[index])
+            {
                 bodies[index]->UpdateCurrentState(lock.GetBody(static_cast<int>(index)));
+            }
         }
     }
 
@@ -544,7 +550,9 @@ namespace
     {
         JPH::PhysicsSystem* const jolt = PhysicsBody::ContextJoltSystem();
         if (!jolt || bodies.empty())
+        {
             return 0;
+        }
         const std::vector<JPH::BodyID>& ids = CollectBodyIds(bodies);
         const JPH::BodyLockMultiRead lock(jolt->GetBodyLockInterface(), ids.data(), static_cast<int>(ids.size()));
         uint32_t active = 0;
@@ -552,7 +560,9 @@ namespace
         {
             const JPH::Body* body = lock.GetBody(static_cast<int>(index));
             if (body && body->IsInBroadPhase() && body->IsActive())
+            {
                 ++active;
+            }
         }
         return active;
     }

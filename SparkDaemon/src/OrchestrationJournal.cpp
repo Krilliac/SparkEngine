@@ -106,17 +106,27 @@ namespace Spark::Daemon
             {
                 if (!processIds.insert(process.definition.id).second ||
                     !IsRepresentableUnixMilliseconds(process.status.drainDeadlineUnixMilliseconds))
+                {
                     return false;
+                }
                 for (int64_t timestamp : process.crashTimestampsUnixMilliseconds)
+                {
                     if (!IsRepresentableUnixMilliseconds(timestamp))
+                    {
                         return false;
+                    }
+                }
             }
 
             std::unordered_set<std::string> clients;
             for (const auto& mutation : state.mutations)
+            {
                 if (mutation.clientInstance.empty() || mutation.sequence == 0 ||
                     !clients.insert(mutation.clientInstance).second)
+                {
                     return false;
+                }
+            }
             return true;
         }
 
@@ -179,13 +189,19 @@ namespace Spark::Daemon
             std::vector<ProcessStatus> statuses;
             if (!DecodeProcessDefinition(definitionBytes, ignored, process.definition) ||
                 !DecodeProcessStatuses(statusBytes, statuses, 1) || statuses.size() != 1)
+            {
                 return std::nullopt;
+            }
             process.status = std::move(statuses.front());
             process.desiredRunning = desired != 0;
             process.crashTimestampsUnixMilliseconds.resize(crashCount);
             for (auto& timestamp : process.crashTimestampsUnixMilliseconds)
+            {
                 if (!reader.Read(timestamp))
+                {
                     return std::nullopt;
+                }
+            }
             state.processes.push_back(std::move(process));
         }
 
@@ -199,11 +215,15 @@ namespace Spark::Daemon
             if (!reader.ReadString(mutation.clientInstance, kMaximumClientInstanceLength) ||
                 !reader.Read(mutation.sequence) || !reader.Read(mutation.response.messageType) ||
                 !reader.ReadBytes(mutation.response.payload, kMaximumJournalBlob))
+            {
                 return std::nullopt;
+            }
             state.mutations.push_back(std::move(mutation));
         }
         if (!reader.Finished() || !IsValidJournalState(state))
+        {
             return std::nullopt;
+        }
         return state;
     }
 
@@ -211,7 +231,9 @@ namespace Spark::Daemon
     {
         if (state.processes.size() > std::numeric_limits<uint32_t>::max() ||
             state.mutations.size() > std::numeric_limits<uint32_t>::max() || !IsValidJournalState(state))
+        {
             return false;
+        }
         Wire::Writer writer;
         if (!writer.WriteString(kMagic, kMagic.size()))
             return false;

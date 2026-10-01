@@ -182,10 +182,14 @@ namespace Spark::PasswordHash
             std::array<uint8_t, 64> pad{};
             const auto clearPad = Spark::MakeScopeExit([&] { SecureErase(pad.data(), pad.size()); });
             for (size_t i = 0; i < keyBlock.size(); ++i)
+            {
                 pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
+            }
             prepared.inner.Update(pad.data(), pad.size());
             for (size_t i = 0; i < keyBlock.size(); ++i)
+            {
                 pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
+            }
             prepared.outer.Update(pad.data(), pad.size());
             return prepared;
         }

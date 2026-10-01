@@ -31,7 +31,9 @@ namespace Spark
     inline void SecureErase(void* data, size_t size) noexcept
     {
         if (!data || size == 0)
+        {
             return;
+        }
 #if defined(__GNUC__) || defined(__clang__)
         std::memset(data, 0, size);
         __asm__ __volatile__("" : : "r"(data) : "memory");
