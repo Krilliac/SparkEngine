@@ -16,17 +16,23 @@ namespace SparkInstaller
         bool IsSafeRef(const std::string& ref)
         {
             if (ref.empty() || ref.size() > 255)
+            {
                 return false;
+            }
             for (char c : ref)
             {
                 bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' ||
                           c == '_' || c == '/' || c == '-' || c == '+';
                 if (!ok)
+                {
                     return false;
+                }
             }
             // Git also disallows "..", leading "-", and consecutive slashes.
             if (ref.front() == '-' || ref.front() == '.' || ref.find("..") != std::string::npos)
+            {
                 return false;
+            }
             return true;
         }
 
@@ -41,11 +47,15 @@ namespace SparkInstaller
         bool IsSafeRepoUrl(const std::string& url)
         {
             if (url.empty() || url.size() > 1024 || url.front() == '-')
+            {
                 return false;
+            }
             for (const unsigned char character : url)
             {
                 if (character < 32 || character == 127)
+                {
                     return false;
+                }
             }
 
             const bool networkUrl = StartsWith(url, "https://") || StartsWith(url, "http://") ||
@@ -58,7 +68,9 @@ namespace SparkInstaller
                                    ((url[0] >= 'A' && url[0] <= 'Z') || (url[0] >= 'a' && url[0] <= 'z')) &&
                                    url[1] == ':' && (url[2] == '/' || url[2] == '\\');
             if ((networkUrl || scpUrl) && url.find(' ') != std::string::npos)
+            {
                 return false;
+            }
             return networkUrl || scpUrl || posixPath || uncPath || drivePath;
         }
 
@@ -96,11 +108,15 @@ namespace SparkInstaller
         bool IsSafeCloneDestination(const std::string& destination)
         {
             if (destination.empty() || destination.size() > 32767 || destination.front() == '-')
+            {
                 return false;
+            }
             for (const unsigned char character : destination)
             {
                 if (character < 32 || character == 127)
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -114,7 +130,9 @@ namespace SparkInstaller
         for (const char character : argument)
         {
             if (character == '\\' || character == '"')
+            {
                 encoded.push_back('\\');
+            }
             encoded.push_back(character);
         }
         encoded.push_back('"');
@@ -126,12 +144,16 @@ namespace SparkInstaller
         SparkBuild::ProcessRunner runner;
         std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
         if (log)
+        {
             log("$ git " + args);
+        }
 
         std::string output;
         int exitCode = runner.RunSync(cmd, cwd, output);
         if (log && !output.empty())
+        {
             log(output);
+        }
         return exitCode;
     }
 
@@ -141,25 +163,33 @@ namespace SparkInstaller
         if (!IsSafeRepoUrl(repoUrl))
         {
             if (log)
+            {
                 log("error: repository URL contains unsafe characters: " + repoUrl);
+            }
             return false;
         }
         if (!ref.empty() && !IsSafeRef(ref))
         {
             if (log)
+            {
                 log("error: git ref contains unsafe characters: " + ref);
+            }
             return false;
         }
         if (!IsSafeCloneDestination(destination))
         {
             if (log)
+            {
                 log("error: clone destination is empty, option-shaped, or contains control characters: " + destination);
+            }
             return false;
         }
 
         std::string args = "clone --recurse-submodules --progress";
         if (!ref.empty())
+        {
             args += " --branch " + EncodeProcessRunnerArgument(ref);
+        }
         args += " -- " + EncodeProcessRunnerArgument(repoUrl) + " " + EncodeProcessRunnerArgument(destination);
         return Run(args, {}, log) == 0;
     }
@@ -175,13 +205,17 @@ namespace SparkInstaller
         SparkBuild::ProcessRunner runner;
         std::string command = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
         if (log)
+        {
             log("$ git " + args);
+        }
 
         std::string output;
         if (runner.RunSync(command, destination, output) != 0)
         {
             if (log)
+            {
                 log("error: could not inspect the existing install working tree");
+            }
             return false;
         }
 
@@ -216,9 +250,46 @@ namespace SparkInstaller
         if (!clean)
         {
             if (log)
+            {
                 log("error: existing install has local changes");
+            }
             return false;
         }
+        return true;
+    }
+
+    bool GitRunner::IgnoredFiles(const std::string& destination, std::vector<std::string>& paths,
+                                 const LogSink& log) const
+    {
+        SparkBuild::ProcessRunner runner;
+        std::string output;
+        const std::string command =
+            EncodeProcessRunnerArgument(m_gitExe) + " ls-files --others --ignored --exclude-standard -z";
+        if (runner.RunSync(command, destination, output) != 0)
+        {
+            if (log)
+            {
+                log("error: could not inventory ignored user files");
+            }
+            return false;
+        }
+        std::vector<std::string> parsed;
+        std::size_t start = 0;
+        while (start < output.size())
+        {
+            const std::size_t end = output.find('\0', start);
+            if (end == std::string::npos || end == start)
+            {
+                if (log)
+                {
+                    log("error: malformed ignored-file inventory");
+                }
+                return false;
+            }
+            parsed.emplace_back(output.substr(start, end - start));
+            start = end + 1;
+        }
+        paths = std::move(parsed);
         return true;
     }
 
@@ -227,11 +298,15 @@ namespace SparkInstaller
         if (!IsSafeRef(ref))
         {
             if (log)
+            {
                 log("error: git ref contains unsafe characters: " + ref);
+            }
             return false;
         }
         if (Run("checkout " + EncodeProcessRunnerArgument(ref), destination, log) != 0)
+        {
             return false;
+        }
 
         // A detached tag/commit is already exact after fetch + checkout. If a
         // matching origin branch exists, require its explicit fast-forward even
@@ -239,7 +314,9 @@ namespace SparkInstaller
         // installer could build stale local source while reporting success.
         const std::string remoteRef = "refs/remotes/origin/" + ref;
         if (Run("show-ref --verify --quiet " + EncodeProcessRunnerArgument(remoteRef), destination, log) != 0)
+        {
             return true;
+        }
         return Run("pull --ff-only origin " + EncodeProcessRunnerArgument(ref), destination, log) == 0;
     }
 
@@ -248,7 +325,9 @@ namespace SparkInstaller
         if (!IsSafeRef(commit))
         {
             if (log)
+            {
                 log("error: git commit contains unsafe characters: " + commit);
+            }
             return false;
         }
         return Run("checkout --detach " + EncodeProcessRunnerArgument(commit), destination, log) == 0;
@@ -265,9 +344,13 @@ namespace SparkInstaller
         std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " rev-parse HEAD";
         std::string output;
         if (runner.RunSync(cmd, destination, output) != 0)
+        {
             return {};
+        }
         while (!output.empty() && (output.back() == '\n' || output.back() == '\r' || output.back() == ' '))
+        {
             output.pop_back();
+        }
         return output;
     }
 } // namespace SparkInstaller

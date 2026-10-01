@@ -4,6 +4,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -73,7 +74,9 @@ namespace
             std::ifstream file(path);
             uint64_t pid = 0;
             if (file >> pid; pid > 1)
+            {
                 return pid;
+            }
             std::this_thread::sleep_for(10ms);
         }
         return 0;
@@ -120,6 +123,8 @@ namespace
     {
         return "\"" + QuoteNativeArgument(executable.string()) + " --exit-success\"";
     }
+
+
 #else
     std::string QuoteShellArgument(const std::string& argument)
     {
@@ -127,9 +132,13 @@ namespace
         for (char character : argument)
         {
             if (character == '\'')
+            {
                 quoted += "'\\''";
+            }
             else
+            {
                 quoted.push_back(character);
+            }
         }
         quoted.push_back('\'');
         return quoted;
@@ -144,7 +153,44 @@ namespace
     {
         return QuoteShellArgument(executable.string()) + " --exit-success";
     }
+
+
 #endif
+
+    // RunSync parses argv directly; the shell wrappers used by RunAsync
+    // fixtures would turn the entire command into one executable name here.
+    std::string BuildBinaryOutputCommand(const std::filesystem::path& executable)
+    {
+        std::string command = "\"";
+        for (const char character : executable.string())
+        {
+            if (character == '\\' || character == '\"')
+            {
+                command.push_back('\\');
+            }
+            command.push_back(character);
+        }
+        command += "\" --emit-binary-output";
+        return command;
+    }
+
+    std::string ExpectedBinaryOutput()
+    {
+        std::string expected(4095, 'A');
+        expected.push_back('\0');
+        expected.append(4096, 'B');
+        expected.push_back('\0');
+        expected.append("git\0files\0", 10);
+        return expected;
+    }
+
+    int BinaryOutputMain()
+    {
+        const std::string output = ExpectedBinaryOutput();
+        const bool writeSucceeded = std::fwrite(output.data(), 1, output.size(), stdout) == output.size();
+        const bool flushSucceeded = std::fflush(stdout) == 0;
+        return writeSucceeded && flushSucceeded ? 0 : 2;
+    }
 
     ExactChild SpawnExactChild(const std::filesystem::path& executable, const char* mode,
                                const std::filesystem::path& pidFile)
@@ -158,7 +204,9 @@ namespace
             QuoteNativeArgument(executable.string()) + " " + mode + " " + QuoteNativeArgument(pidFile.string());
         if (!::CreateProcessA(executable.string().c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
                               nullptr, nullptr, &startup, &process))
+        {
             return child;
+        }
         ::CloseHandle(process.hThread);
         child.process = process.hProcess;
         child.pid = process.dwProcessId;
@@ -171,7 +219,9 @@ namespace
             _exit(127);
         }
         if (pid > 0)
+        {
             child.pid = pid;
+        }
 #endif
         return child;
     }
@@ -188,12 +238,16 @@ namespace
     bool ExactChildIsAlive(const ExactChild& child)
     {
         if (!ExactChildIsValid(child))
+        {
             return false;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         return ::WaitForSingleObject(child.process, 0) == WAIT_TIMEOUT;
 #else
         if (::kill(child.pid, 0) == 0)
+        {
             return true;
+        }
         return errno == EPERM;
 #endif
     }
@@ -201,17 +255,23 @@ namespace
     bool ProcessIdIsAlive(uint64_t pid)
     {
         if (pid <= 1)
+        {
             return false;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         HANDLE process = ::OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
         if (!process)
+        {
             return false;
+        }
         const bool alive = ::WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
         ::CloseHandle(process);
         return alive;
 #else
         if (::kill(static_cast<pid_t>(pid), 0) == 0)
+        {
             return true;
+        }
         return errno == EPERM;
 #endif
     }
@@ -219,10 +279,14 @@ namespace
     void StopExactChild(ExactChild& child)
     {
         if (!ExactChildIsValid(child))
+        {
             return;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         if (::WaitForSingleObject(child.process, 0) == WAIT_TIMEOUT)
+        {
             (void)::TerminateProcess(child.process, 0);
+        }
         (void)::WaitForSingleObject(child.process, 5000);
         ::CloseHandle(child.process);
         child.process = nullptr;
@@ -252,10 +316,14 @@ namespace
     int SentinelMain(const std::filesystem::path& pidFile)
     {
         if (!WritePidFile(pidFile))
+        {
             return 2;
+        }
         const auto deadline = std::chrono::steady_clock::now() + 30s;
         while (std::chrono::steady_clock::now() < deadline)
+        {
             std::this_thread::sleep_for(100ms);
+        }
         return 0;
     }
 
@@ -263,7 +331,9 @@ namespace
     {
         ExactChild descendant = SpawnExactChild(executable, "--sentinel", pidFile);
         if (!ExactChildIsValid(descendant))
+        {
             return 3;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         (void)::WaitForSingleObject(descendant.process, INFINITE);
         ::CloseHandle(descendant.process);
@@ -334,7 +404,9 @@ namespace
 
         const auto descendantDeadline = std::chrono::steady_clock::now() + 3s;
         while (ProcessIdIsAlive(descendantPid) && std::chrono::steady_clock::now() < descendantDeadline)
+        {
             std::this_thread::sleep_for(10ms);
+        }
 
         {
             std::lock_guard<std::mutex> lock(completionMutex);
@@ -458,6 +530,26 @@ namespace
         return 0;
     }
 
+    int RunSyncBinaryOutputTest(const std::filesystem::path& executable)
+    {
+        SparkBuild::ProcessRunner runner;
+        std::string output;
+        const int exitCode = runner.RunSync(BuildBinaryOutputCommand(executable), {}, output);
+        if (exitCode != 0)
+        {
+            std::cerr << "FAIL: RunSync binary-output child exited with " << exitCode << '\n';
+            return 1;
+        }
+        const std::string expected = ExpectedBinaryOutput();
+        if (output != expected)
+        {
+            std::cerr << "FAIL: RunSync did not preserve binary output (expected " << expected.size() << " bytes, got "
+                      << output.size() << ")\n";
+            return 1;
+        }
+        return 0;
+    }
+
 #ifdef SPARK_PLATFORM_WINDOWS
     constexpr char kPathListSeparator = ';';
 #else
@@ -473,7 +565,9 @@ namespace
             const char* current = std::getenv("PATH");
             m_hadValue = current != nullptr;
             if (m_hadValue)
+            {
                 m_previous = current;
+            }
             m_ok = Set(value);
         }
         ~ScopedPathVariable()
@@ -482,9 +576,13 @@ namespace
             (void)Set(m_hadValue ? m_previous : std::string());
 #else
             if (m_hadValue)
+            {
                 (void)Set(m_previous);
+            }
             else
+            {
                 (void)::unsetenv("PATH");
+            }
 #endif
         }
         ScopedPathVariable(const ScopedPathVariable&) = delete;
@@ -535,10 +633,14 @@ namespace
         std::error_code error;
         fs::create_directories(plantDirectory, error);
         if (!error)
+        {
             fs::copy_file(executable, planted, fs::copy_options::overwrite_existing, error);
+        }
 #ifndef SPARK_PLATFORM_WINDOWS
         if (!error)
+        {
             fs::permissions(planted, fs::perms::owner_exec, fs::perm_options::add, error);
+        }
 #endif
         if (error)
         {
@@ -625,16 +727,32 @@ int main(int argc, char** argv)
 {
     const std::filesystem::path executable = std::filesystem::absolute(argv[0]);
     if (argc == 3 && std::string(argv[1]) == "--sentinel")
+    {
         return SentinelMain(argv[2]);
+    }
     if (argc == 3 && std::string(argv[1]) == "--spawn-descendant")
+    {
         return DescendantSpawnerMain(executable, argv[2]);
+    }
     if (argc == 2 && std::string(argv[1]) == "--exit-success")
+    {
         return 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--emit-binary-output")
+    {
+        return BinaryOutputMain();
+    }
     if (argc != 1)
+    {
         return 64;
+    }
     const int cancellationResult = RunCancellationTreeTest(executable);
     const int reentryResult = RunCompletionReentryTest(executable);
     const int destructionResult = RunCompletionOwnedDestructionTest(executable);
+    const int binaryOutputResult = RunSyncBinaryOutputTest(executable);
     const int plantedToolResult = RunPlantedToolSearchTest(executable);
-    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 && plantedToolResult == 0 ? 0 : 1;
+    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 && binaryOutputResult == 0 &&
+                   plantedToolResult == 0
+               ? 0
+               : 1;
 }

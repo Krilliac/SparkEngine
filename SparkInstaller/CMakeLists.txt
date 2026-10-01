@@ -178,7 +178,11 @@ if(SPARKINSTALLER_BUILD_TESTS)
     target_link_libraries(SparkInstallerTransactionTests PRIVATE SparkBuildCore)
     target_compile_definitions(SparkInstallerTransactionTests PRIVATE
         SPARK_INSTALLER_VERSION="${PROJECT_VERSION}"
+        SPARK_INSTALLER_TEST_EXE="$<TARGET_FILE:SparkInstaller>"
     )
+    # The interruption case kills the real installer, whose output directory
+    # differs from the contract test in a standalone multi-config build.
+    add_dependencies(SparkInstallerTransactionTests SparkInstaller)
     if(MSVC)
         target_compile_definitions(SparkInstallerTransactionTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
     endif()

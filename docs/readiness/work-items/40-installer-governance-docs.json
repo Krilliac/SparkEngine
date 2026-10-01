@@ -66,9 +66,15 @@
             "SparkInstaller/src/InstallState.h",
             "SparkInstaller/README.md",
             ".github/workflows/release.yml",
-            ".github/scripts/test-workflow-failure-propagation.py"
+            ".github/scripts/test-workflow-failure-propagation.py",
+            "SparkBuild/tests/DownloaderTests.cpp",
+            "SparkBuild/src/Downloader.cpp",
+            "SparkInstaller/src/InstallState.cpp",
+            ".github/workflows/build.yml",
+            "SparkBuild/src/ProcessRunner.cpp",
+            "SparkBuild/tests/ProcessRunnerTests.cpp"
           ],
-          "note": "Already 'implemented' in the ledger; no state change. Add the registered selectors (Installer_Tamper, Installer_AtomicUpdate, Installer_Interrupted) and the release.yml build fix as evidence. These are local fixtures, not native Windows evidence."
+          "note": "Updates build/verify sibling checkouts before recoverable activation and preserve prior trees/ignored user files. Byte-preservation and process-kill fixtures added; CI cannot skip planted links. C++ tests and pinned formatting not run here; ci:build.yml/<run>@<sha> required. Existing ledger state retained; no evidence promotion."
         },
         {
           "criterionDigest": "sha256:b2d639655345",

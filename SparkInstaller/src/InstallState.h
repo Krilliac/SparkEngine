@@ -40,7 +40,9 @@ namespace SparkInstaller
         static std::string RepairRequiredFileName() { return ".sparkengine-install.repair-required"; }
 
         static bool Load(const std::string& destination, InstallState& out);
-        bool Save(const std::string& destination) const;
+        // recordedDestination lets a staged build record its final activation
+        // path without writing anything into the live install.
+        bool Save(const std::string& destination, const std::string& recordedDestination = {}) const;
         static bool Exists(const std::string& destination);
 
         // The pending marker holds the ref and the exact commit that was cloned,
