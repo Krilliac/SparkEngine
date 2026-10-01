@@ -238,3 +238,14 @@ Metal-side capture uses
 from `Graphics/RHI/Metal/MetalTextureReadback.h`, wrapped by
 `MetalGoldenImageCapture` as an `IGoldenImageCapture`. Metal is not a
 manifest backend row yet.
+
+## RHI-210 pending capture plans
+
+See [RHI210-CAPTURE.md](RHI210-CAPTURE.md) for the new frame, FPS, world, deferred
+and shadow capture lanes, five-run variance measurement and owner review commands.
+An waiting-capture manifest entry has only scene, ackendRow, software,
+status, and 	hresholdPolicy (set from measured variance). It cannot name a
+baseline, hash, reviewer or threshold. Both parsers validate these records; the
+comparison/review APIs exclude them, so they cannot pass as reviewed baselines.
+Lane parity includes capture plans; committed-PNG integrity still requires a
+reviewed entry, and converting a reviewed entry back to pending fails the review gate.

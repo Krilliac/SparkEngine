@@ -30,6 +30,13 @@
 
 using Microsoft::WRL::ComPtr;
 
+struct RHI210PassAccess
+{
+    static bool InjectRemoved(GraphicsEngine& engine) { return engine.HandleDeviceLost(DXGI_ERROR_DEVICE_REMOVED); }
+
+    static uint32_t RecoveryAttempts(const GraphicsEngine& engine) { return engine.m_deviceLostRecoveryAttempts; }
+};
+
 namespace
 {
     /// Reviewed threshold for the same scene before and after recovery: WARP is
@@ -55,7 +62,9 @@ TEST(D3D11_DeviceLoss_RecoveryRecreatesDeviceAndRendersAgain)
 
     RHI210::Frame before;
     for (int frame = 0; frame < 4; ++frame)
+    {
         before = RHI210::RenderCubeFrame(engine);
+    }
     ASSERT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(before.rgba, 0.95));
 
     // Hold the old device so the new one cannot reuse its address and make the
@@ -70,22 +79,73 @@ TEST(D3D11_DeviceLoss_RecoveryRecreatesDeviceAndRendersAgain)
     EXPECT_TRUE(engine.GetSwapChain() != nullptr);
     lostDevice.Reset();
 
-    // Recovery rebuilds the AssetPipeline on the new device; mesh owners upload
-    // their geometry again, exactly as after a real removal.
-    ASSERT_TRUE(RHI210::LoadCube(engine));
+    // Do not reload the mesh here. The first post-recovery draw must exercise
+    // the production draw-list lazy reload on the new device.
     RHI210::Frame after;
     for (int frame = 0; frame < 4; ++frame)
+    {
         after = RHI210::RenderCubeFrame(engine);
+    }
 
     ASSERT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(after.rgba, 0.95));
     EXPECT_EQ(after.width, before.width);
     EXPECT_EQ(after.height, before.height);
     const double difference = RHI210::MeanAbsoluteDifference(before, after);
     if (difference >= kRecoveredFrameMeanDifference)
+    {
         std::cerr << "  recovered frame mean RGB difference " << difference << "\n";
+    }
     EXPECT_LT(difference, kRecoveredFrameMeanDifference);
     // The cube is still drawn where it was: centre differs from the corner.
     EXPECT_TRUE(PixelsDiffer(after.At(after.width / 2, after.height / 2), after.At(1, 1)));
+    engine.Shutdown();
+}
+
+TEST(D3D11_DeviceLoss_RepeatedResetRecoversAndResetsBudget)
+{
+    RHI210::ScopedEnvironmentVariable warp(L"SPARK_D3D11_DRIVER", L"warp");
+    RHI210::HiddenWindow window;
+    ASSERT_TRUE(window.Get() != nullptr);
+
+    GraphicsEngine engine;
+    ASSERT_TRUE(SUCCEEDED(engine.Initialize(window.Get())));
+    ASSERT_TRUE(RHI210::LoadCube(engine));
+
+    for (int loss = 0; loss < 4; ++loss)
+    {
+        ComPtr<ID3D11Device> previousDevice(engine.GetDevice());
+        ASSERT_TRUE(previousDevice != nullptr);
+        engine.Console_ResetDevice();
+        ASSERT_TRUE(engine.GetDevice() != nullptr);
+        EXPECT_TRUE(engine.GetDevice() != previousDevice.Get());
+        EXPECT_EQ(engine.GetDevice()->GetDeviceRemovedReason(), S_OK);
+        EXPECT_EQ(RHI210PassAccess::RecoveryAttempts(engine), 0U);
+
+        const RHI210::Frame frame = RHI210::RenderCubeFrame(engine);
+        ASSERT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame.rgba, 0.95));
+    }
+    engine.Shutdown();
+}
+
+TEST(D3D11_DeviceLoss_DeviceRemovedBranchRecoversAndRenders)
+{
+    RHI210::ScopedEnvironmentVariable warp(L"SPARK_D3D11_DRIVER", L"warp");
+    RHI210::HiddenWindow window;
+    ASSERT_TRUE(window.Get() != nullptr);
+
+    GraphicsEngine engine;
+    ASSERT_TRUE(SUCCEEDED(engine.Initialize(window.Get())));
+    ASSERT_TRUE(RHI210::LoadCube(engine));
+    ComPtr<ID3D11Device> previousDevice(engine.GetDevice());
+
+    ASSERT_TRUE(RHI210PassAccess::InjectRemoved(engine));
+
+    ASSERT_TRUE(engine.GetDevice() != nullptr);
+    EXPECT_TRUE(engine.GetDevice() != previousDevice.Get());
+    EXPECT_EQ(engine.GetDevice()->GetDeviceRemovedReason(), S_OK);
+    EXPECT_EQ(RHI210PassAccess::RecoveryAttempts(engine), 0U);
+    const RHI210::Frame frame = RHI210::RenderCubeFrame(engine);
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame.rgba, 0.95));
     engine.Shutdown();
 }
 
@@ -139,7 +199,9 @@ TEST(D3D11_Resource_ResizeKeepsRendering)
         EXPECT_TRUE(engine.GetDevice() == device);
         // A single pixel cannot show geometry; every larger size must.
         if (size.width > 1)
+        {
             EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(frame.rgba, 0.95));
+        }
     }
     engine.Shutdown();
 }

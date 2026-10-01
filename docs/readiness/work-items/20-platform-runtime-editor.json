@@ -669,7 +669,9 @@
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.console"
       ],
-      "testSelectors": ["PublicWording_ConsoleCertification"],
+      "testSelectors": [
+        "PublicWording_ConsoleCertification"
+      ],
       "requiredCiJobs": [],
       "performanceBudgets": [],
       "documentationUpdates": [
@@ -745,11 +747,34 @@
           "criterionDigest": "sha256:f339929ecf90",
           "state": "unmet",
           "evidence": [
+            "Tests/TestRHI210D3D11GoldenReal.cpp",
+            "Tests/TestRHI210D3D11PassGoldenReal.cpp",
+            "Tests/TestRHI210D3D11FrameGoldenReal.cpp",
+            "Tests/TestRHI210D3D11SceneGoldenReal.cpp",
+            "Tests/TestRHI210D3D11WorldGoldenReal.cpp",
+            "Tests/TestRHI210D3D11PrimaryGoldenReal.cpp",
+            "Tests/GoldenImages/manifest.json",
+            "Tools/rhi210_capture.py",
+            "Tests/Tools/test_rhi210_capture.py"
+          ],
+          "note": "Four post-processing goldens are owner-approved. Ten frame/FPS/world/deferred/shadow goldens await capture and thresholds set from measured variance; awaiting owner review of 10 goldens. Deferred MRT/lighting resolve remains incomplete; new guards expose it. No new Windows runtime or exact-SHA CI proof."
+        },
+        {
+          "criterionDigest": "sha256:745ccd700288",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI210D3D11DeviceLossReal.cpp",
+            "Tests/TestRHI210D3D11ValidationReal.cpp",
+            "Tests/RHI210D3D11EngineFixture.h",
+            "Tests/CMakeLists.txt",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp",
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp",
+            "SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp",
+            "wiki/subsystems/Rendering-and-Graphics.md",
             "Tests/TestRHI210D3D11GoldenReal.cpp"
           ],
-          "note": "Only a uniform frame and a triangle golden are checked. No primary-pass or representative-content goldens with reviewed thresholds."
+          "note": "Added repeated-reset budget, DEVICE_REMOVED and lazy draw-list reload checks; WARP setup fails closed. Module-owned mesh and allocation-pressure recovery remain open. New C++ checks are unbuilt here; inherited state is not new proof. Producer is build-windows-vs2022; requiredCiJobs still names planned jobs."
         },
-        {"criterionDigest": "sha256:745ccd700288", "state": "implemented", "evidence": ["Tests/TestRHI210D3D11DeviceLossReal.cpp", "Tests/TestRHI210D3D11ValidationReal.cpp", "Tests/RHI210D3D11EngineFixture.h", "Tests/CMakeLists.txt", "SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp", "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp", "SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp", "wiki/subsystems/Rendering-and-Graphics.md"], "note": "D3D11_DeviceLoss (2, WARP) and D3D11_Resource (3, includes the 1x1/1920x1080/320x240 resize) lanes, plus the 2,000-cycle create/destroy live-object baseline in the debug-layer lane (D3D11_Validation_CreateDestroyStressReturnsToBaseline). Local Windows run only; no exact-commit CI yet."},
         {
           "criterionDigest": "sha256:ab52617664c9",
           "state": "implemented",
@@ -762,9 +787,15 @@
             "SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp",
             "SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h",
             ".github/workflows/build.yml",
-            "wiki/graphics/RHI-Abstraction-Layer.md"
+            "wiki/graphics/RHI-Abstraction-Layer.md",
+            "Tests/TestRHI210D3D11PassGoldenReal.cpp",
+            "Tests/TestRHI210D3D11FrameGoldenReal.cpp",
+            "Tests/TestRHI210D3D11SceneGoldenReal.cpp",
+            "Tests/TestRHI210D3D11WorldGoldenReal.cpp",
+            "Tests/TestRHI210D3D11PrimaryGoldenReal.cpp",
+            "Tests/RHI210D3D11EngineFixture.h"
           ],
-          "note": "The D3D11_Validation lane (4 tests, label d3d11-validation;d3d11-debug-layer) runs WARP and debug-layer frames under SPARK_D3D11_DEBUG_LAYER=1, with an injected-error negative control. build-windows-vs2022 installs the Graphics Tools layer before ctest. This is WARP software validation; hardware GPU rows remain open."
+          "note": "WARP post passes and frame/FPS/world/primary goldens require the debug layer and zero warnings/errors/corruption/discards, with an injected warning/error counter control. New C++ clean-run proof is pending, including deferred pass gaps. Hardware is deferred by OD-27. Real producer build-windows-vs2022; requiredCiJobs retains planned names."
         },
         {
           "criterionDigest": "sha256:0a3989a189ef",
@@ -1944,8 +1975,7 @@
         "editor-integration",
         "editor-package-roundtrip"
       ],
-      "plannedTestSelectors": [
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ASSET-220",

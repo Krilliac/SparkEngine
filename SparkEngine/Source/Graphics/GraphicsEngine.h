@@ -179,6 +179,10 @@ class GraphicsEngine
     // LightingPass, RenderPostProcessing, etc.) when running the render-
     // graph-based pipeline.
     friend class Spark::Graphics::RenderPipeline;
+    // RHI-210 tests inspect intermediate pass resources without widening the
+    // production API; the accessor is defined only in the test translation unit.
+    friend struct RHI210PassAccess;
+    friend struct RHI210GoldenPassAccess; // Test-only access to real deferred pass outputs, before forward replay.
 
   public:
     /**

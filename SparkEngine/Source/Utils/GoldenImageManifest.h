@@ -118,6 +118,34 @@ namespace Spark
                                    { return std::find(allowed.begin(), allowed.end(), key) != allowed.end(); });
             }
 
+            /// Capture plans carry no thresholds, reviewer or hash and never enter the comparison set.
+            [[nodiscard]] inline bool ParsePendingEntry(const Json::Value& value, GoldenManifestEntry& entry,
+                                                        std::string& error)
+            {
+                static constexpr std::array<std::string_view, 5> kFields = {"scene", "backendRow", "software", "status",
+                                                                            "thresholdPolicy"};
+                if (!value.IsObject() || !HasOnlyKeys(value, kFields) || value.GetKeys().size() != kFields.size() ||
+                    !value["scene"].IsString() || !value["backendRow"].IsString() || !value["software"].IsBool() ||
+                    !value["status"].IsString() || value["status"].AsString() != "awaiting-capture" ||
+                    !value["thresholdPolicy"].IsString() ||
+                    value["thresholdPolicy"].AsString() != "set from measured variance")
+                {
+                    error = "invalid awaiting-capture entry (no baseline, review or thresholds are permitted)";
+                    return false;
+                }
+                entry.scene = value["scene"].AsString();
+                entry.backendRow = value["backendRow"].AsString();
+                entry.software = value["software"].AsBool();
+                bool software = false;
+                if (!IsValidSceneId(entry.scene) || !ResolveBackendRow(entry.backendRow, software) || !software ||
+                    !entry.software)
+                {
+                    error = "awaiting-capture requires a valid scene and software backend row";
+                    return false;
+                }
+                return true;
+            }
+
             /** @brief Validate one manifest entry; see the file comment for the schema. */
             [[nodiscard]] inline bool ParseEntry(const Json::Value& value, GoldenManifestEntry& entry,
                                                  std::string& error)
@@ -244,25 +272,32 @@ namespace Spark
 
             const Json::Value& list = doc["entries"];
             std::vector<GoldenManifestEntry> parsed;
+            std::vector<GoldenManifestEntry> seen;
             parsed.reserve(list.Size());
             for (size_t i = 0; i < list.Size(); ++i)
             {
                 GoldenManifestEntry entry;
                 std::string entryError;
-                if (!Detail::ParseEntry(list[i], entry, entryError))
+                const bool pending = list[i].HasKey("status");
+                if (!(pending ? Detail::ParsePendingEntry(list[i], entry, entryError)
+                              : Detail::ParseEntry(list[i], entry, entryError)))
                 {
                     error = "entries[" + std::to_string(i) + "]: " + entryError;
                     return false;
                 }
                 const bool duplicate =
-                    std::any_of(parsed.begin(), parsed.end(), [&](const GoldenManifestEntry& previous)
+                    std::any_of(seen.begin(), seen.end(), [&](const GoldenManifestEntry& previous)
                                 { return previous.scene == entry.scene && previous.backendRow == entry.backendRow; });
                 if (duplicate)
                 {
                     error = "entries[" + std::to_string(i) + "]: duplicate scene/backendRow";
                     return false;
                 }
-                parsed.push_back(std::move(entry));
+                seen.push_back(entry);
+                if (!pending)
+                {
+                    parsed.push_back(std::move(entry));
+                }
             }
 
             entries = std::move(parsed);

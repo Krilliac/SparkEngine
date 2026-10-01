@@ -79,6 +79,20 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def entry_errors(index: int, entry: Any) -> list[str]:
     where = f"entries[{index}]"
+    if isinstance(entry, dict) and "status" in entry:
+        fields = {"scene", "backendRow", "software", "status", "thresholdPolicy"}
+        if (
+            set(entry) != fields
+            or not isinstance(entry.get("scene"), str)
+            or _SCENE_RE.fullmatch(entry["scene"]) is None
+            or not isinstance(entry.get("backendRow"), str)
+            or not BACKEND_ROWS.get(entry["backendRow"], False)
+            or entry.get("software") is not True
+            or entry.get("status") != "awaiting-capture"
+            or entry.get("thresholdPolicy") != "set from measured variance"
+        ):
+            return [f"{where}: invalid awaiting-capture entry (no baseline, review or thresholds are permitted)"]
+        return []
     if not isinstance(entry, dict) or set(entry) - set(ENTRY_FIELDS):
         return [f"{where}: entry must be an object with only the documented fields"]
     missing = [field for field in ENTRY_FIELDS if field not in entry]
@@ -114,16 +128,16 @@ def entry_errors(index: int, entry: Any) -> list[str]:
     return errors
 
 
-def load_manifest(golden_root: Path) -> tuple[list[dict[str, Any]], list[str]]:
+def load_manifest(golden_root: Path, *, include_pending: bool = False) -> tuple[list[dict[str, Any]], list[str]]:
     """Return (valid entries, errors). Any error invalidates the manifest."""
     try:
         text = (golden_root / "manifest.json").read_text(encoding="utf-8")
     except (OSError, ValueError) as exc:
         return [], [f"manifest.json: {exc}"]
-    return parse_manifest_text(text)
+    return parse_manifest_text(text, include_pending=include_pending)
 
 
-def parse_manifest_text(text: str) -> tuple[list[dict[str, Any]], list[str]]:
+def parse_manifest_text(text: str, *, include_pending: bool = False) -> tuple[list[dict[str, Any]], list[str]]:
     """Parse manifest.json content (also used by tools/perf-budget/check_golden_review.py)."""
     try:
         document = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
@@ -149,7 +163,8 @@ def parse_manifest_text(text: str) -> tuple[list[dict[str, Any]], list[str]]:
         if key in seen:
             errors.append(f"entries[{index}]: duplicate scene/backendRow {key}")
         seen.add(key)
-    return (document["entries"] if not errors else []), errors
+    entries = [e for e in document["entries"] if include_pending or "status" not in e]
+    return (entries if not errors else []), errors
 
 
 def png_errors(label: str, data: bytes) -> list[str]:
@@ -180,6 +195,10 @@ def baseline_errors(golden_root: Path, entries: list[dict[str, Any]]) -> list[st
     expected: set[str] = set()
     for entry in entries:
         relative = f"{entry['backendRow']}/{entry['scene']}.png"
+        if entry.get("status") == "awaiting-capture":
+            if (golden_root / relative).exists():
+                errors.append(f"{relative}: awaiting-capture entry cannot have a committed baseline")
+            continue
         expected.add(relative)
         path = golden_root / relative
         if not path.is_file():
@@ -251,12 +270,66 @@ def lane_errors(tests_root: Path, cmake_text: str, entries: list[dict[str, Any]]
 
 
 def golden_errors(golden_root: Path, tests_root: Path, cmake_text: str) -> list[str]:
-    entries, errors = load_manifest(golden_root)
+    entries, errors = load_manifest(golden_root, include_pending=True)
     if errors:
         return errors
-    if not entries:
+    if not any("status" not in entry for entry in entries):
         return ["manifest.json has no entries; the committed baseline set cannot be empty"]
     return baseline_errors(golden_root, entries) + lane_errors(tests_root, cmake_text, entries)
+
+
+class GoldenManifestCapturePlanTests(unittest.TestCase):
+    def pending(self) -> dict[str, Any]:
+        return {
+            "scene": "PendingScene", "backendRow": "d3d11-warp", "software": True,
+            "status": "awaiting-capture", "thresholdPolicy": "set from measured variance",
+        }
+
+    def test_pending_is_never_a_reviewed_comparison_entry(self) -> None:
+        text = json.dumps({"schemaVersion": 1, "entries": [self.pending()]})
+        self.assertEqual(([], []), parse_manifest_text(text))
+        self.assertEqual(([self.pending()], []), parse_manifest_text(text, include_pending=True))
+
+    def test_pending_cannot_supply_review_or_thresholds(self) -> None:
+        for key, value in (("reviewer", "owner"), ("baselineSha256", "0" * 64),
+                           ("perPixelThreshold", 0), ("tolerancePercent", 0), ("extra", True)):
+            with self.subTest(key=key):
+                entry = self.pending()
+                entry[key] = value
+                self.assertTrue(entry_errors(0, entry))
+
+    def test_invalid_pending_metadata_is_rejected(self) -> None:
+        for key, value in (("status", "reviewed"), ("thresholdPolicy", "guessed"),
+                           ("backendRow", "d3d11-hw"), ("scene", "../escape"), ("software", 1)):
+            with self.subTest(key=key):
+                entry = self.pending()
+                entry[key] = value
+                self.assertTrue(entry_errors(0, entry))
+
+    def test_duplicate_pending_or_reviewed_identity_is_rejected(self) -> None:
+        pending = self.pending()
+        reviewed = {"scene": pending["scene"], "backendRow": pending["backendRow"], "software": True,
+                    "perPixelThreshold": 0, "tolerancePercent": 0, "reviewer": "owner", "baselineSha256": "0" * 64}
+        for other in (pending, reviewed):
+            entries, errors = parse_manifest_text(json.dumps({"schemaVersion": 1, "entries": [pending, other]}))
+            self.assertEqual([], entries)
+            self.assertTrue(any("duplicate scene/backendRow" in error for error in errors))
+
+    def test_reviewed_to_pending_still_requires_reviewed_deletion(self) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rhi210_review_gate", REPO_ROOT / "tools/perf-budget/check_golden_review.py")
+        gate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(gate)
+        entries, errors = load_manifest(GOLDEN_ROOT)
+        self.assertEqual([], errors)
+        reviewed = entries[0]
+        pending = self.pending()
+        pending.update(scene=reviewed["scene"], backendRow=reviewed["backendRow"])
+        head, errors = parse_manifest_text(json.dumps({"schemaVersion": 1, "entries": [pending]}))
+        self.assertEqual([], errors)
+        key = (reviewed["scene"], reviewed["backendRow"])
+        violations, _ = gate.review_errors({key: reviewed}, {(e["scene"], e["backendRow"]): e for e in head}, [])
+        self.assertTrue(any("removed" in violation for violation in violations))
 
 
 class GoldenManifestLiveTests(unittest.TestCase):

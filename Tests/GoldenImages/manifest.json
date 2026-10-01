@@ -135,6 +135,76 @@
       "tolerancePercent": 0.5,
       "reviewer": "Claude agent, RHI-210 GTAO normalization fix (WARP 10.0.26100.x; open plane now ~204; Krilliac approved 2026-09-30 from the before/after review packet)",
       "baselineSha256": "2bde35c70f03bc0dc4a5b460380c3b592f5772d3fda74d3ce9cc951de0423353"
+    },
+    {
+      "scene": "Frame_ForwardLit",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Frame_ForwardMaterial",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Frame_DrawList",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Frame_PostChain",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Scene_FPSLevel1_MainCamera",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Scene_FPSLevel1_Overview",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "World_OpaqueAndSprites",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Primary_DeferredGeometry",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Primary_DeferredLighting",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Primary_ShadowDepth",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
     }
   ]
 }

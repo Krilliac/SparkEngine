@@ -71,7 +71,9 @@ namespace
         {
             const auto path = root / kRow / (scene + ".png");
             if (!Spark::GoldenImageTestRunner::SavePNG(path.string(), pixels.data(), kSceneSize, kSceneSize))
+            {
                 return {};
+            }
             std::string digest;
             std::string error;
             return Spark::FileIntegrity::ComputeSha256(path, digest, error) ? digest : std::string{};
@@ -453,7 +455,9 @@ namespace
         std::vector<uint8_t> compressed(compressedSize);
         if (mz_compress(compressed.data(), &compressedSize, filteredRows.data(),
                         static_cast<mz_ulong>(filteredRows.size())) != MZ_OK)
+        {
             return {};
+        }
         compressed.resize(compressedSize);
         AppendChunk(png, "IDAT", compressed);
         AppendChunk(png, "IEND", {});
@@ -476,7 +480,9 @@ TEST(GoldenImageTest_PNG_DecodesAllScanlineFilters)
     constexpr size_t stride = width * 3;
     std::vector<uint8_t> expected(stride * height);
     for (size_t i = 0; i < expected.size(); ++i)
+    {
         expected[i] = static_cast<uint8_t>(17 + i * 23);
+    }
 
     auto paeth = [](int a, int b, int c)
     {
@@ -573,6 +579,29 @@ TEST(GoldenImageTest_Manifest_ValidEntryParses)
     EXPECT_NEAR(entries[0].tolerancePercent, 0.25f, 0.0001f);
     EXPECT_EQ(entries[0].reviewer, std::string("golden-test"));
     EXPECT_EQ(entries[0].baselineSha256, kZeroSha);
+}
+
+TEST(GoldenImageTest_Manifest_AwaitingCaptureCannotPassComparison)
+{
+    GoldenScratch scratch("manifest-awaiting-capture");
+    const std::string pending = R"({"scene":"pending","backendRow":"vulkan-lavapipe","software":true,)"
+                                R"("status":"awaiting-capture","thresholdPolicy":"set from measured variance"})";
+    scratch.WriteManifest(ManifestJson(pending));
+    std::vector<Spark::GoldenManifestEntry> entries;
+    std::string error;
+    ASSERT_TRUE(Spark::GoldenManifest::Load(scratch.root / "manifest.json", entries, error));
+    EXPECT_TRUE(entries.empty());
+    const auto result = scratch.Runner(MakeGradient()).CompareWithGolden("pending");
+    EXPECT_FALSE(result.matched);
+    EXPECT_TRUE(result.failureReason.find("no manifest entry") != std::string::npos);
+    EXPECT_TRUE(ManifestRejected(scratch, ManifestJson(pending + "," + pending)));
+    EXPECT_TRUE(ManifestRejected(scratch, ManifestJson(pending + "," + EntryJson("pending", kZeroSha, 0, 0))));
+    std::string withThreshold = pending;
+    withThreshold.insert(withThreshold.size() - 1, R"(,"perPixelThreshold":0)");
+    EXPECT_TRUE(ManifestRejected(scratch, ManifestJson(withThreshold)));
+    std::string wrongStatus = pending;
+    wrongStatus.replace(wrongStatus.find("awaiting-capture"), std::string("awaiting-capture").size(), "reviewed");
+    EXPECT_TRUE(ManifestRejected(scratch, ManifestJson(wrongStatus)));
 }
 
 TEST(GoldenImageTest_Manifest_InvalidManifestsFailClosed)
@@ -729,7 +758,9 @@ TEST(GoldenImageTest_FrameContent_UniformFrameRejected)
 
     // Paint 16 of 64 pixels a second colour: 75% dominant, 2 colours.
     for (size_t i = 0; i < 16; ++i)
+    {
         frame[i * 4] = 200;
+    }
     const auto content = Spark::GoldenImageTestRunner::AnalyzeFrame(frame);
     EXPECT_EQ(content.distinctColors, 2u);
     EXPECT_NEAR(content.dominantFraction, 0.75, 0.0001);

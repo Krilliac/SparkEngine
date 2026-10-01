@@ -58,7 +58,9 @@ TEST(D3D11_Golden_UniformFrameIsRejected)
 
     // A frame with a real second region passes.
     for (size_t i = 0; i < uniform.size() / 4; i += 4)
+    {
         uniform[i] = 200;
+    }
     EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(uniform, 0.95));
 }
 
@@ -93,14 +95,18 @@ namespace
 
         ComPtr<ID3D11Texture2D> staging;
         if (FAILED(device.GetD3D11Device()->CreateTexture2D(&stagingDesc, nullptr, &staging)))
+        {
             return pixels;
+        }
 
         ID3D11DeviceContext1* context = device.GetD3D11Context();
         context->CopyResource(staging.Get(), resource);
 
         D3D11_MAPPED_SUBRESOURCE mapped{};
         if (FAILED(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+        {
             return pixels;
+        }
 
         pixels.resize(size_t(width) * height * 4);
         for (uint32_t y = 0; y < height; ++y)
@@ -153,8 +159,7 @@ namespace
 TEST(D3D11_Resource_WrapNativeRenderTargetCreatesRTV)
 {
     Spark::RHI::D3D11::D3D11Device device;
-    if (!TryCreateD3D11Device(device))
-        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+    ASSERT_TRUE(TryCreateD3D11Device(device));
 
     constexpr uint32_t kSize = 16;
     ComPtr<ID3D11Texture2D> native = CreateNativeRenderTarget(device, kSize);
@@ -185,8 +190,7 @@ TEST(D3D11_Resource_WrapNativeRenderTargetCreatesRTV)
 TEST(D3D11_Resource_SetRenderTargetsClampsToEightSlots)
 {
     Spark::RHI::D3D11::D3D11Device device;
-    if (!TryCreateD3D11Device(device))
-        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+    ASSERT_TRUE(TryCreateD3D11Device(device));
 
     constexpr uint32_t kSize = 8;
     auto first = device.CreateTexture(RenderTargetDesc(kSize, "RHI210_First"));
@@ -207,8 +211,12 @@ TEST(D3D11_Resource_SetRenderTargetsClampsToEightSlots)
     device.GetD3D11Context()->OMGetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, bound, nullptr);
     const bool secondBound = bound[0] == second->GetRenderTargetView();
     for (auto* view : bound)
+    {
         if (view)
+        {
             view->Release();
+        }
+    }
     EXPECT_TRUE(secondBound);
 
     first.reset();
@@ -219,8 +227,7 @@ TEST(D3D11_Resource_SetRenderTargetsClampsToEightSlots)
 TEST(D3D11_Golden_RHITriangleFrameIsNotUniform)
 {
     Spark::RHI::D3D11::D3D11Device device;
-    if (!TryCreateD3D11Device(device))
-        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+    ASSERT_TRUE(TryCreateD3D11Device(device));
 
     using namespace Spark::RHI;
     constexpr uint32_t kSize = 64;

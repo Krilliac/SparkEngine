@@ -14,7 +14,7 @@ This checks the recorded review, not the reviewer's identity; protected human
 approval still depends on repository review policy. The gate's Python regressions
 run in CI and through CTest `GoldenImage_ReviewGate`.
 
-> **Status (2026-09-26):** two software rows have entries. `vulkan-lavapipe` has `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). `opengl-llvmpipe` has eight scenes of the shipped GLSL (BasicVS+BasicPS lit sphere, the ACES/Reinhard/Uncharted2/FXAA `PostProcess` variants, horizontal and vertical `GaussianBlur`, and `BloomExtract`) rendered through `GLDevice` on Mesa llvmpipe by `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Both are software-row shader evidence, not engine-pass goldens or hardware certification. `d3d11-warp` has `PostPass_TonemapACES`, `PostPass_Bloom`, `PostPass_FXAA` and `PostPass_GTAO`, the production `PostProcessingPipeline` passes rendered one at a time on WARP by `Tests/TestRHI210D3D11PassGoldenReal.cpp` (RHI-210, CTest `D3D11PassGolden`), reviewed with the D3D11 WARP checklist below and still owner review pending. The canonical-content goldens and the `d3d11-hw` row have no entries yet.
+> **Status (2026-09-26):** two software rows have entries. `vulkan-lavapipe` has `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). `opengl-llvmpipe` has eight scenes of the shipped GLSL (BasicVS+BasicPS lit sphere, the ACES/Reinhard/Uncharted2/FXAA `PostProcess` variants, horizontal and vertical `GaussianBlur`, and `BloomExtract`) rendered through `GLDevice` on Mesa llvmpipe by `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Both are software-row shader evidence, not engine-pass goldens or hardware certification. `d3d11-warp` has `PostPass_TonemapACES`, `PostPass_Bloom`, `PostPass_FXAA` and `PostPass_GTAO`, the production `PostProcessingPipeline` passes rendered one at a time on WARP by `Tests/TestRHI210D3D11PassGoldenReal.cpp` (RHI-210, CTest `D3D11PassGolden`), owner-approved in September 2026 with the D3D11 WARP checklist below. The canonical-content goldens and the `d3d11-hw` row have no entries yet.
 
 ## Overview
 
@@ -441,3 +441,11 @@ auto pixels = Spark::GoldenImageTestRunner::LoadPNG("input.png", w, h);
 - [[Graphics-Engine]] -- Rendering pipeline and framebuffer management
 - [[RHI-Overview]] -- RHI abstraction layer and backend implementations
 - [[Testing]] -- Unit test infrastructure and CTest setup
+
+## RHI-210 capture continuation (2026-10-01)
+
+The new capture plans and their current deferred-pass blockers are documented in
+[the RHI-210 capture handoff](../../Tests/GoldenImages/RHI210-CAPTURE.md). Pending
+manifest entries carry no baseline or numeric threshold and are excluded from
+the reviewed comparison set. The registered lanes fail closed until capture and
+owner review; no readiness promotion follows from the tooling changes.

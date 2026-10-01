@@ -1163,6 +1163,10 @@ target_sources(SparkTests PRIVATE
     TestD3D11DeviceContractsReal.cpp
     TestRHI210D3D11GoldenReal.cpp
     TestRHI210D3D11PassGoldenReal.cpp
+    TestRHI210D3D11FrameGoldenReal.cpp
+    TestRHI210D3D11SceneGoldenReal.cpp
+    TestRHI210D3D11WorldGoldenReal.cpp
+    TestRHI210D3D11PrimaryGoldenReal.cpp
     TestRHI210D3D11ValidationReal.cpp
     TestRHI210D3D11DeviceLossReal.cpp
     TestSEC2RenderingHardeningReal.cpp
@@ -2992,7 +2996,7 @@ if(WIN32)
         TIMEOUT 60)
     # RHI-210: the production PostProcessingPipeline passes (ACES tonemap, bloom,
     # FXAA, GTAO) on WARP, compared with the d3d11-warp baselines and reviewed
-    # thresholds in Tests/GoldenImages/manifest.json (owner review pending). The
+    # thresholds in Tests/GoldenImages/manifest.json (owner approved September 2026). The
     # device is always WARP, so exactly this lane compares them; the main suite
     # excludes the family.
     add_test(NAME D3D11PassGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
@@ -3003,6 +3007,47 @@ if(WIN32)
         RUN_SERIAL TRUE
         TIMEOUT 120)
     spark_exclude_from_main_suite(D3D11PassGolden_)
+    # RHI-210: the production D3D11 frame on WARP (TestRHI210D3D11FrameGoldenReal.cpp:
+    # clear + forward lit pass, basic material, ECS draw list, the post chain inside
+    # the frame), the FPS module's authored level1.scene through SceneManager and
+    # RenderScene (TestRHI210D3D11SceneGoldenReal.cpp), and the ECS world renderer's
+    # opaque and transparent sprite passes (TestRHI210D3D11WorldGoldenReal.cpp), each
+    # awaiting capture and owner review in manifest.json; missing baselines fail closed. Exact counts;
+    # the main suite excludes the families.
+    add_test(NAME D3D11FrameGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11FrameGolden PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI210D3D11FrameGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=5;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+    spark_exclude_from_main_suite(D3D11FrameGolden_)
+    add_test(NAME D3D11SceneGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11SceneGolden PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI210D3D11SceneGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=3;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+    spark_exclude_from_main_suite(D3D11SceneGolden_)
+    add_test(NAME D3D11WorldGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11WorldGolden PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI210D3D11WorldGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=2;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        LABELS "d3d11-golden;d3d11;stable-v1"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+    spark_exclude_from_main_suite(D3D11WorldGolden_)
+    add_test(NAME D3D11PrimaryGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(D3D11PrimaryGolden PROPERTIES
+        ENVIRONMENT
+            "SPARK_TEST_FILE=TestRHI210D3D11PrimaryGoldenReal.cpp;SPARK_TEST_EXPECT_COUNT=4;SPARK_GOLDEN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/Tests/Output"
+        RUN_SERIAL TRUE
+        TIMEOUT 300)
+    spark_exclude_from_main_suite(D3D11PrimaryGolden_)
+    set_tests_properties(D3D11PassGolden D3D11FrameGolden D3D11SceneGolden D3D11WorldGolden D3D11PrimaryGolden PROPERTIES
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:SparkTests>"
+        LABELS "d3d11-golden;d3d11-validation;d3d11-debug-layer;d3d11;stable-v1")
     add_test(NAME D3D11_Resource COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_Resource PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Resource_;SPARK_TEST_EXPECT_COUNT=3"
@@ -3023,7 +3068,7 @@ if(WIN32)
         TIMEOUT 180)
     add_test(NAME D3D11_DeviceLoss COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_DeviceLoss PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME=D3D11_DeviceLoss_;SPARK_TEST_EXPECT_COUNT=2"
+        ENVIRONMENT "SPARK_TEST_NAME=D3D11_DeviceLoss_;SPARK_TEST_EXPECT_COUNT=4"
         LABELS "d3d11-stress;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 120)
@@ -4748,6 +4793,12 @@ add_test(
         ${CMAKE_SOURCE_DIR}/Tests/Tools/test_golden_manifest.py -v)
 set_tests_properties(GoldenImage_ManifestIntegrity PROPERTIES
     LABELS "rendering;golden;unit;python"
+    TIMEOUT 60)
+add_test(NAME RHI210_CapturePacket
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_rhi210_capture.py -v)
+set_tests_properties(RHI210_CapturePacket PROPERTIES
+    LABELS "rendering;golden;unit;python"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
     TIMEOUT 60)
 # PERF-100: tools/perf-budget/check_golden_review.py, the diff gate that the
 # required performance-budget-governance job runs on every PR and push, rejects
