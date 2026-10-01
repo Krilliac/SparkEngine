@@ -2833,8 +2833,8 @@ Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkEngine/Source/Engine/Networking/NetworkManager.cpp`, `Tests/TestSecureTransportWired.cpp`, `GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.cpp`
    - Connect carries the signed handshake and NetworkManager seals every later datagram, so Terrafront SCRAM login and gameplay use the same channel. SecureTransport_Wired_PlaintextGameplayAfterHandshakeDropped and SensitiveMessageRefusedWithoutChannel pin it. Local Windows run only; no exact-commit CI yet.
 4. **[implemented]** No custom cryptographic primitive remains in the advertised transport
-   - Evidence: `ThirdParty/Security/libsodium`, `cmake/SparkLibsodium.cmake`, `SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp`, `Tests/TestNET100Libsodium.cpp`, `Tests/Tools/test_network_security_csprng.py`
-   - Local windows-release evidence only; no ci: reference yet. Separately, NET-100.plannedCiJobs lists 'network-security', which now exists, and site-data validate.py fails until it is promoted to requiredCiJobs. That ledger edit is left to the owner.
+   - Evidence: `ThirdParty/Security/libsodium`, `cmake/SparkLibsodium.cmake`, `SparkEngine/Source/Engine/Networking/NetworkEncryption.cpp`, `SparkEngine/Source/Utils/PasswordHash.cpp`, `GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp`, `GameModules/SparkGameMMOFPS/CMakeLists.txt`, `Tests/TestNET100Libsodium.cpp`, `Tests/TestPasswordHash.cpp`, `Tests/TestTFOnboarding.cpp`, `Tests/Tools/test_network_security_csprng.py`
+   - Transport, gateway and SCRAM SHA/HMAC now call libsodium; PBKDF2 copies the keyed HMAC state. The expanded source scanner passes locally, and pre-migration byte fixtures are recorded in C++ tests. C++ KATs, shipping builds, sanitizer timing and exact-commit CI remain unverified in this lane.
 
 **Required commands**
 

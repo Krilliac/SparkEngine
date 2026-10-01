@@ -1,12 +1,9 @@
 /**
  * @file TFCrypto.h
- * @brief Self-contained SHA-256 / HMAC-SHA256 / PBKDF2-HMAC-SHA256 primitives
- *        for TERRAFRONT account password hashing.
+ * @brief libsodium-backed SHA-256 / HMAC-SHA256 with PBKDF2 for TERRAFRONT accounts.
  *
- * Deliberately self-contained (stdlib only, no engine dependency) so it stays
- * linkable standalone into SparkTests, matching TFAccountSystem's existing
- * minimal-dependency convention. It serves account storage, not the network
- * transport (whose primitives are libsodium's, NET-100).
+ * The module and SparkTests both link libsodium. PBKDF2 retains the password
+ * storage format and cost while the SHA-256 and HMAC primitives come from libsodium.
  *
  * All functions are pure/stateless from the caller's perspective. Correctness
  * is pinned by known-answer tests in Tests/TestTFOnboarding.cpp (FIPS 180-2

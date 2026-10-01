@@ -456,6 +456,30 @@ TEST(TFCrypto_Pbkdf2HmacSha256_KnownAnswer)
     EXPECT_TRUE(Terrafront::Crypto::ToHex(dk) == "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b");
 }
 
+TEST(TFCrypto_PreservesPreMigrationBinaryAndLongKeyHashes)
+{
+    // Captured from TFCrypto.cpp at 4dd5aaf79 before the libsodium migration.
+    const std::array<uint8_t, 5> data{0x00, 0x41, 0x80, 0xff, 0x42};
+    std::array<uint8_t, 80> key{};
+    for (size_t i = 0; i < key.size(); ++i)
+    {
+        key[i] = static_cast<uint8_t>(i);
+    }
+
+    const auto hash = Terrafront::Crypto::Sha256(data.data(), data.size());
+    const auto mac = Terrafront::Crypto::HmacSha256(key.data(), key.size(), data.data(), data.size());
+    EXPECT_EQ(Terrafront::Crypto::ToHex(hash.data(), hash.size()),
+              "d3ac8e5d47fd7c85177114e40301f9047697ce7de33402ab17d5d7f747c7bf92");
+    EXPECT_EQ(Terrafront::Crypto::ToHex(mac.data(), mac.size()),
+              "24f3f58a1deaec238e54cde4e26c670c50037b52d339425ae6911b283127b2bc");
+
+    const std::vector<uint8_t> salt{0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                    0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    const auto derived = Terrafront::Crypto::Pbkdf2HmacSha256(std::string("p\0ss", 4), salt, 17, 48);
+    EXPECT_EQ(Terrafront::Crypto::ToHex(derived),
+              "1e869d1a4e89544a817576324bb9e5923f2d8e38542d46e63d93fdca5ab72208161bd3d8f1154a026e43856217f29ef5");
+}
+
 TEST(TFCrypto_Pbkdf2_SelfConsistency)
 {
     const std::vector<uint8_t> saltA{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
