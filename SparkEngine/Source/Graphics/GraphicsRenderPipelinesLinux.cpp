@@ -19,9 +19,11 @@
 #include "PostProcessingPipeline.h"
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
+#include "../Utils/LogMacros.h"
 
 #include <chrono>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 using namespace DirectX;
@@ -245,21 +247,114 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     m_statistics.culledObjects = m_statistics.totalObjects - m_statistics.visibleObjects;
 }
 
+// ============================================================================
+// Tone-mapping post pass — Linux/RHI
+// ============================================================================
+
+bool Spark::Graphics::Detail::CreateTonemapPass(LinuxRHIState& rhi, const Spark::RHI::RHIPipelineStateDesc& forwardDesc,
+                                                Spark::RHI::IRHIShader* forwardVs, Spark::RHI::IRHIShader* forwardPs,
+                                                bool headless)
+{
+    using Spark::RHI::PixelFormat;
+    using Spark::RHI::RHIShaderStage;
+
+    Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice();
+    Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
+    if (!device || !rhi.hdrLighting)
+    {
+        return false;
+    }
+
+    // The Linux RHI backends read GLSL (OpenGL) or its SPIR-V (Vulkan); there is no HLSL
+    // version of these two stages, and no D3D backend on this path.
+    rhi.bridge.RegisterShader("fullscreen_vs", RHIShaderStage::Vertex, "", "Shaders/GLSL/FullscreenQuad.glsl",
+                              "Shaders/SPIRV/FullscreenQuad.vert.spv", "main");
+    rhi.bridge.RegisterShader("post_tonemap_ps", RHIShaderStage::Pixel, "", "Shaders/GLSL/PostProcess.glsl",
+                              "Shaders/SPIRV/PostProcess.frag.spv", "main");
+    Spark::RHI::IRHIShader* vs = headless ? nullptr : rhi.bridge.GetShader("fullscreen_vs");
+    Spark::RHI::IRHIShader* ps = headless ? nullptr : rhi.bridge.GetShader("post_tonemap_ps");
+    if (!headless && (!vs || !ps))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load the tone-mapping shaders via RHI");
+        return false;
+    }
+
+    Spark::RHI::RHIPipelineStateDesc hdrDesc = forwardDesc;
+    hdrDesc.renderTargetFormats[0] = rhi.hdrLighting->GetFormat();
+    hdrDesc.debugName = "BasicForwardPassHDR";
+    auto hdrPipeline = device->CreatePipelineState(hdrDesc, forwardVs, forwardPs);
+
+    // Full-screen triangle from the vertex index: no vertex input, no depth.
+    Spark::RHI::RHIPipelineStateDesc desc;
+    desc.numRenderTargets = 1;
+    desc.renderTargetFormats[0] = backBuffer ? backBuffer->GetFormat() : PixelFormat::R8G8B8A8_UNORM;
+    desc.depthStencilFormat = PixelFormat::Unknown;
+    desc.depthStencil.depthEnable = false;
+    desc.depthStencil.depthWrite = false;
+    desc.rasterizer.cullMode = Spark::RHI::RHICullMode::None;
+    desc.debugName = "TonemapPass";
+    auto pipeline = device->CreatePipelineState(desc, vs, ps);
+
+    auto constants = rhi.bridge.CreateConstantBuffer(sizeof(PostProcessConstants));
+    auto sampler = rhi.bridge.CreateSamplerLinearClamp();
+    if (!hdrPipeline || !pipeline || !constants || !sampler)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create the tone-mapping post pass resources");
+        return false;
+    }
+
+    rhi.basicForward.hdrPipeline = std::move(hdrPipeline);
+    rhi.tonemap.pipeline = std::move(pipeline);
+    rhi.tonemap.constants = std::move(constants);
+    rhi.tonemap.sampler = std::move(sampler);
+    return true;
+}
+
 void GraphicsEngine::RenderPostProcessing()
 {
     m_postProcessStartTime = std::chrono::high_resolution_clock::now();
 
-    // PostProcessingPipeline is the only post-process path on Linux. Its pass
-    // count includes only passes that actually executed (a bound shader and a
-    // recorded draw); the engine-level Bloom/SSAO/tone-mapping settings have
-    // no Linux RHI pipeline, so they add no passes of their own.
+    // The PostProcessingPipeline's CPU state advances once per frame in EndFrame; its effect
+    // shaders are D3D11-only, so on this path it executes no pass itself. The one post pass
+    // the Linux RHI path records is tone mapping (PostProcessPass::Tonemapping), and only for a
+    // frame BeginFrame routed into the HDR scene target. The engine-level Bloom/SSAO settings
+    // have no Linux RHI pipeline and add no passes of their own.
     uint32_t executedPasses = 0;
-    if (m_postProcessing)
+    auto& rhi = GetRHI();
+    Spark::RHI::IRHICommandList* cmd = rhi.initialized ? rhi.bridge.GetCommandList() : nullptr;
+    Spark::RHI::IRHIDevice* device = rhi.initialized ? rhi.bridge.GetDevice() : nullptr;
+    Spark::RHI::IRHITexture* backBuffer = rhi.initialized ? rhi.bridge.GetBackBuffer() : nullptr;
+    Spark::RHI::IRHITexture* hdrScene = rhi.hdrLighting.get();
+    if (cmd && device && backBuffer && m_postProcessing && hdrScene && rhi.sceneTarget == hdrScene &&
+        rhi.tonemap.pipeline)
     {
-        float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
-        m_postProcessing->Process(deltaTime);
-        m_postProcessing->Render();
-        executedPasses = static_cast<uint32_t>(m_postProcessing->GetActivePassCount());
+        const auto& settings = m_postProcessing->GetTonemappingSettings();
+        PostProcessConstants constants{};
+        constants.screenSize =
+            XMFLOAT2(static_cast<float>(backBuffer->GetWidth()), static_cast<float>(backBuffer->GetHeight()));
+        constants.invScreenSize = XMFLOAT2(1.0f / constants.screenSize.x, 1.0f / constants.screenSize.y);
+        constants.exposure = settings.exposure;
+        // The D3D11 tonemap pass writes the operator's output without a gamma curve.
+        constants.gamma = 1.0f;
+        constants.vignetteRadius = 0.75f;
+        constants.saturation = settings.saturation;
+        device->UpdateBuffer(rhi.tonemap.constants.get(), &constants, sizeof(constants));
+
+        cmd->BeginEvent("Tonemapping");
+        // Bind the input first: a sampled-image layout change cannot be recorded while the
+        // back buffer is open for rendering (Vulkan dynamic rendering).
+        cmd->SetShaderResource(Spark::RHI::RHIShaderStage::Pixel, 0, hdrScene);
+        cmd->SetSampler(Spark::RHI::RHIShaderStage::Pixel, 0, rhi.tonemap.sampler.get());
+        cmd->SetRenderTargets(&backBuffer, 1, nullptr);
+        cmd->SetPipelineState(rhi.tonemap.pipeline.get());
+        cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Pixel, 1, rhi.tonemap.constants.get());
+        cmd->Draw(3, 0);
+        cmd->EndEvent();
+
+        // Anything drawn after post-processing (debug overlays, UI) lands on the back buffer.
+        cmd->SetRenderTargets(&backBuffer, 1, rhi.bridge.GetDepthBuffer());
+        rhi.sceneTarget = backBuffer;
+        executedPasses = 1;
     }
     m_statistics.postProcessPasses = executedPasses;
 

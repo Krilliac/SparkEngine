@@ -1990,6 +1990,17 @@ if(SPARK_OPENGL_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
             RUN_SERIAL TRUE
             TIMEOUT 120)
         spark_exclude_from_main_suite(LinuxForwardPass_OpenGL)
+        # RHI-230: the tone-mapping post pass on the same window: the cube frame routed through
+        # the HDR scene target and the shipped PostProcess shader, checked against the shader
+        # formula applied on the CPU to an untone-mapped reference frame.
+        add_test(NAME LinuxTonemapPassOpenGL
+            COMMAND ${_spark_forward_pass_display} $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(LinuxTonemapPassOpenGL PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=LinuxTonemapPass_OpenGL;SPARK_TEST_EXPECT_COUNT=1;SPARK_REQUIRE_OPENGL=1;LIBGL_ALWAYS_SOFTWARE=1;GALLIUM_DRIVER=llvmpipe;SDL_AUDIODRIVER=dummy"
+            LABELS "opengl;llvmpipe"
+            RUN_SERIAL TRUE
+            TIMEOUT 120)
+        spark_exclude_from_main_suite(LinuxTonemapPass_OpenGL)
     endif()
 endif()
 add_test(NAME SparkSaveCompatibilityTests COMMAND $<TARGET_FILE:SparkTests> --quiet)
@@ -2853,6 +2864,16 @@ if(SPARK_VULKAN_AVAILABLE AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET Spar
             RUN_SERIAL TRUE
             TIMEOUT 120)
         spark_exclude_from_main_suite(LinuxForwardPass_Vulkan)
+        # RHI-230: the tone-mapping post pass (HDR scene target + shipped PostProcess SPIR-V)
+        # through the production frame under the same forced validation layer, zero errors.
+        add_test(NAME LinuxTonemapPassVulkan
+            COMMAND ${_spark_forward_pass_display} $<TARGET_FILE:SparkTests> --warn-is-error)
+        set_tests_properties(LinuxTonemapPassVulkan PROPERTIES
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=LinuxTonemapPass_Vulkan;SPARK_TEST_EXPECT_COUNT=1;SPARK_REQUIRE_VULKAN_VALIDATION=1;SDL_AUDIODRIVER=dummy"
+            LABELS "vulkan;vulkan-validation"
+            RUN_SERIAL TRUE
+            TIMEOUT 120)
+        spark_exclude_from_main_suite(LinuxTonemapPass_Vulkan)
     endif()
 endif()
 

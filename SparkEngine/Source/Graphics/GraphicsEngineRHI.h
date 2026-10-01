@@ -95,11 +95,58 @@ namespace Spark::Graphics::Detail
     struct BasicForwardPass
     {
         std::unique_ptr<Spark::RHI::IRHIPipelineState> pipeline;
+        /// The same shaders and state for the R16G16B16A16_FLOAT scene target the tone-mapping
+        /// pass reads (Vulkan requires the pipeline's colour format to match the attachment).
+        std::unique_ptr<Spark::RHI::IRHIPipelineState> hdrPipeline;
         std::unique_ptr<Spark::RHI::IRHIBuffer> frameConstants;
         std::unique_ptr<Spark::RHI::IRHIBuffer> materialConstants;
         std::vector<std::unique_ptr<Spark::RHI::IRHIBuffer>> objectConstants;
         std::unique_ptr<Spark::RHI::IRHISampler> sampler;
         uint64_t rejectedDraws = 0;
+    };
+
+    /// PostProcessConstants of Shaders/GLSL/PostProcess.glsl (std140, binding 1).
+    struct PostProcessConstants
+    {
+        DirectX::XMFLOAT2 screenSize;
+        DirectX::XMFLOAT2 invScreenSize;
+        float exposure;
+        float gamma;
+        float vignetteStrength;
+        float vignetteRadius;
+        float chromaticStrength;
+        float grainStrength;
+        float time;
+        float saturation;
+    };
+    static_assert(sizeof(PostProcessConstants) == 48, "must match the std140 PostProcessConstants block");
+
+    /**
+     * @brief Resources of the Linux/macOS tone-mapping post pass (PostProcessPass::Tonemapping).
+     *
+     * When the PostProcessingPipeline has Tonemapping enabled with a variant the shipped
+     * PostProcess shader implements (the ACES operator with contrast 1), BeginFrame routes the
+     * scene into LinuxRHIState::hdrLighting and GraphicsEngine::RenderPostProcessing draws
+     * FullscreenQuad + PostProcess from it into the back buffer, the way the D3D11 pipeline's
+     * tonemap pass writes the frame. The shader's gamma is set to 1 because the D3D11 pass
+     * applies none.
+     *
+     * Contract:
+     *   - Thread affinity: game thread only.
+     *   - Ownership: owned by LinuxRHIState; created by GraphicsEngine::InitializeBasicShaders,
+     *     released by GraphicsEngine::Shutdown after the device is idle.
+     *   - Allocation: none per frame (one constant buffer, rewritten once per frame).
+     *
+     * A frame that asks for tone mapping the pass cannot perform (unsupported operator or
+     * contrast, or a missing pipeline or HDR target) renders straight to the back buffer, is
+     * counted in `rejectedFrames` and logged; no pass is reported for it.
+     */
+    struct TonemapPass
+    {
+        std::unique_ptr<Spark::RHI::IRHIPipelineState> pipeline;
+        std::unique_ptr<Spark::RHI::IRHIBuffer> constants;
+        std::unique_ptr<Spark::RHI::IRHISampler> sampler;
+        uint64_t rejectedFrames = 0;
     };
 
     struct LinuxRHIState
@@ -134,6 +181,14 @@ namespace Spark::Graphics::Detail
 
         // Pipeline, constant buffers and sampler of the forward draw-list pass.
         BasicForwardPass basicForward;
+
+        // Pipeline, constants and sampler of the tone-mapping post pass.
+        TonemapPass tonemap;
+
+        // Colour target the current frame's scene pass records into: the back buffer, or
+        // hdrLighting when BeginFrame routed the frame through the tone-mapping pass. Set by
+        // BeginFrame; non-owning.
+        Spark::RHI::IRHITexture* sceneTarget = nullptr;
     };
 
     inline LinuxRHIState& GetRHI()
@@ -147,6 +202,18 @@ namespace Spark::Graphics::Detail
     // (GraphicsEngineLinux.cpp: Initialize / Shutdown / Resize).
     void CreatePlatformRenderTargets(uint32_t width, uint32_t height);
     void ReleasePlatformRenderTargets();
+
+    /**
+     * Builds the tone-mapping post pass (LinuxRHIState::tonemap) and the forward pipeline variant
+     * that renders the scene into the HDR target it reads (BasicForwardPass::hdrPipeline).
+     * @p forwardDesc, @p forwardVs and @p forwardPs are the basic forward pass's description and
+     * shaders; @p headless builds the pipelines without shaders, as the NullRHI path does.
+     * Defined in GraphicsRenderPipelinesLinux.cpp beside the pass it records; called once from
+     * GraphicsEngine::InitializeBasicShaders.
+     * @return false, with the pass left empty, when any part is missing.
+     */
+    bool CreateTonemapPass(LinuxRHIState& rhi, const Spark::RHI::RHIPipelineStateDesc& forwardDesc,
+                           Spark::RHI::IRHIShader* forwardVs, Spark::RHI::IRHIShader* forwardPs, bool headless);
 
 } // namespace Spark::Graphics::Detail
 

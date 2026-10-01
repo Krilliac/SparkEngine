@@ -108,6 +108,15 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
         return E_FAIL;
     }
 
+    // The tone-mapping post pass is optional: without it a frame that asks for tone mapping
+    // renders straight to the back buffer and is counted as rejected (see TonemapPass).
+    if (!CreateTonemapPass(rhi, desc, vs, ps, headless))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): tone-mapping post pass unavailable; tone-mapped frames will be "
+                       "rejected");
+    }
+
     return S_OK;
 }
 

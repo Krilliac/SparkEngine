@@ -366,16 +366,19 @@ void GraphicsEngine::Shutdown()
         m_vctSystem.reset();
     }
 
-    // Deregister + release GBuffer/HDR/depth textures before bridge shutdown —
-    // the bridge's registry stores non-owning pointers and must not be left
-    // dangling. Calling RegisterRenderTarget(slot, nullptr) clears the slot.
-    ReleasePlatformRenderTargets();
-    // The GPU may still read the forward pass's pipeline and buffers from the last frame.
+    // The GPU may still read the forward and tone-mapping passes' pipelines, buffers and the
+    // HDR scene target from the last frame, so it drains before any of them is released.
     if (Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice())
     {
         device->WaitForIdle();
     }
+    // Deregister + release GBuffer/HDR/depth textures before bridge shutdown —
+    // the bridge's registry stores non-owning pointers and must not be left
+    // dangling. Calling RegisterRenderTarget(slot, nullptr) clears the slot.
+    ReleasePlatformRenderTargets();
+    rhi.sceneTarget = nullptr;
     rhi.basicForward = BasicForwardPass{};
+    rhi.tonemap = TonemapPass{};
     rhi.defaultTexture.reset();
 
     rhi.bridge.Shutdown();
@@ -418,6 +421,7 @@ HRESULT GraphicsEngine::Resize(uint32_t width, uint32_t height)
     // Propagate the new viewport to every subsystem that tracks resolution.
     // Without this, the subsystems keep their initial m_width/m_height and
     // any subsequent render would use stale data.
+    rhi.sceneTarget = nullptr;
     if (m_postProcessing)
         m_postProcessing->Resize(width, height);
     if (m_temporalEffects)

@@ -69,12 +69,15 @@ namespace
     using Spark::Graphics::Detail::BasicFrameConstants;
     using Spark::Graphics::Detail::BasicObjectConstants;
 
-    /// Projection as the active backend's clip space needs it. The engine builds D3D-style
-    /// matrices (clip Y up, depth 0..1). OpenGL shares the Y direction; Vulkan's clip Y points
-    /// down, so its image would be upside down without the flip.
-    XMMATRIX BackendProjection(const XMMATRIX& projMatrix, Spark::RHI::GraphicsBackend backend)
+    /// Projection as the active backend's clip space and the bound target need it. The engine
+    /// builds D3D-style matrices (clip Y up, depth 0..1). Vulkan's clip Y points down, so its
+    /// image would be upside down without the flip. OpenGL shares the D3D direction for the
+    /// window, but an offscreen scene target is sampled by FullscreenQuad, which reads texture
+    /// row 0 as the top of the image (its GL path flips v); a GL framebuffer stores clip Y = -1
+    /// in row 0, so the offscreen scene is flipped too.
+    XMMATRIX BackendProjection(const XMMATRIX& projMatrix, Spark::RHI::GraphicsBackend backend, bool offscreen)
     {
-        if (backend == Spark::RHI::GraphicsBackend::Vulkan)
+        if (backend == Spark::RHI::GraphicsBackend::Vulkan || offscreen)
         {
             return XMMatrixMultiply(projMatrix, XMMatrixScaling(1.0f, -1.0f, 1.0f));
         }
@@ -163,7 +166,11 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 
     Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice();
     auto& pass = rhi.basicForward;
-    if (!m_assetPipeline || !device || !pass.pipeline || !rhi.defaultTexture)
+    // BeginFrame bound either the back buffer or, for a tone-mapped frame, the HDR scene
+    // target; the pipeline must be the variant built for that target's format.
+    const bool hdrScene = rhi.sceneTarget != nullptr && rhi.sceneTarget == rhi.hdrLighting.get();
+    Spark::RHI::IRHIPipelineState* pipeline = hdrScene ? pass.hdrPipeline.get() : pass.pipeline.get();
+    if (!m_assetPipeline || !device || !pipeline || !rhi.defaultTexture)
     {
         // Fail closed: a draw recorded without the pass pipeline is not a draw.
         pass.rejectedDraws += localDrawList.size();
@@ -196,7 +203,7 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
         localDrawList.resize(drawable);
     }
 
-    const XMMATRIX projection = BackendProjection(projMatrix, rhi.bridge.GetActiveBackend());
+    const XMMATRIX projection = BackendProjection(projMatrix, rhi.bridge.GetActiveBackend(), hdrScene);
     const XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projection);
 
     BasicFrameConstants frame{};
@@ -214,7 +221,7 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     device->UpdateBuffer(pass.frameConstants.get(), &frame, sizeof(frame));
 
     cmd->BeginEvent("ProcessDrawList (RHI)");
-    cmd->SetPipelineState(pass.pipeline.get());
+    cmd->SetPipelineState(pipeline);
     cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Vertex, 0, pass.frameConstants.get());
     cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Pixel, 2, pass.materialConstants.get());
     // BasicPS samples five textures. BindMaterial replaces slot 0 (albedo); the basic material

@@ -23,10 +23,18 @@
  *     forced on through the loader and its log redirected to a file; the layer must report
  *     itself active and log zero validation errors.
  *
- * Software-rasterizer evidence for the forward pass only: the deferred, shadow and post engine
- * passes are not covered, and neither is hardware. Without a display, window or driver the tests
- * skip, or fail under SPARK_REQUIRE_OPENGL=1 / SPARK_REQUIRE_VULKAN_VALIDATION=1 (the dedicated
- * CTest lanes, which run under xvfb-run).
+ * RHI-230 also runs the tone-mapping post pass (PostProcessPass::Tonemapping) through the same
+ * production frame. LinuxTonemapPass_{OpenGL,Vulkan}CubeRenders render the cube once straight to
+ * the back buffer as a reference, then with Tonemapping enabled (ACES, exposure 1.25), which routes
+ * the scene into the HDR target and resolves it with the shipped FullscreenQuad + PostProcess
+ * shaders. The second frame must equal the shader formula applied on the CPU to the reference
+ * (corners, cube centre, mirrored row), with one post pass reported, none rejected, and on
+ * Vulkan zero validation errors.
+ *
+ * Software-rasterizer evidence for the forward and tone-mapping passes only: the deferred and
+ * shadow engine passes and the other post effects are not covered, and neither is hardware.
+ * Without a display, window or driver the tests skip, or fail under SPARK_REQUIRE_OPENGL=1 /
+ * SPARK_REQUIRE_VULKAN_VALIDATION=1 (the dedicated CTest lanes, which run under xvfb-run).
  */
 
 #include "Core/Platform.h"
@@ -38,6 +46,7 @@
 #include "Graphics/AssetPipeline.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/GraphicsEngineRHI.h"
+#include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "Utils/GoldenImageTest.h"
 
@@ -52,6 +61,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -418,101 +428,242 @@ namespace
         EXPECT_EQ(Spark::Graphics::Detail::GetRHI().basicForward.rejectedDraws, 0u);
     }
 
+    /// PostProcess.glsl main() with no variant defines, for one channel, as the tone-mapping pass
+    /// configures it: exposure, ACES, saturation 1 (channels stay independent), gamma 1.
+    float TonemapReference(float linear, float exposure)
+    {
+        const float x = linear * exposure;
+        return std::clamp((x * (2.51f * x + 0.03f)) / (x * (2.43f * x + 0.59f) + 0.14f), 0.0f, 1.0f);
+    }
+
+    /// Whether @p actual is the tone-mapped value of a scene channel the untone-mapped frame
+    /// stored as @p referenceByte. The byte stands for any linear value within half a step of it,
+    /// so the accepted range is the tone-mapped image of that interval, widened by two steps.
+    bool MatchesTonemapped(int actual, int referenceByte, float exposure)
+    {
+        const float low = TonemapReference((static_cast<float>(referenceByte) - 0.5f) / 255.0f, exposure);
+        const float high = TonemapReference((static_cast<float>(referenceByte) + 0.5f) / 255.0f, exposure);
+        const int lowByte = static_cast<int>(std::floor(low * 255.0f)) - 2;
+        const int highByte = static_cast<int>(std::ceil(high * 255.0f)) + 2;
+        return actual >= lowByte && actual <= highByte;
+    }
+
+    int TonemappedByte(float linear, float exposure)
+    {
+        return static_cast<int>(std::lround(TonemapReference(linear, exposure) * 255.0f));
+    }
+
+    /// Exposure the tone-mapping tests set, so the pass is shown to read its constants.
+    constexpr float kTonemapExposure = 1.25f;
+
+    /**
+     * Renders the cube once straight to the back buffer (the reference), then with
+     * PostProcessPass::Tonemapping enabled, and checks the second frame against the shipped
+     * PostProcess shader's formula applied to the first: the clear colour in every corner, the
+     * cube centre, and the tone-mapped clear colour at the mirrored row (a Y-flipped HDR scene
+     * target fails). One tone-mapping pass must be reported and no frame rejected.
+     */
+    void ExpectTonemappedCubeFrame(GraphicsEngine& engine, Backend backend)
+    {
+        const Frame reference = RenderCubeFrames(engine, backend);
+        ExpectCubeFrame(reference);
+        EXPECT_EQ(engine.GetStatistics().postProcessPasses, 0u);
+
+        Spark::Graphics::PostProcessingPipeline* post = engine.GetPostProcessingPipeline();
+        ASSERT_TRUE(post != nullptr);
+        auto& settings = post->GetTonemappingSettings();
+        settings.op = Spark::Graphics::TonemapOperator::ACES;
+        settings.exposure = kTonemapExposure;
+        settings.contrast = 1.0f;
+        settings.saturation = 1.0f;
+        post->SetEffectEnabled(Spark::Graphics::PostProcessPass::Tonemapping, true);
+
+        const Frame frame = RenderCubeFrames(engine, backend);
+        post->SetEffectEnabled(Spark::Graphics::PostProcessPass::Tonemapping, false);
+        ASSERT_EQ(frame.rgba.size(), size_t(kWidth) * kHeight * 4);
+
+        const Rgb clear{TonemappedByte(kClearColour[0], kTonemapExposure),
+                        TonemappedByte(kClearColour[1], kTonemapExposure),
+                        TonemappedByte(kClearColour[2], kTonemapExposure)};
+        // The tone-mapped clear colour must differ from the raw one, or the corner checks
+        // below could not tell a tone-mapped frame from an untouched one.
+        ASSERT_TRUE(MaxChannelDifference(clear, ClearRgb()) > 24);
+        for (const auto& [column, row] :
+             {std::pair{2, 2}, std::pair{kWidth - 3, 2}, std::pair{2, kHeight - 3}, std::pair{kWidth - 3, kHeight - 3}})
+        {
+            EXPECT_TRUE(MaxChannelDifference(PixelAt(frame.rgba, column, row), clear) <= 2);
+        }
+
+        const auto [column, row] = ProjectedCubeCentre();
+        const Rgb referenceCube = PixelAt(reference.rgba, column, row);
+        const Rgb cube = PixelAt(frame.rgba, column, row);
+        const Rgb mirrored = PixelAt(frame.rgba, column, kHeight - 1 - row);
+        std::printf("[RHI-230 TONEMAP] cube centre (%d,%d) reference rgb(%d,%d,%d) tone-mapped rgb(%d,%d,%d); "
+                    "mirrored row %d rgb(%d,%d,%d); expected clear rgb(%d,%d,%d); post passes %u, rejected %llu\n",
+                    column, row, referenceCube.r, referenceCube.g, referenceCube.b, cube.r, cube.g, cube.b,
+                    kHeight - 1 - row, mirrored.r, mirrored.g, mirrored.b, clear.r, clear.g, clear.b,
+                    engine.GetStatistics().postProcessPasses,
+                    static_cast<unsigned long long>(Spark::Graphics::Detail::GetRHI().tonemap.rejectedFrames));
+        // A saturated reference byte hides the scene value the tone-mapped frame started from.
+        ASSERT_TRUE(std::max({referenceCube.r, referenceCube.g, referenceCube.b}) < 255);
+        EXPECT_TRUE(MatchesTonemapped(cube.r, referenceCube.r, kTonemapExposure));
+        EXPECT_TRUE(MatchesTonemapped(cube.g, referenceCube.g, kTonemapExposure));
+        EXPECT_TRUE(MatchesTonemapped(cube.b, referenceCube.b, kTonemapExposure));
+        EXPECT_TRUE(MaxChannelDifference(mirrored, clear) <= 2);
+
+        EXPECT_EQ(engine.GetStatistics().postProcessPasses, 1u);
+        EXPECT_EQ(Spark::Graphics::Detail::GetRHI().tonemap.rejectedFrames, 0u);
+        EXPECT_EQ(Spark::Graphics::Detail::GetRHI().basicForward.rejectedDraws, 0u);
+        // The forward draw and the full-screen tone-mapping draw.
+        EXPECT_GE(frame.backendDrawCalls, 2u);
+    }
+
     void RequireActiveBackend(Backend backend)
     {
         const auto expected =
             backend == Backend::OpenGL ? Spark::RHI::GraphicsBackend::OpenGL : Spark::RHI::GraphicsBackend::Vulkan;
         const auto active = Spark::Graphics::Detail::GetRHI().bridge.GetActiveBackend();
         if (active != expected)
+        {
             SkipOrFail(backend,
                        "the RHI bridge came up on " + Spark::Graphics::Detail::GetRHI().bridge.GetBackendName());
+        }
     }
 } // namespace
 
 #ifdef SPARK_OPENGL_SUPPORT
+namespace
+{
+    /// Brings the production engine up on an SDL2 OpenGL window on llvmpipe, runs @p body on
+    /// it, and requires that no GL error is pending afterwards.
+    template <typename Body> void RunOpenGLEngine(Body&& body)
+    {
+        // Shaders/GLSL is read from the source tree: the runtime directory stages only HLSL and SPIR-V.
+        ScopedWorkingDirectory cwd(SPARK_TEST_SOURCE_DIR);
+        ScopedEnv backendRequest("SPARK_RHI_BACKEND", "opengl");
+        WindowHost host(Backend::OpenGL);
+
+        GraphicsEngine engine;
+        if (FAILED(engine.Initialize(host.window)))
+        {
+            SkipOrFail(Backend::OpenGL, "GraphicsEngine::Initialize failed on the OpenGL window");
+        }
+        RequireActiveBackend(Backend::OpenGL);
+        std::printf("[RHI-240 FORWARD] OpenGL GL_RENDERER=\"%s\"\n",
+                    reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+
+        body(engine);
+        EXPECT_EQ(DrainGLErrors(), 0);
+        engine.Shutdown();
+    }
+} // namespace
+
 TEST(LinuxForwardPass_OpenGLCubeRenders)
 {
-    // Shaders/GLSL is read from the source tree: the runtime directory stages only HLSL and SPIR-V.
-    ScopedWorkingDirectory cwd(SPARK_TEST_SOURCE_DIR);
-    ScopedEnv backendRequest("SPARK_RHI_BACKEND", "opengl");
-    WindowHost host(Backend::OpenGL);
+    RunOpenGLEngine([](GraphicsEngine& engine) { ExpectCubeFrame(RenderCubeFrames(engine, Backend::OpenGL)); });
+}
 
-    GraphicsEngine engine;
-    if (FAILED(engine.Initialize(host.window)))
-        SkipOrFail(Backend::OpenGL, "GraphicsEngine::Initialize failed on the OpenGL window");
-    RequireActiveBackend(Backend::OpenGL);
-    std::printf("[RHI-240 FORWARD] OpenGL GL_RENDERER=\"%s\"\n",
-                reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-
-    const Frame frame = RenderCubeFrames(engine, Backend::OpenGL);
-    ExpectCubeFrame(frame);
-    EXPECT_EQ(DrainGLErrors(), 0);
-    engine.Shutdown();
+TEST(LinuxTonemapPass_OpenGLCubeRenders)
+{
+    RunOpenGLEngine([](GraphicsEngine& engine) { ExpectTonemappedCubeFrame(engine, Backend::OpenGL); });
 }
 #endif // SPARK_OPENGL_SUPPORT
 
 #if defined(SPARK_VULKAN_SUPPORT) && defined(SPARK_TEST_SPIRV_DIR)
+namespace
+{
+    /**
+     * Brings the production engine up on an SDL2 Vulkan window on Lavapipe with
+     * VK_LAYER_KHRONOS_validation forced on, runs @p body on it, shuts the engine down and
+     * requires that the layer reported itself active and logged zero validation errors. @p tag
+     * names the layer's log and settings files.
+     */
+    template <typename Body> void RunVulkanEngineUnderValidation(const std::string& tag, Body&& body)
+    {
+        // The runtime directory the build stages Shaders/SPIRV into.
+        ScopedWorkingDirectory cwd(std::filesystem::path(SPARK_TEST_SPIRV_DIR).parent_path().parent_path());
+        ScopedEnv backendRequest("SPARK_RHI_BACKEND", "vulkan");
+
+        // Force the Khronos validation layer on through the loader, whatever the build type, and
+        // send its report to a file. The info report proves the layer ran; errors are counted.
+        const std::filesystem::path validationLog =
+            std::filesystem::temp_directory_path() / ("spark_rhi240_" + tag + "_vulkan_validation.log");
+        // A log left by an earlier run must not stand in for this one.
+        std::filesystem::remove(validationLog);
+        // The Ubuntu 24.04 layer (1.3.275) reads debug_action/report_flags/log_filename only from
+        // vk_layer_settings.txt, not from the VK_KHRONOS_VALIDATION_* environment variables, so the
+        // same settings are also written to a settings file the loader-visible layer is pointed at.
+        const std::filesystem::path layerSettings =
+            std::filesystem::temp_directory_path() / ("spark_rhi240_" + tag + "_vk_layer_settings.txt");
+        {
+            std::ofstream settings(layerSettings, std::ios::trunc);
+            settings << "khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG\n"
+                     << "khronos_validation.report_flags = error,info\n"
+                     << "khronos_validation.log_filename = " << validationLog.string() << "\n";
+            settings.close();
+            ASSERT_TRUE(!settings.fail());
+        }
+        ScopedEnv settingsPath("VK_LAYER_SETTINGS_PATH", layerSettings.string());
+        ScopedEnv layers("VK_INSTANCE_LAYERS", "VK_LAYER_KHRONOS_validation");
+        ScopedEnv action("VK_KHRONOS_VALIDATION_DEBUG_ACTION", "VK_DBG_LAYER_ACTION_LOG_MSG");
+        ScopedEnv reportFlags("VK_KHRONOS_VALIDATION_REPORT_FLAGS", "error,info");
+        ScopedEnv logFile("VK_KHRONOS_VALIDATION_LOG_FILENAME", validationLog.string());
+
+        {
+            WindowHost host(Backend::Vulkan);
+            GraphicsEngine engine;
+            if (FAILED(engine.Initialize(host.window)))
+            {
+                SkipOrFail(Backend::Vulkan, "GraphicsEngine::Initialize failed on the Vulkan window");
+            }
+            RequireActiveBackend(Backend::Vulkan);
+            if (!Spark::Graphics::Detail::GetRHI().bridge.GetCapabilities().isSoftwareDevice)
+            {
+                SkipOrFail(Backend::Vulkan, "the Vulkan device is not Lavapipe");
+            }
+
+            body(engine);
+            engine.Shutdown();
+        }
+
+        // The layer flushes and closes its log when the instance is destroyed (engine shutdown).
+        std::ifstream logStream(validationLog);
+        std::stringstream log;
+        log << logStream.rdbuf();
+        const std::string report = log.str();
+        std::error_code removeError;
+        std::filesystem::remove(layerSettings, removeError);
+        size_t errors = 0;
+        for (size_t at = report.find("Validation Error"); at != std::string::npos;
+             at = report.find("Validation Error", at + 1))
+        {
+            ++errors;
+        }
+        if (report.find("Validation Layer Active") == std::string::npos)
+        {
+            SkipOrFail(Backend::Vulkan,
+                       "VK_LAYER_KHRONOS_validation did not report itself active in " + validationLog.string());
+        }
+        std::printf("[RHI-240 FORWARD] Vulkan validation (%s): layer active, %zu validation error(s)\n", tag.c_str(),
+                    errors);
+        if (errors != 0)
+        {
+            std::printf("[RHI-240 FORWARD] Vulkan validation report:\n%s\n", report.c_str());
+        }
+        EXPECT_EQ(errors, size_t(0));
+    }
+} // namespace
+
 TEST(LinuxForwardPass_VulkanCubeRenders)
 {
-    // The runtime directory the build stages Shaders/SPIRV into.
-    ScopedWorkingDirectory cwd(std::filesystem::path(SPARK_TEST_SPIRV_DIR).parent_path().parent_path());
-    ScopedEnv backendRequest("SPARK_RHI_BACKEND", "vulkan");
+    RunVulkanEngineUnderValidation("forward", [](GraphicsEngine& engine)
+                                   { ExpectCubeFrame(RenderCubeFrames(engine, Backend::Vulkan)); });
+}
 
-    // Force the Khronos validation layer on through the loader, whatever the build type, and
-    // send its report to a file. The info report proves the layer ran; errors are counted.
-    const std::filesystem::path validationLog =
-        std::filesystem::temp_directory_path() / "spark_rhi240_forward_vulkan_validation.log";
-    std::filesystem::remove(validationLog);
-    // The Ubuntu 24.04 layer (1.3.275) reads debug_action/report_flags/log_filename only from
-    // vk_layer_settings.txt, not from the VK_KHRONOS_VALIDATION_* environment variables, so the
-    // same settings are also written to a settings file the loader-visible layer is pointed at.
-    const std::filesystem::path layerSettings =
-        std::filesystem::temp_directory_path() / "spark_rhi240_forward_vk_layer_settings.txt";
-    {
-        std::ofstream settings(layerSettings, std::ios::trunc);
-        settings << "khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG\n"
-                 << "khronos_validation.report_flags = error,info\n"
-                 << "khronos_validation.log_filename = " << validationLog.string() << "\n";
-        settings.close();
-        ASSERT_TRUE(!settings.fail());
-    }
-    ScopedEnv settingsPath("VK_LAYER_SETTINGS_PATH", layerSettings.string());
-    ScopedEnv layers("VK_INSTANCE_LAYERS", "VK_LAYER_KHRONOS_validation");
-    ScopedEnv action("VK_KHRONOS_VALIDATION_DEBUG_ACTION", "VK_DBG_LAYER_ACTION_LOG_MSG");
-    ScopedEnv reportFlags("VK_KHRONOS_VALIDATION_REPORT_FLAGS", "error,info");
-    ScopedEnv logFile("VK_KHRONOS_VALIDATION_LOG_FILENAME", validationLog.string());
-
-    {
-        WindowHost host(Backend::Vulkan);
-        GraphicsEngine engine;
-        if (FAILED(engine.Initialize(host.window)))
-            SkipOrFail(Backend::Vulkan, "GraphicsEngine::Initialize failed on the Vulkan window");
-        RequireActiveBackend(Backend::Vulkan);
-        if (!Spark::Graphics::Detail::GetRHI().bridge.GetCapabilities().isSoftwareDevice)
-            SkipOrFail(Backend::Vulkan, "the Vulkan device is not Lavapipe");
-
-        const Frame frame = RenderCubeFrames(engine, Backend::Vulkan);
-        ExpectCubeFrame(frame);
-        engine.Shutdown();
-    }
-
-    // The layer flushes and closes its log when the instance is destroyed (engine shutdown).
-    std::ifstream logStream(validationLog);
-    std::stringstream log;
-    log << logStream.rdbuf();
-    const std::string report = log.str();
-    std::error_code removeError;
-    std::filesystem::remove(layerSettings, removeError);
-    size_t errors = 0;
-    for (size_t at = report.find("Validation Error"); at != std::string::npos;
-         at = report.find("Validation Error", at + 1))
-        ++errors;
-    if (report.find("Validation Layer Active") == std::string::npos)
-        SkipOrFail(Backend::Vulkan,
-                   "VK_LAYER_KHRONOS_validation did not report itself active in " + validationLog.string());
-    if (errors != 0)
-        std::printf("[RHI-240 FORWARD] Vulkan validation report:\n%s\n", report.c_str());
-    EXPECT_EQ(errors, size_t(0));
+TEST(LinuxTonemapPass_VulkanCubeRenders)
+{
+    RunVulkanEngineUnderValidation("tonemap",
+                                   [](GraphicsEngine& engine) { ExpectTonemappedCubeFrame(engine, Backend::Vulkan); });
 }
 #endif // SPARK_VULKAN_SUPPORT && SPARK_TEST_SPIRV_DIR
 
