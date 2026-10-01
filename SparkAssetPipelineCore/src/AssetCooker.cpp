@@ -205,6 +205,23 @@ namespace Spark::AssetPipeline
                    std::filesystem::hard_link_count(path, ec) > 1 && !ec;
         }
 
+        /// @p path as UTF-8 for an error message. On Windows, path::string() converts to the ANSI
+        /// code page and throws std::system_error for a name that page cannot hold (a CJK name
+        /// under code page 1252), which ended the whole cook before the error was reported.
+        std::string PathText(const std::filesystem::path& path)
+        {
+            try
+            {
+                const std::u8string utf8 = path.u8string();
+                return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+            }
+            catch (const std::system_error&)
+            {
+                // MSVC throws for an unpaired UTF-16 surrogate, which no UTF-8 text can carry.
+                return "<path not representable as UTF-8>";
+            }
+        }
+
 #if defined(_WIN32)
         /// Owns one Win32 handle (the pattern of SparkEngine's Engine/Modding/HeldHandles.h).
         class ScopedHandle
@@ -316,22 +333,23 @@ namespace Spark::AssetPipeline
         bool CopySourceAsset(const std::filesystem::path& source, const std::filesystem::path& sourceRoot,
                              const std::filesystem::path& destination, std::string& error)
         {
-            const std::string changed = "source asset changed while cooking: '" + source.string() + "'";
+            const std::string changed = "source asset changed while cooking: '" + PathText(source) + "'";
 #if defined(_WIN32)
             const DWORD openFlags = FILE_FLAG_SEQUENTIAL_SCAN | (sourceRoot.empty() ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
             const ScopedHandle input(::CreateFileW(source.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
                                                    nullptr, OPEN_EXISTING, openFlags, nullptr));
             if (!input.IsValid())
             {
-                error = "failed to open source asset '" + source.string() + "' (error " +
-                        std::to_string(::GetLastError()) + ")";
+                const DWORD openError = ::GetLastError();
+                error =
+                    "failed to open source asset '" + PathText(source) + "' (error " + std::to_string(openError) + ")";
                 return false;
             }
             BY_HANDLE_FILE_INFORMATION info{};
             if (::GetFileType(input.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(input.Get(), &info) ||
                 (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
             {
-                error = "source asset is not a regular file: '" + source.string() + "'";
+                error = "source asset is not a regular file: '" + PathText(source) + "'";
                 return false;
             }
             if (!sourceRoot.empty())
@@ -362,8 +380,9 @@ namespace Spark::AssetPipeline
                                                         FILE_ATTRIBUTE_NORMAL, nullptr));
                 if (!output.IsValid())
                 {
-                    error = "failed to create '" + destination.string() + "' (error " +
-                            std::to_string(::GetLastError()) + ")";
+                    const DWORD createError = ::GetLastError();
+                    error =
+                        "failed to create '" + PathText(destination) + "' (error " + std::to_string(createError) + ")";
                     return false;
                 }
                 std::vector<char> buffer(64 * 1024);
@@ -372,7 +391,7 @@ namespace Spark::AssetPipeline
                     DWORD got = 0;
                     if (!::ReadFile(input.Get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr))
                     {
-                        error = "failed while reading '" + source.string() + "'";
+                        error = "failed while reading '" + PathText(source) + "'";
                         break;
                     }
                     if (got == 0)
@@ -383,7 +402,7 @@ namespace Spark::AssetPipeline
                     DWORD written = 0;
                     if (!::WriteFile(output.Get(), buffer.data(), got, &written, nullptr) || written != got)
                     {
-                        error = "failed while writing '" + destination.string() + "'";
+                        error = "failed while writing '" + PathText(destination) + "'";
                         break;
                     }
                 }
@@ -410,13 +429,13 @@ namespace Spark::AssetPipeline
             {
                 error = (errno == ELOOP)
                             ? changed
-                            : "failed to open source asset '" + source.string() + "': " + std::strerror(errno);
+                            : "failed to open source asset '" + PathText(source) + "': " + std::strerror(errno);
                 return false;
             }
             struct stat info = {};
             if (::fstat(input.Get(), &info) != 0 || !S_ISREG(info.st_mode))
             {
-                error = "source asset is not a regular file: '" + source.string() + "'";
+                error = "source asset is not a regular file: '" + PathText(source) + "'";
                 return false;
             }
             if (!sourceRoot.empty())
@@ -435,7 +454,7 @@ namespace Spark::AssetPipeline
             ScopedFd output(::open(destination.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR));
             if (output.Get() < 0)
             {
-                error = "failed to create '" + destination.string() + "': " + std::strerror(errno);
+                error = "failed to create '" + PathText(destination) + "': " + std::strerror(errno);
                 return false;
             }
             const auto fail = [&](const std::string& what)
@@ -455,7 +474,7 @@ namespace Spark::AssetPipeline
                 }
                 if (got < 0)
                 {
-                    return fail("failed while reading '" + source.string() + "'");
+                    return fail("failed while reading '" + PathText(source) + "'");
                 }
                 if (got == 0)
                 {
@@ -472,7 +491,7 @@ namespace Spark::AssetPipeline
                     }
                     if (put <= 0)
                     {
-                        return fail("failed while writing '" + destination.string() + "'");
+                        return fail("failed while writing '" + PathText(destination) + "'");
                     }
                     written += static_cast<size_t>(put);
                 }
@@ -508,11 +527,11 @@ namespace Spark::AssetPipeline
             // set-id and sticky bits.
             if (::fchmod(output.Get(), info.st_mode & 0777) != 0)
             {
-                return fail("failed to set the mode of '" + destination.string() + "'");
+                return fail("failed to set the mode of '" + PathText(destination) + "'");
             }
             if (!output.Close())
             {
-                error = "failed to finish '" + destination.string() + "': " + std::strerror(errno);
+                error = "failed to finish '" + PathText(destination) + "': " + std::strerror(errno);
                 ::unlink(destination.c_str());
                 return false;
             }
@@ -537,7 +556,7 @@ namespace Spark::AssetPipeline
                 current /= component;
                 if (IsUnsafeOutputLink(current))
                 {
-                    error = "refusing linked " + std::string(label) + " target '" + current.string() + "'";
+                    error = "refusing linked " + std::string(label) + " target '" + PathText(current) + "'";
                     return false;
                 }
             }
@@ -559,14 +578,15 @@ namespace Spark::AssetPipeline
         {
             if (IsUnsafeOutputLink(destination))
             {
-                error = "refusing to replace linked output '" + destination.string() + "'";
+                error = "refusing to replace linked output '" + PathText(destination) + "'";
                 return false;
             }
 #if defined(_WIN32)
             if (!::MoveFileExW(stage.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             {
-                error = "failed to atomically replace '" + destination.string() + "' (error " +
-                        std::to_string(::GetLastError()) + ")";
+                const DWORD moveError = ::GetLastError();
+                error = "failed to atomically replace '" + PathText(destination) + "' (error " +
+                        std::to_string(moveError) + ")";
                 return false;
             }
 #else
@@ -574,7 +594,7 @@ namespace Spark::AssetPipeline
             std::filesystem::rename(stage, destination, ec);
             if (ec)
             {
-                error = "failed to atomically replace '" + destination.string() + "': " + ec.message();
+                error = "failed to atomically replace '" + PathText(destination) + "': " + ec.message();
                 return false;
             }
 #endif
@@ -1046,7 +1066,7 @@ namespace Spark::AssetPipeline
 
             if (!CopySourceAsset(source, sourceRoot, stage, error))
             {
-                error = "failed to stage '" + source.string() + "': " + error;
+                error = "failed to stage '" + PathText(source) + "': " + error;
                 return false;
             }
             const auto removeStage = [&]
@@ -1120,7 +1140,7 @@ namespace Spark::AssetPipeline
             {
                 const DWORD openError = ::GetLastError();
                 missing = openError == ERROR_FILE_NOT_FOUND || openError == ERROR_PATH_NOT_FOUND;
-                error = "failed to open '" + path.string() + "'";
+                error = "failed to open '" + PathText(path) + "'";
                 return false;
             }
             const ScopedHandle input(handle);
@@ -1128,7 +1148,7 @@ namespace Spark::AssetPipeline
             if (::GetFileType(input.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(input.Get(), &before) ||
                 (before.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
             {
-                error = "source is not a regular file: '" + path.string() + "'";
+                error = "source is not a regular file: '" + PathText(path) + "'";
                 return false;
             }
             if (!containmentRoot.empty())
@@ -1139,7 +1159,7 @@ namespace Spark::AssetPipeline
                 if (!root.IsValid() || (before.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 ||
                     !IsDescendantFinalPath(FinalPathOf(input.Get()), FinalPathOf(root.Get())))
                 {
-                    error = "source asset escapes its containment root: '" + path.string() + "'";
+                    error = "source asset escapes its containment root: '" + PathText(path) + "'";
                     return false;
                 }
             }
@@ -1148,7 +1168,7 @@ namespace Spark::AssetPipeline
                 DWORD got = 0;
                 if (!::ReadFile(input.Get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr))
                 {
-                    error = "failed while reading '" + path.string() + "'";
+                    error = "failed while reading '" + PathText(path) + "'";
                     return false;
                 }
                 if (got == 0)
@@ -1165,7 +1185,7 @@ namespace Spark::AssetPipeline
                 before.ftLastWriteTime.dwHighDateTime != after.ftLastWriteTime.dwHighDateTime ||
                 before.ftLastWriteTime.dwLowDateTime != after.ftLastWriteTime.dwLowDateTime)
             {
-                error = "source asset changed while hashing: '" + path.string() + "'";
+                error = "source asset changed while hashing: '" + PathText(path) + "'";
                 return false;
             }
 #else
@@ -1174,14 +1194,14 @@ namespace Spark::AssetPipeline
             if (fd < 0)
             {
                 missing = errno == ENOENT || errno == ENOTDIR;
-                error = "failed to open '" + path.string() + "'";
+                error = "failed to open '" + PathText(path) + "'";
                 return false;
             }
             const ScopedFd input(fd);
             struct stat before = {};
             if (::fstat(input.Get(), &before) != 0 || !S_ISREG(before.st_mode))
             {
-                error = "source is not a regular file: '" + path.string() + "'";
+                error = "source is not a regular file: '" + PathText(path) + "'";
                 return false;
             }
             if (!containmentRoot.empty())
@@ -1189,7 +1209,7 @@ namespace Spark::AssetPipeline
                 const std::filesystem::path opened = PathOfDescriptor(input.Get());
                 if (opened.empty() || !IsContained(opened, containmentRoot))
                 {
-                    error = "source asset escapes its containment root: '" + path.string() + "'";
+                    error = "source asset escapes its containment root: '" + PathText(path) + "'";
                     return false;
                 }
             }
@@ -1202,7 +1222,7 @@ namespace Spark::AssetPipeline
                 }
                 if (got < 0)
                 {
-                    error = "failed while reading '" + path.string() + "'";
+                    error = "failed while reading '" + PathText(path) + "'";
                     return false;
                 }
                 if (got == 0)
@@ -1215,7 +1235,7 @@ namespace Spark::AssetPipeline
             if (::fstat(input.Get(), &after) != 0 || after.st_dev != before.st_dev || after.st_ino != before.st_ino ||
                 after.st_size != before.st_size)
             {
-                error = "source asset changed while hashing: '" + path.string() + "'";
+                error = "source asset changed while hashing: '" + PathText(path) + "'";
                 return false;
             }
 #if defined(__APPLE__)
@@ -1228,7 +1248,7 @@ namespace Spark::AssetPipeline
                 after.st_ctim.tv_sec != before.st_ctim.tv_sec || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec)
 #endif
             {
-                error = "source asset changed while hashing: '" + path.string() + "'";
+                error = "source asset changed while hashing: '" + PathText(path) + "'";
                 return false;
             }
 #endif
@@ -1248,7 +1268,7 @@ namespace Spark::AssetPipeline
     {
         if (IsUnsafeOutputLink(output))
         {
-            error = "refusing to replace linked output '" + output.string() + "'";
+            error = "refusing to replace linked output '" + PathText(output) + "'";
             return false;
         }
         std::string actualSha256;
@@ -1363,7 +1383,7 @@ namespace Spark::AssetPipeline
             // not UTF-8 was written raw into the JSON manifest, which no strict reader accepts.
             if (!IsValidUtf8(portable))
             {
-                result.error = "asset path is not representable as portable UTF-8: " + path.string();
+                result.error = "asset path is not representable as portable UTF-8: " + PathText(path);
                 return false;
             }
             return !portable.empty();
