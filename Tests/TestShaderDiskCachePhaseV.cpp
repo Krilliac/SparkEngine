@@ -408,6 +408,40 @@ TEST(ShaderDiskCachePhaseV_EmptyCachedBlobIsAMiss)
     std::filesystem::remove_all(dir);
 }
 
+TEST(ShaderDiskCachePhaseV_OversizedCachedBlobIsAMiss)
+{
+    // The cache directory is writable by any process of the user, so the file length is
+    // untrusted: a planted blob one byte past the 16 MiB daemon bytecode cap (sparse where the
+    // file system allows) must be a miss, not an allocation handed to the driver.
+    ResetDiskCache();
+    auto dir = MakeCacheDir("oversizedblob");
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    cache.Initialize(dir);
+    const auto source = MakeSource("oversized cached blob");
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x3C, 16));
+    ASSERT_EQ(cache.GetEntryCount(), static_cast<size_t>(1));
+
+    constexpr std::uintmax_t kCap = std::uintmax_t{16} * 1024 * 1024;
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), kCap + 1);
+    }
+    EXPECT_FALSE(cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    // Exactly at the cap is still a hit.
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), kCap);
+    }
+    const auto atCap = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(atCap.has_value());
+    EXPECT_EQ(atCap->bytecode.size(), static_cast<size_t>(kCap));
+
+    cache.Shutdown();
+    std::filesystem::remove_all(dir);
+}
+
 // ============================================================================
 // Clear / GetEntryCount / GetDiskUsage
 // ============================================================================

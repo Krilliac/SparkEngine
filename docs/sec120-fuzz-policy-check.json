@@ -17,7 +17,7 @@
   },
   "inventory": {
     "blocked_count": 79,
-    "candidate_count": 304,
+    "candidate_count": 303,
     "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2166,
+    "scanned_file_count": 2167,
     "unclassified_candidate_count": 0
   },
   "passed": false,

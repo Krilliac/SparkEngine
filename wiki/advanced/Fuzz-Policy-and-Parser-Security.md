@@ -401,10 +401,18 @@ runtime evidence yet.
   out of the mount. Nothing outside the roots may be returned, a read is a regular fixture
   file's bytes or nothing, and the higher-priority mount wins. On Linux an `ifstream` opens a
   directory and its ext4 end offset reads as `INT64_MAX`, which `LocalFileProvider::ReadFile`
-  used as the buffer size, so a mod naming `.` or a folder aborted the engine. Only regular
-  files are read now (`SecurityParsers_VfsDirectoryPathReadsAsNothing`). The defect does not
-  reproduce on tmpfs, where the directory offset is refused; the smoke reproduces it wherever
-  the temporary directory is on ext4, as on the hosted runner.
+  used as the buffer size, so a mod naming `.` or a folder aborted the engine. The defect does
+  not reproduce on tmpfs, where the directory offset is refused; the smoke reproduces it
+  wherever the temporary directory is on ext4, as on the hosted runner. A review then noted
+  the check-then-open-by-name race: an entry swapped for a directory or an outside link
+  between the containment check and the open was still read. `LocalFileProvider` now opens
+  first and decides on the opened handle (the held-handle helpers in `HeldHandles.h`, shared
+  with the mod scanner): a regular file (`fstat` / `GetFileInformationByHandle`), resolving
+  inside the mount root (`/proc/self/fd` or `F_GETPATH` plus a device/inode match on POSIX,
+  `GetFinalPathNameByHandleW` on Windows), at most 1 GiB, read to exactly its size
+  (`SecurityParsers_VfsDirectoryPathReadsAsNothing` and the three
+  `SecurityParsers_Vfs*SwappedFor*AfterCheckReadsAsNothing` tests, which swap the entry
+  through an open probe; the file-symlink case is POSIX-only).
 - **`entity-archetype-loader`** (`SparkFuzzEntityArchetype`, `FuzzEntityArchetypeSmoke`)
   feeds `Spark::ECS::ParseArchetypeDefinition`, moved to `EntityArchetypeParse.cpp` out of
   `LoadArchetypeFromFile`. Accepted archetypes keep trimmed, line-free fields, positional
