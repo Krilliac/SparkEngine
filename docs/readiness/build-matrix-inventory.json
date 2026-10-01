@@ -9444,7 +9444,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "6df6b348873e9d00"
+            "runDigest": "a384675c4f4a71c8"
           },
           {
             "index": 6,
@@ -14692,7 +14692,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -14704,7 +14704,7 @@
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
-          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
         "buildDir": "build",
@@ -17733,7 +17733,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -17745,7 +17745,7 @@
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
-          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+          "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
           "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
         },
         "buildDir": "build",
@@ -20936,7 +20936,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -20948,7 +20948,7 @@
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
         "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
-        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
       },
       "buildDir": "build",
