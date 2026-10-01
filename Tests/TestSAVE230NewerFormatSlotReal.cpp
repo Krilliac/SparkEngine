@@ -18,9 +18,11 @@
  */
 
 #include "TestFramework.h"
+#include "ScopedLoggerBaseline.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/CRC32.h"
+#include "Utils/Logger.h"
 
 #include <cstdint>
 #include <cstring>
@@ -63,14 +65,18 @@ namespace
     {
         uint32_t value = 0;
         for (size_t index = 0; index < 4u; ++index)
+        {
             value |= static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + index])) << (8u * index);
+        }
         return value;
     }
 
     void WriteLE32(std::vector<char>& bytes, size_t offset, uint32_t value)
     {
         for (size_t index = 0; index < 4u; ++index)
+        {
             bytes[offset + index] = static_cast<char>((value >> (8u * index)) & 0xFFu);
+        }
     }
 
     /// True when @p bytes is a SPRK file of this build's version with a valid CRC-32 trailer.
@@ -122,7 +128,9 @@ namespace
         for (const SaveMetadata& listed : saveSystem.GetSaveSlots())
         {
             if (listed.slotName == slotName)
+            {
                 ++count;
+            }
         }
         return count;
     }
@@ -130,6 +138,17 @@ namespace
 
 TEST(SaveMigration_NewerBuildPrimaryIsNeitherRolledBackNorOverwritten)
 {
+    // Restore the shared logger (including its sink) on assertion failures too.
+    std::string loadDiagnostic;
+    ScopedLoggerBaseline loggerBaseline;
+    Logger::Get().AddSink(std::make_unique<CallbackSink>(
+        [&loadDiagnostic](const LogMessage& message)
+        {
+            if (message.category == LogCategory::Save && message.level == LogLevel::Error)
+            {
+                loadDiagnostic += message.message;
+            }
+        }));
     const std::string dir = MakeSave230TempDir("newer_build_primary");
     SaveSystem& saveSystem = SaveSystem::GetInstance();
     saveSystem.SetFileCache(nullptr);
@@ -156,6 +175,12 @@ TEST(SaveMigration_NewerBuildPrimaryIsNeitherRolledBackNorOverwritten)
     liveWorld.AddComponent<Transform>(liveWorld.CreateEntity("newer-build-live-sentinel"));
     std::unordered_map<std::string, std::string> customState = {{"live", "sentinel"}};
     EXPECT_FALSE(saveSystem.Load("newer-build", liveWorld, customState));
+    EXPECT_STR_CONTAINS(loadDiagnostic, "slot 'newer-build'");
+    EXPECT_STR_CONTAINS(loadDiagnostic, "newer SparkEngine build");
+    EXPECT_STR_CONTAINS(loadDiagnostic, "save format v" + std::to_string(kCurrentSaveVersion + 1));
+    EXPECT_STR_CONTAINS(loadDiagnostic, "reads v" + std::to_string(kOldestSupportedSaveVersion) + "..v" +
+                                            std::to_string(kCurrentSaveVersion));
+    EXPECT_STR_CONTAINS(loadDiagnostic, "open the slot with a build that supports");
     EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
     EXPECT_TRUE(HasNamedEntity(liveWorld, "newer-build-live-sentinel"));
     EXPECT_FALSE(HasNamedEntity(liveWorld, "older-revision"));

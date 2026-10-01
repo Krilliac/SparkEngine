@@ -191,9 +191,10 @@ namespace Spark::ECS
          * writer's layout cannot be read by this build) and a truncated stream.
          *
          * @param reader BinaryReader to read from.
+         * @param error Optional actionable diagnostic, cleared on success.
          * @return true when the prefab was replaced; false leaves this prefab untouched.
          */
-        [[nodiscard]] bool Deserialize(BinaryReader& reader);
+        [[nodiscard]] bool Deserialize(BinaryReader& reader, std::string* error = nullptr);
 
       private:
         std::string m_name;                            ///< Unique prefab name.
@@ -233,13 +234,37 @@ namespace Spark::ECS
         }
     }
 
-    inline bool RuntimePrefab::Deserialize(BinaryReader& reader)
+    inline bool RuntimePrefab::Deserialize(BinaryReader& reader, std::string* error)
     {
+        if (error)
+        {
+            error->clear();
+        }
+        const auto reject = [error](std::string message)
+        {
+            if (error)
+            {
+                *error = std::move(message);
+            }
+            return false;
+        };
         const uint32_t magic = reader.Read<uint32_t>();
         const uint32_t version = reader.Read<uint32_t>();
-        if (reader.HasError() || magic != PrefabFileHeader::kMagic || version != PrefabFileHeader::kVersion)
+        if (reader.HasError())
         {
-            return false;
+            return reject("Runtime prefab header is truncated; restore a complete prefab file.");
+        }
+        if (magic != PrefabFileHeader::kMagic)
+        {
+            return reject("Runtime prefab magic " + std::to_string(magic) +
+                          " is invalid; expected PRFB (0x50524642). Open a runtime prefab file.");
+        }
+        if (version != PrefabFileHeader::kVersion)
+        {
+            return reject("Runtime prefab format version " + std::to_string(version) +
+                          " is unsupported; this build reads and writes version " +
+                          std::to_string(PrefabFileHeader::kVersion) +
+                          ". Open the file with a SparkEngine build that supports its version.");
         }
 
         std::string name = reader.ReadString();
@@ -262,7 +287,7 @@ namespace Spark::ECS
         }
         if (reader.HasError())
         {
-            return false;
+            return reject("Runtime prefab payload is truncated or malformed; restore a complete prefab file.");
         }
 
         m_name = std::move(name);

@@ -361,6 +361,23 @@ live-world update.
 
 ## Compatibility evidence
 
+`SparkSaveCompatibilityTests` selects exactly the `SaveMigration_` family and
+fails on missing tests, empty selection, or warnings. The newer-build rejection
+test captures the production Save logger and checks the slot, file version,
+supported read window, and recovery action while preserving the live world.
+
+`SparkSaveInterruptionTests` and `SparkDocumentInterruptionTests` use fresh
+`Spark::Process` writer children and `Kill` (TerminateProcess on Windows, SIGKILL
+on POSIX). Save, scene, prefab and project tests check complete retained
+generations after interruption. This is process-termination coverage, not a
+power-loss or kernel-crash simulation. Windows and Linux execution of the new
+save port remains pending; the required hosted lanes are `build-windows-vs2022`
+and `build-linux-gcc` (with additional full-suite Clang/sanitizer coverage).
+
+Assets have no production `MigrateAsset` load caller, and `.sparkproject` has no
+historical N-1 format. Both need explicit owner scope decisions before claiming
+SAVE-230 complete; no decision is made by these tests.
+
 The N-1 fixture that must migrate is the production-generated v3 FPS save:
 
 `Tests/Fixtures/Compatibility/SaveSystem/v3-fps-profile.spark_save.hex`
@@ -469,8 +486,8 @@ fixtures fail closed), SceneFile v1-to-v2 migration from real v1 fixtures, the
 module persisted-schema mechanism used by SparkGameFPS, transactional corruption
 rejection, cache freshness, and primary-to-backup recovery. The staged MinSizeRel
 FPS smoke separately demonstrates same-version progression XP persistence across
-two fresh D3D11 WARP processes. Still open: the rest of `FPSLocalProfile`, forced
-process-interruption rehearsal, asset migrations, the window-manager layout file
+two fresh D3D11 WARP processes. Still open: the rest of `FPSLocalProfile`, hosted
+process-interruption proof, asset migrations, the window-manager layout file
 (`EditorWindowManager`, still written in place), schema
 declarations for the other game modules, clean-machine installation, and hosted
 exact-SHA evidence. CRC-32 is not an authenticity control. The ordinary

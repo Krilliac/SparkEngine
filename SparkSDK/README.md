@@ -99,16 +99,17 @@ The SDK component is self-contained and includes:
   `lib/cmake/SparkEngine/`;
 - `LICENSE.txt` and `THIRD_PARTY_NOTICES.txt` under
   `share/SparkEngine/sdk/`;
-- this README; and
+- this README, `API-REFERENCE.md`, and `MIGRATION.md`; and
 - a buildable `EmptyProject` example under
   `share/SparkEngine/sdk/examples/EmptyProject/`.
 
-On Windows, the `SDKConsumer_InstalledEmptyProjectTemplate` CTest installs
-only the `sdk` component and builds that example from the installed copy, in
-the engine's configuration. The test fails if any header, library or flag
-path the build resolves points into the engine source or build tree. It also
-fails if the module's `.sparkabi` sidecar would be rejected by the host's
-pre-load check. This test is registered only when `BUILD_GAME_MODULES` is on.
+On Windows and Linux, the `SDKConsumer_InstalledEmptyProjectTemplate` CTest
+installs the `sdk` and `tools` components and builds that example from the
+installed copy, in the engine's configuration. The test fails if any header,
+library or flag path the build resolves points into the engine source or build
+tree. It also fails if the module's `.sparkabi` sidecar would be rejected by
+the host's pre-load check. This test is registered only when
+`BUILD_GAME_MODULES` is on.
 
 The installed package also contains the engine libraries required by the
 exported targets. The SDK package is a consumer surface, not a declaration

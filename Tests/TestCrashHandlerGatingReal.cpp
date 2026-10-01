@@ -7,8 +7,10 @@
 #include "Utils/CrashHandler.h"
 #include "Utils/CrashHandlerSupport.h"
 #include "Utils/FreezeDetector.h"
+#include "Utils/Process.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -24,6 +26,10 @@
 #if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 #include <csignal>
 #include <unistd.h>
+#endif
+#ifdef SPARK_PLATFORM_LINUX
+#include <sys/prctl.h>
+#include <sys/resource.h>
 #endif
 
 // =============================================================================
@@ -385,6 +391,149 @@ TEST(CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot)
 }
 
 #endif // SPARK_TEST_CRASH_PRODUCER
+
+#if defined(SPARK_PLATFORM_LINUX) && defined(SPARK_TEST_CRASH_PRODUCER)
+namespace
+{
+    std::filesystem::path CrashPolicyTestBinary()
+    {
+        std::error_code error;
+        const std::filesystem::path self = std::filesystem::read_symlink("/proc/self/exe", error);
+        return error ? std::filesystem::path{} : self;
+    }
+
+    std::string RunCrashPolicyProbe(const char* fullDump, const std::filesystem::path& scratch,
+                                    const std::string& canary, bool signalFault = false)
+    {
+        const std::filesystem::path self = CrashPolicyTestBinary();
+        ASSERT_FALSE(self.empty());
+        std::filesystem::create_directories(scratch);
+
+        Spark::Process::Builder builder("env");
+        // env options must precede every NAME=value assignment.
+        for (const char* selection : {"SPARK_TEST_FILE", "SPARK_TEST_NAME_PREFIX", "SPARK_TEST_EXPECT_COUNT",
+                                      "SPARK_TEST_EXCLUDE", "SPARK_TEST_LIMIT", "SPARK_CRASH_FULL_DUMP"})
+        {
+            builder.Arg("-u").Arg(selection);
+        }
+        builder.Arg("SPARK_TEST_NAME=CrashPolicy_DefaultAndOptInKernelDumpPolicy");
+        builder.Arg("SPARK_TEST_EXPECT_COUNT=1");
+        builder.Arg(std::string("SPARK_CRASH_POLICY_PROBE=") + (signalFault ? "signal" : "policy"));
+        builder.Arg("TMPDIR=" + scratch.string());
+        builder.Arg("SPARK_TEST_CRASH_CANARY=" + canary);
+        if (fullDump != nullptr)
+        {
+            builder.Arg(std::string("SPARK_CRASH_FULL_DUMP=") + fullDump);
+        }
+        builder.Arg(self.string()).Arg("--warn-is-error").Arg("--empty-is-error");
+        builder.WorkingDirectory(scratch.string());
+        builder.CaptureStdout().MergeStderrIntoStdout();
+
+        auto child = builder.Launch();
+        ASSERT_TRUE(child.has_value());
+        Spark::Process process = std::move(*child);
+        const bool exited = process.WaitForExit(std::chrono::seconds(20));
+        if (!exited)
+        {
+            process.Kill();
+            ASSERT_TRUE(process.WaitForExit(std::chrono::seconds(5)));
+        }
+        ASSERT_TRUE(exited);
+        const std::string output = process.ReadAllStdout();
+        // Process maps a POSIX signal termination to -1, rather than its signal number.
+        EXPECT_EQ(process.GetExitCode().value_or(999), signalFault ? -1 : 0);
+        EXPECT_STR_CONTAINS(output, "SPARK_CORE_POLICY_OK");
+        return output;
+    }
+} // namespace
+
+TEST(CrashPolicy_DefaultAndOptInKernelDumpPolicy)
+{
+    if (const char* role = std::getenv("SPARK_CRASH_POLICY_PROBE"))
+    {
+        // exec normally enables dumpability. Set it explicitly so an inherited
+        // zero core limit cannot make the opt-in assertion vacuous.
+        ASSERT_EQ(prctl(PR_SET_DUMPABLE, 1L, 0L, 0L, 0L), 0);
+        struct rlimit before
+        {
+        };
+        ASSERT_EQ(getrlimit(RLIMIT_CORE, &before), 0);
+        ASSERT_EQ(prctl(PR_GET_DUMPABLE, 0L, 0L, 0L, 0L), 1);
+
+        CrashConfig config;
+        config.dumpPrefix = L"SparkCorePolicyTest";
+        config.headlessMode = true;
+        config.captureScreenshot = false;
+        config.promptUserDescription = false;
+        const char* fullDump = std::getenv("SPARK_CRASH_FULL_DUMP");
+        config.includeStackMemory = fullDump != nullptr && std::string_view(fullDump) == "1";
+        InstallCrashHandler(config);
+
+        struct rlimit after
+        {
+        };
+        ASSERT_EQ(getrlimit(RLIMIT_CORE, &after), 0);
+        if (config.includeStackMemory)
+        {
+            ASSERT_EQ(after.rlim_cur, before.rlim_cur);
+            ASSERT_EQ(after.rlim_max, before.rlim_max);
+            ASSERT_EQ(prctl(PR_GET_DUMPABLE, 0L, 0L, 0L, 0L), 1);
+        }
+        else
+        {
+            ASSERT_EQ(after.rlim_cur, 0u);
+            ASSERT_EQ(after.rlim_max, 0u);
+            ASSERT_EQ(prctl(PR_GET_DUMPABLE, 0L, 0L, 0L, 0L), 0);
+        }
+        std::cout << "SPARK_CORE_POLICY_OK\n" << std::flush;
+        if (std::string_view(role) == "signal")
+        {
+            ASSERT_FALSE(config.includeStackMemory);
+            const std::string canary = MakeCrashCanary();
+            volatile char stackSecret[64] = {};
+            auto heapSecret = std::make_unique<char[]>(canary.size());
+            volatile char* heapBytes = heapSecret.get();
+            for (size_t index = 0; index < canary.size(); ++index)
+            {
+                stackSecret[index] = canary[index];
+                heapBytes[index] = canary[index];
+            }
+            std::raise(SIGSEGV);
+            // Reaching this means the production handler failed to terminate.
+            std::_Exit(stackSecret[0] == heapBytes[0] ? 98 : 99);
+        }
+        return;
+    }
+
+    namespace fs = std::filesystem;
+    const std::string canary = MakeCrashCanary();
+    const fs::path scratch = fs::temp_directory_path() / ("spark_core_policy_" + canary.substr(kCanaryPrefix.size()));
+    RunCrashPolicyProbe(nullptr, scratch / "default", canary);
+    RunCrashPolicyProbe("0", scratch / "not-opted-in", canary);
+    RunCrashPolicyProbe("1", scratch / "opt-in", canary);
+    RunCrashPolicyProbe(nullptr, scratch / "signal", canary, true);
+
+    size_t signalLogs = 0;
+    size_t manifests = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(scratch / "signal"))
+    {
+        if (entry.is_directory())
+        {
+            EXPECT_TRUE(FilesContainingCanary(entry.path(), canary).empty());
+            signalLogs += CountReportsContaining(entry.path(), "SIGSEGV");
+        }
+        else if (entry.path().extension() == ".json")
+        {
+            ++manifests;
+        }
+        // The .core_hint is text; it is not a captured memory image.
+        EXPECT_FALSE(entry.path().filename() == "core" || entry.path().extension() == ".core");
+    }
+    EXPECT_GT(signalLogs, 0u);
+    EXPECT_GT(manifests, 0u);
+    fs::remove_all(scratch);
+}
+#endif
 
 // =============================================================================
 // utils-13 — the watchdog must not run where heartbeats are compiled out

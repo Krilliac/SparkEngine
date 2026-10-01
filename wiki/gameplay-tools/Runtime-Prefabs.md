@@ -208,16 +208,19 @@ prefab->Serialize(writer);
 // Deserialize
 Spark::BinaryReader reader("prefabs/guard.prefab");
 auto loaded = std::make_unique<Spark::ECS::RuntimePrefab>("");
-if (!loaded->Deserialize(reader))
+std::string error;
+if (!loaded->Deserialize(reader, &error))
 {
-    // Wrong magic, a version other than PrefabFileHeader::kVersion, or a truncated
-    // stream. The prefab is left exactly as it was.
+    // Display error: it names the rejected magic/version or truncated section,
+    // the supported version when applicable, and the recovery action.
+    // The prefab is left exactly as it was.
 }
 ```
 
 `Deserialize` returns `false` for a stream it cannot read: a wrong magic, a
 version other than `PrefabFileHeader::kVersion` (a newer writer's layout), or a
-stream that ends early. It changes the prefab only on success.
+stream that ends early. It changes the prefab only on success. The optional
+`std::string* error` receives an actionable rejection reason and is cleared on success.
 
 ### Registry File I/O
 
@@ -346,7 +349,7 @@ registry.SpawnEntity("ForestRock");
 | `GetParent() -> const RuntimePrefab*` | Get parent prefab or nullptr |
 | `Clone() -> unique_ptr<RuntimePrefab>` | Deep copy with same name, components, parent |
 | `Serialize(BinaryWriter&)` | Write to binary stream |
-| `Deserialize(BinaryReader&)` | Read from binary stream |
+| `Deserialize(BinaryReader&, std::string* error = nullptr)` | Read from binary stream with optional diagnostic |
 
 ### PrefabRegistry (Singleton)
 

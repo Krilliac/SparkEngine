@@ -64,6 +64,7 @@
 #ifdef SPARK_PLATFORM_LINUX
 #include <elf.h>
 #include <link.h>
+#include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
 #include <ucontext.h>
@@ -81,6 +82,7 @@ static bool g_triggerCrashOnAssert = false;
 static std::atomic<std::uint64_t> g_reportSequence{0};
 #if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
 static volatile sig_atomic_t g_inSignalHandler = 0;
+static volatile sig_atomic_t g_posixCoreDumpPolicyEnforced = 1;
 #endif
 
 // Every faulting-thread frame line the stack-trace producers write starts with
@@ -2040,6 +2042,14 @@ namespace
     /// Terminate with the original fatal signal (default action: core dump).
     [[noreturn]] void TerminateWithFatalSignal(int sig)
     {
+        // If either startup control could not be applied, never re-raise the
+        // signal: doing so would hand control back to the kernel's core writer.
+        // The report remains available, but a failed policy cannot expose a
+        // full process image.
+        if (!g_posixCoreDumpPolicyEnforced)
+        {
+            _exit(128 + sig);
+        }
         struct sigaction defaultAction;
         memset(&defaultAction, 0, sizeof(defaultAction));
         defaultAction.sa_handler = SIG_DFL;
@@ -2052,6 +2062,32 @@ namespace
         sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
         raise(sig);
         _exit(128 + sig); // only if the signal did not terminate the process
+    }
+
+    bool ApplyPosixCoreDumpPolicy(bool allowFullDump)
+    {
+        if (allowFullDump)
+        {
+            return true;
+        }
+
+        bool enforced = true;
+        const struct rlimit disabledCore = {0, 0};
+        if (setrlimit(RLIMIT_CORE, &disabledCore) != 0)
+        {
+            enforced = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "CrashHandler: setrlimit(RLIMIT_CORE=0) failed; fatal signals will exit without re-raise");
+        }
+#ifdef SPARK_PLATFORM_LINUX
+        if (prctl(PR_SET_DUMPABLE, 0L, 0L, 0L, 0L) != 0)
+        {
+            enforced = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "CrashHandler: prctl(PR_SET_DUMPABLE=0) failed; fatal signals will exit without re-raise");
+        }
+#endif
+        return enforced;
     }
 
     /// SIGALRM: the report overran its budget, most likely deadlocked on a
@@ -2201,10 +2237,11 @@ namespace
         const std::string prefix = GetCrashArtifactPrefix().string();
         const std::string logFile = (g_artifactRootPath / logName).string();
         const std::string coreFile = prefix + "_" + reportId + ".core_hint";
-        static const char coreHint[] = "Core dump may be found at the system core dump location.\n"
-                                       "Check: /proc/sys/kernel/core_pattern\n"
-                                       "Or run: coredumpctl list\n";
-        const bool coreReady = WriteExclusiveFileUtf8(coreFile, std::string(coreHint, sizeof(coreHint) - 1));
+        const std::string coreHint = g_cfg.includeStackMemory
+                                         ? "Full-dump debugging opt-in: the OS core policy is unchanged.\n"
+                                           "On Linux check /proc/sys/kernel/core_pattern or coredumpctl list.\n"
+                                         : "Kernel core dumps are disabled by the default crash privacy policy.\n";
+        const bool coreReady = WriteExclusiveFileUtf8(coreFile, coreHint);
         PinnedFile coreProbe = coreReady ? OpenPinnedInputFile(coreFile) : PinnedFile{};
         PinnedFile logProbe = logReady ? OpenPinnedInputFile(logFile) : PinnedFile{};
 
@@ -2322,7 +2359,7 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
-    // Re-raise to get the default action (core dump).
+    // Preserve fatal-signal termination; the default policy prevents kernel cores.
     alarm(0);
     TerminateWithFatalSignal(sig);
 }
@@ -2331,6 +2368,17 @@ void InstallCrashHandler(const CrashConfig& cfg)
 {
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Installing crash handler (Linux)");
     AssignCrashConfig(cfg);
+    // Kernel core files are a second crash producer outside the private
+    // artifact directory. Keep them disabled unless the explicit local-debug
+    // full-dump opt-in was selected by SparkEngine.cpp.
+    g_posixCoreDumpPolicyEnforced = ApplyPosixCoreDumpPolicy(cfg.includeStackMemory);
+    if (!g_posixCoreDumpPolicyEnforced)
+    {
+        // A nested fault can bypass a SA_RESETHAND handler. Do not continue
+        // startup with an unenforced kernel policy and rely on re-raise gating.
+        WriteStderr("[SPARK ENGINE] Cannot enforce kernel core-dump privacy; terminating startup.\n");
+        _exit(EXIT_FAILURE);
+    }
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
     g_reporterLaunched = false;
     g_manifestDir.clear();

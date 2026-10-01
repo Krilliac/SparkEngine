@@ -2,8 +2,8 @@
  * @file TestSaveInterruptionReal.cpp
  * @brief SAVE-230: process-interruption rehearsal for the SaveSystem atomic write path.
  *
- * AtomicWrite_* (POSIX) run a writer child that saves successive generations of one slot
- * through the production SaveSystem::Save path, and SIGKILL it at seeded, randomized
+ * AtomicWrite_* run a writer child that saves successive generations of one slot
+ * through the production SaveSystem::Save path, and kill it at seeded, randomized
  * offsets. The child is a freshly exec'd SparkTests process that runs only this test in
  * its writer role, not a bare fork() of this multi-threaded runner: the runner's other
  * threads (async logger, job workers) may hold locks at fork time, and a forked child that
@@ -26,13 +26,11 @@
  * 4 kills in 1000). SaveFileDurability::CopyFileAtomically now stages and renames it.
  *
  * Reproduce a failure with the logged seed: SPARK_ATOMICWRITE_SEED=<seed>. Raise the
- * iteration count with SPARK_ATOMICWRITE_ITERATIONS=<n>. Windows needs a separate
- * TerminateProcess rehearsal; this file compiles to nothing there.
+ * iteration count with SPARK_ATOMICWRITE_ITERATIONS=<n>.
  */
 
 #include "TestFramework.h"
 
-#ifndef _WIN32
 #include "Engine/ECS/Components.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Utils/CRC32.h"
@@ -57,8 +55,17 @@
 #include <unordered_map>
 #include <vector>
 
-#include <sys/stat.h>
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#else
 #include <unistd.h>
+#endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -95,18 +102,102 @@ namespace
     {
         const std::string value = EnvOrEmpty(name);
         if (value.empty())
+        {
             return fallback;
+        }
         return static_cast<uint32_t>(std::strtoul(value.c_str(), nullptr, 0));
     }
 
+    unsigned long CurrentProcessId()
+    {
+#if defined(_WIN32)
+        return static_cast<unsigned long>(::GetCurrentProcessId());
+#else
+        return static_cast<unsigned long>(::getpid());
+#endif
+    }
+
+    std::string Utf8(const fs::path& path)
+    {
+        const std::u8string utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    fs::path PathFromUtf8(const std::string& path)
+    {
+        return fs::path(std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size()));
+    }
+
+    /// Temporarily changes the inherited environment used by a freshly launched writer.
+    class ScopedEnvironment
+    {
+      public:
+        ScopedEnvironment() = default;
+        ScopedEnvironment(const ScopedEnvironment&) = delete;
+        ScopedEnvironment& operator=(const ScopedEnvironment&) = delete;
+
+        ~ScopedEnvironment()
+        {
+            for (auto it = m_saved.rbegin(); it != m_saved.rend(); ++it)
+            {
+                Apply(it->first.c_str(), it->second);
+            }
+        }
+
+        bool Set(const char* name, const std::string& value)
+        {
+            Remember(name);
+            return Apply(name, value);
+        }
+
+        bool Unset(const char* name)
+        {
+            Remember(name);
+            return Apply(name, std::nullopt);
+        }
+
+      private:
+        void Remember(const char* name)
+        {
+            const char* value = std::getenv(name);
+            m_saved.emplace_back(name, value ? std::optional<std::string>(value) : std::nullopt);
+        }
+
+        static bool Apply(const char* name, const std::optional<std::string>& value)
+        {
+#if defined(_WIN32)
+            return _putenv_s(name, value ? value->c_str() : "") == 0;
+#else
+            if (value)
+            {
+                return ::setenv(name, value->c_str(), 1) == 0;
+            }
+            return ::unsetenv(name) == 0;
+#endif
+        }
+
+        std::vector<std::pair<std::string, std::optional<std::string>>> m_saved;
+    };
+
     fs::path TestBinaryPath()
     {
-#ifdef __APPLE__
+#if defined(_WIN32)
+        std::wstring buffer(32768, L'\0');
+        const DWORD length = ::GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if (length == 0 || length >= buffer.size())
+        {
+            return {};
+        }
+        buffer.resize(length);
+        return fs::path(buffer);
+#elif defined(__APPLE__)
         uint32_t size = 0;
         _NSGetExecutablePath(nullptr, &size);
         std::string buffer(size, '\0');
         if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+        {
             return {};
+        }
         return fs::path(buffer.c_str());
 #else
         std::error_code error;
@@ -126,7 +217,9 @@ namespace
         std::unordered_map<std::string, std::string> state;
         state["generation"] = std::to_string(generation);
         for (int key = 0; key < kFillerKeys; ++key)
+        {
             state["filler" + std::to_string(key)] = std::string(kFillerBytes, FillerByte(generation));
+        }
         return state;
     }
 
@@ -135,13 +228,17 @@ namespace
     {
         const auto found = state.find("generation");
         if (found == state.end() || found->second.empty())
+        {
             return std::nullopt;
+        }
         const uint32_t generation = static_cast<uint32_t>(std::strtoul(found->second.c_str(), nullptr, 10));
         for (int key = 0; key < kFillerKeys; ++key)
         {
             const auto filler = state.find("filler" + std::to_string(key));
             if (filler == state.end() || filler->second != std::string(kFillerBytes, FillerByte(generation)))
+            {
                 return std::nullopt;
+            }
         }
         return generation;
     }
@@ -152,7 +249,7 @@ namespace
     fs::path UniqueScratchDirectory(std::string_view purpose)
     {
         return fs::temp_directory_path() /
-               ("spark_save230_" + std::string(purpose) + "_" + std::to_string(static_cast<long>(::getpid())));
+               ("spark_save230_" + std::string(purpose) + "_" + std::to_string(CurrentProcessId()));
     }
 
     void PopulateWorld(World& world)
@@ -177,7 +274,9 @@ namespace
         World world;
         std::unordered_map<std::string, std::string> state;
         if (!saveSystem.Load(slot, world, state))
+        {
             return std::nullopt;
+        }
         return ConsistentGeneration(state);
     }
 
@@ -192,25 +291,30 @@ namespace
     {
         const std::vector<char> bytes = ReadBytes(path);
         if (bytes.size() < 12u || std::memcmp(bytes.data(), "SPRK", 4) != 0)
+        {
             return false;
+        }
         auto readLE32 = [&](size_t offset)
         {
             uint32_t value = 0;
             for (size_t index = 0; index < 4u; ++index)
+            {
                 value |= static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + index])) << (8u * index);
+            }
             return value;
         };
         const size_t trailer = bytes.size() - sizeof(uint32_t);
         return readLE32(4) == kCurrentSaveVersion && readLE32(trailer) == ComputeCRC32(bytes.data(), trailer);
     }
 
-    /// Writer role: save generation start, start+1, ... until SIGKILLed.
+    /// Writer role: save generation start, start+1, ... until killed.
     int RunWriterRole()
     {
         const std::string directory = EnvOrEmpty(kDirEnv);
         const uint32_t start = EnvOrDefault(kStartEnv, 0);
         SaveSystem& saveSystem = SaveSystem::GetInstance();
-        if (directory.empty() || start == 0 || !saveSystem.Initialize(directory))
+        const fs::path directoryPath = PathFromUtf8(directory);
+        if (directory.empty() || start == 0 || !saveSystem.Initialize(Utf8(directoryPath)))
         {
             std::printf("ATOMICWRITE_SETUP_FAILED\n");
             std::fflush(stdout);
@@ -239,24 +343,33 @@ namespace
     {
         const fs::path self = TestBinaryPath();
         if (self.empty())
+        {
             return std::unexpected(std::string("cannot resolve the test binary path"));
+        }
 
-        Spark::Process::Builder builder("env");
-        // Drop the parent's test selection so the child runs exactly this test.
+        // The child inherits this environment: select exactly the calling test in its
+        // writer role and drop the parent's family selection.
+        ScopedEnvironment environment;
         for (const char* selection : {"SPARK_TEST_FILE", "SPARK_TEST_NAME_PREFIX", "SPARK_TEST_EXPECT_COUNT",
                                       "SPARK_TEST_EXCLUDE", "SPARK_TEST_LIMIT"})
         {
-            builder.Arg("-u").Arg(selection);
+            if (!environment.Unset(selection))
+            {
+                return std::unexpected(std::string("cannot clear child test-selection environment"));
+            }
         }
-        builder.Arg(std::string("SPARK_TEST_NAME=") + kTestName)
-            .Arg(std::string(kRoleEnv) + "=writer")
-            .Arg(std::string(kDirEnv) + "=" + fs::absolute(directory).string())
-            .Arg(std::string(kStartEnv) + "=" + std::to_string(startGeneration))
-            .Arg(self.string())
-            .WorkingDirectory(fs::current_path().string())
+        if (!environment.Set("SPARK_TEST_NAME", kTestName) || !environment.Set(kRoleEnv, "writer") ||
+            !environment.Set(kDirEnv, Utf8(fs::absolute(directory))) ||
+            !environment.Set(kStartEnv, std::to_string(startGeneration)))
+        {
+            return std::unexpected(std::string("cannot set child writer environment"));
+        }
+        return Spark::Process::Builder(Utf8(self))
+            .WorkingDirectory(Utf8(fs::current_path()))
             .CaptureStdout()
-            .MergeStderrIntoStdout();
-        return builder.Launch();
+            .MergeStderrIntoStdout()
+            .NoWindow()
+            .Launch();
     }
 
     struct WriterProgress
@@ -273,16 +386,24 @@ namespace
         {
             const size_t at = line.find(key);
             if (at == std::string::npos)
+            {
                 return std::nullopt;
+            }
             return static_cast<uint32_t>(std::strtoul(line.c_str() + at + key.size(), nullptr, 10));
         };
         if (const auto started = valueOf("ATOMICWRITE_START="))
+        {
             progress.lastStarted = std::max(progress.lastStarted, *started);
+        }
         else if (const auto done = valueOf("ATOMICWRITE_DONE="))
+        {
             progress.lastDone = std::max(progress.lastDone, *done);
+        }
         else if (line.find("ATOMICWRITE_FAIL") != std::string::npos ||
                  line.find("ATOMICWRITE_SETUP_FAILED") != std::string::npos)
+        {
             progress.failed = true;
+        }
         progress.log += line + '\n';
     }
 } // namespace
@@ -292,7 +413,7 @@ TEST(AtomicWrite_KilledSaveWriterNeverLosesTheLastCompletedGeneration)
     if (EnvOrEmpty(kRoleEnv) == "writer")
     {
         std::fflush(stdout);
-        ::_exit(RunWriterRole());
+        std::_Exit(RunWriterRole());
     }
 
     const fs::path directory = UniqueScratchDirectory("atomicwrite");
@@ -304,7 +425,7 @@ TEST(AtomicWrite_KilledSaveWriterNeverLosesTheLastCompletedGeneration)
     const fs::path probe = directory / (std::string(kProbeSlot) + ".spark_save");
 
     SaveSystem& saveSystem = SaveSystem::GetInstance();
-    ASSERT_TRUE(saveSystem.Initialize(directory.string()));
+    ASSERT_TRUE(saveSystem.Initialize(Utf8(directory)));
 
     // Seed generation 1 and time one full save, which scales the kill offsets below.
     World seedWorld;
@@ -342,18 +463,24 @@ TEST(AtomicWrite_KilledSaveWriterNeverLosesTheLastCompletedGeneration)
                std::chrono::steady_clock::now() < deadline)
         {
             while (writer.TryReadLine(line))
+            {
                 FoldLine(line, progress);
+            }
             std::this_thread::sleep_for(std::chrono::microseconds(200));
         }
         const bool reachedLoop = progress.lastDone != 0;
         if (reachedLoop)
+        {
             std::this_thread::sleep_for(std::chrono::microseconds(offsetMicros));
+        }
         const bool stillSaving = writer.IsRunning();
         writer.Kill();
         // Markers written before the kill still count.
         std::istringstream rest(writer.ReadAllStdout());
         while (std::getline(rest, line))
+        {
             FoldLine(line, progress);
+        }
 
         auto dump = [&](const char* reason)
         {
@@ -432,7 +559,7 @@ TEST(AtomicWrite_KilledSaveWriterNeverLosesTheLastCompletedGeneration)
     fs::remove_all(directory);
 }
 
-// Deterministic guards for the torn-.bak fix. The SIGKILL rehearsal above hits the
+// Deterministic guards for the torn-.bak fix. The process-kill rehearsal above hits the
 // in-place-copy window only about 4 times in 1000 kills, so on its own it would rarely
 // catch a revert of the staged copy. These two tests fail on every run if the retained
 // copy is ever rewritten in place again.
@@ -452,24 +579,17 @@ TEST(AtomicWrite_RetentionRefreshReplacesTheBackupByRenameNotInPlace)
     ASSERT_TRUE(SaveGeneration(saveSystem, kSlot, world, 2));
     ASSERT_TRUE(fs::exists(retained));
 
-    // Keep the old .bak inode alive through a hard link. A rename puts a new inode at the
-    // .bak name and leaves the link holding generation 1; an in-place copy truncates and
-    // rewrites the shared inode, so the link would change to generation 2.
+    // Keep the old .bak contents alive through a hard link. A rename leaves the link
+    // holding generation 1; an in-place copy would rewrite the shared file contents.
     const fs::path previousRetained = directory / "previous_bak_link";
     fs::create_hard_link(retained, previousRetained);
-    struct stat before
-    {
-    };
-    ASSERT_EQ(::stat(retained.c_str(), &before), 0);
     const std::vector<char> previousBytes = ReadBytes(previousRetained);
 
     ASSERT_TRUE(SaveGeneration(saveSystem, kSlot, world, 3));
 
-    struct stat after
-    {
-    };
-    ASSERT_EQ(::stat(retained.c_str(), &after), 0);
-    EXPECT_TRUE(before.st_ino != after.st_ino);
+    std::error_code equivalentError;
+    EXPECT_FALSE(fs::equivalent(retained, previousRetained, equivalentError));
+    EXPECT_FALSE(equivalentError);
     EXPECT_TRUE(ReadBytes(previousRetained) == previousBytes);
     EXPECT_TRUE(HasValidChecksum(retained));
     fs::copy_file(retained, directory / (std::string(kProbeSlot) + ".spark_save"));
@@ -525,4 +645,3 @@ TEST(AtomicWrite_FailedRetentionStagingLeavesBackupAndSlotUntouched)
 
     fs::remove_all(directory);
 }
-#endif

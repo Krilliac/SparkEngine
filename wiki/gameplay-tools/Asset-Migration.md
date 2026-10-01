@@ -1,6 +1,15 @@
 # Asset Migration
 
-The Asset Migration system provides automatic forward-migration of serialized asset files across engine versions. Each binary asset carries an `AssetFileHeader` with the magic bytes `SPRK` and a semantic version; the `AssetMigrationRegistry` chains registered `IMigrationStep` implementations to transform data from any older version to the current one.
+The Asset Migration registry provides in-memory migration helpers for buffers with
+an `AssetFileHeader`. It is initialized and shut down by `GameplayLifecycleShared`,
+but no production asset loader calls `MigrateAsset`. The examples below describe
+the registry API, not an automatic migration performed by shipped loaders.
+
+SAVE-230 still needs an owner decision: define a production asset format and its
+N-1 fixtures, migration, rollback and diagnostics, or explicitly change the item scope.
+No scope change has been approved by this implementation. Existing scene, save and
+prefab formats use their own headers; adding this registry to those loaders would
+change their on-disk contracts rather than connect an existing compatible path.
 
 **Source:** `SparkEngine/Source/Core/AssetMigration.h`
 
@@ -10,7 +19,7 @@ The Asset Migration system provides automatic forward-migration of serialized as
 |---|---|
 | `AssetMigrationRegistry` | Singleton registry that stores migration steps, resolves migration paths, and applies them to in-memory asset buffers |
 | `IMigrationStep` | Abstract interface for a single version-to-version transformation step |
-| `AssetFileHeader` | Fixed-size binary header at the start of every SparkEngine asset file (magic, version, type, checksum, sizes) |
+| `AssetFileHeader` | Header for buffers accepted by this registry (magic, version, type, checksum, sizes) |
 | `AssetVersion` | Semantic version triplet (`major.minor.patch`) with spaceship comparison |
 | `AssetType` | Enum discriminating the kind of asset stored in a binary file |
 
@@ -58,7 +67,7 @@ assert(v2.ToString() == "1.1.0");
 
 ### AssetFileHeader
 
-Every SparkEngine binary asset begins with this fixed-size header:
+The registry expects this header; it is not the header of every engine asset:
 
 ```cpp
 struct AssetFileHeader
