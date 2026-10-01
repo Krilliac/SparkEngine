@@ -40,8 +40,8 @@ namespace Terrafront
     };
 
     /// Read the tf* keys of @p scenePath's [Terrain] section into @p params. Returns false, leaving
-    /// @p params untouched, when the file cannot be read: the caller must not mistake the defaults (another
-    /// continent's ground) for this scene's.
+    /// @p params untouched, when the file cannot be read or a tf* value is not a finite number: the caller must
+    /// not mistake the defaults (another continent's ground) for this scene's.
     bool TFLoadTerrainParams(const std::string& scenePath, TFTerrainParams& params);
 
     /// Ground height at world XZ: dunes, canyon, one plateau per region of @p regions (may be null), and the

@@ -108,7 +108,16 @@ namespace Terrafront
             }
             if (float* field = TerrainKey(loaded, line.substr(0, eq)))
             {
-                *field = std::strtof(line.c_str() + eq + 1, nullptr);
+                // A value that is not a whole finite number fails the load: the caller then keeps its defaults and
+                // refuses continent handoffs instead of simulating on NaN ground.
+                const char* begin = line.c_str() + eq + 1;
+                char* end = nullptr;
+                const float value = std::strtof(begin, &end);
+                if (end == begin || *end != '\0' || !std::isfinite(value))
+                {
+                    return false;
+                }
+                *field = value;
             }
         }
         params = loaded;

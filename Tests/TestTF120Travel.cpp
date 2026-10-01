@@ -592,6 +592,23 @@ TEST(TF120_Travel_UnreadableSceneLeavesTerrainUnloaded)
     EXPECT_FALSE(TFLoadTerrainParams((RepoRoot() / "Assets" / "Scenes" / "MMOFPS" / "missing.scene").string(), params));
     EXPECT_EQ(params.baseHeight, -3.0f);
 
+    // A non-finite or malformed value fails the whole load the same way, so no NaN reaches the ground height.
+    const fs::path bad = fs::temp_directory_path() / "spark_tf120_bad_terrain.scene";
+    for (const char* value : {"nan", "inf", "-inf", "8.0abc", ""})
+    {
+        {
+            std::ofstream out(bad, std::ios::trunc);
+            out << "[Terrain]\ntfDuneAmp=2.0\ntfBaseHeight=" << value << "\n";
+        }
+        TFTerrainParams rejected;
+        rejected.baseHeight = -3.0f;
+        rejected.duneAmp = -1.0f;
+        EXPECT_FALSE(TFLoadTerrainParams(bad.string(), rejected));
+        EXPECT_EQ(rejected.baseHeight, -3.0f);
+        EXPECT_EQ(rejected.duneAmp, -1.0f);
+    }
+    fs::remove(bad);
+
     // Each continent's own [Terrain] keys, not the built-in defaults, define its ground.
     ASSERT_TRUE(Cindral().loaded && Veyra().loaded);
     EXPECT_EQ(Cindral().terrain.baseHeight, 8.0f);
