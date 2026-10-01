@@ -4,6 +4,7 @@
  */
 
 #include "MMOPersistenceSystem.h"
+#include "MMOCharacterRecord.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -192,45 +193,53 @@ namespace MMO
             return std::get_if<std::string>(&result.rows[0].columns[0]);
         }
 
-        /// Parse a stored character row into the identity/location/stat fields of @p out.
+        /// Parse a stored character row into the identity/location/stat fields of @p out,
+        /// which is left untouched when the row does not decode.
         bool ParseCharacterRecord(const std::string& stored, CharacterSaveData& out)
         {
-            // UpdateCharacter stores the whole blob as one quoted string;
-            // InsertCharacter quotes only the leading name token.
-            const std::vector<std::string> tokens = Split(UnquoteStoredString(stored), '|');
-            if (tokens.size() < 14)
+            CharacterRecordFields fields;
+            if (!DecodeCharacterRecord(stored, fields))
             {
                 return false;
             }
-            try
-            {
-                out.name = UnquoteStoredString(tokens[0]);
-                // Version 2 stores accountId after the name. Continue to
-                // accept legacy 14-field records written by earlier builds.
-                const size_t valueOffset = tokens.size() >= 15 ? 2 : 1;
-                if (tokens.size() >= 15)
-                {
-                    out.accountId = static_cast<uint32_t>(std::stoul(tokens[1]));
-                }
-                out.level = std::stoi(tokens[valueOffset]);
-                out.xp = std::stoi(tokens[valueOffset + 1]);
-                out.areaId = static_cast<uint32_t>(std::stoul(tokens[valueOffset + 2]));
-                out.posX = std::stof(tokens[valueOffset + 3]);
-                out.posY = std::stof(tokens[valueOffset + 4]);
-                out.posZ = std::stof(tokens[valueOffset + 5]);
-                out.rotY = std::stof(tokens[valueOffset + 6]);
-                out.health = std::stof(tokens[valueOffset + 7]);
-                out.maxHealth = std::stof(tokens[valueOffset + 8]);
-                out.mana = std::stof(tokens[valueOffset + 9]);
-                out.maxMana = std::stof(tokens[valueOffset + 10]);
-                out.playTime = std::stof(tokens[valueOffset + 11]);
-                out.inventory.currency = std::stoi(tokens[valueOffset + 12]);
-            }
-            catch (const std::exception&)
-            {
-                return false;
-            }
+            out.name = std::move(fields.name);
+            out.accountId = fields.accountId;
+            out.level = fields.level;
+            out.xp = fields.xp;
+            out.areaId = fields.areaId;
+            out.posX = fields.posX;
+            out.posY = fields.posY;
+            out.posZ = fields.posZ;
+            out.rotY = fields.rotY;
+            out.health = fields.health;
+            out.maxHealth = fields.maxHealth;
+            out.mana = fields.mana;
+            out.maxMana = fields.maxMana;
+            out.playTime = fields.playTime;
+            out.inventory.currency = fields.currency;
             return true;
+        }
+
+        /// The row BuildCharacterSave stores, or nullopt when it could not be loaded back.
+        std::optional<std::string> EncodeCharacterRow(const CharacterSaveData& data)
+        {
+            CharacterRecordFields fields;
+            fields.name = data.name;
+            fields.accountId = data.accountId;
+            fields.level = data.level;
+            fields.xp = data.xp;
+            fields.areaId = data.areaId;
+            fields.posX = data.posX;
+            fields.posY = data.posY;
+            fields.posZ = data.posZ;
+            fields.rotY = data.rotY;
+            fields.health = data.health;
+            fields.maxHealth = data.maxHealth;
+            fields.mana = data.mana;
+            fields.maxMana = data.maxMana;
+            fields.playTime = data.playTime;
+            fields.currency = data.inventory.currency;
+            return EncodeCharacterRecord(fields);
         }
 
         /// "1|maxSlots|maxWeight|slotCount|slot:itemDefId:count,..." — every slot
@@ -763,17 +772,24 @@ namespace MMO
         return true;
     }
 
-    MMOPersistenceSystem::Transaction MMOPersistenceSystem::BuildCharacterSave(const CharacterSaveData& data)
+    std::optional<MMOPersistenceSystem::Transaction> MMOPersistenceSystem::BuildCharacterSave(
+        const CharacterSaveData& data)
     {
-        std::ostringstream ss;
-        ss << data.name << "|" << data.accountId << "|" << data.level << "|" << data.xp << "|" << data.areaId << "|"
-           << data.posX << "|" << data.posY << "|" << data.posZ << "|" << data.rotY << "|" << data.health << "|"
-           << data.maxHealth << "|" << data.mana << "|" << data.maxMana << "|" << data.playTime << "|"
-           << data.inventory.currency;
+        // A row LoadCharacter would refuse must never replace the stored one: the
+        // character could not log in again.
+        const std::optional<std::string> row = EncodeCharacterRow(data);
+        if (!row)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "MMOPersistence: character %u was not saved: its name or a location/stat value cannot be "
+                            "stored",
+                            data.characterId);
+            return std::nullopt;
+        }
 
         Transaction tx;
         KeySet written;
-        tx.Append(Sid(MMOStmtId::UpdateCharacter), {MakeInt(data.characterId), MakeString(ss.str())});
+        tx.Append(Sid(MMOStmtId::UpdateCharacter), {MakeInt(data.characterId), MakeString(*row)});
         SaveInventory(tx, data.characterId, data.inventory);
         SaveReputationState(tx, data.characterId, data.reputationState, written);
         SaveAchievementState(tx, data.characterId, data.achievementState, written);
@@ -804,7 +820,12 @@ namespace MMO
 
         // One transaction per save: the character row and its subsystem records
         // commit together (one flush), and the single worker applies saves in order.
-        m_db->AsyncTransaction(BuildCharacterSave(data));
+        std::optional<Transaction> tx = BuildCharacterSave(data);
+        if (!tx)
+        {
+            return;
+        }
+        m_db->AsyncTransaction(std::move(*tx));
 
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Async save character: %s (ID %u)", data.name.c_str(),
                         data.characterId);
@@ -820,7 +841,12 @@ namespace MMO
         }
 
         // Queued behind any pending auto-save, so this state is the one that lands last.
-        const QueryResult result = m_db->AsyncTransaction(BuildCharacterSave(data)).get();
+        std::optional<Transaction> tx = BuildCharacterSave(data);
+        if (!tx)
+        {
+            return false;
+        }
+        const QueryResult result = m_db->AsyncTransaction(std::move(*tx)).get();
         if (!result.success)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "MMOPersistence: save failed for character %u: %s",

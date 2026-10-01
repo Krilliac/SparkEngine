@@ -136,6 +136,12 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzModManifest",
     "SparkFuzzReplay",
     "SparkFuzzAnimationBinary",
+    "SparkFuzzOrchestrationJournal",
+    "SparkFuzzAsyncDatabase",
+    "SparkFuzzMMOCharacterRecord",
+    "SparkFuzzGatewayAreaControlState",
+    "SparkFuzzRTSPersistence",
+    "SparkFuzzOrchestratorIdentity",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2174,6 +2180,42 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Animation::DecodeAnimationClipsBinary",
                 "animation-skel-sanim",
                 7,
+            ),
+            "daemon-orchestration-journal": (
+                "OrchestrationJournal",
+                "Spark::Daemon::RecoverOrchestrationJournal",
+                "daemon-orchestration-journal",
+                11,
+            ),
+            "async-database-kv": (
+                "AsyncDatabase",
+                "Spark::Persistence::SQLiteConnection::Open",
+                "async-database-kv",
+                8,
+            ),
+            "mmo-character-record": (
+                "MMOCharacterRecord",
+                "MMO::DecodeCharacterRecord",
+                "mmo-character-record",
+                10,
+            ),
+            "gateway-area-control-state": (
+                "GatewayAreaControlState",
+                "Spark::Gateway::ParseAreaControlState",
+                "gateway-area-control-state",
+                9,
+            ),
+            "rts-save-snapshot": (
+                "RTSPersistence",
+                "RTS::RTSPersistence::Deserialize",
+                "rts-save-snapshot",
+                8,
+            ),
+            "daemon-orchestrator-identity-state": (
+                "OrchestratorIdentity",
+                "Spark::Daemon::OrchestratorIdentityLease::Acquire",
+                "daemon-orchestrator-identity-state",
+                8,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

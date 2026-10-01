@@ -1,6 +1,7 @@
 /** @file GatewayAreaControl.h @brief Authenticated local area-control transport. */
 #pragma once
 
+#include "GatewayAreaControlState.h"
 #include "GatewaySecurity.h"
 #include "Engine/Networking/AreaHandoffDispatcher.h"
 
@@ -10,20 +11,15 @@
 #include <mutex>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <unordered_map>
 
 namespace Spark::Gateway
 {
     class GatewayCoordinator;
-    enum class AreaControlPhase : uint8_t
-    {
-        Prepare = 1,
-        Transfer = 2,
-        Commit = 3,
-        Acknowledge = 4,
-        Abort = 5,
-        Probe = 6
-    };
+
+    static_assert(std::is_same_v<Net::AreaID, uint32_t> && Net::INVALID_AREA == 0,
+                  "AreaControlSessionFence stores Net::AreaID as uint32_t with 0 as INVALID_AREA");
 
     /**
      * @brief Bounded classification of every frame the area-control service receives.
@@ -98,13 +94,7 @@ namespace Spark::Gateway
         void SetHandoffDispatcher(Spark::Net::AreaHandoffDispatcher* dispatcher) { m_dispatcher = dispatcher; }
 
       private:
-        struct SessionFence
-        {
-            uint64_t epoch = 0;
-            AreaControlPhase phase = AreaControlPhase::Abort;
-            Net::AreaID sourceArea = Net::INVALID_AREA;
-            Net::AreaID targetArea = Net::INVALID_AREA;
-        };
+        using SessionFence = AreaControlSessionFence;
         void Run();
         void SetError(std::string error);
         /** Authenticates one received frame, applies it when valid, and writes its audit record. */
@@ -122,7 +112,7 @@ namespace Spark::Gateway
         std::vector<uint8_t> m_key;
         std::string m_error;
         mutable std::mutex m_errorMutex;
-        std::unordered_map<std::string, SessionFence> m_sessions;
+        AreaControlSessions m_sessions;
         std::unordered_map<uint64_t, int64_t> m_seenNonces;
         mutable std::mutex m_mutex;
         std::array<std::atomic<uint64_t>, static_cast<size_t>(AreaControlAuditReason::Count)> m_auditCounts{};

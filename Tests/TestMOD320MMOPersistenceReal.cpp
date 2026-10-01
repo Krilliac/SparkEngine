@@ -8,6 +8,7 @@
  * instance, exactly as a restarted server does.
  */
 #include "TestFramework.h"
+#include "Persistence/MMOCharacterRecord.h"
 #include "Persistence/MMOPersistenceSystem.h"
 
 #ifdef SPARK_TEST_HAS_IMGUI
@@ -19,6 +20,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -860,3 +863,145 @@ TEST(MMOPersistence_InvalidGuildRestoreLeavesStateUnchanged)
     guilds.Shutdown();
 }
 #endif
+
+TEST(MMOPersistence_CharacterRowKeepsExactFloatsThroughColdRestart)
+{
+    // SparkFuzzMMOCharacterRecord's regression-lossy-float.row seed: the row used to be
+    // written with iostream's 6 significant digits, so every save moved the character.
+    const fs::path path = FreshPath("test_mod320_exact_floats.db");
+    MMO::CharacterSaveData save = MakeSave(0, 31, "Surveyor");
+    save.posX = 12345.678f;
+    save.posZ = -0.1f;
+    save.health = 99.99999f;
+    save.playTime = 86400.125f;
+    {
+        MMO::MMOPersistenceSystem persistence;
+        ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+        save.characterId = persistence.CreateCharacter(save.name, save.accountId);
+        ASSERT_NE(save.characterId, uint32_t{0});
+        ASSERT_TRUE(persistence.SaveCharacterSync(save));
+        persistence.Shutdown();
+    }
+
+    MMO::MMOPersistenceSystem restarted;
+    ASSERT_TRUE(restarted.Initialize(nullptr, path.string()));
+    MMO::CharacterSaveData loaded;
+    ASSERT_TRUE(restarted.LoadCharacter(save.characterId, loaded));
+    EXPECT_EQ(loaded.posX, save.posX);
+    EXPECT_EQ(loaded.posZ, save.posZ);
+    EXPECT_EQ(loaded.health, save.health);
+    EXPECT_EQ(loaded.playTime, save.playTime);
+    restarted.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_CharacterRowKeepsSubnormalFloats)
+{
+    // The encoder writes a subnormal stat as its shortest form ("1e-40"); std::stof threw
+    // out_of_range on it, so the saved character could never load again.
+    MMO::CharacterRecordFields fields;
+    fields.name = "Drifter";
+    fields.posX = std::numeric_limits<float>::denorm_min();
+    fields.rotY = -1.0e-40f;
+    const std::optional<std::string> row = MMO::EncodeCharacterRecord(fields);
+    ASSERT_TRUE(row.has_value());
+    MMO::CharacterRecordFields decoded;
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(*row, decoded));
+    EXPECT_EQ(decoded.posX, fields.posX);
+    EXPECT_EQ(decoded.rotY, fields.rotY);
+
+    // Values that underflow to zero or overflow are still refused, as are forms the
+    // encoder never writes (leading space, plus sign, hex).
+    const std::string refused[] = {
+        "Drifter|0|1|0|1|1e-60|1|0|0|100|100|50|50|0|0", "Drifter|0|1|0|1|1e40|1|0|0|100|100|50|50|0|0",
+        "Drifter|0|1|0|1| 1|1|0|0|100|100|50|50|0|0",    "Drifter|0|1|0|1|+1|1|0|0|100|100|50|50|0|0",
+        "Drifter|0|1|0|1|0x1p3|1|0|0|100|100|50|50|0|0",
+    };
+    for (const std::string& stored : refused)
+    {
+        EXPECT_FALSE(MMO::DecodeCharacterRecord(stored, decoded));
+    }
+}
+
+TEST(MMOPersistence_CharacterRowPreservesApostrophes)
+{
+    MMO::CharacterRecordFields fields;
+    fields.name = "O'Brien";
+    fields.accountId = 8;
+    const std::optional<std::string> row = MMO::EncodeCharacterRecord(fields);
+    ASSERT_TRUE(row.has_value());
+    MMO::CharacterRecordFields decoded;
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(*row, decoded));
+    EXPECT_EQ(decoded.name, fields.name);
+
+    // The old insert quoted only the name; the old save quoted the entire row.
+    const std::string legacyInsert = "'O''Brien'|8|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0";
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(legacyInsert, decoded));
+    EXPECT_EQ(decoded.name, fields.name);
+    const std::string legacySave = "'O''Brien|8|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0'";
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(legacySave, decoded));
+    EXPECT_EQ(decoded.name, fields.name);
+}
+
+TEST(MMOPersistence_UnstorableCharacterIsNotSaved)
+{
+    // A NaN stat or a name holding the '|' separator would write a row LoadCharacter
+    // refuses (or misreads); the save fails and the stored row is kept.
+    const fs::path path = FreshPath("test_mod320_unstorable.db");
+    MMO::MMOPersistenceSystem persistence;
+    ASSERT_TRUE(persistence.Initialize(nullptr, path.string()));
+    MMO::CharacterSaveData save = MakeSave(0, 32, "Keeper");
+    save.characterId = persistence.CreateCharacter(save.name, save.accountId);
+    ASSERT_NE(save.characterId, uint32_t{0});
+    ASSERT_TRUE(persistence.SaveCharacterSync(save));
+
+    MMO::CharacterSaveData nan = save;
+    nan.level = 9;
+    nan.health = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_FALSE(persistence.SaveCharacterSync(nan));
+    MMO::CharacterSaveData injected = save;
+    injected.level = 9;
+    injected.name = "Keeper|99";
+    EXPECT_FALSE(persistence.SaveCharacterSync(injected));
+
+    MMO::CharacterSaveData loaded;
+    ASSERT_TRUE(persistence.LoadCharacter(save.characterId, loaded));
+    EXPECT_EQ(loaded.level, 4);
+    EXPECT_EQ(loaded.name, std::string("Keeper"));
+    persistence.Shutdown();
+    fs::remove(path);
+}
+
+TEST(MMOPersistence_CharacterRowDecoderRejectsDamagedRows)
+{
+    // SparkFuzzMMOCharacterRecord's regression seeds. Each row used to load: std::stoul
+    // wraps "-1", std::stoi stops at "12abc", std::stof reads "nan", and rows with extra
+    // fields were silently truncated. A rejected row leaves the output untouched.
+    const std::string good = "Alice|7|3|120|2|1.5|0|2.25|90|100|100|50|50|12.5|40";
+    MMO::CharacterRecordFields decoded;
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(good, decoded));
+    EXPECT_EQ(decoded.accountId, uint32_t{7});
+    EXPECT_EQ(decoded.posX, 1.5f);
+    ASSERT_TRUE(MMO::DecodeCharacterRecord("'Bob'|8|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0", decoded));
+    EXPECT_EQ(decoded.name, std::string("Bob"));
+    ASSERT_TRUE(MMO::DecodeCharacterRecord("Legacy|3|120|2|1.5|0|2.25|90|100|100|50|50|12.5|40", decoded));
+    EXPECT_EQ(decoded.accountId, uint32_t{0});
+
+    const std::string damaged[] = {
+        "Alice|-1|3|120|2|1.5|0|2.25|90|100|100|50|50|12.5|40",
+        "Alice|7|12abc|120|2|1.5|0|2.25|90|100|100|50|50|12.5|40",
+        "Alice|7|3|120|2|nan|0|2.25|90|100|100|50|50|12.5|40",
+        "Alice|7|3|120|2|1.5|0|2.25|90|inf|100|50|50|12.5|40",
+        "Alice|7|3|120|2|1.5|0|2.25|90|100|100|50|50|12.5|40|extra",
+        "|7|3|120|2|1.5|0|2.25|90|100|100|50|50|12.5|40",
+    };
+    for (const std::string& row : damaged)
+    {
+        MMO::CharacterRecordFields sentinel;
+        sentinel.name = "Sentinel";
+        sentinel.level = 77;
+        EXPECT_FALSE(MMO::DecodeCharacterRecord(row, sentinel));
+        EXPECT_EQ(sentinel.name, std::string("Sentinel"));
+        EXPECT_EQ(sentinel.level, 77);
+    }
+}

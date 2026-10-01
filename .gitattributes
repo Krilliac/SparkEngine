@@ -83,6 +83,12 @@ FuzzerTests/corpora/installer-state-manifest/** -text
 FuzzerTests/corpora/mod-manifest/** -text
 FuzzerTests/corpora/replay-system/** -text
 FuzzerTests/corpora/animation-skel-sanim/** -text
+FuzzerTests/corpora/daemon-orchestration-journal/** -text
+FuzzerTests/corpora/async-database-kv/** -text
+FuzzerTests/corpora/mmo-character-record/** -text
+FuzzerTests/corpora/gateway-area-control-state/** -text
+FuzzerTests/corpora/daemon-orchestrator-identity-state/** -text
+FuzzerTests/corpora/rts-save-snapshot/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

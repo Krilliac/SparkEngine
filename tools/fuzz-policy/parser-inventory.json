@@ -1354,10 +1354,16 @@
       "formats": [
         ".db"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzAsyncDatabase.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzAsyncDatabase",
+        "test_selector": "FuzzAsyncDatabaseSmoke",
+        "corpus_id": "async-database-kv-corpus",
+        "entry_symbol": "Spark::Persistence::SQLiteConnection::Open",
+        "binding_source": "FuzzerTests/FuzzAsyncDatabaseProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzOpenAsyncDatabase"
       }
     },
     {
@@ -1403,10 +1409,16 @@
         "journal",
         ".wal"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzOrchestrationJournal.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzOrchestrationJournal",
+        "test_selector": "FuzzOrchestrationJournalSmoke",
+        "corpus_id": "daemon-orchestration-journal-corpus",
+        "entry_symbol": "Spark::Daemon::RecoverOrchestrationJournal",
+        "binding_source": "FuzzerTests/FuzzOrchestrationJournalProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzRecoverOrchestrationJournal"
       }
     },
     {
@@ -1451,10 +1463,16 @@
       "formats": [
         "state"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzOrchestratorIdentity.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzOrchestratorIdentity",
+        "test_selector": "FuzzOrchestratorIdentitySmoke",
+        "corpus_id": "daemon-orchestrator-identity-state-corpus",
+        "entry_symbol": "Spark::Daemon::OrchestratorIdentityLease::Acquire",
+        "binding_source": "FuzzerTests/FuzzOrchestratorIdentityProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzAcquireOrchestratorIdentity"
       }
     },
     {
@@ -1486,15 +1504,23 @@
       "description": "Area-control epoch state-file reader with an unbounded record count.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkGateway/src/GatewayAreaControl.cpp"
+        "SparkGateway/src/GatewayAreaControl.cpp",
+        "SparkGateway/src/GatewayAreaControlState.cpp",
+        "SparkGateway/src/GatewayAreaControlState.h"
       ],
       "formats": [
         "state"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzGatewayAreaControlState.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzGatewayAreaControlState",
+        "test_selector": "FuzzGatewayAreaControlStateSmoke",
+        "corpus_id": "gateway-area-control-state-corpus",
+        "entry_symbol": "Spark::Gateway::ParseAreaControlState",
+        "binding_source": "FuzzerTests/FuzzGatewayAreaControlStateProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseGatewayAreaControlState"
       }
     },
     {
@@ -2122,6 +2148,29 @@
       "description": "SparkGameMMO pipe-delimited character record decoded from the persisted AsyncDatabase key-value store.",
       "trust_boundary": "untrusted-file",
       "source_files": [
+        "GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp",
+        "GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.h"
+      ],
+      "formats": [
+        "database-row"
+      ],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzMMOCharacterRecord.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzMMOCharacterRecord",
+        "test_selector": "FuzzMMOCharacterRecordSmoke",
+        "corpus_id": "mmo-character-record-corpus",
+        "entry_symbol": "MMO::DecodeCharacterRecord",
+        "binding_source": "FuzzerTests/FuzzMMOCharacterRecordProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeMMOCharacterRecord"
+      }
+    },
+    {
+      "id": "mmo-persistence-rows",
+      "description": "SparkGameMMO inventory, guild and guild-member rows and character-id key suffixes decoded from the persisted AsyncDatabase key-value store (the character row itself is mmo-character-record).",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
         "GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
       ],
       "formats": [
@@ -2129,7 +2178,7 @@
       ],
       "status": "blocked",
       "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
+        "reason": "No production-entry-point fuzz harness drives ParseInventoryRecord, ParseGuildRecord, ParseGuildMemberRecord or ParseIdPair; split from mmo-character-record when its codec moved to MMOCharacterRecord.cpp.",
         "ticket": "SEC-120"
       }
     },
@@ -2231,10 +2280,16 @@
       "formats": [
         "save-custom-state"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzRTSPersistence.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzRTSPersistence",
+        "test_selector": "FuzzRTSPersistenceSmoke",
+        "corpus_id": "rts-save-snapshot-corpus",
+        "entry_symbol": "RTS::RTSPersistence::Deserialize",
+        "binding_source": "FuzzerTests/FuzzRTSPersistenceProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDeserializeRTSSnapshot"
       }
     },
     {

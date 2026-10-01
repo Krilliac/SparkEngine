@@ -158,7 +158,7 @@
       "directory": "GameModules/SparkGameMMO",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameMMO/Source",
-      "sourceFileCount": 52,
+      "sourceFileCount": 54,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,
@@ -198,9 +198,10 @@
         "Utils/PasswordHash.h",
         "Utils/SecureMemory.h",
         "Utils/SecureRandom.h",
-        "Utils/SparkConsole.h"
+        "Utils/SparkConsole.h",
+        "Utils/StringUtils.h"
       ],
-      "privateEngineHeaderCount": 29,
+      "privateEngineHeaderCount": 30,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
       ]
@@ -416,7 +417,7 @@
       "directory": "GameModules/SparkGameRTS",
       "cmakeLists": true,
       "sourceDirectory": "GameModules/SparkGameRTS/Source",
-      "sourceFileCount": 28,
+      "sourceFileCount": 29,
       "moduleLocalContentState": "unclassified",
       "releaseClassification": "unclassified",
       "cmakeDeclarationParseError": false,

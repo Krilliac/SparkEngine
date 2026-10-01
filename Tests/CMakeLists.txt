@@ -701,6 +701,7 @@ add_executable(SparkTests
     # (MMOPersistenceSystem below; the character-system case needs the ImGui block).
     TestMOD320MMOPersistenceReal.cpp
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+    "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp"
     # W7/W8 outfit persistence + secondary-motion chain math — both module
     # .cpps are deliberately minimal-dependency and link standalone into
@@ -1297,6 +1298,7 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistence.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceCodec.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Core/RTSPersistenceValidation.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameRTS/Source/Simulation/RTSScriptedCommander.cpp"
@@ -1461,6 +1463,7 @@ if(ENABLE_NETWORKING)
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOPlayerSession.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp"
         "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp")
     target_compile_features(SparkMMOSessionGatePeer PRIVATE cxx_std_23)
     target_include_directories(SparkMMOSessionGatePeer PRIVATE
@@ -2096,7 +2099,7 @@ set_tests_properties(SparkUtf8PathTests PROPERTIES
 # directory-sync cases SKIP on Windows.
 add_test(NAME SparkSEC2PersistenceTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkSEC2PersistenceTests PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=13"
+    ENVIRONMENT "SPARK_TEST_NAME_PREFIX=SEC2Persist_;SPARK_TEST_EXPECT_COUNT=14"
     LABELS "persistence;save;security;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)

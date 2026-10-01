@@ -14,6 +14,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <limits>
 #include <new>
 #include <optional>
 #include <string>
@@ -494,6 +496,62 @@ namespace
               "oversized journal rejection preserves the prior readable snapshot");
     }
 
+    /// SparkFuzzOrchestrationJournal's regression seeds: a snapshot the service could
+    /// not restore faithfully is refused whole (fail closed), not partially applied.
+    void TestJournalRejectsRecordsTheServiceCannotRestore(const std::filesystem::path& scratch)
+    {
+        const auto journal = scratch / "damaged.state";
+        Spark::Daemon::JournalProcess process;
+        process.definition.id = "server";
+        process.definition.executable = "/opt/spark/bin/SparkServer";
+        process.status.id = "server";
+        const Spark::Daemon::JournalMutation committed{
+            "cli-a", 7, {static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StopResponse), {1, 0}}};
+
+        Spark::Daemon::OrchestrationJournalState valid;
+        valid.processes.push_back(process);
+        valid.mutations.push_back(committed);
+        Check(Spark::Daemon::WriteOrchestrationJournal(journal, valid) &&
+                  Spark::Daemon::LoadOrchestrationJournal(journal, 16, 16).has_value(),
+              "a well-formed journal still loads");
+        const auto readBytes = [&]()
+        {
+            std::ifstream input(journal, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        };
+        const std::string goodBytes = readBytes();
+        const auto refusesAndPreserves =
+            [&](const Spark::Daemon::OrchestrationJournalState& state, const char* description)
+        {
+            Check(!Spark::Daemon::WriteOrchestrationJournal(journal, state), description);
+            const auto recovered = Spark::Daemon::LoadOrchestrationJournal(journal, 16, 16);
+            Check(std::filesystem::exists(journal) && readBytes() == goodBytes && recovered &&
+                      recovered->processes.size() == 1 && recovered->mutations.size() == 1 &&
+                      recovered->mutations.front().sequence == committed.sequence,
+                  "refused journal preserves the previous readable snapshot on disk");
+        };
+
+        // OrchestrationService converts each persisted Unix time to a system_clock time
+        // point; INT64_MIN or INT64_MAX milliseconds overflow that conversion.
+        auto crashBeforeEpoch = valid;
+        crashBeforeEpoch.processes.front().crashTimestampsUnixMilliseconds = {std::numeric_limits<int64_t>::min()};
+        refusesAndPreserves(crashBeforeEpoch, "journal refuses a crash timestamp system_clock cannot represent");
+        auto drainOverflow = valid;
+        drainOverflow.processes.front().status.drainDeadlineUnixMilliseconds = std::numeric_limits<int64_t>::max();
+        refusesAndPreserves(drainOverflow, "journal refuses a drain deadline system_clock cannot represent");
+
+        auto duplicateProcess = valid;
+        duplicateProcess.processes.push_back(process);
+        refusesAndPreserves(duplicateProcess, "journal refuses two records for one process id");
+        auto duplicateClient = valid;
+        duplicateClient.mutations.push_back(committed);
+        duplicateClient.mutations.back().sequence = 8;
+        refusesAndPreserves(duplicateClient, "journal refuses two committed mutations for one client instance");
+        auto emptyClient = valid;
+        emptyClient.mutations.front().clientInstance.clear();
+        refusesAndPreserves(emptyClient, "journal refuses a committed mutation with an empty client instance");
+    }
+
     void TestPersistentOrchestratorIdentity(const std::filesystem::path& scratch)
     {
         const auto identityPath = scratch / "operator" / "identity.state";
@@ -787,6 +845,7 @@ int main(int argc, char** argv)
     TestSupervisorRevalidatesExecutableAtLaunch(executable, scratch);
     TestJournalTornTailAndStalePid(scratch, executable);
     TestJournalWriteBoundsPreservePublishedSnapshot(scratch);
+    TestJournalRejectsRecordsTheServiceCannotRestore(scratch);
     TestPersistentOrchestratorIdentity(scratch);
     TestPreExecReleaseFailsClosedAfterAbruptDaemonDeath(executable, scratch);
     TestWindowsOrPosixLaunchAndDurableReplay(executable, scratch);

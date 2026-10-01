@@ -302,6 +302,73 @@ evidence yet, and structural policy results are not sanitizer runtime evidence.
   carry finite matrices, clip timing and keys with ordered key times. The corpus pins a
   key-count allocation amplification, NaN clip duration and decreasing key-time regression.
 
+### Save, store and daemon state targets
+
+These six targets cover persisted state that a server or daemon reads back from disk before it
+accepts work. They were built with Clang 21 and libFuzzer (ASan and UBSan) on a local WSL
+Ubuntu tree, their corpora replayed clean through the registered CTest smokes, and each ran a
+bounded local campaign of 151 seconds each with no crash, leak or timeout (rerun at
+`76f3f25b4`): 1,619,467 inputs for the orchestration journal, 152,119 for the store file,
+13,725,069 for the character row, 3,101,649 for the epoch state, 4,743,016 for the RTS snapshot
+and 1,594,853 for the identity state. Every `regression-*` seed was also replayed against a
+harness linked with the pre-fix reader (the base commit's file, or its logic moved verbatim
+behind the new codec API) and aborts there with the matching invariant. None of them has hosted
+runtime evidence yet.
+
+- **`daemon-orchestration-journal`** (`SparkFuzzOrchestrationJournal`,
+  `FuzzOrchestrationJournalSmoke`) splits each input into an orchestration snapshot and its
+  write-ahead log and calls `Spark::Daemon::RecoverOrchestrationJournal`, the path
+  `OrchestrationService::LoadJournalLocked` takes. An accepted journal must stay within the
+  configured process, client and crash-history counts, hold unique process ids and unique,
+  non-empty client instances, report each interrupted mutation once, and be a fixed point of
+  write, load, write. `LoadOrchestrationJournal` used to accept a repeated process id or
+  client instance (which the service's keyed tables silently collapsed), an empty client
+  instance, and crash timestamps or drain deadlines that overflow the service's
+  `system_clock` conversion (signed-overflow UB). It now refuses all five; the regression
+  seeds and `SparkDaemonServiceTests` pin them.
+- **`async-database-kv`** (`SparkFuzzAsyncDatabase`, `FuzzAsyncDatabaseSmoke`) writes the
+  input as the store file and opens it with `SQLiteConnection::Open` under a 64 KiB budget.
+  An independent model of the format (legacy raw records, or escape-decoded records after
+  the `#!spark-kv-v2` marker, no repeated key) must agree with every accept and reject, a
+  rejected open must leave the file intact, and an accepted store must republish and reopen
+  to the same records. `Open` accepted a legacy store, or an escaped store holding raw tabs,
+  whose canonical rewrite exceeds the budget, so every later write failed to publish. It now
+  sizes the rewrite while loading
+  (`SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish`).
+- **`mmo-character-record`** (`SparkFuzzMMOCharacterRecord`, `FuzzMMOCharacterRecordSmoke`)
+  feeds the stored `character_<id>` row to `MMO::DecodeCharacterRecord`. The row codec moved
+  out of `MMOPersistenceSystem.cpp` into `MMOCharacterRecord.cpp`. The old reader took any
+  row with 14 or more fields, accepted `-1` as account id 4294967295, `12abc` as level 12 and
+  `nan` as a position, and the writer kept six significant digits, so a load-save cycle
+  moved the character. The decoder now takes exactly 14 or 15 whole fields and finite
+  floats, the encoder writes the shortest exact form and refuses a row it could not read
+  back, and `SaveCharacter` then leaves the stored row alone. The shortest form of a
+  subnormal (`1e-40`) made `std::stof` throw `out_of_range`, so floats are read through
+  `StringUtils::ParseFloatingExact`. The `MMOPersistence_CharacterRow*` and
+  `MMOPersistence_UnstorableCharacterIsNotSaved` tests pin this. The inventory, guild,
+  guild-member and id-suffix rows in `MMOPersistenceSystem.cpp` are a separate record,
+  `mmo-persistence-rows`, which stays blocked.
+- **`gateway-area-control-state`** (`SparkFuzzGatewayAreaControlState`,
+  `FuzzGatewayAreaControlStateSmoke`) feeds `Spark::Gateway::ParseAreaControlState`, the
+  epoch-state reader `LocalAreaControlService::LoadState` runs before it accepts a handoff
+  phase. It moved to `GatewayAreaControlState.cpp` with its writer. `std::istream` negated a
+  signed token into the unsigned fields: `-1` loaded as the largest epoch, which fenced the
+  session forever, and `-4294967295` wrapped to phase 1. Every number is now plain unsigned
+  decimal (`GatewayAreaControl_EpochStateRejectsSignedNumbers`).
+- **`rts-save-snapshot`** (`SparkFuzzRTSPersistence`, `FuzzRTSPersistenceSmoke`) feeds the
+  `SparkGameRTS.match.v2` custom state of a save slot to `RTSPersistence::Deserialize`. A
+  rejected snapshot must leave the caller's snapshot intact, and an accepted one must pass
+  `RTSPersistence::Validate` and be a fixed point of serialize, deserialize, serialize.
+  `Validate` and `RTSCommandSystem::IsCommandValid` moved to `RTSPersistenceValidation.cpp`
+  so the target links without the live systems (GNU ld reports the undefined references of
+  `Capture` and `Apply` even in sections `--gc-sections` drops). No parser defect was found.
+- **`daemon-orchestrator-identity-state`** (`SparkFuzzOrchestratorIdentity`,
+  `FuzzOrchestratorIdentitySmoke`) writes the input as a private `SPORCHCLI1` state file and
+  takes an `OrchestratorIdentityLease`, as every SparkOrchestrator mutation does. `Acquire`
+  must accept exactly an empty file or a well-formed state with a sequence below
+  `UINT64_MAX`, republish the next sequence, leave a rejected file intact, and never hand two
+  leases the same key. No defect was found.
+
 ### Retired and reclassified records
 
 Five blocked records described code that decodes no untrusted bytes. Each now carries its
@@ -452,7 +519,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
@@ -628,7 +695,7 @@ change *is* the review record.
 - retain exact-SHA sanitizer smoke for all registered targets. A structural binding
   check alone does not show that a target compiled or ran;
 - commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
-- retain the blocking ASan/UBSan smoke now wired for both targets and record hosted
+- retain the blocking ASan/UBSan smoke now wired for the registered targets and record hosted
   `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
   coverage reporting (the `-L fuzz` CI run is required whenever a parser is marked
   `fuzzed`);
@@ -645,5 +712,6 @@ Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocki
 campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
 re-verified structurally 2026-09-28 (SparkBuild, `-exec` and `.vscript` targets and the
-record reclassification) and 2026-09-29 (installer marker and mod-manifest targets); rerun the CI command for
+record reclassification), 2026-09-29 (installer marker and mod-manifest targets) and 2026-09-30
+(save, store and daemon state targets); rerun the CI command for
 current counts and exact-SHA runtime evidence.

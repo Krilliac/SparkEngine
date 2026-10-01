@@ -336,30 +336,6 @@ namespace RTS
         return command.path.empty();
     }
 
-    bool RTSCommandSystem::IsCommandValid(const UnitCommand& command)
-    {
-        if (command.type >= RTSCommandType::Count)
-            return false;
-
-        const bool routed = command.type == RTSCommandType::Move ||
-                            (command.type == RTSCommandType::Attack && command.targetEntity == 0);
-        if (!command.path.empty() &&
-            (!routed || command.path.size() > RTSGridPathfinder::MAX_WAYPOINTS ||
-             !std::ranges::all_of(command.path, [](const RTSWaypoint& waypoint)
-                                  { return std::isfinite(waypoint.x) && std::isfinite(waypoint.y); })))
-        {
-            return false;
-        }
-
-        if (command.type == RTSCommandType::Move || command.type == RTSCommandType::Patrol ||
-            command.type == RTSCommandType::Build ||
-            (command.type == RTSCommandType::Attack && command.targetEntity == 0))
-        {
-            return std::isfinite(command.targetX) && std::isfinite(command.targetY);
-        }
-        return true;
-    }
-
     void RTSCommandSystem::PruneSelection()
     {
         std::erase_if(m_selectedUnits,

@@ -374,7 +374,7 @@
         "Required fuzz smoke is deterministic and blocking"
       ],
       "acceptanceStatus": [
-        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "Partial progress: ShaderDiskCache and ConfigParser gained libFuzzer targets and regressions (10 of 141 inventoried parsers fuzzed); 131 parsers remain blocked, so the criterion stays open.", "evidence": []},
+        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "Partial progress: 50 of 137 inventoried parsers have libFuzzer targets with seed corpora and minimized regressions (docs/sec120-fuzz-policy-check.json); 87 parsers remain blocked and no target has exact-commit sanitizer evidence, so the criterion stays open.", "evidence": []},
         {
           "criterionDigest": "sha256:f3d43da4661a",
           "state": "implemented",

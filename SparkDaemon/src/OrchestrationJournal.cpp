@@ -5,10 +5,12 @@
 
 #include "OrchestrationJournal.h"
 
+#include <chrono>
 #include <fstream>
 #include <limits>
 #include <system_error>
 #include <unordered_map>
+#include <unordered_set>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -85,6 +87,37 @@ namespace Spark::Daemon
             ::close(file);
             return success;
 #endif
+        }
+
+        /// OrchestrationService turns persisted Unix times into system_clock time points; a
+        /// value that conversion cannot represent (or one before the epoch) is corruption.
+        bool IsRepresentableUnixMilliseconds(int64_t value) noexcept
+        {
+            constexpr auto kMaximum =
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::duration::max())
+                    .count();
+            return value >= 0 && value <= kMaximum;
+        }
+
+        bool IsValidJournalState(const OrchestrationJournalState& state)
+        {
+            std::unordered_set<std::string> processIds;
+            for (const auto& process : state.processes)
+            {
+                if (!processIds.insert(process.definition.id).second ||
+                    !IsRepresentableUnixMilliseconds(process.status.drainDeadlineUnixMilliseconds))
+                    return false;
+                for (int64_t timestamp : process.crashTimestampsUnixMilliseconds)
+                    if (!IsRepresentableUnixMilliseconds(timestamp))
+                        return false;
+            }
+
+            std::unordered_set<std::string> clients;
+            for (const auto& mutation : state.mutations)
+                if (mutation.clientInstance.empty() || mutation.sequence == 0 ||
+                    !clients.insert(mutation.clientInstance).second)
+                    return false;
+            return true;
         }
 
         bool ReadFileBounded(const std::filesystem::path& path, std::vector<uint8_t>& bytes)
@@ -165,11 +198,11 @@ namespace Spark::Daemon
             JournalMutation mutation;
             if (!reader.ReadString(mutation.clientInstance, kMaximumClientInstanceLength) ||
                 !reader.Read(mutation.sequence) || !reader.Read(mutation.response.messageType) ||
-                !reader.ReadBytes(mutation.response.payload, kMaximumJournalBlob) || mutation.sequence == 0)
+                !reader.ReadBytes(mutation.response.payload, kMaximumJournalBlob))
                 return std::nullopt;
             state.mutations.push_back(std::move(mutation));
         }
-        if (!reader.Finished())
+        if (!reader.Finished() || !IsValidJournalState(state))
             return std::nullopt;
         return state;
     }
@@ -177,7 +210,7 @@ namespace Spark::Daemon
     bool WriteOrchestrationJournal(const std::filesystem::path& path, const OrchestrationJournalState& state)
     {
         if (state.processes.size() > std::numeric_limits<uint32_t>::max() ||
-            state.mutations.size() > std::numeric_limits<uint32_t>::max())
+            state.mutations.size() > std::numeric_limits<uint32_t>::max() || !IsValidJournalState(state))
             return false;
         Wire::Writer writer;
         if (!writer.WriteString(kMagic, kMagic.size()))
