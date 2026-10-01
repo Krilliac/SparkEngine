@@ -127,30 +127,22 @@ export class SiteDataRuntime
             {
                 const status = await verifyPublicationStatus(this.m_load, { fetchEvidence: this.m_fetchEvidence });
                 let verified = null;
-                let contentError = null;
+                // Content the status names must verify whatever the status state: a
+                // rejected bundle rejects the whole refresh, so it is disclosed as
+                // stale (fallback held) or unavailable (none held), never hidden
+                // behind a blocked status.
                 if (status.contentCommit !== null)
                 {
-                    try
+                    verified = await verifyPublishedBundle(this.m_load, {
+                        displayedCommit: this.m_displayedCommit,
+                        fetchEvidence: this.m_fetchEvidence,
+                        allowHistorical: status.state === 'blocked',
+                    });
+                    if (verified.commit !== status.contentCommit)
                     {
-                        verified = await verifyPublishedBundle(this.m_load, {
-                            displayedCommit: this.m_displayedCommit,
-                            fetchEvidence: this.m_fetchEvidence,
-                            allowHistorical: status.state === 'blocked',
-                        });
-                        if (verified.commit !== status.contentCommit)
-                        {
-                            throw new BundleVerificationError(['status contentCommit differs from retained bundle']);
-                        }
-                        verifyNavigation(verified);
+                        throw new BundleVerificationError(['status contentCommit differs from retained bundle']);
                     }
-                    catch (error)
-                    {
-                        if (status.state === 'current')
-                        {
-                            throw error;
-                        }
-                        contentError = error;
-                    }
+                    verifyNavigation(verified);
                 }
                 this.m_status = status;
                 this.m_statusAt = this.m_now();
@@ -163,7 +155,7 @@ export class SiteDataRuntime
                     this.m_verified = null;
                 }
                 this.m_fetchOutcome = 'verified';
-                this.m_error = contentError;
+                this.m_error = null;
             }
             catch (error)
             {
