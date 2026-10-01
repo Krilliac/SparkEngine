@@ -3802,7 +3802,7 @@ jobs:
       contents: read
     runs-on: ubuntu-24.04
     # 60: the build takes ~23 min and the instrumented suite ~17-20 min on the hosted runner.
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       # Instrumented objects plus one .gcno per compile outgrow the workflow's
       # 1G cache (the plain GCC Debug lane alone fills 0.8G); evicting during a
@@ -3866,8 +3866,8 @@ jobs:
           # pipefail so a cmake --build failure is not masked by tee
           set -o pipefail
           # Coverage executes SparkTests only; building the default target also
-          # compiles unrelated tools and product binaries inside the 45-minute
-          # job budget. SparkTests still brings in every library and module it
+          # compiles unrelated tools and product binaries inside the job budget
+          # (75 minutes, OD-29). SparkTests still brings in every library and module it
           # links, so the instrumented test corpus and coverage thresholds are
           # unchanged.
           cmake --build build --target SparkTests --parallel $(nproc) 2>&1 | tee cmake-build.log
