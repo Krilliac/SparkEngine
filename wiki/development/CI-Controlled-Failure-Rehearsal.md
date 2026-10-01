@@ -24,7 +24,7 @@ gate is designed to catch, so nothing here weakens a gate.
 - Producing the hosted CI-100[0] evidence (an owner task; see below).
 - Confirming, after a workflow change, that each required check still reddens the
   gate.
-- Reviewing exactly which job each class of failure lands on.
+- Reviewing which intended job and step each class reaches.
 
 ## The six classes and their gated jobs
 
@@ -40,7 +40,7 @@ gate is designed to catch, so nothing here weakens a gate.
 Every one of these jobs is listed in `required-ci-gate.needs` and in the gate's
 `EXPECTED_REQUIRED_JOBS_JSON` (`.github/workflows/build.yml`), so a non-success
 result in any of them makes `verify-required-jobs.py` report the gate as
-`failure`. The map is pinned by
+`failure`. The driver verifies the intended step's failure; the map is pinned by
 `.github/scripts/test-workflow-failure-propagation.py`
 (`test_ci100_controlled_failure_classes_map_to_gated_required_jobs`), which runs
 in the required `validate-ci-tools` job.
@@ -61,8 +61,8 @@ without it:
 - **threshold** — `scripts/coverage-report.sh` on a synthetic lcov fixture with
   the `Core` threshold raised to 100 % reports `Core … FAIL >= 100%` (exit 1);
   the baseline 40 % threshold passes. A real instrumented coverage build is the
-  hosted `coverage` job; the patch makes the threshold unmeetable by any real
-  measurement.
+  hosted `coverage` job. A 100 % threshold can be met in principle; the
+  fixture only proves the check rejects its below-threshold measurement.
 - **test** / **sanitizer** — the probe bodies were compiled against the real
   `Tests/TestFramework.h` with a minimal runner. `EXPECT_TRUE(false)` produces a
   hard failure and a non-zero process exit; the AddressSanitizer build of the
@@ -81,16 +81,29 @@ python3 tools/ci/run_controlled_failure_rehearsal.py --base <base-sha>
 python3 tools/ci/run_controlled_failure_rehearsal.py --base <base-sha> --execute
 ```
 
-For each class the driver creates `rehearsal/ci100-<class>-<shortsha>` from the
+For each class the driver creates `rehearsal/ci100-<class>-<shortsha>-<run-id>` from the
 base SHA, applies the patch, opens a **draft** PR against `Working` labelled
 `do-not-merge`, waits for the `Build SparkEngine` run, records the run id, the
-failing job(s), and the `Required CI Gate` conclusion into
+failing job(s), intended failing step, patch SHA, PR URL, and the `Required CI Gate` conclusion into
 `docs/readiness/evidence/ci100-controlled-failures.json`, then closes the PR and
-deletes the branch. A class is marked `demonstrated` only when the gate
-conclusion is `failure`. Unit tests for the driver (fake `gh`, no network) live
+deletes the branch after checking its SHA. A class is marked `demonstrated` only
+when a `pull_request` Build run belongs to that PR and exact pushed patch SHA,
+the intended job and step fail, and the gate and run conclude `failure`.
+Cleanup failures are recorded and make the command fail. Unit tests for the driver (fake `gh`, no network) live
 in `tools/ci/test_run_controlled_failure_rehearsal.py`.
 
-## Owner decision
+## Two controlled-failure paths and owner decision
+
+`build.yml` already has a default-off `workflow_dispatch` input,
+`simulate_required_job_failure`. When explicitly enabled, its probe fails the
+`Controlled required-job failure probe` step in `validate-ci-tools`. A dispatch
+from `Working` can establish generic propagation from one required job to the
+gate at that ref. It does not exercise the six defect classes above.
+
+The draft-PR rehearsal exercises six class-specific checks with patches based
+on a selected SHA. Its runs are `pull_request` events targeting `Working`, not
+pushes or dispatches on `Working`. Even six demonstrated PR records do not by
+themselves settle the work item's Working-branch definition of done.
 
 CI-100[0]'s definition of done asks for a controlled required-job failure that
 turns the gate red **"on Working."** The rehearsal runs on draft `do-not-merge`
@@ -100,20 +113,22 @@ the same always-running gate as a `Working` push (no `paths`/`paths-ignore`
 filters; the gate is `if: always()` and needs the full inventory). Whether a
 draft-PR red run satisfies the "on Working" wording, or whether a direct push to
 `Working` (temporarily, behind the ruleset) is required, is an **owner
-decision** recorded in the readiness handoff. The rehearsal supports either: the
-same patches apply to a push-based variant.
+decision**. Until that decision and the required hosted evidence exist,
+CI-100[0] remains `unmet`. A dispatch probe can complement the PR records, but
+neither local fake-runner tests nor a generic dispatch substitutes for six
+class-specific hosted failures.
 
 ## Troubleshooting
 
-- **A class is not marked `demonstrated`.** The `Required CI Gate` conclusion was
-  not `failure`. Inspect the recorded `runId` with `gh run view <id>`; the
-  expected failing job for the class is in the table above.
+- **A class is not marked `demonstrated`.** Inspect the recorded `runId` and
+  `patchSha`: the PR identity, exact SHA, intended job, failing step, Build
+  conclusion, and gate conclusion must all match.
 - **`git apply` fails for a patch.** The base SHA drifted from where the patch
   was captured. Re-capture the patch against the current base (edit the file,
   `git diff` it, revert), keeping the change minimal and single-class.
-- **The rehearsal left a branch behind.** Cleanup runs in a `finally`, but a
-  hard interrupt can skip it. Delete `rehearsal/ci100-*` branches and close any
-  open `do-not-merge` draft PRs manually.
+- **The rehearsal reports cleanup errors.** Inspect the named PR and branch.
+  Close only the PR created by this run; delete a branch only after confirming
+  it still points to the recorded `patchSha`. A hard interrupt can skip cleanup.
 
 ## Related Pages
 

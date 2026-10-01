@@ -737,7 +737,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Controlled test, sanitizer, format, threshold, registration, and validation failures each make CI red
    - Evidence: `tools/ci/controlled-failures/README.md`, `tools/ci/run_controlled_failure_rehearsal.py`, `tools/ci/test_run_controlled_failure_rehearsal.py`, `.github/scripts/test-workflow-failure-propagation.py`, `docs/readiness/evidence/ci100-controlled-failures.json`
-   - Rehearsal scaffolded locally (no hosted run). Six tools/ci/controlled-failures/ patches, each proven to fail its real check and pass without it (clang-format 18.1.3, check-test-registration, validate.py, coverage threshold, ASan UAF, failing TEST). run_controlled_failure_rehearsal.py has fake-gh tests; class->job map pinned in test-workflow-failure-propagation.py. Unmet pending hosted red run.
+   - Local rehearsal driver and six patches exist. The driver now matches each PR run to its pushed patch SHA and checks the intended failed job/step before recording proof; cleanup verifies PR and branch state. No class-specific hosted run exists. Owner must decide whether PRs targeting Working meet the Working evidence rule. Unmet.
 2. **[implemented]** Every Working commit receives a gate summary, including docs-only changes
    - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `.github/scripts/test-workflow-failure-propagation.py`
    - The Build workflow has no path filters, pushes are not cancelled and the gate is always(); registered mutations reject paths/paths-ignore and a conditional gate. No hosted docs-only run or exact-commit CI.

@@ -21,6 +21,8 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
+import run_controlled_failure_rehearsal as controlled_failure_driver  # noqa: E402
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recovery.yml"
@@ -2604,27 +2606,25 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertEqual(enforced_jobs, declared_jobs)
 
     def test_ci100_controlled_failure_classes_map_to_gated_required_jobs(self) -> None:
-        """CI-100[0]: each controlled-failure class the rehearsal exercises must land
-        on a job that the Required CI Gate needs and enforces, so the class's failure
-        turns the gate red. This pins the class -> job map the rehearsal driver
-        (tools/ci/run_controlled_failure_rehearsal.py) and patches depend on; removing
-        any of these jobs from the gate fails here.
+        """The driver's actual class plan must target a required job and its real check."""
 
-        The checks within each job are proven to fail locally under
-        tools/ci/controlled-failures/ and are structurally fail-closed by the other
-        tests in this file (required_job_bypass_errors, check_format_gate_errors,
-        docs_health_gate_errors, standard_test_evidence_errors, required_workflow_errors,
-        and validate_all_ci_coverage_errors)."""
-
-        # class -> the build.yml job the controlled failure turns red.
-        controlled_failure_class_jobs = {
-            "test": "build-linux-gcc",
-            "sanitizer": "build-linux-asan",
-            "format": "check-format",
-            "threshold": "coverage",
-            "registration": "validate-ci-tools",
-            "validation": "docs-health",
+        patch_targets = {
+            "test": "Tests/TestMathUtils.cpp",
+            "sanitizer": "Tests/TestObjectPool.cpp",
+            "format": "Tests/TestMathUtils.cpp",
+            "threshold": "scripts/coverage-report.sh",
+            "registration": "Tests/TestCI100RegistrationProbe.cpp",
+            "validation": "docs/readiness/work-items/40-installer-governance-docs.json",
         }
+        check_commands = {
+            "test": "ctest",
+            "sanitizer": "run-sanitizer-tests.sh",
+            "format": "check-format-changed.sh",
+            "threshold": "scripts/coverage-report.sh",
+            "registration": "tools/check-test-registration.sh",
+            "validation": "tools/site-data/validate.py --docs",
+        }
+        self.assertEqual(set(controlled_failure_driver.CLASS_PLAN), set(patch_targets))
         document = parse_workflow_yaml(self.build)
         gate = document["jobs"]["required-ci-gate"]
         needs = gate["needs"]
@@ -2634,7 +2634,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             if step.get("name") == "Verify every required job succeeded"
         )
         inventory = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
-        for failure_class, job in controlled_failure_class_jobs.items():
+        for failure_class, (patch_name, job, display_name, step_name) in controlled_failure_driver.CLASS_PLAN.items():
             with self.subTest(failure_class=failure_class):
                 self.assertIn(job, REQUIRED_CI_JOBS, f"{failure_class}: {job} is not a required job")
                 self.assertIn(job, needs, f"{failure_class}: {job} is not in required-ci-gate needs")
@@ -2642,6 +2642,17 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertIsInstance(
                     document["jobs"].get(job), dict, f"{failure_class}: {job} is missing from build.yml"
                 )
+                job_spec = document["jobs"][job]
+                self.assertEqual(job_spec.get("name", job), display_name)
+                steps = [step for step in job_spec["steps"] if isinstance(step, dict)
+                         and step.get("name") == step_name]
+                self.assertEqual(len(steps), 1, f"{failure_class}: expected check step missing")
+                self.assertIn(check_commands[failure_class], steps[0].get("run", ""))
+                patch = controlled_failure_driver.PATCH_DIR / patch_name
+                self.assertTrue(patch.is_file())
+                targets = re.findall(r"^diff --git a/\S+ b/(\S+)$",
+                                     patch.read_text(encoding="utf-8"), re.MULTILINE)
+                self.assertEqual(targets, [patch_targets[failure_class]])
 
     def test_license_compliance_job_is_required_and_fail_closed(self) -> None:
         document = parse_workflow_yaml(self.build)

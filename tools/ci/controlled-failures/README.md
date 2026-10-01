@@ -1,10 +1,12 @@
 # CI-100 controlled-failure patches
 
 Six minimal, self-contained patches, one per failure class CI-100[0] requires a
-controlled red run for. Each patch, applied on a throwaway branch, makes exactly
-one required CI check fail so the `Required CI Gate` turns red. **None of these
+controlled red run for. Each patch targets one required CI job and check; it may
+also affect other jobs that execute the same tests. The driver requires the
+intended job and step to fail before recording proof that the gate turned red.
+**None of these
 patches is ever merged into `Working`.** They are applied only on short-lived
-`rehearsal/ci100-<class>-<shortsha>` branches by
+`rehearsal/ci100-<class>-<shortsha>-<run-id>` branches by
 `tools/ci/run_controlled_failure_rehearsal.py`, which opens a draft `do-not-merge`
 pull request, records the run, and then closes the PR and deletes the branch.
 
@@ -34,6 +36,7 @@ map; `verify-required-jobs.py` turns any non-success required job into a red gat
   to the already-registered `Tests/TestMathUtils.cpp`. The runner records a hard
   failure and `main()` returns `EXIT_FAILURE` (`Tests/TestMain.cpp`), so
   `ctest --no-tests=error` turns `build-linux-gcc`'s "Run Tests" step red.
+  Other jobs that run `SparkTests`, including coverage, may fail too.
 - **sanitizer.patch** — appends an `#if defined(__SANITIZE_ADDRESS__)`-guarded
   heap-use-after-free `TEST` to the registered `Tests/TestObjectPool.cpp`. Under
   the ASan lane (which defines `__SANITIZE_ADDRESS__` and runs with
@@ -44,8 +47,8 @@ map; `verify-required-jobs.py` turns any non-success required job into a red gat
   `Tests/TestMathUtils.cpp`. No new symbol, no test-count change; it only trips
   `clang-format --dry-run --Werror`.
 - **threshold.patch** — raises the `Core` per-subsystem coverage threshold in
-  `scripts/coverage-report.sh` from 40 % to 100 %, which no real measurement can
-  meet, so the `coverage` job's threshold step exits non-zero.
+  `scripts/coverage-report.sh` from 40 % to 100 %. The synthetic fixture's
+  below-threshold result fails; the hosted `coverage` result must be checked.
 - **registration.patch** — adds `Tests/TestCI100RegistrationProbe.cpp` **without**
   registering it in `Tests/CMakeLists.txt` and without the
   `// test-registration: ignore` opt-out, so `tools/check-test-registration.sh`
