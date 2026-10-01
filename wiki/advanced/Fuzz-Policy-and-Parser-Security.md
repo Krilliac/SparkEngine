@@ -369,6 +369,69 @@ runtime evidence yet.
   `UINT64_MAX`, republish the next sequence, leave a rejected file intact, and never hand two
   leases the same key. No defect was found.
 
+### Content, settings and module-gate targets
+
+These eight targets cover files the engine reads from content, settings and module
+directories before it trusts them. They were built with Clang 21 and libFuzzer (ASan and
+UBSan) on a local WSL Ubuntu tree, their corpora replayed clean through the smoke command
+line, and each ran a bounded local campaign of 131 seconds with no crash, leak or timeout
+(fixtures on ext4; ASan quarantine 32 MB as `run_campaign.py` sets it): 1,538,422 inputs for
+the material reader, 25,257 for engine settings, 572,603 for the VFS resolver, 435,875 for
+the archetype reader, 481,035 for the sidecar reader, 170,887 for plugin metadata,
+11,775,298 for the reflection codec and 586,171 for the blob cache. None of them has hosted
+runtime evidence yet.
+
+- **`material-loader`** (`SparkFuzzMaterialLoader`, `FuzzMaterialLoaderSmoke`) feeds
+  `Spark::Graphics::ParseSparkMatDefinition`, the `.sparkmat` reader
+  `MaterialLoader::ParseFile` now hands its stream to (moved to `SparkMatParser.cpp` so it
+  links without the MaterialSystem and console). `std::stof` accepted `nan` and `inf`, and
+  `RegisterMaterial`'s `std::clamp` passes NaN through (`normalScale` is not clamped), so a
+  material file put non-finite PBR factors into the GPU constant buffers. A non-finite factor
+  now keeps its previous value (`SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults`).
+- **`engine-settings`** (`SparkFuzzEngineSettings`, `FuzzEngineSettingsSmoke`) writes
+  `settings.ini` (and, after a NUL byte, `settings.local.ini`) and calls
+  `EngineSettings::Load`. A rejected file must change no setting and not touch the assert
+  policy, an accepted one must apply its `[Debug]` policy, drop the retired crash-upload keys
+  and be a fixed point of load, `SaveAs`, load. The `settings_*` console commands moved to
+  `EngineSettingsConsole.cpp`; the adapter defines the two `Assert` policy setters, as
+  `SparkFuzzReflectedScene` does for `Assert::Fail`. No defect was found.
+- **`virtual-filesystem-mounts`** (`SparkFuzzVirtualFileSystem`,
+  `FuzzVirtualFileSystemSmoke`) resolves the input as a virtual path through
+  `VirtualFileSystem::ReadFile`/`ReadTextFile` over two real mounts holding links that point
+  out of the mount. Nothing outside the roots may be returned, a read is a regular fixture
+  file's bytes or nothing, and the higher-priority mount wins. On Linux an `ifstream` opens a
+  directory and its ext4 end offset reads as `INT64_MAX`, which `LocalFileProvider::ReadFile`
+  used as the buffer size, so a mod naming `.` or a folder aborted the engine. Only regular
+  files are read now (`SecurityParsers_VfsDirectoryPathReadsAsNothing`). The defect does not
+  reproduce on tmpfs, where the directory offset is refused; the smoke reproduces it wherever
+  the temporary directory is on ext4, as on the hosted runner.
+- **`entity-archetype-loader`** (`SparkFuzzEntityArchetype`, `FuzzEntityArchetypeSmoke`)
+  feeds `Spark::ECS::ParseArchetypeDefinition`, moved to `EntityArchetypeParse.cpp` out of
+  `LoadArchetypeFromFile`. Accepted archetypes keep trimmed, line-free fields, positional
+  parameters `p0`..`pN-1` and survive write, parse. No defect was found.
+- **`module-abi-sidecar`** (`SparkFuzzModuleSidecar`, `FuzzModuleSidecarSmoke`) writes the
+  input as the `.sparkabi` sidecar of a fixed module image and calls
+  `Spark::ModuleSidecar::ValidateModuleSidecar`, the gate `ModuleManager` runs before the OS
+  loader maps a module (moved with its SHA-256 and `DescribeModuleCompatibilityRejection` to
+  `ModuleSidecar.cpp`). The literal `@compiler_abi_version@` in a seed is replaced by the
+  building Clang's value, the one field that differs between toolchains. An accepted sidecar
+  must hold exactly the twelve fields with this host's descriptor (a larger `struct_size` is
+  allowed: the descriptor is append-only) and the image's hash. No defect was found.
+- **`plugin-metadata-json`** (`SparkFuzzPluginMetadata`, `FuzzPluginMetadataSmoke`) writes the
+  input as `fuzz-plugin.so.sparkplugin.json` and calls `Spark::ValidatePluginMetadata`, moved
+  to `PluginMetadata.cpp` out of `DynamicPluginHost.cpp`. Both gates must accept their own
+  correct document, so a gate that rejects everything fails the target. No defect was found.
+- **`reflection-binary-codec`** (`SparkFuzzReflectionBinary`, `FuzzReflectionBinarySmoke`)
+  decodes into a record with every field kind. The decoder must consume all bytes or none,
+  never write Custom, Unknown or non-serialized fields, keep Bool at 0 or 1, and agree with
+  `SerializeToBinary` on every accepted record. No defect was found.
+- **`shader-disk-cache-blob`** (`SparkFuzzShaderDiskCache`, `FuzzShaderDiskCacheSmoke`)
+  plants the input as the `.blob` `Store` wrote and calls `ShaderDiskCache::Lookup`. A
+  zero-length entry (a crash between `Store`'s truncating open and its write, or a planted
+  file) was returned as a successful blob with empty bytecode on every run, so the shader
+  was never recompiled; it is now a miss (`ShaderDiskCachePhaseV_EmptyCachedBlobIsAMiss`).
+  The empty input libFuzzer always runs is that regression; no zero-byte seed is committed.
+
 ### Retired and reclassified records
 
 Five blocked records described code that decodes no untrusted bytes. Each now carries its
@@ -519,7 +582,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
@@ -713,5 +776,6 @@ campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
 `.github/workflows/release.yml`. The OD-21 classification and the counts above were
 re-verified structurally 2026-09-28 (SparkBuild, `-exec` and `.vscript` targets and the
 record reclassification), 2026-09-29 (installer marker and mod-manifest targets) and 2026-09-30
-(save, store and daemon state targets); rerun the CI command for
+(save, store and daemon state targets) and 2026-10-01 (content, settings and module-gate
+targets); rerun the CI command for
 current counts and exact-SHA runtime evidence.

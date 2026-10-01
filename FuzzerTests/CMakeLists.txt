@@ -2853,3 +2853,423 @@ set_tests_properties(FuzzRTSPersistenceSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# SparkMatParser.cpp is the .sparkmat reader MaterialLoader::ParseFile hands the file
+# stream to; MaterialLoader.cpp itself registers materials with the MaterialSystem
+# and the console, so it is not linked (GNU ld reports undefined symbols even in
+# sections --gc-sections drops).
+add_executable(SparkFuzzMaterialLoader
+    FuzzMaterialLoader.cpp
+    FuzzMaterialLoaderProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/SparkMatParser.cpp"
+)
+set_source_files_properties(
+    FuzzMaterialLoaderProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/SparkMatParser.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzMaterialLoader PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzMaterialLoader PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzMaterialLoader PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzMaterialLoader PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzMaterialLoader PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzMaterialLoader PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzMaterialLoaderSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzMaterialLoader>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/material-loader"
+)
+set_tests_properties(FuzzMaterialLoaderSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# EngineSettings::Load runs on settings.ini and its settings.local.ini override at
+# every engine start. ConfigParser.cpp is the INI reader it stages through; the
+# settings_* console commands live in EngineSettingsConsole.cpp, which is not linked,
+# and the adapter defines the two Assert policy setters Load ends with (their
+# production bodies in Utils/Assert.cpp sit on the crash handler and console).
+add_executable(SparkFuzzEngineSettings
+    FuzzEngineSettings.cpp
+    FuzzEngineSettingsProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/EngineSettings.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/ConfigParser.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzEngineSettingsProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/EngineSettings.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/ConfigParser.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEngineSettings PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+)
+target_compile_features(SparkFuzzEngineSettings PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzEngineSettings PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzEngineSettings PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEngineSettings PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEngineSettings PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEngineSettingsSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEngineSettings>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=10
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/engine-settings"
+)
+set_tests_properties(FuzzEngineSettingsSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# VirtualFileSystem.cpp is the mount resolver every mod and asset read goes through;
+# the adapter mounts a real directory tree with links that point out of the mount.
+add_executable(SparkFuzzVirtualFileSystem
+    FuzzVirtualFileSystem.cpp
+    FuzzVirtualFileSystemProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/FileUtils.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzVirtualFileSystemProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/FileUtils.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzVirtualFileSystem PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzVirtualFileSystem PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzVirtualFileSystem PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzVirtualFileSystem PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzVirtualFileSystem PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzVirtualFileSystem PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzVirtualFileSystemSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzVirtualFileSystem>
+        -max_len=4096
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=17
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/virtual-filesystem-mounts"
+)
+set_tests_properties(FuzzVirtualFileSystemSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# EntityArchetypeParse.cpp is the .archetype reader LoadArchetypeFromFile hands the
+# file stream to; the loader's registry, console and spawning stay in
+# EntityArchetypeLoader.cpp, which is not linked.
+add_executable(SparkFuzzEntityArchetype
+    FuzzEntityArchetype.cpp
+    FuzzEntityArchetypeProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/ECS/EntityArchetypeParse.cpp"
+)
+set_source_files_properties(
+    FuzzEntityArchetypeProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/ECS/EntityArchetypeParse.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEntityArchetype PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzEntityArchetype PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzEntityArchetype PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzEntityArchetype PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEntityArchetype PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEntityArchetype PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEntityArchetypeSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEntityArchetype>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/entity-archetype-loader"
+)
+set_tests_properties(FuzzEntityArchetypeSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# ModuleSidecar.cpp is the .sparkabi gate ModuleManager runs before the OS loader
+# maps a game module; the lifecycle in ModuleManager.cpp is not linked.
+add_executable(SparkFuzzModuleSidecar
+    FuzzModuleSidecar.cpp
+    FuzzModuleSidecarProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ModuleSidecar.cpp"
+)
+set_source_files_properties(
+    FuzzModuleSidecarProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ModuleSidecar.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzModuleSidecar PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+)
+target_compile_features(SparkFuzzModuleSidecar PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzModuleSidecar PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzModuleSidecar PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzModuleSidecar PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzModuleSidecar PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzModuleSidecarSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzModuleSidecar>
+        -max_len=8192
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=14
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/module-abi-sidecar"
+)
+set_tests_properties(FuzzModuleSidecarSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# PluginMetadata.cpp is the .sparkplugin.json gate DynamicPluginHost::Load runs before
+# mapping a plugin; FileIntegrity.cpp hashes the image and Json::ParseStrict
+# (Utils/JsonUtils.h) reports through the logger.
+add_executable(SparkFuzzPluginMetadata
+    FuzzPluginMetadata.cpp
+    FuzzPluginMetadataProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/PluginMetadata.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/FileIntegrity.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzPluginMetadataProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/PluginMetadata.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/FileIntegrity.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzPluginMetadata PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+)
+target_compile_features(SparkFuzzPluginMetadata PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzPluginMetadata PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzPluginMetadata PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzPluginMetadata PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzPluginMetadata PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzPluginMetadataSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzPluginMetadata>
+        -max_len=70000
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=14
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/plugin-metadata-json"
+)
+set_tests_properties(FuzzPluginMetadataSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# Spark::DeserializeFromBinary is header-only (Core/ReflectionSerializer.h) and is
+# compiled into the adapter; Reflection.h reaches Spark/Version.h through
+# Core/EngineContext.h, so the target reuses the generated version header.
+add_executable(SparkFuzzReflectionBinary
+    FuzzReflectionBinary.cpp
+    FuzzReflectionBinaryProduction.cpp
+)
+set_source_files_properties(
+    FuzzReflectionBinaryProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzReflectionBinary PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+)
+target_compile_features(SparkFuzzReflectionBinary PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzReflectionBinary PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzReflectionBinary PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzReflectionBinary PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzReflectionBinary PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzReflectionBinarySmoke
+    COMMAND $<TARGET_FILE:SparkFuzzReflectionBinary>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=12
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/reflection-binary-codec"
+)
+set_tests_properties(FuzzReflectionBinarySmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# ShaderDiskCache.cpp reads cached bytecode back for the driver. Its optional daemon
+# path references ShaderServiceClient/DaemonClient and the blob codec, so those are
+# linked; the adapter never attaches a daemon client.
+add_executable(SparkFuzzShaderDiskCache
+    FuzzShaderDiskCache.cpp
+    FuzzShaderDiskCacheProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/ShaderDiskCache.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/ShaderServiceClient.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/DaemonClient.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzShaderDiskCacheProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/ShaderDiskCache.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Graphics/ShaderDaemonBridge.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/ShaderServiceClient.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/DaemonClient.cpp"
+    "${SPARK_FUZZ_PRODUCTION_LOGGER}"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzShaderDiskCache PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+)
+target_compile_features(SparkFuzzShaderDiskCache PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzShaderDiskCache PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzShaderDiskCache PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzShaderDiskCache PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzShaderDiskCache PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzShaderDiskCacheSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzShaderDiskCache>
+        -max_len=1048576
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=7
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/shader-disk-cache-blob"
+)
+set_tests_properties(FuzzShaderDiskCacheSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

@@ -1,0 +1,5 @@
+name = First
+name = Second=Name
+albedoTexture = a=b.dds
+roughness = 0.25
+roughness = 0.75

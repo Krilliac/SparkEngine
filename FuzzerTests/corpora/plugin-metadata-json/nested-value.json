@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "id": {
+    "nested": [
+      "a",
+      {
+        "b": 1
+      }
+    ]
+  },
+  "version": "1.0.0",
+  "type": "gameplay",
+  "abi_major": 1,
+  "abi_minor": 1,
+  "entry_point": "SparkGetPluginDescriptor",
+  "binary": "fuzz-plugin.so",
+  "sha256": "30733e1a836a3d81bf4b097e4568a78d9f25caea08854af251d20905ed41c68f"
+}

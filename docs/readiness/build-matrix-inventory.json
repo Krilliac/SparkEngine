@@ -3069,6 +3069,26 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzEngineSettings",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 2912,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzEntityArchetype",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3019,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzExecScript",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3199,6 +3219,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzMaterialLoader",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 2861,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzMiniz",
       "kind": "static_library",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3213,6 +3243,16 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 2379,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzModuleSidecar",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3067,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3269,6 +3309,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzPluginMetadata",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3118,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzRTSPersistence",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3283,6 +3333,16 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 940,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzReflectionBinary",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3172,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3425,6 +3485,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzShaderDiskCache",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 3221,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzShaderServiceProtocol",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3499,6 +3569,16 @@
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
       "line": 144,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFuzzVirtualFileSystem",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 2966,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5618,6 +5698,42 @@
       ]
     },
     {
+      "target": "SparkFuzzEngineSettings",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 2912,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzEntityArchetype",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3019,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzExecScript",
       "kind": "executable",
       "buildable": true,
@@ -5852,6 +5968,24 @@
       ]
     },
     {
+      "target": "SparkFuzzMaterialLoader",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 2861,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzMiniz",
       "kind": "static_library",
       "buildable": true,
@@ -5880,6 +6014,24 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 2379,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzModuleSidecar",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3067,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5978,6 +6130,24 @@
       ]
     },
     {
+      "target": "SparkFuzzPluginMetadata",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3118,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzRTSPersistence",
       "kind": "executable",
       "buildable": true,
@@ -6006,6 +6176,24 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 940,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzReflectionBinary",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3172,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6230,6 +6418,24 @@
       ]
     },
     {
+      "target": "SparkFuzzShaderDiskCache",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 3221,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzShaderServiceProtocol",
       "kind": "executable",
       "buildable": true,
@@ -6366,6 +6572,24 @@
         {
           "file": "FuzzerTests/CMakeLists.txt",
           "line": 144,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFuzzVirtualFileSystem",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 2966,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -8244,7 +8468,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "4f26deeffaf8403b"
+            "runDigest": "7ba0995850dbe1c5"
           },
           {
             "index": 6,
@@ -14858,7 +15082,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzAnimationBinary",
@@ -14874,6 +15098,8 @@
           "SparkFuzzDialogue",
           "SparkFuzzEditorCollaboration",
           "SparkFuzzEditorPrefab",
+          "SparkFuzzEngineSettings",
+          "SparkFuzzEntityArchetype",
           "SparkFuzzExecScript",
           "SparkFuzzExr",
           "SparkFuzzFbx",
@@ -14887,20 +15113,25 @@
           "SparkFuzzMMOChatWire",
           "SparkFuzzMMOClientState",
           "SparkFuzzMMOEntityEvents",
+          "SparkFuzzMaterialLoader",
           "SparkFuzzModManifest",
+          "SparkFuzzModuleSidecar",
           "SparkFuzzNavMesh",
           "SparkFuzzNeuralWeights",
           "SparkFuzzObjStatic",
           "SparkFuzzOrchestrationJournal",
           "SparkFuzzOrchestratorIdentity",
+          "SparkFuzzPluginMetadata",
           "SparkFuzzRTSPersistence",
           "SparkFuzzReflectedScene",
+          "SparkFuzzReflectionBinary",
           "SparkFuzzReplay",
           "SparkFuzzSaveSystem",
           "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
           "SparkFuzzSessionGateProtocol",
           "SparkFuzzShaderBlob",
+          "SparkFuzzShaderDiskCache",
           "SparkFuzzShaderServiceProtocol",
           "SparkFuzzSoundWav",
           "SparkFuzzSparkBuildConfig",
@@ -14909,6 +15140,7 @@
           "SparkFuzzTelemetrySpool",
           "SparkFuzzTextureLinux",
           "SparkFuzzTextureStex",
+          "SparkFuzzVirtualFileSystem",
           "SparkFuzzVisualScriptGraph",
           "SparkFuzzZipListing"
         ],
@@ -19070,7 +19302,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzAnimationBinary",
@@ -19086,6 +19318,8 @@
           "SparkFuzzDialogue",
           "SparkFuzzEditorCollaboration",
           "SparkFuzzEditorPrefab",
+          "SparkFuzzEngineSettings",
+          "SparkFuzzEntityArchetype",
           "SparkFuzzExecScript",
           "SparkFuzzExr",
           "SparkFuzzFbx",
@@ -19099,20 +19333,25 @@
           "SparkFuzzMMOChatWire",
           "SparkFuzzMMOClientState",
           "SparkFuzzMMOEntityEvents",
+          "SparkFuzzMaterialLoader",
           "SparkFuzzModManifest",
+          "SparkFuzzModuleSidecar",
           "SparkFuzzNavMesh",
           "SparkFuzzNeuralWeights",
           "SparkFuzzObjStatic",
           "SparkFuzzOrchestrationJournal",
           "SparkFuzzOrchestratorIdentity",
+          "SparkFuzzPluginMetadata",
           "SparkFuzzRTSPersistence",
           "SparkFuzzReflectedScene",
+          "SparkFuzzReflectionBinary",
           "SparkFuzzReplay",
           "SparkFuzzSaveSystem",
           "SparkFuzzSceneManagerText",
           "SparkFuzzSceneManifest",
           "SparkFuzzSessionGateProtocol",
           "SparkFuzzShaderBlob",
+          "SparkFuzzShaderDiskCache",
           "SparkFuzzShaderServiceProtocol",
           "SparkFuzzSoundWav",
           "SparkFuzzSparkBuildConfig",
@@ -19121,6 +19360,7 @@
           "SparkFuzzTelemetrySpool",
           "SparkFuzzTextureLinux",
           "SparkFuzzTextureStex",
+          "SparkFuzzVirtualFileSystem",
           "SparkFuzzVisualScriptGraph",
           "SparkFuzzZipListing"
         ],

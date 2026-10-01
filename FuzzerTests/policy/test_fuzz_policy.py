@@ -142,6 +142,14 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzGatewayAreaControlState",
     "SparkFuzzRTSPersistence",
     "SparkFuzzOrchestratorIdentity",
+    "SparkFuzzMaterialLoader",
+    "SparkFuzzEngineSettings",
+    "SparkFuzzVirtualFileSystem",
+    "SparkFuzzEntityArchetype",
+    "SparkFuzzModuleSidecar",
+    "SparkFuzzPluginMetadata",
+    "SparkFuzzReflectionBinary",
+    "SparkFuzzShaderDiskCache",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2216,6 +2224,54 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "Spark::Daemon::OrchestratorIdentityLease::Acquire",
                 "daemon-orchestrator-identity-state",
                 8,
+            ),
+            "material-loader": (
+                "MaterialLoader",
+                "Spark::Graphics::ParseSparkMatDefinition",
+                "material-loader",
+                8,
+            ),
+            "engine-settings": (
+                "EngineSettings",
+                "EngineSettings::Load",
+                "engine-settings",
+                10,
+            ),
+            "virtual-filesystem-mounts": (
+                "VirtualFileSystem",
+                "Spark::VirtualFileSystem::ReadFile",
+                "virtual-filesystem-mounts",
+                17,
+            ),
+            "entity-archetype-loader": (
+                "EntityArchetype",
+                "Spark::ECS::ParseArchetypeDefinition",
+                "entity-archetype-loader",
+                8,
+            ),
+            "module-abi-sidecar": (
+                "ModuleSidecar",
+                "Spark::ModuleSidecar::ValidateModuleSidecar",
+                "module-abi-sidecar",
+                14,
+            ),
+            "plugin-metadata-json": (
+                "PluginMetadata",
+                "Spark::ValidatePluginMetadata",
+                "plugin-metadata-json",
+                14,
+            ),
+            "reflection-binary-codec": (
+                "ReflectionBinary",
+                "Spark::DeserializeFromBinary",
+                "reflection-binary-codec",
+                12,
+            ),
+            "shader-disk-cache-blob": (
+                "ShaderDiskCache",
+                "Spark::Graphics::ShaderDiskCache::Lookup",
+                "shader-disk-cache-blob",
+                7,
             ),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)

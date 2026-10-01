@@ -229,20 +229,26 @@
     },
     {
       "id": "material-loader",
-      "description": "Material definition loader.",
+      "description": "Material definition (.sparkmat key = value) reader MaterialLoader::LoadMaterial runs.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Graphics/MaterialLoader.cpp",
-        "SparkEngine/Source/Graphics/MaterialLoader.h"
+        "SparkEngine/Source/Graphics/MaterialLoader.h",
+        "SparkEngine/Source/Graphics/SparkMatParser.cpp"
       ],
       "formats": [
-        ".mat",
-        ".json"
+        ".sparkmat"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzMaterialLoader.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzMaterialLoader",
+        "test_selector": "FuzzMaterialLoaderSmoke",
+        "corpus_id": "material-loader-corpus",
+        "entry_symbol": "Spark::Graphics::ParseSparkMatDefinition",
+        "binding_source": "FuzzerTests/FuzzMaterialLoaderProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseSparkMat"
       }
     },
     {
@@ -419,19 +425,25 @@
     },
     {
       "id": "engine-settings",
-      "description": "Engine settings JSON reader.",
+      "description": "Engine settings INI reader (settings.ini plus the settings.local.ini override).",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Core/EngineSettings.cpp",
         "SparkEngine/Source/Core/EngineSettings.h"
       ],
       "formats": [
-        ".json"
+        ".ini"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEngineSettings.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEngineSettings",
+        "test_selector": "FuzzEngineSettingsSmoke",
+        "corpus_id": "engine-settings-corpus",
+        "entry_symbol": "EngineSettings::Load",
+        "binding_source": "FuzzerTests/FuzzEngineSettingsProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadEngineSettings"
       }
     },
     {
@@ -591,20 +603,25 @@
     },
     {
       "id": "virtual-filesystem-mounts",
-      "description": "Virtual-filesystem mount and archive metadata reader.",
+      "description": "Virtual-filesystem mount resolver for mod- and content-supplied virtual paths.",
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp",
         "SparkEngine/Source/Engine/Modding/VirtualFileSystem.h"
       ],
       "formats": [
-        ".vfs",
-        ".pak"
+        "virtual-path"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzVirtualFileSystem.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzVirtualFileSystem",
+        "test_selector": "FuzzVirtualFileSystemSmoke",
+        "corpus_id": "virtual-filesystem-mounts-corpus",
+        "entry_symbol": "Spark::VirtualFileSystem::ReadFile",
+        "binding_source": "FuzzerTests/FuzzVirtualFileSystemProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzVirtualFileSystemRead"
       }
     },
     {
@@ -626,20 +643,27 @@
     },
     {
       "id": "entity-archetype-loader",
-      "description": "Entity archetype JSON reader.",
+      "description": "Entity archetype (.archetype key = value) reader LoadArchetypeFromFile runs.",
       "trust_boundary": "untrusted-file",
       "source_files": [
+        "SparkEngine/Source/Engine/ECS/EntityArchetype.h",
         "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.cpp",
-        "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h"
+        "SparkEngine/Source/Engine/ECS/EntityArchetypeLoader.h",
+        "SparkEngine/Source/Engine/ECS/EntityArchetypeParse.cpp"
       ],
       "formats": [
-        ".archetype",
-        ".json"
+        ".archetype"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEntityArchetype.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEntityArchetype",
+        "test_selector": "FuzzEntityArchetypeSmoke",
+        "corpus_id": "entity-archetype-loader-corpus",
+        "entry_symbol": "Spark::ECS::ParseArchetypeDefinition",
+        "binding_source": "FuzzerTests/FuzzEntityArchetypeProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseArchetype"
       }
     },
     {
@@ -993,6 +1017,8 @@
       "source_files": [
         "SparkEngine/Source/Core/ModuleManager.cpp",
         "SparkEngine/Source/Core/ModuleManager.h",
+        "SparkEngine/Source/Core/ModuleSidecar.cpp",
+        "SparkEngine/Source/Core/ModuleSidecar.h",
         "SparkSDK/Include/Spark/ModuleABI.h"
       ],
       "formats": [
@@ -1001,10 +1027,16 @@
         "pe",
         "elf"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzModuleSidecar.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzModuleSidecar",
+        "test_selector": "FuzzModuleSidecarSmoke",
+        "corpus_id": "module-abi-sidecar-corpus",
+        "entry_symbol": "Spark::ModuleSidecar::ValidateModuleSidecar",
+        "binding_source": "FuzzerTests/FuzzModuleSidecarProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzValidateModuleSidecar"
       }
     },
     {
@@ -1012,15 +1044,23 @@
       "description": "Dynamic plugin metadata JSON reader.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEngine/Source/Core/DynamicPluginHost.cpp"
+        "SparkEngine/Source/Core/DynamicPluginHost.cpp",
+        "SparkEngine/Source/Core/PluginMetadata.cpp",
+        "SparkEngine/Source/Core/PluginMetadata.h"
       ],
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzPluginMetadata.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzPluginMetadata",
+        "test_selector": "FuzzPluginMetadataSmoke",
+        "corpus_id": "plugin-metadata-json-corpus",
+        "entry_symbol": "Spark::ValidatePluginMetadata",
+        "binding_source": "FuzzerTests/FuzzPluginMetadataProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzValidatePluginMetadata"
       }
     },
     {
@@ -1191,10 +1231,16 @@
       "formats": [
         ".blob"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzShaderDiskCache.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzShaderDiskCache",
+        "test_selector": "FuzzShaderDiskCacheSmoke",
+        "corpus_id": "shader-disk-cache-blob-corpus",
+        "entry_symbol": "Spark::Graphics::ShaderDiskCache::Lookup",
+        "binding_source": "FuzzerTests/FuzzShaderDiskCacheProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLookupShaderDiskCache"
       }
     },
     {
@@ -2523,10 +2569,16 @@
       "formats": [
         "binary-blob"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzReflectionBinary.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzReflectionBinary",
+        "test_selector": "FuzzReflectionBinarySmoke",
+        "corpus_id": "reflection-binary-codec-corpus",
+        "entry_symbol": "Spark::DeserializeFromBinary",
+        "binding_source": "FuzzerTests/FuzzReflectionBinaryProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDeserializeReflectionBinary"
       }
     },
     {
