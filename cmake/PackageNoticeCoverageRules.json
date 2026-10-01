@@ -11,7 +11,7 @@
     "description": "Fonts that third-party code compiles into binaries (ThirdParty/Licenses/embedded-fonts.json keys, which must equal 'markers'). Each marker is the name the embedding code compiles into every binary that carries the font. A package file matching 'scanPattern' that contains a marker must have the marker named on a 'Files:' line of an inventory entry whose notice files are reproduced with license text. Files larger than 'maximumScanBytes' fail closed rather than going unscanned.",
     "markers": ["ProggyClean.ttf", "ProggyForever.ttf"],
     "scanPattern": "^(bin|lib)/(.*/)?([^/.]+|[^/]+\\.(exe|dll|so|dylib|a|lib)|[^/]+\\.so\\.[0-9.]+)$",
-    "maximumScanBytes": 2147483648
+    "maximumScanBytes": 8589934592
   },
   "thirdPartyRoots": [
     "^include/SparkEngine/ThirdParty/",
