@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **174 implemented** (67%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **172 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -264,7 +264,7 @@ Create a hardened Shipping path, enforce quality, and secure the supply chain.
 | [`REL-100`](#rel-100--unify-versioning-packaging-installer-launcher-and-release-provenance) Unify versioning, packaging, installer, launcher, and release provenance | P0 | **in-progress** | 3/5 · 0/5 | `BLD-100`, `CI-100` | `REL-110`, `SEC-110` |
 | [`REL-110`](#rel-110--sign-checksum-attest-scan-and-approve-release-artifacts) Sign, checksum, attest, scan, and approve release artifacts | P0 | **in-progress** | 2/4 · 0/4 | `BLD-100`, `SEC-110`, `GOV-400` | `REL-100` |
 | [`SEC-100`](#sec-100--close-critical-remote-administration-and-runtime-security-paths) Close critical remote-administration and runtime security paths | P0 | **in-progress** | 4/4 · 0/4 | — | `CI-100`, `OPS-100`, `RDY-000` |
-| [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | 4/4 · 0/4 | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
+| [`SEC-110`](#sec-110--establish-software-supply-chain-and-dependency-policy) Establish software supply-chain and dependency policy | P0 | **in-progress** | 2/4 · 0/4 | `CI-100` | `CI-110`, `CI-120`, `BLD-100` |
 | [`SEC-120`](#sec-120--fuzz-and-bound-every-stable-v1-untrusted-file-and-package-parser) Fuzz and bound every stable-v1 untrusted file and package parser | P0 | **in-progress** | 2/3 · 0/3 | `CI-100`, `SEC-110` | `NET-100`, `ASSET-220`, `SAVE-230` |
 | [`OPS-100`](#ops-100--secure-and-complete-crash-reporting-telemetry-delivery-and-symbol-operations) Secure and complete crash reporting, telemetry delivery, and symbol operations | P0 | **in-progress** | 3/5 · 0/5 | — | `SEC-100`, `CI-100`, `RDY-000` |
 
@@ -1541,14 +1541,14 @@ Workflow actions use mutable major tags, dependency inventories disagree, CodeQL
 
 **Acceptance criteria**
 
-Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
-1. **[implemented]** No unpinned action or unmanaged dependency remains
+1. **[unmet]** No unpinned action or unmanaged dependency remains
    - Evidence: `Tests/test_check_supply_chain.py`, `tools/check-supply-chain.py`, `ThirdParty/supply-chain.lock`, `ThirdParty/POLICY.md`, `tools/architecture-viz/code_city_template.html`, `SECURITY.md`
-   - external_dependencies policy for code outside ThirdParty/. Owner review of the declared records is still pending.
-2. **[implemented]** Critical/high findings block without an owned expiring exception
-   - Evidence: `.github/scripts/verify_vulnerability_findings.py`, `.github/workflows/build.yml`, `.github/scripts/test_verify_vulnerability_findings.py`, `.github/scripts/fixtures/vulnerability/lock-sbom.spdx.json`, `.github/scripts/fixtures/vulnerability/grype-lock-sbom-high.json`, `tools/generate-sbom.py`, `Tests/Tools/test_generate_sbom.py`, `ThirdParty/supply-chain.lock`, `.github/scripts/test-workflow-failure-propagation.py`
-   - The PR-time dependency-policy job over the lock SBOM, plus the existing release gate. Hosted exact-SHA evidence is still needed.
+   - Raw-download inventory pins LLVM, sccache and DirectXMath. Two exact MinGW wget calls have expiring exceptions until the parallel lane fixes them. DXVK hash and owner review of external dependencies remain open; local policy checks cannot prove the universal claim.
+2. **[unmet]** Critical/high findings block without an owned expiring exception
+   - Evidence: `.github/scripts/verify_vulnerability_findings.py`, `.github/workflows/build.yml`, `.github/scripts/test_verify_vulnerability_findings.py`, `.github/scripts/fixtures/vulnerability/lock-sbom.spdx.json`, `.github/scripts/fixtures/vulnerability/grype-lock-sbom-high.json`, `tools/generate-sbom.py`, `Tests/Tools/test_generate_sbom.py`, `ThirdParty/supply-chain.lock`, `.github/scripts/test-workflow-failure-propagation.py`, `tools/check-secret-scan.py`, `SECURITY.md`, `.github/scripts/check-analysis-results.py`
+   - Exceptions now have a 366-day horizon and secret-scan blocks findings. CPE-less dependencies lack proved advisory matching; CodeQL baseline entries lack owner/expiry. Universal Critical/High coverage and hosted exact-SHA evidence remain open. requiredCiJobs still names obsolete analyze/license-scan jobs.
 3. **[implemented]** Final package inventory reconciles with source lock
    - Evidence: `Tests/Tools/test_generate_sbom.py`, `tools/generate-sbom.py`, `.github/workflows/release.yml`, `Tests/Tools/test_release_supply_chain_wiring.py`, `Tests/CMakeLists.txt`
    - Reconcile mode is tested but not wired into the release.yml package jobs. There is no final Windows or hosted package reconciliation evidence.

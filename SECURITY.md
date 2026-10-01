@@ -188,7 +188,12 @@ and enforced by `tools/check-supply-chain.py` in the required
   `apt-get`/`brew` packages, remote web scripts, and files that carry a foreign
   license header must each match an owned `external_dependencies` record in the
   lock. Remote scripts must name an exact version and carry the recorded SRI
-  hash.
+  hash. Raw artifact fetches in tracked scripts, workflow `run:` blocks, and
+  CMake must match a lock URL and SHA-256 and compare the downloaded bytes in
+  the fetching file. GitHub API JSON reads used by publication do not install
+  third-party artifacts. The existing MinGW/Wine setup script still has two
+  unverified `wget` calls; exact-call, owner-directed exceptions in the lock
+  expire on 2026-10-08 and must be removed when that lane pins the downloads.
 - **Resource bounds and fail-closed behavior:** policy inputs and traversals are
   bounded; malformed, unsafe, or unverifiable data fails rather than falling
   back to a weaker check.
@@ -240,9 +245,17 @@ it from Git history.
   SBOM in `release.yml` and, on every pull request, the lock-derived SBOM in the
   required `dependency-policy` job, where each locked dependency carries a
   reviewed CPE (or the reason there is none) and its upstream release (see
-  `ThirdParty/POLICY.md`). Neither has a retained hosted run yet
+  `ThirdParty/POLICY.md`). Neither has a retained hosted run yet. A reason for
+  missing CPE is an inventory note, not vulnerability coverage: the GitHub and
+  generic PURLs for AngelScript, Dear ImGui, EnTT, Jolt, RecastNavigation,
+  cgltf, glad, libsodium and other CPE-less entries are not proven to match
+  grype advisories. Package-identity and advisory matching for those entries
+  remain open.
 - Hosted exact-SHA evidence for the required `secret-scan` job
-- CodeQL coverage for every shipped product
+- CodeQL coverage for every shipped product. The required
+  `analysis-regressions` job blocks new findings relative to a reviewed
+  baseline; baseline entries do not yet carry the owned, bounded-expiry
+  exception policy required for a universal Critical/High finding claim.
 - Owner review of the declared dependencies outside `ThirdParty/`.
   `tools/check-supply-chain.py` now fails on any undeclared system library, CI
   system package, remote web script without a pinned version and SRI hash, or
@@ -262,7 +275,9 @@ review, and no hosted stable run has yet exercised it.
 
 The reviewed-exception schema (named owner, justification, and expiry for each
 `supply-chain.lock` exception) is implemented and enforced by the checker; see
-[`ThirdParty/POLICY.md`](ThirdParty/POLICY.md#reviewed-exceptions).
+[`ThirdParty/POLICY.md`](ThirdParty/POLICY.md#reviewed-exceptions). Supply-chain
+and vulnerability exceptions also have a maximum 366-day horizon. A longer
+expiry is a policy violation even when the finding itself is otherwise covered.
 
 ## Credit
 
