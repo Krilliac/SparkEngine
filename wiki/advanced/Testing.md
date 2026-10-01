@@ -1039,7 +1039,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*728 test-bearing `.cpp`/`.mm` files, 8430 source-level test definitions*
+*729 test-bearing `.cpp`/`.mm` files, 8446 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1323,7 +1323,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestGameplaySystemExtension` | 6 |
 | `TestGameplayTags` | 14 |
 | `TestGameplayTagsReal` | 7 |
-| `TestGatewayAreaControl` | 25 |
+| `TestGatewayAreaControl` | 26 |
 | `TestGatewaySecurity` | 14 |
 | `TestGizmoMath` | 3 |
 | `TestGoldenImageTest` | 28 |
@@ -1387,7 +1387,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestMOD300ShowcaseLocalizationReal` | 2 |
 | `TestMOD310FPSArenaAutopilotReal` | 5 |
 | `TestMOD310FPSSceneReloadRespawnReal` | 6 |
-| `TestMOD320MMOPersistenceReal` | 17 |
+| `TestMOD320MMOPersistenceReal` | 22 |
 | `TestMOD330ARPGDungeonReal` | 7 |
 | `TestMOD330ARPGWorldActors` | 4 |
 | `TestMOD340PlatformerCompletionReal` | 12 |
@@ -1512,7 +1512,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProcess` | 20 |
 | `TestProcessDrawListLinux` | 10 |
 | `TestProfiler` | 19 |
-| `TestPrototypeModuleKitReal` | 6 |
+| `TestPrototypeModuleKitReal` | 7 |
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuaternionStubsReal` | 14 |
 | `TestQuestSystem` | 11 |
@@ -1525,7 +1525,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRHI225D3D12ValidationReal` | 5 |
 | `TestRHI230VulkanGoldenReal` | 4 |
 | `TestRHI230VulkanValidationReal` | 18 |
-| `TestRHI240LinuxForwardPassReal` | 2 |
+| `TestRHI240LinuxForwardPassReal` | 4 |
 | `TestRHI240OpenGLGoldenReal` | 8 |
 | `TestRHI240OpenGLReal` | 13 |
 | `TestRHIBridgeIntegration` | 19 |
@@ -1564,9 +1564,9 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestSEC100RemoteAdminUnavailableReal` | 4 |
 | `TestSEC2ConsoleIpcReal` | 11 |
 | `TestSEC2GameModules` | 15 |
-| `TestSEC2PersistenceHardening` | 13 |
+| `TestSEC2PersistenceHardening` | 14 |
 | `TestSEC2RenderingHardeningReal` | 8 |
-| `TestSEC3GameplayHardening` | 18 |
+| `TestSEC3GameplayHardening` | 21 |
 | `TestSEC3ScriptingHardening` | 11 |
 | `TestSEC4NarrowPathsReal` | 13 |
 | `TestSEC4SoundEffectWav` | 8 |
@@ -1662,6 +1662,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestTF120Migration` | 6 |
 | `TestTF120Residency` | 19 |
 | `TestTF120SharedSaveRoot` | 8 |
+| `TestTF120Travel` | 3 |
 | `TestTFAbilityWire` | 6 |
 | `TestTFCaptureMath` | 7 |
 | `TestTFChatRules` | 11 |
