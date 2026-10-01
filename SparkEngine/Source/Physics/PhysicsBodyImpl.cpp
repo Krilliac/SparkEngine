@@ -217,17 +217,23 @@ void PhysicsBody::StoreCurrentState()
     m_previousRotation = m_currentRotation;
 }
 
-void PhysicsBody::UpdateCurrentState()
+JPH::BodyInterface* PhysicsBody::ContextBodyInterface()
 {
-    if (!HasValidJoltBody(m_joltBodyID))
+    return GetBodyInterfacePtr();
+}
+
+void PhysicsBody::UpdateCurrentState(JPH::BodyInterface* bodyInterface)
+{
+    const JPH::BodyID id(m_joltBodyID);
+    if (!bodyInterface || !bodyInterface->IsAdded(id))
         return;
 
-    auto& bi = GetBodyInterface();
-    JPH::RVec3 pos = bi.GetPosition(JPH::BodyID(m_joltBodyID));
+    // One body lock for both reads.
+    JPH::RVec3 pos;
+    JPH::Quat rot;
+    bodyInterface->GetPositionAndRotation(id, pos, rot);
     m_currentPosition =
         XMFLOAT3(static_cast<float>(pos.GetX()), static_cast<float>(pos.GetY()), static_cast<float>(pos.GetZ()));
-
-    JPH::Quat rot = bi.GetRotation(JPH::BodyID(m_joltBodyID));
     m_currentRotation = XMFLOAT4(rot.GetX(), rot.GetY(), rot.GetZ(), rot.GetW());
 }
 

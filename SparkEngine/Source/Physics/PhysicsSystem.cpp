@@ -542,11 +542,12 @@ void PhysicsSystem::Update(float deltaTime)
                 m_joltSystem->Update(m_timeStep, 1, m_tempAllocator.get(), m_jobSystem.get());
 
                 // Read back new state from Jolt
+                JPH::BodyInterface* const contextBodies = PhysicsBody::ContextBodyInterface();
                 for (auto& body : m_bodies)
                 {
                     if (body)
                     {
-                        body->UpdateCurrentState();
+                        body->UpdateCurrentState(contextBodies);
                     }
                 }
 
@@ -623,11 +624,13 @@ uint32_t PhysicsSystem::StepFixed(uint32_t stepCount, float interpolationAlpha)
 
         m_joltSystem->Update(m_timeStep, 1, m_tempAllocator.get(), m_jobSystem.get());
 
+        // Resolved once per step: each per-body EngineContext lookup cost more than the read.
+        JPH::BodyInterface* const contextBodies = PhysicsBody::ContextBodyInterface();
         for (auto& body : m_bodies)
         {
             if (body)
             {
-                body->UpdateCurrentState();
+                body->UpdateCurrentState(contextBodies);
             }
         }
     }
@@ -666,9 +669,16 @@ void PhysicsSystem::UpdateMetrics()
     m_metrics.timeStep = m_timeStep;
     m_metrics.debugDrawEnabled = m_debugDrawEnabled;
 
-    // Count active rigid bodies
+    // Count active rigid bodies (PhysicsBody::IsActive() semantics, with the context's body
+    // interface resolved once instead of once per body).
+    JPH::BodyInterface* const contextBodies = PhysicsBody::ContextBodyInterface();
     m_metrics.activeRigidBodies = static_cast<uint32_t>(
-        std::count_if(m_bodies.begin(), m_bodies.end(), [](const auto& body) { return body && body->IsActive(); }));
+        std::count_if(m_bodies.begin(), m_bodies.end(),
+                      [contextBodies](const auto& body)
+                      {
+                          const JPH::BodyID id(body ? body->GetJoltBodyID() : JPH::BodyID::cInvalidBodyID);
+                          return body && contextBodies && contextBodies->IsAdded(id) && contextBodies->IsActive(id);
+                      }));
 
     // Jolt body stats
     m_metrics.collisionPairs = m_joltSystem->GetNumActiveBodies(JPH::EBodyType::RigidBody);
