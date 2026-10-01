@@ -204,10 +204,12 @@ namespace Spark::UI
         std::function<void(uint32_t, const std::string&)> m_onSelectionChanged;
     };
 
-    template <typename T> class UIDataBinding
+    /// One-way binding from a source value to its formatted display text. (UIFactory.h's
+    /// UIDataBinding is the unrelated bidirectional widget binding.)
+    template <typename T> class UIDisplayBinding
     {
       public:
-        UIDataBinding() = default;
+        UIDisplayBinding() = default;
 
         // Intentionally inline: this is a templated leaf type used across TU boundaries.
         void Bind(T* source) { m_source = source; }
