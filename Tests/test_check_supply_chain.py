@@ -1707,6 +1707,24 @@ class TestExternalDependencies(FakeRepoCase):
         self.commit()
         self.assert_violation("unmanaged raw download")
 
+    _GITHUB_API_FETCH = ('curl --silent --header "Accept: application/vnd.github+json" '
+                         '--output "$body" "$api_url"\n')
+
+    def test_github_api_json_fetch_through_api_url_is_not_a_download(self) -> None:
+        self.write("tools/publish.sh", (
+            '#!/bin/sh\nlocal api_url="https://api.github.com/repos/$REPO"\n'
+            'api_url="$api_url/$endpoint"\n' + self._GITHUB_API_FETCH))
+        self.commit()
+        self.assert_passes()
+
+    def test_api_url_pointing_elsewhere_is_a_download_despite_an_api_mention(self) -> None:
+        # Mentioning the GitHub API in a comment says nothing about where $api_url points.
+        self.write("tools/publish.sh", (
+            '#!/bin/sh\n# mirrors https://api.github.com/ responses\n'
+            'api_url="https://downloads.example.org/latest"\n' + self._GITHUB_API_FETCH))
+        self.commit()
+        self.assert_violation("unmanaged raw download")
+
     _VAR_CURL = "if ! curl --fail --proto '=https' \"$DEMO_URL\" --output \"$tmp/demo.tar.gz\"; then"
 
     def _variable_url_script(self, check_line: str, url_value: str | None = None) -> None:

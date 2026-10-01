@@ -250,6 +250,9 @@ SHA256SUM_STDIN_CHECK_RE = re.compile(
     r"\bsha256sum\s+(?:--(?:strict|quiet|status|warn)\s+)*(?:-c|--check)"
     r"(?:\s+--(?:strict|quiet|status|warn))*\s+-(?=\s*$|\s*;\s*then\b|\s*&&)"
 )
+# A static shell assignment of `api_url`, as the publication workflows write it.
+API_URL_ASSIGNMENT_RE = re.compile(r"""(?m)^\s*(?:local\s+)?api_url=(["']?)([^"'\s]*)\1\s*(?:#.*)?$""")
+GITHUB_API_ORIGIN = "https://api.github.com/"
 JS_STATIC_IMPORT_RE = re.compile(
     r"""\b(?:import|export)\b[^'";]*?\bfrom\s*(['"])([^'"]+)\1"""
     r"""|\bimport\s*\(?\s*(['"])([^'"]+)\3""",
@@ -2477,6 +2480,17 @@ def _external_records(lockfile: dict[str, Any], kind: str) -> list[dict[str, Any
     return [r for r in lockfile.get("external_dependencies", []) if r["class"] == kind]
 
 
+def _api_url_is_github_api(source: str) -> bool:
+    """Every static assignment of `api_url` starts at the GitHub API origin or extends itself.
+
+    A mention of the API anywhere in the file (a comment, another variable) is not
+    evidence about where `$api_url` points, so only the assignments count.
+    """
+    values = [match.group(2) for match in API_URL_ASSIGNMENT_RE.finditer(source)]
+    return bool(values) and all(
+        value.startswith((GITHUB_API_ORIGIN, "$api_url/", "${api_url}/")) for value in values)
+
+
 def _raw_download_commands(text: str, *, cmake: bool = False) -> list[str]:
     """Return normalized artifact-fetch calls, including shell line continuations."""
     if cmake:
@@ -2500,7 +2514,7 @@ def _raw_download_commands(text: str, *, cmake: bool = False) -> list[str]:
             # The publication workflows fetch GitHub API JSON, then validate its
             # fields. These responses are not executable third-party inputs.
             if ("application/vnd.github+json" in stripped and
-                    ("GITHUB_API_URL" in stripped or "https://api.github.com/" in source)):
+                    ("GITHUB_API_URL" in stripped or _api_url_is_github_api(source))):
                 continue
         commands.append(" ".join(stripped.split()))
     return commands
