@@ -1645,7 +1645,7 @@ Saves, scenes, assets, shaders, archives, manifests, and crash metadata cross st
 Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Malformed input cannot cause crash, OOB, path escape, integer overflow, or unbounded allocation/time
-   - Partial progress: 50 of 137 inventoried parsers have libFuzzer targets with seed corpora and minimized regressions (docs/sec120-fuzz-policy-check.json); 87 parsers remain blocked and no target has exact-commit sanitizer evidence, so the criterion stays open.
+   - Partial progress: 58 of 137 inventoried parsers have libFuzzer targets with seed corpora and minimized regressions (docs/sec120-fuzz-policy-check.json); 79 parsers remain blocked and no target has exact-commit sanitizer evidence, so the criterion stays open.
 2. **[implemented]** Every found issue lands with a minimized regression fixture
    - Evidence: `tools/fuzz-policy/corpus_manifest.py`, `tools/fuzz-policy/import_regression.py`, `FuzzerTests/policy/test_fuzz_policy.py`
    - corpus_manifest.py _require_declared_regressions rejects any regression-* seed without a declared finding and minimized fixture, and import_regression.py is the only intake path; the fuzz-policy unittests pin both. Local only; no exact-commit CI yet.

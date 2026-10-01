@@ -4,18 +4,28 @@
  */
 
 #include "VirtualFileSystem.h"
+#include "HeldHandles.h"
 #include "../../Utils/FileUtils.h"
 #include "../../Utils/Validate.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <optional>
 #include <sstream>
 #include <string_view>
 #include <system_error>
 #include <unordered_set>
+#include <utility>
+
+#ifndef _WIN32
+#include <cerrno>
+#include <climits>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -175,46 +185,215 @@ namespace Spark
         return fs::exists(ResolvePath(virtualPath));
     }
 
-    std::vector<uint8_t> LocalFileProvider::ReadFile(const std::string& virtualPath) const
+    void LocalFileProvider::SetOpenProbeForTesting(std::function<void(const std::string&)> probe)
     {
-        std::string fullPath = ResolvePath(virtualPath);
-        std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
-        if (!file.is_open())
+        m_openProbe = std::move(probe);
+    }
+
+    // ResolvePath's lexical and link-resolved checks name a path; whatever sits at that name
+    // when the open happens is what would be read. So the file is opened first and every
+    // decision is made on the opened handle: it must be a regular file (a directory used to
+    // size the buffer from ext4's INT64_MAX directory offset), it must resolve inside the
+    // mount root (a link swapped in after ResolvePath escaped it), and exactly its size is
+    // read, so a file that shrinks or grows during the read is refused.
+#ifdef _WIN32
+    bool LocalFileProvider::ReadVerified(const std::string& virtualPath, std::vector<uint8_t>& bytes) const
+    {
+        const std::string fullPath = ResolvePath(virtualPath);
+        if (fullPath.empty())
+        {
+            return false;
+        }
+        if (m_openProbe)
+        {
+            m_openProbe(fullPath);
+        }
+
+        const HeldHandles::ScopedHandle file(::CreateFileW(fs::path(fullPath).c_str(), GENERIC_READ,
+                                                           FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
+                                                           FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
+        if (!file.IsValid())
         {
             SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Failed to open file '%s'", fullPath.c_str());
-            return {};
+            return false;
+        }
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (::GetFileType(file.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(file.Get(), &info) ||
+            (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: '%s' is not a regular file", fullPath.c_str());
+            return false;
+        }
+        const std::uint64_t size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) | info.nFileSizeLow;
+        if (size > kMaxFileBytes)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: '%s' is larger than the read limit", fullPath.c_str());
+            return false;
         }
 
-        auto size = file.tellg();
-        if (size <= 0)
+        const HeldHandles::ScopedHandle root = HeldHandles::OpenPinnedDirectory(m_root, /*allowReparse=*/true);
+        const std::wstring rootFinal = root.IsValid() ? HeldHandles::FinalPathOf(root.Get()) : std::wstring();
+        if (rootFinal.empty() || !HeldHandles::IsDescendantPath(HeldHandles::FinalPathOf(file.Get()), rootFinal))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected '%s': the opened file is outside the mount root",
+                           virtualPath.c_str());
+            return false;
+        }
+
+        bytes.resize(static_cast<size_t>(size));
+        size_t total = 0;
+        while (total < bytes.size())
+        {
+            DWORD got = 0;
+            const DWORD request = static_cast<DWORD>(std::min<size_t>(bytes.size() - total, 1U << 30));
+            if (!::ReadFile(file.Get(), bytes.data() + total, request, &got, nullptr) || got == 0)
+            {
+                break;
+            }
+            total += got;
+        }
+        uint8_t extra = 0;
+        DWORD extraRead = 0;
+        const bool atEnd = ::ReadFile(file.Get(), &extra, 1, &extraRead, nullptr) && extraRead == 0;
+        if (total != bytes.size() || !atEnd)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: '%s' changed size while it was read", fullPath.c_str());
+            bytes.clear();
+            return false;
+        }
+        return true;
+    }
+#else
+    namespace
+    {
+        /// Path the kernel reports for an open descriptor, or empty when it cannot say.
+        fs::path PathOfDescriptor(int fd)
+        {
+#if defined(__APPLE__)
+            char buffer[PATH_MAX] = {};
+            if (::fcntl(fd, F_GETPATH, buffer) == -1)
+            {
+                return {};
+            }
+            return fs::path(buffer);
+#else
+            std::error_code ec;
+            fs::path path = fs::read_symlink("/proc/self/fd/" + std::to_string(fd), ec);
+            return ec ? fs::path() : path;
+#endif
+        }
+    } // namespace
+
+    bool LocalFileProvider::ReadVerified(const std::string& virtualPath, std::vector<uint8_t>& bytes) const
+    {
+        const std::string fullPath = ResolvePath(virtualPath);
+        if (fullPath.empty())
+        {
+            return false;
+        }
+        if (m_openProbe)
+        {
+            m_openProbe(fullPath);
+        }
+
+        // O_NONBLOCK keeps a FIFO planted at the name from blocking the open; the fstat below
+        // refuses it, a directory, a device and every other non-regular file.
+        const HeldHandles::ScopedFd file(::open(fullPath.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC));
+        if (file.Get() < 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Failed to open file '%s'", fullPath.c_str());
+            return false;
+        }
+        struct stat info = {};
+        if (::fstat(file.Get(), &info) != 0 || !S_ISREG(info.st_mode))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: '%s' is not a regular file", fullPath.c_str());
+            return false;
+        }
+        if (info.st_size < 0 || static_cast<std::uint64_t>(info.st_size) > kMaxFileBytes)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: '%s' is larger than the read limit", fullPath.c_str());
+            return false;
+        }
+
+        // The opened object must live inside the (link-resolved) mount root, and that path
+        // must still name the very file that was opened.
+        std::error_code rootError;
+        const fs::path root = fs::canonical(m_root, rootError);
+        const fs::path opened = PathOfDescriptor(file.Get());
+        struct stat named = {};
+        if (rootError || opened.empty() || !IsContainedIn(opened.lexically_normal(), root) ||
+            ::stat(opened.c_str(), &named) != 0 || named.st_dev != info.st_dev || named.st_ino != info.st_ino)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: rejected '%s': the opened file is outside the mount root",
+                           virtualPath.c_str());
+            return false;
+        }
+
+        bytes.resize(static_cast<size_t>(info.st_size));
+        size_t total = 0;
+        while (total < bytes.size())
+        {
+            const ssize_t got = ::read(file.Get(), bytes.data() + total, bytes.size() - total);
+            if (got < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            if (got <= 0)
+            {
+                break;
+            }
+            total += static_cast<size_t>(got);
+        }
+        uint8_t extra = 0;
+        ssize_t extraRead = 0;
+        do
+        {
+            extraRead = ::read(file.Get(), &extra, 1);
+        } while (extraRead < 0 && errno == EINTR);
+        if (total != bytes.size() || extraRead != 0)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: '%s' changed size while it was read", fullPath.c_str());
+            bytes.clear();
+            return false;
+        }
+        return true;
+    }
+#endif
+
+    std::vector<uint8_t> LocalFileProvider::ReadFile(const std::string& virtualPath) const
+    {
+        std::vector<uint8_t> bytes;
+        if (!ReadVerified(virtualPath, bytes))
         {
             return {};
         }
-
-        std::vector<uint8_t> buffer(static_cast<size_t>(size));
-        file.seekg(0, std::ios::beg);
-        file.read(reinterpret_cast<char*>(buffer.data()), size);
-        if (file.bad())
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Read error for '%s'", fullPath.c_str());
-            return {};
-        }
-        return buffer;
+        return bytes;
     }
 
     std::string LocalFileProvider::ReadTextFile(const std::string& virtualPath) const
     {
-        std::string fullPath = ResolvePath(virtualPath);
-        std::ifstream file(fullPath);
-        if (!file.is_open())
+        std::vector<uint8_t> bytes;
+        if (!ReadVerified(virtualPath, bytes))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Failed to open text file '%s'", fullPath.c_str());
             return {};
         }
-
-        std::ostringstream ss;
-        ss << file.rdbuf();
-        return ss.str();
+        std::string text(bytes.begin(), bytes.end());
+#ifdef _WIN32
+        // This used to read through a text-mode ifstream, which turns CRLF into LF on Windows.
+        std::string normalized;
+        normalized.reserve(text.size());
+        for (size_t i = 0; i < text.size(); ++i)
+        {
+            if (text[i] == '\r' && i + 1 < text.size() && text[i + 1] == '\n')
+            {
+                continue;
+            }
+            normalized.push_back(text[i]);
+        }
+        text = std::move(normalized);
+#endif
+        return text;
     }
 
     std::vector<std::string> LocalFileProvider::ListFiles(const std::string& directory,

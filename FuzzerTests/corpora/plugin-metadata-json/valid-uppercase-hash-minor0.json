@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "spark.fuzz.plugin",
+  "version": "1.0.0",
+  "type": "gameplay",
+  "abi_major": 1,
+  "abi_minor": 0,
+  "entry_point": "SparkGetPluginDescriptor",
+  "binary": "fuzz-plugin.so",
+  "sha256": "30733E1A836A3D81BF4B097E4568A78D9F25CAEA08854AF251D20905ED41C68F"
+}

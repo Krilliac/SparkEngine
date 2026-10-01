@@ -7,6 +7,7 @@
  */
 
 #include "ModSystem.h"
+#include "HeldHandles.h"
 #include "../../Utils/FileUtils.h"
 #include "../../Utils/Validate.h"
 
@@ -51,111 +52,12 @@ namespace Spark
         };
 
 #ifdef _WIN32
-        /// Owns one Win32 handle.
-        class ScopedHandle
-        {
-          public:
-            explicit ScopedHandle(HANDLE handle) : m_handle(handle) {}
-            ~ScopedHandle()
-            {
-                if (IsValid())
-                {
-                    ::CloseHandle(m_handle);
-                }
-            }
-            ScopedHandle(const ScopedHandle&) = delete;
-            ScopedHandle& operator=(const ScopedHandle&) = delete;
-            ScopedHandle(ScopedHandle&& other) noexcept : m_handle(other.m_handle)
-            {
-                other.m_handle = INVALID_HANDLE_VALUE;
-            }
-            ScopedHandle& operator=(ScopedHandle&&) = delete;
-
-            [[nodiscard]] HANDLE Get() const { return m_handle; }
-            [[nodiscard]] bool IsValid() const { return m_handle != nullptr && m_handle != INVALID_HANDLE_VALUE; }
-
-          private:
-            HANDLE m_handle;
-        };
-
-        /// NT-namespace final path of an open handle, or empty when it cannot be queried.
-        std::wstring FinalPathOf(HANDLE handle)
-        {
-            std::wstring buffer(512, L'\0');
-            for (;;)
-            {
-                const DWORD length = ::GetFinalPathNameByHandleW(
-                    handle, buffer.data(), static_cast<DWORD>(buffer.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
-                if (length == 0)
-                {
-                    return {};
-                }
-                if (length < buffer.size())
-                {
-                    buffer.resize(length);
-                    return buffer;
-                }
-                buffer.resize(static_cast<size_t>(length) + 1);
-            }
-        }
-
-        /// True when @p child names an entry directly inside @p parent (both final paths).
-        bool IsDirectChildPath(const std::wstring& child, std::wstring parent)
-        {
-            while (!parent.empty() && parent.back() == L'\\')
-            {
-                parent.pop_back();
-            }
-            return !parent.empty() && child.size() > parent.size() + 1 &&
-                   child.compare(0, parent.size(), parent) == 0 && child[parent.size()] == L'\\' &&
-                   child.find(L'\\', parent.size() + 1) == std::wstring::npos;
-        }
-
-        /// Opens a directory for listing without following a reparse point in its last component
-        /// (unless @p allowReparse) and without FILE_SHARE_DELETE, which pins it: while the
-        /// handle is open the directory cannot be renamed, deleted or replaced.
-        ScopedHandle OpenPinnedDirectory(const std::filesystem::path& path, bool allowReparse)
-        {
-            const DWORD flags = FILE_FLAG_BACKUP_SEMANTICS | (allowReparse ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
-            ScopedHandle handle(::CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
-                                              FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, flags,
-                                              nullptr));
-            if (!handle.IsValid())
-            {
-                return ScopedHandle(INVALID_HANDLE_VALUE);
-            }
-            BY_HANDLE_FILE_INFORMATION info{};
-            if (!::GetFileInformationByHandle(handle.Get(), &info) ||
-                (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
-                (!allowReparse && (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0))
-            {
-                return ScopedHandle(INVALID_HANDLE_VALUE);
-            }
-            return handle;
-        }
+        using HeldHandles::FinalPathOf;
+        using HeldHandles::IsDirectChildPath;
+        using HeldHandles::OpenPinnedDirectory;
+        using HeldHandles::ScopedHandle;
 #else
-        /// Owns one POSIX file descriptor.
-        class ScopedFd
-        {
-          public:
-            explicit ScopedFd(int fd) : m_fd(fd) {}
-            ~ScopedFd()
-            {
-                if (m_fd >= 0)
-                {
-                    ::close(m_fd);
-                }
-            }
-            ScopedFd(const ScopedFd&) = delete;
-            ScopedFd& operator=(const ScopedFd&) = delete;
-            ScopedFd(ScopedFd&&) = delete;
-            ScopedFd& operator=(ScopedFd&&) = delete;
-
-            [[nodiscard]] int Get() const { return m_fd; }
-
-          private:
-            int m_fd;
-        };
+        using HeldHandles::ScopedFd;
 #endif
 
         /// Holds the canonical mods root open for one scan and reads each mod's manifest

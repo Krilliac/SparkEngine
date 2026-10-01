@@ -1248,6 +1248,162 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "material-loader-corpus",
+      "parser_id": "material-loader",
+      "corpus_dir": "FuzzerTests/corpora/material-loader",
+      "last_verified": "2026-09-30",
+      "content_digest": "2bcfdbb6aa54a717ecba658bf174d5c21ff2e27ee4845e73fab0f53039b9b3d6",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-factor.sparkmat",
+          "finding": "ParseSparkMatDefinition accepted nan/inf factors (std::stof), which RegisterMaterial's std::clamp passes through to the GPU constant buffers; non-finite factors now keep their value.",
+          "found_by": "smoke",
+          "guard_test": "SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults"
+        }
+      ]
+    },
+    {
+      "id": "engine-settings-corpus",
+      "parser_id": "engine-settings",
+      "corpus_dir": "FuzzerTests/corpora/engine-settings",
+      "last_verified": "2026-09-30",
+      "content_digest": "9231199e13a11c830b9a4f3d9aa795fefaba5a543e98682e1e4fd40e0b349623",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "virtual-filesystem-mounts-corpus",
+      "parser_id": "virtual-filesystem-mounts",
+      "corpus_dir": "FuzzerTests/corpora/virtual-filesystem-mounts",
+      "last_verified": "2026-09-30",
+      "content_digest": "7c3dac7207195da9a57e1322db0994a10e775ca142b8f1f9cf4e2391eeccf0d3",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-mount-root-directory.path",
+          "finding": "LocalFileProvider::ReadFile opened the mount root directory on Linux and sized its buffer from the INT64_MAX ext4 directory end offset, aborting the process; only regular files are read now.",
+          "found_by": "smoke",
+          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing"
+        },
+        {
+          "file": "regression-subdirectory.path",
+          "finding": "A virtual path naming a mounted subdirectory reached the same INT64_MAX allocation in LocalFileProvider::ReadFile on ext4; directories now read as nothing.",
+          "found_by": "smoke",
+          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing"
+        }
+      ]
+    },
+    {
+      "id": "entity-archetype-loader-corpus",
+      "parser_id": "entity-archetype-loader",
+      "corpus_dir": "FuzzerTests/corpora/entity-archetype-loader",
+      "last_verified": "2026-09-30",
+      "content_digest": "9872ed634056ff97d8a9ebe37c5e23239f741fd1359a95543a2324b62b76e46e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "module-abi-sidecar-corpus",
+      "parser_id": "module-abi-sidecar",
+      "corpus_dir": "FuzzerTests/corpora/module-abi-sidecar",
+      "last_verified": "2026-09-30",
+      "content_digest": "b906244be185814f358201a85945905831650704b621d7c682fd4007f2d3ff3c",
+      "budget": {
+        "max_input_bytes": 8192,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "plugin-metadata-json-corpus",
+      "parser_id": "plugin-metadata-json",
+      "corpus_dir": "FuzzerTests/corpora/plugin-metadata-json",
+      "last_verified": "2026-09-30",
+      "content_digest": "ba626d072dfd80d5c364882e494674b20d3eb4ca4049d5a3d150432819648502",
+      "budget": {
+        "max_input_bytes": 70000,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "reflection-binary-codec-corpus",
+      "parser_id": "reflection-binary-codec",
+      "corpus_dir": "FuzzerTests/corpora/reflection-binary-codec",
+      "last_verified": "2026-09-30",
+      "content_digest": "87f28dfee6f027a4ac4002a8c6f674956495c0c73f43c24d7d196ef26f5436df",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "shader-disk-cache-blob-corpus",
+      "parser_id": "shader-disk-cache-blob",
+      "corpus_dir": "FuzzerTests/corpora/shader-disk-cache-blob",
+      "last_verified": "2026-09-30",
+      "content_digest": "b7ecc59fa690c4524fccb85792d09b7b4e2b83515c61adf1b9e3bb692947dea7",
+      "budget": {
+        "max_input_bytes": 1048576,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }
