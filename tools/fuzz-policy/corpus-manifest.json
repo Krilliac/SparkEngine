@@ -1136,7 +1136,7 @@
       "parser_id": "mmo-character-record",
       "corpus_dir": "FuzzerTests/corpora/mmo-character-record",
       "last_verified": "2026-09-30",
-      "content_digest": "8f82961f0b9b03cf66ba0a916e4a6dc5afb446ee792d7833df5b7c994275d1d0",
+      "content_digest": "6de5fc4cc07a1fb7a2ba54c0d4df75534afe61ae97aef88403d7103499e092da",
       "budget": {
         "max_input_bytes": 4096,
         "max_parse_time_ms": 1000,

@@ -2197,7 +2197,7 @@ class TestRepositoryIntegration(unittest.TestCase):
                 "MMOCharacterRecord",
                 "MMO::DecodeCharacterRecord",
                 "mmo-character-record",
-                9,
+                10,
             ),
             "gateway-area-control-state": (
                 "GatewayAreaControlState",

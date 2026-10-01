@@ -118,8 +118,7 @@ namespace
         {
             InvariantFailure("accepted a row without exactly 14 or 15 fields");
         }
-        if (fields.name.empty() || fields.name.find('|') != std::string::npos ||
-            fields.name.find('\'') != std::string::npos)
+        if (fields.name.empty() || fields.name.find('|') != std::string::npos)
         {
             InvariantFailure("accepted a name a saved row could not hold");
         }

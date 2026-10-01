@@ -99,6 +99,27 @@ namespace Spark::Daemon
             return value >= 0 && value <= kMaximum;
         }
 
+        bool IsValidJournalState(const OrchestrationJournalState& state)
+        {
+            std::unordered_set<std::string> processIds;
+            for (const auto& process : state.processes)
+            {
+                if (!processIds.insert(process.definition.id).second ||
+                    !IsRepresentableUnixMilliseconds(process.status.drainDeadlineUnixMilliseconds))
+                    return false;
+                for (int64_t timestamp : process.crashTimestampsUnixMilliseconds)
+                    if (!IsRepresentableUnixMilliseconds(timestamp))
+                        return false;
+            }
+
+            std::unordered_set<std::string> clients;
+            for (const auto& mutation : state.mutations)
+                if (mutation.clientInstance.empty() || mutation.sequence == 0 ||
+                    !clients.insert(mutation.clientInstance).second)
+                    return false;
+            return true;
+        }
+
         bool ReadFileBounded(const std::filesystem::path& path, std::vector<uint8_t>& bytes)
         {
             std::ifstream input(path, std::ios::binary);
@@ -143,9 +164,6 @@ namespace Spark::Daemon
 
         OrchestrationJournalState state;
         state.processes.reserve(processCount);
-        // The writer serializes the service's keyed maps, so a repeated process id or
-        // client instance can only come from a damaged file.
-        std::unordered_set<std::string> processIds;
         for (uint32_t index = 0; index < processCount; ++index)
         {
             std::vector<uint8_t> definitionBytes;
@@ -160,15 +178,13 @@ namespace Spark::Daemon
             JournalProcess process;
             std::vector<ProcessStatus> statuses;
             if (!DecodeProcessDefinition(definitionBytes, ignored, process.definition) ||
-                !DecodeProcessStatuses(statusBytes, statuses, 1) || statuses.size() != 1 ||
-                !IsRepresentableUnixMilliseconds(statuses.front().drainDeadlineUnixMilliseconds) ||
-                !processIds.insert(process.definition.id).second)
+                !DecodeProcessStatuses(statusBytes, statuses, 1) || statuses.size() != 1)
                 return std::nullopt;
             process.status = std::move(statuses.front());
             process.desiredRunning = desired != 0;
             process.crashTimestampsUnixMilliseconds.resize(crashCount);
             for (auto& timestamp : process.crashTimestampsUnixMilliseconds)
-                if (!reader.Read(timestamp) || !IsRepresentableUnixMilliseconds(timestamp))
+                if (!reader.Read(timestamp))
                     return std::nullopt;
             state.processes.push_back(std::move(process));
         }
@@ -177,19 +193,16 @@ namespace Spark::Daemon
         if (!reader.Read(mutationCount) || mutationCount > maximumClients)
             return std::nullopt;
         state.mutations.reserve(mutationCount);
-        std::unordered_set<std::string> clients;
         for (uint32_t index = 0; index < mutationCount; ++index)
         {
             JournalMutation mutation;
             if (!reader.ReadString(mutation.clientInstance, kMaximumClientInstanceLength) ||
-                mutation.clientInstance.empty() || !reader.Read(mutation.sequence) ||
-                !reader.Read(mutation.response.messageType) ||
-                !reader.ReadBytes(mutation.response.payload, kMaximumJournalBlob) || mutation.sequence == 0 ||
-                !clients.insert(mutation.clientInstance).second)
+                !reader.Read(mutation.sequence) || !reader.Read(mutation.response.messageType) ||
+                !reader.ReadBytes(mutation.response.payload, kMaximumJournalBlob))
                 return std::nullopt;
             state.mutations.push_back(std::move(mutation));
         }
-        if (!reader.Finished())
+        if (!reader.Finished() || !IsValidJournalState(state))
             return std::nullopt;
         return state;
     }
@@ -197,7 +210,7 @@ namespace Spark::Daemon
     bool WriteOrchestrationJournal(const std::filesystem::path& path, const OrchestrationJournalState& state)
     {
         if (state.processes.size() > std::numeric_limits<uint32_t>::max() ||
-            state.mutations.size() > std::numeric_limits<uint32_t>::max())
+            state.mutations.size() > std::numeric_limits<uint32_t>::max() || !IsValidJournalState(state))
             return false;
         Wire::Writer writer;
         if (!writer.WriteString(kMagic, kMagic.size()))

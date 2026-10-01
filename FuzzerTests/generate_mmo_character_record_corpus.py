@@ -30,6 +30,7 @@ def main() -> int:
 
     seeds = {
         "valid-current.row": row("Alice", "7", "3", "120", "2", *STATS, "40"),
+        "valid-apostrophe-name.row": row("'O''Brien'", "8", "1", "0", "1", *STATS, "0"),
         "valid-legacy.row": row("Legacy", "3", "120", "2", *STATS, "40"),
         "valid-insert-quoted-name.row": row(
             "'Bob'", "8", "1", "0", "1", "0.0", "1.0", "0.0", "0.0", "100.0", "100.0", "50.0", "50.0", "0.0", "0"

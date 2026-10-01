@@ -2690,7 +2690,7 @@ add_test(
         -max_len=4096
         -timeout=1
         -rss_limit_mb=256
-        -runs=9
+        -runs=10
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/mmo-character-record"
 )
 set_tests_properties(FuzzMMOCharacterRecordSmoke PROPERTIES

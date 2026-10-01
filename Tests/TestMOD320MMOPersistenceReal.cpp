@@ -923,6 +923,26 @@ TEST(MMOPersistence_CharacterRowKeepsSubnormalFloats)
     }
 }
 
+TEST(MMOPersistence_CharacterRowPreservesApostrophes)
+{
+    MMO::CharacterRecordFields fields;
+    fields.name = "O'Brien";
+    fields.accountId = 8;
+    const std::optional<std::string> row = MMO::EncodeCharacterRecord(fields);
+    ASSERT_TRUE(row.has_value());
+    MMO::CharacterRecordFields decoded;
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(*row, decoded));
+    EXPECT_EQ(decoded.name, fields.name);
+
+    // The old insert quoted only the name; the old save quoted the entire row.
+    const std::string legacyInsert = "'O''Brien'|8|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0";
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(legacyInsert, decoded));
+    EXPECT_EQ(decoded.name, fields.name);
+    const std::string legacySave = "'O''Brien|8|1|0|1|0.0|1.0|0.0|0.0|100.0|100.0|50.0|50.0|0.0|0'";
+    ASSERT_TRUE(MMO::DecodeCharacterRecord(legacySave, decoded));
+    EXPECT_EQ(decoded.name, fields.name);
+}
+
 TEST(MMOPersistence_UnstorableCharacterIsNotSaved)
 {
     // A NaN stat or a name holding the '|' separator would write a row LoadCharacter

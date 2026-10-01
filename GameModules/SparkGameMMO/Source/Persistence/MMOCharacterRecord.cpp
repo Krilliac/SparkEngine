@@ -80,7 +80,7 @@ namespace MMO
 
         bool IsStorableName(const std::string& name)
         {
-            return !name.empty() && name.find('|') == std::string::npos && name.find('\'') == std::string::npos;
+            return !name.empty() && name.find('|') == std::string::npos;
         }
     } // namespace
 

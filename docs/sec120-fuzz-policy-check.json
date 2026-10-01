@@ -7,12 +7,12 @@
     "corpus_count": 50,
     "max_staleness_days": 90,
     "regression_count": 61,
-    "seed_bytes": 17201766,
-    "seed_count": 398
+    "seed_bytes": 17201819,
+    "seed_count": 399
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "20c6abec8b8bd53ed141900c84fd139e6fab42a702162b559cc70eac5944a865",
+    "corpus_manifest": "cae21d3992e88929292ad2f3edad180a1d08a6df74a9607a8c30c7e926fd4a68",
     "inventory": "9a9314d1d71393be0a5261e7cb43c2f5e8ad29a85ca3d105f282e6dd5d4f9a1d"
   },
   "inventory": {

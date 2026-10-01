@@ -519,7 +519,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText
+cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
@@ -695,7 +695,7 @@ change *is* the review record.
 - retain exact-SHA sanitizer smoke for all registered targets. A structural binding
   check alone does not show that a target compiled or ran;
 - commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
-- retain the blocking ASan/UBSan smoke now wired for both targets and record hosted
+- retain the blocking ASan/UBSan smoke now wired for the registered targets and record hosted
   `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
   coverage reporting (the `-L fuzz` CI run is required whenever a parser is marked
   `fuzzed`);
