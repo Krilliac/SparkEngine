@@ -6235,14 +6235,18 @@ class TestModuleTestExactSet(FixtureCase):
 
     def test_B37_tautological_production_test_cannot_enter_expected_set(self) -> None:
         path = self.repo / "Tests" / "TestFPSRespawnFixture.cpp"
-        path.write_text(path.read_text(encoding="utf-8") +
-                        '\nTEST(FPSRespawn_ConstantOnly) { EXPECT_EQ(1, 1); }\n', encoding="utf-8")
+        original = path.read_text(encoding="utf-8")
+        # The fixture repository is shared by the class; restore it for later tests.
+        self.addCleanup(path.write_text, original, encoding="utf-8")
+        path.write_text(original + '\nTEST(FPSRespawn_ConstantOnly) { EXPECT_EQ(1, 1); }\n', encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "FPSRespawn_ConstantOnly is tautological"):
             validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
 
     def test_B38_unrelated_production_include_cannot_promote_local_model(self) -> None:
         path = self.repo / "Tests" / "TestFPSRespawnFixture.cpp"
-        path.write_text(path.read_text(encoding="utf-8") +
+        original = path.read_text(encoding="utf-8")
+        self.addCleanup(path.write_text, original, encoding="utf-8")
+        path.write_text(original +
                         '\nTEST(FPSRespawn_LocalModel) { int copied = 1; EXPECT_EQ(copied, 1); }\n', encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "FPSRespawn_LocalModel does not reference"):
             validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
