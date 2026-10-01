@@ -93,6 +93,12 @@ through a register or loaded from memory, built across basic blocks) are not
 resolved; within the threat model MSVC does not generate such control flow into
 the middle of a switch table or past an ISA guard.
 
+Coverage. The Windows Shipping scan covers every configured first-party image
+target, each paired with its own build PDB. The Microsoft runtime DLLs CMake
+copies into the package's redist/ directory have no build PDB and are not
+scanned; they are Microsoft's dispatch-guarded runtime, outside this
+repository's sources.
+
 Exit status: 0 when no violation remains, 1 when violations remain, 2 on a
 usage or tool error (missing file, no disassembler, not an x86-64 image).
 """

@@ -344,7 +344,9 @@ Missing tools, missing files and remaining findings fail the scan. Existing ELF
 registration remains in `Tests/CMakeLists.txt`.
 
 On a local windows-shipping MinSizeRel build (LTO off, MSVC 14.44.35207,
-LLVM 22.1.8) all 12 shipped images pass. The earlier residual classes were
+LLVM 22.1.8) all 12 configured first-party images (each scanned with its own
+build PDB) pass. The Microsoft runtime DLLs packaged under `redist/` have no
+build PDB and are not scanned. The earlier residual classes were
 resolved as follows:
 
 - libsodium's AVX2/AES-NI/AVX-512 variants and `sodium_init`'s XGETBV: no

@@ -1183,7 +1183,7 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - ShippingManifest_PrivateSymbols and ShippingManifest_SymbolManifestTool map installed Linux ELF images to split .debug files by build-id, and clang/lld-link PE fixtures to PDBs. No MSVC Windows Shipping artifact has been mapped; that needs a Windows run.
 4. **[unmet]** Unsupported CPU features are not silently required
    - Evidence: `Tests/Tools/test_cpu_floor.py`, `Tests/Tools/test_check_isa_baseline.py`, `tools/isa_code_map.py`, `Tests/Tools/test_isa_code_map.py`, `cmake/SparkIsaBaseline.cmake`
-   - Windows Shipping PE scan re-enforced; all 12 local images pass and a temporary AVX2 function fails it. Scanner resolves direct, structural and basic-block computed control flow and pins CRT/STL exemptions to toolset 14.44.35207; interprocedural/memory-carried computed targets are out of the threat model (compiler-generated MSVC code). Unmet: below-floor refusal path never ran; no hosted run.
+   - PE scan re-enforced: all 12 first-party images (with build PDBs) pass locally and a temporary AVX2 function fails it; redist Microsoft DLLs are not scanned. Resolves direct, structural and basic-block computed flow; CRT/STL exemptions pinned to toolset 14.44.35207; interprocedural computed targets are outside the threat model. Unmet: below-floor refusal never ran; no hosted run.
 
 **Required commands**
 

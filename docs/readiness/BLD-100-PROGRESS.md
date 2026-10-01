@@ -686,7 +686,9 @@ undecodable), and the AVX2 probe still fails.
    structural pointers (relocs/exports/handlers/guard-CF) and basic-block-local
    computed targets. Not resolved: interprocedural or memory-carried computed
    targets in a fixed-base image. Recorded in the scanner module docstring, here,
-   and the BLD-100[3] note.
+   and the BLD-100[3] note. Coverage is every configured first-party image with
+   its own build PDB; the Microsoft runtime DLLs packaged under `redist/` have no
+   build PDB and are not scanned (Codex round-3 review, ACCEPT-WITH-FIXES).
 
 Each fix was mutation-checked (toolset flag, per-range gate, computed-use,
 constant adjust, stored pointer, above-floor decode-check -- removing any fails

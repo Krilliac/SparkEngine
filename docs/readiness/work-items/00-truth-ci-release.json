@@ -1076,7 +1076,7 @@
             "Tests/Tools/test_isa_code_map.py",
             "cmake/SparkIsaBaseline.cmake"
           ],
-          "note": "Windows Shipping PE scan re-enforced; all 12 local images pass and a temporary AVX2 function fails it. Scanner resolves direct, structural and basic-block computed control flow and pins CRT/STL exemptions to toolset 14.44.35207; interprocedural/memory-carried computed targets are out of the threat model (compiler-generated MSVC code). Unmet: below-floor refusal path never ran; no hosted run."
+          "note": "PE scan re-enforced: all 12 first-party images (with build PDBs) pass locally and a temporary AVX2 function fails it; redist Microsoft DLLs are not scanned. Resolves direct, structural and basic-block computed flow; CRT/STL exemptions pinned to toolset 14.44.35207; interprocedural computed targets are outside the threat model. Unmet: below-floor refusal never ran; no hosted run."
         }
       ],
       "commands": [
