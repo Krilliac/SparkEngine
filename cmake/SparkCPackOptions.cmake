@@ -28,6 +28,17 @@ if(CPACK_GENERATOR STREQUAL "NSIS" OR CPACK_GENERATOR STREQUAL "WIX")
 endif()
 
 if(CPACK_GENERATOR STREQUAL "WIX")
+    # Qualification and installation are per-user and must never request UAC
+    # or default to Program Files. CMake added this WiX switch in 3.29; older
+    # versions can still build the engine and ZIP, but cannot create this MSI.
+    # The closure driver also includes this file in cmake -P mode only to
+    # obtain the component set; that operation does not generate an MSI.
+    get_property(_spark_packaging_role GLOBAL PROPERTY CMAKE_ROLE)
+    if(_spark_packaging_role STREQUAL "CPACK" AND CMAKE_VERSION VERSION_LESS "3.29")
+        message(FATAL_ERROR "Per-user Windows MSI packaging requires CMake 3.29 or newer")
+    endif()
+    unset(_spark_packaging_role)
+    set(CPACK_WIX_INSTALL_SCOPE "perUser")
     # Project-owned identity for the Windows Runtime installer family. Keep it
     # across versions so a separately built predecessor can be upgraded. Leave
     # CPACK_WIX_PRODUCT_GUID unset: each MSI needs its own ProductCode.

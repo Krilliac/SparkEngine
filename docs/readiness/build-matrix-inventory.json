@@ -8556,7 +8556,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 64,
+        "stepCount": 65,
         "steps": [
           {
             "index": 0,
@@ -8824,6 +8824,18 @@
           },
           {
             "index": 22,
+            "name": "Test installed package runtime and installer token contracts",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "a5e9cd4bd5f8563a"
+          },
+          {
+            "index": 23,
             "name": "Test exact release asset publication boundary",
             "id": "",
             "uses": "",
@@ -8835,7 +8847,7 @@
             "runDigest": "c1cda3d75fd3d19c"
           },
           {
-            "index": 23,
+            "index": 24,
             "name": "Test detached stable signature bundle contracts",
             "id": "",
             "uses": "",
@@ -8847,7 +8859,7 @@
             "runDigest": "060c512ac0d124b9"
           },
           {
-            "index": 24,
+            "index": 25,
             "name": "Test release publication recovery",
             "id": "",
             "uses": "",
@@ -8859,7 +8871,7 @@
             "runDigest": "b5a4aee105620528"
           },
           {
-            "index": 25,
+            "index": 26,
             "name": "Test extracted portable-package validation",
             "id": "",
             "uses": "",
@@ -8871,7 +8883,7 @@
             "runDigest": "3cede89fce1f5dba"
           },
           {
-            "index": 26,
+            "index": 27,
             "name": "Test coverage evidence semantics",
             "id": "",
             "uses": "",
@@ -8883,7 +8895,7 @@
             "runDigest": "b870b844a6e610de"
           },
           {
-            "index": 27,
+            "index": 28,
             "name": "Test sanitizer pipeline exit propagation",
             "id": "",
             "uses": "",
@@ -8895,7 +8907,7 @@
             "runDigest": "e9e9310a91486157"
           },
           {
-            "index": 28,
+            "index": 29,
             "name": "Test check-format controlled failures",
             "id": "",
             "uses": "",
@@ -8907,7 +8919,7 @@
             "runDigest": "fe7c915b78c7dbeb"
           },
           {
-            "index": 29,
+            "index": 30,
             "name": "Test workflow failure-propagation contract",
             "id": "",
             "uses": "",
@@ -8919,7 +8931,7 @@
             "runDigest": "f7233b3f14c1a94a"
           },
           {
-            "index": 30,
+            "index": 31,
             "name": "Test granular SparkTests wrapper failure recovery",
             "id": "",
             "uses": "",
@@ -8931,7 +8943,7 @@
             "runDigest": "326ef3bd02bde17a"
           },
           {
-            "index": 31,
+            "index": 32,
             "name": "Test Spark CLI",
             "id": "",
             "uses": "",
@@ -8943,7 +8955,7 @@
             "runDigest": "409c9f97b4a909ab"
           },
           {
-            "index": 32,
+            "index": 33,
             "name": "Test ThirdParty manifest-sync gate",
             "id": "",
             "uses": "",
@@ -8955,7 +8967,7 @@
             "runDigest": "20b1682609fdd8b9"
           },
           {
-            "index": 33,
+            "index": 34,
             "name": "Platform certification validator",
             "id": "",
             "uses": "",
@@ -8967,7 +8979,7 @@
             "runDigest": "6b643bc930292a59"
           },
           {
-            "index": 34,
+            "index": 35,
             "name": "Validate certification matrix",
             "id": "",
             "uses": "",
@@ -8979,7 +8991,7 @@
             "runDigest": "edbea8f70422546c"
           },
           {
-            "index": 35,
+            "index": 36,
             "name": "Verify every test source is registered",
             "id": "",
             "uses": "",
@@ -8991,7 +9003,7 @@
             "runDigest": "4033bf80ea364bbe"
           },
           {
-            "index": 36,
+            "index": 37,
             "name": "Verify every header uses pragma once",
             "id": "",
             "uses": "",
@@ -9003,7 +9015,7 @@
             "runDigest": "3e22424b6d339456"
           },
           {
-            "index": 37,
+            "index": 38,
             "name": "Verify every editor panel is registered",
             "id": "",
             "uses": "",
@@ -9015,7 +9027,7 @@
             "runDigest": "12c59134db92ca55"
           },
           {
-            "index": 38,
+            "index": 39,
             "name": "Verify no deprecated submodules are referenced",
             "id": "",
             "uses": "",
@@ -9027,7 +9039,7 @@
             "runDigest": "daf685300deeabce"
           },
           {
-            "index": 39,
+            "index": 40,
             "name": "Verify wiki pages match the sidebar",
             "id": "",
             "uses": "",
@@ -9039,7 +9051,7 @@
             "runDigest": "55e5d0b6e188e893"
           },
           {
-            "index": 40,
+            "index": 41,
             "name": "Verify initialized systems are wired in",
             "id": "",
             "uses": "",
@@ -9051,7 +9063,7 @@
             "runDigest": "5a18916291787b7f"
           },
           {
-            "index": 41,
+            "index": 42,
             "name": "Verify header Doxygen coverage",
             "id": "",
             "uses": "",
@@ -9063,7 +9075,7 @@
             "runDigest": "e3a2b71dad02b530"
           },
           {
-            "index": 42,
+            "index": 43,
             "name": "Verify cross-utilization boundaries",
             "id": "",
             "uses": "",
@@ -9075,7 +9087,7 @@
             "runDigest": "129fc75ec2a94f39"
           },
           {
-            "index": 43,
+            "index": 44,
             "name": "Verify DI singleton guardrails",
             "id": "",
             "uses": "",
@@ -9087,7 +9099,7 @@
             "runDigest": "449e94a99a2aa9dd"
           },
           {
-            "index": 44,
+            "index": 45,
             "name": "Test module asset reference checker",
             "id": "",
             "uses": "",
@@ -9099,7 +9111,7 @@
             "runDigest": "a98c5fd291ce3d86"
           },
           {
-            "index": 45,
+            "index": 46,
             "name": "Verify module asset references",
             "id": "",
             "uses": "",
@@ -9111,7 +9123,7 @@
             "runDigest": "a5c14134ea7be04c"
           },
           {
-            "index": 46,
+            "index": 47,
             "name": "Test asset integrity verifier",
             "id": "",
             "uses": "",
@@ -9123,7 +9135,7 @@
             "runDigest": "c18e5af256707318"
           },
           {
-            "index": 47,
+            "index": 48,
             "name": "Verify repository asset integrity baseline",
             "id": "",
             "uses": "",
@@ -9135,7 +9147,7 @@
             "runDigest": "24c6f12eaf03dec2"
           },
           {
-            "index": 48,
+            "index": 49,
             "name": "Verify authored FPS material coverage",
             "id": "",
             "uses": "",
@@ -9147,7 +9159,7 @@
             "runDigest": "51b7760d2528df36"
           },
           {
-            "index": 49,
+            "index": 50,
             "name": "Validate module evidence manifest (declarative layer)",
             "id": "",
             "uses": "",
@@ -9159,7 +9171,7 @@
             "runDigest": "3207d199801cc28d"
           },
           {
-            "index": 50,
+            "index": 51,
             "name": "Run module evidence adversarial tests",
             "id": "",
             "uses": "",
@@ -9171,7 +9183,7 @@
             "runDigest": "1593673681e72374"
           },
           {
-            "index": 51,
+            "index": 52,
             "name": "Validate model and template asset contracts",
             "id": "",
             "uses": "",
@@ -9183,7 +9195,7 @@
             "runDigest": "518945017eec4a52"
           },
           {
-            "index": 52,
+            "index": 53,
             "name": "Test build-matrix inventory and parity",
             "id": "",
             "uses": "",
@@ -9195,7 +9207,7 @@
             "runDigest": "c0f9a3a90d8ff03f"
           },
           {
-            "index": 53,
+            "index": 54,
             "name": "Test strict Shipping and reproducible-build contract",
             "id": "",
             "uses": "",
@@ -9207,7 +9219,7 @@
             "runDigest": "f482dd9880b51693"
           },
           {
-            "index": 54,
+            "index": 55,
             "name": "Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)",
             "id": "",
             "uses": "",
@@ -9219,7 +9231,7 @@
             "runDigest": "5b9864acc47d8f75"
           },
           {
-            "index": 55,
+            "index": 56,
             "name": "Test the Shipping private-symbol manifest (BLD-100)",
             "id": "",
             "uses": "",
@@ -9231,7 +9243,7 @@
             "runDigest": "bd2a7e36436cde54"
           },
           {
-            "index": 56,
+            "index": 57,
             "name": "Test the build-output reproducibility comparator (BLD-100)",
             "id": "",
             "uses": "",
@@ -9243,7 +9255,7 @@
             "runDigest": "b744945108bec918"
           },
           {
-            "index": 57,
+            "index": 58,
             "name": "Generate and compare the deterministic build-matrix inventory",
             "id": "build-matrix-inventory",
             "uses": "",
@@ -9255,7 +9267,7 @@
             "runDigest": "0ab6252366aca398"
           },
           {
-            "index": 58,
+            "index": 59,
             "name": "Compare reviewed build-matrix findings",
             "id": "build-matrix-parity",
             "uses": "",
@@ -9267,7 +9279,7 @@
             "runDigest": "d1f0cc7aa640ff32"
           },
           {
-            "index": 59,
+            "index": 60,
             "name": "Upload deterministic build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9279,7 +9291,7 @@
             "runDigest": ""
           },
           {
-            "index": 60,
+            "index": 61,
             "name": "Validate publishable wiki output",
             "id": "",
             "uses": "",
@@ -9291,7 +9303,7 @@
             "runDigest": "1d65f8ae015a2467"
           },
           {
-            "index": 61,
+            "index": 62,
             "name": "Verify all generated documentation and statistics",
             "id": "generated-docs",
             "uses": "",
@@ -9306,7 +9318,7 @@
             "runDigest": "bd155f3f9b9feaa7"
           },
           {
-            "index": 62,
+            "index": 63,
             "name": "Upload generated documentation check log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -9318,7 +9330,7 @@
             "runDigest": ""
           },
           {
-            "index": 63,
+            "index": 64,
             "name": "Controlled required-job failure probe",
             "id": "",
             "uses": "",
@@ -14639,7 +14651,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "d8d10df0e1ca84ee"
+            "runDigest": "329f177104d5809f"
           },
           {
             "index": 3,
@@ -14651,7 +14663,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "120bf8a5e2088208"
+            "runDigest": "72d3f17b0063c64a"
           },
           {
             "index": 4,
@@ -22091,7 +22103,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Generate and compare the deterministic build-matrix inventory",
-        "stepIndex": 57,
+        "stepIndex": 58,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",
@@ -22119,7 +22131,7 @@
       {
         "job": "validate-ci-tools",
         "step": "Compare reviewed build-matrix findings",
-        "stepIndex": 58,
+        "stepIndex": 59,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "linux",

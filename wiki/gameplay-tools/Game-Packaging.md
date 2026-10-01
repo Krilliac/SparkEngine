@@ -20,6 +20,16 @@ claim names a missing test or a documented surface has no claim.
 
 ## Installed qualification checks
 
+The required Windows MSI consumer now requests interruption, plain repair and
+two install/uninstall cycles. It compares reinstall payload hashes and retains
+declared external user data. Its runtime helper runs installed asset integrity,
+authored scene/material pixel checks, NullRHI save/reload and AppContainer
+repository-denial controls. These paths still need a native exact-commit run;
+they do not establish no-display execution or Windows sanitizer/soak evidence.
+Native MSI commands use a verified non-elevated user token and per-user MSI
+properties; WiX MSI generation requires CMake 3.29+ for `perUser` scope.
+See the [Windows qualification commands and limitations](../../docs/readiness/WINDOWS-PACKAGE-QUALIFICATION.md).
+
 `tools/check-module-asset-refs.py` validates the shared provenance policy schema,
 the referenced rule's license, and its supporting evidence paths as well as
 asset hashes. Missing or relabelled license metadata fails. `NOASSERTION`

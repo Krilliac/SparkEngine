@@ -366,8 +366,15 @@
         {
           "criterionDigest": "sha256:5a3bf0f4851d",
           "state": "unmet",
-          "evidence": [],
-          "note": "Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists."
+          "evidence": [
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            "Tests/PackageSmoke/VerifyFPSAuthoredScene.cmake",
+            "Tests/PackageSmoke/windows_appcontainer_run.py",
+            "tools/module-evidence/artifacts.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required MSI smoke now verifies installed stable-v1 asset hashes, authored scene/material pixels, and AppContainer source/build denial with scene-less and asset-less controls. Native runs remain pending; no model/material/texture load totals or zero-failure counters are claimed."
         },
         {
           "criterionDigest": "sha256:b056e4c35794",
@@ -867,8 +874,13 @@
         {
           "criterionDigest": "sha256:169f524e59c4",
           "state": "unmet",
-          "evidence": [],
-          "note": "Needs configured Windows codemodel evidence from a real MSVC configure."
+          "evidence": [
+            "Tools/buildmatrix/inventory.py",
+            "Tools/buildmatrix/capture_provenance.py",
+            "Tests/Tools/test_build_matrix_parity.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required Shipping producer captures windows-shipping, windows-release and installed SDK consumer codemodels. The CLI accepts windows-release as windows-validation. Real MSVC configures/builds and exact-SHA authority remain pending here; use WINDOWS-PACKAGE-QUALIFICATION.md commands."
         },
         {
           "criterionDigest": "sha256:acca7c786544",

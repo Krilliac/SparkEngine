@@ -67,8 +67,15 @@
         {
           "criterionDigest": "sha256:4f1864e49dd0",
           "state": "unmet",
-          "evidence": [],
-          "note": "No runtime dependency closure is recorded. It depends on Windows certification evidence that has not been collected."
+          "evidence": [
+            "Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake",
+            "Tools/platform-cert/pe_imports.py",
+            "tools/pe_import_closure.py",
+            "docs/certification/plans/win11-x64-msvc143-d3d11.json",
+            "docs/certification/plans/win11-x64-msvc143-nullrhi.json",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required build-windows-shipping measures a fresh MSI component stage against both Windows row plans and app-local PE closure, retaining shipping-closure-<sha>. This records staged-package dependencies; physical Windows 11 certification and a current exact-SHA hosted pass remain unverified here."
         }
       ],
       "commands": [
@@ -1559,9 +1566,12 @@
           "evidence": [
             "cmake/ValidateStagedPackageExecutables.cmake",
             "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "The test runs from the staged package's bin directory with an isolated LOCALAPPDATA. The local host still has a GPU and display. Clean-host evidence and the headless-windows-package job still need hosted CI."
+          "note": "Required installed NullRHI smoke enforces zero rendered callbacks and no D3D11 device record. No-desktop execution, zero owned windows and hardware-adapter absence are not established. OS graphics imports do not themselves prove a GPU requirement; native qualification remains pending."
         },
         {
           "criterionDigest": "sha256:dda52a09803d",
@@ -1570,9 +1580,13 @@
             "cmake/RunSparkHeadlessNullRHILifecycle.cmake",
             "cmake/RunSparkHeadlessFPSSaveReload.cmake",
             "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            "Tests/PackageSmoke/windows_appcontainer_run.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "Pending the central build and a FPSHeadlessPackage_NullRHISaveReload run."
+          "note": "Required MSI runtime helper runs installed NullRHI save/reload plus AppContainer source/build canaries and scene-less/asset-less controls. The consumer uses the producer CMakeCache as its build canary. Native execution of these newly required probes remains pending."
         },
         {
           "criterionDigest": "sha256:113da975258b",
@@ -1585,9 +1599,12 @@
             "Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake",
             "Tests/CMakeLists.txt",
             "wiki/subsystems/Dedicated-Server.md",
-            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake"
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "FPSHeadlessPackage_NullRHISaveReload runs a NullRHI save/reload against the staged MinSizeRel package. It is now in testSelectors only; plannedTestSelectors is []. There is no Windows CTest run or sanitizer/soak evidence yet, so the criterion is not evidenced. The ledger JSON still records this criterion as 'unmet' because this lane did not change the state field."
+          "note": "Packaged bounded save/reload is wired into required MSI smoke. Native package execution remains pending. Windows forced-termination/recovery, process-level sanitizer qualification and FPS Windows soak remain open; no sanitizer-clean or soak result is claimed."
         },
         {
           "criterionDigest": "sha256:e6a39adf789f",
@@ -2054,9 +2071,12 @@
           "state": "unmet",
           "evidence": [
             "cmake/SparkUninstall.cmake",
-            "cmake/TestSparkTrackedInstall.cmake"
+            "cmake/TestSparkTrackedInstall.cmake",
+            ".github/scripts/qualify-windows-msi.py",
+            ".github/scripts/test_qualify_windows_msi.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "Local only: the manifest-driven uninstall and SparkTrackedInstall.Contract prove repeatable install/uninstall leaving only declared user data for CMake install trees on Linux. Windows 11 clean-machine CPack/NSIS uninstall and SparkInstaller reuse are unproven."
+          "note": "Required MSI smoke requests two install/uninstall cycles, identical payload digests on reinstall, removed registration/install roots and preserved declared user data. Native MSI execution, NSIS/SparkInstaller reuse and Windows 11 clean-host qualification remain pending."
         }
       ],
       "commands": [

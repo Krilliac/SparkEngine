@@ -204,6 +204,12 @@ jobs:
     - name: Test native MSI qualification orchestration
       run: python3 .github/scripts/test_qualify_windows_msi.py
 
+    - name: Test installed package runtime and installer token contracts
+      run: |
+        python3 Tests/PackageSmoke/package_runtime_probe_tests.py
+        python3 Tests/Tools/test_package_smoke_artifacts.py
+        python3 .github/scripts/test-run-non-elevated-windows.py
+
     - name: Test exact release asset publication boundary
       run: python3 .github/scripts/test_verify_release_asset_boundary.py
 
@@ -2415,6 +2421,7 @@ jobs:
           build/ci-msi-package/*.msi
           build/ci-msi-package/shipping-package-manifest.json
           build/windows-shipping/SparkEngineGameModules.cmake
+          build/windows-shipping/CMakeCache.txt
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
 
@@ -4712,8 +4719,9 @@ jobs:
           $msis = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "*.msi" -File)
           $identities = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "shipping-package-manifest.json" -File)
           $moduleManifests = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "SparkEngineGameModules.cmake" -File)
-          if ($msis.Count -ne 1 -or $identities.Count -ne 1 -or $moduleManifests.Count -ne 1) {
-            throw "expected exactly one Shipping MSI, identity manifest, and game-module manifest"
+          $buildCaches = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "CMakeCache.txt" -File)
+          if ($msis.Count -ne 1 -or $identities.Count -ne 1 -or $moduleManifests.Count -ne 1 -or $buildCaches.Count -ne 1) {
+            throw "expected exactly one Shipping MSI, identity manifest, game-module manifest, and producer cache"
           }
           $input = Join-Path $env:RUNNER_TEMP "module-profile-package-smoke-input"
           if (Test-Path -LiteralPath $input) { throw "package-smoke input directory must be fresh" }
@@ -4721,6 +4729,7 @@ jobs:
           Copy-Item -LiteralPath $msis[0].FullName -Destination $input
           Copy-Item -LiteralPath $identities[0].FullName -Destination $input
           Copy-Item -LiteralPath $moduleManifests[0].FullName -Destination $input
+          Copy-Item -LiteralPath $buildCaches[0].FullName -Destination $input
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "MODULE_PACKAGE_SMOKE_INPUT=$input" -Encoding utf8
 
       - name: Qualify installed SparkGameFPS package
@@ -4738,6 +4747,8 @@ jobs:
             --manifest (Join-Path $env:MODULE_PACKAGE_SMOKE_INPUT "SparkEngineGameModules.cmake") `
             --package-manifest (Join-Path $env:MODULE_PACKAGE_SMOKE_INPUT "shipping-package-manifest.json") `
             --runner-temp $env:RUNNER_TEMP --logs $logs `
+            --build-root $env:MODULE_PACKAGE_SMOKE_INPUT `
+            --drills interrupt,repair,repeatability `
             --source-sha "${{ github.sha }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -4745,7 +4756,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: module-profile-package-smoke-${{ github.sha }}
-          path: msi-qualification/package-smoke.log
+          path: |
+            msi-qualification/package-smoke.log
+            msi-qualification/interrupt-drill.json
+            msi-qualification/repair-drill.json
+            msi-qualification/repeatability-drill.json
+            msi-qualification/runtime-result.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 

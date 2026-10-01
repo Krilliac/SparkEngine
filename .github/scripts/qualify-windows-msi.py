@@ -126,7 +126,8 @@ finally { $stream.Dispose() }
 
 
 FAILURE_TRANSFORM_SCRIPT = Path(__file__).with_name("new-msi-failure-transform.ps1")
-DRILLS = frozenset({"interrupt"})
+DRILLS = frozenset({"interrupt", "repair", "repeatability"})
+PER_USER_PROPERTIES = ["ALLUSERS=", "MSIINSTALLPERUSER=1"]
 # ERROR_INSTALL_FAILURE: the forced custom-action failure ran and Windows
 # Installer completed its rollback script.
 MSI_INSTALL_FAILURE_EXIT = 1603
@@ -145,6 +146,9 @@ def parse_drills(value):
 def _install_tree_digests(root):
     """SHA-256 of every installed file, keyed by relative path; links are refused."""
     root = Path(root)
+    if root.is_symlink() or (root.exists() and getattr(root.lstat(), "st_file_attributes", 0)
+                            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+        raise ValueError(f"installed tree root is a link: {root}")
     if not root.exists():
         return {}
     digests = {}
@@ -156,11 +160,23 @@ def _install_tree_digests(root):
                 raise ValueError(f"installed tree contains a link: {entry}")
         for name in file_names:
             entry = Path(directory) / name
-            digests[entry.relative_to(root).as_posix()] = hashlib.sha256(entry.read_bytes()).hexdigest()
+            digest = hashlib.sha256()
+            with entry.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            digests[entry.relative_to(root).as_posix()] = digest.hexdigest()
     return digests
 
 
 def run_command(argv, log, *, timeout, env=None, cwd=None):
+    if os.name == "nt" and Path(argv[0]).name.casefold() == "msiexec.exe":
+        # Per-user MSI properties do not lower an elevated CI runner token.
+        # The native installer client itself must run with a verified token.
+        spec = importlib.util.spec_from_file_location(
+            "spark_msi_non_elevated", Path(__file__).with_name("run-non-elevated-windows.py"))
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        return launcher.run(argv, log, timeout, env=env, cwd=cwd)
     with log.open("w", encoding="utf-8") as output:
         return subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT, timeout=timeout, env=env, cwd=cwd).returncode
 
@@ -256,11 +272,35 @@ def _validate_d3d11_log(log):
         raise ValueError("installed FPS D3D11/WARP lifecycle terminal record is invalid")
 
 
-def _write_package_smoke_log(path, source_sha, msi_sha256):
+def _runtime_asset_count(path, source_sha, msi_sha256):
+    data = strict_json.read_file_no_follow_bytes(Path(path).absolute(), max_bytes=64 * 1024)
+    result = json.loads(data.decode("utf-8"), object_pairs_hook=_reject_duplicate_json_keys)
+    expected = {
+        "schemaVersion": 1, "result": "PASS", "module": "SparkGameFPS", "commitSha": source_sha,
+        "msiSha256": msi_sha256,
+        "authoredSceneVisual": {"result": "PASS", "contract": "VerifyFPSAuthoredScene.cmake"},
+        "saveReload": {"result": "PASS", "contract": "RunSparkHeadlessFPSSaveReload.cmake"},
+        "repositoryIsolation": {"result": "PASS", "contract": "windows_appcontainer_run.py"},
+        "headlessNoDisplay": "unproven",
+    }
+    if not isinstance(result, dict) or set(result) != {*expected, "assetIntegrity"}:
+        raise ValueError("package runtime result has an invalid schema")
+    if type(result["schemaVersion"]) is not int or any(result[key] != value for key, value in expected.items()):
+        raise ValueError("package runtime result does not match the qualified package or required probes")
+    assets = result["assetIntegrity"]
+    if (not isinstance(assets, dict) or set(assets) != {"result", "entries"}
+            or assets["result"] != "PASS" or type(assets["entries"]) is not int or assets["entries"] < 1):
+        raise ValueError("package runtime result lacks a positive verified asset count")
+    return assets["entries"]
+
+
+def _write_package_smoke_log(path, source_sha, msi_sha256, asset_entries):
     if not _SOURCE_SHA_RE.fullmatch(source_sha):
         raise ValueError("package-smoke source SHA must be 40 lower-case hexadecimal characters")
     if not re.fullmatch(r"[0-9a-f]{64}", msi_sha256):
         raise ValueError("package-smoke MSI SHA-256 must be 64 lower-case hexadecimal characters")
+    if type(asset_entries) is not int or asset_entries < 1:
+        raise ValueError("package-smoke requires a positive verified asset count")
     content = (
         "[package-smoke] schema=package-smoke-v1\n"
         "[package-smoke] product=SparkEngine\n"
@@ -268,6 +308,12 @@ def _write_package_smoke_log(path, source_sha, msi_sha256):
         "[package-smoke] profile=stable-v1\n"
         f"[package-smoke] commit_sha={source_sha}\n"
         f"[package-smoke] msi_sha256={msi_sha256}\n"
+        "[package-smoke] package_runtime=PASS\n"
+        "[package-smoke] asset_integrity=PASS\n"
+        f"[package-smoke] asset_entries={asset_entries}\n"
+        "[package-smoke] authored_scene_visual=PASS\n"
+        "[package-smoke] save_reload=PASS\n"
+        "[package-smoke] repository_isolation=PASS\n"
         "[package-smoke] backend=nullrhi result=PASS\n"
         "[package-smoke] backend=d3d11-warp result=PASS\n"
         "[package-smoke] exit_code=0\n"
@@ -414,7 +460,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                   msiexec, powershell, cmake, source_sha=None, package_manifest=None,
                   previous_packages=None, previous_version=None, previous_package_manifest=None,
                   previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False,
-                  reviewed_baseline_commit=None, git_runner=subprocess.run, drills=frozenset()):
+                  reviewed_baseline_commit=None, git_runner=subprocess.run, drills=frozenset(), build_root=None):
     logs = Path(logs)
     drills = frozenset(drills)
     if not drills <= DRILLS:
@@ -428,6 +474,8 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                        previous_signer_thumbprint, previous_receipt))
     if bootstrap_repair and transaction:
         raise ValueError("bootstrap_repair cannot be combined with predecessor transaction inputs")
+    if "repeatability" in drills and transaction:
+        raise ValueError("repeatability requires a fresh install, without predecessor transaction inputs")
     if reviewed_baseline_commit is not None and not bootstrap_repair:
         raise ValueError("reviewed_baseline_commit applies only to bootstrap_repair qualification")
     report = {"scope": ("hosted-windows-msi-upgrade-repair-rollback-uninstall"
@@ -448,8 +496,11 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
     old_product_code = None
     old_upgrade_code = None
     smoke_output = logs / "package-smoke.log"
+    asset_entries = None
 
     def execute(label, argv, *, env=None, cwd=None, timeout=900):
+        if argv[0] == msiexec:
+            argv = [*argv, *PER_USER_PROPERTIES]
         code = runner(argv, logs / f"{label}.log", timeout=timeout, env=env, cwd=cwd)
         if code != 0:
             raise ValueError(f"{label} failed with exit {code}")
@@ -626,7 +677,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
 
         def verify_user_data(label):
             try:
-                actual = user_data_sentinel.read_bytes()
+                actual = strict_json.read_file_no_follow_bytes(user_data_sentinel.absolute(), max_bytes=4096)
             except OSError as error:
                 raise ValueError(f"{label} could not read external user data sentinel: {error}") from error
             if actual != user_data_sentinel_bytes:
@@ -646,7 +697,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
 
         def run_interrupted_activation(label, transform):
             code = runner([msiexec, "/i", str(package), f"TRANSFORMS={transform}", "/qn", "/norestart", "/L*V",
-                           str(logs / f"msi-{label}.log"), f"INSTALL_ROOT={install_root}"],
+                           str(logs / f"msi-{label}.log"), f"INSTALL_ROOT={install_root}", *PER_USER_PROPERTIES],
                           logs / f"{label}.log", timeout=900)
             if code != MSI_INSTALL_FAILURE_EXIT:
                 raise ValueError(f"{label} exited {code}, expected {MSI_INSTALL_FAILURE_EXIT}: "
@@ -775,15 +826,20 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                 execute("repair", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
                                     str(logs / "msi-repair.log"), f"INSTALL_ROOT={install_root}"])
             verify_user_data("upgrade+repair")
-        elif bootstrap_repair:
+        elif bootstrap_repair or "repair" in drills:
             # Bootstrap qualification has no N-1 package, but it must still
             # exercise the repair transaction and prove user data survives it.
             with _hold_private_msi_identity(package):
                 if package_digest(package) != digest:
-                    raise ValueError("private MSI changed before bootstrap repair")
-                execute("repair-bootstrap", [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
-                                              str(logs / "msi-repair-bootstrap.log"), f"INSTALL_ROOT={install_root}"])
-            verify_user_data("bootstrap+repair")
+                    raise ValueError("private MSI changed before fresh-install repair")
+                repair_label = "repair-bootstrap" if bootstrap_repair else "repair"
+                execute(repair_label, [msiexec, "/fvomus", str(package), "/qn", "/norestart", "/L*V",
+                                       str(logs / f"msi-{repair_label}.log"), f"INSTALL_ROOT={install_root}"])
+            verify_user_data("fresh-install repair")
+            _write_result_report(logs / "repair-drill.json", {
+                "scope": "fresh-install-repair", "source_sha": source_sha, "msi_sha256": digest,
+                "baseline_bound": bootstrap_repair, "n_minus_one": False, "passed": True,
+            })
         with _hold_private_msi_identity(package):
             if package_digest(package) != digest:
                 raise ValueError("private MSI changed before installed identity validation")
@@ -792,6 +848,40 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
             # advertised, absent, or broken registration is not a successful install.
             if installed["ProductState"] != 5:
                 raise ValueError("MSI installation did not establish installed product registration")
+        if "repeatability" in drills:
+            # Compare pristine payloads before running the engine: user logs or
+            # caches must not be mistaken for installed product files.
+            first_tree = _install_tree_digests(install_root)
+            if not first_tree:
+                raise ValueError("repeatability requires a nonempty installed payload")
+            with _hold_private_msi_identity(package):
+                if package_digest(package) != digest:
+                    raise ValueError("private MSI changed before repeatability uninstall")
+                execute("uninstall-cycle-1", [msiexec, "/x", str(package), "/qn", "/norestart", "/L*V",
+                                               str(logs / "msi-uninstall-cycle-1.log")])
+                remaining = identity("identity-cycle-1-after")
+                if remaining["ProductState"] != -1 or remaining["RelatedProducts"]:
+                    raise ValueError("repeatability uninstall left product registration")
+                if install_root.exists() or install_root.is_symlink():
+                    raise ValueError("repeatability uninstall left install-root residue")
+                verify_user_data("repeatability uninstall")
+                attempted = False
+                if _install_tree_digests(user_data_root) != {
+                        user_data_sentinel.name: hashlib.sha256(user_data_sentinel_bytes).hexdigest()}:
+                    raise ValueError("repeatability uninstall left undeclared user data")
+                attempted = True
+                execute("reinstall", [msiexec, "/i", str(package), "/qn", "/norestart", "/L*V",
+                                      str(logs / "msi-reinstall.log"), f"INSTALL_ROOT={install_root}"])
+                reinstalled = identity("identity-reinstalled")
+                if reinstalled["ProductState"] != 5 or reinstalled["ProductVersion"] != version:
+                    raise ValueError("repeatability reinstall did not establish the expected product")
+            if _install_tree_digests(install_root) != first_tree:
+                raise ValueError("repeatability reinstall changed the installed file digest set")
+            verify_user_data("repeatability reinstall")
+            _write_result_report(logs / "repeatability-payload.json", {
+                "source_sha": source_sha, "msi_sha256": digest, "files": first_tree,
+                "identical_reinstall": True, "completed_uninstalls": 1,
+            })
         execute("validate", [cmake, f"-DSPARK_PACKAGE_ROOT={install_root}", "-DSPARK_PACKAGE_LAYOUT=runtime",
                              "-DSPARK_PACKAGE_PROFILE=stable-v1", f"-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST={manifest}",
                              "-DSPARK_EXECUTABLE_SUFFIX:STRING=.exe", "-P",
@@ -811,6 +901,18 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                      "SPARK_RHI_BACKEND": "d3d11", "SPARK_D3D11_DRIVER": "warp"},
                 cwd=install_root / "bin", timeout=120)
         _validate_d3d11_log(logs / "fps-d3d11-warp.log")
+        # On the fresh CI consumer, this is the downloaded producer cache.
+        # Locally it is the actual configured Shipping tree. Never substitute
+        # an absent file: the isolation runner verifies both canaries exist.
+        forbidden_build = Path(build_root) if build_root is not None else manifest.absolute().parent
+        execute("package-runtime", [sys.executable, "-B", str(ROOT / "Tests/PackageSmoke/package_runtime_probe.py"),
+                                    "--package-root", str(install_root), "--source-root", str(ROOT),
+                                    "--build-root", str(forbidden_build), "--output-dir", str(scratch / "runtime-probes"),
+                                    "--record-file", str((logs / "runtime-result.json").absolute()),
+                                    "--diagnostics-dir", str((logs / "runtime").absolute()),
+                                    "--commit-sha", source_sha, "--msi-sha256", digest, "--cmake", cmake],
+                timeout=1500)
+        asset_entries = _runtime_asset_count(logs / "runtime-result.json", source_sha, digest)
         verify_user_data("runtime validation")
         validated = True
     except (OSError, ValueError, subprocess.SubprocessError) as error:
@@ -893,6 +995,16 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                     if remaining["ProductState"] != -1 or remaining["RelatedProducts"]:
                         raise ValueError("MSI product registration remains after uninstall")
                     verify_user_data("final uninstall")
+                    if "repeatability" in drills and validated:
+                        # Runtime-created data is explicitly declared by the
+                        # package contract; arbitrary installer residue is not.
+                        allowed = {"Config", "Saves", "Logs", "ShaderCache", "spark_trace.json",
+                                   user_data_sentinel.name}
+                        residue = sorted(entry.name for entry in user_data_root.iterdir()
+                                         if entry.name not in allowed)
+                        if residue:
+                            raise ValueError(f"undeclared user data remains after uninstall: {residue}")
+                        _install_tree_digests(user_data_root)  # Reject links in retained user data.
             except (OSError, ValueError, subprocess.SubprocessError) as error:
                 errors.append(str(error))
             # Never hide uninstall defects by deleting installed files ourselves.
@@ -900,7 +1012,13 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
                 errors.append(f"Uninstall residue remains at {install_root}")
         if validated and not errors:
             try:
-                _write_package_smoke_log(smoke_output, source_sha, digest)
+                if "repeatability" in drills:
+                    _write_result_report(logs / "repeatability-drill.json", {
+                        "source_sha": source_sha, "msi_sha256": digest,
+                        "cycles": 2, "identical_reinstall": True,
+                        "install_residue": False, "user_data_preserved": True, "passed": True,
+                    })
+                _write_package_smoke_log(smoke_output, source_sha, digest, asset_entries)
                 report["package_smoke_log"] = str(smoke_output)
             except (OSError, ValueError) as error:
                 errors.append(str(error))
@@ -920,7 +1038,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
             msiexec, powershell, cmake, source_sha=None, package_manifest=None,
             previous_packages=None, previous_version=None, previous_package_manifest=None,
             previous_signer_thumbprint=None, previous_receipt=None, bootstrap_repair=False,
-            reviewed_baseline_commit=None, drills=frozenset()):
+            reviewed_baseline_commit=None, drills=frozenset(), build_root=None):
     """Run native MSI qualification on Windows.
 
     The platform-independent transaction state machine lives in the private
@@ -940,6 +1058,7 @@ def qualify(packages, version, manifest, runner_temp, logs, *, runner=run_comman
         bootstrap_repair=bootstrap_repair,
         reviewed_baseline_commit=reviewed_baseline_commit,
         drills=drills,
+        build_root=build_root,
     )
 
 
@@ -952,6 +1071,8 @@ def main():
     parser.add_argument("--runner-temp", type=Path, required=True)
     parser.add_argument("--logs", type=Path, required=True)
     parser.add_argument("--source-sha", required=True)
+    parser.add_argument("--build-root", type=Path,
+                        help="CMakeCache.txt directory; defaults to the module manifest's directory")
     parser.add_argument("--previous-packages", type=Path)
     parser.add_argument("--previous-version")
     parser.add_argument("--previous-package-manifest", type=Path)
@@ -963,7 +1084,7 @@ def main():
     parser.add_argument("--reviewed-baseline-commit",
                         help="reviewed v0.9.0 baselineCommit; required with --bootstrap-repair")
     parser.add_argument("--drills", type=parse_drills, default=frozenset(),
-                        help="comma-separated extra drills: interrupt (forced-rollback activation)")
+                        help="comma-separated drills: interrupt, repair, repeatability (two install/uninstall cycles)")
     args = parser.parse_args()
     previous_values = (args.previous_packages, args.previous_version, args.previous_package_manifest,
                        args.previous_signer_thumbprint, args.previous_receipt)
@@ -987,7 +1108,7 @@ def main():
                    previous_receipt=args.previous_receipt,
                    bootstrap_repair=args.bootstrap_repair,
                    reviewed_baseline_commit=args.reviewed_baseline_commit,
-                   drills=args.drills)
+                   drills=args.drills, build_root=args.build_root)
 
 
 if __name__ == "__main__":

@@ -92,9 +92,11 @@
             "tools/installer/check_installer_claims.py",
             "Tests/Tools/test_installer_claims.py",
             "SparkInstaller/src/main.cpp",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "SparkInstaller/src/InstallerPreflight.h",
+            "README.md"
           ],
-          "note": "Already 'implemented' in the ledger, but its note still says 'No checker ties installer capabilities to documentation claims'. The dispatcher should replace that note: the Installer_DocClaims CTest runs check_installer_claims.py against the README and the installer's literal flags and exit codes."
+          "note": "Installer_DocClaims ties flags/help/build gates, exit and preflight codes, disk budgets and root README flags to implementation. Direct checker and in-memory hostile mutations pass; filesystem-fixture tests are sandbox-blocked. This checker does not replace native installer qualification."
         },
         {
           "criterionDigest": "sha256:637a4f03b8d7",
@@ -200,9 +202,12 @@
             ".github/scripts/qualify-windows-msi.py",
             ".github/scripts/new-msi-failure-transform.ps1",
             ".github/scripts/test_qualify_windows_msi.py",
-            ".github/workflows/release.yml"
+            ".github/workflows/release.yml",
+            ".github/workflows/build.yml",
+            "SparkInstaller/tests/InstallerTransactionTests.cpp",
+            "SparkInstaller/CMakeLists.txt"
           ],
-          "note": "No upgrade-interruption test against a real predecessor installer."
+          "note": "Required MSI smoke requests the native fresh-install interruption drill. Existing N-1 mode protects predecessor registration, file digests and user data, but a real signed published predecessor and native upgrade-interruption run remain required; fresh install proves no working-predecessor claim."
         }
       ],
       "commands": ["ctest --test-dir build/windows-release -C Release -L installer --output-on-failure --no-tests=error"],
@@ -243,15 +248,23 @@
             "SparkInstaller/tests/InstallerTransactionTests.cpp",
             "SparkInstaller/src/InstallState.cpp",
             "SparkInstaller/tests/InstallStateTests.cpp",
-            "SparkInstaller/README.md"
+            "SparkInstaller/README.md",
+            ".github/scripts/qualify-windows-msi.py",
+            ".github/scripts/test_qualify_windows_msi.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "Local Windows Release run: SparkInstallerTransactionTests (fake git) passes fresh-install build-failure resume and interrupted-update rollback, asserting a user-data file survives both. InstallState refuses non-regular marker targets (link case RED on base). No native MSI/NSIS run; no exact-commit CI."
+          "note": "Required MSI smoke requests interrupted fresh activation and verifies absent registration/residue with unchanged external user data. Native execution remains pending. Signed v0.9.0 predecessor qualification still uses the separate reviewed-baseline-bound release path."
         },
         {
           "criterionDigest": "sha256:6f6b2bb4602c",
           "state": "unmet",
-          "evidence": [],
-          "note": "Needs Windows repair and uninstall qualification runs."
+          "evidence": [
+            ".github/scripts/qualify-windows-msi.py",
+            ".github/scripts/test_qualify_windows_msi.py",
+            ".github/scripts/run-non-elevated-windows.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required MSI smoke requests a plain repair drill and two uninstalls, with per-user properties and a verified non-elevated installer client. This path has no predecessor or baseline binding; --bootstrap-repair retains its reviewed-baseline gate. Native MSI repair/uninstall remains unverified."
         },
         {
           "criterionDigest": "sha256:0c8b27a63fd0",
