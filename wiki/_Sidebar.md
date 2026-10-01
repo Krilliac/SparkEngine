@@ -171,6 +171,7 @@
 - [Workflow Patterns](development/Workflow-Patterns.md)
 - [Build Optimizations](development/Build-Optimizations.md)
 - [CI Reproducible Builds](development/CI-Reproducible-Builds.md)
+- [CI Controlled-Failure Rehearsal](development/CI-Controlled-Failure-Rehearsal.md)
 - [Release Publication Stages](development/Release-Publication-Stages.md)
 - [Session Handoff 2026-09-27](development/Session-Handoff-2026-09-27.md)
 - [GitHub API and PR Checks](development/GitHub-API-and-PR-Checks.md)

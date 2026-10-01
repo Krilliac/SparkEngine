@@ -521,8 +521,14 @@
         {
           "criterionDigest": "sha256:55c1cd2f8364",
           "state": "unmet",
-          "evidence": [],
-          "note": "Needs a hosted, controlled red run on Working proving the Required CI Gate turns red."
+          "evidence": [
+            "tools/ci/controlled-failures/README.md",
+            "tools/ci/run_controlled_failure_rehearsal.py",
+            "tools/ci/test_run_controlled_failure_rehearsal.py",
+            ".github/scripts/test-workflow-failure-propagation.py",
+            "docs/readiness/evidence/ci100-controlled-failures.json"
+          ],
+          "note": "Local rehearsal driver and six patches exist. The driver now matches each PR run to its pushed patch SHA and checks the intended failed job/step before recording proof; cleanup verifies PR and branch state. No class-specific hosted run exists. Owner must decide whether PRs targeting Working meet the Working evidence rule. Unmet."
         },
         {
           "criterionDigest": "sha256:ae0f4962f815",
