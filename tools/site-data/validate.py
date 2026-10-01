@@ -41,6 +41,7 @@ from docs_parity import published_docs_parity_errors
 from workflow_ownership import installer_workflow_errors, shipping_workflow_errors
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
+from publication_status import STATUS_MAX_BYTES, validate_status as validate_publication_status
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
                             nminus1_evidence_errors, predecessor_candidate_readiness_errors,
                             predecessor_evidence_reuse_errors)
@@ -4609,7 +4610,7 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
             errors.append("current publication does not have a successful conclusion")
         exact_evidence = publication.get("exactEvidence")
         if exact_evidence is None:
-            if require_exact_evidence:
+            if require_exact_evidence or publication.get("state") == "current":
                 errors.append("current publication has no durable exact CI evidence")
         elif not isinstance(exact_evidence, dict):
             errors.append("publication exactEvidence is not an object")
@@ -4661,7 +4662,7 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
 
     exact_pointer = latest.get("files", {}).get("exactCiEvidence")
     if exact_pointer is None:
-        if require_exact_evidence:
+        if require_exact_evidence or latest.get("publication", {}).get("state") == "current":
             errors.append("latest files have no durable exact CI evidence pointer")
     else:
         _, exact_bytes = verified(exact_pointer, "exact CI evidence", 32 * 1024)
@@ -4680,6 +4681,28 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
         if label == "bundle":
             continue
         verified(pointer, f"latest file {label}")
+    status_path = root / "status.json"
+    if status_path.is_symlink():
+        errors.append("status.json must not be a symlink")
+    elif status_path.exists():
+        try:
+            status = validate_publication_status(
+                decode_json_bytes(
+                    read_bytes_stable(status_path, STATUS_MAX_BYTES, "site status.json"),
+                    "site status.json",
+                    STATUS_MAX_BYTES,
+                )
+            )
+            if status["contentCommit"] != latest.get("source", {}).get("commit"):
+                errors.append("status contentCommit differs from retained latest.json")
+            if status["state"] == "current":
+                build = latest.get("publication", {}).get("exactEvidence", {}).get("build", {})
+                if (status["sourceCommit"] != latest.get("source", {}).get("commit") or
+                        status["run"]["id"] != build.get("runId") or
+                        status["run"]["attempt"] != build.get("runAttempt")):
+                    errors.append("current status differs from bundle Build evidence")
+        except SiteDataError as error:
+            errors.append(f"site status.json is invalid: {error}")
     if errors:
         detail = "\n".join(f"  - {message}" for message in errors)
         raise SiteDataError(f"published bundle validation failed with {len(errors)} error(s):\n{detail}")

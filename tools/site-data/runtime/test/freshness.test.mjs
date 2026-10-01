@@ -44,7 +44,7 @@ describe('classifyFreshness', () =>
         assert.equal(idle.revalidate, true, 'an expired copy must trigger revalidation');
     });
 
-    test('blocked: the producer published a blocked state', () =>
+    test('blocked: the latest Build outcome is verified as blocked', () =>
     {
         assert.equal(at(10, 'blocked', 'verified').state, 'blocked');
         assert.equal(at(MAX_AGE_SECONDS + 1, 'blocked', 'revalidating').state, 'blocked');

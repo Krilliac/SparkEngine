@@ -47,6 +47,7 @@ export function renderSiteDataView(root, view)
 {
     setText(root, '[data-site-banner]', view.banner);
     setText(root, '[data-site-commit]', view.commit ?? 'unavailable');
+    setText(root, '[data-site-status-commit]', view.statusCommit ?? 'unavailable');
     setText(root, '[data-site-freshness]', view.state);
 
     const bundle = view.bundle;

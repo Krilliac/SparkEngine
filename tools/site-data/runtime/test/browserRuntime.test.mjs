@@ -22,6 +22,7 @@ function root()
     const nodes = new Map([
         ['[data-site-banner]', element()],
         ['[data-site-commit]', element()],
+        ['[data-site-status-commit]', element()],
         ['[data-site-freshness]', element()],
         ['[data-site-content]', element()],
         ['[data-site-readiness]', element()],
@@ -50,6 +51,7 @@ function view()
         state: 'current',
         banner: 'Current repository data',
         commit: 'a'.repeat(40),
+        statusCommit: 'b'.repeat(40),
         bundle: {
             source: { commit: 'a'.repeat(40) },
             site: { home: { hero: { lede: 'Bundle-backed introduction' } } },
@@ -72,6 +74,7 @@ describe('browser runtime entrypoint', () =>
         renderSiteDataView(page, view());
         assert.equal(page.nodes.get('[data-site-banner]').textContent, 'Current repository data');
         assert.equal(page.nodes.get('[data-site-commit]').textContent, 'a'.repeat(40));
+        assert.equal(page.nodes.get('[data-site-status-commit]').textContent, 'b'.repeat(40));
         assert.equal(page.nodes.get('[data-site-content]').textContent, 'Bundle-backed introduction');
         assert.equal(page.nodes.get('[data-site-readiness]').textContent, 'Bundle-backed readiness');
         assert.equal(page.claims[0].textContent, '42');
@@ -85,10 +88,12 @@ describe('browser runtime entrypoint', () =>
             state: 'unavailable',
             banner: 'Repository data unavailable',
             commit: null,
+            statusCommit: null,
             bundle: null,
             files: {},
         });
         assert.equal(page.nodes.get('[data-site-content]').textContent, '');
+        assert.equal(page.nodes.get('[data-site-status-commit]').textContent, 'unavailable');
         assert.equal(page.nodes.get('[data-site-docs]').children.length, 0);
         assert.equal(page.nodes.get('[data-site-search]').children.length, 0);
         assert.equal(page.claims[0].textContent, '');

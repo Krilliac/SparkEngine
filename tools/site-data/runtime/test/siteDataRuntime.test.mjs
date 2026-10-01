@@ -8,11 +8,19 @@ import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { SiteDataRuntime } from '../siteDataRuntime.mjs';
+import { buildRun, mockGitHubApi, siteStatus } from './evidenceFixture.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 let scratch;
 let root;
 let latest;
+let statusBytes;
+let contentRun;
+
+function evidence(run = contentRun)
+{
+    return mockGitHubApi(latest.source.commit, [run]).fetchEvidence;
+}
 
 function loader(overrides = new Map())
 {
@@ -21,6 +29,10 @@ function loader(overrides = new Map())
         if (overrides.has(relative))
         {
             return overrides.get(relative);
+        }
+        if (relative === 'status.json')
+        {
+            return statusBytes;
         }
         return new Uint8Array(fs.readFileSync(path.join(root, ...relative.split('/'))));
     };
@@ -54,6 +66,13 @@ before(() =>
         assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     }
     latest = JSON.parse(fs.readFileSync(path.join(root, 'latest.json'), 'utf8'));
+    const build = latest.publication.exactEvidence?.build;
+    contentRun = buildRun(latest.source.commit, {
+        id: build?.runId ?? 101,
+        attempt: build?.runAttempt ?? 1,
+        conclusion: latest.publication.state === 'current' ? 'success' : 'failure',
+    });
+    statusBytes = json(siteStatus(latest.source.commit, contentRun));
 });
 
 after(() =>
@@ -66,7 +85,8 @@ describe('SiteDataRuntime display boundary', () =>
     test('installs only a verified publication and exposes its commit', async () =>
     {
         let now = 1_000_000;
-        const runtime = new SiteDataRuntime({ load: loader(), displayedCommit: latest.source.commit, now: () => now });
+        const runtime = new SiteDataRuntime({ load: loader(), fetchEvidence: evidence(),
+                                              displayedCommit: latest.source.commit, now: () => now });
         assert.equal(runtime.snapshot().state, 'unavailable');
         const result = await runtime.refresh();
         assert.equal(result.state, latest.publication.state === 'blocked' ? 'blocked' : 'current');
@@ -82,6 +102,7 @@ describe('SiteDataRuntime display boundary', () =>
         let currentLoader = loader();
         const runtime = new SiteDataRuntime({
             load: (...args) => currentLoader(...args),
+            fetchEvidence: evidence(),
             displayedCommit: latest.source.commit,
             now: () => now,
             maxAgeSeconds: 5,
@@ -103,7 +124,7 @@ describe('SiteDataRuntime display boundary', () =>
     test('rejects a publication whose displayed SHA differs before exposing data', async () =>
     {
         const wrong = latest.source.commit.replace(/^./, (character) => character === '0' ? '1' : '0');
-        const runtime = new SiteDataRuntime({ load: loader(), displayedCommit: wrong });
+        const runtime = new SiteDataRuntime({ load: loader(), fetchEvidence: evidence(), displayedCommit: wrong });
         const result = await runtime.refresh();
         assert.equal(result.state, 'unavailable');
         assert.match(result.banner, /unavailable/i);
@@ -122,10 +143,12 @@ describe('SiteDataRuntime display boundary', () =>
             publication,
             files: { ...latest.files, bundle: pointer(bundlePath, blockedBundleBytes) },
         };
+        const failedRun = buildRun(latest.source.commit, { id: contentRun.id + 1, conclusion: 'failure' });
         const runtime = new SiteDataRuntime({ load: loader(new Map([
             ['latest.json', json(blockedLatest)],
             [bundlePath, blockedBundleBytes],
-        ])), displayedCommit: latest.source.commit });
+            ['status.json', json(siteStatus(latest.source.commit, failedRun))],
+        ])), fetchEvidence: evidence(failedRun), displayedCommit: latest.source.commit });
         const result = await runtime.refresh();
         assert.equal(result.state, 'blocked');
         assert.match(result.banner, /blocked/i);

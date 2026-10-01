@@ -19,14 +19,10 @@
 // id that equals bundleVersion. None of these can reject a bundle that
 // generate.py produces.
 //
-// One producer rule is deliberately not repeated here: the full schema of the
-// exact CI evidence manifest (exact_evidence.py validate_manifest, reached from
-// validate_published_bundle). Re-deriving that manifest needs the publisher's
-// workflow inputs, which the site never sees. The runtime still binds the
-// manifest to the displayed commit (sourceCommit) and requires the hash-checked
-// exactCiEvidence file to equal publication.exactEvidence, so the evidence
-// shown is byte-for-byte the manifest latest.json points to. (Like every check
-// here, this is integrity, not authenticity: latest.json itself is unsigned.)
+// The manifest's byte hashes establish integrity, not provenance. A current
+// publication additionally checks the Build run against GitHub's public API.
+// status.json is a separate API-checked pointer to the latest Build outcome;
+// a failed run changes status while latest.json keeps the last good content.
 
 // Publication contract constants. Keep these equal to tools/site-data/common.py
 // (SCHEMA_VERSION, MAX_JSON_*) and to the budgets in generate.py
@@ -38,6 +34,8 @@ export const LATEST_MAX_BYTES = 32 * 1024;
 export const BUNDLE_MAX_BYTES = 5 * 1024 * 1024;
 export const DOCUMENT_PAGE_MAX_BYTES = 2 * 1024 * 1024;
 export const EXACT_EVIDENCE_MAX_BYTES = 32 * 1024;
+export const STATUS_MAX_BYTES = 8 * 1024;
+export const GITHUB_RUNS_MAX_BYTES = 8 * 1024 * 1024;
 export const DEFAULT_FILE_MAX_BYTES = 16 * 1024 * 1024;
 export const MAX_JSON_NODES = 250_000;
 export const MAX_JSON_DEPTH = 128;
@@ -48,6 +46,12 @@ export const PUBLICATION_STATES = Object.freeze(['current', 'blocked']);
 const COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const PATH_SEGMENT_PATTERN = /^[A-Za-z0-9._~-]+$/;
+const REPOSITORY = 'Krilliac/SparkEngine';
+const GITHUB_API = `https://api.github.com/repos/${REPOSITORY}`;
+const BUILD_WORKFLOW = '.github/workflows/build.yml';
+const COMPLETED_CONCLUSIONS = Object.freeze([
+    'success', 'failure', 'cancelled', 'timed_out', 'action_required', 'neutral', 'skipped', 'stale',
+]);
 
 /** Raised when a publication fails verification; `errors` lists every finding. */
 export class BundleVerificationError extends Error
@@ -388,6 +392,155 @@ export function createFetchLoader(baseUrl, { fetch: fetchImpl = globalThis.fetch
     };
 }
 
+async function fetchGitHubJson(fetchEvidence, path, maximum)
+{
+    if (typeof fetchEvidence !== 'function')
+    {
+        throw new Error('GitHub evidence fetch is unavailable');
+    }
+    const url = new URL(path, `${GITHUB_API}/`);
+    if (url.origin !== 'https://api.github.com' || !url.pathname.startsWith(`/repos/${REPOSITORY}/`))
+    {
+        throw new Error('GitHub evidence URL left the pinned repository');
+    }
+    const response = await fetchEvidence(url, {
+        cache: 'no-store',
+        headers: {
+            Accept: 'application/vnd.github+json',
+        },
+    });
+    if (!response.ok)
+    {
+        throw new Error(`GitHub evidence HTTP ${response.status}`);
+    }
+    const declared = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > maximum)
+    {
+        throw new Error(`GitHub evidence declares more than ${maximum} bytes`);
+    }
+    const reader = response.body?.getReader?.();
+    if (!reader)
+    {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return parseStrictJson(bytes, 'GitHub evidence', maximum);
+    }
+    const chunks = [];
+    let total = 0;
+    for (;;)
+    {
+        const { done, value } = await reader.read();
+        if (done)
+        {
+            break;
+        }
+        total += value.length;
+        if (total > maximum)
+        {
+            await reader.cancel();
+            throw new Error(`GitHub evidence exceeds ${maximum} bytes`);
+        }
+        chunks.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks)
+    {
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+    }
+    return parseStrictJson(bytes, 'GitHub evidence', maximum);
+}
+
+/**
+ * Authenticate a Build run claim with GitHub's public API. The workflow-run
+ * listing is filtered to one commit and checked in full (at most 100 runs),
+ * including its newest run/attempt. No token is sent by the static site.
+ * API denial, truncation, a newer run, or a moved Working head fails closed.
+ */
+export async function verifyGitHubRun({ sourceCommit, runId, runAttempt, conclusion },
+                                      { fetchEvidence = globalThis.fetch, requireHead = true,
+                                        requireLatest = true } = {})
+{
+    if (typeof sourceCommit !== 'string' || !/^[0-9a-f]{40}$/.test(sourceCommit) ||
+        !Number.isSafeInteger(runId) || runId < 1 || !Number.isSafeInteger(runAttempt) || runAttempt < 1 ||
+        !COMPLETED_CONCLUSIONS.includes(conclusion))
+    {
+        throw new BundleVerificationError(['invalid Build run claim']);
+    }
+    try
+    {
+        if (requireHead)
+        {
+            const head = await fetchGitHubJson(fetchEvidence, 'commits/Working', 2 * 1024 * 1024);
+            if (!isObject(head) || head.sha !== sourceCommit)
+            {
+                throw new Error('Working HEAD differs from the claimed source commit');
+            }
+        }
+        const query = new URLSearchParams({ branch: 'Working', head_sha: sourceCommit, per_page: '100' });
+        const listing = await fetchGitHubJson(fetchEvidence,
+                                              `actions/workflows/build.yml/runs?${query}`, GITHUB_RUNS_MAX_BYTES);
+        const runs = listing?.workflow_runs;
+        if (!Number.isSafeInteger(listing?.total_count) || listing.total_count < 1 ||
+            listing.total_count > 100 || !Array.isArray(runs) || runs.length !== listing.total_count ||
+            runs.some((run) => !Number.isSafeInteger(run?.run_number) || run.run_number < 1))
+        {
+            throw new Error('GitHub Build run listing is empty, incomplete, or over its bound');
+        }
+        const run = runs.find((candidate) => candidate?.id === runId);
+        if (!run || run.run_attempt !== runAttempt || run.head_sha !== sourceCommit ||
+            run.status !== 'completed' || run.conclusion !== conclusion ||
+            run.name !== 'Build SparkEngine' || run.path !== BUILD_WORKFLOW || run.head_branch !== 'Working' ||
+            !['push', 'workflow_dispatch'].includes(run.event) ||
+            run.repository?.full_name !== REPOSITORY || run.head_repository?.full_name !== REPOSITORY)
+        {
+            throw new Error('GitHub Build run identity or conclusion differs from the claim');
+        }
+        if (requireLatest && runs.some((candidate) => candidate.run_number > run.run_number))
+        {
+            throw new Error('a newer Build run exists for the claimed commit');
+        }
+        return run;
+    }
+    catch (error)
+    {
+        throw new BundleVerificationError([`GitHub Build evidence is unavailable or disagrees: ${error.message}`]);
+    }
+}
+
+/** Verify the mutable status pointer independently of the retained content. */
+export async function verifyPublicationStatus(load, { fetchEvidence = globalThis.fetch } = {})
+{
+    let status;
+    try
+    {
+        status = parseStrictJson(await load('status.json', STATUS_MAX_BYTES), 'site status JSON', STATUS_MAX_BYTES);
+    }
+    catch (error)
+    {
+        throw new BundleVerificationError([`cannot read site status.json: ${error.message}`]);
+    }
+    const fields = ['schemaVersion', 'repository', 'sourceCommit', 'contentCommit', 'state', 'run'];
+    const runFields = ['id', 'attempt', 'headSha', 'conclusion', 'url'];
+    const run = status?.run;
+    if (!isObject(status) || Object.keys(status).sort().join(',') !== fields.sort().join(',') ||
+        status.schemaVersion !== SCHEMA_VERSION || status.repository !== REPOSITORY ||
+        typeof status.sourceCommit !== 'string' || !/^[0-9a-f]{40}$/.test(status.sourceCommit) ||
+        (status.contentCommit !== null &&
+         (typeof status.contentCommit !== 'string' || !/^[0-9a-f]{40}$/.test(status.contentCommit))) ||
+        !isObject(run) || Object.keys(run).sort().join(',') !== runFields.sort().join(',') ||
+        run.headSha !== status.sourceCommit ||
+        run.url !== `https://github.com/${REPOSITORY}/actions/runs/${run.id}/attempts/${run.attempt}` ||
+        status.state !== (run.conclusion === 'success' ? 'current' : 'blocked') ||
+        (status.state === 'current' && status.contentCommit !== status.sourceCommit))
+    {
+        throw new BundleVerificationError(['site status schema or run identity is invalid']);
+    }
+    await verifyGitHubRun({ sourceCommit: status.sourceCommit, runId: run.id,
+                            runAttempt: run.attempt, conclusion: run.conclusion }, { fetchEvidence });
+    return status;
+}
+
 async function readPointer(load, pointer, label, maximum, errors)
 {
     if (!isObject(pointer))
@@ -604,14 +757,17 @@ async function verifyDocs(load, latest, bundle, files, sourceCommit, verifyDocum
  *
  * @param {(path: string, maximum: number) => Promise<Uint8Array>} load reads a
  *        publication-relative path, refusing more than `maximum` bytes
- * @param {{displayedCommit?: string, verifyDocuments?: boolean}} [options]
+ * @param {{displayedCommit?: string, verifyDocuments?: boolean,
+ *          fetchEvidence?: typeof fetch, allowHistorical?: boolean}} [options]
  *        `displayedCommit` is the SHA the page is about to display; it must
  *        equal latest.source.commit
  * @returns {Promise<{latest: object, bundle: object, commit: string,
  *          publication: object, files: Object<string, Uint8Array>}>}
  * @throws {BundleVerificationError} listing every failed rule
  */
-export async function verifyPublishedBundle(load, { displayedCommit, verifyDocuments = false } = {})
+export async function verifyPublishedBundle(load, { displayedCommit, verifyDocuments = false,
+                                                    fetchEvidence = globalThis.fetch,
+                                                    allowHistorical = false } = {})
 {
     let latest;
     try
@@ -699,6 +855,33 @@ export async function verifyPublishedBundle(load, { displayedCommit, verifyDocum
     if (displayedCommit !== undefined && displayedCommit !== sourceCommit)
     {
         errors.push(`displayed commit ${JSON.stringify(displayedCommit)} differs from latest.source.commit`);
+    }
+    const publication = objectField(latest, 'publication');
+    if (errors.length === 0 && publication.state === 'current')
+    {
+        const manifest = publication.exactEvidence;
+        const build = isObject(manifest) ? manifest.build : undefined;
+        const runUrl = isObject(build) ?
+            `https://github.com/${REPOSITORY}/actions/runs/${build.runId}/attempts/${build.runAttempt}` : null;
+        if (!isObject(build) || manifest.repository !== REPOSITORY || manifest.sourceCommit !== sourceCommit ||
+            build.runUrl !== runUrl || publication.workflowUrl !== runUrl)
+        {
+            errors.push('current publication has no API-checkable same-commit Build run');
+        }
+        else
+        {
+            try
+            {
+                await verifyGitHubRun({ sourceCommit, runId: build.runId, runAttempt: build.runAttempt,
+                                        conclusion: 'success' },
+                                      { fetchEvidence, requireHead: !allowHistorical,
+                                        requireLatest: !allowHistorical });
+            }
+            catch (error)
+            {
+                errors.push(...(error.errors ?? [error.message]));
+            }
+        }
     }
     if (errors.length > 0)
     {

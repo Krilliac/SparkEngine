@@ -22,8 +22,14 @@ test('bootstrap resolves a relative publication base against the page URL', asyn
             return new Response(null, { status: 503 });
         },
     });
-    await started.runtime.refresh();
-    assert.equal(requested[0], 'https://site.example/app/site-data/latest.json');
-    assert.equal(started.runtime.snapshot().state, 'unavailable');
-    started.unmount();
+    try
+    {
+        await started.runtime.refresh();
+        assert.equal(requested[0], 'https://site.example/app/site-data/status.json');
+        assert.equal(started.runtime.snapshot().state, 'unavailable');
+    }
+    finally
+    {
+        started.unmount();
+    }
 });

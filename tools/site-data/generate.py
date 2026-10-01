@@ -1173,7 +1173,9 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     readiness = contract["readiness"]
     evidence_commit = args.evidence_commit or source["commit"]
     conclusion = args.ci_conclusion or ("dirty-working-tree" if dirty else "success")
-    publication_state = "current" if conclusion == "success" and not dirty else "blocked"
+    # A local clean tree does not by itself prove a successful exact-commit CI
+    # run. Only the CI-owned evidence manifest can make a bundle current.
+    publication_state = "current" if conclusion == "success" and exact_evidence is not None and not dirty else "blocked"
     publication = {
         "state": publication_state,
         "evidenceCommit": evidence_commit,

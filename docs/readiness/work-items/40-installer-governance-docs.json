@@ -630,20 +630,25 @@
           "evidence": [],
           "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs the live, owner-deployed site to use the bundle. It has not adopted it."
         },
-        {
-          "criterionDigest": "sha256:ee89c98da46a",
-          "state": "unmet",
-          "evidence": [
-            "tools/site-data/runtime/verifyBundle.mjs"
-          ],
-          "note": "The reference verifier binds the SHA, but the live site has not adopted it."
-        },
-        {
-          "criterionDigest": "sha256:a9886368fcde",
-          "state": "unmet",
-          "evidence": [],
-          "note": "Needs a hosted failed-CI run that switches the live site to blocked."
-        },
+      {
+        "criterionDigest": "sha256:ee89c98da46a",
+        "state": "unmet",
+        "evidence": [
+          "tools/site-data/runtime/verifyBundle.mjs",
+          "tools/site-data/runtime/test/status.test.mjs"
+        ],
+        "note": "The reference verifier now checks the Build run, attempt, conclusion and Working head through GitHub's public API. Live-site adoption and hosted proof remain pending."
+      },
+      {
+        "criterionDigest": "sha256:a9886368fcde",
+        "state": "unmet",
+        "evidence": [
+          ".github/workflows/site-data-publish.yml",
+          "tools/site-data/publication_status.py",
+          "tools/site-data/runtime/test/siteDataRuntime.fixture.test.mjs"
+        ],
+        "note": "The publisher can write a blocked status sidecar while retaining good content. A hosted failed-CI run and live-site adoption are still required."
+      },
         {
           "criterionDigest": "sha256:21906cf1ffbd",
           "state": "unmet",

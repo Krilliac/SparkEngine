@@ -171,6 +171,36 @@ source URLs before installing a snapshot. Markdown page links and anchors are
 validated by the publisher. Generated-publication tests exercise the full
 producer output; in-memory unit fixtures separately test lifecycle and rejection.
 
+### Site-data status and trust
+
+`site-data-publish.yml` now writes `status.json` beside `latest.json` for every
+completed Build SparkEngine run on the current Working commit. A non-success
+run writes `blocked` status while leaving `latest.json` and the last good
+snapshot byte-for-byte intact. The reference runtime shows the status commit
+separately from the content commit; retained content never acquires the failed
+commit's SHA. A successful run still needs the existing exact-gate proof and
+bundle validation before its content replaces `latest.json`.
+The publisher checks the newest run and attempt for that SHA before preparation
+and again before the ref moves, so a later dispatch cannot republish an older
+successful attempt over a failed status.
+
+The static runtime uses no credential. Before displaying `current` or `blocked`,
+it queries GitHub's public API for the Working head and the complete bounded
+Build run list filtered by source SHA. It compares repository, workflow, branch,
+run ID, latest run number, attempt, status, conclusion, and head SHA with
+`status.json`. A current bundle's Build evidence is checked the same way. A
+missing API response, rate limit, moved head, newer run, rerun, truncated list,
+or disagreement makes the view stale or unavailable. Hashes still protect the
+retained bundle's bytes; the browser does not independently attest every
+subordinate CI-120 or CodeQL field in its exact-evidence manifest. Those fields
+remain subject to the publisher's exact-gate checks and must not be presented
+as independently verified by the browser.
+
+`SITE_DATA_PUBLIC_REF` selects `refs/tags/site-data` (the default) or
+`refs/heads/site-data`. The owner must choose the ref actually served by the
+public site's `/site-data/` path. That publication-channel and live-site
+adoption decision remains open; repository tests do not prove deployment.
+
 The verifier and consumer tests use the same generated publication selected by
 `SPARK_SITE_DATA_DIR`. Run them with:
 
@@ -541,6 +571,12 @@ exact-SHA run/artifact identities before each release.
 Channel retention/support policy (OD-17) and the predecessor owner, baseline
 rule, and REL-190 substitution (OD-18/OD-19) recorded 2026-09-24 from
 [owner decisions](../../docs/readiness/OWNER-DECISIONS.md).
+Site-data status trust model updated 2026-10-01 from
+[the publisher](../../.github/workflows/site-data-publish.yml),
+[the reference verifier](../../tools/site-data/runtime/verifyBundle.mjs),
+[GitHub's workflow-run API](https://docs.github.com/en/rest/actions/workflow-runs),
+[CORS guidance](https://docs.github.com/en/rest/using-the-rest-api/using-cors-and-jsonp-to-make-cross-origin-requests),
+and [unauthenticated rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 Contract reference rules and the public numeric-claim ledger added 2026-09-24 from
 [`validate.py`](../../tools/site-data/validate.py) and
 [`test_site_data_contract.py`](../../Tests/Tools/test_site_data_contract.py).

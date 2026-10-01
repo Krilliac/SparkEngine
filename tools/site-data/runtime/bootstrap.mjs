@@ -10,6 +10,7 @@ export function startSiteDataRuntime({ root = globalThis.document, baseUrl, disp
     const commit = displayedCommit ?? documentRoot?.dataset.siteCommit;
     const runtime = new SiteDataRuntime({
         load: createFetchLoader(publicationBase, { fetch: fetchImpl }),
+        fetchEvidence: fetchImpl ?? globalThis.fetch,
         displayedCommit: commit || undefined,
     });
     const mounted = mountSiteDataRuntime({ runtime, root });
