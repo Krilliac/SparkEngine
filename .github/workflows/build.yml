@@ -3373,7 +3373,7 @@ jobs:
         if-no-files-found: error
 
   # ===========================================================================
-  # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
+  # Linux MinGW Cross-Compilation — Build Windows D3D11 engine/editor on Linux
   # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
   # Experimental: manual dispatch only and advisory. It is not a required-ci-gate
   # dependency; known Wine-only test failures are listed on the wiki page
@@ -3395,8 +3395,8 @@ jobs:
         sudo dpkg --add-architecture i386
         sudo apt-get update
         sudo apt-get install -y \
-          mingw-w64 cmake ccache \
-          wine64 wine \
+          mingw-w64 cmake ccache curl ca-certificates \
+          wine64 wine xvfb xauth \
           mesa-vulkan-drivers
 
     - name: Setup ccache
@@ -3408,58 +3408,95 @@ jobs:
           ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           ccache-linux-mingw-
 
-    - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: build
-        key: build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
-        restore-keys: |
-          build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          build-linux-mingw-
-
     - name: Configure CMake (MinGW cross-compilation)
+      id: mingw-configure
       run: |
         set -o pipefail
         spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
         test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
-        cmake -B build \
+        cmake --preset linux-mingw-release \
           -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=ON \
+          -DENABLE_EDITOR=ON \
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=OFF \
           -DENABLE_SDL2=OFF \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
-    - name: Build (Windows .exe via MinGW)
+    - name: Build engine (Windows .exe via MinGW)
+      id: mingw-engine
       run: |
         set -o pipefail
-        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+        cmake --build build/linux-mingw-release --target SparkEngine --parallel $(nproc) 2>&1 | tee cmake-engine.log
+
+    - name: Build editor (Windows .exe via MinGW)
+      id: mingw-editor
+      if: ${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}
+      run: |
+        set -o pipefail
+        cmake --build build/linux-mingw-release --target SparkEditor --parallel $(nproc) 2>&1 | tee cmake-editor.log
+
+    - name: Build tests and remaining targets (MinGW)
+      id: mingw-tests-build
+      if: ${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}
+      run: |
+        set -o pipefail
+        cmake --build build/linux-mingw-release --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
     - name: Setup Wine prefix and DXVK
+      id: mingw-setup
+      if: ${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}
+      timeout-minutes: 5
       run: |
-        export WINEPREFIX=${{ github.workspace }}/build/.wineprefix
-        tools/wine-run.sh --setup-only
+        export WINEPREFIX="$PWD/build/linux-mingw-release/.wineprefix-mingw"
+        xvfb-run -a bash tools/wine-run.sh --setup-only
+        bash tools/setup-mingw-wine.sh --dxvk-only
+
+    - name: Engine CPU-render agent-control smoke
+      id: mingw-engine-smoke
+      if: ${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-engine.outcome == 'success' }}
+      timeout-minutes: 5
+      run: python3 .github/scripts/mingw-wine-smoke.py engine
+
+    - name: Editor CPU-render agent-control smoke
+      id: mingw-editor-smoke
+      if: ${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-editor.outcome == 'success' }}
+      timeout-minutes: 8
+      run: python3 .github/scripts/mingw-wine-smoke.py editor
 
     - name: Run Tests under Wine
-      env:
-        WINEPREFIX: ${{ github.workspace }}/build/.wineprefix
-        WINEDEBUG: -all
-        LIBGL_ALWAYS_SOFTWARE: "1"
-        # Native Windows lanes cover these facilities. Wine lacks Windows Git,
-        # WARP, native D3DCompiler include semantics, and native stack-frame
-        # addresses, so exclude only those known platform-incompatible tests.
-        SPARK_TEST_EXCLUDE: VersionControlPhaseAA_InitializeShutdown,GPUDriven_D3D11_ShaderReflectionMatchesSharedABI,GPUDriven_D3D11_PrimitiveLosesSparseSourceIdentityAndProductionGateFailsClosed,PostProcessingD3D11_ZeroAndOnePassRouteWithoutViewHazards,WorldBasicRender_DrawsGeometryIntoOffscreenRTV,WARP_D3D11DeviceInit,WARP_D3D11BufferCreation,WARP_D3D11FactoryCreate,StackTrace_FramesHaveAddresses
+      id: mingw-tests
+      if: ${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-tests-build.outcome == 'success' }}
+      timeout-minutes: 32
+      # Named Wine-only exclusions and per-test reasons: .github/scripts/mingw-wine-exclusions.json.
+      # Windows Git is absent; WARP/D3DCompiler and stack-address tests require native Windows.
+      # Gateway key-file / CrashHandler artifacts require protected owner-only Windows DACLs.
+      # GatewayAreaControl depends on native named-pipe disconnect/PeekNamedPipe timing.
+      # UserDataPaths relies on Windows profile mapping; ModuleHotReload uses mapped-PE replacement.
+      # The documented FAudio crash requires an ALSA device absent on this hosted runner.
+      # Pure credential/replay tests remain included; all exclusions still run on native Windows.
+      # Runner pins 7500 passing tests and --warn-is-error; rc=255 is never accepted.
       run: |
         set -o pipefail
-        tools/wine-run.sh build/bin/SparkTests.exe 2>&1 | tee wine-test-results.txt
+        export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+        python3 .github/scripts/mingw-wine-smoke.py tests 2>&1 | tee wine-test-results.txt
+
+    - name: Summarize experimental MinGW execution
+      if: always()
+      env:
+        MINGW_CONFIGURED: ${{ steps.mingw-configure.outcome }}
+        MINGW_ENGINE_BUILT: ${{ steps.mingw-engine.outcome }}
+        MINGW_EDITOR_BUILT: ${{ steps.mingw-editor.outcome }}
+        MINGW_TESTS_BUILT: ${{ steps.mingw-tests-build.outcome }}
+      run: python3 .github/scripts/mingw-wine-smoke.py summary
 
     - name: Extract error summary
       if: failure()
@@ -3467,7 +3504,7 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-mingw-wine" \
           error-summary.json \
-          cmake-configure.log cmake-build.log wine-test-results.txt
+          cmake-configure.log cmake-engine.log cmake-editor.log cmake-build.log wine-test-results.txt
 
     - name: Upload error summary
       if: failure()
@@ -3482,7 +3519,14 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: mingw-wine-test-results
-        path: wine-test-results.txt
+        path: |
+          build/mingw-wine-evidence/
+          wine-test-results.txt
+          cmake-configure.log
+          cmake-engine.log
+          cmake-editor.log
+          cmake-build.log
+        if-no-files-found: error
         retention-days: 14  # OD-17: experimental artifacts are kept 14 days
 
   # ===========================================================================

@@ -4,9 +4,10 @@ A C++23 source-available 3D game engine with multiple graphics backends behind a
 
 Website: [sparkengine.dev](https://sparkengine.dev/)
 
-MinGW/Wine is an experimental development path. Its advisory CI lane runs only
-on manual `workflow_dispatch`; it does not certify Windows support and the last
-documented Wine run failed. See the [MinGW/Wine notes](wiki/development/MinGW-Wine-Cross-Compilation.md).
+MinGW/Wine is experimental; its advisory CI lane runs only on manual
+`workflow_dispatch`. It targets CPU rendering for GPU-less servers and AI agents
+in both the engine and editor. Current runtime proof is pending; the last
+documented hosted Wine tests failed. See the [MinGW/Wine guide](wiki/development/MinGW-Wine-Cross-Compilation.md).
 
 [![Explore the engine in 3D](https://img.shields.io/badge/Explore-the_engine_in_3D-8a2be2?style=for-the-badge&logo=threedotjs&logoColor=white)](https://krilliac.github.io/SparkEngine/)
 

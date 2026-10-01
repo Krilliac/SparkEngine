@@ -482,18 +482,37 @@ preset-driven and advisory.
 
 ## MinGW + Wine (job `build-linux-mingw-wine`, `continue-on-error`)
 
-This experimental lane runs only on manual `workflow_dispatch`. It is advisory;
-the last documented Wine test run failed and does not certify Windows support.
-
-Cross-compiles the Windows D3D11 code on Linux and runs it under Wine:
+This experimental lane runs only on manual `workflow_dispatch`. It is advisory
+and targets CPU rendering for GPU-less servers and agents in both the engine
+and editor. The last documented hosted run built but failed Wine tests; the
+new runtime smokes have no current local or exact-commit hosted pass.
 
 ```bash
-cmake --preset linux-mingw-release
-cmake --build build/linux-mingw-release --parallel $(nproc)
-tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+# From the Linux/WSL checkout root; initialize the recorded submodules first.
+git submodule update --init --recursive
+cmake --preset linux-mingw-release -DBUILD_TESTS=ON -DENABLE_EDITOR=ON
+cmake --build build/linux-mingw-release --target SparkEngine SparkEditor --parallel 2
+cmake --build build/linux-mingw-release --parallel 2
+
+# Use a dedicated prefix. --dxvk-only verifies the archive and copies its x64 DLLs here.
+export WINEPREFIX="$PWD/build/linux-mingw-release/.wineprefix-mingw"
+xvfb-run -a bash tools/wine-run.sh --setup-only
+bash tools/setup-mingw-wine.sh --dxvk-only
+
+# Each command invokes xvfb-run + Wine + pinned DXVK + Lavapipe internally.
+python3 .github/scripts/mingw-wine-smoke.py engine
+python3 .github/scripts/mingw-wine-smoke.py editor
+export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+python3 .github/scripts/mingw-wine-smoke.py tests
+python3 .github/scripts/mingw-wine-smoke.py summary
 ```
 
-See the project's MinGW/Wine setup notes for the full toolchain install (`tools/setup-mingw-wine.sh`).
+The runner requires fresh captures/command audits, editor successful presentation
+counts, pinned DXVK CPU-device logs, clean exits and the passing-test floor (`MINIMUM_TESTS=7500`)
+with `--warn-is-error`. The job emits an always-on stage summary and artifact.
+The [MinGW guide](MinGW-Wine-Cross-Compilation.md) lists prerequisites and every
+Wine-only exclusion. Native Windows tests are unchanged. No nightly trigger is
+added without three consecutive local passes.
 
 ## Prompt validation (runs on every PR — job `validate-prompts`)
 

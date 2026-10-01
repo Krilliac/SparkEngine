@@ -1,188 +1,184 @@
-# MinGW + Wine Cross-Compilation (D3D11 on Linux)
+# MinGW + Wine CPU Rendering (experimental)
 
-> **Audience:** Programmers | Mixed
+> **Audience:** Programmers and automation agents | Mixed
 >
-> **Thread Context:** N/A (development/process reference)
+> **Thread Context:** Build host; engine/editor commands execute on their main threads.
 >
-> **Platform/Backend Scope:** Linux host → Windows target (`_WIN32` / D3D11 code paths), run under Wine + DXVK/WineD3D + Mesa software rasterizers
+> **Platform/Backend Scope:** Linux/WSL host, Windows x64 D3D11 binaries, Wine + DXVK + Lavapipe.
 
-## Overview
+## Capability and proof boundary
 
-SparkEngine can cross-compile its Windows D3D11 code paths on Linux using MinGW-w64, then run the resulting `.exe` under Wine. Combined with DXVK (D3D11 → Vulkan), WineD3D (D3D11 → OpenGL), and Mesa Lavapipe/llvmpipe (software rasterization), this exercises the exact same `#ifdef _WIN32` code that MSVC compiles — without Windows and without a GPU.
+This experimental path has an advisory, manual `workflow_dispatch` CI lane.
+OD-30 (owner, 2026-10-01) keeps CPU rendering for GPU-less servers and AI agents
+as a claimed capability for **both the engine and SparkEditor**. It is not a
+certified Windows release row. D3D12 remains excluded from the MinGW build.
 
-This is an experimental development path, exercised by an advisory, manual
-`workflow_dispatch` lane. Historical March results below are not current support
-or certification evidence. The last documented hosted Wine run failed (see the
-failure sample below). D3D12 is excluded because the MinGW headers are too old;
-D3D11 under Wine is not a certified Windows row.
+The last supplied hosted evidence (2026-09-15, run 34983218822, job 104483285541)
+configured and built successfully, then failed during Wine tests. The owner
+reports the same build-success/test-failure result in four dispatch runs.
+Those runs do not prove the new engine/editor smokes. Current local Wine
+execution and an exact-commit hosted run remain pending; CI-100[2] is `unmet`.
+The 2026-10-01 implementation session could not run WSL, Wine or a C++ build.
+Historical March timing and test counts are not current acceptance evidence.
 
-## The Stack
+## Stack and prerequisites
 
-```
-D3D11 C++ (same #ifdef _WIN32 paths as MSVC)
-  -> MinGW-w64 (x86_64-w64-mingw32-g++) -> .exe
-  -> Wine (translates Windows API calls)
-  -> DXVK (D3D11 -> Vulkan)  or  WineD3D (D3D11 -> OpenGL)
-  -> Lavapipe (software Vulkan, CPU)  or  llvmpipe (software OpenGL, CPU)
-```
+Windows D3D11 engine/editor -> MinGW-w64 -> Wine -> DXVK 2.5.3 -> Mesa Lavapipe
+(CPU Vulkan). WineD3D + llvmpipe remains a development fallback.
 
-## Prerequisites
+NullRHI rasterizes nothing. Native Linux fallback does not exercise Windows.
+Neither diagnostic fallback proves this capability.
 
-```bash
-sudo apt-get install mingw-w64 wine64 wine mesa-vulkan-drivers
-```
-
-**Critical:** DirectXMath headers must be installed manually into `/usr/x86_64-w64-mingw32/include/` (download from Microsoft's GitHub). MinGW does not ship them.
-
-When `apt-get` hangs in sandboxed environments, fall back to `wget` + `dpkg -i`.
-
-## Build and Run
-
-Presets `linux-mingw-release` and `linux-mingw-debug` exist in `CMakePresets.json`. Both set `CMAKE_TOOLCHAIN_FILE` to the MinGW toolchain and disable Vulkan, OpenGL, and SDL2 (the cross-build targets the D3D11 + Wine path, not the Linux-native RHI backends):
+Use an existing GCC 13+ MinGW-w64 toolchain and CMake 3.25+. On a host with
+passwordless sudo, missing dependencies may be installed through signed APT:
 
 ```bash
-cmake --preset linux-mingw-release
-cmake --build build/linux-mingw-release --parallel $(nproc)
-tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
+sudo -n true
+sudo -n apt-get update
+sudo -n apt-get install -y mingw-w64 cmake wine64 wine mesa-vulkan-drivers xvfb xauth curl ca-certificates
 ```
 
-> Note: the preset's `binaryDir` is `build/linux-mingw-release` (per-preset build dir). Earlier notes sometimes used a plain `build/` directory — use the preset's directory to match `--preset`.
+If passwordless sudo is unavailable and dependencies are missing, ask the owner
+to install them; do not download unverified `.deb` files or bypass APT checks.
+This lane's supplied WSL environment had MinGW/Lavapipe/Xvfb but no Wine.
 
-### Automated Test Suite
+The toolchain owns DirectXMath: it verifies the oct2024 archive using
+`cmake/toolchains/SparkVerifiedDirectXMath.cmake`. Do not fetch headers from
+`main` or install a second unpinned copy into the MinGW sysroot.
+`tools/setup-mingw-wine.sh --dxvk-only` pins the exact DXVK release URL and
+SHA-256 before extraction, including repeated setup. The digest is corroborated
+by [Winetricks tag 20260125](https://github.com/Winetricks/winetricks/blob/20260125/src/winetricks#L7302).
+A hash mismatch fails without installing the archive. An explicitly supplied,
+initialized `WINEPREFIX` also receives the verified D3D11/DXGI DLLs.
+
+## Reproduce the acceptance path
+
+The preset disables Vulkan/OpenGL/SDL2 engine backends and uses Windows D3D11.
+The commands below build both applications and all test/module fixtures.
+Serialize with other C++ builds and respect the host memory preflight.
 
 ```bash
-python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
+# From the Linux/WSL checkout root; initialize the recorded submodules first.
+git submodule update --init --recursive
+cmake --preset linux-mingw-release -DBUILD_TESTS=ON -DENABLE_EDITOR=ON
+cmake --build build/linux-mingw-release --target SparkEngine SparkEditor --parallel 2
+cmake --build build/linux-mingw-release --parallel 2
+
+# Use a dedicated prefix. --dxvk-only verifies the archive and copies its x64 DLLs here.
+export WINEPREFIX="$PWD/build/linux-mingw-release/.wineprefix-mingw"
+xvfb-run -a bash tools/wine-run.sh --setup-only
+bash tools/setup-mingw-wine.sh --dxvk-only
+
+# Each command invokes xvfb-run + Wine + pinned DXVK + Lavapipe internally.
+python3 .github/scripts/mingw-wine-smoke.py engine
+python3 .github/scripts/mingw-wine-smoke.py editor
+export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+python3 .github/scripts/mingw-wine-smoke.py tests
+python3 .github/scripts/mingw-wine-smoke.py summary
 ```
 
-A 7-phase test: prerequisites, Wine setup, unit tests, engine-live, editor-live, stress, and break tests.
+The runner writes fresh per-process evidence under `build/mingw-wine-evidence/`.
+Use `--build-dir` and `--output` to select other owned build/evidence directories.
+Local summary build stages say `not-run` unless their outcomes were supplied;
+they are not inferred from old binaries. The CI job supplies actual step outcomes.
 
-### Key Files
+## What the smokes require
 
-| File | Purpose |
-|------|---------|
-| `cmake/toolchains/mingw-w64-x86_64.cmake` | CMake toolchain (cross-compiler, sysroot, static linking) |
-| `tools/wine-run.sh` | Wine runner (auto-detects DXVK / VKD3D-Proton / Lavapipe; `--setup-only`, `--dxvk-only`) |
-| `tools/test-windows-wine.py` | Automated 7-phase Wine test suite with JSON report |
-| `tools/setup-mingw-wine.sh` | One-shot environment setup (supports `--dxvk-only`) |
-| `CMakePresets.json` | `linux-mingw-release` / `linux-mingw-debug` presets |
+- **Engine:** the checked-in editor-authored scene loads (3 entities, 1 renderable),
+  `-exec` disables VSync and issues captures at frames 5 and 55, `-exec-audit`
+  confirms command execution and positive draw/triangle counts at frame 59,
+  both fresh PNGs decode at the window client size (320-640 by 240-480) and contain more than the clear color,
+  and the process exits 0 after 60 loop frames. Capture hashes are recorded.
+- **Editor:** CLI automation creates a project, saves the seeded scene through
+  `--save-scene`, reopens it through `--open-scene`, and runs 60 frames. The
+  `--smoke-result` JSON requires a loaded project, `d3d11`, 60 successful
+  `Present == S_OK` calls, zero presentation failures and exit 0. Occluded
+  presentation statuses do not count. This uses existing CLI commands, not a
+  claim that the separate EditorAutomation registry has a CLI bridge.
+- **CPU path:** both smokes require fresh DXVK 2.5.3 D3D11 logs naming a
+  llvmpipe/Lavapipe device. Both Vulkan loader variables point only to the
+  Lavapipe ICD; hardware fallback cannot satisfy the checks.
+- **Tests:** the runner uses the exact named exclusions below, removes inherited
+  test selectors, passes `--warn-is-error`, requires exit 0 and a terminal
+  summary with the passing-test floor (`MINIMUM_TESTS=7500`) and no failures/warnings. Skips do
+  not count toward the floor. The floor is a minimum, not a discovered total.
 
-All four files verified present as of 2026-06-08.
+`tools/wine-run.sh` normally auto-adds `-headless` and `-minimal-init` to the
+engine. This acceptance runner disables those auto-flags. The legacy
+`tools/test-windows-wine.py` accepts some rc=255 results and remains a diagnostic
+utility; it is not the acceptance producer. The new runner rejects rc=255.
 
-## CMake Changes for MinGW
+## Known failures and Wine-only exclusions
 
-1. `SPARK_PLATFORM_WINDOWS` defined for `MINGW` (was MSVC-only).
-2. `CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH` so ThirdParty deps are found.
-3. D3D12 and DXR sources excluded via `list(FILTER ... EXCLUDE REGEX ".*/RHI/D3D12/.*")`.
-4. `SPARK_NO_D3D12` define guards D3D12 includes in `RHIFactory.cpp`, tests, etc.
-5. `-municode` linker flag for the `wWinMain` Unicode entry point.
-6. `dbghelp` and `xaudio2_8` added to link libraries (MSVC uses `#pragma comment`).
-7. Toolchain sets `-static-libgcc -static-libstdc++` so the `.exe` does not need MinGW DLLs.
+The canonical machine-readable list is `.github/scripts/mingw-wine-exclusions.json`.
+`SPARK_TEST_EXCLUDE` is set only in the Wine job/command. Native Windows tests
+remain unchanged. Credential signature, parsing and replay tests are not
+excluded wholesale. Classification uses the supplied hosted failures plus the
+current source contracts; a new failing case requires diagnosis, not a wider
+substring exclusion.
 
-## Cross-Compilation Fixes (2026-03-29)
+| Test excluded only under Wine | Reason |
+|---|---|
+| `VersionControlPhaseAA_InitializeShutdown` | Windows Git is absent in the Wine prefix |
+| `GPUDriven_D3D11_ShaderReflectionMatchesSharedABI` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `GPUDriven_D3D11_PrimitiveLosesSparseSourceIdentityAndProductionGateFailsClosed` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `PostProcessingD3D11_ZeroAndOnePassRouteWithoutViewHazards` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `WorldBasicRender_DrawsGeometryIntoOffscreenRTV` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `WARP_D3D11DeviceInit` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `WARP_D3D11BufferCreation` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `WARP_D3D11FactoryCreate` | Native WARP and D3DCompiler include/reflection semantics; retained on real Windows |
+| `StackTrace_FramesHaveAddresses` | Wine stack walking does not supply native Windows frame addresses |
+| `GatewaySecurity_AcceptsOwnerOnlyGeneratedKeyFile` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewaySecurity_FailedReloadRevokesPriorOutputKey` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewaySecurity_RejectsHardLinkedKeyFile` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewaySecurity_RejectsUnprotectedAcl` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewaySecurity_AllowsConcurrentOwnerReadHandle` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewaySecurity_RejectsOwnerOnlyAclWhenOwnerIsNotCurrentProcessUser` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot` | Wine does not implement the owner-only protected DACL, owner and hard-link security contract |
+| `GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence` | Wine named-pipe disconnect and PeekNamedPipe timing differ from native Windows |
+| `GatewayAreaControl_RecoversWhenClientDisconnectsBeforeAccept` | Wine named-pipe disconnect and PeekNamedPipe timing differ from native Windows |
+| `UserDataPaths_ResolveSaveDirectoryMigratesLegacyWorkingDirectorySaves` | Wine Windows profile-directory mapping differs in the legacy-save migration fixture; native recheck required |
+| `ModuleHotReload_FailedPollKeepsChangePendingForRetry` | Wine mapped-PE replacement/reload differs in the real DLL fixture; native retry/exception tests stay enabled |
+| `ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions` | Wine mapped-PE replacement/reload differs in the real DLL fixture; native retry/exception tests stay enabled |
+| `AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat` | Hosted runner has no ALSA device; Wine FAudio device enumeration crashed in run 34983218822 |
 
-| Issue | Fix |
-|-------|-----|
-| 60+ `<Windows.h>` includes | Lowercased to `<windows.h>` (case-sensitive FS) |
-| `<WinSock2.h>`, `<Xinput.h>`, `<ShlObj.h>`, etc. | All lowercased |
-| `SDKDDKVer.h` not in MinGW | Guarded with `#if defined(_WIN32) && defined(_MSC_VER)` |
-| `SIGTRAP` not on Windows | MinGW gets `__builtin_trap()` via `#elif __MINGW32__` |
-| D3D12 headers too old | Excluded via `SPARK_NO_D3D12`, `list(FILTER EXCLUDE)` |
-| `ID3D12Device5` missing | Not needed — D3D12 fully excluded |
-| `wofstream(wstring)` | MinGW: convert to narrow string first |
-| `_ReturnAddress()` | GCC: `__builtin_return_address(0)` |
-| `_aligned_malloc` guard | Changed `#ifdef _MSC_VER` to `#ifdef _WIN32` |
-| `size_t`/`uint64_t` overload | Guarded with `!defined(_WIN64) && !defined(__x86_64__)` |
-| `XAudio2Create` undefined | Added `-lxaudio2_8` |
-| `dbghelp` symbols undefined | Added `dbghelp` to link libraries |
-| `WinMain` not found | Added `-municode` for `wWinMain` |
-| `libwinpthread-1.dll` missing | Copy from MinGW sysroot to `bin/` |
-| ThirdParty deps not found | `CMAKE_FIND_ROOT_PATH_MODE_INCLUDE BOTH` |
-| ImGui not found by editor | `NO_CMAKE_FIND_ROOT_PATH` in `find_path` |
+The ACL classification follows `CrashArtifactDirectory.h` and the gateway's
+protected-DACL/owner/hard-link checks. Named-pipe classification follows the
+`GatewayAreaControl.cpp` comment on Wine `PeekNamedPipe` peer-closure behavior.
+The profile-path and mapped-PE fixture classifications are provisional platform
+limitations: no current Wine reproducer was available to establish a new engine
+bug. Re-run their native counterparts and re-evaluate these exclusions when
+Wine changes. Never relax the Windows security requirements to satisfy Wine.
+The FAudio crash was an access violation during device enumeration with no ALSA
+card in the supplied hosted log; excluding that case does not establish audio support.
 
-`#pragma comment(lib, ...)` in `Assert.h` is MSVC-only; under MinGW the same libs come in via CMake's `target_link_libraries`.
+## CI and readiness
 
-## Test Results (2026-03-29 snapshot)
+`build-linux-mingw-wine (experimental)` stays `workflow_dispatch` only,
+job-level `continue-on-error: true`, and outside `required-ci-gate` and its
+expected-job inventory. There is no nightly schedule: three consecutive local
+passes have not been demonstrated.
 
-| Category | Passed | Failed | Notes |
-|----------|--------|--------|-------|
-| Unit tests | 2,504 | 5 | D3D11 WARP + stack-trace expected failures |
-| Engine live (60 frames) | Pass | 0 | DXVK: ~0.5s. Without DXVK: minutes |
-| Editor live (120 frames) | Pass | 0 | D3D11 + ImGui renders correctly |
-| Stress tests | 6 | 3 | Rapid start/stop, extended runs pass |
-| Break tests | 6 | 0 | SIGKILL, SIGTERM, bad prefix, no Vulkan |
-| Console app | Works | 0 | Full interactive console under Wine |
+Separate steps configure, build the engine, build the editor, build remaining
+targets, run the engine smoke, run the editor smoke, and run Wine tests. An
+`always()` step emits `summary.json`, `summary.md` and the GitHub step summary,
+including unsuccessful/skipped build stages and runtime evidence. An `always()`
+artifact uploads receipts, captures, execution audits and raw logs even after a
+failure. Only the compiler cache is restored; prior build receipts are not cached.
 
-> The 2,509 unit-test count is a 2026-03-29 snapshot. Treat the table as historical for that run.
-
-## Performance: DXVK vs WineD3D
-
-| Configuration | 60 frames | FPS | Path |
-|---------------|-----------|-----|------|
-| **DXVK + Lavapipe** | ~0.5s | ~120 | D3D11 → Vulkan → Lavapipe (CPU) |
-| WineD3D + llvmpipe | >120s | <0.5 | D3D11 → OpenGL → llvmpipe (CPU) |
-
-**DXVK provides roughly a 20x speedup.** Install via `tools/setup-mingw-wine.sh --dxvk-only`.
-
-## Wine rc=255 Quirk
-
-Wine GUI (`WIN32`) applications often return exit code 255 instead of 0 when stdout/stderr are piped. The test script's `wine_rc_ok(rc)` treats both 0 and 255 as success.
-
-## Useful Engine Flags
-
-- `-window-size WxH` — override window resolution (e.g. `-window-size 640x480`)
-- `-test-frames N` — exit after N frames (automated testing)
-
-## Software Rendering Fallback (All Backends)
-
-| Backend | Windows software | Linux software |
-|---------|------------------|----------------|
-| D3D11 | WARP (`D3D_DRIVER_TYPE_WARP`) | Wine + DXVK + Lavapipe |
-| D3D12 | WARP (`EnumWarpAdapter()`) | *Excluded on MinGW* |
-| Vulkan | — | Lavapipe (`VK_PHYSICAL_DEVICE_TYPE_CPU`) |
-| OpenGL | — | llvmpipe (EGL headless or GLX + Xvfb) |
-| None | NullRHIDevice | NullRHIDevice |
-
-## CI Job
-
-`build-linux-mingw-wine` in `.github/workflows/build.yml`:
-
-- Display name **`build-linux-mingw-wine (experimental)`**: the lane is experimental, not a supported release lane.
-- **`if: github.event_name == 'workflow_dispatch'`** — the job runs **only on manual dispatch**, not on every push/PR. (This changed from the original entry, which described it as running on PRs.)
-- Job-level `continue-on-error: true` (non-blocking). It is not a `required-ci-gate` dependency and is absent from `EXPECTED_REQUIRED_JOBS_JSON`.
-- These four properties are locked by `test_mingw_wine_lane_is_manual_advisory_and_labeled_experimental` and its mutation test in `.github/scripts/test-workflow-failure-propagation.py`. The exact-source verifier (`.github/scripts/verify-exact-required-gate.py`) accepts the lane's `skipped` conclusion on push runs only because its committed `if:` is an allowlisted event-only guard that is false for `push`.
-- Installs MinGW, Wine, Mesa Lavapipe; cross-compiles with the MinGW toolchain.
-- Configures with `-DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF -DENABLE_SDL2=OFF` (matching the preset).
-- Sets up the Wine prefix via `tools/wine-run.sh --setup-only`, then runs `SparkTests.exe` under Wine.
-
-### Sample of Wine failures (hosted run 34983218822, 2026-09-15)
-
-Manual dispatch on PR branch `claude/stable-v1-release` at `3f427dd` (job 104483285541). Configure and the MinGW build (~49 min) succeeded, and the Wine prefix/DXVK setup succeeded. **`Run Tests under Wine` failed**. `extract-errors.sh` reported failing test cases, and the run ended at a crash. The table below is a partial sample of two of them, not the full list; the job uploads its complete per-test output (`wine-test-results.txt`) as the `mingw-wine-test-results` artifact, kept for the workflow's artifact retention period:
-
-| Test | Result under Wine | Cause observed in the log |
-|------|-------------------|---------------------------|
-| `CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot` | FAIL at `Tests/TestCrashHandlerGatingReal.cpp:283` (at `3f427dd`), 0 artifacts instead of 1 | `CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled`; root cause under Wine not yet diagnosed |
-| `AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat` | CRASH (`ACCESS_VIOLATION`), aborting the run | Wine FAudio `FAudio_PlatformGetDeviceDetails` dereferences a missing device: the runner has no ALSA card (`cannot find card '0'`) |
-
-Only the FAudio crash is attributed to the runner environment (no ALSA sound card). The `CrashHandler` failure is undiagnosed and may be a product defect in the crash-artifact directory path under Windows-like hosts; do not treat it as a Wine quirk until it is reproduced and explained. The other 30 failures were not triaged here. None of them are excluded via `SPARK_TEST_EXCLUDE`, and investigating them needs a MinGW + Wine host.
-
-## Notes
-
-- MinGW defines `_WIN32` automatically — D3D11 code compiles without changes.
-- MSVC-specific features (`__declspec`, `#pragma comment(lib)`) are handled by MinGW compat.
-- The `-test-frames N` flag works on both platforms for frame-limited automated testing.
+CI-100[2] may become `implemented` only after local CPU-render engine and editor
+runs succeed. An integrator-owned exact-commit hosted dispatch is the separate
+`evidenced` step. This implementation does not dispatch workflows.
 
 ## Source & Freshness
 
-- **Original entry date:** 2026-03-29 (`.claude/knowledge/mingw-wine-cross-compilation.md`, type: Pattern)
-- **Verified against codebase 2026-06-08.**
-- **VERIFIED present:** `cmake/toolchains/mingw-w64-x86_64.cmake`, `tools/wine-run.sh`, `tools/test-windows-wine.py`, `tools/setup-mingw-wine.sh`. Presets `linux-mingw-release` / `linux-mingw-debug` exist in `CMakePresets.json` and disable Vulkan/OpenGL/SDL2 as documented.
-- **UPDATED — CI trigger:** `build-linux-mingw-wine` now runs **only on `workflow_dispatch`** (manual), not on every PR. The original entry implied it ran on PRs. Confirmed it still uses `continue-on-error: true` and `-DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF -DENABLE_SDL2=OFF`.
-- **UPDATED 2026-09-24 (CI-100):** the job is now named `build-linux-mingw-wine (experimental)` and declares job-level `continue-on-error: true`. Before this, the docs claimed `continue-on-error` but build.yml did not set it. The sampled Wine failures were read from the job 104483285541 log.
-- **UPDATED — build directory:** corrected build/run commands to use the preset's per-preset `build/linux-mingw-release` directory.
-- **FLAGGED — STALE counts:** the 2,509 unit-test figure is a 2026-03-29 snapshot; use generated metrics for the current suite. Test-results table marked historical.
+Updated 2026-10-01 from the assigned owner context, the existing CLI/graphics
+source, workflow and contract checks. Runtime proof remains pending.
 
 ## Related Pages
 
-- [Live-Editor-Testing.md](Live-Editor-Testing.md) — the Linux-native (SDL2 + llvmpipe) counterpart to this Wine path
-- [Clang-Format.md](Clang-Format.md) — CI formatting gate that runs on the same Linux runners
-- [Code-Quality-Violations.md](Code-Quality-Violations.md) — quality audit covering the cross-platform code touched here
+- [Cross-Compilation: Wine Testing](../platform/Cross-Compilation-Wine-Testing.md)
+- [CI Reproducible Builds](CI-Reproducible-Builds.md)
+- [Testing](../advanced/Testing.md)
+- [Wine Role and Fallback Tiers](../advanced/Wine-Role-and-Fallback-Tiers.md)

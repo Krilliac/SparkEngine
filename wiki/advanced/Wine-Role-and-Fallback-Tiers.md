@@ -16,6 +16,12 @@ Wine in SparkEngine is a **live execution path**, not just a CI smoke test. The 
 
 A future session asking "should we swap upstream Wine for ValveSoftware/wine?" or "should we drop the flaky Wine job?" should read this page first. Both answers are no, for the reasons below.
 
+OD-30 (owner, 2026-10-01) explicitly keeps this experimental CPU-rendering
+capability for GPU-less servers and AI agents, covering both engine and editor.
+The new `.github/scripts/mingw-wine-smoke.py` path requires captures, automation and
+successful editor presentations on DXVK/Lavapipe; local and exact-commit hosted
+proof remain pending. Lower-tier diagnostic fallbacks cannot satisfy CI-100[2].
+
 ## Why Upstream Wine, Not ValveSoftware/wine
 
 `ValveSoftware/wine` is the base of Proton, optimized for shipping games to players via Steam — not for headless/sandboxed/software-rendered developer use:

@@ -12,7 +12,7 @@
 - Gate states: **0 passing**, **0 at risk**, **19 blocked**, **0 not evaluated**
 - Work items: **64 total**, **55 unfinished ledger items marked blocking** (profile applicability determines release impact)
 - Work-item status: **0 done**, **58 in progress**, **5 blocked**, **1 open**
-- Acceptance criteria: **259 total**, **172 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
+- Acceptance criteria: **259 total**, **171 implemented** (66%), **0 evidenced** (0%). Only evidenced criteria (exact-commit CI) count toward release; implemented means committed code with a committed check.
 - First unblocked item: **`RDY-000` — Establish the release profiles and capability ledger**
 
 ### Release means all of the following
@@ -249,7 +249,7 @@ Establish the only source of readiness truth and make CI report reality.
 | [`RDY-000`](#rdy-000--establish-the-release-profiles-and-capability-ledger) Establish the release profiles and capability ledger | P0 | **in-progress** | 3/4 · 0/4 | — | `CI-100`, `SEC-100`, `OPS-100` |
 | [`RDY-010`](#rdy-010--make-real-module-and-production-source-tests-the-readiness-evidence) Make real module and production-source tests the readiness evidence | P0 | **in-progress** | 3/4 · 0/4 | `RDY-000`, `CI-100` | `RDY-020`, `CI-110`, `CI-120` |
 | [`RDY-020`](#rdy-020--establish-asset-and-package-integrity-manifests) Establish asset and package integrity manifests | P0 | **in-progress** | 4/5 · 0/5 | `RDY-000` | `RDY-010`, `CI-110`, `CI-120` |
-| [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 3/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
+| [`CI-100`](#ci-100--repair-fail-closed-required-ci) Repair fail-closed required CI | P0 | **in-progress** | 2/4 · 0/4 | — | `RDY-000`, `SEC-100`, `OPS-100` |
 | [`DOC-410`](#doc-410--repair-and-enforce-deterministic-repository-documentation-generation) Repair and enforce deterministic repository documentation generation | P0 | **in-progress** | 6/6 · 0/6 | `RDY-000` | `CI-100`, `RDY-010`, `RDY-020` |
 
 ### Wave 1 — Build, security, and release substrate
@@ -734,7 +734,7 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 
 **Acceptance criteria**
 
-Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
+Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Controlled test, sanitizer, format, threshold, registration, and validation failures each make CI red
    - Evidence: `tools/ci/controlled-failures/README.md`, `tools/ci/run_controlled_failure_rehearsal.py`, `tools/ci/test_run_controlled_failure_rehearsal.py`, `.github/scripts/test-workflow-failure-propagation.py`, `docs/readiness/evidence/ci100-controlled-failures.json`
@@ -742,9 +742,9 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 2. **[implemented]** Every Working commit receives a gate summary, including docs-only changes
    - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `.github/scripts/test-workflow-failure-propagation.py`
    - The Build workflow has no path filters, pushes are not cancelled and the gate is always(); registered mutations reject paths/paths-ignore and a conditional gate. No hosted docs-only run or exact-commit CI.
-3. **[implemented]** MinGW/Wine is either executable and labeled experimental or removed from claims
-   - Evidence: `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `README.md`, `wiki/development/MinGW-Wine-Cross-Compilation.md`, `wiki/platform/Cross-Compilation-Wine-Testing.md`
-   - Claims now match the workflow_dispatch-only, continue-on-error experimental lane and disclose the last documented Wine failure; a claims test with mutations guards them. No hosted MinGW dispatch since the relabel; no exact-commit CI.
+3. **[unmet]** MinGW/Wine is either executable and labeled experimental or removed from claims
+   - Evidence: `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `README.md`, `wiki/development/MinGW-Wine-Cross-Compilation.md`, `wiki/platform/Cross-Compilation-Wine-Testing.md`, `.github/scripts/mingw-wine-smoke.py`, `.github/scripts/mingw-wine-exclusions.json`, `tools/setup-mingw-wine.sh`, `.github/scripts/test-mingw-wine-contract.py`, `docs/readiness/OWNER-DECISIONS.md`
+   - OD-30 preserves the experimental CPU-rendering path for engine and editor. Pinned setup, named Wine exclusions, frame/control smokes and stage artifacts are in the repo. Local Wine execution is unavailable in this sandbox; both applications must run on CPU before implemented. Exact-commit hosted dispatch remains pending.
 4. **[implemented]** Required-check policy is documented and externally verified
    - Evidence: `.github/scripts/test-verify-working-ruleset.py`, `.github/scripts/verify-working-ruleset.py`, `wiki/advanced/Testing.md`
    - The verifier's hidden-bypass_actors diagnostic is implemented. External verification still needs a live --live run, so this criterion stays at implemented, not evidenced.

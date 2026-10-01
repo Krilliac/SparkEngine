@@ -1827,6 +1827,49 @@ def experimental_mingw_lane_errors(document: dict) -> list[str]:
         errors.append(f"{MINGW_WINE_JOB} does not declare job-level continue-on-error: true")
     if "experimental" not in str(lane.get("name") or ""):
         errors.append(f"{MINGW_WINE_JOB} display name does not say experimental")
+    steps = lane.get("steps", [])
+    for identity, command in (
+            ("mingw-configure", "cmake --preset linux-mingw-release"),
+            ("mingw-engine", "cmake --build build/linux-mingw-release --target SparkEngine --parallel $(nproc)"),
+            ("mingw-editor", "cmake --build build/linux-mingw-release --target SparkEditor --parallel $(nproc)"),
+            ("mingw-tests-build", "cmake --build build/linux-mingw-release --parallel $(nproc)"),
+            ("mingw-setup", "bash tools/setup-mingw-wine.sh --dxvk-only")):
+        matches = [step for step in steps if step.get("id") == identity]
+        if len(matches) != 1 or command not in matches[0].get("run", "") or matches[0].get("continue-on-error"):
+            errors.append(f"{MINGW_WINE_JOB}: missing fail-closed {identity} producer")
+    for step_id, phase, dependency in (("mingw-engine-smoke", "engine", "mingw-engine"),
+                                       ("mingw-editor-smoke", "editor", "mingw-editor"),
+                                       ("mingw-tests", "tests", "mingw-tests-build")):
+        matches = [step for step in steps if step.get("id") == step_id]
+        guard = ("${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps."
+                 + dependency + ".outcome == 'success' }}")
+        if len(matches) != 1:
+            errors.append(f"{MINGW_WINE_JOB}: missing {phase} execution")
+            continue
+        step = matches[0]
+        expected = f"python3 .github/scripts/mingw-wine-smoke.py {phase}"
+        if phase == "tests":
+            expected = ('set -o pipefail\nexport SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"\n'
+                        + expected + ' 2>&1 | tee wine-test-results.txt')
+        if (step.get("run", "").strip() != expected or step.get("if") != guard
+                or step.get("continue-on-error") or not isinstance(step.get("timeout-minutes"), int)):
+            errors.append(f"{MINGW_WINE_JOB}: {phase} smoke must execute bounded and fail closed")
+    summary = [step for step in steps if step.get("name") == "Summarize experimental MinGW execution"]
+    if (len(summary) != 1 or summary[0].get("if") != "always()"
+            or summary[0].get("run") != "python3 .github/scripts/mingw-wine-smoke.py summary"
+            or summary[0].get("continue-on-error")):
+        errors.append(f"{MINGW_WINE_JOB}: missing unconditional execution summary")
+    elif summary[0].get("env") != {
+            "MINGW_CONFIGURED": "${{ steps.mingw-configure.outcome }}",
+            "MINGW_ENGINE_BUILT": "${{ steps.mingw-engine.outcome }}",
+            "MINGW_EDITOR_BUILT": "${{ steps.mingw-editor.outcome }}",
+            "MINGW_TESTS_BUILT": "${{ steps.mingw-tests-build.outcome }}"}:
+        errors.append(f"{MINGW_WINE_JOB}: summary must consume actual build outcomes")
+    upload = [step for step in steps if step.get("with", {}).get("name") == "mingw-wine-test-results"]
+    if (len(upload) != 1 or upload[0].get("if") != "always()"
+            or "build/mingw-wine-evidence/" not in upload[0].get("with", {}).get("path", "")
+            or upload[0].get("with", {}).get("if-no-files-found") != "error"):
+        errors.append(f"{MINGW_WINE_JOB}: missing fail-closed evidence artifact")
     gate = jobs.get("required-ci-gate")
     if not isinstance(gate, dict):
         errors.append("required-ci-gate job is missing")

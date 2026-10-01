@@ -88,7 +88,10 @@ int main(int argc, char* argv[])
     // An abort or access violation must end the replay with a failing exit
     // code, never a modal error dialog that stalls CTest until its timeout.
     ::SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#if defined(_MSC_VER)
+    // MSVC CRT only: MinGW's runtime has no _set_abort_behavior.
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
 #endif
 
     long long timeoutMs = kDefaultTimeoutMs;

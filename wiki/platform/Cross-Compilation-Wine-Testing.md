@@ -1,363 +1,71 @@
-# Cross-Compilation: Windows Testing on Linux (MinGW + Wine)
+# Cross-Compilation: Wine Testing (experimental)
 
-SparkEngine can cross-compile its Windows D3D11 code paths on Linux using MinGW-w64, then run the resulting `.exe` binaries under Wine. Combined with DXVK (D3D11->Vulkan) or Wine's built-in WineD3D (D3D11->OpenGL) and Mesa Lavapipe (software Vulkan/OpenGL), this exercises the **exact same `_WIN32` code** that MSVC compiles -- without Windows or a GPU.
+> **Audience:** Programmers and AI agents | Mixed
+>
+> **Thread Context:** Build host and application main threads.
+>
+> **Platform/Backend Scope:** Linux/WSL -> Windows x64 D3D11 engine and editor.
 
-**Key files:**
-- `cmake/toolchains/mingw-w64-x86_64.cmake` -- CMake toolchain
-- `tools/wine-run.sh` -- Wine runner (auto-detects DXVK, Lavapipe)
-- `tools/test-windows-wine.py` -- Automated 7-phase Wine test suite
-- `CMakePresets.json` -- `linux-mingw-release` / `linux-mingw-debug` presets
+## Scope
 
----
+MinGW/Wine is experimental. Its advisory CI lane runs only on manual
+`workflow_dispatch`. OD-30 preserves the CPU-rendering capability for GPU-less
+servers and agents, covering both SparkEngine and SparkEditor. Current runtime
+proof is pending: the last documented hosted run built successfully but failed
+Wine tests. This remains outside stable-v1 support and does not certify native Windows or D3D12.
 
-## The Stack
+The acceptance path uses DXVK 2.5.3 and Mesa Lavapipe; WineD3D/llvmpipe remains
+a fallback for development.
 
-```
-D3D11 C++ (same #ifdef _WIN32 code paths as MSVC)
-  -> MinGW-w64 (x86_64-w64-mingw32-g++) -> .exe
-  -> Wine (translates Windows API calls to Linux syscalls)
-  -> DXVK (translates D3D11 -> Vulkan)       [if installed]
-  -> WineD3D (translates D3D11 -> OpenGL)     [fallback]
-  -> Lavapipe (software Vulkan on CPU)        [no GPU needed]
-  -> llvmpipe (software OpenGL on CPU)        [WineD3D fallback]
-```
+NullRHI rasterizes nothing. Native Linux fallback does not exercise Windows.
+Neither proves Windows CPU rendering. DirectXMath is fetched and hash-verified by the toolchain;
+do not install mutable `main` headers manually.
 
-## Prerequisites
+## Build, setup and execute
 
-### Required Packages
-
-```bash
-sudo apt-get install mingw-w64 wine64 mesa-vulkan-drivers
-```
-
-| Package | Purpose | Size |
-|---------|---------|------|
-| `mingw-w64` | Cross-compiler (x86_64-w64-mingw32-g++), Windows headers (d3d11.h, xinput.h, etc.), import libraries | ~80 MB |
-| `wine64` | Windows API translation layer, WineD3D (D3D11->OpenGL) | ~300 MB |
-| `mesa-vulkan-drivers` | Lavapipe software Vulkan (CPU rendering) | ~30 MB |
-
-### Optional Packages
-
-| Package | Purpose |
-|---------|---------|
-| `dxvk` | D3D11->Vulkan translation (much faster than WineD3D for rendering) |
-| `xvfb` | Virtual X11 framebuffer (needed for windowed mode without a display) |
-| `libgl-dev` | OpenGL headers only for a manual experimental override; the canonical MinGW presets disable Vulkan and OpenGL and exercise D3D11 |
-
-### DirectXMath Headers
-
-MinGW does **not** ship Microsoft's DirectXMath library. You must install them to the MinGW sysroot:
+Install prerequisites only through signed APT if passwordless sudo is available.
+The [canonical MinGW guide](../development/MinGW-Wine-Cross-Compilation.md)
+contains prerequisites, exact commands, every Wine-only exclusion and its reason.
 
 ```bash
-# Download from Microsoft's official GitHub repository
-mkdir -p /tmp/dxmath && cd /tmp/dxmath
-for f in DirectXMath.h DirectXMathConvert.inl DirectXMathMatrix.inl \
-         DirectXMathMisc.inl DirectXMathVector.inl DirectXCollision.h \
-         DirectXCollision.inl DirectXColors.h DirectXPackedVector.h \
-         DirectXPackedVector.inl; do
-    wget -q "https://raw.githubusercontent.com/microsoft/DirectXMath/main/Inc/$f"
-done
+# From the Linux/WSL checkout root; initialize the recorded submodules first.
+git submodule update --init --recursive
+cmake --preset linux-mingw-release -DBUILD_TESTS=ON -DENABLE_EDITOR=ON
+cmake --build build/linux-mingw-release --target SparkEngine SparkEditor --parallel 2
+cmake --build build/linux-mingw-release --parallel 2
 
-# Install to MinGW sysroot
-sudo cp DirectX*.h DirectX*.inl /usr/x86_64-w64-mingw32/include/
+# Use a dedicated prefix. --dxvk-only verifies the archive and copies its x64 DLLs here.
+export WINEPREFIX="$PWD/build/linux-mingw-release/.wineprefix-mingw"
+xvfb-run -a bash tools/wine-run.sh --setup-only
+bash tools/setup-mingw-wine.sh --dxvk-only
+
+# Each command invokes xvfb-run + Wine + pinned DXVK + Lavapipe internally.
+python3 .github/scripts/mingw-wine-smoke.py engine
+python3 .github/scripts/mingw-wine-smoke.py editor
+export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+python3 .github/scripts/mingw-wine-smoke.py tests
+python3 .github/scripts/mingw-wine-smoke.py summary
 ```
 
-### Verify Installation
-
-```bash
-x86_64-w64-mingw32-g++ --version     # Should show GCC 13+
-wine64 --version                       # Should show wine-9.0+
-ls /usr/share/vulkan/icd.d/lvp_icd*   # Lavapipe ICD file
-ls /usr/x86_64-w64-mingw32/include/DirectXMath.h  # DirectXMath
-```
-
-## Build
-
-```bash
-# Configure using the preset
-cmake --preset linux-mingw-release
-
-# Build all targets (SparkEngine.exe, SparkEditor.exe, SparkTests.exe, etc.)
-cmake --build build/linux-mingw-release --parallel $(nproc)
-```
-
-### What Gets Built
-
-| Target | File | Description |
-|--------|------|-------------|
-| `SparkEngine.exe` | `bin/SparkEngine.exe` | Engine runtime with D3D11 graphics |
-| `SparkEditor.exe` | `bin/SparkEditor.exe` | Editor with D3D11 + ImGui |
-| `SparkTests.exe` | `bin/SparkTests.exe` | Full unit test suite (the source count is the generated `tests.definitions` metric) |
-| `SparkConsole.exe` | `bin/SparkConsole.exe` | Standalone debug console |
-| `SparkShaderCompiler.exe` | `bin/SparkShaderCompiler.exe` | Offline shader compiler |
-| `libSparkGameFPS.dll` | `bin/libSparkGameFPS.dll` | FPS game module |
-| Other game modules | `bin/lib*.dll` | RPG, MMO, RTS, Racing, etc. |
-
-### MinGW Build Differences from MSVC
-
-| Feature | MSVC Build | MinGW Build |
-|---------|-----------|-------------|
-| D3D11 | In-profile candidate only for Windows 11 x64/MSVC v143; blocked/uncertified | Development evaluation path outside `stable-v1` |
-| D3D12 | Experimental/outside `stable-v1` | **Excluded** (`SPARK_NO_D3D12`; MinGW headers lack required interfaces) |
-| DXR Raytracing | Optional | **Excluded** (requires D3D12) |
-| DirectXMath | Built-in | Requires manual header install (see above) |
-| XAudio2 | Built-in | Linked via `-lxaudio2_8` |
-| dbghelp | Via `#pragma comment(lib)` | Linked explicitly in CMake |
-| Entry point | `wWinMain` | `wWinMain` with `-municode` linker flag |
-| Static linking | N/A | `-static-libgcc -static-libstdc++` |
-
-## Running Under Wine
-
-### Unit Tests
-
-```bash
-# Quick run (no graphics needed)
-tools/wine-run.sh build/linux-mingw-release/bin/SparkTests.exe
-
-# Or manually:
-export WINEPREFIX=$(pwd)/build/.wineprefix
-export WINEDEBUG=-all
-export LIBGL_ALWAYS_SOFTWARE=1
-wine64 build/linux-mingw-release/bin/SparkTests.exe
-```
-
-Expected result: **every registered test passes except the 5 expected failures below**. The registered total depends on the build configuration; the source-level count is the generated `tests.definitions` metric, not a Wine pass count. The expected failures are:
-- `WARP_D3D11DeviceInit` -- needs real D3D11 runtime (DXVK or native Windows)
-- `WARP_D3D11BufferCreation` -- same
-- `WARP_D3D11FactoryCreate` -- same
-- `StackTrace_FramesHaveAddresses` -- stack walking differs under Wine
-- `LoadTest_FullEngine_3000Frames` -- needs graphics context
-
-### Missing DLLs
-
-If Wine reports a missing DLL (e.g., `libwinpthread-1.dll`), copy it from the MinGW sysroot:
-
-```bash
-cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll build/linux-mingw-release/bin/
-```
-
-### Console Application
-
-```bash
-wine64 build/linux-mingw-release/bin/SparkConsole.exe
-# Output: "Spark Engine Console v1.0.0" -- interactive console works
-```
-
-### Engine with Graphics (Windowed)
-
-The engine creates a Win32 window and initializes D3D11. Under Wine, this requires:
-1. An X11 display (Xvfb for headless environments)
-2. WineD3D (built into Wine) or DXVK for D3D11 translation
-
-```bash
-# Start virtual display
-Xvfb :99 -screen 0 1920x1080x24 -ac &
-export DISPLAY=:99
-
-# Run engine with test frame limit
-export WINEPREFIX=$(pwd)/build/.wineprefix
-export WINEDEBUG=-all
-export LIBGL_ALWAYS_SOFTWARE=1
-wine64 build/linux-mingw-release/bin/SparkEngine.exe -test-frames 60
-```
-
-**Performance:**
-
-| Configuration | 60 Frames | FPS | Translation Path |
-|--------------|-----------|-----|-----------------|
-| **DXVK + Lavapipe** | ~0.5s | ~120 | D3D11 -> Vulkan -> Lavapipe (CPU) |
-| WineD3D + llvmpipe | >120s | <0.5 | D3D11 -> OpenGL -> llvmpipe (CPU) |
-
-**DXVK provides ~20x speedup.** Install DXVK with:
-```bash
-tools/setup-mingw-wine.sh --dxvk-only   # Downloads from GitHub, no sudo needed
-```
-
-You can also use `-window-size 640x480` for faster software rendering:
-```bash
-wine64 SparkEngine.exe -test-frames 60 -window-size 640x480
-```
-
-### Engine Headless Mode
-
-```bash
-wine64 build/linux-mingw-release/bin/SparkEngine.exe -headless
-```
-
-### Automated Test Suite
-
-The `test-windows-wine.py` script runs a comprehensive 7-phase test:
-
-```bash
-python3 tools/test-windows-wine.py --build-dir build/linux-mingw-release
-```
-
-**Phases:**
-
-| Phase | Name | What It Tests |
-|-------|------|---------------|
-| 0 | Prerequisites | Wine, MinGW, Lavapipe, build artifacts exist |
-| 1 | Wine Setup | Wine prefix initialization, DXVK/VKD3D detection |
-| 2 | Unit Tests | The configured CTest suite under Wine; use that run's discovery count and terminal summary as evidence |
-| 3 | Engine Live | D3D11 initialization, frame rendering, headless mode |
-| 4 | Editor Live | D3D11 + ImGui initialization, test-mode rendering |
-| 5 | Stress Tests | Rapid start/stop, concurrent instances, bad args |
-| 6 | Break Tests | SIGKILL, SIGTERM, corrupt prefix, missing Vulkan |
-
-Output: JSON report at `/tmp/spark-windows-wine-test/report.json`
-
-## The `--test-frames` Flag
-
-Both the engine and editor support a `--test-frames N` / `-test-frames N` command-line flag for automated testing:
-
-```bash
-# Engine (Windows): exit after 60 frames
-wine64 SparkEngine.exe -test-frames 60
-
-# Engine (Linux): exit after 60 frames
-./SparkEngine -test-frames 60
-
-# Editor: exit after 120 frames (with --test-mode to skip project browser)
-wine64 SparkEditor.exe --test-mode --test-frames 120
-```
-
-The flag works on both platforms:
-- **Windows (`wWinMain`):** Parsed from the wide command line, enforced in `RunWindowedMainLoop`
-- **Linux (`main`):** Parsed from `argv`, enforced in `RunSDL2MainLoop`
-
-## wine-run.sh
-
-The `tools/wine-run.sh` script automates Wine environment setup:
-
-```bash
-tools/wine-run.sh <executable.exe> [args...]
-tools/wine-run.sh --setup-only          # Initialize Wine prefix only
-tools/wine-run.sh --info                # Print environment info
-```
-
-**What it does:**
-1. Initializes a Wine prefix at `build/.wineprefix`
-2. Auto-detects DXVK (D3D11->Vulkan) at standard paths
-3. Auto-detects VKD3D-Proton (D3D12->Vulkan)
-4. Finds Lavapipe ICD for software Vulkan
-5. Sets `LIBGL_ALWAYS_SOFTWARE=1` for Mesa software rendering
-6. Runs the `.exe` under `wine64`
-
-## Troubleshooting
-
-### Package Installation Issues
-
-If `apt-get install` hangs on network, download packages directly:
-
-```bash
-# Get download URLs
-apt-get download --print-uris mingw-w64-x86-64-dev g++-mingw-w64-x86-64-posix \
-  gcc-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix-runtime \
-  gcc-mingw-w64-base binutils-mingw-w64-x86-64 mingw-w64-common \
-  libz-mingw-w64 2>&1 | grep "^'" | sed "s/' .*//" | sed "s/^'//"
-
-# Download each URL with wget, then install:
-sudo dpkg -i *.deb
-```
-
-### `DirectXMath.h: No such file or directory`
-
-MinGW doesn't ship DirectXMath. Install it manually (see Prerequisites above).
-
-### `SDKDDKVer.h: No such file or directory`
-
-This is MSVC-only. The engine's `targetver.h` handles this automatically for MinGW by defining `_WIN32_WINNT` and `WINVER` directly.
-
-### `SIGTRAP was not declared`
-
-MinGW targets Windows where `SIGTRAP` doesn't exist. The engine's `Assert.h` uses `__builtin_trap()` on MinGW instead.
-
-### Case-sensitive header includes
-
-MinGW on Linux uses a case-sensitive filesystem. Windows headers must use lowercase:
-- `#include <windows.h>` (not `<Windows.h>`)
-- `#include <winsock2.h>` (not `<WinSock2.h>`)
-- `#include <xinput.h>` (not `<Xinput.h>`)
-- `#include <shlobj.h>` (not `<ShlObj.h>`)
-
-### `wofstream` with `wstring` path
-
-MinGW's libstdc++ doesn't support `std::wstring` paths in `fstream`. Convert to narrow string first:
-```cpp
-#if defined(_MSC_VER)
-    std::wofstream ofs(wideFilename, std::ios::out);
-#else
-    std::string narrow(wideFilename.begin(), wideFilename.end());
-    std::wofstream ofs(narrow.c_str(), std::ios::out);
-#endif
-```
-
-### `_ReturnAddress()` not available
-
-Use `__builtin_return_address(0)` on GCC/MinGW.
-
-### `size_t` / `uint64_t` overload conflict
-
-On 64-bit Windows (both MSVC and MinGW), `size_t` is `uint64_t`. Guard size_t overloads:
-```cpp
-#if !defined(_WIN64) && !defined(__LP64__) && !defined(__x86_64__)
-    void Value(size_t v) { /* ... */ }
-#endif
-```
-
-### `WinMain` entry point not found
-
-MinGW needs `-municode` for `wWinMain` (Unicode entry point). This is set in CMakeLists.txt.
-
-### WineD3D performance (D3D11 very slow)
-
-WineD3D translates D3D11->OpenGL, which combined with llvmpipe is extremely slow (~minutes per frame for shader compilation). **Install DXVK** for D3D11->Vulkan translation:
-
-```bash
-sudo apt-get install dxvk
-# Or download from: https://github.com/doitsujin/dxvk/releases
-```
-
-### `libwinpthread-1.dll` not found
-
-Copy from MinGW sysroot:
-```bash
-cp /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll build/linux-mingw-release/bin/
-```
-
-## CI Integration
-
-The experimental `build-linux-mingw-wine` job in `.github/workflows/build.yml`
-runs only on manual `workflow_dispatch`. It is advisory and the last documented
-hosted Wine test run failed; see the [failure notes](../development/MinGW-Wine-Cross-Compilation.md).
-When dispatched, it:
-- Installs MinGW, Wine, Mesa Lavapipe
-- Cross-compiles with the MinGW toolchain
-- Runs tests under Wine
-- `continue-on-error: true` (non-blocking, advisory)
-
-## Performance Optimization
-
-### Implemented (2026-03-29)
-
-| Optimization | Speedup | Status |
-|-------------|---------|--------|
-| **DXVK** (D3D11->Vulkan) | ~20x | Done — `setup-mingw-wine.sh --dxvk-only` |
-| **Low resolution** (`-window-size 640x480`) | ~4x | Done — engine flag |
-| **`-test-frames N`** flag | N/A | Done — automated frame-limited exits |
-
-### Also Implemented
-
-| Optimization | How | Status |
-|-------------|-----|--------|
-| **DXVK state cache** | `DXVK_STATE_CACHE_PATH` persists compiled pipelines | Done in wine-run.sh |
-| **GPU auto-detection** | `detect_gpu()` in wine-run.sh skips Lavapipe if real GPU found | Done |
-
-### Remaining Opportunities
-
-1. **GPU passthrough in CI** — GitHub Actions runners with GPUs could run real D3D11 hardware tests
-2. **Shader pre-warm** — the engine already lazy-loads shaders (only BasicVertex + BasicPixel at startup), complex scenes will benefit from DXVK pipeline cache
-
-### Wine Return Code Quirk
-
-Wine GUI (WIN32) applications often return exit code 255 instead of 0 when stdout/stderr are piped or redirected. The test script uses `wine_rc_ok(rc)` to treat both 0 and 255 as success. This is a known Wine behavior with `wWinMain` applications.
+The smoke runner disables the Wine wrapper's automatic headless flags and
+requires real rendering, automation results and exit 0. It rejects rc=255,
+which the older diagnostic suite sometimes accepted. The editor is driven by
+its project/save/open-scene CLI hooks. Engine commands and two frame captures,
+editor successful-presentation counters, CPU device logs and the test summary
+are preserved in `build/mingw-wine-evidence/`.
+
+## Known limitations
+
+The named Wine-only exclusions cover native Git/WARP/D3DCompiler/stack walking,
+Windows protected ACLs and file ownership, named-pipe disconnect timing,
+profile-directory mapping, mapped-PE reload fixtures and the documented no-ALSA
+FAudio crash. Native Windows tests remain unchanged; credential/replay logic
+still runs under Wine. The remaining run must pass the passing-test floor (`MINIMUM_TESTS=7500`) with
+`--warn-is-error`. See the canonical guide for the full per-test list and the
+provisional classification of profile-path and hot-reload behavior.
+
+## Source & Freshness
+
+Updated 2026-10-01. Repository implementation is reviewable; local Wine and
+exact-commit hosted execution remain unverified. Historical timing/test totals
+are not current evidence.

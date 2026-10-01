@@ -1525,7 +1525,9 @@ class WorkflowEnforcementTests(unittest.TestCase):
             ):
                 cached_jobs.append((job_id, steps))
 
-        self.assertGreaterEqual(len(cached_jobs), 8)
+        # build-linux-mingw-wine stopped restoring a build tree (ccache covers it), so it no longer
+        # carries a restored CMakeCache that would need the version reasserted.
+        self.assertGreaterEqual(len(cached_jobs), 7)
         for job_id, steps in cached_jobs:
             with self.subTest(job=job_id):
                 configure_runs = [
