@@ -2,6 +2,7 @@
 """Structural integration checks for the signed-bundle release boundary."""
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -31,6 +32,29 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
             self.assertIn("--trusted-public-key", block)
             self.assertIn("--trusted-key-fingerprint", block)
             self.assertIn("spark-release-signature-bundle/release-signatures.json", block)
+
+    def test_reverification_blocks_every_stable_promotion_path(self) -> None:
+        names = ("Reverify signed stable release bundle immediately before promotion",
+                 "Publish complete stable versioned release")
+        blocks = []
+        positions = []
+        for name in names:
+            marker = "    - name: " + name + "\n"
+            self.assertEqual(self.text.count(marker), 1)
+            start = self.text.index(marker)
+            positions.append(start)
+            end = self.text.find("\n    - name:", start + len(marker))
+            block = self.text[start:end if end >= 0 else len(self.text)]
+            self.assertNotRegex(block, r"(?m)^\s+continue-on-error:")
+            blocks.append(block)
+        self.assertLess(*positions, "signature verification must precede publication")
+        conditions = [re.search(r"(?m)^      if: (.+)$", block).group(1) for block in blocks]
+        stable = "needs.prepare.outputs.is_versioned == 'true'"
+        # Exact expressions deliberately fail closed on a new condition: the
+        # verifier runs for every stable invocation, the publisher for a subset.
+        self.assertEqual(conditions[0], stable)
+        self.assertEqual(conditions[1], stable + " && (steps.release-freeze.outputs.target_exists != 'true'"
+                         " || steps.release-freeze.outputs.target_is_draft == 'true')")
 
     def test_provisioning_uses_protected_pfx_and_immutable_control_asset(self) -> None:
         start = self.text.index("- name: Generate protected stable signature bundle")

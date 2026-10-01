@@ -274,7 +274,8 @@ def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path,
         for child in root.iterdir()
         if child.is_file() and not child.is_symlink()
         and (child.name.endswith((".zip", ".tar.gz", ".exe", ".msi", ".spdx.json"))
-             or child.name in {"shipping-package-manifest.json", "SparkEngine-Exact-CI-Evidence.json"})
+             or child.name in {"shipping-package-manifest.json", "SparkEngine-Exact-CI-Evidence.json"}
+             or (child.name.startswith(("build-provenance-", "reconcile-")) and child.name.endswith(".json")))
     }
     _require(
         promotable_candidates <= expected | known_control_files,

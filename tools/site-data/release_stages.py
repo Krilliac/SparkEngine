@@ -403,6 +403,17 @@ def _foreign_reference(text: str, selectors: set[str], literals: set[str]) -> st
     return None
 
 
+def _ci_references(value: Any) -> set[tuple[str, str, str]]:
+    """Extract well-formed CI references as (workflow, run, commit) tuples."""
+    references: set[tuple[str, str, str]] = set()
+    for text in _text_values(value):
+        if ACCEPTANCE_CI_REFERENCE.fullmatch(text):
+            workflow_run, commit = text[3:].split("@", 1)
+            workflow, run = workflow_run.split("/", 1)
+            references.add((workflow, run, commit))
+    return references
+
+
 def _evidence_boundary(contract: dict[str, Any]) -> tuple[dict, dict, dict, dict] | None:
     """(stage, items, substitution sources, predecessor-only items), or None when malformed.
 
@@ -478,9 +489,22 @@ def predecessor_evidence_reuse_errors(contract: dict[str, Any]) -> list[str]:
     source = stage.get("sourceCommitEvidence")
     baseline = source.get("baselineCommit") if isinstance(source, dict) else None
     baseline = baseline.lower() if isinstance(baseline, str) and _COMMIT_RE.fullmatch(baseline) else None
-    published = stage.get("state") in PUBLISHED_PREDECESSOR_STATES
+    source_is_reviewed = (
+        isinstance(source, dict)
+        and bool(baseline)
+        and isinstance(stage.get("signOffEvidence"), list)
+        and bool(stage.get("signOffEvidence"))
+    )
+    published = stage.get("state") in PUBLISHED_PREDECESSOR_STATES and source_is_reviewed
 
     errors: list[str] = []
+    if stage.get("state") in PUBLISHED_PREDECESSOR_STATES and not source_is_reviewed:
+        errors.append("predecessorRelease: published state requires a reviewed baselineCommit and signOffEvidence")
+    predecessor_refs = _ci_references(stage.get("signOffEvidence", []))
+    for predecessor_item in predecessor_only.values():
+        predecessor_refs.update(_ci_references(_acceptance_texts(predecessor_item)))
+    predecessor_runs = {(workflow, run) for workflow, run, _ in predecessor_refs}
+    predecessor_commits = {commit for _, _, commit in predecessor_refs}
     for item_id, item in sorted(sources.items()):
         for text in _acceptance_texts(item):
             if baseline and ACCEPTANCE_CI_REFERENCE.match(text) and text.rsplit("@", 1)[1] == baseline:
@@ -488,6 +512,12 @@ def predecessor_evidence_reuse_errors(contract: dict[str, Any]) -> list[str]:
             cited = _foreign_reference(text, selectors, literals)
             if cited:
                 errors.append(f"{item_id}.acceptanceStatus: substituted v1 work cites predecessor evidence {cited}")
+        for workflow, run, commit in _ci_references(_acceptance_texts(item)):
+            if (workflow, run) in predecessor_runs or commit in predecessor_commits:
+                errors.append(
+                    f"{item_id}.acceptanceStatus: reuses predecessor sign-off CI evidence "
+                    f"ci:{workflow}/{run}@{commit}"
+                )
         if item_id in N_MINUS_ONE_ITEM_IDS and not published:
             states = [entry.get("state") for entry in item.get("acceptanceStatus", []) if isinstance(entry, dict)]
             if item.get("status") == "done" or "evidenced" in states:

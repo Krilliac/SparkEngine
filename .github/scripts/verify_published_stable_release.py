@@ -54,6 +54,8 @@ def expected_assets(tag):
     return {prefix + suffix for suffix in (".zip", "-Runtime.exe", "-Runtime.msi")} | {
         "shipping-package-manifest.json", "SparkEngine-SBOM.spdx.json",
         "SparkEngine-Exact-CI-Evidence.json", "SHA256SUMS",
+        "SparkEngine-Lock-SBOM.spdx.json", "reconcile-Windows-MinSizeRel.json",
+        "build-provenance-Windows-MinSizeRel.json",
     }
 
 

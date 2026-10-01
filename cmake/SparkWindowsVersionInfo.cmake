@@ -41,8 +41,18 @@ function(spark_generate_windows_version_resource target_name output_resource)
     list(GET _spark_version_components 2 SPARK_VERSION_PATCH)
     set(SPARK_VERSION_STRING "${_spark_engine_version}.0")
     set(SPARK_VERSION_INTERNAL_NAME "${target_name}")
-    set(SPARK_VERSION_ORIGINAL_FILENAME "${target_name}.exe")
-    set(SPARK_VERSION_FILE_DESCRIPTION "${target_name} - SparkEngine executable")
+    if(TARGET "${target_name}")
+        get_target_property(_spark_target_type "${target_name}" TYPE)
+    endif()
+    if(_spark_target_type STREQUAL "SHARED_LIBRARY")
+        set(SPARK_VERSION_ORIGINAL_FILENAME "${target_name}.dll")
+        set(SPARK_VERSION_FILE_DESCRIPTION "${target_name} - SparkEngine game module")
+        set(SPARK_VERSION_FILE_TYPE VFT_DLL)
+    else()
+        set(SPARK_VERSION_ORIGINAL_FILENAME "${target_name}.exe")
+        set(SPARK_VERSION_FILE_DESCRIPTION "${target_name} - SparkEngine executable")
+        set(SPARK_VERSION_FILE_TYPE VFT_APP)
+    endif()
     set(SPARK_VERSION_PRODUCT_NAME "SparkEngine")
     if(target_name STREQUAL "SparkBuild")
         set(SPARK_VERSION_FILE_DESCRIPTION "SparkBuild - Cross-Platform Build Tool")
@@ -73,9 +83,10 @@ function(spark_target_windows_version_info target_name)
     endif()
 
     get_target_property(_spark_target_type "${target_name}" TYPE)
-    if(NOT _spark_target_type STREQUAL "EXECUTABLE")
+    if(NOT _spark_target_type STREQUAL "EXECUTABLE" AND
+       NOT _spark_target_type STREQUAL "SHARED_LIBRARY")
         message(FATAL_ERROR
-            "Windows version information requires an executable target; "
+            "Windows version information requires an executable or shared-library target; "
             "${target_name} is ${_spark_target_type}")
     endif()
 

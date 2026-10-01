@@ -74,3 +74,33 @@ endif()
 message(STATUS
     "Validated ${_spark_target_count} Windows VERSIONINFO resources "
     "with override ${SPARK_ENGINE_VERSION} (root default ${_spark_default_version})")
+
+# Configure a compiler-free imported DLL target to exercise the actual target
+# type branch. A text search for VFT_DLL cannot prove the generated resource.
+set(_spark_dll_fixture "${SPARK_TEST_OUTPUT_DIR}/dll-fixture")
+file(MAKE_DIRECTORY "${_spark_dll_fixture}")
+file(WRITE "${_spark_dll_fixture}/CMakeLists.txt" "
+cmake_minimum_required(VERSION 3.16)
+project(SparkVersionResourceFixture NONE)
+include(\"${SPARK_SOURCE_DIR}/cmake/SparkWindowsVersionInfo.cmake\")
+set(SPARK_ENGINE_VERSION 7.8.9)
+add_library(SparkGameVersionFixture SHARED IMPORTED)
+spark_generate_windows_version_resource(SparkGameVersionFixture \"${_spark_dll_fixture}/module.rc\")
+")
+execute_process(COMMAND "${CMAKE_COMMAND}" -G Ninja
+    -S "${_spark_dll_fixture}" -B "${_spark_dll_fixture}/build"
+    RESULT_VARIABLE _spark_dll_result OUTPUT_VARIABLE _spark_dll_stdout ERROR_VARIABLE _spark_dll_stderr)
+if(NOT _spark_dll_result EQUAL 0)
+    message(FATAL_ERROR "DLL resource configure failed: ${_spark_dll_stdout}\n${_spark_dll_stderr}")
+endif()
+file(READ "${_spark_dll_fixture}/module.rc" _spark_dll_resource)
+foreach(_spark_expected IN ITEMS
+        "FILEVERSION 7,8,9,0" "PRODUCTVERSION 7,8,9,0" "FILETYPE VFT_DLL"
+        "VALUE \"OriginalFilename\", \"SparkGameVersionFixture.dll\""
+        "VALUE \"FileVersion\", \"7.8.9.0\"" "VALUE \"ProductVersion\", \"7.8.9.0\"")
+    string(FIND "${_spark_dll_resource}" "${_spark_expected}" _spark_match)
+    if(_spark_match EQUAL -1)
+        message(FATAL_ERROR "DLL resource is missing '${_spark_expected}'")
+    endif()
+endforeach()
+message(STATUS "Validated first-party DLL VERSIONINFO resource")

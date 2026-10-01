@@ -183,6 +183,11 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
             release,
         )
         verify_index = release.index(step_name)
+        verify_end = release.find("\n    - name:", verify_index + len(step_name))
+        verify_step = release[verify_index:verify_end]
+        self.assertNotIn("\n      if:", verify_step,
+                         "both stable and nightly publications require consumer verification")
+        self.assertNotIn("continue-on-error:", verify_step)
         self.assertLess(
             release.index("    - name: Verify release tag immediately after publication\n"),
             verify_index,

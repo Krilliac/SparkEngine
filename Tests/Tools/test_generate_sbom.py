@@ -22,8 +22,10 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -346,6 +348,61 @@ class TestReconcileCli(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("outside install prefix", err)
 
+    def make_archive(self, suffix: str, *, traversal: bool = False) -> Path:
+        for rel in GOOD_FILES:
+            target = self.prefix / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if rel != "THIRD_PARTY_NOTICES.txt":
+                target.write_bytes(b"fixture\n")
+        archive = self.tmp / f"SparkEngine-test{suffix}"
+        if suffix == ".zip":
+            with zipfile.ZipFile(archive, "w") as bundle:
+                for path in self.prefix.rglob("*"):
+                    if path.is_file():
+                        name = path.relative_to(self.prefix).as_posix()
+                        bundle.write(path, name)
+                if traversal:
+                    bundle.writestr("../escape.txt", b"bad")
+        else:
+            with tarfile.open(archive, "w:gz") as bundle:
+                bundle.add(self.prefix, arcname="package")
+                if traversal:
+                    info = tarfile.TarInfo("../escape.txt")
+                    info.size = 3
+                    bundle.addfile(info, io.BytesIO(b"bad"))
+        return archive
+
+    def run_archive(self, archive: Path, *extra: str) -> tuple[int, str, Path]:
+        report_path = self.tmp / "archive-report.json"
+        err = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = sbom.main(["reconcile", "--archive", str(archive), "--json-report", str(report_path), *extra])
+        return code, err.getvalue(), report_path
+
+    def test_final_zip_report_binds_archive_and_source_lock(self) -> None:
+        archive = self.make_archive(".zip")
+        code, err, report_path = self.run_archive(archive)
+        self.assertEqual(code, 0, err)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["artifact"]["name"], archive.name)
+        self.assertEqual(report["artifact"]["format"], "zip")
+        self.assertEqual(report["artifact"]["sha256"], sbom.hashlib.sha256(archive.read_bytes()).hexdigest())
+        self.assertRegex(report["source"]["sha"], r"^[0-9a-f]{40}$")
+        self.assertRegex(report["source"]["dependencyLockSha256"], r"^[0-9a-f]{64}$")
+
+    def test_final_tarball_reconciles(self) -> None:
+        archive = self.make_archive(".tar.gz")
+        code, err, report_path = self.run_archive(archive)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(report_path.read_text(encoding="utf-8"))["artifact"]["format"], "tar.gz")
+
+    def test_archive_path_traversal_is_rejected(self) -> None:
+        for suffix in (".zip", ".tar.gz"):
+            with self.subTest(suffix=suffix):
+                code, err, _ = self.run_archive(self.make_archive(suffix, traversal=True))
+                self.assertEqual(code, 2)
+                self.assertIn("not a normalized relative path", err)
+
 
 class TestRealRepositoryLock(unittest.TestCase):
     """The committed lock, license policy and GOV-400 rules agree today."""
@@ -619,6 +676,24 @@ class TestInventoryConsistency(unittest.TestCase):
     def test_manifest_path_outside_every_locked_container_is_refused(self) -> None:
         with self.assertRaisesRegex(sbom.SbomError, "neither a locked submodule gitlink nor a managed vendored"):
             self.inventory(self.fields("a" * 40, path="ThirdParty/Elsewhere"))
+
+
+class ArchiveBoundaryPureTests(unittest.TestCase):
+    def test_unsafe_names_are_rejected_before_any_extraction(self):
+        for name in ("../escape", "/absolute", "a/./b", "a//b", "C:stream", "a\\b",
+                     "dir/file:stream", "dir/NUL.txt", "dir/evil.", "dir/evil ", "bad\x00name"):
+            with self.subTest(name=name), self.assertRaises(sbom.InputError):
+                sbom._archive_member_path(name)
+        member, key = sbom._archive_member_path("Package/bin/SparkEngine.exe")
+        self.assertEqual(member.as_posix(), "Package/bin/SparkEngine.exe")
+        self.assertEqual(key, "package/bin/sparkengine.exe")
+
+    def test_package_root_cannot_ignore_sibling_metadata_payload(self):
+        root = mock.MagicMock(spec=Path)
+        (root / sbom.NOTICE_NAME).is_file.return_value = False
+        root.iterdir.return_value = [Path("Package"), Path("__MACOSX")]
+        with self.assertRaisesRegex(sbom.InputError, "exactly one top-level"):
+            sbom._archive_package_root(root)
 
 
 if __name__ == "__main__":

@@ -65,6 +65,15 @@ class PublishedConsumerTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=kind):
                 asset_identity(assets, self.tag)
 
+    def test_requires_durable_lock_reconciliation_and_toolchain_evidence(self):
+        required = {"SparkEngine-Lock-SBOM.spdx.json", "reconcile-Windows-MinSizeRel.json",
+                    "build-provenance-Windows-MinSizeRel.json"}
+        self.assertTrue(required <= expected_assets(self.tag))
+        for name in required:
+            with self.subTest(missing=name), self.assertRaisesRegex(ValueError, "asset count"):
+                asset_identity([asset for asset in self.assets if asset["name"] != name], self.tag)
+        self.assertEqual(set(asset_identity(self.assets, self.tag)), expected_assets(self.tag))
+
     def run_consumer(self, root, *, tamper=False, drift=False, signature_failure=False):
         tag_record = {"ref": "refs/tags/" + self.tag, "object": {"type": "commit", "sha": self.sha}}
         api = Mock()
@@ -82,7 +91,7 @@ class PublishedConsumerTests(unittest.TestCase):
                             fingerprint="b" * 64, gate_output=root / "gate.txt", receipt=root / "receipt.json",
                             run_id=456, run_attempt=2, api=api, bundle_verifier=bundle,
                             provenance_verifier=provenance, **self.approval_arguments())
-        self.assertEqual(api.download.call_count, 7)
+        self.assertEqual(api.download.call_count, len(expected_assets(self.tag)))
         bundle.assert_called_once()
         provenance.assert_called_once()
         api.verify_attestation.assert_called_once_with(self.tag)
@@ -189,7 +198,7 @@ class PublishedConsumerTests(unittest.TestCase):
                                 provenance_verifier=provenance, signature_control_asset=control_name,
                                 **self.approval_arguments())
             self.assertEqual(result["state"], "publication-verified")
-            self.assertEqual(api.download.call_count, 8)
+            self.assertEqual(api.download.call_count, len(expected_assets(self.tag)) + 1)
             bundle.assert_called_once()
             self.assertTrue((root / "signatures" / "release-signatures.json").is_file())
             bad = copy.deepcopy(assets)

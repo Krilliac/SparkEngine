@@ -40,7 +40,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 import contract_selectors  # noqa: E402
 import exact_evidence  # noqa: E402
-from common import SiteDataError, load_contract  # noqa: E402
+from common import ACCEPTANCE_CI_REFERENCE, SiteDataError, load_contract  # noqa: E402
 from release_stages import (  # noqa: E402
     _dependencies,
     candidate_readiness_errors,
@@ -179,6 +179,47 @@ def exact_ci_errors(path: Path, repository: str, candidate_sha: str) -> tuple[li
     return [], "sha256:" + hashlib.sha256(exact_evidence.canonical_bytes(manifest)).hexdigest()
 
 
+def acceptance_sha_errors(contract: dict[str, Any], checked: set[str], candidate_sha: str) -> list[str]:
+    """Reject acceptance evidence copied from a different source commit.
+
+    The exact-gate record is already bound to ``candidate_sha``.  A checked
+    item's CI evidence must carry the same binding; otherwise an old passing
+    run can be presented as qualification for the new candidate.
+    """
+    items = {item["id"]: item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    errors: list[str] = []
+    for item_id in sorted(checked):
+        item = items.get(item_id, {})
+        statuses = item.get("acceptanceStatus")
+        if not isinstance(statuses, list) or not statuses:
+            errors.append(f"{item_id}.acceptanceStatus: every checked item requires acceptance evidence")
+            continue
+        for index, entry in enumerate(statuses):
+            if not isinstance(entry, dict) or entry.get("state") != "evidenced":
+                errors.append(f"{item_id}.acceptanceStatus[{index}]: criterion is not evidenced")
+                continue
+            valid_candidate = False
+            for evidence in entry.get("evidence", []):
+                if not isinstance(evidence, str):
+                    continue
+                if evidence.startswith("ci:") and not ACCEPTANCE_CI_REFERENCE.fullmatch(evidence):
+                    errors.append(f"{item_id}.acceptanceStatus[{index}]: malformed CI evidence {evidence}")
+                    continue
+                if not ACCEPTANCE_CI_REFERENCE.fullmatch(evidence):
+                    continue
+                cited_sha = evidence.rsplit("@", 1)[1]
+                if cited_sha != candidate_sha:
+                    errors.append(
+                        f"{item_id}.acceptanceStatus[{index}]: CI evidence {evidence} is not bound to candidate SHA "
+                        f"{candidate_sha}"
+                    )
+                else:
+                    valid_candidate = True
+            if not valid_candidate:
+                errors.append(f"{item_id}.acceptanceStatus[{index}]: no exact-SHA CI evidence for candidate SHA")
+    return errors
+
+
 def qualify(
     contract: dict[str, Any],
     stage: str,
@@ -198,6 +239,7 @@ def qualify(
     except (KeyError, TypeError, AttributeError) as error:
         errors.append(f"readiness: contract cannot be evaluated for {stage}: {error!r}")
     errors.extend(ci_job_errors(contract, checked, blocking))
+    errors.extend(acceptance_sha_errors(contract, checked, candidate_sha))
     record_errors, manifest_digest = exact_ci_errors(exact_ci, repository, candidate_sha)
     errors.extend(record_errors)
     return {

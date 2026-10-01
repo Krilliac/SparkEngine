@@ -94,7 +94,36 @@ def qualifying_contract() -> dict:
     for item in contract["workItems"]:
         item["profileApplicability"] = {"stable-v1": value for value in item["profileApplicability"].values()}
     contract["workItems"][0]["requiredCiJobs"] = ["required-build"]
+    contract["workItems"][0]["acceptanceStatus"] = [{
+        "criterionDigest": "sha256:test",
+        "state": "evidenced",
+        "evidence": [f"ci:build.yml/101@{CANDIDATE}"],
+    }]
     return contract
+
+
+class AcceptanceShaUnitTests(unittest.TestCase):
+    """Pure mutation tests that do not need the exact-CI temporary file."""
+
+    def check(self, evidence):
+        contract = {"workItems": [{"id": "item", "acceptanceStatus": [{
+            "state": "evidenced", "evidence": evidence,
+        }]}]}
+        return rq.acceptance_sha_errors(contract, {"item"}, CANDIDATE)
+
+    def test_empty_or_malformed_acceptance_evidence_is_refused(self):
+        self.assertTrue(rq.acceptance_sha_errors(
+            {"workItems": [{"id": "item", "acceptanceStatus": [{"state": "evidenced", "evidence": []}]}]},
+            {"item"}, CANDIDATE,
+        ))
+        self.assertTrue(self.check(["ci:build.yml/latest@main"]))
+
+    def test_stale_acceptance_evidence_is_refused(self):
+        errors = self.check(["ci:build.yml/7@" + "2" * 40])
+        self.assertTrue(any("not bound to candidate SHA" in error for error in errors), errors)
+
+    def test_candidate_acceptance_evidence_is_accepted(self):
+        self.assertEqual(self.check(["README.md", "ci:build.yml/7@" + CANDIDATE]), [])
 
 
 class ReleaseQualificationTests(unittest.TestCase):
@@ -160,9 +189,19 @@ class ReleaseQualificationTests(unittest.TestCase):
         contract = qualifying_contract()
         contract["workItems"][0]["dependencies"] = ["hidden"]
         contract["workItems"].append(
-            {"id": "hidden", "status": "done", "dependencies": [], "requiredCiJobs": ["advisory-lane"]}
+            {"id": "hidden", "status": "done", "dependencies": [], "requiredCiJobs": ["advisory-lane"],
+             "acceptanceStatus": [{"state": "evidenced", "evidence": [f"ci:build.yml/102@{CANDIDATE}"]}]}
         )
         self.assert_refused(self.qualify(contract), "hidden: required CI job advisory-lane can be skipped")
+
+    def test_acceptance_ci_evidence_must_name_the_candidate_sha(self) -> None:
+        contract = qualifying_contract()
+        contract["workItems"][0]["acceptanceStatus"] = [{
+            "criterionDigest": "sha256:test",
+            "state": "evidenced",
+            "evidence": ["ci:build.yml/77@" + "2" * 40],
+        }]
+        self.assert_refused(self.qualify(contract), "is not bound to candidate SHA")
 
     def test_missing_exact_ci_field_is_refused(self) -> None:
         exact_ci = self.write_gate(gate_lines()[1:], "missing.out")
