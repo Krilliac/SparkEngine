@@ -101,14 +101,20 @@ def derive_module_test_cases(repo_root: Path, selector_prefix: str) -> frozenset
     except SystemExit as exc:
         raise ValueError(f"test source census failed: {exc}") from None
     names: set[str] = set()
+    header_cache: dict[str, frozenset[str]] = {}
     for row in rows:
         if row["kind"] != "production-source":
             continue
         text = (repo_root / row["path"]).read_text(encoding="utf-8")
-        names.update(
-            name for name, _line, _tautological in census.test_definitions(text)
-            if name.startswith(selector_prefix)
-        )
+        production = census.production_test_bodies(text, repo_root, header_cache)
+        for name, _line, tautological in census.test_definitions(text):
+            if not name.startswith(selector_prefix):
+                continue
+            if tautological:
+                raise ValueError(f"{row['path']}: {name} is tautological and cannot be module evidence")
+            if name not in production:
+                raise ValueError(f"{row['path']}: {name} does not reference an included production declaration")
+            names.add(name)
     return frozenset(names)
 
 

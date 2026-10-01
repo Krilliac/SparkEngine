@@ -6183,6 +6183,9 @@ if(Python3_Interpreter_FOUND)
                 ReadyAndPassingEvidenceTests
                 SelectorResolutionTests
                 MissingReferencedPathTests
+                StructuredReferenceTests
+                ClassificationCoverageTests
+                PublicClaimInvariantTests
                 ProseCrossReferenceTests
                 GenerationAndCiTests)
         set_tests_properties(readiness-cross-references PROPERTIES

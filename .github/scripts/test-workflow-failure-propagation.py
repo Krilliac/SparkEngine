@@ -70,6 +70,7 @@ REQUIRED_CI_JOBS = (
     "module-evidence",
     "network-security",
     "docs-health",
+    "site-data-full-determinism",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
 MINGW_WINE_JOB = "build-linux-mingw-wine"

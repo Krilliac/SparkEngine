@@ -31,6 +31,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -6102,6 +6103,31 @@ class TestSanitizerReportEvidence(FixtureCase):
 
 
 
+class TestModuleTestDerivationFlags(unittest.TestCase):
+    """The derived expected set must consume the census verdicts, never discard them."""
+
+    def derive(self, tautological: bool, production: bool) -> frozenset[str]:
+        census = SimpleNamespace(
+            scan=lambda root: [{"kind": "production-source", "path": "Tests/Fixture.cpp"}],
+            test_definitions=lambda text: [("FPSRespawn_Fixture", 1, tautological)],
+            production_test_bodies=lambda text, root, cache: {"FPSRespawn_Fixture"} if production else set(),
+        )
+        with mock.patch.dict(sys.modules, {"spark_module_evidence_census": census}), \
+             mock.patch.object(Path, "read_text", return_value="fixture source"):
+            return validate_manifest_mod.derive_module_test_cases(REPO_ROOT, "FPSRespawn_")
+
+    def test_production_verdict_is_accepted(self) -> None:
+        self.assertEqual(frozenset({"FPSRespawn_Fixture"}), self.derive(False, True))
+
+    def test_B37_tautological_verdict_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "is tautological"):
+            self.derive(True, True)
+
+    def test_B38_copied_body_verdict_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "does not reference an included production declaration"):
+            self.derive(False, False)
+
+
 class TestModuleTestExactSet(FixtureCase):
     """RDY-010: module JUnit/ASan evidence must name every production test, once, passed.
 
@@ -6200,6 +6226,20 @@ class TestModuleTestExactSet(FixtureCase):
                              {INCLUDED: "FPSNothingDefinesThis_"}):
             errors = ManifestValidator(base_manifest(), self.repo, policy_only=True).validate()
         self.assertTrue(any("no production-source test defines" in e for e in errors), errors)
+
+    def test_B37_tautological_production_test_cannot_enter_expected_set(self) -> None:
+        path = self.repo / "Tests" / "TestFPSRespawnFixture.cpp"
+        path.write_text(path.read_text(encoding="utf-8") +
+                        '\nTEST(FPSRespawn_ConstantOnly) { EXPECT_EQ(1, 1); }\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "FPSRespawn_ConstantOnly is tautological"):
+            validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
+
+    def test_B38_unrelated_production_include_cannot_promote_local_model(self) -> None:
+        path = self.repo / "Tests" / "TestFPSRespawnFixture.cpp"
+        path.write_text(path.read_text(encoding="utf-8") +
+                        '\nTEST(FPSRespawn_LocalModel) { int copied = 1; EXPECT_EQ(copied, 1); }\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "FPSRespawn_LocalModel does not reference"):
+            validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
 
 
 if __name__ == "__main__":

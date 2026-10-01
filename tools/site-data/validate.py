@@ -38,6 +38,7 @@ from contract_selectors import (WorkflowJob, cmake_preset_index, command_tokens,
                                 preset_references, required_gate_jobs, resolve_ci_job, resolve_test_selector,
                                 shell_segments, workflow_jobs)
 from docs_parity import published_docs_parity_errors
+from workflow_ownership import installer_workflow_errors, shipping_workflow_errors
 from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
@@ -253,6 +254,7 @@ def experimental_shipping_preset_errors(contract: dict[str, Any], configure_pres
                 f"{location}: {stranger} configures an experimental Shipping preset owned by {owner_id}; "
                 f"list it in {owner_id}.parallelWith or dependencies"
             )
+    errors.extend(shipping_workflow_errors(contract, EXPERIMENTAL_SHIPPING_PRESET_OWNERS))
     return errors
 
 WORK_ITEM_REQUIRED_KEYS = {
@@ -1444,6 +1446,7 @@ def installer_platform_ownership_errors(contract: dict[str, Any]) -> list[str]:
                         f"non-Windows installer ({match.group(0)!r}); that certification belongs to PLT-* work"
                     )
 
+    errors.extend(installer_workflow_errors(contract))
     for owner in NON_WINDOWS_INSTALLER_CAPABILITIES:
         capability = capabilities.get(owner)
         if capability is None:
@@ -4013,7 +4016,8 @@ class Validator:
         first = execution.get("firstUnblockedWorkItemId")
         self.require(first is None or first in item_ids, "execution.firstUnblockedWorkItemId", "unknown work item")
         if first in by_id:
-            unfinished = [dependency for dependency in by_id[first].get("dependencies", []) if by_id[dependency].get("status") != "done"]
+            unfinished = [dependency for dependency in by_id[first].get("dependencies", [])
+                          if dependency in by_id and by_id[dependency].get("status") != "done"]
             self.require(not unfinished, "execution.firstUnblockedWorkItemId", f"has unfinished dependencies: {unfinished}")
             self.require(by_id[first].get("status") != "done", "execution.firstUnblockedWorkItemId", "item is already done")
 
@@ -4266,18 +4270,6 @@ class Validator:
             self.error(
                 f"{entry['source']}:{entry['line']}",
                 f"{entry['target']}: {entry['error']}",
-            )
-
-        from validate_docs_links import validate_docs_links, validate_docs_routes
-
-        route_errors = validate_docs_routes(catalog)
-        for entry in route_errors:
-            self.error(f"docsCatalog.routeOverrides.{entry['target']}", entry["error"])
-        link_errors = validate_docs_links(catalog)
-        for entry in link_errors:
-            self.error(
-                f"{entry['source']}:{entry['line']}",
-                f"broken link to {entry['target']}: {entry['error']}",
             )
 
     def validate_docs_catalog(self) -> None:

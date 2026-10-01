@@ -5020,6 +5020,23 @@ jobs:
           after="$(git status --porcelain=v1 --untracked-files=no)"
           test "$before" = "$after"
 
+  # RDY-000: full bundle proof, including two independent health regenerations.
+  # The existing advisory job retains its narrower 10-minute proof unchanged.
+  site-data-full-determinism:
+    name: Clean site-data and documentation health determinism
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Compare two clean independently generated bundles
+        run: |
+          set -euo pipefail
+          timeout 15m python3 -B Tests/Tools/test_site_data_generation_determinism.py -v
+
   # ===========================================================================
   # One stable branch-protection target. A cancelled, skipped, or missing
   # required lane is a failure instead of an accidental green aggregate.
@@ -5058,6 +5075,7 @@ jobs:
       - module-evidence
       - network-security
       - docs-health
+      - site-data-full-determinism
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -5067,7 +5085,7 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","security-runtime","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","analysis-regressions","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","security-runtime","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","analysis-regressions","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health","site-data-full-determinism"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
         run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
 

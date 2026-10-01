@@ -15,8 +15,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
+import common  # noqa: E402
 GENERATOR = REPO_ROOT / "tools" / "site-data" / "generate.py"
 BUNDLE_INDEX = "latest.json"
 MINIMUM_FILES = 100
@@ -43,7 +46,12 @@ def tree_differences(left: Path, right: Path, limit: int = 20) -> list[str]:
 
 
 def generate(output: Path) -> None:
-    command = [sys.executable, "-B", str(GENERATOR), "--output", str(output), "--skip-doc-health", "--allow-dirty"]
+    dirty = common.git_dirty_paths()
+    if dirty:
+        raise AssertionError(f"clean generation requires a clean checkout: {dirty}")
+    # Each invocation independently regenerates documentation health. No shared
+    # health file and no dirty-tree or health-skipping exemption can prove this.
+    command = [sys.executable, "-B", str(GENERATOR), "--output", str(output)]
     result = subprocess.run(
         command,
         cwd=REPO_ROOT,
@@ -89,11 +97,31 @@ class TreeComparisonTests(unittest.TestCase):
             self.assertEqual([], tree_differences(Path(left), Path(right)))
 
 
+class GenerationPolicyTests(unittest.TestCase):
+    def test_dirty_checkout_is_rejected_before_generation(self) -> None:
+        with mock.patch.object(common, "git_dirty_paths", return_value=[" M README.md"]), \
+             mock.patch.object(subprocess, "run") as run:
+            with self.assertRaisesRegex(AssertionError, "clean checkout.*README.md"):
+                generate(Path("unused-output"))
+            run.assert_not_called()
+
+    def test_each_generation_recomputes_health_without_waivers(self) -> None:
+        with mock.patch.object(common, "git_dirty_paths", return_value=[]), \
+             mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+            generate(Path("first"))
+            generate(Path("second"))
+        self.assertEqual(2, run.call_count)
+        for call in run.call_args_list:
+            self.assertEqual([sys.executable, "-B", str(GENERATOR), "--output"], call.args[0][:-1])
+            self.assertEqual("random", call.kwargs["env"]["PYTHONHASHSEED"])
+
+
 class GenerationDeterminismTests(unittest.TestCase):
     """Two generate.py runs with identical flags produce the same bytes."""
 
     def test_two_generations_are_byte_identical(self) -> None:
         self.assertEqual(frozenset(), DECLARED_TIMESTAMP_KEYS)
+        self.assertEqual([], common.git_dirty_paths(), "determinism requires a clean checkout")
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
             first_root = Path(first) / "bundle"
             second_root = Path(second) / "bundle"

@@ -107,9 +107,14 @@
           "state": "implemented",
           "evidence": [
             "tools/site-data/validate.py",
-            "Tests/Tools/test_site_data_contract.py"
+            "tools/site-data/workflow_ownership.py",
+            "docs/site/readiness.json",
+            "Tests/Tools/test_site_data_contract.py",
+            "Tests/Tools/test_release_build_provenance.py",
+            ".github/scripts/test-workflow-failure-propagation.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "No validator enforces the ownership boundary."
+          "note": "InstallerPlatformOwnershipTests and WorkflowOwnershipTests bind release.yml installer artifacts to explicit experimental products owned by PLT-210/PLT-220. Stable-channel provenance tests are cited. Required docs-health runs contract tests. Local ownership checks pass; hosted proof is pending."
         }
       ],
       "commands": [
@@ -470,20 +475,22 @@
           "criterionDigest": "sha256:59ac611c1455",
           "state": "implemented",
           "evidence": [
-            "docs/generate-flowchart-content.py",
-            "Tests/Tools/test_docs_health.py"
+            "tools/docs_currentness.py",
+            "Tests/Tools/test_docs_health.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff."
+          "note": "CurrentnessRejectionTests cover stale tracked outputs, nondeterministic files and trees, undeclared tracked edits, and tracked-tree mutation. Required docs-health runs the production check. Local temporary-directory permissions block fixture execution; clean regeneration and exact-SHA hosted proof remain pending."
         },
         {
           "criterionDigest": "sha256:ccd94aacef95",
           "state": "implemented",
           "evidence": [
             "tools/site-data/validate_docs_links.py",
-            ".github/workflows/build.yml",
-            "Tests/Tools/test_docs_health.py"
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_docs_health.py",
+            ".github/workflows/build.yml"
           ],
-          "note": "The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; the required build.yml docs-health job runs it at every commit. Local only; no exact-commit CI yet."
+          "note": "DocsLinksHostileTests cover Markdown/HTML images, present images, source-line bounds and missing root documents. validate_docs_surface runs route and link validation once. Required docs-health generates exact-SHA API targets. Local fixtures and full generated-API validation remain pending."
         },
         {
           "criterionDigest": "sha256:d72cef64ec82",
@@ -512,10 +519,11 @@
           "evidence": [
             ".github/workflows/build.yml",
             ".github/scripts/test-workflow-failure-propagation.py",
-            "tools/site-data/validate_docs_links.py",
-            "tools/docs_currentness.py"
+            "Tests/Tools/test_docs_health.py",
+            "tools/docs_currentness.py",
+            "tools/site-data/validate_docs_links.py"
           ],
-          "note": "docs-health is a Required CI Gate dependency in build.yml, and per-SHA push runs never cancel it. Structural and mutation tests only; no hosted red run. Not applied in the ledger by this lane, because the header forbids state edits."
+          "note": "Required build.yml docs-health and validate-ci-tools enforce stale output, missing generator results and broken-link rejection. Direct stale-output and validate_health missing-row tests are added. site-data.yml jobs remain advisory. Local fixtures and a controlled exact-SHA hosted red run are not proven."
         }
       ],
       "commands": [

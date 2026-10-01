@@ -8400,7 +8400,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 42,
+    "jobCount": 43,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -15034,6 +15034,57 @@
         "gating": "blocking"
       },
       {
+        "id": "site-data-full-determinism",
+        "name": "Clean site-data and documentation health determinism",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": "absent",
+        "timeoutMinutes": 25,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {},
+        "stepCount": 2,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout exact source",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Compare two clean independently generated bundles",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "bbc733ebbc056015"
+          }
+        ],
+        "envNames": [],
+        "gating": "blocking"
+      },
+      {
         "id": "required-ci-gate",
         "name": "Required CI Gate",
         "runsOn": "ubuntu-24.04",
@@ -15075,7 +15126,8 @@
           "aggregate-test-stats",
           "module-evidence",
           "network-security",
-          "docs-health"
+          "docs-health",
+          "site-data-full-determinism"
         ],
         "failFast": "absent",
         "maxParallel": "absent",
@@ -21847,8 +21899,8 @@
       }
     ],
     "summary": {
-      "jobCount": 42,
-      "matrixLegCount": 52,
+      "jobCount": 43,
+      "matrixLegCount": 53,
       "pathFilteredEventCount": 0,
       "configureCount": 34,
       "buildCount": 37,
@@ -21856,7 +21908,7 @@
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 20,
-      "blockingJobCount": 31,
+      "blockingJobCount": 32,
       "advisoryJobCount": 7,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [

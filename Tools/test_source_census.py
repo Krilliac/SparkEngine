@@ -56,6 +56,8 @@ PRODUCTION_ROOTS = (
 # is also the vehicle every other test rides in, so including it cannot be what
 # makes a file production-source.
 TEST_SUPPORT_HEADERS = {"TestFramework.h", "TestWarnings.h"}
+# Platform typedefs/macros are scaffolding, not the subject of a production test.
+PROFILE_UTILITY_HEADERS = frozenset({"Core/Platform.h", "Platform.h"})
 
 # ...which leaves the files whose SUBJECT is the harness. Includes alone cannot
 # distinguish those, so they are named here.
@@ -371,6 +373,10 @@ _TEST_DEFINITION_RE = re.compile(
 # Statements that assert nothing about the code under test. EXPECT_NO_CRASH
 # discards its argument unevaluated (TestFramework.h), so it proves nothing.
 _TAUTOLOGICAL_STATEMENT_RE = re.compile(r"EXPECT_TRUE\s*\(\s*true\s*\)|EXPECT_NO_CRASH\s*\(.*\)", re.DOTALL)
+_CONSTANT_ASSERTION_RE = re.compile(r"(?:EXPECT|ASSERT)_(?:TRUE|FALSE|EQ|NE|LT|LE|GT|GE|NEAR)\s*\((.*)\)", re.DOTALL)
+_CONSTANT_TOKEN_RE = re.compile(
+    r'''(?:true|false|nullptr)\b|(?:0[xX][0-9a-fA-F']+|\d[\d']*(?:\.\d*)?(?:[eE][+-]?\d+)?)[uUlLfF]*\b|""|'' '''.strip()
+)
 _EXPECT_COUNT_RE = re.compile(r"^[0-9]+$")
 _INT_MAX = 2**31 - 1
 
@@ -471,7 +477,7 @@ def _braced_body(code: str, open_index: int) -> str:
 
 
 def is_tautological(body: str) -> bool:
-    """True when a literal-free body has no statement besides EXPECT_TRUE(true) / EXPECT_NO_CRASH(...)."""
+    """True when every statement is an unevaluated probe or constant-only assertion."""
     code = body.replace("{", " ").replace("}", " ")
     statements: list[str] = []
     current: list[str] = []
@@ -487,7 +493,73 @@ def is_tautological(body: str) -> bool:
         else:
             current.append(char)
     statements.append("".join(current).strip())
-    return all(_TAUTOLOGICAL_STATEMENT_RE.fullmatch(statement) for statement in statements if statement)
+    def constant_assertion(statement: str) -> bool:
+        if _TAUTOLOGICAL_STATEMENT_RE.fullmatch(statement):
+            return True
+        match = _CONSTANT_ASSERTION_RE.fullmatch(statement)
+        if match is None:
+            return False
+        rest = _CONSTANT_TOKEN_RE.sub("0", match[1])
+        return bool(rest.strip()) and re.fullmatch(r"[0\s(),+*/%<>=!&|^~?:.\-]+", rest) is not None
+
+    return all(constant_assertion(statement) for statement in statements if statement)
+
+
+_TYPE_DECLARATION_RE = re.compile(r"\b(?:class|struct|enum(?:\s+class)?|using)\s+(?:\w+_API\s+)?(\w+)")
+_FUNCTION_BODY_RE = re.compile(r"\b(\w+)\s*\([^;{}]*\)\s*(?:(?:const|noexcept|override|final)\s*)*\{")
+_FUNCTION_DECLARATION_RE = re.compile(
+    r"^[ \t]*(?:[\w:<>,*&]+[ \t]+)+([A-Za-z_]\w*)\s*\([^;{}]*\)", re.MULTILINE,
+)
+
+
+def production_test_bodies(text: str, root: Path, header_cache: dict[str, frozenset[str]]) -> set[str]:
+    """Names whose bodies reach a declaration in an included production header.
+
+    Helpers are followed within this file, including their parameter types. An
+    unrelated engine include, a comment, or a string literal cannot turn a
+    copied test into production evidence. This is a conservative source guard,
+    not C++ name resolution or proof of runtime assertion dependence.
+    """
+    symbols: set[str] = set()
+    for quoted, angled in INCLUDE_RE.findall(text):
+        include = (quoted or angled).replace("\\", "/").lstrip("./")
+        if include in PROFILE_UTILITY_HEADERS or include.endswith("/Core/Platform.h"):
+            continue
+        if include not in header_cache:
+            candidates = [root / prefix / include for prefix in PRODUCTION_ROOTS]
+            candidates += [root / include] if any(include.startswith(prefix + "/") for prefix in PRODUCTION_ROOTS) else []
+            candidates += [source / include for source in (root / "GameModules").glob("*/Source")]
+            declared: set[str] = set()
+            for header in candidates:
+                if header.is_file() and header.name not in TEST_SUPPORT_HEADERS:
+                    code = cpp_code_only(header.read_text(encoding="utf-8"))
+                    declared.update(_TYPE_DECLARATION_RE.findall(code))
+                    declared.update(_FUNCTION_DECLARATION_RE.findall(code))
+            header_cache[include] = frozenset(declared)
+        symbols.update(header_cache[include])
+    code = cpp_code_only(text)
+    # A local class with the same spelling cannot borrow a header's identity.
+    symbols.difference_update(_TYPE_DECLARATION_RE.findall(code))
+    helpers: dict[str, set[str]] = {}
+    for match in _FUNCTION_BODY_RE.finditer(code):
+        if match[1] in {"TEST", "TEST_F", "if", "while", "for", "switch", "catch"}:
+            continue
+        signature_and_body = match[0] + _braced_body(code, match.end() - 1)
+        helpers.setdefault(match[1], set()).update(re.findall(r"\b[A-Za-z_]\w*\b", signature_and_body))
+    production: set[str] = set()
+    for match in _TEST_DEFINITION_RE.finditer(code):
+        body = _braced_body(code, match.end() - 1)
+        pending = set(re.findall(r"\b[A-Za-z_]\w*\b", body))
+        reachable: set[str] = set()
+        while pending:
+            symbol = pending.pop()
+            if symbol in reachable:
+                continue
+            reachable.add(symbol)
+            pending.update(helpers.get(symbol, set()) - reachable)
+        if reachable & symbols:
+            production.add(match.group(1) or f"{match.group(2)}.{match.group(3)}")
+    return production
 
 
 def test_definitions(text: str) -> list[tuple[str, int, bool]]:
@@ -518,14 +590,20 @@ def test_definitions(text: str) -> list[tuple[str, int, bool]]:
 def resolve_registered_tests(root: Path, rows: list[dict[str, object]]) -> list[RegisteredTest]:
     """Resolve every TEST/TEST_F in the census rows to its registered name and body verdict (fail-closed)."""
     definitions: list[RegisteredTest] = []
+    header_cache: dict[str, frozenset[str]] = {}
     for row in rows:
         relative_path = str(row["path"])
         try:
-            parsed = test_definitions((root / relative_path).read_text(encoding="utf-8"))
+            text = (root / relative_path).read_text(encoding="utf-8")
+            parsed = test_definitions(text)
+            production = production_test_bodies(text, root, header_cache) if row["kind"] == "production-source" else set()
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             raise SystemExit(f"error: {relative_path}: cannot resolve TEST definitions: {exc}")
         definitions.extend(
-            RegisteredTest(name=name, path=relative_path, line=line, kind=str(row["kind"]), tautological=tautological)
+            RegisteredTest(name=name, path=relative_path, line=line,
+                           kind=("mirror" if row["kind"] == "production-source" and name not in production
+                                 and relative_path not in HARNESS_TESTS else str(row["kind"])),
+                           tautological=tautological)
             for name, line, tautological in parsed
         )
     return definitions
@@ -701,7 +779,7 @@ def check_profile_selectors(
             if definition.tautological:
                 failures.append(
                     f"{where}: {filters} reaches TEST({definition.name}) at {definition.path}:{definition.line}, "
-                    "whose body is only EXPECT_TRUE(true)/EXPECT_NO_CRASH"
+                    "whose body is only EXPECT_TRUE(true)/EXPECT_NO_CRASH or constant-only assertions"
                 )
         if len(selected) < int(expected_text):
             failures.append(

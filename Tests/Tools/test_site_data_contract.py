@@ -31,6 +31,7 @@ import exact_evidence  # noqa: E402
 import generate as site_data_generate  # noqa: E402
 import render_handoff  # noqa: E402
 import validate as site_data_validate  # noqa: E402
+import workflow_ownership  # noqa: E402
 
 
 HANDOFF_PATH = REPO_ROOT / "docs" / "readiness" / "ENGINE_READINESS_HANDOFF.md"
@@ -347,6 +348,163 @@ class ClassificationCoverageTests(ContractTestCase):
         profile["boundaries"]["experimentalCapabilityIds"].remove("platform.linux")
         profile["includedCapabilityIds"].append("platform.linux")
         self.assert_rejected(self.mutable, "contradicts its profile classification")
+
+
+    def test_supported_capability_cannot_rely_on_excluded_gate(self) -> None:
+        profile = self.profile_of(self.mutable)
+        excluded = {entry["gateId"] for entry in profile["excludedGates"]}
+        capability = next(row for row in self.mutable["readiness"]["capabilities"]
+                          if excluded.intersection(row["requiredGateIds"]))
+        for values in profile["boundaries"].values():
+            if isinstance(values, list) and capability["id"] in values:
+                values.remove(capability["id"])
+        profile["includedCapabilityIds"].append(capability["id"])
+        capability["support"] = "supported"
+        self.assert_rejected(self.mutable, "included capabilities need excluded gates")
+
+    def test_first_party_game_cannot_rely_on_excluded_gate(self) -> None:
+        profile = self.profile_of(self.mutable)
+        excluded = profile["excludedGates"][0]["gateId"]
+        game = self.capabilities_of(self.mutable)[profile["firstPartyGameCapabilityIds"][0]]
+        game["requiredGateIds"].append(excluded)
+        self.assert_rejected(self.mutable, "requires gates the profile does not")
+
+
+class StructuredReferenceTests(ContractTestCase):
+    """Each reference class must reject an unknown target through the live validator."""
+
+    def test_capability_and_gate_references(self) -> None:
+        for collection, field, target, message in (
+            ("capabilities", "requiredGateIds", "G99", "unknown required gate G99"),
+            ("capabilities", "blockingWorkItemIds", "RDY-999", "unknown blocking work item RDY-999"),
+            ("gates", "blockingWorkItemIds", "RDY-999", "unknown blocking work item RDY-999"),
+        ):
+            with self.subTest(collection=collection, field=field):
+                contract = copy.deepcopy(self.contract)
+                contract["readiness"][collection][0][field] = [target]
+                self.assert_rejected(contract, message)
+
+    def test_work_item_references(self) -> None:
+        for field, message in (("dependencies", "unknown dependency RDY-999"),
+                               ("parallelWith", "unknown parallelWith item RDY-999")):
+            with self.subTest(field=field):
+                contract = copy.deepcopy(self.contract)
+                contract["workItems"][0][field] = ["RDY-999"]
+                self.assert_rejected(contract, message)
+
+    def test_source_context_path(self) -> None:
+        path = "docs/readiness/missing-structured-reference.md"
+        self.assertFalse((REPO_ROOT / path).exists())
+        self.mutable["workItems"][0]["sourceContext"].append(path)
+        self.assert_rejected(self.mutable, f"referenced path does not exist: {path}")
+
+    def test_profile_capability_references(self) -> None:
+        for field in ("includedCapabilityIds", "experimentalCapabilityIds", "unsupportedCapabilityIds"):
+            with self.subTest(field=field):
+                contract = copy.deepcopy(self.contract)
+                profile = self.profile_of(contract)
+                container = profile if field == "includedCapabilityIds" else profile["boundaries"]
+                container[field].append("platform.unknown")
+                self.assert_rejected(contract, "unknown capability platform.unknown")
+
+    def test_metric_references(self) -> None:
+        self.mutable["readiness"]["capabilities"][0]["website"]["proofMetricIds"].append("made.up")
+        self.assert_rejected(self.mutable, "unknown metric made.up")
+        for group in ("hero", "referenceGame", "quality"):
+            with self.subTest(group=group):
+                contract = copy.deepcopy(self.contract)
+                contract["content"]["home"][group]["metricIds"].append("made.up")
+                self.assert_rejected(contract, "unknown metric made.up")
+
+    def test_home_capability_references(self) -> None:
+        self.mutable["content"]["home"]["status"]["platformCapabilityIds"].append("platform.unknown")
+        self.assert_rejected(self.mutable, "unknown capability platform.unknown")
+        contract = copy.deepcopy(self.contract)
+        contract["content"]["home"]["status"]["groups"][0]["capabilityIds"].append("platform.unknown")
+        self.assert_rejected(contract, "unknown capability platform.unknown")
+
+    def test_docs_surface_validators_run_once(self) -> None:
+        import validate_docs_links
+        validator = site_data_validate.Validator(self.mutable)
+        with mock.patch.object(validate_docs_links, "validate_docs_routes", return_value=[]) as routes, \
+             mock.patch.object(validate_docs_links, "validate_docs_links", return_value=[]) as links:
+            validator.validate_docs_surface()
+        routes.assert_called_once()
+        links.assert_called_once()
+
+
+class WorkflowOwnershipTests(ContractTestCase):
+    """Real matrix artifacts and preset uses cannot escape their recorded owners."""
+
+    def test_live_shipping_and_installer_jobs_have_owners(self) -> None:
+        before = copy.deepcopy(self.mutable)
+        self.assertEqual([], workflow_ownership.shipping_workflow_errors(
+            self.mutable, site_data_validate.EXPERIMENTAL_SHIPPING_PRESET_OWNERS))
+        self.assertEqual([], workflow_ownership.installer_workflow_errors(self.mutable))
+        self.assertEqual(before, self.mutable, "validation must not rewrite CI ownership")
+
+    def test_shipping_job_mutations_fail_closed(self) -> None:
+        owners = site_data_validate.EXPERIMENTAL_SHIPPING_PRESET_OWNERS
+        baseline = workflow_ownership.workflow_documents()
+
+        def findings(documents: dict) -> str:
+            return "\n".join(workflow_ownership.shipping_workflow_errors(self.mutable, owners, documents))
+
+        documents = copy.deepcopy(baseline)
+        job = documents["build.yml"]["jobs"]["build-macos-shipping"]
+        job.pop("continue-on-error")
+        self.assertIn("must be explicitly advisory", findings(documents))
+
+        documents = copy.deepcopy(baseline)
+        documents["build.yml"]["jobs"]["required-ci-gate"]["needs"].append("build-macos-shipping")
+        self.assertIn("must not block stable-v1", findings(documents))
+
+        documents = copy.deepcopy(baseline)
+        documents["build.yml"]["jobs"]["unowned-shipping"] = {
+            "continue-on-error": True, "steps": [{"run": "cmake --preset linux-shipping"}],
+        }
+        self.assertIn("has no platform owner PLT-210", findings(documents))
+
+        self.items_of(self.mutable)["SEC-100"]["requiredCiJobs"].remove("security-runtime")
+        self.assertIn("test host must remain owned by SEC-100", findings(baseline))
+
+    def test_matrix_and_environment_shipping_presets_are_resolved(self) -> None:
+        for command in ('cmake --preset "${{ matrix.preset }}"', 'cmake --preset "$PRESET"'):
+            documents = {"build.yml": {"jobs": {"unowned-matrix": {
+                "strategy": {"matrix": {"preset": ["linux-shipping", "macos-shipping"]}},
+                "env": {"PRESET": "${{ matrix.preset }}"}, "continue-on-error": True,
+                "steps": [{"run": command}],
+            }}}}
+            errors = workflow_ownership.shipping_workflow_errors(
+                self.mutable, site_data_validate.EXPERIMENTAL_SHIPPING_PRESET_OWNERS, documents)
+            self.assertTrue(any("owner PLT-210" in error for error in errors), errors)
+            self.assertTrue(any("owner PLT-220" in error for error in errors), errors)
+
+    def test_done_shipping_owner_needs_evidenced_criteria(self) -> None:
+        self.items_of(self.mutable)["PLT-210"]["status"] = "done"
+        errors = site_data_validate.experimental_shipping_preset_errors(
+            self.mutable, contract_selectors.cmake_preset_index().names["configure"])
+        self.assertTrue(any("owner PLT-210 is done without evidenced criteria" in error for error in errors), errors)
+
+    def test_installer_matrix_cannot_add_an_unowned_artifact(self) -> None:
+        documents = copy.deepcopy(workflow_ownership.workflow_documents())
+        documents["release.yml"]["jobs"]["build-installer"]["strategy"]["matrix"]["include"].append({
+            "artifact_name": "SparkInstaller-Linux-arm64", "platform_name": "Linux",
+        })
+        errors = workflow_ownership.installer_workflow_errors(self.mutable, documents)
+        self.assertTrue(any("SparkInstaller-Linux-arm64: requires exactly one" in error for error in errors), errors)
+
+    def test_installer_products_are_experimental_and_platform_owned(self) -> None:
+        for field, value in (("capabilityIds", ["platform.windows"]), ("applicability", "required"),
+                             ("ownerWorkItemId", "INST-130")):
+            with self.subTest(field=field):
+                contract = copy.deepcopy(self.contract)
+                contract["readiness"]["experimentalInstallerProducts"][0][field] = value
+                errors = workflow_ownership.installer_workflow_errors(contract)
+                self.assertTrue(any("must remain experimental under platform.linux/PLT-210" in e for e in errors), errors)
+        self.mutable["readiness"]["experimentalInstallerProducts"].pop()
+        errors = workflow_ownership.installer_workflow_errors(self.mutable)
+        self.assertTrue(any("requires exactly one platform-owned build product" in e for e in errors), errors)
 
 
 class WorkItemApplicabilityTests(ContractTestCase):
@@ -2252,6 +2410,25 @@ class DerivedEvidenceTests(ContractTestCase):
 
 class GenerationAndCiTests(ContractTestCase):
     """Frozen case 10: generated outputs and dedicated CI stay wired."""
+
+    def test_full_determinism_is_an_unconditional_required_job(self) -> None:
+        documents = workflow_ownership.workflow_documents()
+        jobs = documents["build.yml"]["jobs"]
+        name = "site-data-full-determinism"
+        self.assertIn(name, jobs["required-ci-gate"]["needs"])
+        expected = next(step["env"]["EXPECTED_REQUIRED_JOBS_JSON"]
+                        for step in jobs["required-ci-gate"]["steps"]
+                        if "EXPECTED_REQUIRED_JOBS_JSON" in step.get("env", {}))
+        self.assertIn(name, json.loads(expected))
+        job = jobs[name]
+        for key in ("if", "continue-on-error", "needs"):
+            self.assertNotIn(key, job)
+        command = "timeout 15m python3 -B Tests/Tools/test_site_data_generation_determinism.py -v"
+        runs = [step for step in job["steps"] if "run" in step]
+        self.assertEqual(1, len(runs))
+        self.assertEqual("set -euo pipefail\n" + command, runs[0]["run"].strip())
+        for key in ("if", "continue-on-error"):
+            self.assertNotIn(key, runs[0])
 
     def test_generated_handoff_is_current_and_deterministic(self) -> None:
         rendered = render_handoff.render_handoff(self.contract)
