@@ -551,9 +551,13 @@
           "evidence": [
             "SparkEngine/Source/Engine/Networking/NetworkManager.cpp",
             "Tests/TestSecureTransportWired.cpp",
-            "GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.cpp"
+            "GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.cpp",
+            ".github/workflows/build.yml",
+            "Tools/Terrafront/check_selection.py",
+            "Tests/Tools/test_terrafront_ci.py",
+            "Tools/Terrafront/multiclient.py"
           ],
-          "note": "Connect carries the signed handshake and NetworkManager seals every later datagram, so Terrafront SCRAM login and gameplay use the same channel. SecureTransport_Wired_PlaintextGameplayAfterHandshakeDropped and SensitiveMessageRefusedWithoutChannel pin it. Local Windows run only; no exact-commit CI yet."
+          "note": "Advisory Terrafront process job exercises real TFClientNet/TFServerSim onboarding and movement. Harness requires positive/increasing sealed send/receive counters in server and both clients and zero plaintext drops/unsealed refusals. Python contracts pass; MSVC/Linux process and exact-commit hosted evidence pending."
         },
         {
           "criterionDigest": "sha256:04b666ab668b",

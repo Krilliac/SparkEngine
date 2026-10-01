@@ -199,6 +199,12 @@ class NetView:
     reorder_pct: float
     seed: int
 
+    # -1 means absent in an old log, never evidence of encrypted traffic.
+    sealed_sent: int = -1
+    sealed_received: int = -1
+    plaintext_dropped: int = -1
+    unsealed_refused: int = -1
+
 
 @dataclass
 class Observation:
@@ -344,13 +350,15 @@ SCENARIOS = {
             (0, 14.0, f"tf_give {FORGED_LEGAL_PRIMARY}"),
             (0, 22.0, "tf_give auc_rifle"),
             (0, 24.0, "tf_give_raw 32766"),
+            (0, 25.0, "tf_fire_raw auc_rifle"),
+            (0, 26.0, "tf_fire_raw np_shotgun"),
         ),
-        server_steps=(ServerStep(25.5, 36.0, "tf_cheat_stats", changes_world=False),),
-        checkpoints=(18.5, 28.5),
-        client_seconds=40.0,
+        server_steps=(ServerStep(30.5, 41.0, "tf_cheat_stats", changes_world=False),),
+        checkpoints=(18.5, 31.0),
+        client_seconds=43.0,
     ),
     # B saves a legal primary, tries a forged one, leaves, and comes back in the
-    # same process through tf_connect / tf_login / tf_enter.
+    # new process through tf_connect / tf_login / tf_enter (run() splits the script).
     "reconnect": Scenario(
         name="reconnect",
         client_factions=("mra", "auc"),
@@ -650,7 +658,9 @@ def _parse_body_line(current: Observation, kind: str, values: dict[str, str]) ->
         current.net = NetView(int(values["bytesSent"]), int(values["bytesReceived"]), int(values["packetsSent"]),
                               int(values["packetsReceived"]), int(values["packetsDropped"]), values["impair"] == "1",
                               float(values["lagMs"]), float(values["jitterMs"]), float(values["lossPct"]),
-                              float(values["dupPct"]), float(values["reorderPct"]), int(values["seed"]))
+                              float(values["dupPct"]), float(values["reorderPct"]), int(values["seed"]),
+                              *(int(values.get(key, -1)) for key in
+                                ("sealedSent", "sealedReceived", "plaintextFramesDropped", "unsealedSendsRefused")))
 
 
 def parse_observations(lines: list[str]) -> list[Observation]:
@@ -962,6 +972,35 @@ def evaluate_views(scenario: Scenario, server: RoleLog, clients: list[RoleLog],
 # --------------------------------------------------------------------------- scenario verdicts
 
 
+def encrypted_transport_verdict(views: RunViews) -> tuple[list[str], dict]:
+    """Production onboarding must exchange keyed traffic before and after movement.
+
+    The convergence verdict already requires authenticated world entry and both
+    moves. Missing counters, plaintext rejection or a send without a key fail.
+    Counters are sampled before client shutdown, when disconnect traffic can race.
+    """
+    problems = []
+    metrics = {}
+    for role, observations in [("server", views.server),
+                               *((f"client{i + 1}", v) for i, v in enumerate(views.clients))]:
+        nets = [view.net if view else None for view in observations]
+        if len(nets) < 3 or any(net is None or min(net.sealed_sent, net.sealed_received,
+                                                  net.plaintext_dropped, net.unsealed_refused) < 0 for net in nets):
+            problems.append(f"{role}: missing encrypted transport checkpoint counters")
+            continue
+        metrics[role] = [{"sealedSent": net.sealed_sent, "sealedReceived": net.sealed_received,
+                          "plaintextFramesDropped": net.plaintext_dropped,
+                          "unsealedSendsRefused": net.unsealed_refused} for net in nets]
+        if any(net.plaintext_dropped or net.unsealed_refused for net in nets):
+            problems.append(f"{role}: plaintext frames dropped or unsealed sends refused")
+        if nets[0].sealed_sent <= 0 or nets[0].sealed_received <= 0:
+            problems.append(f"{role}: onboarding has no keyed traffic in both directions")
+        for before, after in zip(nets, nets[1:]):
+            if after.sealed_sent <= before.sealed_sent or after.sealed_received <= before.sealed_received:
+                problems.append(f"{role}: movement did not advance keyed traffic in both directions")
+    return problems, metrics
+
+
 def _require_views(views: RunViews, clients: tuple[int, ...], name: str) -> list[str]:
     """A verdict cannot run on missing views: every server checkpoint and each named client's must exist."""
     missing = [f"{name}: server checkpoint {i} is missing" for i, v in enumerate(views.server) if v is None]
@@ -1013,6 +1052,10 @@ def forged_verdict(views: RunViews) -> list[str]:
     a = views.self_id(0, 0)
     b = views.self_id(1, 0)
     for index, view in enumerate(views.server):
+        for player in (a, b):
+            before, after = views.server[0].pawns.get(player), view.pawns.get(player)
+            if before is None or after is None or before.health != after.health:
+                problems.append(f"forged: player {player} health changed after rejected fire")
         saved = view.players.get(a)
         if saved is None or saved.loadout != FORGED_LEGAL_PRIMARY:
             problems.append(f"forged: checkpoint {index} server loadout of player {a} is "
@@ -1021,7 +1064,7 @@ def forged_verdict(views: RunViews) -> list[str]:
         if other is None or other.loadout != "default":
             problems.append(f"forged: player {b} was affected (loadout {other.loadout if other else 'missing'})")
     audited = forged_audit_records(views.server_entries)
-    for kind in ("loadout-ineligible", "loadout-unknown-weapon"):
+    for kind in ("loadout-ineligible", "loadout-unknown-weapon", "fire-weapon-not-in-loadout", "fire-weapon-locked"):
         if (kind, a) not in audited:
             problems.append(f"forged: no [TF-AUDIT] forged-state kind={kind} line for player {a}")
     if any(player == b for _, player in audited):
@@ -1029,8 +1072,8 @@ def forged_verdict(views: RunViews) -> list[str]:
     snapshots = [rows for rows in cheat_stats_snapshots(views.server_entries) if a in rows]
     if not snapshots:
         problems.append(f"forged: no tf_cheat_stats run listed player {a}")
-    elif snapshots[-1][a] != 2 or snapshots[-1].get(b, 0) != 0:
-        problems.append(f"forged: forged-state counters {snapshots[-1]} (expected {a}: 2, {b}: 0)")
+    elif snapshots[-1][a] != 4 or snapshots[-1].get(b, 0) != 0:
+        problems.append(f"forged: forged-state counters {snapshots[-1]} (expected {a}: 4, {b}: 0)")
     return problems
 
 
@@ -1532,11 +1575,14 @@ def fresh_credentials() -> dict[str, str]:
 
 
 def client_script(scenario: Scenario, port: int, faction: str, index: int = 0,
-                  credentials: dict[str, str] | None = None, impairment: Impairment | None = None) -> str:
+                  credentials: dict[str, str] | None = None, impairment: Impairment | None = None,
+                  start_seconds: float = 0.0, end_seconds: float | None = None) -> str:
     values = {"port": port, "faction": faction, **(credentials or fresh_credentials())}
     timeline = [(at, template.format(**values)) for at, template in timed_client_steps(scenario, index)]
     timeline += [(at, "tf_observe") for at in scenario.checkpoints]
-    return render_script(timeline, impairment, index + 1, scenario.client_seconds)
+    end = scenario.client_seconds if end_seconds is None else end_seconds
+    timeline = [(at - start_seconds, command) for at, command in timeline if start_seconds <= at < end]
+    return render_script(timeline, impairment, index + 1, end - start_seconds)
 
 
 def soak_server_script(port: int, budgets: dict, soak_seconds: float) -> str:
@@ -1646,6 +1692,31 @@ def stop_all(children: list[Child]) -> None:
             child.process.wait()
 
 
+RECONNECT_EXIT_S = 30.0
+RECONNECT_START_S = 31.0
+
+
+def join_reconnected_client(first: RoleLog, second: RoleLog, impairment: Impairment | None) -> RoleLog:
+    """Join independent process logs using measured clocks, never a fabricated restart time."""
+    for log in (first, second):
+        if log.returncode != 0 or log.anchor is None or not log.entries:
+            raise HarnessError(f"{log.role}: reconnect requires a clean exit and a real audit trail")
+        if impairment is not None:
+            probes = command_outputs(log.entries, "net_impair")
+            if len(probes) < IMPAIR_MIN_PROBES or any(
+                    (seen := parse_impair_status(lines)) is None or not impair_matches(seen, impairment.expected(2))
+                    for _, lines in probes):
+                raise HarnessError(f"{log.role}: reconnect process did not retain requested impairment")
+    before_ids, after_ids = character_ids(first.entries), character_ids(second.entries)
+    if before_ids is None or len(before_ids) != 1 or before_ids != after_ids:
+        raise HarnessError("reconnect: new process did not restore the same single character")
+    offset = second.anchor - first.anchor
+    if offset <= 0:
+        raise HarnessError("reconnect: returning process clock did not start after original process")
+    entries = [*first.entries, *(replace(entry, seconds=entry.seconds + offset) for entry in second.entries)]
+    return RoleLog(first.role, 0, first.anchor, entries, first.faction)
+
+
 def run(args: argparse.Namespace, name: str, workdir: Path) -> dict:
     """One scenario: a dedicated server plus its clients, optionally under args.impairment."""
     scenario = SCENARIOS[name]
@@ -1659,24 +1730,59 @@ def run(args: argparse.Namespace, name: str, workdir: Path) -> dict:
     deadline = time.monotonic() + args.timeout
     server_seconds = scenario.client_seconds + SERVER_TAIL_S
     children: list[Child] = []
+    returning: Child | None = None
+    credentials = [fresh_credentials() for _ in scenario.client_factions]
     try:
         server = launch("server", args, workdir, server_script(port, server_seconds, scenario, args.impairment),
                         server_seconds)
         children.append(server)
         wait_for_server(server, min(deadline, time.monotonic() + SERVER_READY_TIMEOUT_S))
         for index, faction in enumerate(scenario.client_factions):
-            script = client_script(scenario, port, faction, index, impairment=args.impairment)
-            children.append(launch(f"client{index + 1}", args, workdir, script, scenario.client_seconds))
+            seconds = RECONNECT_EXIT_S if name == "reconnect" and index == 1 else scenario.client_seconds
+            script = client_script(scenario, port, faction, index, credentials[index], args.impairment,
+                                   end_seconds=seconds)
+            children.append(launch(f"client{index + 1}", args, workdir, script, seconds))
+        if name == "reconnect":
+            original = children[2]
+            def poll_anchors() -> None:
+                for child in children:
+                    child.poll_anchor()
+            wait_for_exit([original], deadline, poll_anchors)
+            if original.process.returncode != 0 or original.anchor is None:
+                raise HarnessError("reconnect: original client failed before replacement launch")
+            while time.monotonic() < original.anchor + RECONNECT_START_S:
+                if time.monotonic() > deadline:
+                    raise HarnessError("reconnect: timed out before replacement launch")
+                poll_anchors()
+                time.sleep(POLL_INTERVAL_S)
+            script = client_script(scenario, port, scenario.client_factions[1], 1, credentials[1], args.impairment,
+                                   start_seconds=RECONNECT_START_S)
+            returning = launch("client2-reconnect", args, workdir, script,
+                               scenario.client_seconds - RECONNECT_START_S)
+            children.append(returning)
         wait_for_exit(children, deadline)
     finally:
         stop_all(children)
-        for index in range(len(scenario.client_factions)):
-            (workdir / f"client{index + 1}" / f"client{index + 1}.cfg").unlink(missing_ok=True)
+        for child in children:
+            (workdir / child.role / f"{child.role}.cfg").unlink(missing_ok=True)
 
     logs = [child.log() for child in children]
+    if returning is not None:
+        logs[2] = join_reconnected_client(logs[2], logs.pop(), args.impairment)
     for log, faction in zip(logs[1:], scenario.client_factions):
         log.faction = faction
-    summary = evaluate(scenario, logs[0], logs[1:], args.impairment)
+    summary, views = evaluate_views(scenario, logs[0], logs[1:], args.impairment)
+    if name == "onboard_spawn_move":
+        problems, metrics = encrypted_transport_verdict(views)
+        summary["problems"] += problems
+        summary["encrypted_transport"] = metrics
+    if returning is not None:
+        summary["client_restart"] = {"originalPid": children[2].process.pid,
+                                     "replacementPid": returning.process.pid,
+                                     "originalExit": children[2].process.returncode,
+                                     "replacementExit": returning.process.returncode,
+                                     "originalAnchor": children[2].anchor, "replacementAnchor": returning.anchor}
+    summary["passed"] = not summary["problems"]
     summary["port"] = port
     summary["workdir"] = str(workdir)
     return summary
@@ -1935,6 +2041,9 @@ def main(argv: list[str] | None = None) -> int:
     except HarnessError as error:
         summary = {"scenario": "soak", "passed": False, "problems": [str(error)], "checkpoints": []}
     label = "soak" if args.soak_seconds is not None else " ".join(args.scenario)
+    output_dir = Path(args.workdir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2))
     if not summary["passed"]:
         print(f"TerrafrontMultiClient {label}: FAILED", file=sys.stderr)

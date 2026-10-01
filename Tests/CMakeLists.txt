@@ -4842,6 +4842,12 @@ set_tests_properties(TerrafrontMultiClient_Harness PROPERTIES
     TIMEOUT 120)
 option(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS
     "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)" OFF)
+add_test(NAME TerrafrontMultiClient_CIContract
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_terrafront_ci.py)
+set_tests_properties(TerrafrontMultiClient_CIContract PROPERTIES
+    LABELS "terrafront;unit;python"
+    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+    TIMEOUT 120)
 if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEADLESS_SUPPORT AND
    TARGET SparkEngine AND TARGET SparkGameMMOFPS)
     add_dependencies(SparkTests SparkEngine SparkGameMMOFPS)
@@ -4875,14 +4881,27 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
     set(_tf_runs ${CMAKE_BINARY_DIR}/Testing/terrafront-multiclient)
     # TF-110: the same checkpoints under 80 ms / 20 ms / 3% loss / 2% dup / 3%
     # reorder with a fixed seed; fails unless impairment was live in every process.
-    add_test(
-        NAME TerrafrontMultiClient_ImpairedConvergence
-        COMMAND ${_tf_harness} --scenario onboard_spawn_move combat_kill_respawn territory
-            --impair 80,20,0.03,2,3 --seed 20260927 --timeout 150 --workdir ${_tf_runs}/impaired)
-    set_tests_properties(TerrafrontMultiClient_ImpairedConvergence PROPERTIES
-        LABELS "terrafront-multiclient;network;process"
-        RUN_SERIAL TRUE
-        TIMEOUT 360)
+    # Separate entries preserve bounded execution when covering all six scenarios.
+    foreach(_tf_run IN ITEMS
+            OnboardSpawnMove:onboard_spawn_move
+            CombatKillRespawn:combat_kill_respawn
+            ForgedStateRejectedAndAudited:forged_state
+            ReconnectRestoresAllowedState:reconnect
+            TerritoryReplicates:territory
+            VehicleLifecycle:vehicle_lifecycle)
+        string(REPLACE ":" ";" _tf_run "${_tf_run}")
+        list(GET _tf_run 0 _tf_name)
+        list(GET _tf_run 1 _tf_scenario)
+        add_test(
+            NAME TerrafrontMultiClient_ImpairedConvergence_${_tf_name}
+            COMMAND ${_tf_harness} --scenario ${_tf_scenario}
+                --impair 80,20,0.03,2,3 --seed 20260927 --timeout 150
+                --workdir ${_tf_runs}/impaired/${_tf_scenario})
+        set_tests_properties(TerrafrontMultiClient_ImpairedConvergence_${_tf_name} PROPERTIES
+            LABELS "terrafront-multiclient;network;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 240)
+    endforeach()
     # TF-110: 120 s soak against Tools/Terrafront/soak_budgets.json (provisional
     # guards). The 30-minute run is the same command with --soak-seconds 1800.
     add_test(

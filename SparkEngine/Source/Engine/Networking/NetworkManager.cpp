@@ -561,6 +561,10 @@ namespace Spark::Net
         frame.push_back(NETWORK_FRAME_SEALED);
         frame.insert(frame.end(), sealed.begin(), sealed.end());
         const bool sent = SendRawTo(frame, addr, localOnly);
+        if (sent)
+        {
+            ++m_stats.sealedFramesSent;
+        }
 
         // Nonce discipline: the sequence space per key is never approached. Rotating is
         // unilateral (the receiver accepts epoch + 1 once it authenticates); when the epoch

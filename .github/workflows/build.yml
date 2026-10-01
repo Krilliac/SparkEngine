@@ -1099,6 +1099,79 @@ jobs:
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
+  # TF-110 / NET-100: advisory until three clean local runs and one clean hosted
+  # run qualify this exact selection for promotion by the integrator.
+  # Do not add to Required CI Gate in this change.
+  terrafront-multiclient:
+    name: "Terrafront Multi-client (advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Terrafront process tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON \
+          -DENABLE_NETWORKING=ON -DSPARK_HEADLESS_SUPPORT=ON \
+          -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON 2>&1 | tee terrafront-configure.log
+
+    - name: Build Terrafront processes and tests
+      run: |
+        set -euo pipefail
+        cmake --build build/linux-gcc-release --target SparkEngine SparkGameMMOFPS SparkTests \
+          --parallel 2 2>&1 | tee terrafront-build.log
+
+    - name: Pin Terrafront process selections
+      id: selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-multiclient$' > terrafront-multiclient-selection.json
+        python3 Tools/Terrafront/check_selection.py terrafront-multiclient-selection.json --label terrafront-multiclient
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-soak$' > terrafront-soak-selection.json
+        python3 Tools/Terrafront/check_selection.py terrafront-soak-selection.json --label terrafront-soak
+
+    - name: Run Terrafront multi-client selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^terrafront-multiclient$' \
+          --no-tests=error --output-on-failure --output-junit terrafront-multiclient.xml \
+          2>&1 | tee terrafront-multiclient-tests.log
+
+    - name: Run Terrafront short soak
+      if: ${{ !cancelled() && steps.selection.outcome == 'success' }}
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^terrafront-soak$' \
+          --no-tests=error --output-on-failure --output-junit terrafront-soak.xml \
+          2>&1 | tee terrafront-soak-tests.log
+
+    - name: Upload Terrafront summaries and audit logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: terrafront-multiclient-${{ github.sha }}
+        if-no-files-found: error
+        path: |
+          terrafront-*.log
+          terrafront-*-selection.json
+          build/linux-gcc-release/terrafront-*.xml
+          build/linux-gcc-release/Testing/Temporary/LastTest.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/summary.json
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/exec_audit.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/stdout.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/stderr.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
   # SEC-100: real multi-process network integration in the Linux Shipping
   # configuration. SparkServer, SparkGateway and the SparkGame module run as
   # separate processes over the area-control channel, and the orchestration

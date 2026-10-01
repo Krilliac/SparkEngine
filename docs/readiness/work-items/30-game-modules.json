@@ -1910,9 +1910,12 @@
             "Tests/CMakeLists.txt",
             "wiki/advanced/Testing.md",
             "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp",
-            "GameModules/SparkGameMMOFPS/DESIGN.md"
+            "GameModules/SparkGameMMOFPS/DESIGN.md",
+            ".github/workflows/build.yml",
+            "Tools/Terrafront/check_selection.py",
+            "Tests/Tools/test_terrafront_ci.py"
           ],
-          "note": "Adds the impaired matrix (TerrafrontMultiClient_ImpairedConvergence) to the existing unimpaired scenarios. The process run has not been executed locally."
+          "note": "Advisory build.yml/terrafront-multiclient pins 15 process tests: seven normal, all six impaired, two server restarts. Python contracts cover selection and verdicts. Three clean local runs and one hosted run remain pending before required-gate promotion; no live process result is claimed."
         },
         {
           "criterionDigest": "sha256:885e584f6fb7",
@@ -1930,9 +1933,12 @@
             "Tools/Terrafront/multiclient.py",
             "Tests/Tools/test_terrafront_multiclient.py",
             "Tests/CMakeLists.txt",
-            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp"
+            "GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp",
+            ".github/workflows/build.yml",
+            "Tools/Terrafront/check_selection.py",
+            "Tests/Tools/test_terrafront_ci.py"
           ],
-          "note": "The forged_verdict requires the [TF-AUDIT] forged-state lines, a forged count of at least 2 in tf_cheat_stats, and an unchanged saved loadout on the server's player line. The live process run (TerrafrontMultiClient_ForgedStateRejectedAndAudited) has not been run here."
+          "note": "Harness requires loadout-ineligible, loadout-unknown-weapon, fire-weapon-not-in-loadout and fire-weapon-locked audit kinds, exactly four rejects, unchanged loadout and health. Production tf_fire_raw sends via TFClientNet. Live runs pending; inventory/ability scope remains an owner decision."
         },
         {
           "criterionDigest": "sha256:b9afc7b58a80",
@@ -1940,9 +1946,12 @@
           "evidence": [
             "Tools/Terrafront/multiclient.py",
             "Tests/Tools/test_terrafront_multiclient.py",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "Tools/Terrafront/check_selection.py",
+            "Tests/Tools/test_terrafront_ci.py"
           ],
-          "note": "The reconnect_verdict compares the server's before and after player lines and rejects a pre-disconnect snapshot that is still default kit. The live process run (TerrafrontMultiClient_ReconnectRestoresAllowedState) has not been run here."
+          "note": "Reconnect exits client2, launches a fresh process with isolated user data, reuses credentials and checks one identical character plus restored legal state. Logs use measured process clocks; either crash or missing audit fails. Python contracts pass; live local and hosted runs pending."
         },
         {
           "criterionDigest": "sha256:a993c17ebdcf",
@@ -1952,9 +1961,12 @@
             "Tools/Terrafront/soak_budgets.json",
             "Tests/Tools/test_terrafront_multiclient.py",
             "Tests/CMakeLists.txt",
-            "GameModules/SparkGameMMOFPS/DESIGN.md"
+            "GameModules/SparkGameMMOFPS/DESIGN.md",
+            ".github/workflows/build.yml",
+            "Tools/Terrafront/check_selection.py",
+            "Tests/Tools/test_terrafront_ci.py"
           ],
-          "note": "Provisional budgets; 34 actors because of the kTFMaxBots cap. TerrafrontSoak_Short has not been executed locally, and the 30-minute run needs a hosted job."
+          "note": "Advisory terrafront-multiclient also pins/runs TerrafrontSoak_Short and uploads metrics/audits. Existing provisional budgets and 32-bot cap unchanged: no measurements justify replacements. 30-minute/100-actor coverage and declared measured budgets remain open; no process run proved here."
         }
       ],
       "commands": [
@@ -1996,7 +2008,6 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "terrafront-multiclient",
         "terrafront-soak"
       ],
       "plannedTestSelectors": []

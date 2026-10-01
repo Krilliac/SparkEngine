@@ -1844,6 +1844,7 @@ namespace Spark::Net
                     m_stats.plaintextFramesDropped++;
                     continue;
                 }
+                ++m_stats.sealedFramesReceived;
             }
             else if (frameKind == NETWORK_FRAME_HANDSHAKE)
             {
