@@ -523,13 +523,26 @@ TEST(LauncherProcess_GameLaunchRefusesManifestPathWithEmbeddedNul)
 
     // "Game\u0000.so" kept its NUL through std::filesystem::u8path, and the OS read the name
     // only up to it, so the module and its .sparkabi sidecar both resolved to the file "Game".
+    // The JSON escape \u0000 decodes to that NUL, so it reaches the path check.
     const std::string nativeExtension = NativeModule(projectRoot, "x").extension().string();
-    WriteBytes(projectRoot / "spark.modules.json", "{\"modules\":[{\"path\":\"Game\u0000" + nativeExtension + "\"}]}");
+    WriteBytes(projectRoot / "spark.modules.json", "{\"modules\":[{\"path\":\"Game\\u0000" + nativeExtension + "\"}]}");
     const auto request = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
     EXPECT_FALSE(request.has_value());
     if (!request)
     {
         EXPECT_TRUE(request.error().find("NUL") != std::string::npos);
+    }
+
+    // A raw NUL byte never reaches the path check: unescaped control bytes are not JSON.
+    std::string rawManifest = "{\"modules\":[{\"path\":\"Game";
+    rawManifest.push_back('\0');
+    rawManifest += nativeExtension + "\"}]}";
+    WriteBytes(projectRoot / "spark.modules.json", rawManifest);
+    const auto rawRequest = BuildLaunchRequest(binaries, project, LaunchTarget::Game);
+    EXPECT_FALSE(rawRequest.has_value());
+    if (!rawRequest)
+    {
+        EXPECT_TRUE(rawRequest.error().find("not valid JSON") != std::string::npos);
     }
 
     std::error_code error;
