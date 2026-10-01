@@ -635,6 +635,12 @@ TEST(SecureTransport_Wired_CaptureContainsNoPayloadPlaintext)
               });
     EXPECT_TRUE(sawChat);
     EXPECT_TRUE(sawSecret);
+    // Positive sealed counters distinguish an active encrypted path from zero
+    // plaintext refusals on a path that never exchanged any traffic.
+    EXPECT_GE(server.GetStats().sealedFramesSent, uint64_t{2});
+    EXPECT_GT(server.GetStats().sealedFramesReceived, uint64_t{0});
+    EXPECT_EQ(server.GetStats().plaintextFramesDropped, uint32_t{0});
+    EXPECT_EQ(server.GetStats().unsealedSendsRefused, uint32_t{0});
     for (const auto& datagram : peer.Socket().Captured())
     {
         EXPECT_FALSE(ContainsBytes(datagram, Bytes(chatText)));

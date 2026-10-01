@@ -478,6 +478,8 @@ namespace Spark::Net
         /// NET-100: sealed frames dropped by SecureChannel::Open, indexed by OpenResult
         /// (Malformed, UnsupportedVersion, UnknownKeyEpoch, AuthenticationFailed, Replayed; [0] unused).
         std::array<uint32_t, 6> securityDrops{};
+        uint64_t sealedFramesSent = 0;           ///< Successfully sent keyed non-handshake frames
+        uint64_t sealedFramesReceived = 0;       ///< Authenticated and decoded non-handshake frames
         uint32_t plaintextFramesDropped = 0;     ///< Unframed, unknown-kind or out-of-state plaintext frames refused
         uint32_t unsealedSendsRefused = 0;       ///< Outgoing non-handshake messages with no SecureChannel to seal them
         uint32_t keyRotations = 0;               ///< Send-key rotations performed

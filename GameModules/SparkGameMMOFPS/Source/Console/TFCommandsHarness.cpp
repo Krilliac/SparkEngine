@@ -270,10 +270,13 @@ namespace Terrafront::CommandDetail
                 Spark::Net::InstabilitySimulator::GetInstance().GetSettings();
             return std::format("\n[TF-OBSERVE] net bytesSent={} bytesReceived={} packetsSent={} packetsReceived={} "
                                "packetsDropped={} impair={} lagMs={:.1f} jitterMs={:.1f} lossPct={:.1f} dupPct={:.1f} "
-                               "reorderPct={:.1f} seed={}",
+                               "reorderPct={:.1f} seed={} sealedSent={} sealedReceived={} plaintextFramesDropped={} "
+                               "unsealedSendsRefused={}",
                                stats.bytesSent, stats.bytesReceived, stats.packetsSent, stats.packetsReceived,
                                stats.packetsDropped, impair.enabled ? 1 : 0, impair.latencyMs, impair.jitterMs,
-                               impair.packetLossPercent, impair.duplicatePercent, impair.reorderPercent, impair.seed);
+                               impair.packetLossPercent, impair.duplicatePercent, impair.reorderPercent, impair.seed,
+                               stats.sealedFramesSent, stats.sealedFramesReceived, stats.plaintextFramesDropped,
+                               stats.unsealedSendsRefused);
 #else
             return {};
 #endif
@@ -447,6 +450,38 @@ namespace Terrafront::CommandDetail
                 },
                 "TF-110 harness: point the local view at a player's pawn (enemy = nearest other faction)", cat,
                 "tf_aim_at <playerId|enemy>");
+
+            console.RegisterCommand(
+                "tf_fire_raw",
+                [context](const std::vector<std::string>& args) -> std::string
+                {
+                    if (args.size() != 1 || !context->data || !context->data->IsLoaded())
+                    {
+                        return "[TF] usage: tf_fire_raw <weaponKey> (requires loaded data)";
+                    }
+                    const WeaponDef* weapon = context->data->GetWeaponByKey(args[0]);
+                    if (!weapon || !ClientConnected(*context) || !context->HasLocalPlayer())
+                    {
+                        return "[TF] tf_fire_raw: requires a known weapon and connected local player";
+                    }
+                    float eye[3] = {};
+                    if (!LocalEye(*context, eye))
+                    {
+                        return "[TF] tf_fire_raw: local pawn is not alive";
+                    }
+                    // Bypass only client equipment checks. The real packet, encrypted transport,
+                    // server admission and ServerHandleFire validation remain authoritative.
+                    TF_FireEvent event{};
+                    event.weaponId = weapon->id;
+                    event.originX = eye[0];
+                    event.originY = eye[1];
+                    event.originZ = eye[2];
+                    event.dirZ = 1.0f;
+                    context->clientNet->SendMsg(TFMsg::FireEvent, &event, sizeof(event));
+                    return "[TF] raw fire event sent";
+                },
+                "TF-110 harness: send a fire event for a supplied weapon (server validates)", cat,
+                "tf_fire_raw <weaponKey>");
 
             console.RegisterCommand(
                 "tf_give_raw",

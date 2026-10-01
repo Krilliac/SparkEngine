@@ -94,6 +94,7 @@ namespace
         "tf_walk",
         "tf_aim_at",
         "tf_give_raw",
+        "tf_fire_raw",
         "tf_vehicle_buy",
         "tf_vehicle_seat",
         "tf_place_faction",

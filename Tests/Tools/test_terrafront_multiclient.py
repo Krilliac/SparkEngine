@@ -11,6 +11,7 @@ real three-process runs are the TerrafrontMultiClient_<Scenario> CTest entries.
 from __future__ import annotations
 
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -506,7 +507,11 @@ class ScheduleTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as workdir, redirect_stdout(out), redirect_stderr(io.StringIO()):
                 code = multiclient.main(["--engine", sys.executable, "--module", __file__, "--scenario",
                                          "onboard_spawn_move", "--workdir", workdir])
-                self.assertEqual(list(Path(workdir).iterdir()), [])  # refused before launching anything
+                # Refused before launching anything: the only output is the failed summary.
+                self.assertEqual([p.name for p in Path(workdir).iterdir()], ["summary.json"])
+                refused = json.loads((Path(workdir) / "summary.json").read_text(encoding="utf-8"))
+                self.assertFalse(refused["passed"])
+                self.assertEqual(refused["checkpoints"], [])
         self.assertEqual(code, 1)
         self.assertIn("must be quiet for more than", out.getvalue())
 
@@ -534,6 +539,10 @@ class ScheduleTests(unittest.TestCase):
         self.assertIn("client2: its clock started", " ".join(problems))
         summary = multiclient.evaluate(multiclient.SCENARIOS["territory"], server, clients)
         self.assertIn("client2: its clock started", " ".join(summary["problems"]))
+
+
+FORGED_KINDS = ("loadout-ineligible", "loadout-unknown-weapon",
+                "fire-weapon-not-in-loadout", "fire-weapon-locked")
 
 
 class ScenarioVerdictTests(unittest.TestCase):
@@ -568,7 +577,7 @@ class ScenarioVerdictTests(unittest.TestCase):
         self.assert_fails_with(run_scenario("combat_kill_respawn", states, COMBAT_IDS), "sanctuary")
 
     def test_forged_state_rejected_and_audited_passes(self) -> None:
-        extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 2)
+        extra = forged_lines(FORGED_KINDS, 4)
         self.assert_passes(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra))
 
     def test_forged_state_rejected_but_not_audited_fails(self) -> None:
@@ -578,7 +587,7 @@ class ScenarioVerdictTests(unittest.TestCase):
                                "kind=loadout-unknown-weapon")
 
     def test_forged_state_audited_but_applied_fails(self) -> None:
-        extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 2)
+        extra = forged_lines(FORGED_KINDS, 4)
         self.assert_fails_with(run_scenario("forged_state", forged_states(saved="auc_rifle"), [(2, 1)] * 2, extra),
                                "expected mra_rifle")
 
@@ -586,6 +595,20 @@ class ScenarioVerdictTests(unittest.TestCase):
         extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 1)
         self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
                                "forged-state counters")
+
+    def test_each_fire_rejection_needs_its_own_audit_kind(self) -> None:
+        for missing in FORGED_KINDS[2:]:
+            extra = forged_lines(tuple(kind for kind in FORGED_KINDS if kind != missing), 4)
+            self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
+                                   f"kind={missing}")
+
+    def test_audited_fire_that_still_damages_a_player_fails(self) -> None:
+        states = forged_states()
+        states[1] = {**states[1], "pawns": dict(states[1]["pawns"])}
+        faction, cls, health, pos = states[1]["pawns"][1]
+        states[1]["pawns"][1] = (faction, cls, health - 1, pos)
+        self.assert_fails_with(run_scenario("forged_state", states, [(2, 1)] * 2,
+                                           forged_lines(FORGED_KINDS, 4)), "health changed")
 
     def test_reconnect_restoring_saved_state_passes(self) -> None:
         self.assert_passes(run_scenario("reconnect", reconnect_states(), RECONNECT_IDS))
@@ -703,7 +726,7 @@ class ProcessTests(unittest.TestCase):
 # --------------------------------------------------------------------------- impaired runs
 
 IMPAIRMENT = multiclient.Impairment.parse("80,20,0.03,2,3", 20260927)
-IMPAIRED_TRIO = ("onboard_spawn_move", "combat_kill_respawn", "territory")
+IMPAIRED_TRIO = tuple(multiclient.SCENARIOS)
 
 
 def impair_probe(frame: int, seconds: float, values: tuple | None) -> list[str]:
