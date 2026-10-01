@@ -140,6 +140,17 @@ namespace Spark::Graphics
             return std::nullopt;
         }
 
+        // Store never writes an empty entry, so a zero-length file is a torn write (a crash
+        // between Store's truncating open and its write) or a planted file. Returning it as a
+        // successful blob handed the driver empty bytecode on every later run and the shader
+        // was never recompiled; treat it as a miss so the next compile rewrites the entry.
+        if (fileSize == 0)
+        {
+            SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                           "ShaderDiskCache: cached blob '%s' is empty — treating as miss", PathForLog(path).c_str());
+            return std::nullopt;
+        }
+
         CompiledShaderBlob blob;
         blob.bytecode.resize(fileSize);
         ifs.read(reinterpret_cast<char*>(blob.bytecode.data()), static_cast<std::streamsize>(fileSize));

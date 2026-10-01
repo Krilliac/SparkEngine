@@ -45,6 +45,13 @@ namespace Spark
             return false;
         }
 
+        /// A resolved path names a regular file (links followed); errors and empty paths do not.
+        bool IsRegularFile(const std::string& fullPath)
+        {
+            std::error_code ec;
+            return !fullPath.empty() && fs::is_regular_file(fullPath, ec) && !ec;
+        }
+
         /// Containment decided on already-normalized paths: @p child must sit under
         /// @p parent without climbing out of it.
         bool IsContainedIn(const fs::path& child, const fs::path& parent)
@@ -178,6 +185,13 @@ namespace Spark
     std::vector<uint8_t> LocalFileProvider::ReadFile(const std::string& virtualPath) const
     {
         std::string fullPath = ResolvePath(virtualPath);
+        // Only a regular file has contents. On Linux an ifstream opens a directory, and on
+        // ext4 its end offset reads as INT64_MAX, which used to size the buffer below: any
+        // mod path naming a directory ("." or "textures") aborted the process.
+        if (!IsRegularFile(fullPath))
+        {
+            return {};
+        }
         std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
         if (!file.is_open())
         {
@@ -194,7 +208,7 @@ namespace Spark
         std::vector<uint8_t> buffer(static_cast<size_t>(size));
         file.seekg(0, std::ios::beg);
         file.read(reinterpret_cast<char*>(buffer.data()), size);
-        if (file.bad())
+        if (file.bad() || file.gcount() != static_cast<std::streamsize>(size))
         {
             SPARK_LOG_WARN(Spark::LogCategory::Core, "VFS: Read error for '%s'", fullPath.c_str());
             return {};
@@ -205,6 +219,10 @@ namespace Spark
     std::string LocalFileProvider::ReadTextFile(const std::string& virtualPath) const
     {
         std::string fullPath = ResolvePath(virtualPath);
+        if (!IsRegularFile(fullPath))
+        {
+            return {};
+        }
         std::ifstream file(fullPath);
         if (!file.is_open())
         {

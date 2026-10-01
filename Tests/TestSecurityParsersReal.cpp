@@ -16,6 +16,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/PacketValidator.h"
 #include "Engine/Streaming/SceneManifest.h"
+#include "Graphics/MaterialLoader.h"
 #include "Utils/JsonUtils.h"
 
 #include <cstdint>
@@ -24,6 +25,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -333,6 +335,40 @@ TEST(SecurityParsers_ZeroByteOverrideWinsThePriorityContest)
     vfs.Unmount("securityparsers_engine");
     vfs.Unmount("securityparsers_mod");
     std::filesystem::remove_all(engineRoot, ec);
+    std::filesystem::remove_all(modRoot, ec);
+}
+
+TEST(SecurityParsers_VfsDirectoryPathReadsAsNothing)
+{
+    // SEC-120 fuzz finding (SparkFuzzVirtualFileSystem, regression-mount-root-directory.path
+    // and regression-subdirectory.path). On Linux an ifstream opens a directory, and on ext4
+    // its end offset reads as INT64_MAX, which LocalFileProvider::ReadFile used as the buffer
+    // size: a mod naming "." or a folder aborted the engine. Only regular files have contents.
+    const auto modRoot = ScratchPath("vfs_directory_mod");
+    std::error_code ec;
+    std::filesystem::remove_all(modRoot, ec);
+    std::filesystem::create_directories(modRoot / "textures" / "nested", ec);
+    {
+        std::ofstream file(modRoot / "textures" / "brick.dds", std::ios::binary | std::ios::trunc);
+        file << "DDS ";
+    }
+
+    auto& vfs = Spark::VirtualFileSystem::GetInstance();
+    vfs.Initialize();
+    vfs.Unmount("securityparsers_dirs");
+    vfs.Mount("securityparsers_dirs", std::make_unique<Spark::LocalFileProvider>(modRoot.string()),
+              Spark::MOD_PRIORITY);
+
+    for (const char* directory : {".", "textures", "textures/nested", "textures/./nested/.."})
+    {
+        EXPECT_EQ(vfs.ReadFile(directory).size(), 0u);
+        EXPECT_EQ(vfs.ReadTextFile(directory).size(), 0u);
+    }
+    // A regular file beside them still reads.
+    EXPECT_EQ(vfs.ReadTextFile("textures/brick.dds"), std::string("DDS "));
+    EXPECT_EQ(vfs.ReadFile("textures/brick.dds").size(), 4u);
+
+    vfs.Unmount("securityparsers_dirs");
     std::filesystem::remove_all(modRoot, ec);
 }
 
@@ -746,4 +782,27 @@ TEST(SecurityParsers_HitValidationRejectsOutOfWindowClientTimestamp)
     EXPECT_FALSE(manager.ValidateHit(0.5f, 0.0f, origin, direction, 1000.0f).hit);
 
     manager.GetLagCompensator().Clear();
+}
+
+// ============================================================================
+// .sparkmat factors (SEC-120 material-loader fuzz finding)
+// ============================================================================
+
+TEST(SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults)
+{
+    // SparkFuzzMaterialLoader found that std::stof accepts "nan" and "inf", and
+    // RegisterMaterial's std::clamp passes NaN through (normalScale is not clamped at all),
+    // so a material file put non-finite PBR factors into the GPU constant buffers.
+    std::istringstream input("name = NaNMaterial\nmetallic = nan\nroughness = inf\nnormalScale = -inf\n"
+                             "emissiveFactor = NAN\nalphaCutoff = 0.25\n");
+    Spark::Graphics::SparkMatDefinition definition;
+    ASSERT_TRUE(Spark::Graphics::ParseSparkMatDefinition(input, definition));
+    const Spark::Graphics::SparkMatDefinition defaults;
+    EXPECT_EQ(definition.metallic, defaults.metallic);
+    EXPECT_EQ(definition.roughness, defaults.roughness);
+    EXPECT_EQ(definition.normalScale, defaults.normalScale);
+    EXPECT_EQ(definition.emissiveFactor, defaults.emissiveFactor);
+    // Finite factors still parse.
+    EXPECT_EQ(definition.alphaCutoff, 0.25f);
+    EXPECT_EQ(definition.name, std::string("NaNMaterial"));
 }
