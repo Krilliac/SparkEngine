@@ -333,9 +333,9 @@ TEST(EngineWiring_TriggerVolumeComponentPublishesEnterEventFromLifecycleTick)
 // physics contact events reach entity scripts with no game-module glue
 // ============================================================================
 
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
 TEST(EngineWiring_LifecycleConnectsScriptContactDispatch)
 {
-#ifdef SPARK_ANGELSCRIPT_SUPPORT
     World& world = SetupContextWithWorld();
     InitializeProductionLifecycle();
     auto* ctx = EngineContext::Get();
@@ -372,8 +372,8 @@ TEST(EngineWiring_LifecycleConnectsScriptContactDispatch)
     world.DestroyEntity(other);
     world.DestroyEntity(filler);
     Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
-#endif
 }
+#endif
 
 // ============================================================================
 // engine-longtail-03: the lifecycle produces RecordFrame while recording

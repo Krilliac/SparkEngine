@@ -68,11 +68,6 @@ VERSION_PROBE_DEFINES = frozenset({"SPARK_VERSION_EXECUTABLE"})
 # an entry whose binary gains a behavioural lane on a gap platform fails until
 # it is removed.
 KNOWN_BINARY_LANE_GAPS: dict[str, tuple[frozenset[str] | None, str]] = {
-    "SparkLauncher": (
-        None,
-        "GUI-only project picker with no headless mode; its launch-request validation runs in-process in "
-        "Tests/TestLauncherProcess.cpp, not through the shipped binary",
-    ),
     "SparkShaderCompiler": (
         frozenset({"Linux", "Darwin"}),
         "d3dcompiler_47 is its only integrated backend, so off Windows every compile is refused; the Windows "

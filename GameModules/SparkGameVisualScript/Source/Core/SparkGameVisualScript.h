@@ -64,6 +64,7 @@ class SparkGameVisualScriptModule : public Spark::IModule
     std::unique_ptr<Spark::VisualScriptDemo::DemoWorld> m_demo; ///< Script entities; null until a load succeeds
     std::vector<std::string> m_loadedSoundCues;                 ///< Cues this load registered with the AudioEngine
     std::vector<std::string> m_consoleCommands; ///< Registered through m_context->GetConsole(); removed in OnUnload
+    std::vector<EntityID> m_pausedScripts;      ///< Enabled scripts suspended by this module
     bool m_initialized{false};
     bool m_paused{false};
 };

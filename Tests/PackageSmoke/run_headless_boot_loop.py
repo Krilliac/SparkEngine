@@ -17,8 +17,7 @@ Every iteration gets a fresh working directory and private user directories
   unloaded=1, faults=0) -- the single acceptance contract every NullRHI gate uses;
 * print exactly one ``SPARK_FPS_HEADLESS_ARENA`` record with an active match,
   every authored spawn bound, and one arena tick per reported OnUpdate;
-* print ``SPARK_HEADLESS_NULLRHI_RESOURCES live=0`` where the host reports it
-  (the Linux headless host; the Windows host does not emit the record);
+* print ``SPARK_HEADLESS_NULLRHI_RESOURCES live=0`` on both supported hosts;
 * print exactly one ``SPARK_HEADLESS_SHUTDOWN ms=N`` teardown-time record with
   ``N`` within the ``nullrhi.headless.shutdown_time`` ceiling of
   ``perf-budgets/v1/budget.json`` (``--budget-file``);
@@ -290,7 +289,7 @@ def run_loop(args: argparse.Namespace, root: Path) -> list[str]:
                              bound=RUN_BOUND_SECONDS, label=label)
         try:
             require_strict_records(args.cmake, parser_script, result, run_dir, label)
-            state, shutdown_ms = validate_run(result, resources_required=not IS_WINDOWS,
+            state, shutdown_ms = validate_run(result, resources_required=True,
                                               shutdown_ceiling_ms=shutdown_ceiling_ms)
             states.append(state)
             require_deterministic(states)

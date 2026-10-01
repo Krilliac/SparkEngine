@@ -70,6 +70,7 @@ bool EngineRuntime::InitializeHeadlessRhi()
     }
 
     headlessRhiBridge = std::move(bridge);
+    CheckInitializationPointForTesting("headless-rhi-ready");
     return true;
 }
 

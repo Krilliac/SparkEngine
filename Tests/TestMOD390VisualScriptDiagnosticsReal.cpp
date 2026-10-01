@@ -20,6 +20,7 @@
 #include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.h"
 #include "Core/RuntimePackage.h"
 #include "Engine/ECS/Components.h"
+#include "Engine/ECS/Systems/ECSystems.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 
 #include <array>
@@ -161,6 +162,8 @@ TEST(VisualScriptDiagnostics_ShippedScriptsBuildElevenEntityWorld)
     EXPECT_TRUE(fx.demo->GetLastError().empty());
     EXPECT_TRUE(fx.demo->GetScriptRoot() == fx.scriptRoot);
     ASSERT_TRUE(fx.demo->Spawn());
+    Spark::ECS::ScriptRuntimeSystem scriptRuntime{&fx.engine};
+    scriptRuntime.Update(fx.world, 0.0f);
 
     EXPECT_EQ(fx.CountDemoEntities(), Spark::VisualScriptDemo::ExpectedEntityCount);
     EXPECT_EQ(fx.demo->GetEntities().size(), static_cast<size_t>(Spark::VisualScriptDemo::ExpectedEntityCount));
@@ -226,9 +229,9 @@ TEST(VisualScriptDiagnostics_AttachFailureRollsBackAllEntities)
     DiagnosticsFixture fx;
     ASSERT_TRUE(fx.ready);
 
-    // HealthPickup is spawned last, so ten entities already hold started
-    // scripts when its constructor faults on the healAmount line (integer
-    // division by a runtime zero during member initialization).
+    // HealthPickup is spawned last, so ten entities are attached before its
+    // constructor faults on the healAmount line. The runtime tick is separate
+    // from spawning, so those earlier scripts have not necessarily received Start().
     const size_t faultLine = fx.FindLine("HealthPickup.as", "    float healAmount = 30.0f;").first;
     ASSERT_TRUE(faultLine != 0);
     ASSERT_TRUE(fx.Rewrite("HealthPickup.as", "    float healAmount = 30.0f;\n",

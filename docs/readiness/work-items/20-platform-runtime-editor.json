@@ -1743,9 +1743,16 @@
             "Tests/TestLifecycleCompositionRootFailure.cpp",
             "SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h",
             "Tests/TestLIFE200LifecycleLoopReal.cpp",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            "Tests/TestLIFE200ModuleReloadLoopReal.cpp",
+            "Tests/LifecycleLoopGuards.h",
+            "Tests/PackageSmoke/run_headless_init_failure.py",
+            "SparkEngine/Source/Core/EngineRuntime.h",
+            "SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp",
+            "SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp",
+            "SparkEngine/Source/Core/SparkEngine.cpp"
           ],
-          "note": "LifecycleLoop_InjectedFailureAtEveryInitBoundaryUnwinds and LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles (CTest Lifecycle_LifecycleLoop, exact count 4) inject failures at every production init stage boundary and a throwing update stage, and check the root unwinds without leaks. Local only; no exact-commit CI run."
+          "note": "Lifecycle_LifecycleLoop pins 9 tests, including partial gameplay-stage exceptions and NullRHI init failure. POSIX HeadlessInitFailure_Unwinds sweeps host checkpoints; loops check services, phases, commands, threads and handles. Throwing module-load coverage is also cited. C++ tests are unrun here; windowed audio/graphics injection and allocation-leak proof remain open."
         },
         {
           "criterionDigest": "sha256:4fdc9530334c",
@@ -1770,7 +1777,7 @@
             "tools/perf-budget/compare_results.py",
             "Tests/Tools/test_perf_budget_hardening.py"
           ],
-          "note": "HeadlessBootLoop_FPSNullRHI enforces the provisional 5000 ms nullrhi.headless.shutdown_time ceiling on every boot. The metric stays 'suspended' because 'active' requires a reviewed baseline. Certified-hardware numbers remain PERF-100 hosted evidence. No MSVC run of HeadlessBootLoop_FPSNullRHI is recorded yet."
+          "note": "Headless NullRHI only: the boot loop enforces the provisional 5000 ms teardown ceiling and now requires live=0 on Windows and Linux. Timing excludes process exit and retained POSIX module images. The metric remains suspended pending a reviewed PERF-100 baseline; windowed client/editor, daemon and tools lack shutdown budgets. No C++ or hosted run was performed here."
         }
       ],
       "commands": [
@@ -2532,9 +2539,14 @@
             "Tests/TestENG200ScriptAudioAnimationReal.cpp",
             "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
             "SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp",
-            "SparkEngine/Source/Engine/ECS/Components/AudioComponents.h"
+            "SparkEngine/Source/Engine/ECS/Components/AudioComponents.h",
+            "SparkEngine/Source/Core/EngineSetup.h",
+            "SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp",
+            "Tests/TestENG200ScriptRuntimeReal.cpp",
+            "GameModules/SparkGameVisualScript/Source/Core/Main.cpp",
+            "Tests/CMakeLists.txt"
           ],
-          "note": "criterionDigest sha256:bb0380c76dc5. Replaces 'Audio/animation untested'. playSound() queues bounded ScriptAudioCues, which AudioUpdateSystem drains through the real AudioEngine. playAnimation() switches the entity's existing AnimationController idempotently, and AnimationUpdateSystem advances it (ScriptBindings_ENG200_Media*, ctest ScriptMediaBindingsReal)."
+          "note": "Engine-owned ScriptRuntimeSystem dispatches components; VisualScript no longer calls Start/Update. Regression covers movement, start-once, disabled and detach. playSound() queues ScriptAudioCues drained by AudioUpdateSystem; playAnimation() switches AnimationController and AnimationUpdateSystem advances it (TestENG200ScriptAudioAnimationReal, ScriptMediaBindingsReal). C++/audio/CI unverified."
         },
         {
           "criterionDigest": "sha256:cd885ff23a2b",
@@ -2565,9 +2577,13 @@
             "Tests/TestMOD390VisualScriptGameplayReal.cpp",
             "Tests/CMakeLists.txt",
             "GameModules/SparkGameVisualScript/README.md",
-            "wiki/subsystems/Visual-Scripting.md"
+            "wiki/subsystems/Visual-Scripting.md",
+            ".github/workflows/build.yml",
+            "Tests/run_visual_script_package.py",
+            "Tests/Tools/test_visual_script_package.py",
+            "GameModules/SparkGameVisualScript/Source/Core/Main.cpp"
           ],
-          "note": "CTest VisualScriptRuntimePackagedLoop plays graphs compiled into a package to the win and pins the VisualScriptRuntime_ prefix with SPARK_TEST_EXPECT_COUNT=3. Local runs only; no exact-commit CI run."
+          "note": "Advisory build.yml visual-script-package builds AngelScript and the VisualScript module, packages graphs through spark-cli, and launches the packaged host from a foreign cwd with autoplay and a one-win/exit-0 check. Python contracts are local harness proof only. The packaged executable launch and C++ build remain unrun; no exact-commit CI evidence."
         }
       ],
       "commands": [
@@ -2614,8 +2630,7 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "scripting-integration",
-        "visual-script-package"
+        "scripting-integration"
       ],
       "plannedTestSelectors": []
     }

@@ -329,7 +329,7 @@
       "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 182,
+      "line": 184,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -356,7 +356,7 @@
       "description": "Build deterministic cooker and worker processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 195,
+      "line": 197,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -365,7 +365,7 @@
       "description": "Build the standalone automation host",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 196,
+      "line": 198,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -374,7 +374,7 @@
       "description": "Include SparkConsole in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 199,
+      "line": 201,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -383,7 +383,7 @@
       "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 200,
+      "line": 202,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -401,7 +401,7 @@
       "description": "Enable editor features",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 190,
+      "line": 192,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -419,7 +419,7 @@
       "description": "Build SparkInstaller (bootstrap installer/updater)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 193,
+      "line": 195,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -428,7 +428,7 @@
       "description": "Build SparkLauncher (Unity-Hub-style project picker)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 191,
+      "line": 193,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -437,7 +437,7 @@
       "description": "Enable link-time optimization in Release/MinSizeRel builds",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 377,
+      "line": 379,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -544,7 +544,7 @@
       "description": "Build dedicated server, gateway, and orchestration processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 194,
+      "line": 196,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -553,7 +553,7 @@
       "description": "Build SparkBuild (terminal-UI CMake configurator)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 192,
+      "line": 194,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -580,7 +580,7 @@
       "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 187,
+      "line": 189,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -589,7 +589,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2740,
+      "line": 2745,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -603,11 +603,20 @@
       "definitionScope": []
     },
     {
+      "name": "SPARK_LIFECYCLE_TEST_HOOKS",
+      "description": "Enable process-level lifecycle fault-injection hooks for dedicated test lanes",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 182,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "SPARK_NATIVE_ARCH",
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 370,
+      "line": 372,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -616,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3706,
+      "line": 3711,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -625,7 +634,7 @@
       "description": "FATAL_ERROR when any dependency declared by ThirdParty/dependencies.lock is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 185,
+      "line": 187,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -634,7 +643,7 @@
       "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 186,
+      "line": 188,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -643,7 +652,7 @@
       "description": "Keep private symbols out of the runtime images (split to the symbols component)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 201,
+      "line": 203,
       "conditionFrames": [],
       "definitionScope": []
     }
@@ -986,6 +995,18 @@
       ]
     },
     {
+      "name": "SPARK_LIFECYCLE_TEST_HOOKS",
+      "description": "Enable process-level lifecycle fault-injection hooks for dedicated test lanes",
+      "default": false,
+      "status": "active",
+      "declarationCount": 1,
+      "activeDeclarationCount": 1,
+      "indeterminateDeclarationCount": 0,
+      "declaredIn": [
+        "CMakeLists.txt"
+      ]
+    },
+    {
       "name": "SPARK_NATIVE_ARCH",
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
       "default": false,
@@ -1052,7 +1073,7 @@
       "description": "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 182,
+      "line": 184,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1079,7 +1100,7 @@
       "description": "Build deterministic cooker and worker processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 195,
+      "line": 197,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1088,7 +1109,7 @@
       "description": "Build the standalone automation host",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 196,
+      "line": 198,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1097,7 +1118,7 @@
       "description": "Include SparkConsole in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 199,
+      "line": 201,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1106,7 +1127,7 @@
       "description": "Include developer commands (god, noclip, etc.) in Shipping builds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 200,
+      "line": 202,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1124,7 +1145,7 @@
       "description": "Enable editor features",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 190,
+      "line": 192,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1142,7 +1163,7 @@
       "description": "Build SparkInstaller (bootstrap installer/updater)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 193,
+      "line": 195,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1151,7 +1172,7 @@
       "description": "Build SparkLauncher (Unity-Hub-style project picker)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 191,
+      "line": 193,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1160,7 +1181,7 @@
       "description": "Enable link-time optimization in Release/MinSizeRel builds",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 377,
+      "line": 379,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1267,7 +1288,7 @@
       "description": "Build dedicated server, gateway, and orchestration processes",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 194,
+      "line": 196,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1276,7 +1297,7 @@
       "description": "Build SparkBuild (terminal-UI CMake configurator)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 192,
+      "line": 194,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1330,7 +1351,7 @@
       "description": "Enable double precision physics (JPH_DOUBLE_PRECISION) for large worlds",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 187,
+      "line": 189,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1348,7 +1369,7 @@
       "description": "Build production-entry-point libFuzzer targets (Linux Clang only)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 2740,
+      "line": 2745,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1357,7 +1378,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4428,
+      "line": 4456,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1366,10 +1387,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3839,
+      "line": 3867,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3834",
+          "id": "Tests/CMakeLists.txt:3862",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1383,7 +1404,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4466,
+      "line": 4494,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1392,7 +1413,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4635,
+      "line": 4663,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1401,10 +1422,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3782,
+      "line": 3810,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3710",
+          "id": "Tests/CMakeLists.txt:3738",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1418,7 +1439,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4899,
+      "line": 4927,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1427,7 +1448,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1888,
+      "line": 1895,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1465,11 +1486,20 @@
       "definitionScope": []
     },
     {
+      "name": "SPARK_LIFECYCLE_TEST_HOOKS",
+      "description": "Enable process-level lifecycle fault-injection hooks for dedicated test lanes",
+      "default": "OFF",
+      "file": "CMakeLists.txt",
+      "line": 182,
+      "conditionFrames": [],
+      "definitionScope": []
+    },
+    {
       "name": "SPARK_NATIVE_ARCH",
       "description": "Tune for the build machine's CPU (SSE4.2/AVX2/etc). Disable for distributed binaries.",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 370,
+      "line": 372,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1478,7 +1508,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3706,
+      "line": 3711,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1487,7 +1517,7 @@
       "description": "FATAL_ERROR when any dependency declared by ThirdParty/dependencies.lock is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 185,
+      "line": 187,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1496,7 +1526,7 @@
       "description": "Suppress compiler warnings from third-party libraries (Jolt, etc.)",
       "default": "ON",
       "file": "CMakeLists.txt",
-      "line": 186,
+      "line": 188,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1505,7 +1535,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1750,
+      "line": 1757,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1514,7 +1544,7 @@
       "description": "Keep private symbols out of the runtime images (split to the symbols component)",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 201,
+      "line": 203,
       "conditionFrames": [],
       "definitionScope": []
     }
@@ -1557,6 +1587,7 @@
     "SPARK_GL_HARDWARE_ROW",
     "SPARK_HEADLESS_SUPPORT",
     "SPARK_IMGUI_ENABLE_FREETYPE",
+    "SPARK_LIFECYCLE_TEST_HOOKS",
     "SPARK_NATIVE_ARCH",
     "SPARK_REQUIRE_WINDOWS_INSTALLERS",
     "SPARK_STRICT_DEPS",
@@ -2221,10 +2252,10 @@
       "target": "Detour",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1799,
+      "line": 1804,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1785",
+          "id": "CMakeLists.txt:1790",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2259,24 +2290,24 @@
       "target": "Jolt",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1770,
+      "line": 1775,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1673",
+          "id": "CMakeLists.txt:1678",
           "branch": 0,
           "branches": [
             "JOLT_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:1768",
+          "id": "CMakeLists.txt:1773",
           "branch": 0,
           "branches": [
             "SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"
           ]
         },
         {
-          "id": "CMakeLists.txt:1769",
+          "id": "CMakeLists.txt:1774",
           "branch": 0,
           "branches": [
             "MSVC"
@@ -2311,31 +2342,31 @@
       "target": "OpenGL::GL",
       "kind": "imported",
       "file": "CMakeLists.txt",
-      "line": 639,
+      "line": 641,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:574",
+          "id": "CMakeLists.txt:576",
           "branch": 0,
           "branches": [
             "NOT WIN32 AND ENABLE_SDL2 AND EXISTS \"${SDL2_SUBMODULE_DIR}/CMakeLists.txt\""
           ]
         },
         {
-          "id": "CMakeLists.txt:578",
+          "id": "CMakeLists.txt:580",
           "branch": 0,
           "branches": [
             "NOT OpenGL_FOUND"
           ]
         },
         {
-          "id": "CMakeLists.txt:593",
+          "id": "CMakeLists.txt:595",
           "branch": 0,
           "branches": [
             "_LIBGL_RUNTIME AND EXISTS \"${_FALLBACK_GL_HEADERS}/GL/gl.h\""
           ]
         },
         {
-          "id": "CMakeLists.txt:638",
+          "id": "CMakeLists.txt:640",
           "branch": 0,
           "branches": [
             "NOT TARGET OpenGL::GL"
@@ -2370,10 +2401,10 @@
       "target": "Recast",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1787,
+      "line": 1792,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1785",
+          "id": "CMakeLists.txt:1790",
           "branch": 0,
           "branches": [
             "ENABLE_RECAST AND NOT TARGET Recast AND NOT TARGET Detour AND EXISTS \"${RECAST_DIR}/Recast/Source/Recast.cpp\""
@@ -2570,7 +2601,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 852,
+      "line": 853,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2620,10 +2651,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2238,
+      "line": 2245,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2237",
+          "id": "Tests/CMakeLists.txt:2244",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2756,10 +2787,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5611,
+      "line": 5639,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5609",
+          "id": "Tests/CMakeLists.txt:5637",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2802,7 +2833,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 814,
+      "line": 815,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2861,10 +2892,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1534,
+      "line": 1536,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1533",
+          "id": "CMakeLists.txt:1535",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -2879,10 +2910,10 @@
       "target": "SparkEngine",
       "kind": "executable",
       "file": "CMakeLists.txt",
-      "line": 1536,
+      "line": 1538,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1533",
+          "id": "CMakeLists.txt:1535",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -2898,10 +2929,10 @@
       "target": "SparkEngineInterface",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 1517,
+      "line": 1519,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1516",
+          "id": "CMakeLists.txt:1518",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -2916,7 +2947,7 @@
       "target": "SparkEngineLib",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 1490,
+      "line": 1492,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2926,10 +2957,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1497,
+      "line": 1498,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1459",
+          "id": "Tests/CMakeLists.txt:1460",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2944,7 +2975,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 968,
+      "line": 969,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -3920,10 +3951,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 836,
+      "line": 837,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:835",
+          "id": "Tests/CMakeLists.txt:836",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -4051,7 +4082,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 856,
+      "line": 857,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4061,10 +4092,10 @@
       "target": "SparkMMOSessionGatePeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1466,
+      "line": 1467,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1459",
+          "id": "Tests/CMakeLists.txt:1460",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -4079,7 +4110,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 847,
+      "line": 848,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4089,7 +4120,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 858,
+      "line": 859,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4119,10 +4150,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 827,
+      "line": 828,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:826",
+          "id": "Tests/CMakeLists.txt:827",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -4159,7 +4190,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 850,
+      "line": 851,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4169,7 +4200,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 854,
+      "line": 855,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4179,7 +4210,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 973,
+      "line": 974,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -4189,7 +4220,7 @@
       "target": "SparkRuntimeShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1904,
+      "line": 1909,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4239,7 +4270,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 860,
+      "line": 861,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4249,10 +4280,10 @@
       "target": "SparkSpirvShaders",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 1979,
+      "line": 1984,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:1920",
+          "id": "CMakeLists.txt:1925",
           "branch": 0,
           "branches": [
             "SPARK_VULKAN_AVAILABLE"
@@ -4289,7 +4320,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 963,
+      "line": 964,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -4299,7 +4330,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 803,
+      "line": 804,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4339,10 +4370,10 @@
       "target": "VulkanMemoryAllocator",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 790,
+      "line": 792,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:789",
+          "id": "CMakeLists.txt:791",
           "branch": 0,
           "branches": [
             "NOT TARGET VulkanMemoryAllocator AND EXISTS \"${VMA_ROOT}/vk_mem_alloc.h\""
@@ -4357,10 +4388,10 @@
       "target": "angelscript",
       "kind": "required_reference",
       "file": "CMakeLists.txt",
-      "line": 1051,
+      "line": 1053,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:993",
+          "id": "CMakeLists.txt:995",
           "branch": 0,
           "branches": [
             "ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"
@@ -4375,10 +4406,10 @@
       "target": "cgltf",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 859,
+      "line": 861,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:858",
+          "id": "CMakeLists.txt:860",
           "branch": 0,
           "branches": [
             "NOT TARGET cgltf AND EXISTS \"${CGLTF_DIR}/cgltf.h\""
@@ -4413,17 +4444,17 @@
       "target": "glad",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 2457,
+      "line": 2462,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:2452",
+          "id": "CMakeLists.txt:2457",
           "branch": 0,
           "branches": [
             "SPARK_OPENGL_AVAILABLE"
           ]
         },
         {
-          "id": "CMakeLists.txt:2456",
+          "id": "CMakeLists.txt:2461",
           "branch": 0,
           "branches": [
             "GLAD_FOUND"
@@ -4503,10 +4534,10 @@
       "target": "miniaudio",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 878,
+      "line": 880,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:877",
+          "id": "CMakeLists.txt:879",
           "branch": 0,
           "branches": [
             "NOT TARGET miniaudio AND EXISTS \"${MINIAUDIO_DIR}/miniaudio.h\""
@@ -4521,10 +4552,10 @@
       "target": "miniz",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 735,
+      "line": 737,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:733",
+          "id": "CMakeLists.txt:735",
           "branch": 0,
           "branches": [
             "MINIZ_SOURCES"
@@ -4539,10 +4570,10 @@
       "target": "nlohmann_json",
       "kind": "interface_library",
       "file": "CMakeLists.txt",
-      "line": 904,
+      "line": 906,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:903",
+          "id": "CMakeLists.txt:905",
           "branch": 0,
           "branches": [
             "NOT TARGET nlohmann_json AND EXISTS \"${NLOHMANN_JSON_DIR}/nlohmann_json.h\""
@@ -4707,10 +4738,10 @@
       "target": "stb_image",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 840,
+      "line": 842,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:839",
+          "id": "CMakeLists.txt:841",
           "branch": 0,
           "branches": [
             "NOT TARGET stb_image AND EXISTS \"${STB_DIR}/stb_image.h\""
@@ -4725,10 +4756,10 @@
       "target": "tinyexr",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 917,
+      "line": 919,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:916",
+          "id": "CMakeLists.txt:918",
           "branch": 0,
           "branches": [
             "NOT TARGET tinyexr AND EXISTS \"${TINYEXR_DIR}/tinyexr.h\""
@@ -4743,10 +4774,10 @@
       "target": "tinyobjloader",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 813,
+      "line": 815,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:810",
+          "id": "CMakeLists.txt:812",
           "branch": 0,
           "branches": [
             "TINYOBJLOADER_INCLUDE_DIR"
@@ -4761,7 +4792,7 @@
       "target": "uninstall",
       "kind": "utility",
       "file": "CMakeLists.txt",
-      "line": 2803,
+      "line": 2808,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4771,10 +4802,10 @@
       "target": "zstd",
       "kind": "static_library",
       "file": "CMakeLists.txt",
-      "line": 769,
+      "line": 771,
       "conditionFrames": [
         {
-          "id": "CMakeLists.txt:768",
+          "id": "CMakeLists.txt:770",
           "branch": 0,
           "branches": [
             "NOT TARGET zstd AND EXISTS \"${ZSTD_ROOT}/zstd.h\""
@@ -4865,7 +4896,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1799,
+          "line": 1804,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -4919,7 +4950,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1770,
+          "line": 1775,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -4973,7 +5004,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 639,
+          "line": 641,
           "kind": "imported",
           "origin": "non-build",
           "definitionScope": [],
@@ -5027,7 +5058,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1787,
+          "line": 1792,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5267,7 +5298,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 852,
+          "line": 853,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5341,7 +5372,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2238,
+          "line": 2245,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5449,7 +5480,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5611,
+          "line": 5639,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5503,7 +5534,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 814,
+          "line": 815,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5567,7 +5598,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1534,
+          "line": 1536,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5575,7 +5606,7 @@
         },
         {
           "file": "CMakeLists.txt",
-          "line": 1536,
+          "line": 1538,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5593,7 +5624,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1517,
+          "line": 1519,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5611,7 +5642,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1490,
+          "line": 1492,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5629,7 +5660,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1497,
+          "line": 1498,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5647,7 +5678,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 968,
+          "line": 969,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7375,7 +7406,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 836,
+          "line": 837,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7511,7 +7542,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 856,
+          "line": 857,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7529,7 +7560,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1466,
+          "line": 1467,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7547,7 +7578,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 847,
+          "line": 848,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7565,7 +7596,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 858,
+          "line": 859,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7603,7 +7634,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 827,
+          "line": 828,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7659,7 +7690,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 850,
+          "line": 851,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7677,7 +7708,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 854,
+          "line": 855,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7695,7 +7726,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 973,
+          "line": 974,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7713,7 +7744,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1904,
+          "line": 1909,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -7803,7 +7834,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 860,
+          "line": 861,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7821,7 +7852,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1979,
+          "line": 1984,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -7877,7 +7908,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 963,
+          "line": 964,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7895,7 +7926,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 803,
+          "line": 804,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7967,7 +7998,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 790,
+          "line": 792,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7985,7 +8016,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 1051,
+          "line": 1053,
           "kind": "required_reference",
           "origin": "required-target-reference",
           "definitionScope": [],
@@ -8003,7 +8034,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 859,
+          "line": 861,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8041,7 +8072,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2457,
+          "line": 2462,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8085,7 +8116,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 878,
+          "line": 880,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8103,7 +8134,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 735,
+          "line": 737,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8121,7 +8152,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 904,
+          "line": 906,
           "kind": "interface_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8409,7 +8440,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 840,
+          "line": 842,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8427,7 +8458,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 917,
+          "line": 919,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8445,7 +8476,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 813,
+          "line": 815,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8463,7 +8494,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 2803,
+          "line": 2808,
           "kind": "utility",
           "origin": "declaration",
           "definitionScope": [],
@@ -8481,7 +8512,7 @@
       "declarations": [
         {
           "file": "CMakeLists.txt",
-          "line": 769,
+          "line": 771,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8518,7 +8549,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 222
+      "line": 225
     },
     {
       "name": "BUILD_TESTS",
@@ -8536,7 +8567,7 @@
       "default": true,
       "category": "Scripting",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 239
+      "line": 242
     },
     {
       "name": "ENABLE_ASSET_PIPELINE_TOOLS",
@@ -8545,7 +8576,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 230
+      "line": 233
     },
     {
       "name": "ENABLE_AUTOMATION_HOST",
@@ -8554,7 +8585,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 232
+      "line": 235
     },
     {
       "name": "ENABLE_CONSOLE_IN_SHIPPING",
@@ -8563,7 +8594,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 250
+      "line": 253
     },
     {
       "name": "ENABLE_DEVCOMMANDS_IN_SHIPPING",
@@ -8572,7 +8603,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 252
+      "line": 255
     },
     {
       "name": "ENABLE_DXR",
@@ -8608,7 +8639,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 229
+      "line": 232
     },
     {
       "name": "ENABLE_LAUNCHER",
@@ -8617,7 +8648,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 225
+      "line": 228
     },
     {
       "name": "ENABLE_LTO",
@@ -8626,7 +8657,7 @@
       "default": true,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 259
+      "line": 262
     },
     {
       "name": "ENABLE_METAL",
@@ -8644,7 +8675,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 274
+      "line": 277
     },
     {
       "name": "ENABLE_NETWORKING",
@@ -8653,7 +8684,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 267
+      "line": 270
     },
     {
       "name": "ENABLE_NEURAL_RENDERING",
@@ -8707,7 +8738,7 @@
       "default": true,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 269
+      "line": 272
     },
     {
       "name": "ENABLE_SPARKBUILD",
@@ -8716,7 +8747,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 227
+      "line": 230
     },
     {
       "name": "ENABLE_VR",
@@ -8725,7 +8756,7 @@
       "default": false,
       "category": "Experimental",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 272
+      "line": 275
     },
     {
       "name": "ENABLE_VULKAN",
@@ -8755,13 +8786,22 @@
       "line": 189
     },
     {
+      "name": "SPARK_LIFECYCLE_TEST_HOOKS",
+      "displayName": "Lifecycle Test Hooks",
+      "description": "Enable process-level lifecycle fault-injection hooks for dedicated test lanes",
+      "default": false,
+      "category": "EditorTools",
+      "file": "SparkBuild/src/Config.cpp",
+      "line": 222
+    },
+    {
       "name": "SPARK_NATIVE_ARCH",
       "displayName": "Native CPU Tuning",
       "description": "Tune for the build machine instead of distributed CPUs",
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 244
+      "line": 247
     },
     {
       "name": "SPARK_REQUIRE_WINDOWS_INSTALLERS",
@@ -8770,7 +8810,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 262
+      "line": 265
     },
     {
       "name": "SPARK_STRICT_DEPS",
@@ -8779,7 +8819,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 247
+      "line": 250
     },
     {
       "name": "SPARK_SUPPRESS_THIRDPARTY_WARNINGS",
@@ -8788,7 +8828,7 @@
       "default": true,
       "category": "EditorTools",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 234
+      "line": 237
     },
     {
       "name": "STRIP_DEBUG_SYMBOLS",
@@ -8797,7 +8837,7 @@
       "default": false,
       "category": "Shipping",
       "file": "SparkBuild/src/Config.cpp",
-      "line": 254
+      "line": 257
     }
   ],
   "workflow": {
@@ -8848,7 +8888,7 @@
       "CCACHE_SLOPPINESS",
       "ERROR_RETENTION_DAYS"
     ],
-    "jobCount": 44,
+    "jobCount": 45,
     "jobs": [
       {
         "id": "fuzz-policy",
@@ -10480,7 +10520,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "a384675c4f4a71c8"
+            "runDigest": "d59b40acd7d50e4e"
           },
           {
             "index": 6,
@@ -10520,7 +10560,7 @@
               "LSAN_OPTIONS",
               "UBSAN_OPTIONS"
             ],
-            "runDigest": "e2e24ee32383d340"
+            "runDigest": "32d0d50562d5f410"
           },
           {
             "index": 9,
@@ -15190,6 +15230,149 @@
         "gating": "blocking"
       },
       {
+        "id": "visual-script-package",
+        "name": "Visual script package gameplay (advisory)",
+        "runsOn": "ubuntu-24.04",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "runnerOsClasses": [
+          "linux"
+        ],
+        "if": "absent",
+        "continueOnError": true,
+        "timeoutMinutes": 90,
+        "needs": [],
+        "failFast": "absent",
+        "maxParallel": "absent",
+        "matrixAxes": [],
+        "matrixCombinations": [],
+        "matrixResolved": true,
+        "defaultShell": "",
+        "permissions": {
+          "contents": "read"
+        },
+        "stepCount": 9,
+        "steps": [
+          {
+            "index": 0,
+            "name": "Checkout repository",
+            "id": "",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 1,
+            "name": "Install configure dependencies",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "6965040f58e8ab92"
+          },
+          {
+            "index": 2,
+            "name": "Configure visual-script Release runtime",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "1bdaf199fa1e6568"
+          },
+          {
+            "index": 3,
+            "name": "Verify package harness rejection controls",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f5addbf210634a18"
+          },
+          {
+            "index": 4,
+            "name": "Build the real engine, graph compiler tests, and visual-script module",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "2fbbbcd84df2cf0d"
+          },
+          {
+            "index": 5,
+            "name": "Assemble a packager project around the built module",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "PROJECT_ROOT"
+            ],
+            "runDigest": "8afaa66b6a367060"
+          },
+          {
+            "index": 6,
+            "name": "Package graphs and generated scripts with spark-cli",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "PROJECT_ROOT"
+            ],
+            "runDigest": "74bb1020c4439081"
+          },
+          {
+            "index": 7,
+            "name": "Launch packaged engine from a foreign working directory",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [
+              "PROJECT_ROOT"
+            ],
+            "runDigest": "de8657cce9496aed"
+          },
+          {
+            "index": 8,
+            "name": "Upload visual-script package log",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          }
+        ],
+        "envNames": [],
+        "gating": "advisory"
+      },
+      {
         "id": "module-profile-lifecycle",
         "name": "Module lifecycle (SparkGameFPS / Windows Release)",
         "runsOn": "windows-2022",
@@ -16065,12 +16248,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
+          "SPARK_LIFECYCLE_TEST_HOOKS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -16108,6 +16292,29 @@
         "preset": "",
         "parallel": "$(nproc)",
         "buildsAllTargets": true,
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-asan",
+        "step": "Run Tests under ASan + UBSan + LSan",
+        "stepIndex": 8,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build --output-on-failure --no-tests=error  -R '^HeadlessInitFailure_Unwinds$'",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build",
+        "noTestsAction": "error",
+        "outputJUnit": "",
         "commandIndex": 0
       },
       {
@@ -19336,6 +19543,92 @@
         "commandIndex": 0
       },
       {
+        "job": "visual-script-package",
+        "step": "Configure visual-script Release runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S . -B build/visual-script-package -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON -DSPARK_HEADLESS_SUPPORT=ON  -DSPARK_GAME_MODULES=SparkGameVisualScript -DENABLE_ANGELSCRIPT=ON  -DENABLE_SDL2=OFF -DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF  -DSPARK_STRICT_DEPS=ON",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "BUILD_TESTS": "ON",
+          "BUILD_GAME_MODULES": "ON",
+          "SPARK_HEADLESS_SUPPORT": "ON",
+          "SPARK_GAME_MODULES": "SparkGameVisualScript",
+          "ENABLE_ANGELSCRIPT": "ON",
+          "ENABLE_SDL2": "OFF",
+          "ENABLE_VULKAN": "OFF",
+          "ENABLE_OPENGL": "OFF",
+          "SPARK_STRICT_DEPS": "ON"
+        },
+        "sourceDir": ".",
+        "buildDir": "build/visual-script-package",
+        "commandIndex": 0
+      },
+      {
+        "job": "visual-script-package",
+        "step": "Build the real engine, graph compiler tests, and visual-script module",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/visual-script-package --target SparkEngine SparkTests SparkGameVisualScript --parallel $(nproc)",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkEngine",
+          "SparkGameVisualScript",
+          "SparkTests"
+        ],
+        "configuration": "",
+        "buildDir": "build/visual-script-package",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
+        "job": "visual-script-package",
+        "step": "Assemble a packager project around the built module",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S \"$PROJECT_ROOT\" -B \"$PROJECT_ROOT/build/Release\" -DCMAKE_BUILD_TYPE=Release",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_BUILD_TYPE": "Release"
+        },
+        "sourceDir": "$PROJECT_ROOT",
+        "buildDir": "$PROJECT_ROOT/build/Release",
+        "commandIndex": 0
+      },
+      {
         "job": "experimental-module-lifecycle",
         "step": "Configure CMake",
         "stepIndex": 3,
@@ -19478,12 +19771,13 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
           "CMAKE_BUILD_TYPE": "Debug",
           "BUILD_TESTS": "ON",
+          "SPARK_LIFECYCLE_TEST_HOOKS": "ON",
           "CMAKE_C_COMPILER": "gcc-14",
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -20447,6 +20741,63 @@
         },
         "sourceDir": "build-installer",
         "buildDir": "build-installer/build",
+        "commandIndex": 0
+      },
+      {
+        "job": "visual-script-package",
+        "step": "Configure visual-script Release runtime",
+        "stepIndex": 2,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S . -B build/visual-script-package -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON -DSPARK_HEADLESS_SUPPORT=ON  -DSPARK_GAME_MODULES=SparkGameVisualScript -DENABLE_ANGELSCRIPT=ON  -DENABLE_SDL2=OFF -DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF  -DSPARK_STRICT_DEPS=ON",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "BUILD_TESTS": "ON",
+          "BUILD_GAME_MODULES": "ON",
+          "SPARK_HEADLESS_SUPPORT": "ON",
+          "SPARK_GAME_MODULES": "SparkGameVisualScript",
+          "ENABLE_ANGELSCRIPT": "ON",
+          "ENABLE_SDL2": "OFF",
+          "ENABLE_VULKAN": "OFF",
+          "ENABLE_OPENGL": "OFF",
+          "SPARK_STRICT_DEPS": "ON"
+        },
+        "sourceDir": ".",
+        "buildDir": "build/visual-script-package",
+        "commandIndex": 0
+      },
+      {
+        "job": "visual-script-package",
+        "step": "Assemble a packager project around the built module",
+        "stepIndex": 5,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "configure",
+        "command": "cmake -S \"$PROJECT_ROOT\" -B \"$PROJECT_ROOT/build/Release\" -DCMAKE_BUILD_TYPE=Release",
+        "commandProvenance": "literal",
+        "options": {
+          "CMAKE_BUILD_TYPE": "Release"
+        },
+        "sourceDir": "$PROJECT_ROOT",
+        "buildDir": "$PROJECT_ROOT/build/Release",
         "commandIndex": 0
       },
       {
@@ -21680,6 +22031,35 @@
         "commandIndex": 0
       },
       {
+        "job": "visual-script-package",
+        "step": "Build the real engine, graph compiler tests, and visual-script module",
+        "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "build",
+        "command": "cmake --build build/visual-script-package --target SparkEngine SparkTests SparkGameVisualScript --parallel $(nproc)",
+        "commandProvenance": "literal",
+        "targets": [
+          "SparkEngine",
+          "SparkGameVisualScript",
+          "SparkTests"
+        ],
+        "configuration": "",
+        "buildDir": "build/visual-script-package",
+        "preset": "",
+        "parallel": "$(nproc)",
+        "buildsAllTargets": false,
+        "commandIndex": 0
+      },
+      {
         "job": "experimental-module-lifecycle",
         "step": "Build the host and every experimental module",
         "stepIndex": 4,
@@ -21752,6 +22132,29 @@
         "commandProvenance": "literal",
         "configuration": "Release",
         "testDir": "build/fuzz-policy",
+        "noTestsAction": "error",
+        "outputJUnit": "",
+        "commandIndex": 0
+      },
+      {
+        "job": "build-linux-asan",
+        "step": "Run Tests under ASan + UBSan + LSan",
+        "stepIndex": 8,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "linux",
+        "shell": "bash",
+        "jobIf": "absent",
+        "jobContinueOnError": "absent",
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "blocking",
+        "tool": "ctest",
+        "kind": "test",
+        "command": "ctest --test-dir build --output-on-failure --no-tests=error  -R '^HeadlessInitFailure_Unwinds$'",
+        "commandProvenance": "literal",
+        "configuration": "",
+        "testDir": "build",
         "noTestsAction": "error",
         "outputJUnit": "",
         "commandIndex": 0
@@ -22968,17 +23371,17 @@
       }
     ],
     "summary": {
-      "jobCount": 44,
-      "matrixLegCount": 54,
+      "jobCount": 45,
+      "matrixLegCount": 55,
       "pathFilteredEventCount": 0,
-      "configureCount": 35,
-      "buildCount": 40,
-      "testCount": 42,
+      "configureCount": 37,
+      "buildCount": 41,
+      "testCount": 43,
       "buildMatrixInvocationCount": 8,
       "unresolvedCount": 0,
       "buildAllTargetCount": 20,
       "blockingJobCount": 32,
-      "advisoryJobCount": 8,
+      "advisoryJobCount": 9,
       "conditionalJobCount": 4,
       "builtOsConfigurationPairs": [
         "linux:Release",
@@ -23046,12 +23449,13 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
         "CMAKE_BUILD_TYPE": "Debug",
         "BUILD_TESTS": "ON",
+        "SPARK_LIFECYCLE_TEST_HOOKS": "ON",
         "CMAKE_C_COMPILER": "gcc-14",
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
@@ -24015,6 +24419,63 @@
       },
       "sourceDir": "build-installer",
       "buildDir": "build-installer/build",
+      "commandIndex": 0
+    },
+    {
+      "job": "visual-script-package",
+      "step": "Configure visual-script Release runtime",
+      "stepIndex": 2,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "linux",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": true,
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "advisory",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake -S . -B build/visual-script-package -DCMAKE_BUILD_TYPE=Release  -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON -DSPARK_HEADLESS_SUPPORT=ON  -DSPARK_GAME_MODULES=SparkGameVisualScript -DENABLE_ANGELSCRIPT=ON  -DENABLE_SDL2=OFF -DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF  -DSPARK_STRICT_DEPS=ON",
+      "commandProvenance": "literal",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON",
+        "BUILD_GAME_MODULES": "ON",
+        "SPARK_HEADLESS_SUPPORT": "ON",
+        "SPARK_GAME_MODULES": "SparkGameVisualScript",
+        "ENABLE_ANGELSCRIPT": "ON",
+        "ENABLE_SDL2": "OFF",
+        "ENABLE_VULKAN": "OFF",
+        "ENABLE_OPENGL": "OFF",
+        "SPARK_STRICT_DEPS": "ON"
+      },
+      "sourceDir": ".",
+      "buildDir": "build/visual-script-package",
+      "commandIndex": 0
+    },
+    {
+      "job": "visual-script-package",
+      "step": "Assemble a packager project around the built module",
+      "stepIndex": 5,
+      "matrix": {},
+      "matrixResolved": true,
+      "runnerOs": "linux",
+      "shell": "bash",
+      "jobIf": "absent",
+      "jobContinueOnError": true,
+      "stepIf": "absent",
+      "stepContinueOnError": "absent",
+      "gating": "advisory",
+      "tool": "cmake",
+      "kind": "configure",
+      "command": "cmake -S \"$PROJECT_ROOT\" -B \"$PROJECT_ROOT/build/Release\" -DCMAKE_BUILD_TYPE=Release",
+      "commandProvenance": "literal",
+      "options": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "sourceDir": "$PROJECT_ROOT",
+      "buildDir": "$PROJECT_ROOT/build/Release",
       "commandIndex": 0
     },
     {

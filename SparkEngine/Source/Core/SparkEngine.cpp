@@ -390,6 +390,9 @@ bool ShutdownEngineAfterPreflight()
     {
         Spark::SimpleConsole::GetInstance().Shutdown();
         Spark::ConsoleProcessManager::GetInstance().Shutdown();
+        // Core startup can fail before ModuleManager exists. Its World must not
+        // survive that path merely because no module was loaded.
+        g_engineEcsWorld.reset();
     }
 
     // Platform-owned gameplay services remain registered and alive until all

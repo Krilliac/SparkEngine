@@ -8,8 +8,10 @@
  * installed in an injected EngineContext, exactly where the script getKey /
  * getKeyDown bindings read it. The harness only plays the role of the human at
  * the keyboard: each frame it presses W/A/S/D towards a target, then ticks
- * every demo script through CallUpdate at the module's sanitized frame delta,
- * in spawn order, as SparkGameVisualScriptModule::OnUpdate does.
+ * the production engine-owned ScriptRuntimeSystem at a fixed 1/60 s delta
+ * (in the product the engine Timer caps the delta). It does not reimplement
+ * script lifecycle dispatch, so scripts run in ECS storage order, not the
+ * order the demo spawned them.
  *
  * All gameplay is decided by the scripts and observed only through
  * script-visible state: Transform and HealthComponent values the scripts
@@ -24,6 +26,7 @@
 #include "Core/EngineContext.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/ECS/Systems/ECSystems.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 #include "Input/InputManager.h"
 #include "ScopedLoggerBaseline.h"
@@ -79,6 +82,7 @@ namespace VisualScriptGameplayHarness
         EngineContext context;
         std::optional<ScopedInjectedContext> injected;
         AngelScriptEngine engine;
+        Spark::ECS::ScriptRuntimeSystem scriptRuntime{&engine};
         std::optional<Spark::VisualScriptDemo::DemoWorld> demo; // destroyed first (declared last)
         bool ready = false;
 
@@ -98,6 +102,10 @@ namespace VisualScriptGameplayHarness
 
             demo.emplace(world, engine);
             ready = engine.Initialize() && demo->LoadScripts(searchPaths) && demo->Spawn();
+            if (ready)
+            {
+                scriptRuntime.Update(world, 0.0f);
+            }
         }
 
         /// The shipped scripts from the module's source tree.
@@ -147,7 +155,7 @@ namespace VisualScriptGameplayHarness
 
         void ReleaseAllKeys() { SteerTowards(Position(Find("VS_Player")).x, Position(Find("VS_Player")).z); }
 
-        /// One host frame: input edge update, then every demo script's Update() in spawn order.
+        /// One host frame: input edge update, then the production script runtime.
         void Tick()
         {
 #ifndef _WIN32
@@ -157,12 +165,7 @@ namespace VisualScriptGameplayHarness
             input.Update();
 #endif
             const float scriptDelta = Spark::VisualScriptDemo::SanitizeDeltaTime(kFrameDelta);
-            for (EntityID entity : demo->GetEntities())
-            {
-                const auto* script = world.GetComponent<Script>(entity);
-                if (script && script->enabled)
-                    engine.CallUpdate(entity, scriptDelta);
-            }
+            scriptRuntime.Update(world, scriptDelta);
         }
 
         /**
@@ -187,6 +190,13 @@ namespace VisualScriptGameplayHarness
                     Tick();
                     ++frame;
                 }
+            }
+            // ECS iteration does not promise the manager runs after the last
+            // collectible. Give it one ordinary frame to observe the final score.
+            if (frame < frameBudget)
+            {
+                Tick();
+                ++frame;
             }
             return frame;
         }

@@ -21,6 +21,7 @@
 #include "Engine/ECS/Components/GameplayComponents.h"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <memory>
 #include <sstream>
@@ -81,8 +82,9 @@ bool SparkGameVisualScriptModule::OnLoad(Spark::IEngineContext* context)
     // The build stages the scripts beside the engine executable, so that root is
     // searched first and a launch from another directory still finds them; the
     // working directory and the module's source tree are development fallbacks.
-    // Step 2: spawn entities, bind each generated script to its real entity ID,
-    // and call Start(). A partial demo is rolled back and treated as a load failure.
+    // Step 2: spawn entities and bind each generated script to its real entity ID.
+    // ScriptRuntimeSystem starts them on the first enabled ECS tick. A partial
+    // demo is rolled back and treated as a load failure.
     std::error_code cwdError;
     const std::vector<std::filesystem::path> searchPaths = Spark::VisualScriptDemo::ScriptSearchPaths(
         Spark::RuntimePackage::GetExecutableDirectory(), std::filesystem::current_path(cwdError));
@@ -148,31 +150,15 @@ void SparkGameVisualScriptModule::OnUnload()
     m_context = nullptr;
     m_initialized = false;
     m_paused = false;
+    m_pausedScripts.clear();
 }
 
 void SparkGameVisualScriptModule::OnUpdate(float deltaTime)
 {
-    if (!m_initialized || m_paused)
-        return;
-
-    auto* world = m_context ? m_context->GetWorld() : nullptr;
-    auto* scriptEngine = m_context ? m_context->GetScriptEngine() : nullptr;
-    const float scriptDeltaTime = Spark::VisualScriptDemo::SanitizeDeltaTime(deltaTime);
-    if (!world || !scriptEngine || !m_demo || scriptDeltaTime <= 0.0f)
-        return;
-
-    for (EntityID entity : m_demo->GetEntities())
-    {
-        if (!world->GetRegistry().valid(entity))
-        {
-            scriptEngine->DetachScript(entity);
-            continue;
-        }
-
-        auto* script = world->GetComponent<Script>(entity);
-        if (script && script->enabled)
-            scriptEngine->CallUpdate(entity, scriptDeltaTime);
-    }
+    // Script lifecycle dispatch is owned by the engine's ECS Lifecycle phase.
+    // Keeping the module callback empty prevents a second update for the same
+    // Script component when this module is loaded.
+    (void)deltaTime;
 }
 
 void SparkGameVisualScriptModule::OnFixedUpdate(float fixedDeltaTime)
@@ -190,12 +176,47 @@ void SparkGameVisualScriptModule::OnResize(int width, int height)
 
 void SparkGameVisualScriptModule::OnPause()
 {
+    if (m_paused)
+    {
+        return;
+    }
     m_paused = true;
+    m_pausedScripts.clear();
+    if (m_context && m_context->GetWorld() && m_demo)
+    {
+        for (const EntityID entity : m_demo->GetEntities())
+        {
+            if (!m_context->GetWorld()->GetRegistry().valid(entity))
+            {
+                continue;
+            }
+            if (auto* script = m_context->GetWorld()->GetComponent<Script>(entity); script && script->enabled)
+            {
+                m_pausedScripts.push_back(entity);
+                script->enabled = false;
+            }
+        }
+    }
 }
 
 void SparkGameVisualScriptModule::OnResume()
 {
     m_paused = false;
+    if (m_context && m_context->GetWorld())
+    {
+        for (const EntityID entity : m_pausedScripts)
+        {
+            if (!m_context->GetWorld()->GetRegistry().valid(entity))
+            {
+                continue;
+            }
+            if (auto* script = m_context->GetWorld()->GetComponent<Script>(entity))
+            {
+                script->enabled = true;
+            }
+        }
+    }
+    m_pausedScripts.clear();
 }
 
 void SparkGameVisualScriptModule::OnImGui() {}
@@ -273,7 +294,14 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
 
             // Spawn() destroys the previous entities first and rolls back a partial restart.
             if (!m_demo->Spawn())
+            {
                 return "Visual-script demo restart failed: " + m_demo->GetLastError();
+            }
+            if (m_paused)
+            {
+                m_paused = false;
+                OnPause();
+            }
             return std::string{"Visual-script demo restarted\n"} + GetStatusString();
         },
         "Recreate the complete visual-script demo");
@@ -303,6 +331,47 @@ void SparkGameVisualScriptModule::RegisterConsoleCommands()
                 "avoid patrols, and use the green health pickup. Commands: vs_status, vs_restart, vs_reload."};
         },
         "Show visual-script demo controls");
+    registerCommand(
+        "vs_autoplay",
+        [this](const std::vector<std::string>& args)
+        {
+            if (!m_initialized || !m_context || !m_context->GetWorld() || !m_demo || args.size() != 2)
+            {
+                return std::string{"Usage: vs_autoplay <player-x> <player-z>"};
+            }
+            try
+            {
+                std::size_t usedX = 0;
+                std::size_t usedZ = 0;
+                const float x = std::stof(args[0], &usedX);
+                const float z = std::stof(args[1], &usedZ);
+                if (usedX != args[0].size() || usedZ != args[1].size() || !std::isfinite(x) || !std::isfinite(z))
+                {
+                    return std::string{"Autoplay coordinates must be finite numbers"};
+                }
+                for (const EntityID entity : m_demo->GetEntities())
+                {
+                    if (!m_context->GetWorld()->GetRegistry().valid(entity))
+                    {
+                        continue;
+                    }
+                    const auto* name = m_context->GetWorld()->GetComponent<NameComponent>(entity);
+                    auto* transform = m_context->GetWorld()->GetComponent<Transform>(entity);
+                    if (name && transform && name->name == "VS_Player")
+                    {
+                        transform->position.x = x;
+                        transform->position.z = z;
+                        return "Autoplay moved player to " + args[0] + "," + args[1];
+                    }
+                }
+                return std::string{"Autoplay player entity is unavailable"};
+            }
+            catch (const std::exception&)
+            {
+                return std::string{"Usage: vs_autoplay <player-x> <player-z>"};
+            }
+        },
+        "Move the player to one deterministic graph-game waypoint for the package smoke");
 }
 
 void SparkGameVisualScriptModule::UnregisterConsoleCommands()

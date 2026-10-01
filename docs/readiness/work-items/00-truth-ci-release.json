@@ -725,9 +725,12 @@
             ".github/workflows/build.yml",
             "SparkInstaller/CMakeLists.txt",
             "SparkInstaller/tests/InstallerHeadlessSmoke.cmake",
-            "wiki/advanced/Testing.md"
+            "wiki/advanced/Testing.md",
+            "SparkLauncher/src/main.cpp",
+            "SparkLauncher/CMakeLists.txt",
+            "Tests/Tools/run_launcher_headless_smoke.py"
           ],
-          "note": "Shipped and built binaries are read from the configured tree's file-API codemodel, not from test references. The documented gaps are SparkLauncher (all platforms) and SparkShaderCompiler (Linux/Darwin). No current configured tree or hosted run has been validated under the new rule."
+          "note": "SparkLauncherHeadlessSmoke drives shipped --validate-launch-request through the production validator with accepted/rejected fixtures; its known-gap exemption is removed. Static policy checks pass; configured-tree execution is unrun here. SparkShaderCompiler Linux/Darwin gaps and windows-shipping installed-set parity remain open. No hosted evidence."
         },
         {
           "criterionDigest": "sha256:c7cfdec66128",

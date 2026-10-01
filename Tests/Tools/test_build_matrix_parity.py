@@ -165,7 +165,9 @@ class RepositoryInventoryTests(unittest.TestCase):
         # golden-linux (CI-110), service-contract (NET-110) and build-macos-shipping
         # (PLT-220) each own one leg. TelemetrySpool (OPS-100A) reuses the
         # security-runtime configure instead of owning a second linux-shipping leg.
-        self.assertEqual(len(configs), 35)
+        # terrafront-multiclient (TF CI) owns one leg; visual-script-package
+        # (ENG-200) configures the engine and its packager project.
+        self.assertEqual(len(configs), 37)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -192,6 +194,7 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "security-runtime",
                 "service-contract",
                 "terrafront-multiclient",
+                "visual-script-package",
             ],
         )
         single_leg_presets = {

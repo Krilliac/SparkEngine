@@ -18,9 +18,11 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class GraphicsEngine;
@@ -65,6 +67,18 @@ struct EngineRuntime
 
     EngineRuntime(const EngineRuntime&) = delete;
     EngineRuntime& operator=(const EngineRuntime&) = delete;
+
+    /// Startup-thread-only fault seam. Empty in production; tests restore it on
+    /// scope exit. Checkpoints run after real ownership/publication changes, so
+    /// a throwing callback exercises ordinary partial-initialization teardown.
+    std::function<void(std::string_view)> initializationCheckpointForTesting;
+    void CheckInitializationPointForTesting(std::string_view point) const
+    {
+        if (initializationCheckpointForTesting)
+        {
+            initializationCheckpointForTesting(point);
+        }
+    }
 
     /**
      * [shutdown thread] Managers that headless POSIX teardown keeps alive, with their

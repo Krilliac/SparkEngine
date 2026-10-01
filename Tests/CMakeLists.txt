@@ -391,6 +391,7 @@ add_executable(SparkTests
     TestAngelScriptEngine.cpp
     TestAngelScriptStackAlignmentReal.cpp
     TestENG200ScriptFaultsReal.cpp
+    TestENG200ScriptRuntimeReal.cpp
     TestENG200ScriptBindingsReal.cpp
     TestENG200ScriptAudioAnimationReal.cpp
     TestScriptHotReload.cpp
@@ -1552,8 +1553,14 @@ endif()
 if(SPARK_ANGELSCRIPT_AVAILABLE)
     add_test(NAME ScriptMediaBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(ScriptMediaBindingsReal PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_ENG200_Media;SPARK_TEST_EXPECT_COUNT=5"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_ENG200_Media;SPARK_TEST_EXPECT_COUNT=6"
         LABELS "scripting;scripting-integration;audio;animation;integration"
+        TIMEOUT 120)
+    add_test(NAME ScriptRuntimeLifecycleReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(ScriptRuntimeLifecycleReal PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestENG200ScriptRuntimeReal.cpp;SPARK_TEST_EXPECT_COUNT=1"
+        LABELS "scripting;scripting-integration;lifecycle;integration"
+        RUN_SERIAL TRUE
         TIMEOUT 120)
     # ENG-200: AngelScriptEngine::HotReloadModule() state rules R1-R8 against real
     # .as files, and reload after a working-directory change (TestENG200ScriptHotReloadReal.cpp).
@@ -2704,13 +2711,17 @@ else()
         math(EXPR _spark_life_module_abi_count "${_spark_life_module_abi_count} + 1")
     endif()
 endif()
+set(_spark_life_engine_wiring_count 11)
+if(SPARK_ANGELSCRIPT_AVAILABLE)
+    math(EXPR _spark_life_engine_wiring_count "${_spark_life_engine_wiring_count} + 1")
+endif()
 set(_spark_life_selectors
     "ModuleLifecycle_=6"
     "ModuleABI_=${_spark_life_module_abi_count}"
-    "EngineWiring_=12"
+    "EngineWiring_=${_spark_life_engine_wiring_count}"
     "ModuleHotReload_=15"
     "LIFE200_=${_spark_life_life200_count}"
-    "LifecycleLoop_=7"
+    "LifecycleLoop_=9"
     "ModuleReload_=3")
 if(NOT WIN32)
     list(APPEND _spark_life_selectors "EngineLifecycle_=22")
@@ -3538,6 +3549,23 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(HeadlessBootLoop_HarnessContract PROPERTIES
         LABELS "lifecycle;nullrhi-headless;unit;python"
         TIMEOUT 60)
+    add_test(NAME HeadlessInitFailure_HarnessContract
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_init_failure.py --self-test)
+    set_tests_properties(HeadlessInitFailure_HarnessContract PROPERTIES
+        LABELS "lifecycle;nullrhi-headless;unit;python"
+        TIMEOUT 60)
+    if(SPARK_LIFECYCLE_TEST_HOOKS AND UNIX AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING AND SPARK_HEADLESS_SUPPORT AND
+       TARGET SparkEngine AND TARGET SparkGameFPS)
+        add_test(NAME HeadlessInitFailure_Unwinds
+            COMMAND ${Python3_EXECUTABLE} -B
+                ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/run_headless_init_failure.py
+                --engine $<TARGET_FILE:SparkEngine> --module $<TARGET_FILE:SparkGameFPS>)
+        set_tests_properties(HeadlessInitFailure_Unwinds PROPERTIES
+            LABELS "lifecycle;nullrhi-headless;integration;process"
+            RUN_SERIAL TRUE
+            TIMEOUT 600)
+    endif()
     if(NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES AND TARGET SparkEngine AND TARGET SparkGameFPS AND
        (WIN32 OR (UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT)))
         add_dependencies(SparkTests SparkEngine SparkGameFPS)

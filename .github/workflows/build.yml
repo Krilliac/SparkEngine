@@ -731,6 +731,7 @@ jobs:
           -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
+          -DSPARK_LIFECYCLE_TEST_HOOKS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -770,6 +771,10 @@ jobs:
           --timeout-seconds 1800 \
           --runtime-env ASAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
+
+        # Fault-injection hooks are confined to this non-packaging Debug lane.
+        ctest --test-dir build --output-on-failure --no-tests=error \
+          -R '^HeadlessInitFailure_Unwinds$'
 
     - name: Summarize ASan exact-commit test evidence
       run: |
@@ -4817,6 +4822,107 @@ jobs:
           path: msi-qualification/
           retention-days: ${{ env.ERROR_RETENTION_DAYS }}
           if-no-files-found: ignore
+
+  # ENG-200[3] advisory package proof.  This lane intentionally stays outside
+  # required-ci-gate until a hosted run establishes the exact-SHA evidence.
+  visual-script-package:
+    name: "Visual script package gameplay (advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install configure dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libgl-dev libfreetype-dev
+
+      - name: Configure visual-script Release runtime
+        run: |
+          cmake -S . -B build/visual-script-package -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON -DSPARK_HEADLESS_SUPPORT=ON \
+            -DSPARK_GAME_MODULES=SparkGameVisualScript -DENABLE_ANGELSCRIPT=ON \
+            -DENABLE_SDL2=OFF -DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF \
+            -DSPARK_STRICT_DEPS=ON
+
+      - name: Verify package harness rejection controls
+        run: python3 Tests/Tools/test_visual_script_package.py
+
+      - name: Build the real engine, graph compiler tests, and visual-script module
+        run: cmake --build build/visual-script-package --target SparkEngine SparkTests SparkGameVisualScript --parallel $(nproc)
+
+      - name: Assemble a packager project around the built module
+        env:
+          PROJECT_ROOT: ${{ runner.temp }}/visual-script-package-project
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          project = Path(os.environ["PROJECT_ROOT"])
+          project.mkdir(parents=True, exist_ok=False)
+          (project / "Assets").mkdir()
+          shutil.copytree("GameModules/SparkGameVisualScript/Assets", project / "Assets", dirs_exist_ok=True)
+          (project / "VisualScriptPackage.sparkproject").write_text(json.dumps({
+              "projectFileVersion": 1, "name": "VisualScriptPackage", "version": "1.0.0",
+              "description": "ENG-200 visual-script package smoke", "template": "empty",
+              "createdTime": 0, "lastModified": 0, "modules": ["SparkGameVisualScript"]
+          }, indent=2) + "\n", encoding="utf-8")
+          (project / "spark.modules.json").write_text(json.dumps({
+              "modules": [{"name": "SparkGameVisualScript", "path": "SparkGameVisualScript.so"}]
+          }, indent=2) + "\n", encoding="utf-8")
+          (project / "CMakeLists.txt").write_text(
+              "cmake_minimum_required(VERSION 3.25)\nproject(VisualScriptPackage LANGUAGES CXX)\n"
+              "add_custom_target(visual_script_package ALL)\n", encoding="utf-8")
+          PY
+          cmake -S "$PROJECT_ROOT" -B "$PROJECT_ROOT/build/Release" -DCMAKE_BUILD_TYPE=Release
+          SPARK_TEST_NAME_PREFIX=VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts \
+            SPARK_TEST_EXPECT_COUNT=1 \
+            SPARK_VSCRIPT_OUTPUT_DIR="$PROJECT_ROOT/Assets/Scripts/Generated" \
+            build/visual-script-package/bin/SparkTests --warn-is-error
+          module=$(find build/visual-script-package -type f -name 'libSparkGameVisualScript.so' -print -quit)
+          test -n "$module"
+          cp "$module" "$PROJECT_ROOT/build/Release/SparkGameVisualScript.so"
+          cp "$module.sparkabi" "$PROJECT_ROOT/build/Release/SparkGameVisualScript.so.sparkabi"
+          host=$(find build/visual-script-package -type f -name SparkEngine -perm -111 -print -quit)
+          test -n "$host"
+          echo "SPARKENGINE_RUNTIME_HOST=$GITHUB_WORKSPACE/$host" >> "$GITHUB_ENV"
+          echo "SPARK_ENGINE_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+
+      - name: Package graphs and generated scripts with spark-cli
+        env:
+          PROJECT_ROOT: ${{ runner.temp }}/visual-script-package-project
+        run: |
+          python3 "$GITHUB_WORKSPACE/Tools/spark-cli/spark_cli.py" package --config Release --output dist --force
+        working-directory: ${{ runner.temp }}/visual-script-package-project
+
+      - name: Launch packaged engine from a foreign working directory
+        env:
+          PROJECT_ROOT: ${{ runner.temp }}/visual-script-package-project
+        run: |
+          mkdir -p "$RUNNER_TEMP/visual-script-foreign-cwd"
+          python3 "$GITHUB_WORKSPACE/Tests/run_visual_script_package.py" \
+            --package-dir "$PROJECT_ROOT/dist/VisualScriptPackage-linux-release" \
+            --engine SparkGame --module SparkGameVisualScript.so \
+            --foreign-cwd "$RUNNER_TEMP/visual-script-foreign-cwd" \
+            --log "$GITHUB_WORKSPACE/visual-script-package.log"
+
+      - name: Upload visual-script package log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: visual-script-package-${{ github.sha }}-${{ github.run_attempt }}
+          path: visual-script-package.log
+          retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+          if-no-files-found: warn
 
   # ===========================================================================
   # RDY-010 real Windows module lifecycle producer. It consumes only the exact

@@ -14,6 +14,7 @@
 #pragma once
 
 #include <chrono>
+#include <array>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdio>
@@ -34,6 +35,8 @@
 #include <tlhelp32.h>
 #elif defined(__APPLE__)
 #include <mach/mach.h>
+#include <libproc.h>
+#include <unistd.h>
 #else
 #include <filesystem>
 #endif
@@ -46,6 +49,32 @@ namespace LifecycleLoop
      * 20+ cycles grows far past this, so the slack cannot hide one.
      */
     inline constexpr std::size_t kOsThreadSlack = 4;
+
+    /// Live OS handles/descriptors, including files; zero means query failure.
+    /// Sample after warm-up and outside open directory/snapshot handles.
+    inline std::size_t CountProcessHandles()
+    {
+#if defined(_WIN32)
+        DWORD count = 0;
+        return GetProcessHandleCount(GetCurrentProcess(), &count) ? count : 0;
+#elif defined(__APPLE__)
+        std::array<proc_fdinfo, 4096> descriptors{};
+        const int bytes = proc_pidinfo(getpid(), PROC_PIDLISTFDS, 0, descriptors.data(), sizeof(descriptors));
+        // A full buffer might have truncated the inventory; fail the query.
+        return bytes > 0 && static_cast<std::size_t>(bytes) < sizeof(descriptors)
+                   ? static_cast<std::size_t>(bytes) / sizeof(proc_fdinfo)
+                   : 0;
+#else
+        std::error_code ec;
+        std::size_t count = 0;
+        for (std::filesystem::directory_iterator it("/proc/self/fd", ec), end; !ec && it != end; it.increment(ec))
+        {
+            ++count;
+        }
+        // The iterator itself owned one fd while enumerating.
+        return !ec && count > 0 ? count - 1 : 0;
+#endif
+    }
 
     /// Live threads in this process; 0 only when the OS query itself failed.
     inline std::size_t CountProcessThreads()

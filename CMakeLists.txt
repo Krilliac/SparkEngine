@@ -179,6 +179,8 @@ option(ENABLE_NEURAL_RENDERING "Enable neural rendering features (NTC, radiance 
 option(ENABLE_VR "Enable VR/AR framework (OpenXR-ready stub)" OFF)
 option(ENABLE_MOBILE "Enable mobile platform support (touch, gestures, battery-aware scaling)" OFF)
 option(BUILD_TESTS "Build test suite" ON)
+option(SPARK_LIFECYCLE_TEST_HOOKS
+    "Enable process-level lifecycle fault-injection hooks for dedicated test lanes" OFF)
 option(BUILD_GAME_MODULES "Build in-tree game modules (SparkGameFPS, SparkGameMMO, etc.)" ON)
 set(SPARK_GAME_MODULES "" CACHE STRING
     "Semicolon-separated in-tree game modules to build (empty builds every discovered module)")
@@ -1534,6 +1536,9 @@ if(WIN32)
     add_executable(SparkEngine WIN32 ${SPARK_ENGINE_ENTRY_POINTS})
 else()
     add_executable(SparkEngine ${SPARK_ENGINE_ENTRY_POINTS})
+endif()
+if(SPARK_LIFECYCLE_TEST_HOOKS)
+    target_compile_definitions(SparkEngine PRIVATE SPARK_LIFECYCLE_TEST_HOOKS=1)
 endif()
 if(WIN32)
     target_link_libraries(SparkEngine PRIVATE SparkEngineLib)

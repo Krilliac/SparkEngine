@@ -228,6 +228,7 @@ bool AngelScriptEngine::StageAndCommitReload(const std::string& moduleName, cons
     {
         EntityID entity;
         std::string className;
+        bool started;
         std::vector<FieldSnapshot> fields;
     };
     std::vector<SavedBinding> bindings;
@@ -235,7 +236,7 @@ bool AngelScriptEngine::StageAndCommitReload(const std::string& moduleName, cons
     {
         if (instance.moduleName == moduleName)
         {
-            bindings.push_back({entity, instance.className, CaptureFields(instance.object)});
+            bindings.push_back({entity, instance.className, instance.started, CaptureFields(instance.object)});
         }
     }
 
@@ -296,6 +297,10 @@ bool AngelScriptEngine::StageAndCommitReload(const std::string& moduleName, cons
             continue;
         }
         ++report.instances;
+        if (auto* instance = GetScriptInstance(binding.entity); instance != nullptr)
+        {
+            instance->started = binding.started;
+        }
         RestoreFields(GetScriptInstance(binding.entity)->object, binding.fields, location);
     }
 

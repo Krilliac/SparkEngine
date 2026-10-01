@@ -23,18 +23,20 @@
  * ## Typical workflow
  *
  * @code
- *   AngelScriptEngine engine;
- *   engine.Initialize();
+ *   auto& engine = *EngineContext::Get()->GetScriptEngine();
+ *   auto& world = *EngineContext::Get()->GetWorld();
  *
  *   // Compile a script file
  *   engine.CompileScriptFile("Assets/Scripts/EnemyAI.as");
  *
  *   // Attach the script class "EnemyBehavior" to an entity
+ *   auto& script = world.AddComponent<Script>(enemyEntity);
+ *   script.className = "EnemyBehavior";
+ *   script.moduleName = "EnemyAI";
  *   engine.AttachScript(enemyEntity, "EnemyBehavior", "EnemyAI");
  *
- *   // In the game loop:
- *   engine.CallStart(enemyEntity);       // called once
- *   engine.CallUpdate(enemyEntity, dt);  // called every frame
+ *   // The engine-owned ScriptRuntimeSystem dispatches lifecycle callbacks
+ *   // during the Gameplay phase after the component is attached.
  * @endcode
  *
  * ## AngelScript API available to scripts
@@ -181,17 +183,32 @@ class AngelScriptEngine
     // ========================================================================
 
     /**
-     * @brief Call the script's Start() method for an entity (called once)
+     * @brief Dispatch the script's Start() method for an entity.
+     *
+     * Called by the engine-owned ScriptRuntimeSystem; game code should not
+     * invoke lifecycle callbacks directly.
      * @param entity The entity whose script Start() should be invoked
      */
     void CallStart(EntityID entity);
 
     /**
-     * @brief Call the script's Update(float) method for an entity (called every frame)
+     * @brief Dispatch the script's Update(float) method for an entity.
+     *
+     * Called by the engine-owned ScriptRuntimeSystem; game code should not
+     * invoke lifecycle callbacks directly.
      * @param entity    The entity whose script Update() should be invoked
      * @param deltaTime Time elapsed since the last frame in seconds
      */
     void CallUpdate(EntityID entity, float deltaTime);
+
+    /**
+     * @brief Remove attached instances whose ECS entities no longer exist.
+     *
+     * The lifecycle script system calls this before iterating the live Script
+     * components.  The operation is game-thread-only because script contexts
+     * and the bound World are not thread-safe.
+     */
+    void PruneInvalidScripts(const World& world);
 
     /**
      * @brief Call the script's OnCollision(EntityID) method for an entity
@@ -270,6 +287,15 @@ class AngelScriptEngine
      */
     bool IsScriptFaulted(EntityID entity) const;
 
+    /** @brief Return the current attached-instance generation, or zero when absent. */
+    uint64_t GetScriptGeneration(EntityID entity) const;
+
+    /** @brief Return whether the attached instance has already received Start(). */
+    bool IsScriptStarted(EntityID entity) const;
+
+    /** @brief Number of currently attached script instances. */
+    std::size_t GetAttachedScriptCount() const;
+
     /**
      * @brief Get the script execution sandbox
      * @return Pointer to the ScriptSandbox, or nullptr if not initialized
@@ -328,8 +354,8 @@ class AngelScriptEngine
     /**
      * @brief Bind an ECS World for script API functions (createEntity, getTransform).
      *
-     * Must be called after Initialize() and before any scripts call createEntity()
-     * or getTransform(). Typically called once per scene load.
+     * The engine-owned ScriptRuntimeSystem rebinds the active World before each
+     * gameplay tick, before any scripts call createEntity() or getTransform().
      *
      * @param world Non-owning pointer to the active World. Pass nullptr to unbind.
      */
@@ -364,10 +390,13 @@ class AngelScriptEngine
         std::string className;                             ///< Name of the script class
         std::string moduleName;                            ///< Name of the module containing the class
         bool faulted = false;                              ///< Disabled by a runtime fault until re-attached
+        bool started = false;                              ///< Whether this instance has received Start()
         EntityID entity = entt::null;                      ///< Owning entity (context user data for GetExecutingEntity)
+        uint64_t generation = 0;                           ///< Monotonic attachment generation
     };
 
     std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
+    uint64_t m_nextScriptGeneration = 0;                          ///< Monotonic generation source for attachments
     std::string m_lastError;                                      ///< Last error message from AS engine
     std::string m_firstCompileError; ///< First compiler error of the current build (kept for diagnostics)
     std::unique_ptr<Spark::ScriptSandbox> m_sandbox;               ///< Script execution sandbox

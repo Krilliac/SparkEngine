@@ -127,12 +127,13 @@ class CTestPolicyValidator(unittest.TestCase):
     def check_json(
         self,
         text: str,
-        installed: tuple[str, ...] = ("SparkLauncher",),
-        system_name: str = "Windows",
+        installed: tuple[str, ...] = ("SparkShaderCompiler",),
+        system_name: str = "Linux",
         uninstalled: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
-        # The default tree ships only SparkLauncher, a documented gap on every
-        # platform, so the TIMEOUT/LABELS cases see no shipped-binary errors.
+        # Generic timeout/label fixtures use the remaining documented Linux
+        # compiler gap. A configured tree must contain an installed executable;
+        # binary-enforcement cases override installed/platform explicitly.
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "ctest.json"
             path.write_text(text, encoding="utf-8")
@@ -353,23 +354,19 @@ class CTestPolicyValidator(unittest.TestCase):
             self.assertEqual(empty.returncode, 2)
             self.assertIn("builds no installed executable", empty.stderr)
 
-    def test_known_gap_is_reported_as_a_note_and_a_stale_gap_fails(self) -> None:
+    def test_launcher_behavioural_lane_is_required_after_headless_entry_point(self) -> None:
         help_only = self.binary_entry("LauncherHelp", ["/b/SparkLauncher", "--help"], ["launcher", "process"])
-        noted = self.check_json(ctest_json(help_only), system_name="Linux")
-        self.assertEqual(noted.returncode, 0, noted.stderr)
-        self.assertIn("known gap: shipped binary SparkLauncher", noted.stdout)
+        missing = self.check_json(ctest_json(help_only), installed=("SparkLauncher",), system_name="Linux")
+        self.assertEqual(missing.returncode, 1)
+        self.assertIn("shipped binary SparkLauncher", missing.stderr)
 
-        untested = self.check_json(ctest_json(ctest_entry("Unrelated", TIMEOUT=30.0, LABELS=["unit"])))
-        self.assertEqual(untested.returncode, 0, untested.stderr)
-        self.assertIn("known gap: shipped binary SparkLauncher", untested.stdout)
-
-        driven = self.binary_entry("LauncherSmoke", ["/b/SparkLauncher", "--project", "p"], ["launcher", "process"])
-        stale = self.check_json(ctest_json(help_only, driven))
-        self.assertEqual(stale.returncode, 1)
-        self.assertIn(
-            "SparkLauncher now has a behavioural lane on Windows; remove the gap from KNOWN_BINARY_LANE_GAPS",
-            stale.stderr,
+        driven = self.binary_entry(
+            "LauncherSmoke",
+            ["/b/SparkLauncher", "--validate-launch-request", "fixture.sparkproject"],
+            ["launcher", "integration", "process"],
         )
+        valid = self.check_json(ctest_json(help_only, driven), installed=("SparkLauncher",))
+        self.assertEqual(valid.returncode, 0, valid.stderr)
 
     def test_configured_shipped_executables_are_installed_executables_of_every_configuration(self) -> None:
         policy = self._policy_module()
