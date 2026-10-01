@@ -1266,8 +1266,13 @@ class InstallerPlatformOwnershipTests(ContractTestCase):
             item for item in capability["blockingWorkItemIds"] if not item.startswith("PLT-")
         ]
         errors = site_data_validate.installer_platform_ownership_errors(self.mutable)
+        # Dropping every PLT-* item also detaches the macOS installer from its
+        # owning PLT-220 work (workflow_ownership.py), so both diagnostics fire.
         self.assertEqual(
-            ["capabilities.platform.macos: owns an experimental installer but lists no PLT-* blocking work item"],
+            [
+                "experimentalInstallers.SparkInstaller-macOS-arm64: capability is detached from PLT-220",
+                "capabilities.platform.macos: owns an experimental installer but lists no PLT-* blocking work item",
+            ],
             errors,
         )
 
