@@ -1,0 +1,29 @@
+{
+  "windowLayout": {
+    "name": "Dual \"Screen\"",
+    "version": 1,
+    "dockLayoutINI": "[Window][SceneView]\nPos=0,19\nSize=1280,700\nDockId=0x00000001\n\n[Docking][Data]\n",
+    "panels": [
+      {
+        "panelName": "Console",
+        "isOpen": true,
+        "isFloating": true,
+        "posX": -1920.5,
+        "posY": 100,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": 1
+      },
+      {
+        "panelName": "Profiler",
+        "isOpen": false,
+        "isFloating": false,
+        "posX": 0,
+        "posY": 0,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": -1
+      }
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "layout": {
+    "name": "Tabs",
+    "description": "",
+    "version": 1,
+    "panels": [
+      {
+        "name": "Console",
+        "displayName": "Console",
+        "dock": 0,
+        "sizeX": 300,
+        "sizeY": 200,
+        "posX": 0,
+        "posY": 0,
+        "visible": true,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": -1e20,
+        "parentDock": ""
+      }
+    ]
+  }
+}

@@ -19,8 +19,10 @@
  */
 
 #include "SceneImportPanel.h"
+#include "SceneImportParser.h"
 
 #include "../Core/EditorUI.h"
+#include "../Utils/EditorFileRead.h"
 #include "Engine/ECS/Components.h"
 #include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
@@ -36,26 +38,6 @@ namespace fs = std::filesystem;
 
 namespace SparkEditor
 {
-
-    namespace
-    {
-        /// @brief Parse "a,b,c" into out[3] (strtof, same as TFWorldCollision).
-        ///        Missing/malformed components keep their prior values.
-        void ParseFloat3(const std::string& value, float out[3])
-        {
-            const char* c = value.c_str();
-            char* end = nullptr;
-            for (int i = 0; i < 3; ++i)
-            {
-                out[i] = std::strtof(c, &end);
-                if (end == c)
-                    return; // malformed tail: keep defaults for the rest
-                c = end;
-                while (*c == ',' || *c == ' ')
-                    ++c;
-            }
-        }
-    } // namespace
 
     SceneImportPanel::SceneImportPanel() : EditorPanel("Scene Import", "scene_import_panel")
     {
@@ -104,7 +86,9 @@ namespace SparkEditor
         const fs::path sceneRoot = fs::path(m_assetsPrefix) / "Assets" / "Scenes";
         std::error_code ec;
         if (!fs::exists(sceneRoot, ec))
+        {
             return;
+        }
 
         fs::recursive_directory_iterator it(sceneRoot, fs::directory_options::skip_permission_denied, ec);
         const fs::recursive_directory_iterator end;
@@ -112,9 +96,13 @@ namespace SparkEditor
         {
             std::error_code fec;
             if (!it->is_regular_file(fec))
+            {
                 continue;
+            }
             if (it->path().extension() != ".scene")
+            {
                 continue;
+            }
 
             // diskPath is reopened through a narrow std::ifstream, so a scene whose name
             // the Windows ANSI code page cannot spell has no usable diskPath (and
@@ -148,95 +136,31 @@ namespace SparkEditor
         out = ParsedScene{};
         out.diskPath = diskPath;
 
-        std::ifstream file(diskPath);
-        if (!file.is_open())
+        // Read through one opened handle: the scan's regular-file check named a path, and the
+        // file was reopened by name here and read line by line without a bound.
+        std::string text;
+        if (ReadRegularFileBounded(fs::path(diskPath), kMaxGameSceneBytes, text) != BoundedReadStatus::Ok)
+        {
             return false;
-
-        std::string line;
-        std::string currentSection;
-        SceneObjectRecord current;
-        bool inNode = false;
-
-        auto flushNode = [&]()
-        {
-            if (inNode)
-            {
-                if (current.type == "cube" || current.type == "Cube" || current.type == "model" ||
-                    current.type == "Model")
-                {
-                    if (current.name.empty())
-                        current.name = current.type + "_" + std::to_string(out.objects.size());
-                    out.objects.push_back(current);
-                }
-                else
-                {
-                    // Honest skip accounting: spawnpoints, terrain, unknown types.
-                    out.skippedTypes.push_back(current.type.empty() ? "<no type> [" + currentSection + "]"
-                                                                    : current.type);
-                }
-            }
-            current = SceneObjectRecord{};
-            inNode = false;
-        };
-
-        while (std::getline(file, line))
-        {
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
-                line.pop_back();
-            if (line.empty() || line[0] == '#' || line[0] == ';')
-                continue;
-
-            if (line.front() == '[' && line.back() == ']')
-            {
-                flushNode();
-                currentSection = line.substr(1, line.size() - 2);
-                // Every non-[Scene] section is a node candidate so unknown
-                // sections are reported as skips instead of vanishing.
-                inNode = (currentSection != "Scene");
-                continue;
-            }
-
-            const size_t eq = line.find('=');
-            if (eq == std::string::npos)
-                continue;
-            const std::string key = line.substr(0, eq);
-            const std::string value = line.substr(eq + 1);
-
-            if (currentSection == "Scene")
-            {
-                if (key == "name")
-                    out.sceneName = value;
-                continue;
-            }
-            if (!inNode)
-                continue;
-
-            if (key == "type")
-                current.type = value;
-            else if (key == "name")
-                current.name = value;
-            else if (key == "model")
-                current.model = value;
-            else if (key == "material")
-                current.material = value;
-            else if (key == "position")
-                ParseFloat3(value, current.position);
-            else if (key == "rotation")
-                ParseFloat3(value, current.rotationDeg);
-            else if (key == "scale")
-                ParseFloat3(value, current.scale);
-            // other keys (tag, priority, tf* terrain params) are intentionally ignored
         }
-        flushNode();
+
+        GameSceneIniDocument document = ParseGameSceneIni(text);
+        out.sceneName = std::move(document.sceneName);
+        out.objects = std::move(document.objects);
+        out.skippedTypes = std::move(document.skippedTypes);
 
         // Unresolved model paths (rendered as placeholder cubes until fixed).
         for (const SceneObjectRecord& record : out.objects)
         {
             if (record.model.empty())
+            {
                 continue; // cubes: placeholder mesh is intentional
+            }
             std::error_code ec;
             if (!fs::exists(fs::path(m_assetsPrefix) / record.model, ec))
+            {
                 out.unresolvedModels.push_back(record.model);
+            }
         }
         std::sort(out.unresolvedModels.begin(), out.unresolvedModels.end());
         out.unresolvedModels.erase(std::unique(out.unresolvedModels.begin(), out.unresolvedModels.end()),
@@ -252,7 +176,9 @@ namespace SparkEditor
     {
         ::World* world = m_editorUI ? m_editorUI->GetWorld() : nullptr;
         if (!world || parsed.objects.empty())
+        {
             return;
+        }
 
         const std::string fileName = fs::path(parsed.diskPath).filename().string();
         const std::string description = "Import Scene '" + fileName + "' (" + std::to_string(parsed.objects.size()) +
@@ -285,12 +211,16 @@ namespace SparkEditor
     {
         std::map<std::string, int> counts;
         for (const std::string& type : skippedTypes)
+        {
             ++counts[type];
+        }
 
         std::vector<std::string> out;
         out.reserve(counts.size());
         for (const auto& [type, count] : counts)
+        {
             out.push_back(type + " x" + std::to_string(count));
+        }
         return out;
     }
 

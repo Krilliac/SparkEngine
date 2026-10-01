@@ -1404,6 +1404,201 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "editor-scene-json-corpus",
+      "parser_id": "editor-scene-json",
+      "corpus_dir": "FuzzerTests/corpora/editor-scene-json",
+      "last_verified": "2026-10-01",
+      "content_digest": "5aa208022235c0081bd994560e08cab2c64651135777370a2dca29e1939b6181",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-scene-load-dispatch-corpus",
+      "parser_id": "editor-scene-load-dispatch",
+      "corpus_dir": "FuzzerTests/corpora/editor-scene-load-dispatch",
+      "last_verified": "2026-10-01",
+      "content_digest": "65dcf43dd42f48d72fb3f9963f2e8080c901e1387575f92a662ab8c7296ef6d1",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-project-file-corpus",
+      "parser_id": "editor-project-file",
+      "corpus_dir": "FuzzerTests/corpora/editor-project-file",
+      "last_verified": "2026-10-01",
+      "content_digest": "5f3ebf1afa5bef8a2b2c3510d61e0f2c689cd387f1106b2139c6049c4fd10744",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-brace-in-recent-name.json",
+          "finding": "A brace inside a quoted recent-project name truncated the hand-rolled field scan; the reader now retains the field boundary.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorProjectFileSmoke"
+        },
+        {
+          "file": "regression-bracket-in-scene-path.sparkproject",
+          "finding": "A bracket inside a quoted scene path disrupted the project-field scan; the reader now retains the complete path.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorProjectFileSmoke"
+        },
+        {
+          "file": "regression-timestamp-overflow.sparkproject",
+          "finding": "An oversized project timestamp could throw during numeric conversion; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorProjectFileSmoke"
+        }
+      ]
+    },
+    {
+      "id": "editor-recovery-snapshot-corpus",
+      "parser_id": "editor-recovery-snapshot",
+      "corpus_dir": "FuzzerTests/corpora/editor-recovery-snapshot",
+      "last_verified": "2026-10-01",
+      "content_digest": "b430edb306242c3c5ef57f0ff1cb3b757347fc2cc6a6b90057e1e8ab8b2bd6ea",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 64,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-scene-ini-import-corpus",
+      "parser_id": "editor-scene-ini-import",
+      "corpus_dir": "FuzzerTests/corpora/editor-scene-ini-import",
+      "last_verified": "2026-10-01",
+      "content_digest": "24b6ffa2c25ccdccc7462e6b030f5a1b788673a76416b14b6d784c020777c85a",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-transform.scene",
+          "finding": "An INI scene transform could import non-finite coordinates; the reader now rejects them.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorSceneImportSmoke"
+        }
+      ]
+    },
+    {
+      "id": "editor-theme-import-corpus",
+      "parser_id": "editor-theme-import",
+      "corpus_dir": "FuzzerTests/corpora/editor-theme-import",
+      "last_verified": "2026-10-01",
+      "content_digest": "d0da7bbe63dbf1199a14f8c3b2d75406bbf648c892aad191e7be2302b81d2f1a",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-color.json",
+          "finding": "A theme colour could import non-finite components; the reader now rejects them.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorThemeImportSmoke"
+        }
+      ]
+    },
+    {
+      "id": "editor-window-layout-corpus",
+      "parser_id": "editor-window-layout",
+      "corpus_dir": "FuzzerTests/corpora/editor-window-layout",
+      "last_verified": "2026-10-01",
+      "content_digest": "904f85ffc4b36393392693386d28b37bddb06685420f98c1757443c58fd16d4e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-monitor-index-overflow.json",
+          "finding": "A window monitor index outside int32 range could narrow with undefined behavior; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorWindowLayoutSmoke"
+        }
+      ]
+    },
+    {
+      "id": "editor-layout-corpus",
+      "parser_id": "editor-layout",
+      "corpus_dir": "FuzzerTests/corpora/editor-layout",
+      "last_verified": "2026-10-01",
+      "content_digest": "ca93efe4b4ffd1f6faefcc1ca34e1f59242adaa0393adbd03f72d99951350f2d",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-dock-overflow.json",
+          "finding": "An overflowing dock coordinate could throw or become non-finite; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorLayoutSmoke"
+        },
+        {
+          "file": "regression-size-overflow.json",
+          "finding": "An overflowing layout size could throw or become non-finite; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorLayoutSmoke"
+        },
+        {
+          "file": "regression-tab-order-overflow.json",
+          "finding": "An overflowing tab order could narrow outside its integer range; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorLayoutSmoke"
+        }
+      ]
     }
   ]
 }

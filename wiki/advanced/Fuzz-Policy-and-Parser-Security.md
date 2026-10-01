@@ -440,6 +440,47 @@ runtime evidence yet.
   was never recompiled; it is now a miss (`ShaderDiskCachePhaseV_EmptyCachedBlobIsAMiss`).
   The empty input libFuzzer always runs is that regression; no zero-byte seed is committed.
 
+### Editor parser batch 3
+
+Eight editor targets now bind shipped read paths to bounded, byte-exact corpora. These are
+structural registrations awaiting a Linux Clang build, sanitizer smoke, and mutation campaigns;
+no runtime or exact-commit CI result is claimed for them.
+
+| Inventory parser | Fuzz target | Production entry and oracle |
+|---|---|---|
+| `editor-scene-json` | `SparkFuzzEditorSceneJson` | `DecodeSceneJSONDocument`; rejected output stays unchanged, accepted scenes validate and round-trip |
+| `editor-scene-load-dispatch` | `SparkFuzzEditorSceneLoad` | `SceneSerializer::LoadScene`; file extension dispatch agrees with decode and saved scene reload |
+| `editor-project-file` | `SparkFuzzEditorProjectFile` | extracted project and recent-list readers used by `ProjectManager`; accepted fields round-trip |
+| `editor-recovery-snapshot` | `SparkFuzzEditorRecovery` | `EditorRecoveryStore::LoadForProject`; primary/backup recovery and restored world invariants |
+| `editor-scene-ini-import` | `SparkFuzzEditorSceneImport` | extracted `ParseGameSceneIni` used by the import panel; finite transforms and deterministic parse |
+| `editor-theme-import` | `SparkFuzzEditorThemeImport` | extracted `ParseThemeDocument` used by theme import; finite colours and export/import round-trip |
+| `editor-window-layout` | `SparkFuzzEditorWindowLayout` | `EditorWindowManager::LoadLayoutFromFile`; finite layout fields and save/load agreement |
+| `editor-layout` | `SparkFuzzEditorLayout` | `EditorLayoutManager::LoadLayout`; finite layout state and save/load agreement |
+
+The window-layout and layout targets are the permitted substitutes for the still-blocked
+`editor-scene-binary` and `editor-crash-recovery-state` records in this batch. The binary
+scene `LoadBinary` entry always refuses because the legacy format is incomplete; the crash
+handler writes state but has no untrusted-state reader. Neither gives a meaningful Linux
+parser harness without a product/scope decision to retire or reclassify its inventory record. Bounded file
+readers validate the opened regular-file handle before parsing, avoiding a checked-path/opened-path
+race. Each corpus has valid and malformed nonempty seeds; regression seeds are declared in
+`tools/fuzz-policy/corpus-manifest.json` and replayed by its registered `FuzzEditor*Smoke` test.
+
+Build just this batch on Linux Clang:
+
+```bash
+CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
+  LDFLAGS="-stdlib=libstdc++" \
+  cmake -S tools/fuzz-policy -B build/fuzz-policy
+cmake --build build/fuzz-policy --target \
+  SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile \
+  SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport \
+  SparkFuzzEditorWindowLayout SparkFuzzEditorLayout
+ctest --test-dir build/fuzz-policy --output-on-failure \
+  -R '^FuzzEditor(SceneJson|SceneLoad|ProjectFile|Recovery|SceneImport|ThemeImport|WindowLayout|Layout)Smoke$' \
+  --no-tests=error
+```
+
 ### Retired and reclassified records
 
 Five blocked records described code that decodes no untrusted bytes. Each now carries its
@@ -590,7 +631,18 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache
+cmake --build build/fuzz-policy --target \
+  SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive \
+  SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab \
+  SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr \
+  SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents \
+  SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain \
+  SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable \
+  SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest \
+  SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState \
+  SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype \
+  SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad \
+  SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```

@@ -374,7 +374,7 @@
         "Required fuzz smoke is deterministic and blocking"
       ],
       "acceptanceStatus": [
-        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "Partial progress: 58 of 137 inventoried parsers have libFuzzer targets with seed corpora and minimized regressions (docs/sec120-fuzz-policy-check.json); 79 parsers remain blocked and no target has exact-commit sanitizer evidence, so the criterion stays open.", "evidence": []},
+        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "Partial progress: 66 of 137 inventoried parsers have libFuzzer targets and seed corpora (docs/sec120-fuzz-policy-check.json); 71 remain blocked. Eight editor targets are structurally bound, using layout and window-layout as allowed substitutes for binary-scene and crash-state. Linux sanitizer smoke, campaigns, and exact-commit CI remain unverified; the criterion stays unmet.", "evidence": []},
         {
           "criterionDigest": "sha256:f3d43da4661a",
           "state": "implemented",
