@@ -3724,14 +3724,18 @@ add_executable(SparkFuzzUILayout
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp")
 add_executable(SparkFuzzAssetCooker
     FuzzAssetCooker.cpp FuzzAssetCookerProduction.cpp
-    "${SPARK_FUZZ_PROJECT_ROOT}/SparkAssetPipelineCore/src/AssetCooker.cpp")
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkAssetPipelineCore/src/AssetCooker.cpp"
+    # Spark::Json (the accepted-output oracle) logs through Spark::Logger.
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp")
 add_executable(SparkFuzzLauncherTemplate
     FuzzLauncherTemplate.cpp FuzzLauncherTemplateProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherTemplates.cpp"
-    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp")
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp")
 add_executable(SparkFuzzLauncherModuleManifest
     FuzzLauncherModuleManifest.cpp FuzzLauncherModuleManifestProduction.cpp
-    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp")
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp")
 
 target_compile_features(SparkFuzzRuntimePrefab PRIVATE cxx_std_23)
 target_compile_features(SparkFuzzAssetMigration PRIVATE cxx_std_23)
