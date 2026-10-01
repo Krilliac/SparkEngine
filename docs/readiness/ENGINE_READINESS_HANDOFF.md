@@ -1649,7 +1649,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Malformed input cannot cause crash, OOB, path escape, integer overflow, or unbounded allocation/time
    - Evidence: `docs/sec120-fuzz-policy-check.json`, `tools/fuzz-policy/build_binding.py`, `FuzzerTests/CMakeLists.txt`
-   - 58 of 137 inventoried parsers have targets; 79 remain blocked. All registered fuzz targets now require fatal UBSan at compile and link, but Linux smoke and exact-commit sanitizer proof remain pending. Counts come from the generated policy report.
+   - 66 of 137 inventoried parsers have libFuzzer targets with seed corpora; 71 remain blocked. All registered targets require fatal UBSan at compile and link; editor batch 3 uses layout and window-layout as allowed substitutes for binary-scene and crash-state. Linux sanitizer smoke, campaigns and exact-commit CI remain unverified. Counts come from the generated policy report.
 2. **[implemented]** Every found issue lands with a minimized regression fixture
    - Evidence: `tools/fuzz-policy/corpus_manifest.py`, `tools/fuzz-policy/check_fuzz_policy.py`, `tools/fuzz-policy/import_regression.py`, `tools/fuzz-policy/run_campaign.py`, `FuzzerTests/policy/test_fuzz_policy.py`, `FuzzerTests/policy/test_fuzz_campaign.py`, `.github/workflows/fuzz-scheduled.yml`
    - The gate requires each regression seed, guard and source-touching fixed_commit. Scheduled default time now scales with target count. Imports are not the only intake path; review and smoke records can be added manually. Historical minimization and guard RED proof remain unverified. Empty input lacks an approved regression record type.

@@ -3275,3 +3275,433 @@ set_tests_properties(FuzzShaderDiskCacheSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# SEC-120 batch 3, editor readers. Every target below links the shipped editor
+# reader in its own translation unit, compiled against libc++ with the adapter,
+# and meets the libstdc++ libFuzzer driver only at the C ABI in its
+# *Production.h header (the SparkFuzzJsonUtils split).
+
+# DecodeSceneJSONDocument is the editor scene grammar SceneSerializer::LoadJSON runs
+# on a file's bytes (moved to SceneJSONReader.cpp out of JSONSceneSerializer.cpp);
+# its closure is the component codec and SceneFile::Validate, whose log macros
+# need the logger.
+add_executable(SparkFuzzEditorSceneJson
+    FuzzEditorSceneJson.cpp
+    FuzzEditorSceneJsonProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneJSONReader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzEditorSceneJsonProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneJSONReader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorSceneJson PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzEditorSceneJson PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzEditorSceneJson PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzEditorSceneJson PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorSceneJson PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorSceneJson PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorSceneJsonSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorSceneJson>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=16
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-scene-json"
+)
+set_tests_properties(FuzzEditorSceneJsonSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# SceneSerializer::LoadScene is the editor's scene open entry: extension dispatch,
+# the bounded handle read, the JSON decoder and validation. The adapter also saves
+# every accepted scene through SaveScene, so the whole serializer is linked.
+add_executable(SparkFuzzEditorSceneLoad
+    FuzzEditorSceneLoad.cpp
+    FuzzEditorSceneLoadProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneJSONReader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzEditorSceneLoadProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneJSONReader.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/SceneSystem/SceneFile.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorSceneLoad PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzEditorSceneLoad PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzEditorSceneLoad PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzEditorSceneLoad PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorSceneLoad PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorSceneLoad PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorSceneLoadSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorSceneLoad>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=15
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-scene-load-dispatch"
+)
+set_tests_properties(FuzzEditorSceneLoadSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The .sparkproject and RecentProjects.json scrape ProjectManager reads (moved to
+# ProjectDocument.cpp out of ProjectManager.cpp) has no other dependency.
+add_executable(SparkFuzzEditorProjectFile
+    FuzzEditorProjectFile.cpp
+    FuzzEditorProjectFileProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/ProjectDocument.cpp"
+)
+set_source_files_properties(
+    FuzzEditorProjectFileProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/ProjectDocument.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorProjectFile PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+)
+target_compile_features(SparkFuzzEditorProjectFile PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorProjectFile PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorProjectFile PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorProjectFile PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorProjectFileSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorProjectFile>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=14
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-project-file"
+)
+set_tests_properties(FuzzEditorProjectFileSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# EditorRecoveryStore::LoadForProject reads the recovery envelope (EditorRecoveryJson.h)
+# and strictly deserializes the nested world, so its closure is the reflected scene
+# reader SparkFuzzReflectedScene links; like that adapter, this one defines
+# Assert::Fail as print-and-abort.
+add_executable(SparkFuzzEditorRecovery
+    FuzzEditorRecovery.cpp
+    FuzzEditorRecoveryProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorRecovery.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneValidation.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ComponentReflection.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+)
+set_source_files_properties(
+    FuzzEditorRecoveryProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorRecovery.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/SceneManager/ReflectedSceneValidation.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Core/ComponentReflection.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorRecovery PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/ECS/entt/single_include"
+)
+target_compile_features(SparkFuzzEditorRecovery PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzEditorRecovery PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzEditorRecovery PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorRecovery PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorRecovery PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorRecoverySmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorRecovery>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=15
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-recovery-snapshot"
+)
+set_tests_properties(FuzzEditorRecoverySmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The Scene Import panel's game INI reader (moved to SceneImportParser.cpp out of
+# SceneImportPanel.cpp) only fills SceneEditTools::SceneObjectRecord values; the
+# component headers that type sits beside are compiled, nothing else is linked.
+add_executable(SparkFuzzEditorSceneImport
+    FuzzEditorSceneImport.cpp
+    FuzzEditorSceneImportProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Panels/SceneImportParser.cpp"
+)
+set_source_files_properties(
+    FuzzEditorSceneImportProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Panels/SceneImportParser.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorSceneImport PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include"
+    "${SPARK_FUZZ_GENERATED_INCLUDE_DIR}"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/ECS/entt/single_include"
+)
+target_compile_features(SparkFuzzEditorSceneImport PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorSceneImport PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorSceneImport PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorSceneImport PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorSceneImportSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorSceneImport>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-scene-ini-import"
+)
+set_tests_properties(FuzzEditorSceneImportSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# The theme import/export format (moved to EditorThemeDocument.cpp out of the ImGui
+# translation unit EditorTheme.cpp) needs only the theme data types.
+add_executable(SparkFuzzEditorThemeImport
+    FuzzEditorThemeImport.cpp
+    FuzzEditorThemeImportProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorThemeDocument.cpp"
+)
+set_source_files_properties(
+    FuzzEditorThemeImportProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorThemeDocument.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorThemeImport PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+)
+target_compile_features(SparkFuzzEditorThemeImport PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorThemeImport PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorThemeImport PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorThemeImport PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorThemeImportSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorThemeImport>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=9
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-theme-import"
+)
+set_tests_properties(FuzzEditorThemeImportSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# EditorWindowManager.cpp holds only the layout persistence and its JSON helpers, so
+# the shipped LoadLayoutFromFile is linked as is.
+add_executable(SparkFuzzEditorWindowLayout
+    FuzzEditorWindowLayout.cpp
+    FuzzEditorWindowLayoutProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorWindowManager.cpp"
+)
+set_source_files_properties(
+    FuzzEditorWindowLayoutProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorWindowManager.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorWindowLayout PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzEditorWindowLayout PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorWindowLayout PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorWindowLayout PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorWindowLayout PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorWindowLayoutSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorWindowLayout>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-window-layout"
+)
+set_tests_properties(FuzzEditorWindowLayoutSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# EditorLayoutManager::LoadLayout reads <layout dir>/<name>.json; its save path writes
+# through SaveFileDurability, which the adapter's round trip exercises.
+add_executable(SparkFuzzEditorLayout
+    FuzzEditorLayout.cpp
+    FuzzEditorLayoutProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/SaveFileDurability.cpp"
+)
+set_source_files_properties(
+    FuzzEditorLayoutProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorLayoutManager.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/SaveFileDurability.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorLayout PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzEditorLayout PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorLayout PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorLayout PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorLayout PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorLayoutSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorLayout>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=13
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-layout"
+)
+set_tests_properties(FuzzEditorLayoutSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)

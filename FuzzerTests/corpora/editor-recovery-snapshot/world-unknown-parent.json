@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "projectIdentity": "/projects/fuzz/Fuzz.sparkproject",
+  "projectRelativeScene": "Scenes/Arena.sparkscene",
+  "sceneDisplayName": "Arena",
+  "serializedWorld": "{\"version\": 1, \"entities\": [{\"id\": 0, \"name\": \"Root\", \"parent\": 5, \"components\": [{\"type\": \"Transform\", \"fields\": {\"position\": \"1.000000,2.000000,3.000000\", \"rotation\": \"0.000000,90.000000,0.000000\", \"scale\": \"1.000000,1.000000,1.000000\"}}]}]}",
+  "layoutIniPath": "Config/layout.ini",
+  "dirtySequence": 12,
+  "capturedUnixMilliseconds": 1790000000123,
+  "recentOperations": [
+    "Move Root",
+    "Rename Camera"
+  ]
+}

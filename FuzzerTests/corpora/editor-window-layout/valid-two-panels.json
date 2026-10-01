@@ -1,0 +1,29 @@
+{
+  "windowLayout": {
+    "name": "Default",
+    "version": 1,
+    "dockLayoutINI": "",
+    "panels": [
+      {
+        "panelName": "SceneView",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": 0,
+        "posY": 0,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": -1
+      },
+      {
+        "panelName": "Inspector",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": 1280,
+        "posY": 0,
+        "width": 320,
+        "height": 300,
+        "monitorIndex": -1
+      }
+    ]
+  }
+}

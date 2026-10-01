@@ -97,6 +97,16 @@ FuzzerTests/corpora/module-abi-sidecar/** -text
 FuzzerTests/corpora/plugin-metadata-json/** -text
 FuzzerTests/corpora/reflection-binary-codec/** -text
 FuzzerTests/corpora/shader-disk-cache-blob/** -text
+# Editor parser seeds include binary noise, CRLF, and malformed encodings;
+# preserve exact bytes used by the SEC-120 corpus digests on every checkout.
+FuzzerTests/corpora/editor-scene-json/** -text
+FuzzerTests/corpora/editor-scene-load-dispatch/** -text
+FuzzerTests/corpora/editor-project-file/** -text
+FuzzerTests/corpora/editor-recovery-snapshot/** -text
+FuzzerTests/corpora/editor-scene-ini-import/** -text
+FuzzerTests/corpora/editor-theme-import/** -text
+FuzzerTests/corpora/editor-window-layout/** -text
+FuzzerTests/corpora/editor-layout/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

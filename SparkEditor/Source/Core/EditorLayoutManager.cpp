@@ -43,6 +43,7 @@
 #include "EditorLayoutManager.h"
 #include "Utils/SaveFileDurability.h"
 #include "Utils/FileUtils.h"
+#include "../Utils/EditorFileRead.h"
 
 #include <algorithm>
 #include <cctype>
@@ -466,6 +467,48 @@ namespace SparkEditor
             }
         };
 
+        /// Largest layout file the editor reads; a layout is a few kilobytes of panel state.
+        constexpr std::uint64_t kMaxLayoutFileBytes = std::uint64_t{1024} * 1024;
+
+        /// A float field must stay finite as a float. ReadNumber's double used to be narrowed
+        /// unchecked, so 1e300 became +inf, which the writer saved as "inf" and the reader then
+        /// loaded as 0. An absent key keeps @p out.
+        bool ReadFloatField(Cursor& sub, const char* key, float& out)
+        {
+            sub.pos = 0;
+            if (!sub.FindKey(key))
+            {
+                return true;
+            }
+            const double value = sub.ReadNumber();
+            if (!(std::fabs(value) <= static_cast<double>(std::numeric_limits<float>::max())))
+            {
+                return false;
+            }
+            out = static_cast<float>(value);
+            return true;
+        }
+
+        /// An integer field must fit an int: static_cast<int> of a larger double is undefined
+        /// behaviour. In-range fractions still truncate toward zero, as they always did. An
+        /// absent key keeps @p out.
+        bool ReadIntField(Cursor& sub, const char* key, int& out)
+        {
+            sub.pos = 0;
+            if (!sub.FindKey(key))
+            {
+                return true;
+            }
+            const double value = sub.ReadNumber();
+            if (!(value > static_cast<double>(std::numeric_limits<int>::min()) - 1.0 &&
+                  value < static_cast<double>(std::numeric_limits<int>::max()) + 1.0))
+            {
+                return false;
+            }
+            out = static_cast<int>(value);
+            return true;
+        }
+
         // Read one panel object starting at `cursor.pos` pointing at the
         // opening `{`. Advances `cursor.pos` past the closing `}`.
         bool ParsePanel(Cursor& cursor, PanelConfig& out)
@@ -505,21 +548,14 @@ namespace SparkEditor
             sub.pos = 0;
             if (sub.FindKey("displayName"))
                 out.displayName = sub.ReadString();
-            sub.pos = 0;
-            if (sub.FindKey("dock"))
-                out.dockPosition = static_cast<LayoutDockPosition>(static_cast<int>(sub.ReadNumber()));
-            sub.pos = 0;
-            if (sub.FindKey("sizeX"))
-                out.sizeX = static_cast<float>(sub.ReadNumber());
-            sub.pos = 0;
-            if (sub.FindKey("sizeY"))
-                out.sizeY = static_cast<float>(sub.ReadNumber());
-            sub.pos = 0;
-            if (sub.FindKey("posX"))
-                out.posX = static_cast<float>(sub.ReadNumber());
-            sub.pos = 0;
-            if (sub.FindKey("posY"))
-                out.posY = static_cast<float>(sub.ReadNumber());
+            int dock = static_cast<int>(out.dockPosition);
+            if (!ReadIntField(sub, "dock", dock) || !ReadFloatField(sub, "sizeX", out.sizeX) ||
+                !ReadFloatField(sub, "sizeY", out.sizeY) || !ReadFloatField(sub, "posX", out.posX) ||
+                !ReadFloatField(sub, "posY", out.posY))
+            {
+                return false;
+            }
+            out.dockPosition = static_cast<LayoutDockPosition>(dock);
             sub.pos = 0;
             if (sub.FindKey("visible"))
                 out.isVisible = sub.ReadBool();
@@ -532,12 +568,10 @@ namespace SparkEditor
             sub.pos = 0;
             if (sub.FindKey("canDock"))
                 out.canDock = sub.ReadBool();
-            sub.pos = 0;
-            if (sub.FindKey("dockRatio"))
-                out.dockRatio = static_cast<float>(sub.ReadNumber());
-            sub.pos = 0;
-            if (sub.FindKey("tabOrder"))
-                out.tabOrder = static_cast<int>(sub.ReadNumber());
+            if (!ReadFloatField(sub, "dockRatio", out.dockRatio) || !ReadIntField(sub, "tabOrder", out.tabOrder))
+            {
+                return false;
+            }
             sub.pos = 0;
             if (sub.FindKey("parentDock"))
                 out.parentDock = sub.ReadString();
@@ -550,16 +584,22 @@ namespace SparkEditor
     bool EditorLayoutManager::ReadLayoutFile(const std::string& path)
     {
         const std::string prefix = "Layout '" + path + "' ";
-        std::ifstream f(path, std::ios::binary);
-        if (!f.is_open())
+        // Read through one opened handle, bounded: the whole file used to be read by name
+        // without a limit after LoadLayout's by-path existence check.
+        std::string contents;
+        switch (ReadRegularFileBounded(fs::path(path), kMaxLayoutFileBytes, contents))
         {
+        case BoundedReadStatus::Ok:
+            break;
+        case BoundedReadStatus::TooLarge:
+            m_lastError = prefix + "is larger than " + std::to_string(kMaxLayoutFileBytes) + " bytes";
+            return false;
+        case BoundedReadStatus::Missing:
+        case BoundedReadStatus::NotRegularFile:
+        case BoundedReadStatus::Failed:
             m_lastError = prefix + "could not be opened";
             return false;
         }
-
-        std::stringstream buffer;
-        buffer << f.rdbuf();
-        const std::string contents = buffer.str();
         if (contents.empty())
         {
             m_lastError = prefix + "is empty";
@@ -664,13 +704,6 @@ namespace SparkEditor
         }
 
         const std::string path = LayoutFilePath(name);
-        std::error_code ec;
-        if (!fs::exists(path, ec))
-        {
-            m_lastError = "Layout '" + path + "' does not exist";
-            return false;
-        }
-
         if (!ReadLayoutFile(path))
         {
             return false;
@@ -727,15 +760,14 @@ namespace SparkEditor
 
             // Peek at the description field — a failed read is fine, just
             // means no description for this entry.
-            std::ifstream f(info.filePath);
-            if (f.is_open())
+            std::string content;
+            if (ReadRegularFileBounded(p, kMaxLayoutFileBytes, content) == BoundedReadStatus::Ok)
             {
-                std::stringstream buf;
-                buf << f.rdbuf();
-                const std::string content = buf.str();
                 Cursor cursor(content);
                 if (cursor.FindKey("description"))
+                {
                     info.description = cursor.ReadString();
+                }
             }
             result.push_back(std::move(info));
         }

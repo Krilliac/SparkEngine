@@ -1,0 +1,20 @@
+{
+  "projectFileVersion": 1,
+  "name": "Courtyard \"Remake\"",
+  "version": "1.2.0",
+  "description": "Line one\nLine two\twith a tab and a \\ backslash",
+  "engineVersion": "0.9.4",
+  "template": "first-person",
+  "defaultScene": "Scenes/Arena.sparkscene",
+  "lastOpenedScene": "Scenes/Caf\u00e9.sparkscene",
+  "createdTime": 1780000000,
+  "lastModified": 1790000000,
+  "modules": [
+    "CourtyardGame",
+    "Shared\u0001Tools"
+  ],
+  "scenes": [
+    "Scenes/Arena.sparkscene",
+    "Scenes/Caf\u00e9.sparkscene"
+  ]
+}

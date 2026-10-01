@@ -1,0 +1,9 @@
+{
+  "projectFileVersion": 1,
+  "name": "Courtyard \"Remake\"",
+  "version": "1.2.0",
+  "description": "Line one\nLine two\twith a tab and a \\ backslash",
+  "engineVersion": "0.9.4",
+  "template": "first-person",
+  "defaultScene": "Scenes/Arena.sparkscene",
+ 

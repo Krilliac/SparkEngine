@@ -57,9 +57,13 @@ namespace SparkEditor
         try
         {
             if (actualFormat == SerializationFormat::BINARY)
+            {
                 result = SaveBinary(scene, filePath);
+            }
             else
+            {
                 result = SaveJSON(scene, filePath);
+            }
         }
         catch (const std::exception& exception)
         {
@@ -96,9 +100,13 @@ namespace SparkEditor
         try
         {
             if (format == SerializationFormat::JSON)
+            {
                 result = LoadJSON(filePath, outScene);
+            }
             else
+            {
                 result = LoadBinary(filePath, outScene);
+            }
         }
         catch (const std::exception& exception)
         {
@@ -174,60 +182,28 @@ namespace SparkEditor
     {
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
             return false;
+        }
 
         uint32_t magic = 0;
         if (!file.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
+        {
             return false;
+        }
         if (magic == SCENE_FILE_MAGIC)
+        {
             return true;
+        }
 
         // Check for JSON format
         file.seekg(0);
         char firstChar = 0;
         if (!file.read(&firstChar, 1))
+        {
             return false;
+        }
         return firstChar == '{';
-    }
-
-    bool SceneSerializer::ValidateScene(const SceneFile& scene, SerializationResult& result)
-    {
-        std::vector<std::string> errors;
-        bool valid = scene.Validate(errors);
-        for (const auto& err : errors)
-        {
-            result.warnings.push_back(err);
-        }
-        return valid;
-    }
-
-    bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& scene,
-                                                     SerializationResult& result)
-    {
-        if (fileVersion < SCENE_FILE_OLDEST_READABLE_VERSION || fileVersion > SCENE_FILE_VERSION)
-        {
-            const std::string window =
-                "this build reads scene versions " + std::to_string(SCENE_FILE_OLDEST_READABLE_VERSION) + "-" +
-                std::to_string(SCENE_FILE_VERSION) + " and writes version " + std::to_string(SCENE_FILE_VERSION);
-            result.errorMessage =
-                "Scene file version " + std::to_string(fileVersion) + " is unsupported: " + window +
-                (fileVersion > SCENE_FILE_VERSION ? "; open it with the newer SparkEngine build that wrote it"
-                                                  : "; convert it with an older build that reads version " +
-                                                        std::to_string(fileVersion) + ", then resave");
-            return false;
-        }
-
-        if (fileVersion < SCENE_FILE_VERSION)
-        {
-            // v1 -> v2 keeps the document structure; the only v2 change is the
-            // schema-tagged component payload, which the loader enforces per
-            // component (v1 raw object images are rejected there, never decoded).
-            scene.header.version = SCENE_FILE_VERSION;
-            result.warnings.push_back("Scene migrated in memory from version " + std::to_string(fileVersion) + " to " +
-                                      std::to_string(SCENE_FILE_VERSION) +
-                                      "; the file on disk is unchanged until it is saved");
-        }
-        return true;
     }
 
     bool SceneSerializer::CreateBackup(const std::string& filePath)

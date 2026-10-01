@@ -41,6 +41,7 @@ endif()
 # Pull ProjectManager + FolderDialog directly from the editor tree — no copy, no new lib.
 target_sources(SparkLauncher PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectDocument.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/FolderDialog.cpp"
 )
 

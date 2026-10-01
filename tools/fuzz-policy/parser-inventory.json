@@ -923,16 +923,24 @@
       "trust_boundary": "untrusted-file",
       "source_files": [
         "SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp",
+        "SparkEditor/Source/SceneSystem/SceneJSONReader.cpp",
+        "SparkEditor/Source/SceneSystem/SceneJSONReader.h",
         "SparkEditor/Source/SceneSystem/SceneComponentCodec.cpp"
       ],
       "formats": [
         ".scene",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorSceneJson.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorSceneJson",
+        "test_selector": "FuzzEditorSceneJsonSmoke",
+        "corpus_id": "editor-scene-json-corpus",
+        "entry_symbol": "SparkEditor::DecodeSceneJSONDocument",
+        "binding_source": "FuzzerTests/FuzzEditorSceneJsonProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzDecodeEditorSceneJson"
       }
     },
     {
@@ -1004,10 +1012,16 @@
         ".ini",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorLayout.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorLayout",
+        "test_selector": "FuzzEditorLayoutSmoke",
+        "corpus_id": "editor-layout-corpus",
+        "entry_symbol": "SparkEditor::EditorLayoutManager::LoadLayout",
+        "binding_source": "FuzzerTests/FuzzEditorLayoutProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadEditorLayout"
       }
     },
     {
@@ -1919,10 +1933,16 @@
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorWindowLayout.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorWindowLayout",
+        "test_selector": "FuzzEditorWindowLayoutSmoke",
+        "corpus_id": "editor-window-layout-corpus",
+        "entry_symbol": "SparkEditor::EditorWindowManager::LoadLayoutFromFile",
+        "binding_source": "FuzzerTests/FuzzEditorWindowLayoutProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadEditorWindowLayout"
       }
     },
     {
@@ -1930,15 +1950,23 @@
       "description": "Editor theme import with hand-rolled JSON and sscanf colour parsing.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEditor/Source/Core/EditorTheme.cpp"
+        "SparkEditor/Source/Core/EditorTheme.cpp",
+        "SparkEditor/Source/Core/EditorThemeDocument.cpp",
+        "SparkEditor/Source/Core/EditorThemeDocument.h"
       ],
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorThemeImport.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorThemeImport",
+        "test_selector": "FuzzEditorThemeImportSmoke",
+        "corpus_id": "editor-theme-import-corpus",
+        "entry_symbol": "SparkEditor::ParseThemeDocument",
+        "binding_source": "FuzzerTests/FuzzEditorThemeImportProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseEditorTheme"
       }
     },
     {
@@ -1965,15 +1993,22 @@
         "SparkEditor/Source/Core/EditorRecovery.cpp",
         "SparkEditor/Source/Core/EditorRecoveryFiles.h",
         "SparkEditor/Source/Core/EditorRecoveryJson.h",
-        "SparkEditor/Source/Core/EditorRecovery.h"
+        "SparkEditor/Source/Core/EditorRecovery.h",
+        "SparkEditor/Source/Utils/EditorFileRead.h"
       ],
       "formats": [
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorRecovery.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorRecovery",
+        "test_selector": "FuzzEditorRecoverySmoke",
+        "corpus_id": "editor-recovery-snapshot-corpus",
+        "entry_symbol": "SparkEditor::EditorRecoveryStore::LoadForProject",
+        "binding_source": "FuzzerTests/FuzzEditorRecoveryProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadEditorRecovery"
       }
     },
     {
@@ -2425,16 +2460,24 @@
       "description": "Hand-rolled JSON field scrape of .sparkproject files and the recent-projects list opened by the editor.",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEditor/Source/Core/ProjectManager.cpp"
+        "SparkEditor/Source/Core/ProjectManager.cpp",
+        "SparkEditor/Source/Core/ProjectDocument.cpp",
+        "SparkEditor/Source/Core/ProjectDocument.h"
       ],
       "formats": [
         ".sparkproject",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorProjectFile.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorProjectFile",
+        "test_selector": "FuzzEditorProjectFileSmoke",
+        "corpus_id": "editor-project-file-corpus",
+        "entry_symbol": "SparkEditor::ReadProjectDocumentFields",
+        "binding_source": "FuzzerTests/FuzzEditorProjectFileProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzReadEditorProjectFile"
       }
     },
     {
@@ -2475,15 +2518,23 @@
       "description": "Scene Import panel reader for game INI .scene files (sections, key=value, strtof float triples).",
       "trust_boundary": "untrusted-file",
       "source_files": [
-        "SparkEditor/Source/Panels/SceneImportPanel.cpp"
+        "SparkEditor/Source/Panels/SceneImportPanel.cpp",
+        "SparkEditor/Source/Panels/SceneImportParser.cpp",
+        "SparkEditor/Source/Panels/SceneImportParser.h"
       ],
       "formats": [
         ".scene"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorSceneImport.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorSceneImport",
+        "test_selector": "FuzzEditorSceneImportSmoke",
+        "corpus_id": "editor-scene-ini-import-corpus",
+        "entry_symbol": "SparkEditor::ParseGameSceneIni",
+        "binding_source": "FuzzerTests/FuzzEditorSceneImportProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseEditorSceneImport"
       }
     },
     {
@@ -2521,10 +2572,16 @@
         ".scene",
         ".json"
       ],
-      "status": "blocked",
-      "blocker": {
-        "reason": "No production-entry-point fuzz harness and bounded seed corpus are committed; recorded by the OD-21 triage.",
-        "ticket": "SEC-120"
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorSceneLoad.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorSceneLoad",
+        "test_selector": "FuzzEditorSceneLoadSmoke",
+        "corpus_id": "editor-scene-load-dispatch-corpus",
+        "entry_symbol": "SparkEditor::SceneSerializer::LoadScene",
+        "binding_source": "FuzzerTests/FuzzEditorSceneLoadProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzLoadEditorScene"
       }
     },
     {

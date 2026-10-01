@@ -151,6 +151,14 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzPluginMetadata",
     "SparkFuzzReflectionBinary",
     "SparkFuzzShaderDiskCache",
+    "SparkFuzzEditorSceneJson",
+    "SparkFuzzEditorSceneLoad",
+    "SparkFuzzEditorProjectFile",
+    "SparkFuzzEditorRecovery",
+    "SparkFuzzEditorSceneImport",
+    "SparkFuzzEditorThemeImport",
+    "SparkFuzzEditorWindowLayout",
+    "SparkFuzzEditorLayout",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2373,6 +2381,39 @@ class TestRepositoryIntegration(unittest.TestCase):
                 self.assertEqual(corpora[parser_id].seed_count, seeds)
                 # The production adapter is compiled against libc++ and meets the
                 # libstdc++ libFuzzer driver only at its C ABI.
+                target = cmake.split(f"add_executable(SparkFuzz{stem}\n", 1)[1].split("add_test(", 1)[0]
+                self.assertIn(f"Fuzz{stem}Production.cpp", target)
+                self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', target)
+                self.assertIn("Threads::Threads c++ c++abi", target)
+
+    def test_editor_batch3_targets_keep_their_production_bindings(self) -> None:
+        expected = {
+            "editor-scene-json": ("EditorSceneJson", "SparkEditor::DecodeSceneJSONDocument", "SparkFuzzDecodeEditorSceneJson", 16, 128),
+            "editor-scene-load-dispatch": ("EditorSceneLoad", "SparkEditor::SceneSerializer::LoadScene", "SparkFuzzLoadEditorScene", 15, 128),
+            "editor-project-file": ("EditorProjectFile", "SparkEditor::ReadProjectDocumentFields", "SparkFuzzReadEditorProjectFile", 14, 2),
+            "editor-recovery-snapshot": ("EditorRecovery", "SparkEditor::EditorRecoveryStore::LoadForProject", "SparkFuzzLoadEditorRecovery", 15, 64),
+            "editor-scene-ini-import": ("EditorSceneImport", "SparkEditor::ParseGameSceneIni", "SparkFuzzParseEditorSceneImport", 9, 1),
+            "editor-theme-import": ("EditorThemeImport", "SparkEditor::ParseThemeDocument", "SparkFuzzParseEditorTheme", 9, 3),
+            "editor-window-layout": ("EditorWindowLayout", "SparkEditor::EditorWindowManager::LoadLayoutFromFile", "SparkFuzzLoadEditorWindowLayout", 8, 3),
+            "editor-layout": ("EditorLayout", "SparkEditor::EditorLayoutManager::LoadLayout", "SparkFuzzLoadEditorLayout", 13, 3),
+        }
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        parsers = {item.parser_id: item for item in inventory.parsers}
+        corpora = {item.parser_id: item for item in corpus_manifest.load_corpora(REPO_ROOT, inventory)}
+        cmake = (REPO_ROOT / "FuzzerTests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        for parser_id, (stem, entry_symbol, adapter_symbol, seed_count, depth) in expected.items():
+            with self.subTest(parser=parser_id):
+                parser = parsers[parser_id]
+                self.assertEqual(parser.status, "fuzzed")
+                self.assertEqual(parser.target["harness"], f"FuzzerTests/Fuzz{stem}.cpp")
+                self.assertEqual(parser.target["binding_source"], f"FuzzerTests/Fuzz{stem}Production.cpp")
+                self.assertEqual(parser.target["cmake_target"], f"SparkFuzz{stem}")
+                self.assertEqual(parser.target["test_selector"], f"Fuzz{stem}Smoke")
+                self.assertEqual(parser.target["entry_symbol"], entry_symbol)
+                self.assertEqual(parser.target["harness_entry_symbol"], adapter_symbol)
+                self.assertIn(f"SparkFuzz{stem}", FUZZ_SMOKE_TARGETS)
+                self.assertEqual(corpora[parser_id].seed_count, seed_count)
+                self.assertEqual(corpora[parser_id].budget.max_depth, depth)
                 target = cmake.split(f"add_executable(SparkFuzz{stem}\n", 1)[1].split("add_test(", 1)[0]
                 self.assertIn(f"Fuzz{stem}Production.cpp", target)
                 self.assertIn('PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"', target)
