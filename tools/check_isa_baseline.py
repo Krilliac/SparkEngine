@@ -61,10 +61,18 @@ feature-scoped mechanisms; anything else fails closed until reviewed:
   MSVC 14.44.35207 toolset: AVX, AVX2 and LZCNT only (review below).
 * The exact PDB procedure/module pairs memcpy/memset (AVX/AVX2), and XGETBV in
   vcruntime's __isa_available_init and in Spark::Detail::ReadXcr0.
-* Guard dominance for code the MSVC headers inline into arbitrary procedures:
-  the instruction is reachable from its procedure's entry, and unreachable once
-  the edges implied by a reviewed guard compare are removed from that
-  procedure's control-flow graph (see REVIEWED_MSVC_GUARDS).
+* Guard dominance for code the MSVC headers or auto-vectorizer place inline in
+  arbitrary procedures: the instruction is reachable from its procedure's
+  entry, and unreachable once the edges implied by a reviewed guard compare are
+  removed from that procedure's control-flow graph (see REVIEWED_MSVC_GUARDS).
+* Out-of-line procedures named in REVIEWED_CALLER_GUARDED_PROCEDURES, when every
+  code reference to them is such a guarded branch or call and no data section
+  holds their address (re-proven on every scan).
+
+Before classifying a PE procedure, tools/isa_code_map.py rebuilds its
+instruction stream around the MSVC switch tables it can prove, so table bytes
+are data rather than undecodable or bogus instructions. Bytes it cannot
+explain stay in the stream and fail the scan.
 
 Exit status: 0 when no violation remains, 1 when violations remain, 2 on a
 usage or tool error (missing file, no disassembler, not an x86-64 image).
@@ -82,7 +90,29 @@ import struct
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+
+
+def _load_sibling(name: str):
+    """Load a module that lives next to this script (it also runs as a plain file)."""
+    module_name = "spark_" + name
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name + ".py")
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+code_map = _load_sibling("isa_code_map")
+Instruction = code_map.Record
+_split_operands = code_map.split_operands
+_REG32 = code_map.REG32
+_REG_FAMILY = code_map.REG_FAMILY
 
 # VMX/SVM and the segment-verify instructions also start with 'v' but are not
 # VEX-encoded; they never take a vector register, so the vector-operand test
@@ -216,6 +246,13 @@ class ScanResult:
     violations: list[Finding] = field(default_factory=list)
     allowed: Counter = field(default_factory=Counter)
     informational: Counter = field(default_factory=Counter)
+    switch_tables: int = 0
+    table_bytes: int = 0
+    padding_bytes: int = 0
+    # Caller-guarded procedures: findings held back, and the references seen.
+    deferred: dict = field(default_factory=dict)
+    unguarded_references: Counter = field(default_factory=Counter)
+    guarded_references: Counter = field(default_factory=Counter)
 
 
 AVX_FEATURES = frozenset({"AVX (VEX)", "AVX/AVX2 (ymm)"})
@@ -258,8 +295,8 @@ REVIEWED_MSVC_TOOLSET_LIB = re.compile(
 # "_Definitely_have_lzcnt", __msvc_bit_utils.hpp:119). The _mm_* intrinsics are
 # SSE2-SSE4.2, within the floor. The source review cannot see code the compiler
 # adds: the shipped object also holds auto-vectorized EVEX loops (vpminuq xmm)
-# behind "cmpl $0x6, __isa_available", which classify as AVX-512 and stay
-# violations until that dispatch is reviewed separately.
+# behind "cmpl $0x6, __isa_available", which classify as AVX-512; the
+# contribution does not cover them, the __isa_available >= 6 guard rule does.
 REVIEWED_MSVC_VECTOR_FEATURES = AVX_FEATURES | {"LZCNT"}
 # Microsoft build paths observed in locally linked /MT, /MD and /MDd images.
 REVIEWED_MSVC_MODULE_SUFFIXES = (
@@ -289,11 +326,28 @@ INT32_MAX = (1 << 31) - 1
 
 
 @dataclass(frozen=True)
-class GuardSpec:
-    """A reviewed global int whose value decides whether inline code may run."""
+class GuardRule:
+    """Values of a reviewed guard that prove a set of features present."""
 
     predicate: tuple[tuple[int, int], ...]  # disjoint signed 32-bit intervals
     features: frozenset
+    # When set, only these mnemonics are covered (for families such as AVX-512
+    # whose subsets have their own CPUID bits).
+    mnemonics: frozenset | None = None
+
+    def covers(self, feature: str, mnemonic: str) -> bool:
+        return feature in self.features and (self.mnemonics is None or mnemonic in self.mnemonics)
+
+
+@dataclass(frozen=True)
+class GuardSpec:
+    """A reviewed global int whose value decides whether inline code may run."""
+
+    rules: tuple[GuardRule, ...]
+
+    @property
+    def features(self) -> frozenset:
+        return frozenset().union(*(rule.features for rule in self.rules))
 
 
 # Windows SDK 10.0.26100.0 ucrt/wchar.h:207-214 declares _Avx2WmemEnabled with
@@ -301,16 +355,57 @@ class GuardSpec:
 # wmemcmp (:401) take their AVX2 paths only when it is non-zero. With the /MD CRT
 # only libucrt(d).lib defines the strong symbol, so these images resolve both
 # names to the never-written zero. AVX/AVX2 only.
-_WMEM_GUARD = GuardSpec(((INT32_MIN, -1), (1, INT32_MAX)), AVX_FEATURES)
+_WMEM_GUARD = GuardSpec((GuardRule(((INT32_MIN, -1), (1, INT32_MAX)), AVX_FEATURES),))
 # Guards the MSVC headers read inline. An edge is removed only when every value
 # that takes it satisfies the predicate, and only for the features listed.
 REVIEWED_MSVC_GUARDS = {
     "_Avx2WmemEnabled": _WMEM_GUARD,
     "_Avx2WmemEnabledWeakValue": _WMEM_GUARD,
-    # MSVC 14.44.35207 include/__msvc_bit_utils.hpp:115-127
-    # (_Checked_x86_x64_countl_zero) uses lzcnt only when __isa_available >=
-    # _Stl_isa_available_avx2 (5, __ISA_AVAILABLE_AVX2). LZCNT only.
-    "__isa_available": GuardSpec(((5, INT32_MAX),), frozenset({"LZCNT"})),
+    "__isa_available": GuardSpec((
+        # MSVC 14.44.35207 include/__msvc_bit_utils.hpp:115-127
+        # (_Checked_x86_x64_countl_zero) uses lzcnt only when __isa_available >=
+        # _Stl_isa_available_avx2 (5, __ISA_AVAILABLE_AVX2). The auto-vectorizer
+        # guards its AVX2 loops the same way ("cmpl $0x5, __isa_available; jl
+        # scalar", e.g. Sha256State::Finalize). vcruntime's __isa_available_init
+        # (14.44.35207 msvcrt.lib cpu_disp.obj, disassembly reviewed) stores 5
+        # only after CPUID.1:ECX OSXSAVE (bit 27) and AVX (bit 28), XGETBV(0) &
+        # 6 == 6 (XMM+YMM state), and CPUID.7.0:EBX AVX2 (bit 5). Every AVX2 CPU
+        # implements LZCNT (the STL's _Definitely_have_lzcnt). AVX/AVX2/LZCNT only.
+        GuardRule(((5, INT32_MAX),), AVX_FEATURES | {"LZCNT"}),
+        # The auto-vectorizer emits EVEX loops behind "cmpl $0x6, __isa_available;
+        # jl scalar" (cgltf_calc_index_bound, the STL's __std_minmax_*). The same
+        # procedure stores 6 only after the AVX2 conditions above, CPUID.7.0:EBX &
+        # 0xD0030000 == 0xD0030000 (AVX512F bit 16, DQ 17, CD 28, BW 30, VL 31)
+        # and XGETBV(0) & 0xE0 == 0xE0 (opmask, ZMM_Hi256, Hi16_ZMM state). Only
+        # the observed instructions, each in AVX512F/VL, are covered; another
+        # EVEX instruction, possibly from a subset with its own CPUID bit
+        # (VBMI, VNNI, IFMA, ...), needs its own review.
+        GuardRule(((6, INT32_MAX),), frozenset({"AVX-512"}), frozenset({"vpmaxuq", "vpminuq"})),
+    )),
+}
+
+
+@dataclass(frozen=True)
+class CallerGuarded:
+    """A reviewed out-of-line procedure that runs only behind a guard in its callers."""
+
+    features: frozenset
+    mnemonics: frozenset  # the only above-floor instructions it may contain
+    justification: str
+
+
+# Each entry is re-proven on every scan, not trusted: the procedure must be one
+# unambiguous PDB extent of exactly this name and hold no other above-floor
+# instruction; every code reference to it must be a direct branch or call that
+# a reviewed guard rule (REVIEWED_MSVC_GUARDS) dominates for these features;
+# and its address must not appear in any non-executable section (no function
+# pointer, vtable or /guard:cf entry). Otherwise its findings stay violations.
+REVIEWED_CALLER_GUARDED_PROCEDURES = {
+    "std::_Countl_zero_lzcnt<unsigned __int64>": CallerGuarded(
+        frozenset({"LZCNT"}), frozenset({"lzcntq"}),
+        "MSVC 14.44.35207 include/__msvc_bit_utils.hpp: _Checked_x86_x64_countl_zero tail-jumps here only "
+        "when __isa_available >= 5 (cmpl $0x5, __isa_available; jge _Countl_zero_lzcnt), and every AVX2 "
+        "CPU implements LZCNT; otherwise it takes _Countl_zero_bsr."),
 }
 
 
@@ -320,6 +415,7 @@ class Procedure:
     end: int
     name: str
     ambiguous: bool  # overlaps another procedure's extent without matching it
+    noreturn: bool = False  # every procedure record for these bytes carries the PDB noreturn flag
 
 
 @dataclass
@@ -338,6 +434,10 @@ class PdbInfo:
         for proc in self.procedures:
             maximum = max(maximum, proc.end)
             self._max_ends.append(maximum)
+        self.noreturn = frozenset(proc.start for proc in self.procedures if proc.noreturn)
+        self.caller_guarded = {proc.start: REVIEWED_CALLER_GUARDED_PROCEDURES[proc.name]
+                               for proc in self.procedures
+                               if proc.name in REVIEWED_CALLER_GUARDED_PROCEDURES and not proc.ambiguous}
 
     def procedure_at(self, address: int) -> Procedure | None:
         index = bisect.bisect_right(self._starts, address) - 1
@@ -358,7 +458,8 @@ def _reviewed_runtime_symbol(module: str, symbol: str | None) -> bool:
     return suffix is not None and _normalized(module).endswith(suffix)
 
 
-def _pe_sections(path: str) -> tuple[int, list[tuple[int, int, bool]]]:
+def _pe_section_table(path: str) -> tuple[int, list[tuple[int, int, int, int, int]]]:
+    """(image base, [(rva, virtual size, raw size, raw pointer, characteristics)])."""
     with open(path, "rb") as handle:
         data = handle.read(64)
         if len(data) < 64 or data[:2] != b"MZ":
@@ -380,14 +481,21 @@ def _pe_sections(path: str) -> tuple[int, list[tuple[int, int, bool]]]:
     if optional + optional_size > len(data) or struct.unpack_from("<H", data, optional)[0] != 0x20B:
         raise RuntimeError(f"{path} is not a PE32+ x86-64 image")
     image_base = struct.unpack_from("<Q", data, optional + 24)[0]
-    sections = []
+    table = []
     section_table = optional + optional_size
     for index in range(section_count):
         offset = section_table + index * 40
         if offset + 40 > len(data):
             raise RuntimeError(f"{path} has a truncated PE section table")
-        virtual_size, rva, raw_size = struct.unpack_from("<III", data, offset + 8)
-        characteristics = struct.unpack_from("<I", data, offset + 36)[0]
+        virtual_size, rva, raw_size, raw_pointer = struct.unpack_from("<IIII", data, offset + 8)
+        table.append((rva, virtual_size, raw_size, raw_pointer, struct.unpack_from("<I", data, offset + 36)[0]))
+    return image_base, table
+
+
+def _pe_sections(path: str) -> tuple[int, list[tuple[int, int, bool]]]:
+    image_base, table = _pe_section_table(path)
+    sections = []
+    for rva, virtual_size, raw_size, _, characteristics in table:
         executable = bool(characteristics & 0x20000000)
         # Instructions must have file bytes; data guards can live in the
         # loader's zero-filled tail (VirtualSize may exceed SizeOfRawData).
@@ -531,6 +639,11 @@ def _parse_pdb_symbols(lines, image_base: int, sections: list[tuple[int, int, bo
     pending = None
     ranges = []
     extents: dict[tuple[int, int], set[str]] = {}
+    # Folded (/OPT:ICF) procedures share an extent; it is noreturn only when
+    # every procedure record for it carries the flag.
+    records = Counter()
+    noreturn_records = Counter()
+    awaiting_flags = None
     # Names may contain backticks ("`anonymous namespace'::..."): take everything
     # between the first backtick after the record size and the last one.
     proc_re = re.compile(r"S_(?:G|L)PROC32(?:_ID)? \[[^\]]*\] `(.*)`\s*$")
@@ -562,6 +675,11 @@ def _parse_pdb_symbols(lines, image_base: int, sections: list[tuple[int, int, bo
             if pending and reviewed(pending):
                 raise RuntimeError("PDB procedure has no address/length record")
             pending = None
+            awaiting_flags = None
+        if awaiting_flags is not None and "flags = " in line:
+            if "noreturn" in line.split("flags = ", 1)[1].split(" | "):
+                noreturn_records[awaiting_flags] += 1
+            awaiting_flags = None
         addr_match = addr_re.search(line)
         if not addr_match or pending is None or module is None:
             continue
@@ -572,11 +690,15 @@ def _parse_pdb_symbols(lines, image_base: int, sections: list[tuple[int, int, bo
         if features:
             start = _code_address(section, offset, size, image_base, sections, pending)
             ranges.append(PdbRange(start, start + size, pending, module, features))
+            awaiting_flags = (start, start + size)
+            records[awaiting_flags] += 1
         elif 1 <= section <= len(sections) and size > 0:
             section_rva, section_size, executable = sections[section - 1]
             if executable and offset + size <= section_size:
                 start = image_base + section_rva + offset
                 extents.setdefault((start, start + size), set()).add(pending)
+                awaiting_flags = (start, start + size)
+                records[awaiting_flags] += 1
         pending = None
     if pending and reviewed(pending):
         raise RuntimeError("PDB procedure has no address/length record")
@@ -594,7 +716,9 @@ def _parse_pdb_symbols(lines, image_base: int, sections: list[tuple[int, int, bo
         # an overlap between different extents leaves the entry and extent in doubt.
         overlaps = previous_end > start or (index + 1 < len(ordered) and ordered[index + 1][0] < end)
         previous_end = max(previous_end, end)
-        procedures.append(Procedure(start, end, min(extents[(start, end)]), overlaps))
+        key = (start, end)
+        procedures.append(Procedure(start, end, min(extents[key]), overlaps,
+                                    records[key] > 0 and noreturn_records[key] == records[key]))
     return ranges, procedures
 
 
@@ -649,27 +773,6 @@ _CONDITIONS = {
 _OTHER_CONDITIONAL = {"js", "jns", "jo", "jno", "jp", "jnp", "jpe", "jpo", "jrcxz", "jecxz",
                       "loop", "loope", "loopne", "loopz", "loopnz"}
 _TERMINATORS = {"ret", "retq", "retl", "ud2", "int3", "hlt"}
-_REG32 = {"eax": "a", "ebx": "b", "ecx": "c", "edx": "d", "esi": "si", "edi": "di", "ebp": "bp", "esp": "sp",
-          **{f"r{n}d": f"r{n}" for n in range(8, 16)}}
-_REG_FAMILY = {
-    **{name: family for name, family in _REG32.items()},
-    **{"r" + name[1:]: family for name, family in _REG32.items() if name.startswith("e")},
-    **{f"r{n}": f"r{n}" for n in range(8, 16)}, **{f"r{n}w": f"r{n}" for n in range(8, 16)},
-    **{f"r{n}b": f"r{n}" for n in range(8, 16)},
-    "ax": "a", "bx": "b", "cx": "c", "dx": "d", "si": "si", "di": "di", "bp": "bp", "sp": "sp",
-    "al": "a", "ah": "a", "bl": "b", "bh": "b", "cl": "c", "ch": "c", "dl": "d", "dh": "d",
-    "sil": "si", "dil": "di", "bpl": "bp", "spl": "sp",
-}
-
-
-@dataclass(frozen=True)
-class Instruction:
-    address: int
-    mnemonic: str
-    operands: str
-    annotation: int | None  # absolute address from a "# 0x..." RIP-relative annotation
-
-
 def _intervals(kind: str, constant: int, negate: bool) -> list[tuple[int, int]]:
     """Signed 32-bit values v for which "cmp $constant, v" takes (or, negated, skips) the branch."""
     if kind in ("ult", "ule"):
@@ -695,19 +798,6 @@ def _intervals(kind: str, constant: int, negate: bool) -> list[tuple[int, int]]:
     if cursor <= INT32_MAX:
         result.append((cursor, INT32_MAX))
     return result
-
-
-def _split_operands(operands: str) -> list[str]:
-    """Split AT&T operands on the commas outside a memory operand's parentheses."""
-    parts, depth, current = [], 0, ""
-    for char in operands:
-        depth += {"(": 1, ")": -1}.get(char, 0)
-        if char == "," and depth == 0:
-            parts.append(current.strip())
-            current = ""
-        else:
-            current += char
-    return parts + [current.strip()] if current.strip() else parts
 
 
 def _is_flag_neutral_move(insn: Instruction) -> bool:
@@ -760,13 +850,23 @@ def _guard_compare(insns: list[Instruction], jcc: int, leaders: set[int],
 
 
 def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
-                  guards: dict[int, GuardSpec], extent: tuple[int, int]) -> set[int]:
+                  guards: dict[int, GuardSpec], extent: tuple[int, int],
+                  dispatch: dict[int, tuple[int, ...]] | None = None,
+                  references: list[tuple[int, str, frozenset]] | None = None,
+                  guarded_references: set[int] | None = None) -> set[int]:
     """Return indices of candidate instructions that only reviewed guard edges reach.
+
+    references are (index, feature, mnemonics) of branches and calls into a
+    caller-guarded procedure; the index of each one that is guarded the same way
+    (a jcc whose taken edge the guard removes, or a call/jmp only guard edges
+    reach) is added to guarded_references.
 
     The CFG is instruction-level over one procedure: jcc -> target and
     fallthrough; jmp -> target (or leaves the procedure); ret/ud2/int3/hlt end a
-    path; everything else falls through. An indirect jump or a branch into the
-    middle of an instruction makes the whole procedure fail closed. Code reached
+    path; everything else falls through. A switch dispatch whose tables
+    isa_code_map proved has an edge to each case. Any other indirect jump, or a
+    branch into the middle of an instruction, makes the whole procedure fail
+    closed. Code reached
     only through exception handlers or from another procedure is unreachable from
     the entry here, so it is never exempt.
     """
@@ -782,8 +882,13 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
         is_jump = mnemonic in ("jmp", "jmpq") or mnemonic in _CONDITIONS or mnemonic in _OTHER_CONDITIONAL
         if is_jump or mnemonic in ("call", "callq"):
             if insn.operands.startswith("*"):
-                if is_jump:
+                if is_jump and insn.address not in (dispatch or {}):
                     return set()
+                for case in (dispatch or {}).get(insn.address, ()):
+                    if case not in index_of:
+                        return set()
+                    edges.append((index_of[case], "taken"))
+                    targets.add(index_of[case])
             else:
                 target_match = BRANCH_TARGET_RE.match(insn.operands)
                 if target_match is None:
@@ -798,7 +903,7 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
             edges.append((i + 1, "fall"))
         successors.append(edges)
 
-    removed_for: dict[str, set[tuple[int, str]]] = {}
+    removed_for: dict[GuardRule, set[tuple[int, str]]] = {}
     for i, insn in enumerate(insns):
         if insn.mnemonic not in _CONDITIONS:
             continue
@@ -809,10 +914,10 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
         kind, negate = _CONDITIONS[insn.mnemonic]
         for edge_kind, edge_negate in (("taken", negate), ("fall", not negate)):
             implied = _intervals(kind, constant, edge_negate)
-            if implied and all(any(low >= p_low and high <= p_high for p_low, p_high in spec.predicate)
-                               for low, high in implied):
-                for feature in spec.features:
-                    removed_for.setdefault(feature, set()).add((i, edge_kind))
+            for rule in spec.rules:
+                if implied and all(any(low >= p_low and high <= p_high for p_low, p_high in rule.predicate)
+                                   for low, high in implied):
+                    removed_for.setdefault(rule, set()).add((i, edge_kind))
 
     def reachable(removed: set[tuple[int, str]]) -> set[int]:
         seen, stack = {0}, [0]
@@ -826,12 +931,17 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
 
     full = reachable(set())
     exempt = set()
-    for feature in {feature for _, feature in candidates}:
-        if feature not in removed_for:
+    for rule, removed in removed_for.items():
+        covered = [i for i, feature in candidates if rule.covers(feature, insns[i].mnemonic)]
+        refs = [i for i, feature, mnemonics in references or ()
+                if mnemonics and all(rule.covers(feature, mnemonic) for mnemonic in mnemonics)]
+        if not covered and not refs:
             continue
-        cut = reachable(removed_for[feature])
-        exempt.update(i for i, candidate_feature in candidates
-                      if candidate_feature == feature and i in full and i not in cut)
+        cut = reachable(removed)
+        exempt.update(i for i in covered if i in full and i not in cut)
+        for i in refs:
+            if i in full and (i not in cut or (insns[i].mnemonic in _CONDITIONS and (i, "taken") in removed)):
+                guarded_references.add(i)
     return exempt
 
 
@@ -970,96 +1080,221 @@ def _join_split_prefixes(lines):
         yield pending[3]
 
 
-def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None) -> ScanResult:
-    """Classify disassembly lines; PE findings go through the reviewed PDB mechanisms."""
-    result = ScanResult(path=path)
+def _records(lines):
+    """Yield (objdump symbol header, Record) for every disassembled instruction line."""
     symbol = "<unknown>"
-    symbol_allowed = False
-    procedure: Procedure | None = None
-    buffered: list[Instruction] = []
-    pending: list[tuple[int, str, Finding]] = []
-
-    def flush() -> None:
-        exempt: set[int] = set()
-        if pending and procedure is not None and not procedure.ambiguous and buffered[0].address == procedure.start:
-            candidates = [(index, feature) for index, feature, _ in pending]
-            exempt = _guard_exempt(buffered, candidates, pdb.guards, (procedure.start, procedure.end))
-        for index, feature, finding in pending:
-            if index in exempt:
-                result.allowed[feature] += 1
-            else:
-                result.violations.append(finding)
-        buffered.clear()
-        pending.clear()
-
+    previous = None
     for line in _join_split_prefixes(lines):
         header = SYMBOL_RE.match(line)
         if header:
             symbol = header.group(2)
-            symbol_allowed = any(pattern.search(symbol) for pattern in allow)
             continue
         insn = INSN_RE.match(line)
         if not insn:
             continued = CONTINUED_ANNOTATION_RE.match(line)
-            if continued and buffered and buffered[-1].annotation is None:
-                buffered[-1] = Instruction(buffered[-1].address, buffered[-1].mnemonic, buffered[-1].operands,
-                                           int(continued.group(1), 16))
+            if continued and previous and previous[1].annotation is None:
+                previous = (previous[0], replace(previous[1], annotation=int(continued.group(1), 16)))
             continue
+        if previous:
+            yield previous
+        raw = RAW_BYTES_RE.match(insn.group(2))
         evex, text = split_raw_bytes(insn.group(2))
         mnemonic, operands = split_instruction(text)
         undecodable = not mnemonic or mnemonic.startswith(("(", "<", "."))
-        address = int(insn.group(1), 16)
-        if pdb is not None:
-            current = pdb.procedure_at(address)
-            if current != procedure:
-                flush()
-                procedure = current
-            if procedure is not None:
-                annotation = ANNOTATION_ADDRESS_RE.search(text)
-                buffered.append(Instruction(address, "<undecodable>" if undecodable else mnemonic.lower(), operands,
-                                            int(annotation.group(1), 16) if annotation else None))
-        if undecodable:
-            # This can be data in .text or an instruction unknown to the tool.
-            # Neither is a proof of floor safety; never silently discard it.
-            result.violations.append(Finding("undecodable", insn.group(1),
-                                             procedure.name if procedure else symbol, text.strip()))
-            continue
-        result.instructions += 1
-        feature = classify(mnemonic, operands, evex)
-        if feature is None:
-            continue
-        if feature == "TZCNT":
-            result.informational[feature] += 1
-            continue
-        where = procedure.name if procedure is not None else symbol
-        finding = Finding(feature, insn.group(1), where, text.strip())
-        # The OSXSAVE review covers XGETBV(0), not every member of XSAVE.
-        reviewed_instruction = feature != XSAVE or mnemonic.lower() == "xgetbv"
-        if pdb is None:
-            if symbol_allowed or (reviewed_instruction and feature in ELF_REVIEWED_PROCEDURES.get(symbol, ())):
-                result.allowed[feature] += 1
-            else:
-                result.violations.append(finding)
-        elif reviewed_instruction and _pdb_allows(feature, address, pdb.ranges):
-            result.allowed[feature] += 1
-        elif procedure is not None and any(feature in spec.features for spec in pdb.guards.values()):
-            pending.append((len(buffered) - 1, feature, finding))
-        else:
-            result.violations.append(finding)
-    if pdb is not None:
-        flush()
+        annotation = ANNOTATION_ADDRESS_RE.search(text)
+        previous = (symbol, Instruction(int(insn.group(1), 16), len(raw.group(1).split()) if raw else 0,
+                                        "<undecodable>" if undecodable else mnemonic.lower(), operands,
+                                        int(annotation.group(1), 16) if annotation else None, evex, text.strip()))
+    if previous:
+        yield previous
+
+
+@dataclass(frozen=True)
+class Gap:
+    """Executable bytes outside every PDB procedure: padding, or code with no S_GPROC32."""
+
+    start: int
+    end: int
+
+
+def _region(pdb: PdbInfo, image, address: int):
+    procedure = pdb.procedure_at(address)
+    if procedure is not None:
+        return procedure
+    index = bisect.bisect_right(pdb._starts, address)
+    start = pdb._max_ends[index - 1] if index else 0
+    end = pdb._starts[index] if index < len(pdb._starts) else 1 << 64
+    bounds = image.section_bounds(address) if image is not None else None
+    if bounds is not None:
+        start, end = max(start, bounds[0]), min(end, bounds[1])
+    return Gap(start, end)
+
+
+def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None,
+               image=None) -> ScanResult:
+    """Classify disassembly lines; PE findings go through the reviewed PDB mechanisms.
+
+    With the image bytes (PE scans of real images), each procedure's instruction
+    stream is first rebuilt around its proven switch tables (isa_code_map).
+    """
+    result = ScanResult(path=path)
+    if pdb is None:
+        for symbol, insn in _records(lines):
+            _classify(result, insn, symbol, allow, None, None, [])
+        return result
+    region = None
+    buffered: list[tuple[str, Instruction]] = []
+    for symbol, insn in _records(lines):
+        key = _region(pdb, image, insn.address)
+        if key != region:
+            _finish_region(result, pdb, image, region, buffered)
+            region, buffered = key, []
+        buffered.append((symbol, insn))
+    _finish_region(result, pdb, image, region, buffered)
+    _settle_caller_guarded(result, pdb, image)
     return result
 
 
-def scan(tool: list[str], path: str, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None) -> ScanResult:
-    # Raw bytes are needed to tell EVEX from VEX. GNU objdump wraps them after 7
-    # bytes unless told otherwise; llvm-objdump prints them on one line.
-    command = tool + ["-d", "-C", path]
+def _settle_caller_guarded(result: ScanResult, pdb: PdbInfo, image) -> None:
+    for start, findings in result.deferred.items():
+        entry = pdb.caller_guarded[start]
+        reasons = []
+        if result.unguarded_references[start]:
+            reasons.append(f"{result.unguarded_references[start]} unguarded reference(s)")
+        if image is None:
+            reasons.append("no image bytes to rule out data references")
+        elif (image.data_contains(struct.pack("<Q", start))
+              or image.data_contains(struct.pack("<I", start - image.image_base))):
+            reasons.append("its address appears in a data section")
+        if any(finding.text.split()[0].lower() not in entry.mnemonics for finding in findings):
+            reasons.append("an unreviewed instruction")
+        for finding in findings:
+            if reasons:
+                note = f"{finding.symbol} (caller guard not proven: {', '.join(reasons)})"
+                result.violations.append(replace(finding, symbol=note))
+            else:
+                result.allowed[finding.feature] += 1
+
+
+def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered) -> None:
+    if not buffered:
+        return
+    insns = [insn for _, insn in buffered]
+    symbols = {insn.address: symbol for symbol, insn in buffered}
+    procedure = region if isinstance(region, Procedure) else None
+    dispatch: dict[int, tuple[int, ...]] = {}
+    if image is not None and all(insn.size > 0 for insn in insns):
+        if procedure is not None and not procedure.ambiguous:
+            mapped = code_map.map_procedure(insns, procedure.start, procedure.end, image, pdb.noreturn)
+            insns, dispatch = mapped.records, mapped.dispatch_targets
+            result.switch_tables += sum(table.kind == "jump" for table in mapped.tables)
+            result.table_bytes += sum(table.end - table.start for table in mapped.tables)
+            result.padding_bytes += mapped.padding
+        elif isinstance(region, Gap):
+            insns = code_map.map_gap(insns, region.start, region.end, image)
+    pending: list[tuple[int, str, Finding]] = []
+    for index, insn in enumerate(insns):
+        _classify(result, insn, symbols.get(insn.address, "<unknown>"), [], pdb, procedure,
+                  pending, index)
+    references = []
+    for index, insn in enumerate(insns):
+        target = code_map.direct_target(insn.mnemonic, insn.operands)
+        if target in pdb.caller_guarded:
+            entry = pdb.caller_guarded[target]
+            references += [(index, feature, entry.mnemonics) for feature in entry.features]
+        if insn.annotation in pdb.caller_guarded:
+            result.unguarded_references[insn.annotation] += 1  # the address is taken
+    exempt: set[int] = set()
+    guarded: set[int] = set()
+    analysable = procedure is not None and not procedure.ambiguous and insns[0].address == procedure.start
+    if (pending or references) and analysable:
+        candidates = [(index, feature) for index, feature, _ in pending]
+        exempt = _guard_exempt(insns, candidates, pdb.guards, (procedure.start, procedure.end), dispatch,
+                               references, guarded)
+    for index, _, _ in references:
+        target = code_map.direct_target(insns[index].mnemonic, insns[index].operands)
+        if index in guarded:
+            result.guarded_references[target] += 1
+        else:
+            result.unguarded_references[target] += 1
+    held = procedure.start if procedure is not None and procedure.start in pdb.caller_guarded else None
+    for index, feature, finding in pending:
+        if index in exempt:
+            result.allowed[feature] += 1
+        elif held is not None and feature in pdb.caller_guarded[held].features:
+            result.deferred.setdefault(held, []).append(finding)
+        else:
+            result.violations.append(finding)
+
+
+def _classify(result: ScanResult, insn: Instruction, symbol: str, allow: list[re.Pattern[str]],
+              pdb: PdbInfo | None, procedure: Procedure | None, pending: list, index: int = 0) -> None:
+    where = procedure.name if procedure is not None else symbol
+    address = f"{insn.address:x}"
+    if insn.mnemonic == "<undecodable>":
+        # This can be data in .text or an instruction unknown to the tool.
+        # Neither is a proof of floor safety; never silently discard it.
+        result.violations.append(Finding("undecodable", address, where, insn.text))
+        return
+    result.instructions += 1
+    feature = classify(insn.mnemonic, insn.operands, insn.evex)
+    if feature is None:
+        return
+    if feature == "TZCNT":
+        result.informational[feature] += 1
+        return
+    finding = Finding(feature, address, where, insn.text)
+    # The OSXSAVE review covers XGETBV(0), not every member of XSAVE.
+    reviewed_instruction = feature != XSAVE or insn.mnemonic == "xgetbv"
+    if pdb is None:
+        symbol_allowed = any(pattern.search(symbol) for pattern in allow)
+        if symbol_allowed or (reviewed_instruction and feature in ELF_REVIEWED_PROCEDURES.get(symbol, ())):
+            result.allowed[feature] += 1
+        else:
+            result.violations.append(finding)
+    elif reviewed_instruction and _pdb_allows(feature, insn.address, pdb.ranges):
+        result.allowed[feature] += 1
+    elif procedure is not None and any(feature in spec.features for spec in pdb.guards.values()):
+        pending.append((index, feature, finding))
+    else:
+        result.violations.append(finding)
+
+
+def _disassemble_command(tool: list[str], path: str, *extra: str) -> list[str]:
+    # Raw bytes are needed to tell EVEX from VEX and to size each instruction.
+    # GNU objdump wraps them after 7 bytes unless told otherwise; llvm-objdump
+    # prints them on one line.
+    command = tool + ["-d", "-C", *extra, path]
     if not os.path.basename(tool[0]).lower().startswith("llvm-objdump"):
         command.insert(-1, "--insn-width=15")
+    return command
+
+
+def _image_bytes(tool: list[str], path: str):
+    image_base, table = _pe_section_table(path)
+
+    def redecode(start: int, stop: int) -> list[Instruction]:
+        proc = subprocess.run(_disassemble_command(tool, path, f"--start-address={start:#x}",
+                                                   f"--stop-address={stop:#x}"),
+                              capture_output=True, text=True, errors="replace", check=False)
+        if proc.returncode != 0:
+            raise RuntimeError(f"re-disassembly of {path} failed: {proc.stderr.strip()}")
+        return [insn for _, insn in _records(proc.stdout.splitlines())]
+
+    def ranges(executable: bool) -> list[tuple[int, int, int]]:
+        return [(image_base + rva, min(virtual_size, raw_size), raw_pointer)
+                for rva, virtual_size, raw_size, raw_pointer, characteristics in table
+                if bool(characteristics & 0x20000000) == executable and min(virtual_size, raw_size)]
+
+    return code_map.ImageBytes(path, image_base, ranges(True), redecode, ranges(False))
+
+
+def scan(tool: list[str], path: str, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None) -> ScanResult:
+    image = _image_bytes(tool, path) if pdb is not None else None
+    command = _disassemble_command(tool, path)
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace") as proc:
         assert proc.stdout is not None
-        result = scan_lines(path, proc.stdout, allow, pdb)
+        result = scan_lines(path, proc.stdout, allow, pdb, image)
         stderr = proc.stderr.read() if proc.stderr else ""
     if proc.returncode != 0:
         raise RuntimeError(f"disassembly of {path} failed: {stderr.strip()}")
@@ -1074,6 +1309,9 @@ def report(result: ScanResult, max_report: int) -> None:
     unknown = counts.get("undecodable", 0)
     print(f"{status} {result.path}: {result.instructions} instructions, "
           f"{len(result.violations) - unknown} above-floor, {unknown} undecodable")
+    if result.switch_tables or result.padding_bytes:
+        print(f"  data in code: {result.switch_tables} proven switch tables ({result.table_bytes} bytes), "
+              f"{result.padding_bytes} nop/int3 padding bytes after them")
     for feature, count in sorted(counts.items()):
         print(f"  violation {feature}: {count}")
     for feature, count in sorted(result.allowed.items()):

@@ -4,7 +4,8 @@ tools/check_isa_baseline.py exempts an above-floor instruction inlined into an
 arbitrary PE procedure only when it is reachable from the procedure entry and
 unreachable once the edges a reviewed guard compare implies are removed. The
 guard table binds features: _Avx2WmemEnabled(WeakValue) != 0 excuses AVX/AVX2,
-__isa_available >= 5 excuses LZCNT. The disassembly and llvm-pdbutil text here
+__isa_available >= 5 excuses AVX/AVX2/LZCNT, and __isa_available >= 6 excuses
+only the reviewed AVX512F/VL instructions vpmaxuq/vpminuq. The disassembly and llvm-pdbutil text here
 are synthetic in the formats the real tools print, so this runs on every host.
 """
 
@@ -122,15 +123,43 @@ class GuardDominanceTests(unittest.TestCase):
 
     def test_guard_features_are_bound(self):
         self.assertViolation(scan(self.lzcnt_rows(address=WMEM, immediate="$0x0", condition="je")), "LZCNT")
-        # MSVC's auto-vectorizer guards EVEX code with __isa_available >= 6; the
-        # reviewed guard excuses LZCNT only.
-        for text, feature in (("vfmadd231ps\t%ymm2, %ymm1, %ymm0", "FMA"), ("vzeroupper", "AVX (VEX)"),
+        # __isa_available >= 5 proves AVX2 (and LZCNT), nothing stronger.
+        for text, feature in (("vfmadd231ps\t%ymm2, %ymm1, %ymm0", "FMA"),
                               ("shlxq\t%rsi, %rdi, %rax", "BMI2"),
                               ("62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2", "AVX-512")):
             rows = self.lzcnt_rows()
             rows[2] = (0x09, text)
             with self.subTest(feature=feature):
                 self.assertViolation(scan(rows), feature)
+
+    def test_isa_available_avx2_level_allows_auto_vectorized_avx2(self):
+        # Sha256State::Finalize: "cmpl $0x5, __isa_available; movq; jl scalar".
+        for text, feature in (("vpsrlvq\t%xmm0, %xmm6, %xmm1", "AVX (VEX)"), ("vzeroupper", "AVX (VEX)"),
+                              ("vpaddd\t%ymm0, %ymm1, %ymm2", "AVX/AVX2 (ymm)")):
+            for immediate, allowed in (("$0x5", True), ("$0x4", False)):
+                rows = self.lzcnt_rows(immediate=immediate)
+                rows[2] = (0x09, text)
+                with self.subTest(text=text, immediate=immediate):
+                    if allowed:
+                        self.assertAllowed(scan(rows), feature)
+                    else:
+                        self.assertViolation(scan(rows), feature)
+
+    def test_isa_available_avx512_level_allows_only_reviewed_evex_instructions(self):
+        # cgltf_calc_index_bound: "cmpl $0x6, __isa_available; jl scalar" before vpmaxuq.
+        evex = "62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2"
+        for immediate, allowed in (("$0x6", True), ("$0x5", False), ("$0x4", False)):
+            rows = self.lzcnt_rows(immediate=immediate)
+            rows[2] = (0x09, evex)
+            with self.subTest(immediate=immediate):
+                if allowed:
+                    self.assertAllowed(scan(rows), "AVX-512")
+                else:
+                    self.assertViolation(scan(rows), "AVX-512")
+        # vpermb is AVX512_VBMI, which __isa_available >= 6 does not prove.
+        rows = self.lzcnt_rows(immediate="$0x6")
+        rows[2] = (0x09, "62 f2 75 08 8d c2           \tvpermb\t%xmm2, %xmm1, %xmm0")
+        self.assertViolation(scan(rows), "AVX-512")
 
     def test_evex_xmm_instruction_under_the_wmem_guard_is_a_violation(self):
         rows = list(WMEM_GUARDED)
