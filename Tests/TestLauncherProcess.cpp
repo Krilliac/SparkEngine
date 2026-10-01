@@ -607,6 +607,30 @@ TEST(LauncherTemplates_ReadsFieldsAndFallsBackToTheDirectoryName)
     std::filesystem::remove_all(root, error);
 }
 
+TEST(LauncherTemplates_ReadsTopLevelMembersOnly)
+{
+    using namespace SparkLauncher;
+    const auto root = MakeLauncherTestRoot();
+    // The old first-match substring scan named this template "Inner" and kept the escapes.
+    WriteBytes(root / "Templates" / "Nested" / "template.json",
+               R"({"meta": {"name": "Inner"}, "name": "Outer \"Kit\"", "gameModule": "ArenaKit"})");
+    // Text that is not one JSON object lists the template under its directory name.
+    WriteBytes(root / "Templates" / "Broken" / "template.json", R"({"name": "Half)");
+
+    const auto nested = ReadTemplateEntry(root / "Templates" / "Nested");
+    ASSERT_TRUE(nested.has_value());
+    EXPECT_TRUE(nested->displayName == "Outer \"Kit\"");
+    EXPECT_TRUE(nested->gameModule == "ArenaKit");
+
+    const auto broken = ReadTemplateEntry(root / "Templates" / "Broken");
+    ASSERT_TRUE(broken.has_value());
+    EXPECT_TRUE(broken->displayName == "Broken");
+    EXPECT_TRUE(broken->gameModule.empty());
+
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+}
+
 TEST(LauncherTemplates_RefusedManifestReadsAsEmptyWithoutBlocking)
 {
     using namespace SparkLauncher;

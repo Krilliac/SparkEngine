@@ -10,6 +10,7 @@
 #include "LauncherTemplates.h"
 
 #include "LauncherProcess.h"
+#include "Utils/JsonUtils.h"
 
 #include <string_view>
 #include <system_error>
@@ -18,31 +19,11 @@ namespace SparkLauncher
 {
     namespace
     {
-        // Very small JSON string-field extractor — matches ProjectManager.cpp's approach.
-        std::string ExtractJsonString(std::string_view json, std::string_view key)
+        /// A top-level string member of the manifest object, or empty when absent or not a string.
+        std::string TopLevelString(const Spark::Json::Value& document, const std::string& key)
         {
-            const std::string search = "\"" + std::string(key) + "\"";
-            size_t pos = json.find(search);
-            if (pos == std::string_view::npos)
-            {
-                return {};
-            }
-            pos = json.find(':', pos);
-            if (pos == std::string_view::npos)
-            {
-                return {};
-            }
-            pos = json.find('"', pos + 1);
-            if (pos == std::string_view::npos)
-            {
-                return {};
-            }
-            const size_t end = json.find('"', pos + 1);
-            if (end == std::string_view::npos)
-            {
-                return {};
-            }
-            return std::string(json.substr(pos + 1, end - pos - 1));
+            const Spark::Json::Value& value = document[key];
+            return value.IsString() ? value.AsString() : std::string{};
         }
     } // namespace
 
@@ -64,14 +45,23 @@ namespace SparkLauncher
 
         TemplateEntry entry;
         entry.directoryName = PathToUtf8(templateDirectory.filename());
-        entry.displayName = ExtractJsonString(text, "name");
+
+        // Parse the manifest instead of scanning for the first "key": the old substring scan
+        // returned a nested member ("meta": {"name": ...}) as the template's name, never
+        // unescaped strings, and read keys out of malformed text. Text that is not one strict
+        // JSON object reads like a refused file: the template is listed under its directory.
+        Spark::Json::Value document;
+        if (Spark::Json::ParseStrict(text, &document) && document.IsObject())
+        {
+            entry.displayName = TopLevelString(document, "name");
+            entry.description = TopLevelString(document, "description");
+            entry.genre = TopLevelString(document, "genre");
+            entry.gameModule = TopLevelString(document, "gameModule");
+        }
         if (entry.displayName.empty())
         {
             entry.displayName = entry.directoryName;
         }
-        entry.description = ExtractJsonString(text, "description");
-        entry.genre = ExtractJsonString(text, "genre");
-        entry.gameModule = ExtractJsonString(text, "gameModule");
         return entry;
     }
 } // namespace SparkLauncher

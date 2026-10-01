@@ -95,31 +95,20 @@ namespace
             return value.IsString() ? value.AsString() : std::string{};
         };
 
-        // Compare only unescaped string members whose source spelling is unambiguous. The
-        // production reader intentionally does not unescape JSON, so escaped members are
-        // covered by the determinism and bounded-output checks below rather than being treated
-        // as a production contract by this oracle.
-        const auto checkUnescapedField = [&](std::string_view key, const std::string& actual)
+        // The reader parses the manifest, so every top-level string member, escaped or not,
+        // is the production contract; a nested member of the same name never is. (The old
+        // first-match substring scan returned "meta": {"name": ...} as the template name.)
+        const auto checkField = [&](std::string_view key, const std::string& actual)
         {
-            const std::string value = stringField(key);
-            if (value.empty() || value.find_first_of("\\\"") != std::string::npos)
+            if (actual != stringField(key))
             {
-                return;
-            }
-            const std::string directMember = "\"" + std::string(key) + "\":\"" + value + "\"";
-            if (text.find(directMember) == std::string_view::npos)
-            {
-                return;
-            }
-            if (actual != value)
-            {
-                InvariantFailure("a simple JSON string member was not returned faithfully");
+                InvariantFailure("a top-level JSON string member was not returned faithfully");
             }
         };
-        checkUnescapedField("name", entry.displayName == entry.directoryName ? std::string{} : entry.displayName);
-        checkUnescapedField("description", entry.description);
-        checkUnescapedField("genre", entry.genre);
-        checkUnescapedField("gameModule", entry.gameModule);
+        checkField("name", entry.displayName == entry.directoryName ? std::string{} : entry.displayName);
+        checkField("description", entry.description);
+        checkField("genre", entry.genre);
+        checkField("gameModule", entry.gameModule);
     }
 
     bool SameEntry(const SparkLauncher::TemplateEntry& a, const SparkLauncher::TemplateEntry& b)
