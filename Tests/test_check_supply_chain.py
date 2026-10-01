@@ -552,8 +552,12 @@ class _SubmoduleBaseline:
 
     @staticmethod
     def _git(git: str, cwd: Path, *args: str) -> str:
+        # core.symlinks=true: Git for Windows defaults it to false and would
+        # check the upstream's tracked links out as plain files, leaving these
+        # tests nothing to judge. Linux and macOS already default it to true.
         done = subprocess.run(
-            [git, *FIXTURE_GIT_IDENTITY, "-c", "protocol.file.allow=always", *args],
+            [git, *FIXTURE_GIT_IDENTITY, "-c", "protocol.file.allow=always",
+             "-c", "core.symlinks=true", *args],
             cwd=str(cwd), capture_output=True, text=True, timeout=120,
         )
         if done.returncode != 0:
@@ -640,6 +644,19 @@ class TestSubmoduleLinks(FakeRepoCase):
         self.repo = Path(self._tmp.name) / "repo"
         # symlinks=True: copying must preserve the links under test.
         shutil.copytree(self.submodule_baseline, self.repo, symlinks=True)
+        if sys.platform == "win32":
+            # copytree recreates every link with a bare os.symlink, which on
+            # Windows makes a file link even when the source was a directory
+            # link, and a file link to a directory never resolves. Restore
+            # each copied directory link's type from its source.
+            for root, dirs, files in os.walk(self.submodule_baseline):
+                for name in dirs + files:
+                    source = Path(root) / name
+                    if (source.is_symlink() and
+                            os.lstat(source).st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY):
+                        copied = self.repo / source.relative_to(self.submodule_baseline)
+                        copied.unlink()
+                        os.symlink(os.readlink(source), copied, target_is_directory=True)
         self.sub = self.repo / SUBMODULE_REL
 
     def sub_git(self, *args: str) -> str:
@@ -716,6 +733,11 @@ class TestSubmoduleLinks(FakeRepoCase):
         self.assertEqual(sc._git_link_target("..\\real\\java", "\\"), "../real/java")
         self.assertEqual(sc._git_link_target("../real/java", "\\"), "../real/java")
         self.assertEqual(sc._git_link_target("a\\b", "/"), "a\\b")
+        # Python's Windows readlink returns absolute targets in the Win32
+        # namespace form; Git for Windows stores them without that prefix.
+        self.assertEqual(sc._git_link_target("\\\\?\\C:\\real\\java", "\\"), "C:/real/java")
+        self.assertEqual(sc._git_link_target("\\\\?\\UNC\\host\\share\\x", "\\"), "//host/share/x")
+        self.assertEqual(sc._git_link_target("\\\\?\\C:\\x", "/"), "\\\\?\\C:\\x")
 
     def test_retargeted_tracked_link_is_rejected(self) -> None:
         link = self.sub / "ant" / "target.h"
