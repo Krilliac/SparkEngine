@@ -155,12 +155,14 @@ namespace Spark::Graphics
                 frame.timerNames.clear();
                 frame.timerGenerations.clear();
                 frame.activeCount = 0;
+                frame.resultsPending = false;
             }
 
             m_passTimes.clear();
             m_passHistory.clear();
             m_passGenerations.clear();
             m_initialized = false;
+            m_timingThisFrame = false;
             m_frameIndex = 0;
         }
 
@@ -175,19 +177,22 @@ namespace Spark::Graphics
                 return;
             }
 
-            // Collect results from the oldest buffered frame (N-2)
-            uint32_t readFrame = FrameSlot(m_frameIndex);
-            if (m_frameIndex >= kFrameLatency)
+            // The slot being reused holds frame N - kFrameLatency: read it first. Beginning a
+            // disjoint query whose result is unread abandons it (debug-layer warning #408,
+            // QUERY_BEGIN_ABANDONING_PREVIOUS_RESULTS), so a slot whose results are still in
+            // flight is skipped for this frame instead of reused; timing resumes when the GPU
+            // catches up.
+            const uint32_t slot = FrameSlot(m_frameIndex);
+            auto& frameData = m_frames[slot];
+            if (frameData.resultsPending)
             {
-                CollectResults(context, readFrame);
+                CollectResults(context, slot);
             }
-
-            // Start current frame's disjoint query
-            uint32_t writeFrame = FrameSlot(m_frameIndex);
-            auto& frameData = m_frames[writeFrame];
-            frameData.activeCount = 0;
-
-            context->Begin(frameData.disjointQuery.Get());
+            m_timingThisFrame = !frameData.resultsPending;
+            if (m_timingThisFrame)
+            {
+                frameData.activeCount = 0;
+            }
         }
 
         /**
@@ -201,9 +206,13 @@ namespace Spark::Graphics
                 return;
             }
 
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            context->End(m_frames[writeFrame].disjointQuery.Get());
-
+            auto& frameData = m_frames[FrameSlot(m_frameIndex)];
+            if (m_timingThisFrame && frameData.activeCount > 0)
+            {
+                context->End(frameData.disjointQuery.Get());
+                frameData.resultsPending = true;
+            }
+            m_timingThisFrame = false;
             m_frameIndex++;
         }
 
@@ -215,17 +224,23 @@ namespace Spark::Graphics
      */
         uint32_t BeginTimestamp(ID3D11DeviceContext* context, const char* name)
         {
-            if (!m_initialized || !context || !name)
+            if (!m_initialized || !context || !name || !m_timingThisFrame)
             {
                 return UINT32_MAX;
             }
 
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            auto& frameData = m_frames[writeFrame];
+            auto& frameData = m_frames[FrameSlot(m_frameIndex)];
 
             if (frameData.activeCount >= m_maxTimers)
             {
                 return UINT32_MAX; // Pool exhausted
+            }
+
+            // The disjoint query brackets only frames that time something, so a frame
+            // without timers leaves no result behind for the next Begin to abandon.
+            if (frameData.activeCount == 0)
+            {
+                context->Begin(frameData.disjointQuery.Get());
             }
 
             uint32_t timerID = frameData.activeCount;
@@ -244,13 +259,12 @@ namespace Spark::Graphics
      */
         void EndTimestamp(ID3D11DeviceContext* context, uint32_t timerID)
         {
-            if (!m_initialized || !context || timerID == UINT32_MAX)
+            if (!m_initialized || !context || timerID == UINT32_MAX || !m_timingThisFrame)
             {
                 return;
             }
 
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            auto& frameData = m_frames[writeFrame];
+            auto& frameData = m_frames[FrameSlot(m_frameIndex)];
 
             if (timerID >= frameData.activeCount)
             {
@@ -379,12 +393,11 @@ namespace Spark::Graphics
         /** @brief Get number of active timers in the current frame */
         uint32_t GetActiveTimerCount() const
         {
-            if (!m_initialized)
+            if (!m_initialized || !m_timingThisFrame)
             {
                 return 0;
             }
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            return m_frames[writeFrame].activeCount;
+            return m_frames[FrameSlot(m_frameIndex)].activeCount;
         }
 
         /**
@@ -456,6 +469,7 @@ namespace Spark::Graphics
             std::vector<std::string> timerNames;
             std::vector<uint64_t> timerGenerations;
             uint32_t activeCount = 0;
+            bool resultsPending = false; ///< Disjoint query ended with timers and not yet read back
         };
 
         /**
@@ -467,6 +481,7 @@ namespace Spark::Graphics
 
             if (frameData.activeCount == 0)
             {
+                frameData.resultsPending = false;
                 return;
             }
 
@@ -476,8 +491,9 @@ namespace Spark::Graphics
                                           D3D11_ASYNC_GETDATA_DONOTFLUSH);
             if (hr == S_FALSE)
             {
-                return; // Results not ready yet
+                return; // Results not ready yet; the slot stays pending
             }
+            frameData.resultsPending = false;
 
             if (FAILED(hr) || disjointData.Disjoint)
             {
@@ -524,6 +540,7 @@ namespace Spark::Graphics
         std::unordered_map<std::string, uint64_t> m_passGenerations; ///< Reset epoch per pass
         uint32_t m_maxTimers = 0;
         uint32_t m_frameIndex = 0;
+        bool m_timingThisFrame = false; ///< BeginFrame found the slot free; timers may start
         bool m_initialized = false;
     };
 
