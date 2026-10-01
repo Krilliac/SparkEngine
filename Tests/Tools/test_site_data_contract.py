@@ -29,6 +29,7 @@ from common import SiteDataError, load_contract  # noqa: E402
 import contract_selectors  # noqa: E402
 import exact_evidence  # noqa: E402
 import generate as site_data_generate  # noqa: E402
+import publication_status  # noqa: E402
 import render_handoff  # noqa: E402
 import validate as site_data_validate  # noqa: E402
 
@@ -3992,6 +3993,92 @@ class PublishedMetricTests(unittest.TestCase):
         label = self.metrics["tests.definitions"]["label"]
         self.assertNotIn("GoogleTest", label)
         self.assertIn("SparkTests", label)
+
+
+class PublicationStatusTests(unittest.TestCase):
+    """A failed Build run changes status while the retained content commit stays put."""
+
+    @staticmethod
+    def api_run(commit: str, conclusion: str = "success") -> dict[str, Any]:
+        return {
+            "id": 123,
+            "run_attempt": 2,
+            "name": "Build SparkEngine",
+            "path": ".github/workflows/build.yml",
+            "head_branch": "Working",
+            "head_sha": commit,
+            "event": "push",
+            "status": "completed",
+            "conclusion": conclusion,
+            "repository": {"full_name": "Krilliac/SparkEngine"},
+            "head_repository": {"full_name": "Krilliac/SparkEngine"},
+        }
+
+    def test_failed_run_keeps_old_content_commit(self) -> None:
+        failed_commit = "a" * 40
+        old_commit = "b" * 40
+        run = self.api_run(failed_commit, "failure")
+        status = publication_status.status_from_run(run, run_id=123, attempt=2)
+        status["contentCommit"] = old_commit
+        self.assertEqual(publication_status.validate_status(status, run=run), status)
+        self.assertEqual(status["state"], "blocked")
+        self.assertEqual(status["contentCommit"], old_commit)
+
+    def test_current_requires_same_commit_and_api_success(self) -> None:
+        commit = "c" * 40
+        run = self.api_run(commit)
+        status = publication_status.status_from_run(run, run_id=123, attempt=2)
+        status["contentCommit"] = commit
+        self.assertEqual(publication_status.validate_status(status, run=run), status)
+        status["contentCommit"] = "d" * 40
+        with self.assertRaisesRegex(SiteDataError, "same-commit content"):
+            publication_status.validate_status(status, run=run)
+        status["contentCommit"] = commit
+        with self.assertRaisesRegex(SiteDataError, "differs from the GitHub Build run"):
+            publication_status.validate_status(status, run=self.api_run(commit, "failure"))
+
+    def test_rejects_untrusted_run_and_status_fields(self) -> None:
+        run = self.api_run("e" * 40, "failure")
+        run["head_repository"] = {"full_name": "other/SparkEngine"}
+        with self.assertRaisesRegex(SiteDataError, "trusted repository"):
+            publication_status.status_from_run(run, run_id=123, attempt=2)
+        run = self.api_run("e" * 40, "failure")
+        status = publication_status.status_from_run(run, run_id=123, attempt=2)
+        status["contentCommit"] = None
+        status["run"]["url"] = "https://attacker.invalid/fake"
+        with self.assertRaisesRegex(SiteDataError, "identity differs"):
+            publication_status.validate_status(status)
+
+    def test_cli_writes_failure_status_without_changing_latest(self) -> None:
+        payload = REPO_ROOT / "synthetic-status-payload"
+        old_commit = "a" * 40
+        failed_commit = "b" * 40
+        run = self.api_run(failed_commit, "failure")
+        with (mock.patch.object(sys, "argv", [
+                "publication_status.py", "write", "--run-file", "run.json",
+                "--run-id", "123", "--run-attempt", "2", "--payload-dir", str(payload),
+              ]),
+              mock.patch.object(publication_status, "load_json", return_value=run),
+              mock.patch.object(publication_status, "content_commit_in", return_value=old_commit),
+              mock.patch.object(publication_status, "write_json") as write):
+            self.assertEqual(publication_status.main(), 0)
+        write.assert_called_once()
+        self.assertEqual(write.call_args.args[0], payload / "status.json")
+        self.assertEqual(write.call_args.args[1]["state"], "blocked")
+        self.assertEqual(write.call_args.args[1]["sourceCommit"], failed_commit)
+        self.assertEqual(write.call_args.args[1]["contentCommit"], old_commit)
+
+    def test_failed_run_can_report_blocked_when_old_pointer_is_invalid(self) -> None:
+        run = self.api_run("b" * 40, "failure")
+        with (mock.patch.object(sys, "argv", [
+                "publication_status.py", "write", "--run-file", "run.json",
+                "--run-id", "123", "--run-attempt", "2", "--payload-dir", str(REPO_ROOT),
+              ]),
+              mock.patch.object(publication_status, "load_json", return_value=run),
+              mock.patch.object(publication_status, "content_commit_in", side_effect=SiteDataError("invalid old pointer")),
+              mock.patch.object(publication_status, "write_json") as write):
+            self.assertEqual(publication_status.main(), 0)
+        self.assertIsNone(write.call_args.args[1]["contentCommit"])
 
 
 if __name__ == "__main__":

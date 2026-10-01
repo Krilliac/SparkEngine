@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { describe, test } from 'node:test';
 
 import { SiteDataRuntime } from '../siteDataRuntime.mjs';
+import { buildRun, mockGitHubApi, siteStatus } from './evidenceFixture.mjs';
 
 const encoder = new TextEncoder();
 
@@ -18,7 +19,15 @@ function publication(commit, {
         files.set(name, bytes);
         return pointer;
     };
-    const publicationState = { state, evidenceCommit: commit, conclusion };
+    const run = buildRun(commit, { conclusion });
+    const runUrl = `https://github.com/Krilliac/SparkEngine/actions/runs/${run.id}/attempts/${run.run_attempt}`;
+    const publicationState = {
+        state, evidenceCommit: commit, conclusion, workflowUrl: runUrl,
+        exactEvidence: {
+            repository: 'Krilliac/SparkEngine', sourceCommit: commit,
+            build: { runId: run.id, runAttempt: run.run_attempt, runUrl },
+        },
+    };
     const document = {
         slug: 'guide', title: 'Guide', sourcePath: 'wiki/Guide.md',
         sourceUrl: sourceUrl ?? `https://github.com/Krilliac/SparkEngine/blob/${commit}/wiki/Guide.md`,
@@ -57,19 +66,43 @@ function publication(commit, {
         files: { bundle: bundlePointer, docsSearch: search },
     };
     files.set('latest.json', encoder.encode(JSON.stringify(latest)));
-    return { files, latest, bundle };
+    files.set('status.json', encoder.encode(JSON.stringify(siteStatus(commit, run))));
+    return { files, latest, bundle, run };
 }
 
 function runtimeFixture(commit, options = {}, now = () => 0)
 {
     let current = publication(commit, options);
+    const api = mockGitHubApi(commit, [current.run]);
     const runtime = new SiteDataRuntime({
         load: async (path) => current.files.get(path),
+        fetchEvidence: api.fetchEvidence,
         now,
         maxAgeSeconds: 5,
         staleWhileRevalidateSeconds: 5,
     });
-    return { runtime, set(value) { current = value; }, get current() { return current; } };
+    return {
+        runtime,
+        set(value)
+        {
+            current = value;
+            if (value.run)
+            {
+                api.setHead(value.run.head_sha);
+                api.setRuns([value.run]);
+            }
+        },
+        setStatus(run, sourceCommit = run.head_sha)
+        {
+            const files = new Map(current.files);
+            files.set('status.json', encoder.encode(JSON.stringify(
+                siteStatus(sourceCommit, run, current.latest.source.commit))));
+            api.setHead(sourceCommit);
+            api.setRuns([current.run, run]);
+            current = { ...current, files };
+        },
+        get current() { return current; },
+    };
 }
 
 describe('SiteDataRuntime in-memory publication contract', () =>
@@ -93,8 +126,13 @@ describe('SiteDataRuntime in-memory publication contract', () =>
     {
         const fixture = runtimeFixture('c'.repeat(40));
         assert.equal((await fixture.runtime.refresh()).state, 'current');
-        fixture.set(publication('c'.repeat(40), { state: 'blocked', conclusion: 'failure' }));
-        assert.equal((await fixture.runtime.refresh()).state, 'blocked');
+        const failedCommit = 'd'.repeat(40);
+        fixture.setStatus(buildRun(failedCommit, { id: 102, conclusion: 'failure' }));
+        const blocked = await fixture.runtime.refresh();
+        assert.equal(blocked.state, 'blocked');
+        assert.equal(blocked.commit, 'c'.repeat(40));
+        assert.equal(blocked.statusCommit, failedCommit);
+        assert.equal(blocked.bundle.site.home.hero.lede, 'original');
         assert.match(fixture.runtime.snapshot().banner, /blocked/i);
     });
 

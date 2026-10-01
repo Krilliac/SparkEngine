@@ -4498,14 +4498,22 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertNotEqual(mutated, aggregate, "mutation fixture did not alter YAML")
                 self.assertTrue(aggregate_failure_terminalization_errors(mutated), label)
 
-    def test_site_data_accepts_only_exact_staged_build_and_writes_a_tag(self) -> None:
+    def test_site_data_publishes_exact_success_or_api_bound_failure_to_configured_ref(self) -> None:
         self.assertEqual(self.site_data_publish.count("--staged-build-only"), 1)
         self.assertEqual(
             self.site_data_publish.count("verify-exact-required-gate.py"), 4
         )
         self.assertIn("Wait for trusted exact-commit CI evidence", self.site_data_publish)
         self.assertIn("SOURCE_RUN_ATTEMPT", self.site_data_publish)
-        self.assertIn("STATE_REF: refs/tags/site-data", self.site_data_publish)
+        self.assertEqual(
+            self.site_data_publish.count("STATE_REF: ${{ vars.SITE_DATA_PUBLIC_REF || 'refs/tags/site-data' }}"),
+            2,
+        )
+        self.assertIn("refs/tags/site-data|refs/heads/site-data", self.site_data_publish)
+        self.assertIn("publication_status.py write", self.site_data_publish)
+        self.assertIn("--run-file \"$RUNNER_TEMP/build-evidence-run.json\"", self.site_data_publish)
+        self.assertIn("Refuse a superseded Build run on the same commit", self.site_data_publish)
+        self.assertIn("steps.latest-run.outputs.latest", self.site_data_publish)
         self.assertIn('"HEAD:${STATE_REF}"', self.site_data_publish)
         self.assertIn(
             '--force-with-lease="${STATE_REF}:${EXPECTED_SITE_OBJECT}"',
@@ -4541,6 +4549,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertLess(final_gate, exact_compare)
         self.assertLess(exact_compare, state_compare)
         self.assertLess(state_compare, tag_push)
+        self.assertIn('if test "$EVIDENCE_CONCLUSION" = success; then', publish_step)
+        self.assertIn('if test "$EVIDENCE_CONCLUSION" != success; then', publish_step)
+        self.assertIn('diff --recursive --brief --exclude=.git --exclude=status.json', publish_step)
+        self.assertIn('test -f "$PAYLOAD_DIR/status.json"', publish_step)
+        self.assertIn('run["conclusion"] == conclusion', publish_step)
+        self.assertIn('newest["id"] == run["id"]', publish_step)
         self.assertNotIn("continue-on-error", publish_step)
         self.assertNotIn("|| true", publish_step)
 

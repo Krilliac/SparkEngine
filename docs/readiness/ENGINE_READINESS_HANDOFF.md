@@ -5430,10 +5430,11 @@ Progress: 0 of 7 implemented, 0 evidenced at an exact commit.
 1. **[unmet]** Repository-only wording/status/doc change appears on existing site without Sites checkpoint
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs the live, owner-deployed site to use the bundle. It has not adopted it.
 2. **[unmet]** Displayed SHA equals the bundle/evidence SHA
-   - Evidence: `tools/site-data/runtime/verifyBundle.mjs`
-   - The reference verifier binds the SHA, but the live site has not adopted it.
+   - Evidence: `tools/site-data/runtime/verifyBundle.mjs`, `tools/site-data/runtime/test/status.test.mjs`
+   - The reference verifier now checks the Build run, attempt, conclusion and Working head through GitHub's public API. Live-site adoption and hosted proof remain pending.
 3. **[unmet]** Failed same-commit CI changes site to blocked
-   - Needs a hosted failed-CI run that switches the live site to blocked.
+   - Evidence: `.github/workflows/site-data-publish.yml`, `tools/site-data/publication_status.py`, `tools/site-data/runtime/test/siteDataRuntime.fixture.test.mjs`
+   - The publisher can write a blocked status sidecar while retaining good content. A hosted failed-CI run and live-site adoption are still required.
 4. **[unmet]** Every mutable metric/capability/quick-start/learning/readiness/roadmap claim comes from bundle
    - The claim audit covers repository JSON only. The external site copy has not been audited.
 5. **[unmet]** Malformed/oversize/hash-invalid bundles are rejected

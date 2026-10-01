@@ -2,20 +2,21 @@
 //
 // The site caches a verified publication for MAX_AGE_SECONDS and may keep
 // showing it for STALE_WHILE_REVALIDATE_SECONDS more while it re-fetches and
-// re-verifies latest.json. Every rendered page carries one of five labels so an
+// independently checks status.json against GitHub. Every rendered page carries one of five labels so an
 // old or failed fallback is never presented as current:
 //
 //   current     verified, publication.state "current", within max-age
 //   syncing     verified and "current", past max-age, revalidation pending,
 //               still inside the stale-while-revalidate window
-//   blocked     verified, but the producer published state "blocked" (the
-//               same-commit CI conclusion was not success, or the tree was dirty)
+//   blocked     the latest Working Build run is API-verified as non-success;
+//               last good content may still be shown with its own commit
 //   stale       the shown data is past max-age and revalidation failed or was
 //               rejected, or it is past max-age + stale-while-revalidate
 //   unavailable nothing verified is available to show
 //
-// Staleness outranks "blocked": an outdated copy cannot vouch for the current
-// state of the source branch, blocked or not.
+// Staleness outranks "blocked": an old status cannot vouch for the current
+// state of Working, blocked or not. An API failure rejects the refresh, so
+// SiteDataRuntime immediately labels a retained status/content pair stale.
 
 export const MAX_AGE_SECONDS = 300;
 export const STALE_WHILE_REVALIDATE_SECONDS = 300;
@@ -35,8 +36,8 @@ export const FETCH_OUTCOMES = Object.freeze(['verified', 'revalidating', 'failed
  * Classify what the site is about to display.
  *
  * @param {object} input
- * @param {"current"|"blocked"|null} input.publicationState publication.state of
- *        the last verified bundle the site holds, or null when it holds none
+ * @param {"current"|"blocked"|null} input.publicationState state of the last
+ *        API-verified status document, or null when it holds none
  * @param {string} input.fetchOutcome one of FETCH_OUTCOMES
  * @param {number|null} input.verifiedAt epoch milliseconds when the held bundle
  *        was fetched and verified, or null when none is held
@@ -107,7 +108,7 @@ export function classifyFreshness({
     }
     if (publicationState === 'blocked')
     {
-        return { state: 'blocked', ageSeconds, revalidate, reason: 'the producer published a blocked state' };
+        return { state: 'blocked', ageSeconds, revalidate, reason: 'the latest Build run is verified as blocked' };
     }
     if (expired)
     {

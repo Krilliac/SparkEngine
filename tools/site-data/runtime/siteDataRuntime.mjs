@@ -5,7 +5,8 @@
 // is exposed, and a rejected refresh keeps the previous publication with an
 // explicit stale/unavailable label.
 
-import { BundleVerificationError, parseStrictJson, verifyPublishedBundle } from './verifyBundle.mjs';
+import { BundleVerificationError, parseStrictJson, verifyPublicationStatus,
+         verifyPublishedBundle } from './verifyBundle.mjs';
 import { classifyFreshness, MAX_AGE_SECONDS, STALE_WHILE_REVALIDATE_SECONDS } from './freshness.mjs';
 
 const BANNER_TEXT = Object.freeze({
@@ -75,6 +76,7 @@ export class SiteDataRuntime
 {
     constructor({
         load,
+        fetchEvidence = globalThis.fetch,
         displayedCommit,
         now = () => Date.now(),
         maxAgeSeconds = MAX_AGE_SECONDS,
@@ -86,11 +88,16 @@ export class SiteDataRuntime
         {
             throw new TypeError('load must be a function');
         }
+        if (typeof fetchEvidence !== 'function')
+        {
+            throw new TypeError('fetchEvidence must be a function');
+        }
         if (typeof now !== 'function' || typeof onChange !== 'function')
         {
             throw new TypeError('now and onChange must be functions');
         }
         this.m_load = load;
+        this.m_fetchEvidence = fetchEvidence;
         this.m_displayedCommit = displayedCommit;
         this.m_now = now;
         this.m_maxAgeSeconds = maxAgeSeconds;
@@ -98,7 +105,8 @@ export class SiteDataRuntime
         this.m_onChange = onChange;
         this.m_listeners = new Set();
         this.m_verified = null;
-        this.m_verifiedAt = null;
+        this.m_status = null;
+        this.m_statusAt = null;
         this.m_fetchOutcome = 'failed';
         this.m_error = null;
         this.m_refreshPromise = null;
@@ -117,14 +125,45 @@ export class SiteDataRuntime
         {
             try
             {
-                const verified = await verifyPublishedBundle(this.m_load, {
-                    displayedCommit: this.m_displayedCommit,
-                });
-                verifyNavigation(verified);
-                this.m_verified = verified;
-                this.m_verifiedAt = this.m_now();
+                const status = await verifyPublicationStatus(this.m_load, { fetchEvidence: this.m_fetchEvidence });
+                let verified = null;
+                let contentError = null;
+                if (status.contentCommit !== null)
+                {
+                    try
+                    {
+                        verified = await verifyPublishedBundle(this.m_load, {
+                            displayedCommit: this.m_displayedCommit,
+                            fetchEvidence: this.m_fetchEvidence,
+                            allowHistorical: status.state === 'blocked',
+                        });
+                        if (verified.commit !== status.contentCommit)
+                        {
+                            throw new BundleVerificationError(['status contentCommit differs from retained bundle']);
+                        }
+                        verifyNavigation(verified);
+                    }
+                    catch (error)
+                    {
+                        if (status.state === 'current')
+                        {
+                            throw error;
+                        }
+                        contentError = error;
+                    }
+                }
+                this.m_status = status;
+                this.m_statusAt = this.m_now();
+                if (verified !== null)
+                {
+                    this.m_verified = verified;
+                }
+                else if (this.m_verified?.commit !== status.contentCommit)
+                {
+                    this.m_verified = null;
+                }
                 this.m_fetchOutcome = 'verified';
-                this.m_error = null;
+                this.m_error = contentError;
             }
             catch (error)
             {
@@ -181,18 +220,18 @@ export class SiteDataRuntime
     /** Return the display-safe state and verified content, if available. */
     snapshot(now = this.m_now())
     {
-        const publicationState = this.m_verified?.publication?.state ?? null;
+        const publicationState = this.m_status?.state ?? null;
         const freshness = classifyFreshness({
             publicationState,
             fetchOutcome: this.m_fetchOutcome,
-            verifiedAt: this.m_verifiedAt,
+            verifiedAt: this.m_statusAt,
             now,
             maxAgeSeconds: this.m_maxAgeSeconds,
             staleWhileRevalidateSeconds: this.m_staleWhileRevalidateSeconds,
         });
         // The cache classifier describes age. The visible site additionally
         // discloses any failed refresh immediately, even within that lifetime.
-        if (this.m_verified && ['failed', 'rejected'].includes(this.m_fetchOutcome))
+        if (this.m_status && ['failed', 'rejected'].includes(this.m_fetchOutcome))
         {
             freshness.state = 'stale';
             freshness.reason = `latest refresh ${this.m_fetchOutcome}; showing the last verified publication`;
@@ -202,6 +241,8 @@ export class SiteDataRuntime
             ...freshness,
             banner: BANNER_TEXT[freshness.state],
             commit: this.m_verified?.commit ?? null,
+            statusCommit: this.m_status?.sourceCommit ?? null,
+            status: this.m_status,
             bundle: this.m_verified?.bundle ?? null,
             publication: this.m_verified?.publication ?? null,
             files: this.m_verified?.files ?? {},
