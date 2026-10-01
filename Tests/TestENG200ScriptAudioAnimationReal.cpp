@@ -260,7 +260,7 @@ TEST(ScriptBindings_ENG200_MediaAudioCueStartsLiveVoice)
         }
 
         std::printf("SKIP: XAudio2 device unavailable (set SPARK_REQUIRE_AUDIO_DEVICE=1 to make this a failure)\n");
-        SKIP_TEST("XAudio2 device unavailable");
+        SKIP_TEST("no XAudio2 output device");
     }
     else
     {

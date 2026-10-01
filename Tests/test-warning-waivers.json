@@ -255,6 +255,11 @@
       "kind": "environment"
     },
     {
+      "prefix": "live audio voice assertion requires Windows XAudio2",
+      "owner": "audio",
+      "kind": "environment"
+    },
+    {
       "prefix": "opengl-llvmpipe goldens need an llvmpipe context",
       "owner": "rendering",
       "kind": "environment"
