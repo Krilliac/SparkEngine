@@ -49,6 +49,15 @@ namespace RTS
             void U64(uint64_t data) { Bytes(data, 8); }
             void I32(int data) { Bytes(static_cast<uint32_t>(data), 4); }
             void F32(float data) { Bytes(std::bit_cast<uint32_t>(data), 4); }
+            /// Same digest as U8() per element; one flat loop because fog grids are hashed every tick.
+            void U8Array(const uint8_t* data, size_t count)
+            {
+                for (const uint8_t* end = data + count; data != end; ++data)
+                {
+                    value ^= *data;
+                    value *= FNV_PRIME;
+                }
+            }
         };
 
         /// Squared distance written as separate, correctly rounded operations so no compiler may contract it.
@@ -574,8 +583,8 @@ namespace RTS
             {
                 hash.I32(grid->width);
                 hash.I32(grid->height);
-                for (RTSVisibility cell : grid->cells)
-                    hash.U8(static_cast<uint8_t>(cell));
+                static_assert(sizeof(RTSVisibility) == sizeof(uint8_t));
+                hash.U8Array(reinterpret_cast<const uint8_t*>(grid->cells.data()), grid->cells.size());
             }
         }
 
