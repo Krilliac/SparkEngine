@@ -540,8 +540,17 @@ def _git_link_target(on_disk_target: str, separator: str) -> str:
     Git always records '/' separators; Git for Windows (core.symlinks=true)
     writes the on-disk link with '\\' instead, so readlink must be mapped back
     before the blob comparison or every legitimate tracked link would fail.
+    Python's readlink also returns an absolute target in the Win32 namespace
+    form ('\\\\?\\C:\\x', '\\\\?\\UNC\\host\\share'), whose prefix Git for
+    Windows strips before storing the blob ('C:/x', '//host/share').
     """
     if separator == "\\":
+        for prefix in ("\\\\?\\", "\\??\\"):
+            if on_disk_target.startswith(prefix):
+                on_disk_target = on_disk_target[len(prefix):]
+                if on_disk_target[:4].upper() == "UNC\\":
+                    on_disk_target = "\\\\" + on_disk_target[4:]
+                break
         return on_disk_target.replace("\\", "/")
     return on_disk_target
 
