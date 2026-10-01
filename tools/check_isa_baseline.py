@@ -107,6 +107,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import concurrent.futures
 import importlib.util
 import os
 import re
@@ -250,7 +251,14 @@ CONTINUED_ANNOTATION_RE = re.compile(r"^\s+#\s*(?:0x)?([0-9a-fA-F]+)(?:\s*<[^>]*
 ANNOTATION_ADDRESS_RE = re.compile(r"#\s*(?:0x)?([0-9a-fA-F]+)(?:\s*<[^>]*>)?\s*$")
 BRANCH_TARGET_RE = re.compile(r"^(?:0x)?([0-9a-fA-F]+)\b")
 # Raw instruction bytes, then a tab, then the instruction (both disassemblers).
-RAW_BYTES_RE = re.compile(r"^((?:[0-9a-fA-F]{2} )+)\s*\t(.*)$")
+# llvm-objdump pads the bytes to its 40-column field, or, once they overflow
+# it, to the next tab stop -- which is no space at all when the bytes end on
+# column 7 mod 8 (a 15-byte instruction, or a 47-byte bogus decode of MSVC
+# index-table bytes, at a 9-digit image address).
+RAW_BYTES_RE = re.compile(r"^((?:[0-9a-fA-F]{2}(?: |(?=\t)))+)\s*\t(.*)$")
+# The architectural x86 limit. llvm-objdump accepts any number of prefixes, so
+# a longer record is data, never an instruction a CPU executes.
+MAX_INSTRUCTION_BYTES = 15
 VECTOR_REG_RE = re.compile(r"%?\b([xyz])mm\d+\b")
 WIDE_REG_RE = re.compile(r"%?\b([yz])mm\d+\b")
 OPMASK_RE = re.compile(r"%k[0-7]\b|\{%?k[0-7]\}")
@@ -857,9 +865,55 @@ def _is_flag_neutral_move(insn: Instruction) -> bool:
             and len(_split_operands(insn.operands)) == 2)
 
 
-def _guard_compare(insns: list[Instruction], jcc: int, leaders: set[int],
-                   guards: dict[int, GuardSpec]) -> tuple[GuardSpec, int] | None:
-    """Find "cmpl SRC, guard(%rip)" setting the flags jcc reads, with no other way in."""
+def _register_guard(insns: list[Instruction], compare: int, register: str, preds: list[list[int]],
+                    roots: set[int], guards: dict[int, GuardSpec]) -> GuardSpec | None:
+    """The reviewed guard that every definition of %register reaching insns[compare] loads.
+
+    Each reaching definition must be "movl guard(%rip), %r32" of a reviewed guard
+    (one spec); any other write, an undecodable record, or a path from a
+    procedure entry (or from code with no known predecessor) on which the
+    register is undefined returns None. As in isa_code_map's base proof, a call
+    defines only the return registers.
+    """
+    family = _REG32.get(register)
+    if family is None or compare in roots or not preds[compare]:
+        return None
+    found: GuardSpec | None = None
+    seen, stack = set(), list(preds[compare])
+    while stack:
+        node = stack.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        insn = insns[node]
+        written = code_map.written_families(insn)
+        if written is None:
+            return None
+        if family in written:
+            parts = _split_operands(insn.operands)
+            spec = guards.get(insn.annotation) if insn.annotation is not None else None
+            if (insn.mnemonic != "movl" or len(parts) != 2 or not parts[0].endswith("(%rip)")
+                    or parts[1].lstrip("%").lower() != register or spec is None or found not in (None, spec)):
+                return None
+            found = spec
+            continue
+        if node in roots or not preds[node]:
+            return None
+        stack.extend(preds[node])
+    return found
+
+
+def _guard_compare(insns: list[Instruction], jcc: int, leaders: set[int], guards: dict[int, GuardSpec],
+                   preds: list[list[int]] | None = None,
+                   roots: set[int] = frozenset()) -> tuple[GuardSpec, int] | None:
+    """Find "cmpl SRC, guard(%rip)" setting the flags jcc reads, with no other way in.
+
+    With preds, "cmpl $imm, %r32" also counts when every reaching definition of
+    %r32 is a load of one reviewed guard: MSVC /O2 keeps __isa_available in a
+    callee-saved register across a procedure and compares it at each vectorized
+    loop (Spark::Net::SecureChannel::Seal: "movl __isa_available(%rip), %r12d",
+    then "cmpl $0x5, %r12d; jl scalar" twice).
+    """
     index = jcc - 1
     while index >= 0 and _is_flag_neutral_move(insns[index]):
         index -= 1
@@ -868,6 +922,15 @@ def _guard_compare(insns: list[Instruction], jcc: int, leaders: set[int],
         return None
     compare = insns[index]
     operands = _split_operands(compare.operands)
+    if (preds is not None and compare.mnemonic == "cmpl" and len(operands) == 2 and operands[0].startswith("$")
+            and operands[1].startswith("%")):
+        spec = _register_guard(insns, index, operands[1].lstrip("%").lower(), preds, roots, guards)
+        if spec is None:
+            return None
+        constant = int(operands[0][1:], 0)
+        if constant > INT32_MAX:
+            constant -= 1 << 32
+        return spec, constant
     if compare.mnemonic not in ("cmpl", "cmp") or len(operands) != 2 or not operands[1].endswith("(%rip)"):
         return None
     spec = guards.get(compare.annotation) if compare.annotation is not None else None
@@ -955,11 +1018,17 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
             edges.append((i + 1, "fall"))
         successors.append(edges)
 
+    entry_roots = {0} if roots is None else set(roots) | {0}
+    preds: list[list[int]] = [[] for _ in insns]
+    for i, edges in enumerate(successors):
+        for successor, _ in edges:
+            preds[successor].append(i)
+
     removed_for: dict[GuardRule, set[tuple[int, str]]] = {}
     for i, insn in enumerate(insns):
         if insn.mnemonic not in _CONDITIONS:
             continue
-        found = _guard_compare(insns, i, targets, guards)
+        found = _guard_compare(insns, i, targets, guards, preds, entry_roots)
         if found is None:
             continue
         spec, constant = found
@@ -970,8 +1039,6 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
                 if implied and all(any(low >= p_low and high <= p_high for p_low, p_high in rule.predicate)
                                    for low, high in implied):
                     removed_for.setdefault(rule, set()).add((i, edge_kind))
-
-    entry_roots = {0} if roots is None else set(roots) | {0}
 
     def reachable(removed: set[tuple[int, str]]) -> set[int]:
         seen, stack = set(entry_roots), list(entry_roots)
@@ -1240,11 +1307,12 @@ def _records(lines):
         if previous:
             yield previous
         raw = RAW_BYTES_RE.match(insn.group(2))
+        size = len(raw.group(1).split()) if raw else 0
         evex, text = split_raw_bytes(insn.group(2))
         mnemonic, operands = split_instruction(text)
-        undecodable = not mnemonic or mnemonic.startswith(("(", "<", "."))
+        undecodable = not mnemonic or mnemonic.startswith(("(", "<", ".")) or size > MAX_INSTRUCTION_BYTES
         annotation = ANNOTATION_ADDRESS_RE.search(text)
-        previous = (symbol, Instruction(int(insn.group(1), 16), len(raw.group(1).split()) if raw else 0,
+        previous = (symbol, Instruction(int(insn.group(1), 16), size,
                                         "<undecodable>" if undecodable else mnemonic.lower(), operands,
                                         int(annotation.group(1), 16) if annotation else None, evex, text.strip()))
     if previous:
@@ -1290,6 +1358,19 @@ def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | No
         key = _region(pdb, image, insn.address)
         if key != region:
             _finish_region(result, pdb, image, region, buffered, entries, collector)
+            if image is not None and region is not None:
+                # A record that starts in one region and runs past its end (a bogus
+                # decode of the switch-table bytes that end a procedure) can swallow
+                # all of the next region -- the int3 padding before a 16-byte-aligned
+                # procedure -- so no record ever starts there. Decode every region the
+                # sweep skipped from the image instead of leaving it unclassified.
+                cursor = region.end
+                while cursor < key.start and image.section_bounds(cursor) is not None:
+                    skipped = _region(pdb, image, cursor)
+                    if skipped.start < cursor or skipped.end <= cursor:
+                        break  # overlapping extents: _verify_coverage still fails closed
+                    _finish_region(result, pdb, image, skipped, [], entries, collector)
+                    cursor = skipped.end
             region, buffered = key, []
         buffered.append((symbol, insn))
     _finish_region(result, pdb, image, region, buffered, entries, collector)
@@ -1323,7 +1404,13 @@ def _settle_caller_guarded(result: ScanResult, pdb: PdbInfo, image, entries=None
 def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered, entries=None,
                    collector=None) -> None:
     if not buffered:
-        return
+        if image is None or region is None:
+            return
+        # A region no disassembly record started in (scan_lines): decode it here.
+        buffered = [("<unknown>", insn) for insn in image.redecode(region.start, region.end)
+                    if region.start <= insn.address < region.end]
+        if not buffered and not (isinstance(region, Gap) or not region.ambiguous):
+            return  # nothing decoded in an ambiguous extent: _verify_coverage fails closed
     insns = [insn for _, insn in buffered]
     symbols = {insn.address: symbol for symbol, insn in buffered}
     procedure = region if isinstance(region, Procedure) else None
@@ -1340,6 +1427,9 @@ def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered, en
             insns = code_map.map_gap(insns, region.start, region.end, image)
             result.covered.append((region.start, region.end))
         else:  # an ambiguous (folded) procedure: classified as disassembled
+            if insns[0].address > region.start:  # the sweep entered it out of step (see scan_lines)
+                insns = [insn for insn in image.redecode(region.start, insns[0].address)
+                         if region.start <= insn.address < insns[0].address] + insns
             result.covered.extend((insn.address, insn.address + insn.size) for insn in insns)
     elif image is not None:
         # A record without raw bytes (size 0) cannot be placed; classify as-is
@@ -1862,6 +1952,8 @@ def main(argv: list[str] | None = None) -> int:
         help="exempt ELF functions matching REGEX (CPUID-dispatched code only; never applies to PE)",
     )
     parser.add_argument("--max-report", type=int, default=20, help="violations listed per binary")
+    parser.add_argument("--jobs", type=int, default=0, metavar="N",
+                        help="images scanned in parallel (default: one per CPU; 1 scans in order)")
     args = parser.parse_args(argv)
 
     try:
@@ -1870,34 +1962,67 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, re.error) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    if args.jobs < 0:
+        print("error: --jobs must be 0 (one per CPU) or positive", file=sys.stderr)
+        return 2
+
+    tasks = [(tool, path, allow, _pdb_for(path, args.binaries, args.pdb), args.pdbutil) for path in args.binaries]
+    # The images are independent, and a Release tree's 27 images take about 15
+    # CPU-minutes in sequence: past the CTest timeout. Each is scanned in its own
+    # process; results are reported in argument order, so output is deterministic.
+    jobs = min(args.jobs or os.cpu_count() or 1, len(tasks))
+    if jobs <= 1:
+        outcomes = [_scan_image(task) for task in tasks]
+    else:
+        try:
+            with concurrent.futures.ProcessPoolExecutor(max_workers=jobs) as pool:
+                outcomes = list(pool.map(_scan_image, tasks))
+        except concurrent.futures.process.BrokenProcessPool as exc:
+            print(f"error: an image scan worker died: {exc}", file=sys.stderr)
+            return 2
 
     failed = False
-    for path in args.binaries:
-        try:
-            if not os.path.isfile(path) or os.path.getsize(path) == 0:
-                raise RuntimeError(f"{path} does not exist or is empty")
-            if not image_is_x86_64(tool, path):
-                raise RuntimeError(f"{path} is not an x86-64 image; the SSE4.2 floor does not apply")
-            with open(path, "rb") as header_probe:
-                is_pe = header_probe.read(2) == b"MZ"
-            pdb = None
-            if is_pe:
-                if len(args.binaries) == 1 and len(args.pdb) == 1 and "=" not in args.pdb[0]:
-                    pdb = args.pdb[0]
-                else:
-                    for pair in args.pdb:
-                        image_name, separator, pdb_name = pair.partition("=")
-                        if separator and os.path.abspath(image_name) == os.path.abspath(path):
-                            pdb = pdb_name
-                if not pdb:
-                    raise RuntimeError(f"PE image {path} requires --pdb <matching PDB>")
-            result = scan(tool, path, allow, _pdb_info(pdb, path, args.pdbutil) if pdb else None)
-        except (RuntimeError, OSError, ValueError, struct.error) as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return 2
+    # Every image is scanned even after one cannot be: stopping at the first error hid
+    # five more failing images behind the first two in a Release tree.
+    errored = False
+    for result, error in outcomes:
+        if error is not None:
+            print(f"error: {error}", file=sys.stderr)
+            errored = True
+            continue
         report(result, args.max_report)
         failed = failed or bool(result.violations)
+    if errored:
+        return 2
     return 1 if failed else 0
+
+
+def _pdb_for(path: str, binaries: list[str], pdb_args: list[str]) -> str | None:
+    """The --pdb argument naming this image (a bare PDB applies to a single image)."""
+    if len(binaries) == 1 and len(pdb_args) == 1 and "=" not in pdb_args[0]:
+        return pdb_args[0]
+    for pair in pdb_args:
+        image_name, separator, pdb_name = pair.partition("=")
+        if separator and os.path.abspath(image_name) == os.path.abspath(path):
+            return pdb_name
+    return None
+
+
+def _scan_image(task) -> tuple[ScanResult | None, str | None]:
+    """Scan one image; return (result, None) or (None, error). Runs in a worker process."""
+    tool, path, allow, pdb, pdbutil = task
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            raise RuntimeError(f"{path} does not exist or is empty")
+        if not image_is_x86_64(tool, path):
+            raise RuntimeError(f"{path} is not an x86-64 image; the SSE4.2 floor does not apply")
+        with open(path, "rb") as header_probe:
+            is_pe = header_probe.read(2) == b"MZ"
+        if is_pe and not pdb:
+            raise RuntimeError(f"PE image {path} requires --pdb <matching PDB>")
+        return scan(tool, path, allow, _pdb_info(pdb, path, pdbutil) if is_pe else None), None
+    except (RuntimeError, OSError, ValueError, struct.error) as exc:
+        return None, str(exc)
 
 
 if __name__ == "__main__":

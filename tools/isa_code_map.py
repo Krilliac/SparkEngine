@@ -384,6 +384,74 @@ def _bound(records: list[Record], before: int, index: str, leaders: set[int]) ->
     return None
 
 
+def _bound_all_paths(records: list[Record], preds: list[list[int]], before: int, index: str) -> int | None:
+    """Entry count when every path into records[before] bounds the index, else None.
+
+    MSVC /O2 enters a dispatch past its bound check: tail-merged case code jumps
+    to the index extension with a constant index ("movl $0x26, %ebx; leal
+    -0xe(%rbx), %eax; jmp", asCCompiler::CompileOverloadedDualOperator), and one
+    switch's cases jump into the next switch past its identical bound
+    (GLDevice::UpdateTexture). Walking every predecessor path back from the table
+    load, each must end at the fall-through of "cmp $N, idx; ja/jae" (whose
+    compare is the only way into the jcc) or at a constant definition of idx
+    before any other write of it. Register renames (movslq/movl/cltq) and
+    "leal K(%reg), idx" are followed. The count is the largest any path allows;
+    a path from the procedure entry, from code with no known predecessor, or
+    through the jcc's taken (above) edge returns None.
+    """
+    best = 0
+    seen = set()
+    stack = [(before, index, 0)]  # (node, tracked family, offset: idx = family + offset)
+    while stack:
+        node, tracked, offset = stack.pop()
+        if (node, tracked, offset) in seen:
+            continue
+        seen.add((node, tracked, offset))
+        if node == 0 or not preds[node]:
+            return None
+        for p in preds[node]:
+            insn = records[p]
+            operands = split_operands(insn.operands)
+            if insn.mnemonic in ("ja", "jnbe", "jae", "jnb"):
+                if p + 1 != node or direct_target(insn.mnemonic, insn.operands) == records[node].address:
+                    return None  # the above edge carries no bound
+                compare = records[p - 1] if p > 0 and preds[p] == [p - 1] else None
+                compare_ops = split_operands(compare.operands) if compare is not None else []
+                if (compare is not None and compare.mnemonic in ("cmpb", "cmpw", "cmpl", "cmpq")
+                        and len(compare_ops) == 2 and compare_ops[0].startswith("$")
+                        and family(compare_ops[1]) == tracked and offset == 0):
+                    limit = int(compare_ops[0][1:], 0)
+                    if limit < 0:
+                        return None
+                    best = max(best, limit + 1 if insn.mnemonic in ("ja", "jnbe") else limit)
+                    continue
+                stack.append((p, tracked, offset))
+                continue
+            written = written_families(insn)
+            if written is None:
+                return None
+            if tracked not in written or (insn.mnemonic == "cltq" and tracked == "a"):
+                stack.append((p, tracked, offset))
+                continue
+            if insn.mnemonic in ("movslq", "movl") and len(operands) == 2 and family(operands[1]) == tracked:
+                if family(operands[0]):
+                    stack.append((p, family(operands[0]), offset))
+                    continue
+                if operands[0].startswith("$"):
+                    value = int(operands[0][1:], 0) + offset
+                    if not 0 <= value < MAX_TABLE_ENTRIES:
+                        return None
+                    best = max(best, value + 1)
+                    continue
+            memory = MEMORY_RE.match(operands[0]) if insn.mnemonic == "leal" and len(operands) == 2 else None
+            if (memory is not None and memory.group(2) is not None and memory.group(3) is None
+                    and family(operands[1]) == tracked and family(memory.group(2))):
+                stack.append((p, family(memory.group(2)), offset + int(memory.group(1) or "0", 16)))
+                continue
+            return None
+    return best or None
+
+
 def _entry_target(image: ImageBytes, address: int) -> int | None:
     data = image.read(address, 4)
     return image.image_base + struct.unpack("<I", data)[0] if data is not None else None
@@ -420,7 +488,33 @@ def find_switch_tables(records: list[Record], start: int, end: int, image: Image
     instruction counts.
     """
     index_of = {insn.address: i for i, insn in enumerate(records)}
+
+    def is_dispatch(n: int) -> bool:
+        return records[n].mnemonic in UNCONDITIONAL_JUMPS and re.fullmatch(r"\*%r\w+", records[n].operands) is not None
+
+    # Seed the rounds with every dispatch's candidate tables (idiom, bound,
+    # extent and entries proven; image base assumed). The base proof treats an
+    # instruction with no known predecessor -- a case of a switch whose table is
+    # not known yet -- as entered from every indirect jump of the procedure, so
+    # starting from no tables left a dispatch unproven while another switch's
+    # unknown cases lay on its backward paths: a chain of N
+    # switches needed N rounds (D3D11/D3D12 CreatePipelineState: 10 and 14, more
+    # than MAX_ROUNDS), and switches whose base registers are reused elsewhere
+    # blocked each other for good (Vulkan CreatePipelineState, cgltf_validate).
+    # Each round below re-proves every dispatch, base included, over the CFG the
+    # previous round's tables imply; only a fixed point is accepted.
+    seed_live = _reachable(records, index_of, {}, noreturn) if reachable_only and records else range(len(records))
+    seed_leaders = {index_of[t] for n in seed_live
+                    if (t := direct_target(records[n].mnemonic, records[n].operands)) is not None and t in index_of
+                    and records[n].mnemonic not in ("call", "callq")}
+    seed_preds = _predecessors(records, index_of, {}, noreturn)
     tables: dict[int, list[SwitchTable]] = {}
+    for n in range(len(records)):
+        if is_dispatch(n):
+            found = _dispatch_tables(records, n, seed_preds, seed_leaders, index_of, start, end, image, {}, noreturn,
+                                     assume_base=True)
+            if found:
+                tables[records[n].address] = found
     # A dispatch inside another switch's case is only reachable through that
     # switch's table, and a case that enters between a bound check and its jump
     # voids the bound; so every dispatch is matched again with the cases found
@@ -468,7 +562,9 @@ def _walk_back_to(records: list[Record], i: int, leaders: set[int], register: st
     return None
 
 
-def _dispatch_tables(records, i, preds, leaders, index_of, start, end, image, edges, noreturn) -> list[SwitchTable]:
+def _dispatch_tables(records, i, preds, leaders, index_of, start, end, image, edges, noreturn,
+                     assume_base: bool = False) -> list[SwitchTable]:
+    """Tables of the dispatch at records[i]; assume_base skips the image-base proofs (candidates only)."""
     register = family(records[i].operands[1:])
 
     def is_add(insn: Record) -> bool:
@@ -490,7 +586,8 @@ def _dispatch_tables(records, i, preds, leaders, index_of, start, end, image, ed
     memory = MEMORY_RE.match(split_operands(records[load].operands)[0])
     base = family(memory.group(2))
     # Both the table base and the added base must be the image base.
-    if not (_base_reaches_as_image_base(records, preds, load, base, image.image_base)
+    if not assume_base and not (
+            _base_reaches_as_image_base(records, preds, load, base, image.image_base)
             and _base_reaches_as_image_base(records, preds, add, family(split_operands(records[add].operands)[0]),
                                             image.image_base)):
         return []
@@ -507,7 +604,7 @@ def _dispatch_tables(records, i, preds, leaders, index_of, start, end, image, ed
 
     selector = _walk_back_to(records, load, leaders, index, is_byte_load)
     if selector is not None:
-        if not _base_reaches_as_image_base(records, preds, selector, base, image.image_base):
+        if not assume_base and not _base_reaches_as_image_base(records, preds, selector, base, image.image_base):
             return []
         byte = MEMORY_RE.match(split_operands(records[selector].operands)[0])
         other = byte.group(3) if family(byte.group(2)) == base else byte.group(2)
@@ -517,6 +614,8 @@ def _dispatch_tables(records, i, preds, leaders, index_of, start, end, image, ed
         if index is None:
             return []
     count = _bound(records, before, index, leaders)
+    if count is None:
+        count = _bound_all_paths(records, preds, before, index)
     first = 0
     if count is None:
         if index_table is not None:
