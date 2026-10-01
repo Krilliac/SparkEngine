@@ -25,7 +25,7 @@ MAX_REACHABILITY_DEPTH = 32
 
 ROOT_CMAKE = "CMakeLists.txt"
 FUZZ_LABEL = "fuzz"
-SANITIZER_LITERAL = "fsanitize=fuzzer"
+REQUIRED_SANITIZER_OPTIONS = ("-fsanitize=fuzzer,address,undefined", "-fno-sanitize-recover=undefined")
 
 _COMMAND_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _TARGET_FILE_EXPR = re.compile(r"^\$<TARGET_FILE:([A-Za-z0-9_.+-]+)>$")
@@ -344,14 +344,18 @@ def verify_cmake_registration(
     if harness not in sources:
         raise PolicyError(f"{field} target {cmake_target!r} does not compile the declared harness {harness}")
 
-    sanitized = any(
-        command.arguments
-        and _literal(command.arguments[0], field) == cmake_target
-        and any(SANITIZER_LITERAL in argument for argument in command.arguments[1:])
-        for command in commands
-    )
-    if not sanitized:
-        raise PolicyError(f"{field} target {cmake_target!r} is not built with -{SANITIZER_LITERAL}")
+    for command_name in ("target_compile_options", "target_link_options"):
+        options = {
+            _literal(argument, field)
+            for command in commands_named(commands, command_name)
+            if command.arguments and _literal(command.arguments[0], field) == cmake_target
+            for argument in command.arguments[1:]
+        }
+        for required in REQUIRED_SANITIZER_OPTIONS:
+            if required not in options:
+                raise PolicyError(f"{field} target {cmake_target!r} {command_name} must include {required}")
+        if any(option in options for option in ("-fsanitize-recover=undefined", "-fsanitize-recover=all", "-fno-sanitize=undefined")):
+            raise PolicyError(f"{field} target {cmake_target!r} {command_name} overrides fatal UBSan")
 
     test = _single(
         commands,

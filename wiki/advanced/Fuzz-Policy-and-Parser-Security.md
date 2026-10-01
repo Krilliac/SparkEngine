@@ -9,6 +9,9 @@
 SEC-120 remains open and release-blocking. Production fuzz targets and bounded seed
 corpora cover some inventoried parsers. The current target and corpus set is recorded in
 `tools/fuzz-policy/parser-inventory.json` and `tools/fuzz-policy/corpus-manifest.json`.
+The current structural snapshot has 137 inventoried parsers: 58 fuzzed, 79 blocked,
+zero deferred candidates and 120 OD-21 exemptions. These counts are generated in
+`docs/sec120-fuzz-policy-check.json`; 79 missing harnesses keep closure open.
 Exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
 
@@ -662,14 +665,14 @@ the campaign when its smoke is registered. For each target it:
   `corpus-mutated` if either changed (the workflow also fails on any `git status` change
   under `FuzzerTests/corpora` or `FuzzerTests/generated`);
 - keeps the smoke's `-max_len`/`-timeout`/`-rss_limit_mb`, drops its replay-only
-  `-runs`/`-max_total_time`, and mutates for `--seconds` (600 per target by default);
+  `-runs`/`-max_total_time`, and mutates for `--seconds` (by default, the total
+  campaign budget divided by the discovered target count, rounded down);
 - caps ASan's quarantine at 32 MB unless `ASAN_OPTIONS` already sets one, so the 256 MB
   RSS limit does not report false OOMs;
 - sets `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` unless `halt_on_error` is
-  already set, so undefined behaviour in a target built with recoverable UBSan
-  (`SparkFuzzJsonUtils` lacks `-fno-sanitize-recover=undefined`) aborts and leaves a
-  `crash-` reproducer, and reports `sanitizer-report` if a `runtime error:` line is in
-  the log of an otherwise clean run;
+  already set, in addition to the fatal UBSan compile and link flags required on
+  every registered target; it also reports `sanitizer-report` if a `runtime error:`
+  line is in the log of an otherwise clean run;
 - runs `-minimize_crash=1` on every `crash-`/`leak-`/`timeout-`/`oom-` reproducer and
   keeps both the raw and the minimized file;
 - rewrites `campaign-summary.json` after every target (`complete` stays `false` until
@@ -680,10 +683,11 @@ the campaign when its smoke is registered. For each target it:
 
 It exits 1 on any finding (crash, hang, abnormal exit, UBSan report or corpus change).
 Without a finding it exits 2 when the campaign could not be set up (bad arguments, no
-targets, a budget above `--max-campaign-seconds`) or when a target could not run
+targets, an explicit budget above `--max-campaign-seconds`) or when a target could not run
 (non-executable binary or unusable corpus, recorded as `setup-error` in the summary).
-The workflow passes `--max-campaign-seconds 6000`, so `seconds_per_target` times the
-discovered target count must fit 100 of the job's 180 minutes.
+The workflow passes `--max-campaign-seconds 6000`, so its default per-target seconds
+scale down as targets are added and their total fits 100 of the job's 180 minutes.
+An explicit `seconds_per_target` override is rejected when that total exceeds 6000.
 The workflow uploads the whole output directory as `fuzz-campaign-<run id>` for 90
 days. To land a finding, reproduce with the minimized file, fix the parser, and import
 the reproducer with `tools/fuzz-policy/import_regression.py`, which copies it into the
@@ -703,9 +707,10 @@ python3 tools/fuzz-policy/import_regression.py /tmp/fuzz-campaign/campaign-summa
 
 ### Regression fixtures
 
-Every found issue lands with a minimized regression fixture, and the policy enforces
-it. Each `corpus-manifest.json` entry carries a `regressions` array of
-`{file, finding, found_by, guard_test, fixed_commit?}` records:
+Every recorded `regression-*` seed has a manifest record. The gate checks the records
+it can see; it cannot discover an issue fixed without a fixture or prove a hand-landed
+seed was minimized. Each `corpus-manifest.json` entry carries a `regressions` array of
+`{file, finding, found_by, guard_test, fixed_commit}` records:
 
 - every `regression-*` seed in the corpus is declared, and every declared `file` is a
   seed, so a fixture can be neither dropped silently nor landed undocumented;
@@ -715,19 +720,17 @@ it. Each `corpus-manifest.json` entry carries a `regressions` array of
   first-party CMake listfile (the fuzz smoke itself qualifies when only the sanitizer
   replay catches the bug) or a `TEST(...)` case under `Tests/`. Vendored and build trees
   do not count;
-- `fixed_commit`, when present, is the full commit SHA of the fix;
-- the import tool writes `finding` and `guard_test` as the placeholder `TODO`, which the
-  policy rejects, so an import cannot land half-done;
+- `fixed_commit` is required, must resolve to a commit in the checkout, and must touch
+  an inventoried source file for that parser. The CI checkout fetches full history;
+- the import tool writes `finding`, `guard_test` and `fixed_commit` as `TODO`, which
+  the policy rejects until the fix and its evidence are recorded;
 - the smoke's `-runs=N` must equal the corpus seed count, so the blocking replay covers
   every fixture, and `content_digest` covers its bytes.
 
-The five fixtures that predate the rule are backfilled: the SparkPak campaign findings
-(`regression-deflate-empty-output.spk` guarded by `FuzzArchiveSmoke`, and
-`regression-toc-ratio-bomb.spk` by
-`SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput`) and the three `.stex`
-review findings guarded by `SecurityParsers_StexMipSizeNotMatchingDimensionsRejected` and
-`SecurityParsers_StexHeaderCountsDoNotSizeAllocations`. The check report's
-`corpus.regression_count` records how many are declared.
+All 64 existing regression records now carry a historical source-touching commit.
+That check does not prove their guard tests fail before the fix. The empty-input
+`ShaderDiskCache::Lookup` finding still needs an owner-approved record type because
+the seed policy rejects zero-byte files; no zero-byte seed exception was added.
 
 A workflow file proves nothing until a hosted run is recorded; no scheduled-campaign
 history exists yet, so `runtime_evidence.scheduled_campaign` stays `false`.

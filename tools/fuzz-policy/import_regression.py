@@ -158,6 +158,7 @@ def import_regression(
             "finding": REGRESSION_PLACEHOLDER,
             "found_by": "campaign",
             "guard_test": REGRESSION_PLACEHOLDER,
+            "fixed_commit": REGRESSION_PLACEHOLDER,
         }
     )
     (root / cmake_file).write_bytes(cmake_text.encode("utf-8"))
@@ -182,8 +183,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"import_regression: FAIL: {exc}", file=sys.stderr)
         return 1
     print(
-        f"import_regression: added {destination}. Replace the {REGRESSION_PLACEHOLDER} finding and guard_test in "
-        f"{DEFAULT_CORPUS_MANIFEST}; check_fuzz_policy.py fails until both are real."
+        f"import_regression: added {destination}. Replace the {REGRESSION_PLACEHOLDER} finding, guard_test and "
+        "fixed_commit in "
+        f"{DEFAULT_CORPUS_MANIFEST}; check_fuzz_policy.py fails until all three are real."
     )
     return 0
 

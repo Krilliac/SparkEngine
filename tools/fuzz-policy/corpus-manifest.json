@@ -194,7 +194,8 @@
           "file": "regression-midfile-bom-key.ini",
           "finding": "A key that began with a UTF-8 BOM mid-document was accepted, but SaveToString emitted it as the first line and the reload stripped the BOM and rejected the empty key.",
           "found_by": "review",
-          "guard_test": "ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected"
+          "guard_test": "ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected",
+          "fixed_commit": "f3762ca8ee1b7468780a40d9a044ce11397c3b23"
         }
       ]
     },
@@ -235,7 +236,8 @@
           "file": "regression-metadata-carriage-return.save",
           "finding": "A save whose sceneName held a CR was read and listed, but the writer refuses the field, so every Load failed in DeserializeWorld without trying the .bak and the next Save rotated the unloadable primary over it; the reader now accepts only metadata the writer can re-render.",
           "found_by": "campaign",
-          "guard_test": "SaveSystemRoundTripReal_MetadataCarriageReturnSlotFallsBackToTheRetainedCopy"
+          "guard_test": "SaveSystemRoundTripReal_MetadataCarriageReturnSlotFallsBackToTheRetainedCopy",
+          "fixed_commit": "9db0644d54deffad0f420be60efe0e2fd9269d02"
         }
       ]
     },
@@ -327,25 +329,29 @@
           "file": "regression-data-uri-length-overclaim.gltf",
           "finding": "A base64 data URI declaring a 300 MB byteLength made cgltf_load_buffers allocate the declared size (up to 1 GiB) from a 373-byte file before decoding; ValidateDocumentStructure now rejects a byteLength the payload cannot fill.",
           "found_by": "smoke",
-          "guard_test": "FuzzGltfSmoke"
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "8ac7feed8cc9e9c38aac103078ff34fa9a1d1540"
         },
         {
           "file": "regression-misaligned-index-accessor.glb",
           "finding": "A uint16 index accessor at an odd buffer-view byteOffset made cgltf_validate read indices through a misaligned typed pointer (UBSan); ValidateAccessorBounds now requires view offset, accessor offset and stride to be multiples of the component size.",
           "found_by": "campaign",
-          "guard_test": "FuzzGltfSmoke"
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "9bd763ca533947d8bd91994e2d498710e3f26f27"
         },
         {
           "file": "regression-glb-bin-unaligned.glb",
           "finding": "A GLB whose JSON chunk length is not a multiple of 4 placed the in-place BIN buffer at an odd address, so every typed accessor read was misaligned (UBSan); ValidateDocumentStructure now rejects an unaligned BIN chunk.",
           "found_by": "review",
-          "guard_test": "FuzzGltfSmoke"
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "9bd763ca533947d8bd91994e2d498710e3f26f27"
         },
         {
           "file": "regression-generated-normal-overflow.glb",
           "finding": "A static mesh without NORMAL whose finite positions reach ~1e29 overflowed the float cross products in GenerateNormals, so LoadGLTFStaticMesh published NaN normals; the normals are now accumulated and normalized in double.",
           "found_by": "campaign",
-          "guard_test": "FuzzGltfSmoke"
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "e3fe039b1f14b3c7fd1c48653ce4cc0117bb49b7"
         }
       ]
     },
@@ -386,7 +392,8 @@
           "file": "regression-header-error-leak.exr",
           "finding": "EXRLoader passed an error out-parameter to ParseEXRHeaderFromMemory, which overwrites its first strdup'd message when a second header check also fails, so every such file leaked it.",
           "found_by": "campaign",
-          "guard_test": "FuzzExrSmoke"
+          "guard_test": "FuzzExrSmoke",
+          "fixed_commit": "2b7826d5ed15d454415556ffe3d8d05c63115209"
         }
       ]
     },
@@ -410,7 +417,8 @@
           "file": "regression-undecodable-reports-loaded.png",
           "finding": "Texture::CreateFromFile returned S_OK for a file stb_image could not decode and marked it loaded with a size estimated from the requested description, so TextureSystem cached a texture that held no pixels.",
           "found_by": "review",
-          "guard_test": "AssetSec_TextureUndecodableFileFailsClosed"
+          "guard_test": "AssetSec_TextureUndecodableFileFailsClosed",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
         }
       ]
     },
@@ -434,19 +442,22 @@
           "file": "regression-mtllib-parent-escape.obj",
           "finding": "tinyobjloader's default material reader joined any mtllib name onto the OBJ's directory, so a ../ name read a file outside the asset tree (and ../../dev/zero an unbounded device).",
           "found_by": "review",
-          "guard_test": "AssetSec_ObjStaticRejectsMtllibOutsideDirectory"
+          "guard_test": "AssetSec_ObjStaticRejectsMtllibOutsideDirectory",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
         },
         {
           "file": "regression-ngon-quadratic-time.obj",
           "finding": "Every polygon was ear-clipped in O(n^2): one 3000-corner star in a 49 KiB file took over 4 s under ASan, and larger files grew without bound. Polygons over 96 corners are now fanned.",
           "found_by": "review",
-          "guard_test": "FuzzObjStaticSmoke"
+          "guard_test": "FuzzObjStaticSmoke",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
         },
         {
           "file": "regression-normal-float-overflow.obj",
           "finding": "Normals were normalized in float: a finite authored component such as 1e20 squared to infinity and gave a zero normal, and large positions gave NaN face normals.",
           "found_by": "review",
-          "guard_test": "FuzzObjStaticSmoke"
+          "guard_test": "FuzzObjStaticSmoke",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
         }
       ]
     },
@@ -504,7 +515,8 @@
           "file": "regression-spawn-nan-position.bin",
           "finding": "An EntitySpawn whose position was NaN decoded successfully and seeded a remote player's current and target position; the decoder now rejects non-finite positions.",
           "found_by": "review",
-          "guard_test": "MMOEntityEvents_SpawnRejectsNonFinitePosition"
+          "guard_test": "MMOEntityEvents_SpawnRejectsNonFinitePosition",
+          "fixed_commit": "c643b39c7a4458a7003152912aa57fa0444ffc14"
         }
       ]
     },
@@ -613,13 +625,15 @@
           "file": "regression-adjacency-past-triangles.snav",
           "finding": "A dynamic adjacency entry naming a triangle past the triangle array was accepted and the mesh registered.",
           "found_by": "review",
-          "guard_test": "SEC3Gameplay_NavMeshRejectsAdjacencyPastTriangles"
+          "guard_test": "SEC3Gameplay_NavMeshRejectsAdjacencyPastTriangles",
+          "fixed_commit": "758f7345ce002e70a4dfe5a3eb3aab78c72a5ab5"
         },
         {
           "file": "regression-tri-index-past-vertices.snav",
           "finding": "A triangle naming a vertex past the vertex array was accepted and the mesh registered.",
           "found_by": "review",
-          "guard_test": "SEC3Gameplay_NavMeshRejectsTriangleIndexPastVertices"
+          "guard_test": "SEC3Gameplay_NavMeshRejectsTriangleIndexPastVertices",
+          "fixed_commit": "758f7345ce002e70a4dfe5a3eb3aab78c72a5ab5"
         }
       ]
     },
@@ -643,7 +657,8 @@
           "file": "regression-nonsquare-8x2.sparkterrain",
           "finding": "An 8x2 heightmap was accepted and published as resolution 8, so the clipmap indexed 64 samples of a 16-sample heightmap.",
           "found_by": "review",
-          "guard_test": "SparkTerrainFormat_RejectsNonSquareHeightmap"
+          "guard_test": "SparkTerrainFormat_RejectsNonSquareHeightmap",
+          "fixed_commit": "a061abfd465bb3e0b281baab67225c7cb24dc06c"
         }
       ]
     },
@@ -667,7 +682,8 @@
           "file": "regression-get-request-missing-platform.bin",
           "finding": "A GetAssetRequest missing its platform byte was rejected only after the decoded path had been written into the caller's struct; the path, invalidate and stats decoders shared the partial-publish pattern.",
           "found_by": "review",
-          "guard_test": "AssetServiceProtocol_RejectedDecodeLeavesOutputUntouched"
+          "guard_test": "AssetServiceProtocol_RejectedDecodeLeavesOutputUntouched",
+          "fixed_commit": "533a4bbe6fa76a8754812bd3a4a379a5be193b58"
         }
       ]
     },
@@ -691,7 +707,8 @@
           "file": "regression-header-claims-max-payload.bin",
           "finding": "RecvFrame resized the payload to the header's claimed size before any payload byte arrived, so an 8-byte header from any local peer forced a 16 MiB allocation per frame.",
           "found_by": "review",
-          "guard_test": "DaemonFraming_RecvFrameAllocationTracksReceivedBytes"
+          "guard_test": "DaemonFraming_RecvFrameAllocationTracksReceivedBytes",
+          "fixed_commit": "a64c658325db1ad688d8f25b7a02e5991f5eeb86"
         }
       ]
     },
@@ -715,7 +732,8 @@
           "file": "regression-snapshot-edit-count-overclaim.bin",
           "finding": "DecodeSnapshot reserved up to 65,536 peers, locks or edits from the wire count before checking the bytes existed, so a 20-byte snapshot reserved several MiB; process status and argument lists were sized the same way.",
           "found_by": "review",
-          "guard_test": "SparkDaemonServiceTests"
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "59617a9036aa43e8a18591af40a5c6eb7c830015"
         }
       ]
     },
@@ -756,31 +774,36 @@
           "file": "regression-oversized.csv",
           "finding": "The CSV loader accepted a document larger than the new 8 MiB production limit without bounding its read and parse work.",
           "found_by": "review",
-          "guard_test": "DataTableRegistry_RejectsOversizedValidFileBeforeReading"
+          "guard_test": "DataTableRegistry_RejectsOversizedValidFileBeforeReading",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         },
         {
           "file": "regression-trailing-json.json",
           "finding": "The JSON loader accepted a valid prefix followed by malformed trailing bytes and published partial table data.",
           "found_by": "review",
-          "guard_test": "DataTable_RejectsTrailingJSONWithoutPartialRows"
+          "guard_test": "DataTable_RejectsTrailingJSONWithoutPartialRows",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         },
         {
           "file": "regression-noncanonical-number.json",
           "finding": "A numeric-looking JSON string such as 001 was inferred as an integer and serialized as an invalid bare JSON number.",
           "found_by": "review",
-          "guard_test": "DataTable_NumericLookingStringRoundTripsAsValidJSON"
+          "guard_test": "DataTable_NumericLookingStringRoundTripsAsValidJSON",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         },
         {
           "file": "regression-empty-single-cell-row.csv",
           "finding": "SaveToCSV wrote a single-column row with an empty cell as a blank line, which LoadFromCSV skips, so the row was lost on reload.",
           "found_by": "campaign",
-          "guard_test": "DataTable_CsvRoundTripKeepsEmptySingleCellRow"
+          "guard_test": "DataTable_CsvRoundTripKeepsEmptySingleCellRow",
+          "fixed_commit": "537024d523a05fa1df39c9d428c48b4ac2a802bc"
         },
         {
           "file": "regression-trailing-cr-cell.csv",
           "finding": "SaveToCSV wrote a last-column cell ending in CR unquoted, and LoadFromCSV stripped that CR as a line ending on reload.",
           "found_by": "campaign",
-          "guard_test": "DataTable_CsvRoundTripKeepsTrailingCarriageReturn"
+          "guard_test": "DataTable_CsvRoundTripKeepsTrailingCarriageReturn",
+          "fixed_commit": "a1c64432deb94cfa586608436c0924967d6977b0"
         }
       ]
     },
@@ -804,7 +827,8 @@
           "file": "regression-partial-output-write.bin",
           "finding": "A truncated collaboration frame changed the caller's type and peer before the decoder rejected its incomplete node ID.",
           "found_by": "review",
-          "guard_test": "Editor_Collab_MalformedFrame_DoesNotPartiallyPublish"
+          "guard_test": "Editor_Collab_MalformedFrame_DoesNotPartiallyPublish",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         }
       ]
     },
@@ -828,7 +852,8 @@
           "file": "regression-partial-write.json",
           "finding": "The localization loader published an earlier entry from a malformed catalog instead of preserving the previous table.",
           "found_by": "review",
-          "guard_test": "StringTable_MalformedReloadIsTransactional"
+          "guard_test": "StringTable_MalformedReloadIsTransactional",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         }
       ]
     },
@@ -852,13 +877,15 @@
           "file": "regression-oversized.json",
           "finding": "The dialogue loader read and parsed a document larger than the new 8 MiB production limit without a file-size bound.",
           "found_by": "review",
-          "guard_test": "Dialogue_RejectsOversizedValidDocumentBeforeParsing"
+          "guard_test": "Dialogue_RejectsOversizedValidDocumentBeforeParsing",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         },
         {
           "file": "regression-partial-tree.json",
           "finding": "A dialogue document whose nodes field is not an array replaced the loaded tree's ID and start node before the loader rejected it.",
           "found_by": "review",
-          "guard_test": "Dialogue_LoadFailureDoesNotPartiallyReplaceTree"
+          "guard_test": "Dialogue_LoadFailureDoesNotPartiallyReplaceTree",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         }
       ]
     },
@@ -882,19 +909,22 @@
           "file": "regression-invalid-action-flags.bin",
           "finding": "The FPS player-state decoder accepted unknown action bits in a peer-supplied snapshot record.",
           "found_by": "review",
-          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits"
+          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         },
         {
           "file": "regression-invalid-bool.bin",
           "finding": "The FPS player-state decoder coerced a noncanonical boolean wire byte instead of rejecting the record.",
           "found_by": "review",
-          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits"
+          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         },
         {
           "file": "regression-batch-zero-invalid-bool.bin",
           "finding": "An invalid boolean wire byte decoded to a default state whose zero sequence matched batch zero, so a malformed snapshot was accepted.",
           "found_by": "review",
-          "guard_test": "FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero"
+          "guard_test": "FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
         }
       ]
     },
@@ -935,19 +965,22 @@
           "file": "regression-schema-overflow.json",
           "finding": "The schema field was read with std::atoi over any run of digits; atoi of 4294967297 is undefined and LP64 glibc returned 1, so the reader accepted the file as schema 1. The reader now parses the integer with std::from_chars, range-checked.",
           "found_by": "review",
-          "guard_test": "SparkInstallerInstallStateTests"
+          "guard_test": "SparkInstallerInstallStateTests",
+          "fixed_commit": "e77dabcf98e8b48fdb505864633f1c3038a7ddc5"
         },
         {
           "file": "regression-escaped-quote.json",
           "finding": "String fields ended at the first quote and were never unescaped, so a ref holding an escaped quote read back as its prefix up to the backslash. The reader now unescapes exactly the escapes Save writes and refuses any other.",
           "found_by": "review",
-          "guard_test": "SparkInstallerInstallStateTests"
+          "guard_test": "SparkInstallerInstallStateTests",
+          "fixed_commit": "e77dabcf98e8b48fdb505864633f1c3038a7ddc5"
         },
         {
           "file": "regression-windows-destination.json",
           "finding": "Backslashes were not unescaped, so every Windows destination and a generator holding a backslash read back doubled and changed on each Save and Load round trip.",
           "found_by": "review",
-          "guard_test": "SparkInstallerInstallStateTests"
+          "guard_test": "SparkInstallerInstallStateTests",
+          "fixed_commit": "e77dabcf98e8b48fdb505864633f1c3038a7ddc5"
         }
       ]
     },
@@ -971,13 +1004,15 @@
           "file": "regression-control-byte-id.json",
           "finding": "A mod id had no policy beyond non-empty, so an id holding a control byte (or NUL, a path separator or 64 KiB) was published as the map key, log argument, config field and UI label. Ids are now 1-128 characters of [A-Za-z0-9._-], not '.' or '..'.",
           "found_by": "review",
-          "guard_test": "ModSystem_RejectsIdWithControlOrSeparatorBytes"
+          "guard_test": "ModSystem_RejectsIdWithControlOrSeparatorBytes",
+          "fixed_commit": "d5e0163a6f885f0981e1771eb6f7db1c695aa0c0"
         },
         {
           "file": "regression-duplicate-id-pair.bin",
           "finding": "Two mod directories declaring one id were both counted but only the one the directory iterator reached last was registered, so a dropped-in mod could shadow an installed one. An id claimed twice is now published from neither directory.",
           "found_by": "review",
-          "guard_test": "ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished"
+          "guard_test": "ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished",
+          "fixed_commit": "d5e0163a6f885f0981e1771eb6f7db1c695aa0c0"
         }
       ]
     },
@@ -1001,19 +1036,22 @@
           "file": "regression-nonfinite-duration.replay",
           "finding": "LoadFromFile accepted a NaN duration, so UpdatePlayback never reached the end, and a negative one broke the std::clamp precondition in SeekTo and the kill cam.",
           "found_by": "review",
-          "guard_test": "SEC3Gameplay_ReplayRejectsNonFiniteOrNegativeDuration"
+          "guard_test": "SEC3Gameplay_ReplayRejectsNonFiniteOrNegativeDuration",
+          "fixed_commit": "bb66907681673116ffffd102d46f141c8ac198e7"
         },
         {
           "file": "regression-descending-timestamps.replay",
           "finding": "LoadFromFile accepted descending frame timestamps, breaking the sorted-range precondition of the std::lower_bound in FindFrameIndex so playback jumped backwards.",
           "found_by": "review",
-          "guard_test": "SEC3Gameplay_ReplayRejectsOutOfOrderFrameTimestamps"
+          "guard_test": "SEC3Gameplay_ReplayRejectsOutOfOrderFrameTimestamps",
+          "fixed_commit": "bb66907681673116ffffd102d46f141c8ac198e7"
         },
         {
           "file": "regression-unknown-version.replay",
           "finding": "LoadFromFile read the version field and never checked it, decoding any future or corrupt layout as version 1.",
           "found_by": "review",
-          "guard_test": "SEC3Gameplay_ReplayRejectsUnknownVersion"
+          "guard_test": "SEC3Gameplay_ReplayRejectsUnknownVersion",
+          "fixed_commit": "bb66907681673116ffffd102d46f141c8ac198e7"
         }
       ]
     },
@@ -1037,19 +1075,22 @@
           "file": "regression-key-count-amplification.sanim",
           "finding": "The streaming .sanim loader resized a track to its declared key count before reading any key, so a 60-byte file forced a 20 MB allocation before truncation was detected.",
           "found_by": "review",
-          "guard_test": "Animation_DecodeClips_RejectsKeyCountBeyondInput"
+          "guard_test": "Animation_DecodeClips_RejectsKeyCountBeyondInput",
+          "fixed_commit": "80230ac7e871094de705a795d1710d2f784d635e"
         },
         {
           "file": "regression-nonfinite-clip-timing.sanim",
           "finding": "The .sanim loader accepted a NaN clip duration, which playback feeds to fmod and divides by.",
           "found_by": "review",
-          "guard_test": "Animation_LoadAnimations_RejectsNonFiniteClipTiming"
+          "guard_test": "Animation_LoadAnimations_RejectsNonFiniteClipTiming",
+          "fixed_commit": "80230ac7e871094de705a795d1710d2f784d635e"
         },
         {
           "file": "regression-decreasing-key-times.sanim",
           "finding": "The .sanim loader accepted decreasing key times, which the key search assumes are sorted ascending.",
           "found_by": "review",
-          "guard_test": "Animation_LoadAnimations_RejectsDecreasingKeyTimes"
+          "guard_test": "Animation_LoadAnimations_RejectsDecreasingKeyTimes",
+          "fixed_commit": "80230ac7e871094de705a795d1710d2f784d635e"
         }
       ]
     },
@@ -1073,31 +1114,36 @@
           "file": "regression-duplicate-client-instance.bin",
           "finding": "LoadOrchestrationJournal accepted two committed mutations for one client instance, which the service's keyed replay table silently collapsed to whichever came last.",
           "found_by": "review",
-          "guard_test": "SparkDaemonServiceTests"
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         },
         {
           "file": "regression-duplicate-process-id.bin",
           "finding": "LoadOrchestrationJournal accepted two snapshot records for one process id; the writer serializes a keyed map and cannot produce that.",
           "found_by": "review",
-          "guard_test": "SparkDaemonServiceTests"
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         },
         {
           "file": "regression-empty-client-instance.bin",
           "finding": "LoadOrchestrationJournal accepted a committed mutation with an empty client instance, a key ReadMutationKey refuses everywhere else.",
           "found_by": "review",
-          "guard_test": "SparkDaemonServiceTests"
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         },
         {
           "file": "regression-unrepresentable-crash-timestamp.bin",
           "finding": "LoadOrchestrationJournal accepted an INT64_MIN crash timestamp, and OrchestrationService's conversion to a system_clock time point overflowed (signed-overflow UB).",
           "found_by": "review",
-          "guard_test": "SparkDaemonServiceTests"
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         },
         {
           "file": "regression-unrepresentable-drain-deadline.bin",
           "finding": "LoadOrchestrationJournal accepted an INT64_MAX drain deadline, which overflows the same system_clock conversion when a draining process is reconciled.",
           "found_by": "review",
-          "guard_test": "SparkDaemonServiceTests"
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         }
       ]
     },
@@ -1121,13 +1167,15 @@
           "file": "regression-legacy-rewrite-over-budget.db",
           "finding": "SQLiteConnection::Open accepted a legacy store whose escaped rewrite exceeds the store budget, so every later SET, DELETE and commit failed to publish.",
           "found_by": "review",
-          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish"
+          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         },
         {
           "file": "regression-raw-tab-rewrite-over-budget.db",
           "finding": "SQLiteConnection::Open accepted an escaped-format store whose raw tabs double when rewritten, past the store budget, leaving the store unwritable.",
           "found_by": "review",
-          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish"
+          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
         }
       ]
     },
@@ -1151,31 +1199,36 @@
           "file": "regression-extra-fields.row",
           "finding": "The character row reader accepted rows with more than 15 fields and silently ignored the extra ones.",
           "found_by": "review",
-          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         },
         {
           "file": "regression-lossy-float.row",
           "finding": "BuildCharacterSave wrote positions and stats with iostream's 6 significant digits, so a load-save cycle moved the character and changed its stats.",
           "found_by": "review",
-          "guard_test": "MMOPersistence_CharacterRowKeepsExactFloatsThroughColdRestart"
+          "guard_test": "MMOPersistence_CharacterRowKeepsExactFloatsThroughColdRestart",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         },
         {
           "file": "regression-negative-account.row",
           "finding": "std::stoul accepted -1 for the account id and wrapped it to 4294967295.",
           "found_by": "review",
-          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         },
         {
           "file": "regression-nonfinite-stat.row",
           "finding": "std::stof accepted nan for a position, so a NaN location reached gameplay on login.",
           "found_by": "review",
-          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         },
         {
           "file": "regression-trailing-text.row",
           "finding": "std::stoi stopped at the first non-digit, so a level of 12abc loaded as 12.",
           "found_by": "review",
-          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows"
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         }
       ]
     },
@@ -1199,19 +1252,22 @@
           "file": "regression-negative-epoch.state",
           "finding": "std::istream negated -1 into the unsigned epoch, loading UINT64_MAX so no later Prepare could ever advance that session's fence.",
           "found_by": "review",
-          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers"
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         },
         {
           "file": "regression-signed-area.state",
           "finding": "The epoch state reader accepted a leading plus sign on an area id.",
           "found_by": "review",
-          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers"
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         },
         {
           "file": "regression-wrapped-phase.state",
           "finding": "std::istream wrapped -4294967295 to phase 1, restoring a Prepare fence the file never recorded.",
           "found_by": "review",
-          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers"
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
         }
       ]
     },
@@ -1269,7 +1325,8 @@
           "file": "regression-nonfinite-factor.sparkmat",
           "finding": "ParseSparkMatDefinition accepted nan/inf factors (std::stof), which RegisterMaterial's std::clamp passes through to the GPU constant buffers; non-finite factors now keep their value.",
           "found_by": "smoke",
-          "guard_test": "SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults"
+          "guard_test": "SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults",
+          "fixed_commit": "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
         }
       ]
     },
@@ -1310,13 +1367,15 @@
           "file": "regression-mount-root-directory.path",
           "finding": "LocalFileProvider::ReadFile opened the mount root directory on Linux and sized its buffer from the INT64_MAX ext4 directory end offset, aborting the process; only regular files are read now.",
           "found_by": "smoke",
-          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing"
+          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing",
+          "fixed_commit": "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
         },
         {
           "file": "regression-subdirectory.path",
           "finding": "A virtual path naming a mounted subdirectory reached the same INT64_MAX allocation in LocalFileProvider::ReadFile on ext4; directories now read as nothing.",
           "found_by": "smoke",
-          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing"
+          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing",
+          "fixed_commit": "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
         }
       ]
     },

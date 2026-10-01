@@ -36,6 +36,7 @@ import corpus_manifest
 import harness_shape
 import parser_inventory
 import policy_common
+import run_campaign
 
 
 # Production policy evaluates expiry and corpus verification in UTC. Keep these
@@ -81,8 +82,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 """
 
 FUZZ_CMAKE = """add_executable(FuzzExampleParser ExampleFuzz.cpp ${CMAKE_SOURCE_DIR}/src/ExampleParser.cpp)
-target_compile_options(FuzzExampleParser PRIVATE -fsanitize=fuzzer,address)
-target_link_options(FuzzExampleParser PRIVATE -fsanitize=fuzzer,address)
+target_compile_options(FuzzExampleParser PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined)
+target_link_options(FuzzExampleParser PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined)
 add_test(NAME FuzzExampleParserSmoke
     COMMAND FuzzExampleParser -max_len=128 -timeout=1 -rss_limit_mb=64 -runs=3
             ${CMAKE_SOURCE_DIR}/FuzzerTests/corpora/example)
@@ -318,6 +319,7 @@ class PolicyFixture:
                 "finding": "Nested arrays past the depth cap recursed without bound.",
                 "found_by": "campaign",
                 "guard_test": "FuzzExampleParserSmoke",
+                "fixed_commit": "0" * 40,
             }
             entry.update(record)
             self.corpus["corpora"][0]["regressions"].append(entry)
@@ -1207,8 +1209,35 @@ class TestCorpusBinding(FixtureTestCase):
         self.fixture.rewrite_cmake(
             "\n".join(line for line in FUZZ_CMAKE.splitlines() if "fsanitize" not in line) + "\n"
         )
-        with self.assertPolicyError("is not built with -fsanitize=fuzzer"):
+        with self.assertPolicyError("target_compile_options must include -fsanitize=fuzzer,address,undefined"):
             self.fixture.load_corpora()
+
+    def test_each_target_option_set_requires_all_sanitizers_and_fatal_ubsan(self) -> None:
+        self.fixture.make_fuzzed()
+        for command in ("target_compile_options", "target_link_options"):
+            for required, replacement in (
+                ("-fsanitize=fuzzer,address,undefined", "-fsanitize=fuzzer,address"),
+                ("-fsanitize=fuzzer,address,undefined", "-fsanitize=fuzzer,undefined"),
+                ("-fsanitize=fuzzer,address,undefined", "-fsanitize=fuzzer"),
+                ("-fno-sanitize-recover=undefined", "-fsanitize-recover=undefined"),
+            ):
+                with self.subTest(command=command, replacement=replacement):
+                    lines = FUZZ_CMAKE.splitlines()
+                    lines = [
+                        line.replace(required, replacement) if line.startswith(command + "(") else line
+                        for line in lines
+                    ]
+                    self.fixture.rewrite_cmake("\n".join(lines) + "\n")
+                    with self.assertPolicyError(f"{command} must include {required}"):
+                        self.fixture.load_corpora()
+            self.fixture.rewrite_cmake(
+                FUZZ_CMAKE.replace(
+                    f"{command}(FuzzExampleParser PRIVATE ",
+                    f"{command}(FuzzExampleParser PRIVATE -fsanitize-recover=undefined ",
+                )
+            )
+            with self.assertPolicyError(f"{command} overrides fatal UBSan"):
+                self.fixture.load_corpora()
 
     def test_corpus_dir_must_be_passed_to_the_target(self) -> None:
         self.fixture.make_fuzzed()
@@ -1450,6 +1479,32 @@ class TestRegressionFixtures(FixtureTestCase):
         self.assertEqual(corpus.seed_count, len(SEEDS) + 1)
         self.assertEqual([record.file for record in corpus.regressions], ["regression-deep-nesting.json"])
 
+    def test_missing_fixed_commit_is_rejected(self) -> None:
+        self.fixture.add_regression()
+        del self.fixture.corpus["corpora"][0]["regressions"][0]["fixed_commit"]
+        self.fixture.write_corpus()
+        with self.assertPolicyError("missing keys: fixed_commit"):
+            self.fixture.load_corpora()
+
+    def test_fixed_commit_must_exist_and_touch_parser_source(self) -> None:
+        corpus = SimpleNamespace(
+            corpus_id="fixture", parser_id="material-loader",
+            regressions=(SimpleNamespace(file="regression-test", fixed_commit="1ea4d894626117e0b3ac7a362e41379e6d57f10e"),),
+        )
+        inventory = SimpleNamespace(parsers=(SimpleNamespace(
+            parser_id="material-loader", source_files=("SparkEngine/Source/Graphics/MaterialLoader.cpp",),
+        ),))
+        # Use a real historical fix and an inventoried path it changed.
+        corpus_manifest.validate_regression_fix_commits(REPO_ROOT, inventory, (corpus,))
+        corpus.regressions[0].fixed_commit = "0" * 40
+        with self.assertPolicyError("fixed_commit is not a commit"):
+            corpus_manifest.validate_regression_fix_commits(REPO_ROOT, inventory, (corpus,))
+        corpus.regressions[0].fixed_commit = "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
+        inventory.parsers[0].source_files = ("src/unrelated.cpp",)
+        with self.assertPolicyError("does not touch an inventoried parser source"):
+            corpus_manifest.validate_regression_fix_commits(REPO_ROOT, inventory, (corpus,))
+
+
     def test_guard_may_be_a_sparktests_case(self) -> None:
         (self.root / "Tests").mkdir()
         (self.root / "Tests" / "TestExample.cpp").write_text(
@@ -1534,6 +1589,28 @@ class TestRegressionFixtures(FixtureTestCase):
         self.fixture.add_regression(name="deep-nesting.json")
         with self.assertPolicyError(r"\.file does not match"):
             self.fixture.load_corpora()
+
+
+class TestCampaignBudgetPolicy(unittest.TestCase):
+    def test_default_budget_tracks_discovered_targets(self) -> None:
+        inventory = parser_inventory.load_inventory(REPO_ROOT)
+        targets = sum(parser.status == "fuzzed" for parser in inventory.parsers)
+        for target_count in (targets, targets + 1, 6000):
+            with self.subTest(target_count=target_count):
+                seconds = run_campaign.campaign_seconds(target_count, None, 6000)
+                self.assertGreaterEqual(seconds, 1)
+                self.assertLessEqual(seconds * target_count, 6000)
+        with self.assertRaisesRegex(run_campaign.CampaignError, "--seconds must be between"):
+            run_campaign.campaign_seconds(6001, None, 6000)
+        with self.assertRaisesRegex(run_campaign.CampaignError, "exceeds"):
+            run_campaign.campaign_seconds(11, 600, 6000)
+
+    def test_scheduled_workflow_uses_derived_default(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "fuzz-scheduled.yml").read_text(encoding="utf-8")
+        self.assertIn("--max-campaign-seconds 6000", workflow)
+        self.assertIn('if [ -n "$SECONDS_PER_TARGET" ]; then', workflow)
+        self.assertIn('"${seconds_arg[@]}"', workflow)
+        self.assertNotIn('default: "600"', workflow)
 
 
 class TestGateBehavior(FixtureTestCase):
@@ -1780,6 +1857,11 @@ class TestCiBindingMutations(unittest.TestCase):
 
     def test_unmodified_wiring_passes(self) -> None:
         self.fixture.validate()
+
+    def test_shallow_checkout_is_rejected_for_fix_commit_gate(self) -> None:
+        self.fixture.patch(".github/workflows/build.yml", "        fetch-depth: 0", "        fetch-depth: 1")
+        with self.assertRaisesRegex(policy_common.PolicyError, "must fetch full history"):
+            self.fixture.validate()
 
     def test_conditional_job_is_rejected(self) -> None:
         self.fixture.patch(".github/workflows/build.yml", '  fuzz-policy:\n    name: "Fuzz policy"', '  fuzz-policy:\n    if: false\n    name: "Fuzz policy"')
