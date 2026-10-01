@@ -36,6 +36,15 @@ class FakeImage:
     def section_bounds(self, address):
         return None
 
+    def set_entered(self, addresses):
+        self.entered = sorted(addresses)
+
+    def entered_within(self, lo, hi):
+        return any(lo <= a < hi for a in getattr(self, "entered", ()))
+
+    def exec_ranges(self):
+        return [(self._start, self._start + len(self._data))]
+
     def redecode(self, start, stop):
         self.calls.append((start, stop))
         return [r for r in self.redecoded.get(start, []) if r.address < stop]
@@ -192,6 +201,33 @@ class SwitchTableTests(unittest.TestCase):
         self.assertTrue(all(t.start >= P + 0x20 for t in result.tables))
 
 
+class ExternalEntryTests(unittest.TestCase):
+    """A proven table may not contain bytes reached as code from elsewhere."""
+
+    def test_cross_procedure_entry_into_a_table_rejects_it(self):
+        # Baseline: the table is proven data.
+        baseline, _ = mapped(switch_records(), switch_bytes())
+        self.assertTrue(baseline.tables)
+        # A tail jump from another procedure targets a byte inside the jump
+        # table (its slots also decode as instructions). The bytes are code, so
+        # the table must be rejected and the bytes classified.
+        image = FakeImage(switch_bytes(), start=P)
+        image.set_entered([P + 0x3a])  # inside the jump table [0x38, 0x40)
+        result = cm.map_procedure(switch_records(), P, END, image)
+        self.assertEqual(result.tables, [])
+        self.assertTrue(any(r.mnemonic in ("vpaddd", "<undecodable>") for r in result.records))
+
+    def test_address_taken_into_the_index_table_rejects_it(self):
+        image = FakeImage(switch_bytes(), start=P)
+        image.set_entered([P + 0x41])  # inside the index table [0x40, 0x43)
+        self.assertEqual(cm.map_procedure(switch_records(), P, END, image).tables, [])
+
+    def test_entry_outside_any_table_leaves_the_tables_proven(self):
+        image = FakeImage(switch_bytes(), start=P)
+        image.set_entered([P + 0x24, P + 0x30])  # real case targets, not table bytes
+        self.assertTrue(cm.map_procedure(switch_records(), P, END, image).tables)
+
+
 class CallerGuardedTests(unittest.TestCase):
     HELPER = "std::_Countl_zero_lzcnt<unsigned __int64>"
     ISA = BASE + 0x3020
@@ -212,9 +248,30 @@ class CallerGuardedTests(unittest.TestCase):
                 + [f"{t + 0x40:x}:     \tlzcntq\t%rcx, %rax", f"{t + 0x45:x}:     \tretq"]
                 + (other or [f"{t + 0x50:x}:     \tretq"]))
 
-    def scan(self, lines, image="default"):
+    def scan(self, lines, image="default", entries=None):
         image = FakeImage(b"") if image == "default" else image
-        return checker.scan_lines("image.exe", lines, [], self.info(), image)
+        return checker.scan_lines("image.exe", lines, [], self.info(), image, entries)
+
+    def entries(self, **fields):
+        base = dict(image_base=BASE, branch_sources={}, address_taken=set(), other=set())
+        base.update(fields)
+        return checker._ImageEntries(**base)
+
+    def test_computed_rva_reference_keeps_the_finding(self):
+        # "mov $RVA,%reg; add imagebase; call *reg" -- an address-taken helper
+        # reference the per-call branch logic never sees. It must withdraw the
+        # exemption just like a directly taken address.
+        entries = self.entries(address_taken={self.TEXT + 0x40})
+        self.assertTrue(self.scan(self.lines(), entries=entries).violations)
+        other_entry = self.entries(other={self.TEXT + 0x40})  # reloc/export/guard-CF reference
+        self.assertTrue(self.scan(self.lines(), entries=other_entry).violations)
+
+    def test_closed_guarded_reference_set_is_still_allowed(self):
+        # With entries present but no reference to the helper beyond the guarded
+        # tail jump, the exemption holds.
+        result = self.scan(self.lines(), entries=self.entries())
+        self.assertEqual(result.violations, [])
+        self.assertEqual(result.allowed["LZCNT"], 1)
 
     def test_helper_reached_only_through_the_guard_edge_is_allowed(self):
         result = self.scan(self.lines())
@@ -246,6 +303,42 @@ class CallerGuardedTests(unittest.TestCase):
         lines[4] = f"{self.TEXT + 0x40:x}:     \ttzcntq\t%rcx, %rax"
         lines.insert(5, f"{self.TEXT + 0x44:x}:     \tlzcntl\t%ecx, %eax")
         self.assertTrue(self.scan(lines).violations)
+
+
+class CoverageTests(unittest.TestCase):
+    """_verify_coverage fails unless every executable file-backed byte is classified."""
+
+    class Image:
+        def __init__(self, ranges):
+            self._ranges = ranges
+
+        def exec_ranges(self):
+            return self._ranges
+
+    def verify(self, covered, ranges=((P, P + 0x100),)):
+        result = checker.ScanResult(path="image.exe")
+        result.covered = list(covered)
+        checker._verify_coverage(result, self.Image(list(ranges)))
+
+    def test_complete_coverage_passes(self):
+        self.verify([(P, P + 0x80), (P + 0x80, P + 0x100)])
+
+    def test_a_gap_fails(self):
+        # A record without raw bytes (size 0) leaves [P+0x40, P+0x80) uncovered.
+        with self.assertRaises(RuntimeError):
+            self.verify([(P, P + 0x40), (P + 0x80, P + 0x100)])
+
+    def test_a_trailing_gap_fails(self):
+        with self.assertRaises(RuntimeError):
+            self.verify([(P, P + 0xC0)])
+
+    def test_a_leading_gap_fails(self):
+        with self.assertRaises(RuntimeError):
+            self.verify([(P + 0x10, P + 0x100)])
+
+    def test_overlap_still_requires_full_coverage(self):
+        # Folded procedures may overlap; coverage still holds if nothing is missing.
+        self.verify([(P, P + 0x90), (P + 0x40, P + 0x100)])
 
 
 if __name__ == "__main__":

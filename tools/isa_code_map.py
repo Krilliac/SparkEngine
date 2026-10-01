@@ -201,6 +201,7 @@ class ImageBytes:
         self._redecode = redecode
         self._sections = []
         self._data = []
+        self._entered: list[int] = []  # sorted; set via set_entered()
         with open(path, "rb") as handle:
             for target, ranges in ((self._sections, sections), (self._data, data_sections)):
                 for address, size, offset in ranges:
@@ -214,6 +215,16 @@ class ImageBytes:
         """True when a non-executable section's file bytes contain needle."""
         return any(needle in data for _, data in self._data)
 
+    def set_entered(self, addresses) -> None:
+        """Record image-wide code entry addresses (sorted) for table rejection."""
+        self._entered = sorted(addresses)
+
+    def entered_within(self, lo: int, hi: int) -> bool:
+        """True when any recorded entry address lies in [lo, hi)."""
+        import bisect as _bisect
+        index = _bisect.bisect_left(self._entered, lo)
+        return index < len(self._entered) and self._entered[index] < hi
+
     def read(self, address: int, size: int) -> bytes | None:
         for start, data in self._sections:
             if start <= address and address + size <= start + len(data):
@@ -225,6 +236,10 @@ class ImageBytes:
             if start <= address < start + len(data):
                 return start, start + len(data)
         return None
+
+    def exec_ranges(self) -> list[tuple[int, int]]:
+        """(start, end) of every executable file-backed section, in address order."""
+        return sorted((start, start + len(data)) for start, data in self._sections)
 
     def redecode(self, start: int, stop: int) -> list[Record]:
         return self._redecode(start, stop)
@@ -612,6 +627,11 @@ def map_procedure(records: list[Record], start: int, end: int, image: ImageBytes
     for _ in range(MAX_ROUNDS):
         rebuilt, padding = rebuild(records, start, end, image, tables)
         wrong = validate(rebuilt, start, tables, noreturn)
+        # A table whose bytes are reached as code from anywhere in the image (a
+        # cross-procedure branch, an address-taken value, a .pdata/export/reloc
+        # or guard-CF entry) is not data; keep those bytes classified.
+        if wrong is None:
+            wrong = next((t for t in tables if image.entered_within(t.start, t.end)), None)
         if wrong is not None:
             # Drop every table of the contradicted dispatch and rebuild without it.
             tables = [t for t in tables if t.dispatch != wrong.dispatch]

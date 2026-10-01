@@ -580,3 +580,62 @@ Unverified: hosted CI (the windows-2022 runner's MSVC toolset and LLVM version
 may differ from the reviewed 14.44.35207 and the local LLVM 22.1.8; either can
 turn the scan red), LTO-on images, the `CpuFloor_IsaBaseline` CTest in a
 `windows-release` tree, and below-floor execution.
+
+## 2026-10-01 (cont.): independent review hardening (Codex gpt-6-sol)
+
+An independent review rejected the first cut with four executed synthetic
+checks. All four are fixed, each with a regression test built from the
+reviewer's case, and the real windows-shipping scan still passes on all 12
+images (0 above-floor, 0 undecodable) while the temporary AVX2 probe still
+fails.
+
+1. **A switch table could hide code entered from outside its procedure.** The
+   branch/fall-through checks were per-procedure, so a cross-procedure tail jump
+   (or an address-taken pointer) into a table's bytes was unchecked.
+   `check_isa_baseline.py` now computes image-wide code entry points and rejects
+   any proven table whose bytes they enter (`isa_code_map.ImageBytes.entered_within`).
+   Entries are gathered over the *rebuilt* streams of a first scan pass (so table
+   bytes, which decode as bogus branches on a raw linear sweep, do not pollute
+   them), plus the PE's own exception handlers, exports, base-relocation pointees
+   and guard-CF table. `.pdata` BeginAddress is deliberately excluded: MSVC gives
+   a compiler-placed jump table its own RUNTIME_FUNCTION (observed in
+   `ImGui::ColorConvertHSVtoRGB` and the UCRT wmem* fragments), so a begin can
+   legitimately coincide with table bytes.
+2. **Guard dominance assumed the procedure's entry was the only way in.** A tail
+   jump from another procedure into a guarded AVX block, or a reliable
+   address-taken reference to it, now seeds the reachability analysis as an
+   alternate root, so a block reachable without the guard edge stays a
+   violation. The caller-guarded helper exemption
+   (`std::_Countl_zero_lzcnt`) is withdrawn unless its complete reference set is
+   closed: a computed `mov RVA; add imagebase; call` reference, an export, a
+   relocation or a guard-CF entry now counts as unguarded.
+3. **An unknown VEX mnemonic fell through to plain AVX.** VEX classification now
+   uses an explicit allow-list of the AVX/AVX2 mnemonics llvm-objdump prints
+   (built from the AVX/AVX2 ISA and every VEX mnemonic in the shipped images);
+   anything else fails closed. AVX-VNNI (`vpdpbusd`), AVX-IFMA, AVX-NE-CONVERT
+   and the XOP forms get their own feature classes, so the `__isa_available >= 5`
+   guard cannot excuse them.
+4. **A record without raw bytes disabled rebuilding, and the final check needed
+   only one classified instruction.** `_verify_coverage` now requires that the
+   classified instructions, proven tables and padding tile every executable
+   file-backed byte range with no gap; a record whose size is unknown (no raw
+   bytes) leaves a gap and fails.
+
+Scoping note (learned while fixing 1-2): immediate-materialized addresses are
+used only for the caller-guard reference check, never to reject tables or seed
+guard roots -- a data constant can coincide with a byte inside a real jump table
+or a guarded block, and treating every such immediate as a code entry wrongly
+rejected ~160 legitimate tables and withdrew the UCRT `wmemcmp` guard on a first
+attempt. Only branches and reliable structural pointers enter code.
+
+The MSVC CRT/STL exemptions remain pinned to toolset 14.44.35207; on a PDB built
+by a different toolset the report now prints a "re-review for toolset X" note so
+a hosted-runner red is diagnosable, without loosening anything.
+
+Regression tests: `Tests/Tools/test_isa_code_map.py` (ExternalEntryTests,
+CallerGuardedTests computed/closed-reference cases, CoverageTests),
+`Tests/Tools/test_isa_guard_dominance.py` (alternate-entry and
+separately-bitted-VEX cases), `Tests/Tools/test_check_isa_baseline.py`
+(separately-bitted and unrecognized VEX). Each fix was mutation-checked: removing
+it fails its test. 108 ISA unit tests pass. Still unverified, as before: the
+below-floor refusal path, and any hosted Windows run.

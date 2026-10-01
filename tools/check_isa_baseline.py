@@ -89,6 +89,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from dataclasses import dataclass, field, replace
 
@@ -253,6 +254,8 @@ class ScanResult:
     deferred: dict = field(default_factory=dict)
     unguarded_references: Counter = field(default_factory=Counter)
     guarded_references: Counter = field(default_factory=Counter)
+    covered: list = field(default_factory=list)  # (start, end) byte ranges classified
+    toolsets: frozenset = frozenset()  # MSVC toolset versions seen in the PDB
 
 
 AVX_FEATURES = frozenset({"AVX (VEX)", "AVX/AVX2 (ymm)"})
@@ -272,6 +275,7 @@ class PdbRange:
 
 # The only toolset whose runtime sources were reviewed. Contribution ranges and
 # the cpu_disp pair apply only to objects the PDB says came from its libraries.
+REVIEWED_TOOLSET = "14.44.35207"
 REVIEWED_MSVC_TOOLSET_LIB = re.compile(
     r"\\msvc\\14\.44\.35207\\lib\\x64\\(msvcprt|msvcprtd|libcpmt|libcpmtd|msvcrt|msvcrtd)\.lib$"
 )
@@ -423,6 +427,7 @@ class PdbInfo:
     ranges: list[PdbRange]
     procedures: list[Procedure]
     guards: dict[int, GuardSpec]
+    toolsets: frozenset = frozenset()
 
     def __post_init__(self) -> None:
         self.procedures.sort(key=lambda proc: (proc.start, proc.end))
@@ -562,7 +567,11 @@ def _pdb_info(pdb: str, image: str, pdbutil_path: str | None = None) -> PdbInfo:
     ranges, procedures = _run_pdbutil(
         pdbutil, ["--symbols"], pdb, lambda lines: _parse_pdb_symbols(lines, image_base, sections, libraries))
     guards = _run_pdbutil(pdbutil, ["--publics"], pdb, lambda lines: _parse_pdb_guards(lines, image_base, sections))
-    return PdbInfo(contributions + ranges, procedures, guards)
+    toolsets = set()
+    for module, library in libraries.values():
+        for text in (module, library):
+            toolsets.update(re.findall(r"\\msvc\\([0-9.]+)\\", _normalized(text)))
+    return PdbInfo(contributions + ranges, procedures, guards, frozenset(toolsets))
 
 
 MODULE_RE = re.compile(r"^\s*Mod\s+([0-9]+)\s+\|\s+`([^`]*)`\s*:")
@@ -853,7 +862,8 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
                   guards: dict[int, GuardSpec], extent: tuple[int, int],
                   dispatch: dict[int, tuple[int, ...]] | None = None,
                   references: list[tuple[int, str, frozenset]] | None = None,
-                  guarded_references: set[int] | None = None) -> set[int]:
+                  guarded_references: set[int] | None = None,
+                  roots: set[int] | None = None) -> set[int]:
     """Return indices of candidate instructions that only reviewed guard edges reach.
 
     references are (index, feature, mnemonics) of branches and calls into a
@@ -919,8 +929,10 @@ def _guard_exempt(insns: list[Instruction], candidates: list[tuple[int, str]],
                                    for low, high in implied):
                     removed_for.setdefault(rule, set()).add((i, edge_kind))
 
+    entry_roots = {0} if roots is None else set(roots) | {0}
+
     def reachable(removed: set[tuple[int, str]]) -> set[int]:
-        seen, stack = {0}, [0]
+        seen, stack = set(entry_roots), list(entry_roots)
         while stack:
             node = stack.pop()
             for successor, kind in successors[node]:
@@ -956,6 +968,90 @@ def _base_mnemonic(mnemonic: str) -> str:
     return mnemonic
 
 
+# VEX-encoded instructions whose CPUID feature is NOT AVX/AVX2 but a separate
+# bit, so an AVX2 guard or AVX runtime range must never cover them. Matched by
+# mnemonic prefix, ahead of the AVX/AVX2 allow-list.
+_SEPARATE_VEX_FEATURES = (
+    ("vaes", "VAES"),
+    ("vpclmul", "VPCLMULQDQ"),
+    ("vgf2p8", "GFNI"),
+    ("vprot", "XOP"), ("vpcom", "XOP"), ("vpmacs", "XOP"), ("vpmadcs", "XOP"), ("vpperm", "XOP"),
+    ("vpdp", "AVX-VNNI"),            # vpdpbusd/vpdpwssd and the VNNI-INT8/16 forms
+    ("vpmadd52", "AVX-IFMA"),        # vpmadd52luq/huq
+    ("vcvtne", "AVX-NE-CONVERT"),    # vcvtneps2bf16, vcvtne{e,o}{bf16,ph}2ps
+    ("vbcstne", "AVX-NE-CONVERT"),   # vbcstnebf162ps/vbcstnesh2ps
+    ("vsha", "SHA"),
+)
+
+
+def _vex_avx_allow_list():
+    """Every VEX mnemonic llvm-objdump prints that AVX or AVX2 (not a separate
+    CPUID bit) establishes. Anything VEX outside this set fails closed."""
+    names = set()
+    for base in ("add", "sub", "mul", "div", "min", "max", "sqrt"):
+        names |= {"v" + base + s for s in ("ps", "pd", "ss", "sd")}
+    for base in ("rcp", "rsqrt"):
+        names |= {"v" + base + s for s in ("ps", "ss")}
+    for base in ("and", "andn", "or", "xor"):
+        names |= {"v" + base + s for s in ("ps", "pd")}
+    for base in ("hadd", "hsub", "addsub"):
+        names |= {"v" + base + s for s in ("ps", "pd")}
+    names |= {"vcomis" + s for s in ("s", "d")} | {"vucomis" + s for s in ("s", "d")}
+    names |= {"vmovmsk" + s for s in ("ps", "pd")}
+    names |= {"vmov" + m for m in ("aps", "apd", "ups", "upd", "ss", "sd", "hps", "lps", "hpd", "lpd",
+                                   "hlps", "lhps", "ddup", "shdup", "sldup", "ntps", "ntpd", "ntdq",
+                                   "ntdqa", "d", "q", "dqa", "dqu", "mskb")}
+    names |= {"vlddqu", "vmaskmovdqu", "vmovntdqa"}
+    names |= {"vshuf" + s for s in ("ps", "pd")}
+    names |= {"vunpck" + h + s for h in ("l", "h") for s in ("ps", "pd")}
+    names |= {"vblend" + s for s in ("ps", "pd", "vps", "vpd", "w", "d")}
+    names |= {"vperm2f128", "vperm2i128", "vpermilps", "vpermilpd", "vpermd", "vpermq", "vpermps", "vpermpd"}
+    names |= {"vinsertf128", "vextractf128", "vinserti128", "vextracti128", "vinsertps", "vextractps"}
+    names |= {"vbroadcast" + s for s in ("ss", "sd", "f128", "i128")}
+    names |= {"vpbroadcast" + s for s in ("b", "w", "d", "q")}
+    names |= {"vmaskmov" + s for s in ("ps", "pd")} | {"vpmaskmov" + s for s in ("d", "q")}
+    names |= {"vround" + s for s in ("ps", "pd", "ss", "sd")}
+    names |= {"vdp" + s for s in ("ps", "pd")} | {"vmpsadbw"}
+    names |= {"vtest" + s for s in ("ps", "pd")} | {"vptest"}
+    names |= {"vzeroupper", "vzeroall", "vldmxcsr", "vstmxcsr"}
+    names |= {"vcvt" + c for c in ("dq2ps", "ps2dq", "tps2dq", "dq2pd", "pd2dq", "tpd2dq", "ps2pd", "pd2ps",
+                                   "sd2ss", "ss2sd", "sd2si", "ss2si", "tsd2si", "tss2si", "si2sd", "si2ss")}
+    for base in ("padd", "psub"):
+        names |= {"vp" + base[1:] + s for s in ("b", "w", "d", "q")}
+        names |= {"vp" + base[1:] + "s" + s for s in ("b", "w")} | {"vp" + base[1:] + "us" + s for s in ("b", "w")}
+    names |= {"vpmullw", "vpmulld", "vpmulhw", "vpmulhuw", "vpmulhrsw", "vpmuldq", "vpmuludq",
+              "vpmaddwd", "vpmaddubsw"}
+    names |= {"vpavg" + s for s in ("b", "w")}
+    names |= {"vpmin" + s + w for s in ("s", "u") for w in ("b", "w", "d")}
+    names |= {"vpmax" + s + w for s in ("s", "u") for w in ("b", "w", "d")}
+    names |= {"vpand", "vpandn", "vpor", "vpxor"}
+    names |= {"vpcmpeq" + s for s in ("b", "w", "d", "q")} | {"vpcmpgt" + s for s in ("b", "w", "d", "q")}
+    names |= {"vpsll" + s for s in ("w", "d", "q")} | {"vpsrl" + s for s in ("w", "d", "q")}
+    names |= {"vpsra" + s for s in ("w", "d")} | {"vpsllv" + s for s in ("d", "q")}
+    names |= {"vpsrlv" + s for s in ("d", "q")} | {"vpsravd", "vpslldq", "vpsrldq"}
+    names |= {"vpsign" + s for s in ("b", "w", "d")}
+    names |= {"vphadd" + s for s in ("w", "d", "sw")} | {"vphsub" + s for s in ("w", "d", "sw")}
+    names |= {"vpabs" + s for s in ("b", "w", "d")} | {"vpsadbw", "vphminposuw"}
+    names |= {"vpmovzx" + s for s in ("bw", "bd", "bq", "wd", "wq", "dq")}
+    names |= {"vpmovsx" + s for s in ("bw", "bd", "bq", "wd", "wq", "dq")}
+    names |= {"vpackss" + s for s in ("wb", "dw")} | {"vpackus" + s for s in ("wb", "dw")}
+    names |= {"vpunpck" + h + s for h in ("l", "h") for s in ("bw", "wd", "dq", "qdq")}
+    names |= {"vpshufb", "vpshufd", "vpshufhw", "vpshuflw"}
+    names |= {"vpblendvb"}
+    names |= {"vpinsr" + s for s in ("b", "w", "d", "q")} | {"vpextr" + s for s in ("b", "w", "d", "q")}
+    names |= {"vpalignr", "vpmovmskb"}
+    names |= {"vpgather" + s for s in ("dd", "qd", "dq", "qq")}
+    names |= {"vgather" + s for s in ("dps", "qps", "dpd", "qpd")}
+    names |= {"vpcmpestr" + s for s in ("i", "m")} | {"vpcmpistr" + s for s in ("i", "m")}
+    return frozenset(names)
+
+
+VEX_AVX_ALLOW_LIST = _vex_avx_allow_list()
+# vcmp<cc>ps / vcmp<cc>pd / vcmp<cc>ss / vcmp<cc>sd carry a named condition
+# (vcmpeqps, vcmpgt_oqpd, ...); their feature is AVX regardless of the condition.
+_VEX_CMP_RE = re.compile(r"^vcmp[a-z_0-9]*(ps|pd|ss|sd)$")
+
+
 def classify(mnemonic: str, operands: str, evex: bool = False) -> str | None:
     """Return the above-floor feature an instruction needs, "TZCNT", or None.
 
@@ -971,14 +1067,18 @@ def classify(mnemonic: str, operands: str, evex: bool = False) -> str | None:
                 return "AVX-512"
             # These extensions have independent CPUID bits. Neither an AVX2
             # guard nor a reviewed AVX runtime range authorizes them.
-            for prefix, feature in (("vaes", "VAES"), ("vpclmul", "VPCLMULQDQ"), ("vgf2p8", "GFNI"),
-                                    ("vprot", "XOP")):
+            for prefix, feature in _SEPARATE_VEX_FEATURES:
                 if mnemonic.startswith(prefix):
                     return feature
             if re.match(r"^vf(n)?m(add|sub)", mnemonic):
                 return "FMA"
             if mnemonic in ("vcvtph2ps", "vcvtps2ph"):
                 return "F16C"
+            # Only VEX mnemonics AVX/AVX2 actually establishes may be excused by
+            # an AVX2 guard. Anything else (a newer VEX extension with its own
+            # CPUID bit, e.g. AVX-VNNI vpdpbusd) fails closed as its own feature.
+            if mnemonic not in VEX_AVX_ALLOW_LIST and not _VEX_CMP_RE.match(mnemonic):
+                return "AVX (unrecognized VEX)"
             if WIDE_REG_RE.search(operands):
                 return "AVX/AVX2 (ymm)"
             return "AVX (VEX)"
@@ -1131,13 +1231,13 @@ def _region(pdb: PdbInfo, image, address: int):
 
 
 def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None,
-               image=None) -> ScanResult:
+               image=None, entries=None, collector=None) -> ScanResult:
     """Classify disassembly lines; PE findings go through the reviewed PDB mechanisms.
 
     With the image bytes (PE scans of real images), each procedure's instruction
     stream is first rebuilt around its proven switch tables (isa_code_map).
     """
-    result = ScanResult(path=path)
+    result = ScanResult(path=path, toolsets=pdb.toolsets if pdb is not None else frozenset())
     if pdb is None:
         for symbol, insn in _records(lines):
             _classify(result, insn, symbol, allow, None, None, [])
@@ -1147,18 +1247,20 @@ def scan_lines(path: str, lines, allow: list[re.Pattern[str]], pdb: PdbInfo | No
     for symbol, insn in _records(lines):
         key = _region(pdb, image, insn.address)
         if key != region:
-            _finish_region(result, pdb, image, region, buffered)
+            _finish_region(result, pdb, image, region, buffered, entries, collector)
             region, buffered = key, []
         buffered.append((symbol, insn))
-    _finish_region(result, pdb, image, region, buffered)
-    _settle_caller_guarded(result, pdb, image)
+    _finish_region(result, pdb, image, region, buffered, entries, collector)
+    _settle_caller_guarded(result, pdb, image, entries)
     return result
 
 
-def _settle_caller_guarded(result: ScanResult, pdb: PdbInfo, image) -> None:
+def _settle_caller_guarded(result: ScanResult, pdb: PdbInfo, image, entries=None) -> None:
     for start, findings in result.deferred.items():
         entry = pdb.caller_guarded[start]
         reasons = []
+        if entries is not None and entries.non_branch_reference(start):
+            reasons.append("its address is taken or reached indirectly")
         if result.unguarded_references[start]:
             reasons.append(f"{result.unguarded_references[start]} unguarded reference(s)")
         if image is None:
@@ -1176,7 +1278,8 @@ def _settle_caller_guarded(result: ScanResult, pdb: PdbInfo, image) -> None:
                 result.allowed[finding.feature] += 1
 
 
-def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered) -> None:
+def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered, entries=None,
+                   collector=None) -> None:
     if not buffered:
         return
     insns = [insn for _, insn in buffered]
@@ -1190,8 +1293,18 @@ def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered) ->
             result.switch_tables += sum(table.kind == "jump" for table in mapped.tables)
             result.table_bytes += sum(table.end - table.start for table in mapped.tables)
             result.padding_bytes += mapped.padding
+            result.covered.append((procedure.start, procedure.end))
         elif isinstance(region, Gap):
             insns = code_map.map_gap(insns, region.start, region.end, image)
+            result.covered.append((region.start, region.end))
+        else:  # an ambiguous (folded) procedure: classified as disassembled
+            result.covered.extend((insn.address, insn.address + insn.size) for insn in insns)
+    elif image is not None:
+        # A record without raw bytes (size 0) cannot be placed; classify as-is
+        # and let _verify_coverage fail on the gap it leaves.
+        result.covered.extend((insn.address, insn.address + insn.size) for insn in insns)
+    if collector is not None:
+        collector.record(insns)
     pending: list[tuple[int, str, Finding]] = []
     for index, insn in enumerate(insns):
         _classify(result, insn, symbols.get(insn.address, "<unknown>"), [], pdb, procedure,
@@ -1209,8 +1322,13 @@ def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered) ->
     analysable = procedure is not None and not procedure.ambiguous and insns[0].address == procedure.start
     if (pending or references) and analysable:
         candidates = [(index, feature) for index, feature, _ in pending]
+        address_of = {insn.address: i for i, insn in enumerate(insns)}
+        roots = {0}
+        if entries is not None:
+            roots |= {address_of[a] for a in entries.alternate_roots(pdb, procedure.start, procedure.end)
+                      if a in address_of}
         exempt = _guard_exempt(insns, candidates, pdb.guards, (procedure.start, procedure.end), dispatch,
-                               references, guarded)
+                               references, guarded, roots)
     for index, _, _ in references:
         target = code_map.direct_target(insns[index].mnemonic, insns[index].operands)
         if index in guarded:
@@ -1289,17 +1407,277 @@ def _image_bytes(tool: list[str], path: str):
     return code_map.ImageBytes(path, image_base, ranges(True), redecode, ranges(False))
 
 
+_IMMEDIATE_RE = re.compile(r"\$(?:0x)?([0-9a-fA-F]+)\b")
+
+
+def _pe_structural_entries(path: str) -> set[int]:
+    """Reliable code entry VAs taken from the PE structures themselves.
+
+    Exported function RVAs, guard-CF valid indirect-call targets, exception-
+    handler RVAs from .pdata unwind info, and absolute code pointers named by
+    base relocations. A .pdata BeginAddress is deliberately NOT included: MSVC
+    gives a compiler-placed jump table its own RUNTIME_FUNCTION, so a begin can
+    coincide with table bytes and must not reject a proven table. A malformed
+    standard directory fails the scan.
+    """
+    with open(path, "rb") as handle:
+        data = handle.read()
+
+    def u16(off: int) -> int:
+        return struct.unpack_from("<H", data, off)[0]
+
+    def u32(off: int) -> int:
+        return struct.unpack_from("<I", data, off)[0]
+
+    def u64(off: int) -> int:
+        return struct.unpack_from("<Q", data, off)[0]
+
+    pe = u32(0x3C)
+    optional = pe + 24
+    if u16(optional) != 0x20B:
+        raise RuntimeError(f"{path} is not a PE32+ image")
+    image_base = u64(optional + 24)
+    rva_count = u32(optional + 108)
+    directory = optional + 112
+    section_count = u16(pe + 6)
+    optional_size = u16(pe + 20)
+    section_table = pe + 24 + optional_size
+    sections = []  # (rva, virtual size, raw size, raw pointer, executable)
+    for i in range(section_count):
+        o = section_table + i * 40
+        vs, rva, rs, rp = struct.unpack_from("<IIII", data, o + 8)
+        ch = u32(o + 36)
+        sections.append((rva, vs, rs, rp, bool(ch & 0x20000000)))
+
+    def directory_entry(index: int) -> tuple[int, int]:
+        if index >= rva_count:
+            return 0, 0
+        return u32(directory + index * 8), u32(directory + index * 8 + 4)
+
+    def offset_of(rva: int, length: int) -> int | None:
+        for srva, vs, rs, rp, _ in sections:
+            if srva <= rva and rva + length <= srva + rs:
+                return rp + (rva - srva)
+        return None
+
+    def in_exec(va: int) -> bool:
+        rva = va - image_base
+        return any(executable and srva <= rva < srva + min(vs, rs)
+                   for srva, vs, rs, rp, executable in sections)
+
+    other: set[int] = set()
+
+    # .pdata: RUNTIME_FUNCTION[] {BeginRVA, EndRVA, UnwindRVA}; take the handlers.
+    pdata_rva, pdata_size = directory_entry(3)
+    if pdata_rva:
+        base = offset_of(pdata_rva, pdata_size)
+        if base is None:
+            raise RuntimeError(f"{path} .pdata is outside the file image")
+        for o in range(base, base + (pdata_size // 12) * 12, 12):
+            _begin, _end, unwind = struct.unpack_from("<III", data, o)
+            handler = _unwind_handler(data, offset_of, unwind)
+            if handler is not None and in_exec(image_base + handler):
+                other.add(image_base + handler)
+
+    # Export address table: each slot is a function RVA (skip forwarders).
+    export_rva, export_size = directory_entry(0)
+    if export_rva:
+        base = offset_of(export_rva, 40)
+        if base is None:
+            raise RuntimeError(f"{path} export directory is outside the file image")
+        count = u32(base + 20)
+        functions = u32(base + 28)
+        table = offset_of(functions, count * 4) if count else None
+        for i in range(count if table is not None else 0):
+            rva = u32(table + i * 4)
+            if rva and not (export_rva <= rva < export_rva + export_size) and in_exec(image_base + rva):
+                other.add(image_base + rva)
+
+    # Base relocations: DIR64 slots hold absolute pointers; a pointee in an
+    # executable section is an address-taken code location.
+    reloc_rva, reloc_size = directory_entry(5)
+    if reloc_rva:
+        base = offset_of(reloc_rva, reloc_size)
+        if base is None:
+            raise RuntimeError(f"{path} base relocations are outside the file image")
+        cursor = base
+        while cursor < base + reloc_size:
+            page = u32(cursor)
+            block = u32(cursor + 4)
+            if block < 8:
+                break
+            for j in range(cursor + 8, cursor + block, 2):
+                entry = u16(j)
+                if (entry >> 12) == 10:  # IMAGE_REL_BASED_DIR64
+                    slot = offset_of(page + (entry & 0xFFF), 8)
+                    if slot is not None and in_exec(u64(slot)):
+                        other.add(u64(slot))
+            cursor += block
+
+    # Guard-CF valid indirect-call targets, when present.
+    config_rva, config_size = directory_entry(10)
+    if config_rva and config_size >= 0x94:
+        base = offset_of(config_rva, 0x94)
+        if base is not None:
+            table_va = u64(base + 0x80)
+            table_count = u64(base + 0x88)
+            stride = (u32(base + 0x90) & 0xF0000000) >> 28
+            entry_size = 4 + stride
+            table = offset_of(table_va - image_base, table_count * entry_size) if table_va and table_count else None
+            for i in range(table_count if table is not None else 0):
+                rva = u32(table + i * entry_size)
+                if in_exec(image_base + rva):
+                    other.add(image_base + rva)
+
+    return other
+
+
+def _unwind_handler(data: bytes, offset_of, unwind_rva: int) -> int | None:
+    """The exception-handler RVA of an UNWIND_INFO, following one CHAININFO link."""
+    for _ in range(8):
+        base = offset_of(unwind_rva, 4)
+        if base is None:
+            return None
+        flags = data[base] >> 3
+        codes = data[base + 2]
+        tail = base + 4 + ((codes + 1) & ~1) * 2
+        if flags & 0x4:  # UNW_FLAG_CHAININFO -> a RUNTIME_FUNCTION, recurse
+            if offset_of(unwind_rva + (tail - base), 12) is None:
+                return None
+            unwind_rva = struct.unpack_from("<I", data, tail + 8)[0]
+            continue
+        if flags & 0x3:  # UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER
+            return struct.unpack_from("<I", data, tail)[0]
+        return None
+    return None
+
+
+@dataclass
+class _ImageEntries:
+    image_base: int
+    branch_sources: dict  # target VA -> set of source VAs (direct jmp/jcc/call)
+    address_taken: set    # VAs materialized as immediates/annotations, in exec
+    other: set            # reliable non-branch code entries: handlers, exports, reloc, guard-CF
+
+    def entered(self) -> set:
+        # Addresses reached as code by authoritative control flow, used to reject
+        # a switch table whose bytes they enter: a direct branch/call anywhere in
+        # the image, plus the reliable structural entries. Immediate-materialized
+        # addresses are excluded -- a data constant can coincide with a byte
+        # inside a real jump table, and only branches/pointers actually enter it.
+        return set(self.branch_sources) | self.other
+
+    def alternate_roots(self, pdb, start: int, end: int) -> set:
+        """VAs strictly inside (start, end) reached other than by an intra-procedure edge.
+
+        A reliable non-branch code entry (handler/export/reloc/guard-CF) or a
+        branch target whose source is outside the procedure. Immediate-scanned
+        address_taken is deliberately excluded: a data constant can coincide with
+        a code address and would spuriously withdraw a guard exemption."""
+        roots = {a for a in self.other if start < a < end}
+        for target, sources in self.branch_sources.items():
+            if start < target < end and any(not (start <= s < end) for s in sources):
+                roots.add(target)
+        return roots
+
+    def non_branch_reference(self, address: int) -> bool:
+        """True when address is reached indirectly (address-taken, exported, relocated, guard-CF)."""
+        return address in self.address_taken or address in self.other
+
+
+class _EntryCollector:
+    """Gathers code entry points from rebuilt instruction streams.
+
+    Run over the tables-as-data streams of a first scan pass, never the raw
+    linear disassembly (there table bytes decode as bogus branches that would
+    point garbage targets into other tables).
+    """
+
+    def __init__(self, image):
+        self.image = image
+        self.branch_sources: dict[int, set[int]] = {}
+        self.address_taken: set[int] = set()
+
+    def record(self, insns) -> None:
+        base = self.image.image_base
+        for insn in insns:
+            target = code_map.direct_target(insn.mnemonic, insn.operands)
+            if target is not None and self.image.section_bounds(target) is not None:
+                self.branch_sources.setdefault(target, set()).add(insn.address)
+            if insn.annotation is not None and self.image.section_bounds(insn.annotation) is not None:
+                self.address_taken.add(insn.annotation)
+            for match in _IMMEDIATE_RE.finditer(insn.operands):
+                value = int(match.group(1), 16)
+                if self.image.section_bounds(value) is not None:
+                    self.address_taken.add(value)
+                elif self.image.section_bounds(base + value) is not None:
+                    self.address_taken.add(base + value)
+
+
+def _verify_coverage(result: ScanResult, image) -> None:
+    """Every executable file-backed byte must be classified exactly once (no gap)."""
+    covered = sorted(result.covered)
+    for section_start, section_end in image.exec_ranges():
+        cursor = section_start
+        for start, end in covered:
+            if end <= cursor or start >= section_end:
+                continue
+            if start > cursor:
+                raise RuntimeError(f"{result.path}: executable bytes {cursor:#x}-{start:#x} were not classified "
+                                   f"(disassembly gap or a record without raw bytes)")
+            cursor = max(cursor, end)
+            if cursor >= section_end:
+                break
+        if cursor < section_end:
+            raise RuntimeError(f"{result.path}: executable bytes {cursor:#x}-{section_end:#x} were not classified "
+                               f"(disassembly gap or a record without raw bytes)")
+
+
 def scan(tool: list[str], path: str, allow: list[re.Pattern[str]], pdb: PdbInfo | None = None) -> ScanResult:
-    image = _image_bytes(tool, path) if pdb is not None else None
     command = _disassemble_command(tool, path)
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace") as proc:
-        assert proc.stdout is not None
-        result = scan_lines(path, proc.stdout, allow, pdb, image)
-        stderr = proc.stderr.read() if proc.stderr else ""
-    if proc.returncode != 0:
-        raise RuntimeError(f"disassembly of {path} failed: {stderr.strip()}")
+    if pdb is None:
+        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                              errors="replace") as proc:
+            assert proc.stdout is not None
+            result = scan_lines(path, proc.stdout, allow, None, None)
+            stderr = proc.stderr.read() if proc.stderr else ""
+        if proc.returncode != 0:
+            raise RuntimeError(f"disassembly of {path} failed: {stderr.strip()}")
+        if result.instructions == 0:
+            raise RuntimeError(f"no instructions disassembled from {path}")
+        return result
+    # PE: disassemble once to a temp file and read it twice.
+    #  Pass 1 rebuilds each procedure's instruction stream (proving switch tables
+    #   with the disassembly-independent structural entries only), and collects
+    #   the real branch and address-taken targets from those tables-as-data
+    #   streams.
+    #  Pass 2 classifies with the full entry set, so a table whose bytes any real
+    #   branch or address-taken reference enters is rejected (its bytes stay
+    #   classified), and an alternate entry past a guard counts.
+    image = _image_bytes(tool, path)
+    other = _pe_structural_entries(path)
+    base = image.image_base
+    handle, scratch = tempfile.mkstemp(suffix=".dis")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8", errors="replace") as out:
+            proc = subprocess.run(command, stdout=out, stderr=subprocess.PIPE, text=True, errors="replace",
+                                  check=False)
+        if proc.returncode != 0:
+            raise RuntimeError(f"disassembly of {path} failed: {proc.stderr.strip()}")
+        structural = _ImageEntries(base, {}, set(), other)
+        image.set_entered(structural.entered())
+        collector = _EntryCollector(image)
+        with open(scratch, encoding="utf-8", errors="replace") as lines:
+            scan_lines(path, lines, allow, pdb, image, structural, collector)
+        entries = _ImageEntries(base, collector.branch_sources, collector.address_taken, other)
+        image.set_entered(entries.entered())
+        with open(scratch, encoding="utf-8", errors="replace") as lines:
+            result = scan_lines(path, lines, allow, pdb, image, entries)
+    finally:
+        os.unlink(scratch)
     if result.instructions == 0:
         raise RuntimeError(f"no instructions disassembled from {path}")
+    _verify_coverage(result, image)
     return result
 
 
@@ -1309,6 +1687,11 @@ def report(result: ScanResult, max_report: int) -> None:
     unknown = counts.get("undecodable", 0)
     print(f"{status} {result.path}: {result.instructions} instructions, "
           f"{len(result.violations) - unknown} above-floor, {unknown} undecodable")
+    other_toolsets = sorted(v for v in result.toolsets if v != REVIEWED_TOOLSET)
+    if result.violations and other_toolsets:
+        print(f"  note: MSVC runtime libraries are toolset {', '.join(other_toolsets)}; the reviewed CRT/STL "
+              f"exemptions are pinned to {REVIEWED_TOOLSET} -- re-review for toolset {other_toolsets[0]} "
+              f"before trusting or dismissing these findings")
     if result.switch_tables or result.padding_bytes:
         print(f"  data in code: {result.switch_tables} proven switch tables ({result.table_bytes} bytes), "
               f"{result.padding_bytes} nop/int3 padding bytes after them")

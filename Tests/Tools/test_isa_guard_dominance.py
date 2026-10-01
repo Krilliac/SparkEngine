@@ -34,10 +34,16 @@ def pdb_info(size=0x100, publics=DEFAULT_PUBLICS):
     return checker.PdbInfo(ranges, procedures, guards)
 
 
-def scan(rows, **options):
+def scan(rows, entries=None, **options):
     """rows: (offset, llvm-objdump instruction text); addresses are TEXT + offset."""
     lines = [f"{TEXT:016x} <.text>:"] + [f"{TEXT + offset:x}:     \t{text}" for offset, text in rows]
-    return checker.scan_lines("image.exe", lines, [], pdb_info(**options))
+    return checker.scan_lines("image.exe", lines, [], pdb_info(**options), None, entries)
+
+
+def entries(**fields):
+    base = dict(image_base=BASE, branch_sources={}, address_taken=set(), other=set())
+    base.update(fields)
+    return checker._ImageEntries(**base)
 
 
 def guard(address, immediate="$0x0"):
@@ -165,6 +171,34 @@ class GuardDominanceTests(unittest.TestCase):
         rows = list(WMEM_GUARDED)
         rows[2] = (0x09, "62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2")
         self.assertViolation(scan(rows), "AVX-512")
+
+    def test_separately_bitted_vex_is_a_violation_under_the_isa_guard(self):
+        # AVX-VNNI vpdpbusd has its own CPUID bit; __isa_available >= 5 does not
+        # establish it, so the level-5 guard cannot excuse it.
+        rows = self.lzcnt_rows()
+        rows[2] = (0x09, "vpdpbusd\t%ymm0, %ymm1, %ymm2")
+        self.assertViolation(scan(rows), "AVX-VNNI")
+
+    def test_alternate_entry_past_the_guard_is_a_violation(self):
+        # A tail jump from another procedure lands on the AVX2 block, bypassing
+        # the guard. Without the alternate entry the block is exempt; with it,
+        # the block is reachable without the guard edge, so it is a violation.
+        self.assertAllowed(scan(WMEM_GUARDED), "AVX/AVX2 (ymm)")
+        avx_block = TEXT + 0x09
+        external = {avx_block: {TEXT + 0x9000}}  # a source outside the procedure
+        self.assertViolation(scan(WMEM_GUARDED, entries=entries(branch_sources=external)), "AVX/AVX2 (ymm)")
+        # A reliable address-taken AVX2 block (reloc/guard-CF/export) is likewise
+        # reachable without the guard.
+        self.assertViolation(scan(WMEM_GUARDED, entries=entries(other={avx_block})),
+                             "AVX/AVX2 (ymm)")
+        # An immediate-scanned address alone does NOT withdraw the exemption: a
+        # data constant may coincide with a code address (false positives there
+        # wrongly failed wmemcmp).
+        self.assertAllowed(scan(WMEM_GUARDED, entries=entries(address_taken={avx_block})),
+                           "AVX/AVX2 (ymm)")
+        # An intra-procedure branch to the same block is a normal edge, still exempt.
+        self.assertAllowed(scan(WMEM_GUARDED, entries=entries(branch_sources={avx_block: {TEXT + 0x20}})),
+                           "AVX/AVX2 (ymm)")
 
     def test_compare_against_unreviewed_global_is_a_violation(self):
         self.assertViolation(scan(self.lzcnt_rows(address=OTHER)), "LZCNT")

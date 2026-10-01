@@ -402,9 +402,26 @@ table set must be a fixed point of re-reading the rebuilt stream. The stream
 is re-decoded where the sweep fell out of step. Bytes nothing explains stay
 undecodable and fail.
 
+A table is also rejected, and a guarded block's exemption withdrawn, when the
+bytes are reached as code from **outside** the procedure. The scanner collects
+image-wide code entry points -- direct branch/call targets (from the rebuilt
+streams, so table bytes do not masquerade as branches), exception handlers,
+exports, base-relocation pointees and the guard-CF table -- and treats an entry
+inside a table, or strictly inside a guarded procedure, as an alternate entry.
+`.pdata` BeginAddress is excluded (MSVC gives a jump table its own
+RUNTIME_FUNCTION), and immediate-materialized addresses are used only for the
+caller-guard reference check, never to reject a table or seed a guard root,
+since a data constant can coincide with a code address. Finally,
+`_verify_coverage` requires the classified instructions, proven tables and
+padding to tile every executable file-backed byte with no gap, so a record
+without raw bytes (unknown size) fails rather than being skipped.
+
 The scanner reads raw instruction bytes, so an EVEX-encoded xmm instruction
-counts as AVX-512 and never as AVX. VAES, VPCLMULQDQ, GFNI and XOP rotations
-cannot inherit AVX/AVX2 exemptions; mask-register instructions include k0.
+counts as AVX-512 and never as AVX. A VEX instruction is classified by an
+explicit allow-list of the AVX/AVX2 mnemonics; anything outside it fails closed
+as its own feature, so AVX-VNNI (`vpdpbusd`), AVX-IFMA, AVX-NE-CONVERT, VAES,
+VPCLMULQDQ, GFNI and XOP cannot inherit an AVX/AVX2 exemption.
+Mask-register instructions include k0.
 LLVM's separate prefix records are joined only to contiguous instruction bytes.
 Undecodable bytes remain failures and are reported separately from identified
 above-floor instructions. FMA, unreviewed AVX-512, BMI, other extensions and
