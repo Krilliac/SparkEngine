@@ -201,11 +201,12 @@ if(NOT _image_stem STREQUAL SPARK_MODULE_TARGET)
     message(FATAL_ERROR "Module image ${SPARK_GAME_MODULE} does not belong to target ${SPARK_MODULE_TARGET}")
 endif()
 
-# The SDL host drives OnFixedUpdate from a wall-clock accumulator (60 Hz) while
-# NullRHI frames take microseconds, so a short run can finish before one fixed
-# step elapses. 120000 frames keep the loop running for roughly a second on a
-# fast host (about 50 fixed steps); slower hosts only accumulate more.
-set(_test_frames 120000)
+# The SDL host drives OnFixedUpdate from a wall-clock accumulator (60 Hz), so the
+# run is bounded by wall time, not a frame count: two seconds give about 120
+# fixed steps however expensive a module's frame is. A fixed 120000 frames
+# timed out SparkGameVisualScript, whose per-frame AngelScript updates take
+# about 0.6 ms each in a Debug build.
+set(_test_seconds 2)
 
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env
@@ -215,7 +216,7 @@ execute_process(
         "${SPARK_ENGINE_EXECUTABLE}"
         -game "${SPARK_GAME_MODULE}"
         -require-game
-        -test-frames ${_test_frames}
+        -test-seconds ${_test_seconds}
         -threads 1
         -no-subprocess
         -minimal-init
