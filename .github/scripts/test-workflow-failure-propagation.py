@@ -2603,6 +2603,46 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         enforced_jobs = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
         self.assertEqual(enforced_jobs, declared_jobs)
 
+    def test_ci100_controlled_failure_classes_map_to_gated_required_jobs(self) -> None:
+        """CI-100[0]: each controlled-failure class the rehearsal exercises must land
+        on a job that the Required CI Gate needs and enforces, so the class's failure
+        turns the gate red. This pins the class -> job map the rehearsal driver
+        (tools/ci/run_controlled_failure_rehearsal.py) and patches depend on; removing
+        any of these jobs from the gate fails here.
+
+        The checks within each job are proven to fail locally under
+        tools/ci/controlled-failures/ and are structurally fail-closed by the other
+        tests in this file (required_job_bypass_errors, check_format_gate_errors,
+        docs_health_gate_errors, standard_test_evidence_errors, required_workflow_errors,
+        and validate_all_ci_coverage_errors)."""
+
+        # class -> the build.yml job the controlled failure turns red.
+        controlled_failure_class_jobs = {
+            "test": "build-linux-gcc",
+            "sanitizer": "build-linux-asan",
+            "format": "check-format",
+            "threshold": "coverage",
+            "registration": "validate-ci-tools",
+            "validation": "docs-health",
+        }
+        document = parse_workflow_yaml(self.build)
+        gate = document["jobs"]["required-ci-gate"]
+        needs = gate["needs"]
+        verifier = next(
+            step
+            for step in gate["steps"]
+            if step.get("name") == "Verify every required job succeeded"
+        )
+        inventory = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
+        for failure_class, job in controlled_failure_class_jobs.items():
+            with self.subTest(failure_class=failure_class):
+                self.assertIn(job, REQUIRED_CI_JOBS, f"{failure_class}: {job} is not a required job")
+                self.assertIn(job, needs, f"{failure_class}: {job} is not in required-ci-gate needs")
+                self.assertIn(job, inventory, f"{failure_class}: {job} is not in EXPECTED_REQUIRED_JOBS_JSON")
+                self.assertIsInstance(
+                    document["jobs"].get(job), dict, f"{failure_class}: {job} is missing from build.yml"
+                )
+
     def test_license_compliance_job_is_required_and_fail_closed(self) -> None:
         document = parse_workflow_yaml(self.build)
         job = document["jobs"].get("license-compliance")

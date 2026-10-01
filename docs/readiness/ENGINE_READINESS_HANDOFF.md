@@ -736,7 +736,8 @@ ASan/TSan pipelines can mask failing test processes, MinGW/Wine cannot run under
 Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Controlled test, sanitizer, format, threshold, registration, and validation failures each make CI red
-   - Needs a hosted, controlled red run on Working proving the Required CI Gate turns red.
+   - Evidence: `tools/ci/controlled-failures/README.md`, `tools/ci/run_controlled_failure_rehearsal.py`, `tools/ci/test_run_controlled_failure_rehearsal.py`, `.github/scripts/test-workflow-failure-propagation.py`, `docs/readiness/evidence/ci100-controlled-failures.json`
+   - Rehearsal scaffolded locally (no hosted run). Six tools/ci/controlled-failures/ patches, each proven to fail its real check and pass without it (clang-format 18.1.3, check-test-registration, validate.py, coverage threshold, ASan UAF, failing TEST). run_controlled_failure_rehearsal.py has fake-gh tests; class->job map pinned in test-workflow-failure-propagation.py. Unmet pending hosted red run.
 2. **[implemented]** Every Working commit receives a gate summary, including docs-only changes
    - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-ci-perf-contract.py`, `.github/scripts/test-workflow-failure-propagation.py`
    - The Build workflow has no path filters, pushes are not cancelled and the gate is always(); registered mutations reject paths/paths-ignore and a conditional gate. No hosted docs-only run or exact-commit CI.
