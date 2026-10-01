@@ -641,7 +641,8 @@ Progress: 4 of 5 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_asset_integrity.py`, `tools/asset-integrity/verify_asset_integrity.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`
    - check-all verifies the root, legacy and template manifests. check-module-asset-refs.py verifies all 11 module records fail-closed; 0 problems were found locally. Composed prefixes stay report-only in FPS 2, MMOFPS 26 and VisualScript 1. Local runs only; no exact-commit CI. Not applied in the ledger by this lane, because the header forbids state edits.
 2. **[unmet]** Every in-profile packaged module resolves assets without the repository
-   - Needs the Windows installed-package D3D11 smoke (MOD-310). Only a local Linux NullRHI run exists.
+   - Evidence: `.github/scripts/qualify-windows-msi.py`, `Tests/PackageSmoke/package_runtime_probe.py`, `Tests/PackageSmoke/VerifyFPSAuthoredScene.cmake`, `Tests/PackageSmoke/windows_appcontainer_run.py`, `tools/module-evidence/artifacts.py`, `.github/workflows/build.yml`
+   - Required MSI smoke now verifies installed stable-v1 asset hashes, authored scene/material pixels, and AppContainer source/build denial with scene-less and asset-less controls. Native runs remain pending; no model/material/texture load totals or zero-failure counters are claimed.
 3. **[implemented]** Every asset has provenance/license metadata where required
    - Evidence: `Tests/Tools/test_asset_package_profile.py`, `tools/check-module-asset-refs.py`, `Tests/Tools/test_check_module_asset_refs.py`, `Tests/PackageSmoke/asset_provenance_tests.py`, `Tests/CMakeLists.txt`, `tools/asset-integrity/verify_asset_integrity.py`
    - check-module-asset-refs validates the shared provenance policy schema, rejects duplicate rules, requires rule evidence files and fails on missing or relabelled licenses for every module-referenced asset (4 fixture and 2 real-FPS regressions, RED on base). NOASSERTION stays excluded from stable-v1. Local runs only; no exact-commit CI.
@@ -1062,7 +1063,8 @@ SparkBuild exposes options not recognized by root CMake, root CMake exposes opti
 Progress: 5 of 8 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Every stable-v1 target appears with its declared kind in configured codemodel evidence for its canonical build profile
-   - Needs configured Windows codemodel evidence from a real MSVC configure.
+   - Evidence: `Tools/buildmatrix/inventory.py`, `Tools/buildmatrix/capture_provenance.py`, `Tests/Tools/test_build_matrix_parity.py`, `.github/workflows/build.yml`
+   - Required Shipping producer captures windows-shipping, windows-release and installed SDK consumer codemodels. The CLI accepts windows-release as windows-validation. Real MSVC configures/builds and exact-SHA authority remain pending here; use WINDOWS-PACKAGE-QUALIFICATION.md commands.
 2. **[unmet]** The strict Windows Shipping profile, Windows validation profile, and installed public-SDK consumer are all independently evidenced
    - Needs independent hosted evidence for Windows Shipping, validation and the installed SDK.
 3. **[implemented]** Unknown or unused options fail
@@ -1834,7 +1836,8 @@ Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tools/platform-cert/validate_certification.py`, `Tests/Tools/test_platform_certification.py`, `docs/certification/support-matrix.json`, `Tests/CMakeLists.txt`
    - CTest PlatformCertification and PlatformCertMatrixOnly reject extra certifiable rows, tier changes and unknown profiles on the committed two-row matrix.
 3. **[unmet]** Runtime dependency closure is recorded
-   - No runtime dependency closure is recorded. It depends on Windows certification evidence that has not been collected.
+   - Evidence: `Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake`, `Tools/platform-cert/pe_imports.py`, `tools/pe_import_closure.py`, `docs/certification/plans/win11-x64-msvc143-d3d11.json`, `docs/certification/plans/win11-x64-msvc143-nullrhi.json`, `.github/workflows/build.yml`
+   - Required build-windows-shipping measures a fresh MSI component stage against both Windows row plans and app-local PE closure, retaining shipping-closure-<sha>. This records staged-package dependencies; physical Windows 11 certification and a current exact-SHA hosted pass remain unverified here.
 
 **Required commands**
 
@@ -1998,14 +2001,14 @@ NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS mod
 Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** The Windows package runs from a clean layout with no GPU or display dependency
-   - Evidence: `cmake/ValidateStagedPackageExecutables.cmake`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`
-   - The test runs from the staged package's bin directory with an isolated LOCALAPPDATA. The local host still has a GPU and display. Clean-host evidence and the headless-windows-package job still need hosted CI.
+   - Evidence: `cmake/ValidateStagedPackageExecutables.cmake`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`, `.github/scripts/qualify-windows-msi.py`, `Tests/PackageSmoke/package_runtime_probe.py`, `.github/workflows/build.yml`
+   - Required installed NullRHI smoke enforces zero rendered callbacks and no D3D11 device record. No-desktop execution, zero owned windows and hardware-adapter absence are not established. OS graphics imports do not themselves prove a GPU requirement; native qualification remains pending.
 2. **[implemented]** No rendered backend or repository content is accidentally required
-   - Evidence: `cmake/RunSparkHeadlessNullRHILifecycle.cmake`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`
-   - Pending the central build and a FPSHeadlessPackage_NullRHISaveReload run.
+   - Evidence: `cmake/RunSparkHeadlessNullRHILifecycle.cmake`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `Tests/CMakeLists.txt`, `.github/scripts/qualify-windows-msi.py`, `Tests/PackageSmoke/package_runtime_probe.py`, `Tests/PackageSmoke/windows_appcontainer_run.py`, `.github/workflows/build.yml`
+   - Required MSI runtime helper runs installed NullRHI save/reload plus AppContainer source/build canaries and scene-less/asset-less controls. The consumer uses the producer CMakeCache as its build canary. Native execution of these newly required probes remains pending.
 3. **[implemented]** FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean
-   - Evidence: `docs/platform/LINUX-SUPPORT-EVIDENCE.md`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/TestHEAD220NullRHILifetimeReal.cpp`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, `Tests/CMakeLists.txt`, `wiki/subsystems/Dedicated-Server.md`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`
-   - FPSHeadlessPackage_NullRHISaveReload runs a NullRHI save/reload against the staged MinSizeRel package. It is now in testSelectors only; plannedTestSelectors is []. There is no Windows CTest run or sanitizer/soak evidence yet, so the criterion is not evidenced. The ledger JSON still records this criterion as 'unmet' because this lane did not change the state field.
+   - Evidence: `docs/platform/LINUX-SUPPORT-EVIDENCE.md`, `Tests/Tools/test_run_nullrhi_soak.py`, `Tests/TestHEAD220NullRHILifetimeReal.cpp`, `cmake/RunSparkHeadlessFPSSaveReload.cmake`, `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, `Tests/CMakeLists.txt`, `wiki/subsystems/Dedicated-Server.md`, `Tests/PackageSmoke/RunInstalledFPSPackage.cmake`, `.github/scripts/qualify-windows-msi.py`, `Tests/PackageSmoke/package_runtime_probe.py`, `.github/workflows/build.yml`
+   - Packaged bounded save/reload is wired into required MSI smoke. Native package execution remains pending. Windows forced-termination/recovery, process-level sanitizer qualification and FPS Windows soak remain open; no sanitizer-clean or soak result is claimed.
 4. **[implemented]** Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`
    - The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them.
@@ -2271,8 +2274,8 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `SparkEngine/Source/Core/SparkEngineLinux.cpp`, `Tools/spark-cli/claims.json`, `Tools/spark-cli/tests/test_spark_cli_claims.py`, `Tools/spark-cli/spark_cli.py`, `Tools/spark-cli/README.md`, `wiki/gameplay-tools/Game-Packaging.md`, `Tests/CMakeLists.txt`
    - ctest CLI_ClaimsMatchBehavior; the claims file is also in SparkCliContract's discover run.
 4. **[unmet]** Install/uninstall is repeatable and leaves only declared user data
-   - Evidence: `cmake/SparkUninstall.cmake`, `cmake/TestSparkTrackedInstall.cmake`
-   - Local only: the manifest-driven uninstall and SparkTrackedInstall.Contract prove repeatable install/uninstall leaving only declared user data for CMake install trees on Linux. Windows 11 clean-machine CPack/NSIS uninstall and SparkInstaller reuse are unproven.
+   - Evidence: `cmake/SparkUninstall.cmake`, `cmake/TestSparkTrackedInstall.cmake`, `.github/scripts/qualify-windows-msi.py`, `.github/scripts/test_qualify_windows_msi.py`, `.github/workflows/build.yml`
+   - Required MSI smoke requests two install/uninstall cycles, identical payload digests on reinstall, removed registration/install roots and preserved declared user data. Native MSI execution, NSIS/SparkInstaller reuse and Windows 11 clean-host qualification remain pending.
 
 **Required commands**
 
@@ -2361,8 +2364,8 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 2. **[unmet]** Fresh install, repair, user-data retention, and uninstall pass on Windows 11 x64
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs Windows 11 x64 fresh-install, repair and uninstall runs. None are recorded.
 3. **[implemented]** Capabilities match documentation exactly
-   - Evidence: `SparkInstaller/README.md`, `SparkInstaller/src/InstallerPreflight.cpp`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `tools/installer/check_installer_claims.py`, `Tests/Tools/test_installer_claims.py`, `SparkInstaller/src/main.cpp`, `Tests/CMakeLists.txt`
-   - Already 'implemented' in the ledger, but its note still says 'No checker ties installer capabilities to documentation claims'. The dispatcher should replace that note: the Installer_DocClaims CTest runs check_installer_claims.py against the README and the installer's literal flags and exit codes.
+   - Evidence: `SparkInstaller/README.md`, `SparkInstaller/src/InstallerPreflight.cpp`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `tools/installer/check_installer_claims.py`, `Tests/Tools/test_installer_claims.py`, `SparkInstaller/src/main.cpp`, `Tests/CMakeLists.txt`, `SparkInstaller/src/InstallerPreflight.h`, `README.md`
+   - Installer_DocClaims ties flags/help/build gates, exit and preflight codes, disk budgets and root README flags to implementation. Direct checker and in-memory hostile mutations pass; filesystem-fixture tests are sandbox-blocked. This checker does not replace native installer qualification.
 4. **[unmet]** Only signed artifacts can enter the stable channel
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs signed published artifacts and a stable-channel signing gate.
 5. **[implemented]** Experimental platform installers remain owned by their platform work
@@ -5530,8 +5533,8 @@ Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 2. **[unmet]** Upgrade and rollback pass on a clean supported Windows host
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs upgrade and rollback runs on a clean Windows host.
 3. **[implemented]** Failure or interruption never replaces the working install
-   - Evidence: `.github/scripts/qualify-windows-msi.py`, `.github/scripts/new-msi-failure-transform.ps1`, `.github/scripts/test_qualify_windows_msi.py`, `.github/workflows/release.yml`
-   - No upgrade-interruption test against a real predecessor installer.
+   - Evidence: `.github/scripts/qualify-windows-msi.py`, `.github/scripts/new-msi-failure-transform.ps1`, `.github/scripts/test_qualify_windows_msi.py`, `.github/workflows/release.yml`, `.github/workflows/build.yml`, `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/CMakeLists.txt`
+   - Required MSI smoke requests the native fresh-install interruption drill. Existing N-1 mode protects predecessor registration, file digests and user data, but a real signed published predecessor and native upgrade-interruption run remain required; fresh install proves no working-predecessor claim.
 
 **Required commands**
 
@@ -5600,10 +5603,11 @@ The signed v0.9.0 predecessor has no earlier stable MSI. Its equivalent evidence
 Progress: 1 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Fresh predecessor installation and interrupted activation recover without replacing user data
-   - Evidence: `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/src/InstallState.cpp`, `SparkInstaller/tests/InstallStateTests.cpp`, `SparkInstaller/README.md`
-   - Local Windows Release run: SparkInstallerTransactionTests (fake git) passes fresh-install build-failure resume and interrupted-update rollback, asserting a user-data file survives both. InstallState refuses non-regular marker targets (link case RED on base). No native MSI/NSIS run; no exact-commit CI.
+   - Evidence: `SparkInstaller/tests/InstallerTransactionTests.cpp`, `SparkInstaller/src/InstallState.cpp`, `SparkInstaller/tests/InstallStateTests.cpp`, `SparkInstaller/README.md`, `.github/scripts/qualify-windows-msi.py`, `.github/scripts/test_qualify_windows_msi.py`, `.github/workflows/build.yml`
+   - Required MSI smoke requests interrupted fresh activation and verifies absent registration/residue with unchanged external user data. Native execution remains pending. Signed v0.9.0 predecessor qualification still uses the separate reviewed-baseline-bound release path.
 2. **[unmet]** Repair and uninstall pass with no N-1 claim
-   - Needs Windows repair and uninstall qualification runs.
+   - Evidence: `.github/scripts/qualify-windows-msi.py`, `.github/scripts/test_qualify_windows_msi.py`, `.github/scripts/run-non-elevated-windows.py`, `.github/workflows/build.yml`
+   - Required MSI smoke requests a plain repair drill and two uninstalls, with per-user properties and a verified non-elevated installer client. This path has no predecessor or baseline binding; --bootstrap-repair retains its reviewed-baseline gate. Native MSI repair/uninstall remains unverified.
 3. **[unmet]** Evidence is bound to the reviewed v0.9.0 source commit
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs evidence bound to the reviewed v0.9.0 commit.
 

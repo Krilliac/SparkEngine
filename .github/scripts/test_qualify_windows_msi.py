@@ -25,6 +25,24 @@ PREVIOUS_SIGNER_THUMBPRINT = "A" * 40
 REVIEWED_BASELINE_SHA = "b" * 40
 
 
+def write_runtime_fixture(argv):
+    """Generated child-process evidence for the MSI orchestration fixtures."""
+    if "--record-file" not in argv:
+        return False
+    path = Path(argv[argv.index("--record-file") + 1])
+    path.write_text(json.dumps({
+        "schemaVersion": 1, "result": "PASS", "module": "SparkGameFPS",
+        "commitSha": argv[argv.index("--commit-sha") + 1],
+        "msiSha256": argv[argv.index("--msi-sha256") + 1],
+        "assetIntegrity": {"result": "PASS", "entries": 12},
+        "authoredSceneVisual": {"result": "PASS", "contract": "VerifyFPSAuthoredScene.cmake"},
+        "saveReload": {"result": "PASS", "contract": "RunSparkHeadlessFPSSaveReload.cmake"},
+        "repositoryIsolation": {"result": "PASS", "contract": "windows_appcontainer_run.py"},
+        "headlessNoDisplay": "unproven",
+    }), encoding="utf-8")
+    return True
+
+
 def setUpModule():
     """Build fixtures under the canonical temp root, not through an OS-owned alias.
 
@@ -88,6 +106,39 @@ def write_previous_receipt(path, old_msi, old_manifest, *, current_version="1.2.
     path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
+class WindowsMSIRuntimeEvidenceTests(unittest.TestCase):
+    def test_runtime_result_rejects_missing_mismatched_and_false_evidence(self):
+        with mock.patch.object(Path, "write_text") as write:
+            write_runtime_fixture(["--record-file", "unused", "--commit-sha", SOURCE_SHA,
+                                   "--msi-sha256", "a" * 64])
+            original = json.loads(write.call_args.args[0])
+        with mock.patch.object(MODULE.strict_json, "read_file_no_follow_bytes",
+                               return_value=json.dumps(original).encode()):
+            self.assertEqual(MODULE._runtime_asset_count(Path("unused"), SOURCE_SHA, "a" * 64), 12)
+        mutations = [{**original, "commitSha": "b" * 40}, {**original, "msiSha256": "b" * 64},
+                     {**original, "saveReload": {"result": "FAIL"}},
+                     {**original, "headlessNoDisplay": "PASS"}, {**original, "schemaVersion": True},
+                     {key: value for key, value in original.items() if key != "repositoryIsolation"}]
+        mutations.extend({**original, "assetIntegrity": {"result": "PASS", "entries": count}}
+                         for count in (0, -1, True, "12"))
+        for result in mutations:
+            with self.subTest(result=result), mock.patch.object(MODULE.strict_json, "read_file_no_follow_bytes",
+                                                                return_value=json.dumps(result).encode()):
+                with self.assertRaises(ValueError):
+                    MODULE._runtime_asset_count(Path("unused"), SOURCE_SHA, "a" * 64)
+
+    def test_canonical_writer_is_accepted_by_the_real_artifact_consumer(self):
+        import artifacts
+        with mock.patch.object(MODULE.package_evidence_io, "publish_bytes_no_replace") as publish:
+            MODULE._write_package_smoke_log(Path("unused"), SOURCE_SHA, "a" * 64, 12)
+            payload = publish.call_args.args[1]
+        self.assertEqual(artifacts.validate_package_smoke_bytes(
+            payload, "package-smoke.log", "SparkGameFPS", expected_sha=SOURCE_SHA), [])
+        for count in (None, True, 0, -1, "12"):
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                MODULE._write_package_smoke_log(Path("unused"), SOURCE_SHA, "a" * 64, count)
+
+
 class WindowsMSILifecycleTests(unittest.TestCase):
     def _transaction_fixture(self, root):
         """Create the two immutable package identities used by the transaction contract."""
@@ -111,7 +162,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _run_transaction_contract(self, *, root, old_packages, new_packages,
                                   old_manifest, new_manifest, module_manifest,
                                   logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
-                                  powershell="powershell.exe", bootstrap=False, previous_receipt=None,
+                                  powershell="powershell.exe", bootstrap=False, plain=False, previous_receipt=None,
                                   previous_version="1.2.2", reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
                                   git_runner=None, drills=frozenset()):
         """Exercise the old->new contract with generated native-process fixtures."""
@@ -137,7 +188,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 side_effect=publish_bytes_no_replace,
             ):
                 kwargs = {}
-                if not bootstrap:
+                if not bootstrap and not plain:
                     kwargs.update(
                         previous_packages=old_packages,
                         previous_version=previous_version,
@@ -145,7 +196,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         previous_signer_thumbprint=previous_signer_thumbprint,
                         previous_receipt=previous_receipt or root / "old-provisioning-receipt.json",
                     )
-                else:
+                elif bootstrap:
                     kwargs.update(
                         bootstrap_repair=True,
                         reviewed_baseline_commit=reviewed_baseline_commit,
@@ -221,6 +272,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 log.write_text(json.dumps(evidence), encoding="utf-8")
                 state["signature_verified_before_install"] = not state["installed"]
                 state["signature_call_index"] = len(calls) - 1
+                return 0
+            if write_runtime_fixture(argv):
                 return 0
             if "-EncodedCommand" in argv:
                 selected_name = Path(env["SPARK_MSI_PATH"]).name
@@ -837,18 +890,19 @@ class WindowsMSILifecycleTests(unittest.TestCase):
         with self.assertRaises(MODULE.argparse.ArgumentTypeError):
             MODULE.parse_drills("interrupt,teleport")
         self.assertEqual(MODULE.parse_drills("interrupt"), frozenset({"interrupt"}))
+        self.assertEqual(MODULE.parse_drills("interrupt,repair,repeatability"), MODULE.DRILLS)
         argv = [
             "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
             "--manifest", "modules.cmake", "--package-manifest", "package.json",
             "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
-            "--drills", "interrupt,repair",
+            "--drills", "interrupt,teleport",
         ]
         stderr = io.StringIO()
         with mock.patch.object(sys, "argv", argv), contextlib.redirect_stderr(stderr):
             with self.assertRaises(SystemExit) as raised:
                 MODULE.main()
         self.assertEqual(raised.exception.code, 2)
-        self.assertIn("unknown drill(s) 'repair'", stderr.getvalue())
+        self.assertIn("unknown drill(s) 'teleport'", stderr.getvalue())
         with tempfile.TemporaryDirectory() as raw, self.assertRaises(ValueError):
             MODULE._qualify_impl(Path(raw), "1.2.3", Path(raw), Path(raw), Path(raw) / "logs",
                                  msiexec="msiexec.exe", powershell="powershell.exe", cmake="cmake",
@@ -863,6 +917,91 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             command = invocation.split("if ($LASTEXITCODE -ne 0)", 1)[0]
             self.assertIn("--drills interrupt", command)
         self.assertTrue(MODULE.FAILURE_TRANSFORM_SCRIPT.is_file())
+
+    def test_required_package_job_runs_interrupt_repair_and_repeatability(self):
+        build = (Path(__file__).resolve().parents[1] / "workflows/build.yml").read_text(encoding="utf-8")
+        job = build.split("\n  module-profile-package-smoke:\n", 1)[1].split("\n  # ====", 1)[0]
+        self.assertIn("--drills interrupt,repair,repeatability", job)
+        for name in ("interrupt", "repair", "repeatability"):
+            self.assertIn(f"msi-qualification/{name}-drill.json", job)
+
+    def _run_plain_drills(self, root, drills, *, mutation=None):
+        old_packages, new_packages, old_manifest, new_manifest, manifest = self._transaction_fixture(root)
+        calls, state = [], {"installed": False, "version": None, "repaired": False}
+        native = self._identity_runner(calls, state)
+
+        def runner(argv, log, **kwargs):
+            code = native(argv, log, **kwargs)
+            if mutation:
+                mutation(log.name, state)
+            return code
+
+        logs = root / "logs"
+        result = self._run_transaction_contract(
+            root=root, old_packages=old_packages, new_packages=new_packages, old_manifest=old_manifest,
+            new_manifest=new_manifest, module_manifest=manifest, logs=logs, runner=runner,
+            plain=True, drills=frozenset(drills),
+        )
+        return result, calls, state, logs
+
+    def test_plain_repair_has_no_baseline_or_predecessor_requirement(self):
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_plain_drills(Path(raw), {"repair"})
+            self.assertEqual(result, 0)
+            self.assertTrue(state["repaired"])
+            self.assertFalse((logs / "bootstrap-baseline.json").exists())
+            self.assertFalse((logs / "previous-release.json").exists())
+            self.assertEqual(json.loads((logs / "repair-drill.json").read_text())["n_minus_one"], False)
+            self.assertFalse(state["installed"])
+
+    def test_repeatability_two_uninstalls_and_identical_payload(self):
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_plain_drills(Path(raw), MODULE.DRILLS)
+            self.assertEqual(result, 0)
+            self.assertEqual(sum("/x" in call for call in calls), 2)
+            self.assertEqual(sum("/i" in call for call in calls), 3)  # interrupted + two successful installs
+            for call in calls:
+                if call[0] == "msiexec.exe":
+                    self.assertIn("ALLUSERS=", call)
+                    self.assertIn("MSIINSTALLPERUSER=1", call)
+            evidence = json.loads((logs / "repeatability-drill.json").read_text())
+            self.assertEqual(evidence["cycles"], 2)
+            self.assertTrue(evidence["identical_reinstall"])
+            self.assertFalse(Path(state["install_root"]).exists())
+
+    def test_repeatability_rejects_payload_registration_residue_and_user_data_mutations(self):
+        for mutation_kind in ("payload", "registration", "residue", "user-data", "undeclared", "final-undeclared"):
+            with self.subTest(mutation_kind=mutation_kind), tempfile.TemporaryDirectory() as raw:
+                def mutate(label, state):
+                    install = Path(state["install_root"]) if "install_root" in state else None
+                    if label == "reinstall.log" and mutation_kind == "payload":
+                        (install / "bin/SparkEngine.exe").write_bytes(b"changed payload")
+                    if label == "uninstall-cycle-1.log":
+                        if mutation_kind == "registration":
+                            state.update(installed=True, version="1.2.3")
+                        elif mutation_kind == "residue":
+                            install.mkdir()
+                        elif mutation_kind == "user-data":
+                            (install.parent / "localappdata/SparkEngine/release-qualification-sentinel.sav").unlink()
+                        elif mutation_kind == "undeclared":
+                            (install.parent / "localappdata/SparkEngine/unowned.txt").write_text("residue")
+                    if label == "uninstall.log" and mutation_kind == "final-undeclared":
+                        (install.parent / "localappdata/SparkEngine/unowned.txt").write_text("residue")
+
+                result, calls, state, logs = self._run_plain_drills(Path(raw), {"repeatability"}, mutation=mutate)
+                self.assertNotEqual(result, 0)
+                self.assertFalse((logs / "package-smoke.log").exists())
+                self.assertFalse((logs / "repeatability-drill.json").exists())
+
+    def test_repair_rejects_user_data_loss(self):
+        with tempfile.TemporaryDirectory() as raw:
+            def mutate(label, state):
+                if label == "repair.log":
+                    (Path(state["install_root"]).parent /
+                     "localappdata/SparkEngine/release-qualification-sentinel.sav").unlink()
+            result, calls, state, logs = self._run_plain_drills(Path(raw), {"repair"}, mutation=mutate)
+            self.assertNotEqual(result, 0)
+            self.assertFalse((logs / "package-smoke.log").exists())
 
     def test_main_requires_all_previous_artifact_arguments_together(self):
         """CLI transaction inputs are an all-or-none contract."""
@@ -1310,6 +1449,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root
+                if write_runtime_fixture(argv):
+                    return 0
                 if "-EncodedCommand" in argv:
                     Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
@@ -1368,6 +1509,12 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 "[package-smoke] profile=stable-v1\n"
                 f"[package-smoke] commit_sha={SOURCE_SHA}\n"
                 f"[package-smoke] msi_sha256={hashlib.sha256(b'fixture MSI').hexdigest()}\n"
+                "[package-smoke] package_runtime=PASS\n"
+                "[package-smoke] asset_integrity=PASS\n"
+                "[package-smoke] asset_entries=12\n"
+                "[package-smoke] authored_scene_visual=PASS\n"
+                "[package-smoke] save_reload=PASS\n"
+                "[package-smoke] repository_isolation=PASS\n"
                 "[package-smoke] backend=nullrhi result=PASS\n"
                 "[package-smoke] backend=d3d11-warp result=PASS\n"
                 "[package-smoke] exit_code=0\n"
@@ -1443,6 +1590,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root, install_target, private_copy_swapped, identity_copy_swapped, identity_attempted
+                if write_runtime_fixture(argv):
+                    return 0
                 if "-EncodedCommand" in argv:
                     if not identity_attempted:
                         identity_attempted = True
@@ -1591,7 +1740,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             with mock.patch.object(MODULE.package_evidence_io.os, "link", side_effect=race_link):
                 with self.assertRaises(MODULE.package_evidence_io.PackageEvidenceIOError):
-                    MODULE._write_package_smoke_log(output, SOURCE_SHA, "a" * 64)
+                    MODULE._write_package_smoke_log(output, SOURCE_SHA, "a" * 64, 12)
 
             self.assertEqual(output.read_text(encoding="utf-8"), "attacker")
 
@@ -1614,6 +1763,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root
+                if write_runtime_fixture(argv):
+                    return 0
                 if "-EncodedCommand" in argv:
                     Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
@@ -1681,6 +1832,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     nonlocal install_root, installed
                     calls.append(argv)
                     log.write_text("fixture command output")
+                    if write_runtime_fixture(argv):
+                        return 0
                     if "-EncodedCommand" in argv:
                         if case == "invalid_identity":
                             Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text("[]")

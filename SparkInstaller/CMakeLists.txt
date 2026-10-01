@@ -212,7 +212,11 @@ if(SPARKINSTALLER_BUILD_TESTS)
         add_test(NAME Installer_Uninstall COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k uninstall)
         add_test(NAME Installer_Upgrade COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k upgrade)
         add_test(NAME Installer_Rollback COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k roll)
-        set_tests_properties(Installer_Uninstall Installer_Upgrade Installer_Rollback PROPERTIES
+        add_test(NAME Installer_Interrupted_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k interrupt)
+        add_test(NAME Installer_Repair_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k repair)
+        add_test(NAME Installer_Repeatability_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k repeatability)
+        set_tests_properties(Installer_Uninstall Installer_Upgrade Installer_Rollback
+            Installer_Interrupted_Msi Installer_Repair_Msi Installer_Repeatability_Msi PROPERTIES
             FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
             TIMEOUT 120 LABELS "installer;python")
         unset(_sparkinstaller_msi_tests)

@@ -324,6 +324,12 @@ _PACKAGE_SMOKE_ALLOWED_FIELDS = frozenset({
     "module",
     "commit_sha",
     "msi_sha256",
+    "package_runtime",
+    "asset_integrity",
+    "asset_entries",
+    "authored_scene_visual",
+    "save_reload",
+    "repository_isolation",
 })
 
 
@@ -425,6 +431,25 @@ def _validate_package_smoke_text(
         errors.append(f"package-smoke artifact {leaf_name} is missing required MSI SHA-256")
     elif not _SHA256_RE.fullmatch(digest_record.removeprefix("msi_sha256=")):
         errors.append(f"package-smoke artifact {leaf_name} has invalid lower-case MSI SHA-256")
+    for key in ("package_runtime", "asset_integrity", "authored_scene_visual", "save_reload",
+                "repository_isolation"):
+        record = fields.get(key)
+        if record is None:
+            errors.append(f"package-smoke artifact {leaf_name} is missing required runtime field {key!r}")
+        elif record != f"{key}=PASS":
+            errors.append(f"package-smoke artifact {leaf_name} field {key!r} must be PASS")
+    for key in ("asset_entries",):
+        record = fields.get(key)
+        if record is None:
+            errors.append(f"package-smoke artifact {leaf_name} is missing required runtime count {key!r}")
+        else:
+            try:
+                count = int(record.removeprefix(f"{key}="))
+            except ValueError:
+                errors.append(f"package-smoke artifact {leaf_name} field {key!r} is not an integer")
+                continue
+            if count <= 0:
+                errors.append(f"package-smoke artifact {leaf_name} field {key!r} must be positive")
     return errors
 
 

@@ -496,6 +496,32 @@ class WorkflowParserTests(unittest.TestCase):
 
 
 class PresetAndCodemodelTests(unittest.TestCase):
+    def test_inventory_codemodel_accepts_release_preset_alias(self) -> None:
+        parsed = inventory._parse_codemodel_args(
+            [
+                "windows-shipping=build/windows-shipping",
+                "windows-release=build/windows-release",
+                "installed-sdk-consumer=build/installed-sdk-consumer",
+            ]
+        )
+        self.assertEqual(
+            parsed,
+            {
+                "windows-shipping": Path("build/windows-shipping"),
+                "windows-validation": Path("build/windows-release"),
+                "installed-sdk-consumer": Path("build/installed-sdk-consumer"),
+            },
+        )
+
+    def test_inventory_codemodel_rejects_alias_collision(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "same profile"):
+            inventory._parse_codemodel_args(
+                [
+                    "windows-release=build/windows-release",
+                    "windows-validation=build/windows-validation",
+                ]
+            )
+
     def test_preset_capture_configure_is_fresh(self) -> None:
         executable = Path("C:/cmake.exe")
 
