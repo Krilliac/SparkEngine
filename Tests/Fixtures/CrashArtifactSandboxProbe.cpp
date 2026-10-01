@@ -326,7 +326,7 @@ namespace
         }
 
         const fs::path base = Detail::ResolveCrashArtifactBaseDirectory();
-        std::fputws(std::format(L"[CrashArtifactSandboxProbe] base={}\n", base).c_str(), stdout);
+        std::fputws(std::format(L"[CrashArtifactSandboxProbe] base={}\n", base.wstring()).c_str(), stdout);
         if (base.empty())
         {
             return Fail(kNoBaseDirectory, "ResolveCrashArtifactBaseDirectory");
@@ -364,7 +364,7 @@ namespace
         {
             return Fail(kCreateFailed, "CreatePrivateCrashArtifactDirectory");
         }
-        std::fputws(std::format(L"[CrashArtifactSandboxProbe] root={}\n", root).c_str(), stdout);
+        std::fputws(std::format(L"[CrashArtifactSandboxProbe] root={}\n", root.wstring()).c_str(), stdout);
 
         // PinArtifactRoot's open, with its exact access and flags.
         HANDLE pinned =
