@@ -8,7 +8,7 @@ Status: Approved (design). Foundation for the Unity/Unreal-style editor effort.
 SparkEditor and the SparkEngine runtime currently use **two disconnected scene/component
 models**:
 
-- The editor operates on its own `SparkEditor::SceneFile` (~90 private component POD structs in
+- The editor operates on its own `SparkEditor::SceneFile` (private component POD structs in
   `SparkEditor/Source/SceneSystem/SceneFileTypes.h`). Its Hierarchy and Inspector edit that
   in-memory model. Its Scene View (`Panels/SceneViewPanel.cpp`) renders **no geometry** (a
   blue/green split placeholder), gizmos (`Gizmos/GizmoSystem.cpp` — real math; **deleted 2026-09**, the live gizmos are `SceneViewPanel` + `Gizmos/SceneEditTools`) aren't overlaid on

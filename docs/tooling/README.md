@@ -22,7 +22,7 @@ docs/update-all-docs.sh check        # Dry-run: report what's stale
 | Script | What it updates | Deps | Speed |
 |--------|----------------|------|-------|
 | `docs/sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | None | ~2s |
-| `docs/generate-api-docs.sh generate` | API reference (~250 headers → ~240 pages) | None | ~15s |
+| `docs/generate-api-docs.sh generate` | API reference generated from the header inventory | None | ~15s |
 | `docs/generate-symbol-index.sh generate` | Symbol/Function/Class/Enum/Macro indexes | None | ~2s |
 | `docs/generate-file-tree.sh generate` | File tree (LOC + Mermaid module graph) | None | ~10s |
 | `docs/generate-class-hierarchy.sh generate` | Inheritance Mermaid classDiagrams | None | ~5s |

@@ -193,7 +193,7 @@ signing, and independent acceptance evidence are complete.
 - AI system (behavior trees, NavMesh, perception, formations, steering)
 - Animation system (skeletal, blend spaces, IK, retargeting)
 - UDP networking with entity replication, prediction, lag compensation
-- EnTT-based ECS with 75 component types and 25 systems
+- EnTT-based ECS component and system framework
 - Dear ImGui editor with 59 panels and collaborative editing
 - Audio system (XAudio2, OpenAL, null backend)
 - AngelScript + Lua scripting with hot-reload

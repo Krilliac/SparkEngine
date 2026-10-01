@@ -31,9 +31,9 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 ## Features
 
 - **Debug Layer:** Optional validation with GPU-based validation support
-- **3 Command Queues:** Direct (graphics), Copy, Compute
+- **Command Queues:** Direct (graphics), Copy, and Compute queues
 - **4 CPU-only Descriptor Heaps:** CBV/SRV/UAV (1M), RTV (256), DSV (64), Sampler (2048)
-- **2 Shader-Visible Table Heaps:** CBV/SRV/UAV (64 pages x 1024) and Sampler (16 pages x 128)
+- **Shader-Visible Table Heaps:** CBV/SRV/UAV and Sampler tables sized by the backend descriptor limits
 - **Flip-Model Swap Chain:** DXGI 1.5+ with `FLIP_DISCARD` and tearing support
 - **Deferred Deletion:** Resources queued with fence values, released when GPU completes
 - **Per-Frame Resources:** Double-buffered command allocators with fence sync
@@ -109,7 +109,7 @@ staged bindings (bindings do not survive a reset).
 pool tagged with the next frame-fence value; a page is reused only after the
 GPU passes it. Pages are the only shared state, so several lists can record at
 once. There is no per-draw heap allocation; when no page is free (or one list
-holds 32 pages without submitting) the draw is logged and skipped rather than
+reaches `kMaxHeldPages` without submitting) the draw is logged and skipped rather than
 bound to stale descriptors. Compute root signatures are out of scope:
 `Dispatch` binds nothing.
 

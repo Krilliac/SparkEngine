@@ -9,8 +9,8 @@
 ## Overview
 
 A gap analysis targeting the distance between "feature-rich engine" and "engine you can
-ship games with," followed by implementation of 13 production-infrastructure systems
-plus 3 bonus systems. The focus is shipping concerns: packaging, asset validation,
+ship games with," followed by implementation of production-infrastructure systems
+plus additional bonus systems. The focus is shipping concerns: packaging, asset validation,
 format versioning, accessibility, cross-platform input, performance regression testing,
 project templates, telemetry, achievements, shader hot-reload, and community
 contribution files.
@@ -61,7 +61,7 @@ subsystems, and a test suite, but lacked production infrastructure: no game pack
 no asset validation, no format versioning, no accessibility, limited cross-platform
 input, no performance regression testing, only one project template, basic UI widgets,
 no telemetry, undocumented achievements, no shader hot-reload, and no community
-contribution files. The 16 systems above close those gaps.
+contribution files. The systems above close those gaps.
 
 ## Source & Freshness
 
@@ -70,7 +70,7 @@ contribution files. The 16 systems above close those gaps.
 
 Updates / status changes since the original:
 
-- **All 16 systems (13 + 3 bonus) still present** at the stated paths — Implemented.
+- **All implemented systems still present** at the stated paths — Implemented.
 - New observation: a second `GamePackager.h` exists under `Engine/Build/` alongside the
   original `Core/GamePackager.h` — flagged above to avoid duplicate-system drift.
 - Test totals referenced in the original are superseded; use generated metrics for current totals; the per-system test files remain in place.

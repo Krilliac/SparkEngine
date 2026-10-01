@@ -3410,6 +3410,194 @@ class PublicNumericClaimTests(ContractTestCase):
             validator.errors,
         )
 
+    def test_validator_enumerates_status_and_readiness_markdown_surfaces(self) -> None:
+        sources = (
+            REPO_ROOT / "docs" / "status" / "PROJECT_STATUS.md",
+            REPO_ROOT / "docs" / "readiness" / "OWNER-DECISIONS.md",
+        )
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            if path in sources:
+                return text + "\nThe status snapshot names 123456 modules.\n"
+            return text
+
+        with mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_public_numeric_claims()
+        for source in sources:
+            relative = source.relative_to(REPO_ROOT).as_posix()
+            self.assertIn(relative, site_data_validate.public_numeric_claim_surfaces())
+            self.assertTrue(
+                any(
+                    error.startswith(f"{relative}:")
+                    and "unclaimed numeric claim '123456 modules'" in error
+                    for error in validator.errors
+                ),
+                validator.errors,
+            )
+
+    def test_status_and_readiness_discovery_is_independent_of_catalog_roots(self) -> None:
+        catalog = json.loads((REPO_ROOT / "docs/site/docs-catalog.json").read_text(encoding="utf-8"))
+        catalog["include"]["recursiveMarkdownRoots"] = []
+        catalog["excludePrefixes"] = list(catalog.get("excludePrefixes", [])) + ["wiki/", "docs/"]
+        with mock.patch.object(site_data_validate, "load_json", return_value=catalog):
+            surfaces = site_data_validate.public_numeric_claim_surfaces()
+        self.assertTrue(any(path.startswith("wiki/") for path in surfaces))
+        self.assertIn("docs/status/PROJECT_STATUS.md", surfaces)
+        self.assertIn("docs/readiness/OWNER-DECISIONS.md", surfaces)
+
+    def test_wiki_and_readiness_registration_is_nonvacuous_when_catalog_hides_them(self) -> None:
+        sources = (
+            REPO_ROOT / "wiki" / "advanced" / "Codebase-Bloat-Audit.md",
+            REPO_ROOT / "docs" / "readiness" / "OWNER-DECISIONS.md",
+        )
+        catalog_path = REPO_ROOT / "docs/site/docs-catalog.json"
+        catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        catalog["include"]["recursiveMarkdownRoots"] = []
+        catalog["excludePrefixes"] = list(catalog.get("excludePrefixes", [])) + ["wiki/", "docs/"]
+        original_load = site_data_validate.load_json
+        original_read = Path.read_text
+
+        def load(path, *args, **kwargs):
+            if Path(path) == catalog_path:
+                return catalog
+            return original_load(path, *args, **kwargs)
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            if path in sources:
+                return text + "\nThe public snapshot names 123456 panels.\n"
+            return text
+
+        with mock.patch.object(site_data_validate, "load_json", load), mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_public_numeric_claims()
+        for source in sources:
+            relative = source.relative_to(REPO_ROOT).as_posix()
+            self.assertIn(relative, site_data_validate.public_numeric_claim_surfaces())
+            self.assertTrue(
+                any(
+                    error.startswith(f"{relative}:")
+                    and "unclaimed numeric claim '123456 panels'" in error
+                    for error in validator.errors
+                ),
+                validator.errors,
+            )
+
+    def test_fenced_and_quoted_ledger_claims_are_ignored_but_ordinary_quotes_are_not(self) -> None:
+        text = (
+            "```text\n"
+            "12 panels\n"
+            "```\n"
+            "~~~text\n"
+            "13 panels\n"
+            "~~~\n"
+            "> Acceptance criteria: 14 panels\n"
+            "> continued quoted criterion text\n"
+            "> Ledger note: 15 modules\n"
+            "> continued ledger note text\n"
+            "> Ordinary public claim: 16 panels\n"
+        )
+        errors = self.claim_errors({"docs/status/PROJECT_STATUS.md": text}, [])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("'16 panels'", errors[0])
+
+    def test_actual_wiki_auto_and_fenced_claims_are_ignored(self) -> None:
+        source = REPO_ROOT / "wiki" / "advanced" / "Codebase-Bloat-Audit.md"
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            if path == source:
+                return (
+                    text
+                    + "\n<!-- AUTO:generated -->\n123456 panels\n<!-- /AUTO:generated -->\n"
+                    + "````text\n123456 modules\n```\n123456 modules\n````\n"
+                    + "~~~text\n123456 panels\n~~\n123456 panels\n~~~\n"
+                )
+            return text
+
+        with mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_public_numeric_claims()
+        self.assertFalse(any("123456" in error for error in validator.errors), validator.errors)
+
+    def test_profile_status_claim_masks_only_contract_quotes_and_generated_text(self) -> None:
+        profile = self.profile_of(self.mutable)
+        self.assertTrue(
+            any("forbidden unqualified claim" in error for error in site_data_validate.validate_public_claim_text(
+                profile, "status", "SparkEngine is production-ready."
+            )),
+        )
+        self.assertTrue(
+            any("forbidden unqualified claim" in error for error in site_data_validate.validate_public_claim_text(
+                profile, "status", "> Ordinary public quote: SparkEngine is production-ready."
+            )),
+        )
+        exempt = (
+            "<!-- AUTO:status -->\nSparkEngine is production-ready.\n<!-- /AUTO:status -->\n"
+            "```text\nSparkEngine is production-ready.\n```\n"
+            "> Acceptance criteria: SparkEngine is production-ready.\n"
+            "> continued criterion text.\n"
+            "> Ledger note: SparkEngine is production-ready.\n"
+            "> continued ledger note text.\n"
+            "SparkEngine is production-ready.\n"
+        )
+        violations = site_data_validate.validate_public_claim_text(profile, "status", exempt)
+        self.assertEqual(sum("forbidden unqualified claim" in error for error in violations), 1, violations)
+
+    def test_short_or_mismatched_fence_closers_do_not_unmask_claims(self) -> None:
+        for opening, short_closer, closing in (("```", "``", "```"), ("~~~", "~~", "~~~")):
+            with self.subTest(opening=opening):
+                text = f"{opening}text\n12 panels\n{short_closer}\n13 panels\n{closing}\n"
+                self.assertEqual(self.claim_errors({self.SURFACE: text}, []), [])
+
+    def test_generated_reference_surfaces_are_not_hand_written_claim_surfaces(self) -> None:
+        texts = {
+            "wiki/reference/API-Reference.md": "Generated index contains 123456 files.\n",
+            "docs/api/README.md": "Generated API index contains 123456 files.\n",
+        }
+        self.assertEqual(self.claim_errors(texts, []), [])
+
+    def test_backed_wiki_metric_passes_and_stale_value_fails(self) -> None:
+        surface = "wiki/advanced/Codebase-Observations.md"
+        entry = {
+            "surface": surface,
+            "text": "64 nodes",
+            "classification": "metric",
+            "owner": "docs",
+            "metricId": "visualScript.nodes",
+        }
+        self.assertEqual(
+            self.claim_errors({surface: "The graph exposes 64 nodes.\n"}, [entry], {"visualScript.nodes": 64}),
+            [],
+        )
+        errors = self.claim_errors(
+            {surface: "The graph exposes 65 nodes.\n"},
+            [{**entry, "text": "65 nodes"}],
+            {"visualScript.nodes": 64},
+        )
+        self.assertTrue(any("claims 65 but visualScript.nodes is 64" in error for error in errors), errors)
+
+    def test_extended_numeric_claim_nouns_are_detected(self) -> None:
+        for noun in (
+            "systems",
+            "components",
+            "features",
+            "capabilities",
+            "shaders",
+            "commands",
+            "pages",
+            "gates",
+            "work items",
+            "criteria",
+        ):
+            with self.subTest(noun=noun):
+                errors = self.claim_errors({self.SURFACE: f"The product exposes 123456 {noun}.\n"}, [])
+                self.assertTrue(any("unclaimed numeric claim" in error for error in errors), errors)
+
     def test_every_published_catalog_document_is_a_governed_claim_surface(self) -> None:
         # RDY-000: the docs catalog publishes every Markdown file under its recursive
         # roots, not just the root documents and wiki/, so each one is governed.
@@ -3541,7 +3729,10 @@ class PublicNumericClaimTests(ContractTestCase):
         self.assertIn("README.md:2", joined)
 
     def test_product_versions_are_not_counts(self) -> None:
-        text = "Win32 + DirectX 11 ImGui backends; a DirectX 12 backend; version 1 files are rejected.\n"
+        text = (
+            "Win32 + DirectX 11 ImGui backends; a DirectX 12 backend; version 1 files are rejected. "
+            "C++23 and C++26 are supported language modes; patch 1 routes page faults to the logger.\n"
+        )
         self.assertEqual(self.claim_errors({self.SURFACE: text}, []), [])
 
     def test_stale_metric_value_is_rejected(self) -> None:

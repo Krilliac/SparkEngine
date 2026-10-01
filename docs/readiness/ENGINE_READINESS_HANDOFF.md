@@ -54,8 +54,8 @@ Open **`RDY-000` — Establish the release profiles and capability ledger**. Its
 ### Session acceptance
 
 1. **[unmet]** No public capability or numeric claim exists without a validated contract entry
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open.
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/readiness/RDY-000-claim-audit.json`, `wiki/development/Release-Publication-Stages.md`
+   - Wiki, readiness and status Markdown share numeric/profile claim checks, including catalog-independent discovery and prose exemptions. The audit records 65 findings resolved by rewording or justified exclusions. Universal coverage remains unmet: arbitrary capability-status labels and numbers outside the matcher vocabulary are not contract-bound. Local tests only; no exact-commit CI evidence.
 2. **[implemented]** Every referenced path, gate, work item, metric, and capability exists
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`
    - FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet.
@@ -417,8 +417,8 @@ Status documents, roadmap entries, test counts, module counts, website copy, and
 Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** No public capability or numeric claim exists without a validated contract entry
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open.
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/readiness/RDY-000-claim-audit.json`, `wiki/development/Release-Publication-Stages.md`
+   - Wiki, readiness and status Markdown share numeric/profile claim checks, including catalog-independent discovery and prose exemptions. The audit records 65 findings resolved by rewording or justified exclusions. Universal coverage remains unmet: arbitrary capability-status labels and numbers outside the matcher vocabulary are not contract-bound. Local tests only; no exact-commit CI evidence.
 2. **[implemented]** Every referenced path, gate, work item, metric, and capability exists
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`
    - FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet.

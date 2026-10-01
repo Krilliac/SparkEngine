@@ -171,7 +171,7 @@ An experimental [Visual Scripting](../subsystems/Visual-Scripting.md) panel comp
 
 ### How does the ECS work?
 
-SparkEngine uses [EnTT](https://github.com/skypjack/entt) for its Entity Component System. Entities are lightweight IDs, components are plain data structs, and systems operate on component groups. A reproducible source inventory currently finds 79 component structs across 17 component headers; no canonical source-backed total is claimed for systems here. See [Entity Component System](../subsystems/Entity-Component-System.md).
+SparkEngine uses [EnTT](https://github.com/skypjack/entt) for its Entity Component System. Entities are lightweight IDs, components are plain data structs, and systems operate on component groups. The generated component inventory is maintained in the ECS reference; no canonical source-backed total is claimed for systems here. See [Entity Component System](../subsystems/Entity-Component-System.md).
 
 ### How do I add multiplayer to my game?
 
