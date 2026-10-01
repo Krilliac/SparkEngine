@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstring>
 #include <limits>
 
 namespace Spark::CrashDump
@@ -33,6 +34,24 @@ namespace Spark::CrashDump
         constexpr LONG kPhaseAbandoned = 2;
         constexpr LONG kPhaseMask = 3;
         constexpr SIZE_T kWriterStackReservation = 256 * 1024;
+
+        // DbgHelp builds differ in how many bytes they read at the exception's ContextRecord: some
+        // read the full size of every extended state the processor enables (CONTEXT + CONTEXT_EX +
+        // XSAVE area, several KiB) even when the record is a plain CONTEXT or was sized by the
+        // kernel for the state the thread had in use. Whatever lies past the caller's CONTEXT
+        // (its own stack frame, or the faulting function's locals) would then be copied into the
+        // dump's exception context, outside every memory range that RemoveMemoryCallback can
+        // strip. The writer therefore hands DbgHelp a copy of the context at the start of a
+        // zero-filled buffer far larger than any XSAVE layout, so any over-read stays inside it.
+        constexpr size_t kContextBufferSize = 64 * 1024;
+
+        struct ExceptionCopy
+        {
+            alignas(64) unsigned char contextBuffer[kContextBufferSize];
+            EXCEPTION_RECORD record;
+            EXCEPTION_POINTERS pointers;
+            MINIDUMP_EXCEPTION_INFORMATION information;
+        };
 
         struct WriterJob
         {
@@ -109,6 +128,73 @@ namespace Spark::CrashDump
         // Static: ~12 KiB is too much for a possibly exhausted faulting stack. Callers serialize
         // through StackTrace::SymbolLockLease (see the header contract).
         WriterJob g_job;
+        ExceptionCopy g_exceptionCopy;
+
+        /// Place @p source at the start of g_exceptionCopy's buffer. If the extended-context API
+        /// refuses, only the legacy CONTEXT is copied: the dump loses the upper vector registers
+        /// but DbgHelp still never reads caller memory.
+        CONTEXT* CopyExceptionContext(const CONTEXT& source)
+        {
+            unsigned char* buffer = g_exceptionCopy.contextBuffer;
+            SecureZeroMemory(buffer, kContextBufferSize);
+
+            const DWORD xstateBit = CONTEXT_XSTATE & ~CONTEXT_AMD64;
+            const DWORD64 features = GetEnabledXStateFeatures();
+            DWORD flags = CONTEXT_ALL;
+            if ((features & ~XSTATE_MASK_LEGACY) != 0)
+                flags |= CONTEXT_XSTATE;
+
+            DWORD length = 0;
+            InitializeContext(nullptr, flags, nullptr, &length);
+            CONTEXT* copy = nullptr;
+            if (length != 0 && length <= kContextBufferSize && InitializeContext(buffer, flags, &copy, &length))
+            {
+                // Copy only what the source holds: CopyContext reads a CONTEXT_EX after the source
+                // only when the source's flags say one is there.
+                DWORD copyFlags = source.ContextFlags & flags;
+                if ((flags & xstateBit) != 0)
+                    SetXStateFeaturesMask(copy, (copyFlags & xstateBit) != 0 ? features : 0);
+                bool copied = CopyContext(copy, copyFlags, const_cast<CONTEXT*>(&source)) != FALSE;
+                if (!copied && (copyFlags & xstateBit) != 0)
+                {
+                    copyFlags &= ~xstateBit;
+                    copied = CopyContext(copy, copyFlags, const_cast<CONTEXT*>(&source)) != FALSE;
+                }
+                if (copied)
+                {
+                    copy->ContextFlags = copyFlags;
+                    return copy;
+                }
+                SecureZeroMemory(buffer, kContextBufferSize);
+            }
+
+            copy = reinterpret_cast<CONTEXT*>(buffer);
+            std::memcpy(copy, &source, sizeof(CONTEXT));
+            copy->ContextFlags &= ~xstateBit;
+            return copy;
+        }
+
+        /// The exception information DbgHelp sees: every structure it reads lives in writer-owned
+        /// storage. The process dumps itself, so the caller's pointers are readable here.
+        MINIDUMP_EXCEPTION_INFORMATION* CopyExceptionInformation(const MINIDUMP_EXCEPTION_INFORMATION* exception)
+        {
+            if (!exception)
+                return nullptr;
+            ExceptionCopy& copy = g_exceptionCopy;
+            copy.pointers = {};
+            const EXCEPTION_POINTERS* source = exception->ExceptionPointers;
+            if (source && source->ExceptionRecord)
+            {
+                copy.record = *source->ExceptionRecord;
+                copy.pointers.ExceptionRecord = &copy.record;
+            }
+            if (source && source->ContextRecord)
+                copy.pointers.ContextRecord = CopyExceptionContext(*source->ContextRecord);
+            copy.information.ThreadId = exception->ThreadId;
+            copy.information.ExceptionPointers = source ? &copy.pointers : nullptr;
+            copy.information.ClientPointers = FALSE;
+            return &copy.information;
+        }
 
         DWORD WINAPI DumpWriterThread(LPVOID param)
         {
@@ -134,7 +220,7 @@ namespace Spark::CrashDump
         WriterJob& job = g_job;
         job.file = file;
         job.type = type;
-        job.exception = exception;
+        job.exception = CopyExceptionInformation(exception);
         job.removeStacks = removeStacks;
         job.writerThreadId = 0;
         job.result = FALSE;

@@ -121,6 +121,17 @@ namespace
         return {list->MemoryRanges, list->NumberOfMemoryRanges};
     }
 
+    /** @brief The ExceptionStream of the minidump image @p dump, or nullptr. */
+    const MINIDUMP_EXCEPTION_STREAM* DumpExceptionStream(const std::string& dump)
+    {
+        void* stream = nullptr;
+        ULONG streamSize = 0;
+        if (!MiniDumpReadDumpStream(const_cast<char*>(dump.data()), ExceptionStream, nullptr, &stream, &streamSize) ||
+            streamSize < sizeof(MINIDUMP_EXCEPTION_STREAM))
+            return nullptr;
+        return static_cast<const MINIDUMP_EXCEPTION_STREAM*>(stream);
+    }
+
     /** @brief Failure diagnostic: which part of the minidump image @p dump holds file offset @p offset. */
     std::string DumpRegionHolding(const std::string& dump, size_t offset)
     {
@@ -158,6 +169,13 @@ namespace
                 if (within(thread.ThreadContext.Rva, thread.ThreadContext.DataSize))
                     owner += std::format("context of thread {} ", thread.ThreadId);
             }
+        }
+        // So does the exception context, which a DbgHelp build that over-reads the ContextRecord fills.
+        if (const MINIDUMP_EXCEPTION_STREAM* exception = DumpExceptionStream(dump))
+        {
+            if (within(exception->ThreadContext.Rva, exception->ThreadContext.DataSize))
+                owner += std::format("the exception context [0x{:x}, +0x{:x}) ", exception->ThreadContext.Rva,
+                                     exception->ThreadContext.DataSize);
         }
         return owner.empty() ? std::string("no stream or thread context (indirect data or file slack)") : owner;
     }
@@ -390,6 +408,92 @@ TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
         std::printf("  canary at dump offset 0x%zx lies in %s\n", leak, DumpRegionHolding(filtered, leak).c_str());
     EXPECT_TRUE(leak == std::string::npos);
     EXPECT_EQ(stackSecret[0], 'S');
+}
+
+// OPS-100: some DbgHelp builds read the exception ContextRecord at the full size of every extended
+// state the processor enables, several KiB past a plain CONTEXT, and write those bytes into the
+// dump's exception context. A crash handler's CONTEXT sits in a stack frame next to live locals, so
+// the writer must hand DbgHelp its own copy. Here the bytes after the caller's CONTEXT are a secret,
+// and in the second case they are unreadable: the dump must leave the first out and must not fail
+// on the second, and the exception context it records must still be the caller's registers.
+TEST(CrashDumpWriter_BytesPastTheExceptionContextNeverReachTheDump)
+{
+    const std::string canary =
+        std::format("SPARKCONTEXTCANARY-{:016x}", std::random_device{}() * 0x9E3779B97F4A7C15ull);
+    constexpr SIZE_T kRegion = 0x10000;
+    constexpr SIZE_T kContextSlot = (sizeof(CONTEXT) + 63) & ~SIZE_T{63};
+    auto* region = static_cast<char*>(VirtualAlloc(nullptr, 2 * kRegion, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    ASSERT_TRUE(region != nullptr);
+
+    // Case 1: the secret fills everything after the CONTEXT, as live locals would.
+    auto* secretFollowed = reinterpret_cast<CONTEXT*>(region);
+    for (SIZE_T offset = kContextSlot; offset + canary.size() <= 2 * kRegion; offset += canary.size())
+        std::memcpy(region + offset, canary.data(), canary.size());
+    RtlCaptureContext(secretFollowed);
+
+    // Case 2: the CONTEXT ends where readable memory ends.
+    auto* edge = static_cast<char*>(VirtualAlloc(nullptr, 2 * kRegion, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    ASSERT_TRUE(edge != nullptr);
+    DWORD oldProtect = 0;
+    ASSERT_TRUE(VirtualProtect(edge + kRegion, kRegion, PAGE_NOACCESS, &oldProtect) != FALSE);
+    auto* atEdge = reinterpret_cast<CONTEXT*>(edge + kRegion - kContextSlot);
+    std::memcpy(atEdge, secretFollowed, sizeof(CONTEXT));
+
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    const auto dumpType = static_cast<MINIDUMP_TYPE>(SparkEditor::EditorCrashHandler::CrashDumpType());
+    ScratchCrashDir dir("context_overread");
+    const auto writeDump = [&](CONTEXT* context, const char* name, DWORD& error) -> std::string
+    {
+        EXCEPTION_POINTERS pointers{&record, context};
+        MINIDUMP_EXCEPTION_INFORMATION exception{GetCurrentThreadId(), &pointers, FALSE};
+        const std::filesystem::path file = std::filesystem::path(dir.Path()) / name;
+        HANDLE handle =
+            CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return {};
+        BOOL written = FALSE;
+        {
+            Spark::StackTrace::SymbolLockLease symbolLock(true);
+            written = symbolLock.owns_lock()
+                          ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, &error)
+                          : FALSE;
+        }
+        CloseHandle(handle);
+        if (!written)
+            return {};
+        std::ifstream in(file, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+
+    DWORD followedError = ERROR_SUCCESS;
+    const std::string followed = writeDump(secretFollowed, "followed.dmp", followedError);
+    DWORD edgeError = ERROR_SUCCESS;
+    const std::string atEdgeDump = writeDump(atEdge, "edge.dmp", edgeError);
+
+    EXPECT_EQ(followedError, static_cast<DWORD>(ERROR_SUCCESS));
+    ASSERT_FALSE(followed.empty());
+    const size_t leak = followed.find(canary);
+    if (leak != std::string::npos)
+        std::printf("  canary at dump offset 0x%zx lies in %s\n", leak, DumpRegionHolding(followed, leak).c_str());
+    EXPECT_TRUE(leak == std::string::npos);
+
+    // The copy is faithful: the recorded exception context holds the caller's registers.
+    const MINIDUMP_EXCEPTION_STREAM* exceptionStream = DumpExceptionStream(followed);
+    ASSERT_TRUE(exceptionStream != nullptr);
+    ASSERT_TRUE(exceptionStream->ThreadContext.DataSize >= sizeof(CONTEXT) &&
+                exceptionStream->ThreadContext.Rva + sizeof(CONTEXT) <= followed.size());
+    CONTEXT recorded{};
+    std::memcpy(&recorded, followed.data() + exceptionStream->ThreadContext.Rva, sizeof(CONTEXT));
+    EXPECT_EQ(recorded.Rip, secretFollowed->Rip);
+    EXPECT_EQ(recorded.Rsp, secretFollowed->Rsp);
+    EXPECT_EQ(exceptionStream->ExceptionRecord.ExceptionCode, static_cast<ULONG32>(EXCEPTION_BREAKPOINT));
+
+    EXPECT_EQ(edgeError, static_cast<DWORD>(ERROR_SUCCESS));
+    EXPECT_FALSE(atEdgeDump.empty());
+
+    VirtualFree(edge, 0, MEM_RELEASE);
+    VirtualFree(region, 0, MEM_RELEASE);
 }
 
 // The dump writer runs DbgHelp on its own thread. If that thread cannot start (here: this thread
