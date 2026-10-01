@@ -764,7 +764,7 @@
             "Tools/rhi210_capture.py",
             "Tests/Tools/test_rhi210_capture.py"
           ],
-          "note": "Four post-processing goldens are owner-approved. Ten frame/FPS/world/deferred/shadow goldens await capture and thresholds set from measured variance; awaiting owner review of 10 goldens. Deferred MRT/lighting resolve remains incomplete; new guards expose it. No new Windows runtime or exact-SHA CI proof."
+          "note": "Four post-processing goldens are owner-approved. The frame/FPS/world/primary suites are DISABLED: they exposed Windows normal-transform, frustum-plane, PNG-decode and Plane-winding defects plus the missing G-buffer fill and lighting resolve; 10 captures then need owner review. No exact-SHA CI proof."
         },
         {
           "criterionDigest": "sha256:745ccd700288",
@@ -780,7 +780,7 @@
             "wiki/subsystems/Rendering-and-Graphics.md",
             "Tests/TestRHI210D3D11GoldenReal.cpp"
           ],
-          "note": "Added repeated-reset budget, DEVICE_REMOVED and lazy draw-list reload checks; WARP setup fails closed. Module-owned mesh and allocation-pressure recovery remain open. New C++ checks are unbuilt here; inherited state is not new proof. Producer is build-windows-vs2022; requiredCiJobs still names planned jobs."
+          "note": "Reset, repeated-reset budget and injected DEVICE_REMOVED recover on WARP; the mesh owner reloads after recovery, since the CPU draw list has no lazy reload. WARP setup fails closed. Module-owned mesh rehydration and allocation-pressure recovery remain open. Producer is build-windows-vs2022; requiredCiJobs still names planned jobs."
         },
         {
           "criterionDigest": "sha256:ab52617664c9",
@@ -796,13 +796,10 @@
             ".github/workflows/build.yml",
             "wiki/graphics/RHI-Abstraction-Layer.md",
             "Tests/TestRHI210D3D11PassGoldenReal.cpp",
-            "Tests/TestRHI210D3D11FrameGoldenReal.cpp",
-            "Tests/TestRHI210D3D11SceneGoldenReal.cpp",
-            "Tests/TestRHI210D3D11WorldGoldenReal.cpp",
-            "Tests/TestRHI210D3D11PrimaryGoldenReal.cpp",
+            "SparkEngine/Source/Graphics/GPUTimestampQuery.h",
             "Tests/RHI210D3D11EngineFixture.h"
           ],
-          "note": "WARP post passes and frame/FPS/world/primary goldens require the debug layer and zero warnings/errors/corruption/discards, with an injected warning/error counter control. New C++ clean-run proof is pending, including deferred pass gaps. Hardware is deferred by OD-27. Real producer build-windows-vs2022; requiredCiJobs retains planned names."
+          "note": "D3D11_Validation and the reviewed post-pass goldens require the debug layer and zero warnings/errors/corruption/discards, with an injected counter control; GPUTimestampQuery no longer abandons disjoint queries (#408). The disabled frame/FPS/world/primary suites are not evidence yet. Hardware is deferred by OD-27. Producer build-windows-vs2022."
         },
         {
           "criterionDigest": "sha256:0a3989a189ef",
