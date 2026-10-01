@@ -2250,7 +2250,21 @@ PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
 
 def published_catalog_documents(root: Path, catalog: dict[str, Any]) -> set[str]:
     """Use the publisher's inventory, including generated documents."""
-    return {path.relative_to(root).as_posix() for path in collect_document_sources(catalog, root)}
+    return set(_catalog_documents(str(root), json.dumps(catalog, sort_keys=True)))
+
+
+@functools.lru_cache(maxsize=16)
+def _catalog_documents(root: str, catalog_json: str) -> frozenset[str]:
+    """Walk the document tree once per (root, catalog) in a process.
+
+    One validation needs the inventory three times and the contract suite validates
+    hundreds of mutated contracts against the same tree, so the walk dominated the
+    suite; keyed on the catalog's content, a substituted catalog is never served a
+    stale inventory.
+    """
+    base = Path(root)
+    return frozenset(path.relative_to(base).as_posix()
+                     for path in collect_document_sources(json.loads(catalog_json), base))
 
 
 def generated_public_documents(root: Path, published: set[str]) -> set[str]:
