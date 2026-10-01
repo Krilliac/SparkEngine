@@ -4353,11 +4353,11 @@ Prototype modules need reusable controller, ECS, camera, render, save, HUD, AI, 
 Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Prototype modules no longer copy private infrastructure
-   - Evidence: `Tests/Tools/test_module_private_dependencies.py`
-   - The ratchet only freezes the current inventory. Prototype modules still copy engine-private headers and *EngineSystems.cpp.
+   - Evidence: `Tests/Tools/test_module_private_dependencies.py`, `Tests/SDK/test_module_console_boundary.py`, `GameModules/module-content-inventory.json`
+   - The ratchet only freezes the current inventory. 2026-09-30: nine modules add state rules via GetStateValidation (SDK v9), SparkGame and VisualScript use IConsole/ModuleLog (-15 private-header entries, PrototypeModuleKit_PublicConsoleBoundary). No module is private-header-free: ECS components, EventBus and subsystem headers remain, as do seven *EngineSystems.cpp.
 2. **[implemented]** Helpers exercise production SDK surfaces
-   - Evidence: `SparkEngine/Source/Core/EngineSdkLogger.h`, `SparkEngine/Source/Core/EngineSdkLogger.cpp`, `SparkEngine/Source/Core/EngineContext.h`, `SparkSDK/Include/Spark/IEngineContext.h`, `SparkSDK/Include/Spark/ILogger.h`, `SparkSDK/Include/Spark/ModuleLog.h`, `SparkSDK/Include/Spark/Version.h`, `SparkSDK/ABI/sdk-abi-surface.json`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp`, `Tests/TestPrototypeModuleKitReal.cpp`, `Tests/Tools/test_sdk240_abi_surface.py`, `Tests/CMakeLists.txt`
-   - ctest PrototypeModuleKit_Helpers (PrototypeModuleKit_, count 3 with ImGui / 2 without).
+   - Evidence: `SparkEngine/Source/Core/EngineSdkLogger.h`, `SparkEngine/Source/Core/EngineSdkLogger.cpp`, `SparkEngine/Source/Core/EngineSdkStateValidation.h`, `SparkEngine/Source/Core/EngineSdkStateValidation.cpp`, `SparkEngine/Source/Core/EngineContext.h`, `SparkSDK/Include/Spark/IEngineContext.h`, `SparkSDK/Include/Spark/ILogger.h`, `SparkSDK/Include/Spark/IStateValidation.h`, `SparkSDK/Include/Spark/ModuleLog.h`, `SparkSDK/Include/Spark/Version.h`, `SparkSDK/ABI/sdk-abi-surface.json`, `GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp`, `GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp`, `Tests/TestPrototypeModuleKitReal.cpp`, `Tests/Tools/test_sdk240_abi_surface.py`, `Tests/CMakeLists.txt`
+   - ctest PrototypeModuleKit_Helpers (PrototypeModuleKit_, count 5 with ImGui / 4 without): logger, console and state-validation routing through a real EngineContext.
 3. **[implemented]** Prototype completion remains outside stable-v1
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `docs/readiness/work-items/30-game-modules.json`
    - test_split_experimental_work_stays_open_owned_and_scheduled requires MOD-295 to be outside stable-v1, not done, and anchored to modules.prototypes.

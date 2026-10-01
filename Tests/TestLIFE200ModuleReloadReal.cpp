@@ -15,6 +15,8 @@
 
 #include "Fixtures/ScopedUnboundedFileSize.h"
 
+#include "Core/EngineSdkConsole.h"
+#include "Core/EngineSdkStateValidation.h"
 #include "Core/ModuleManager.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/SaveSystem/SaveSystem.h"
@@ -66,10 +68,16 @@ namespace
         {
             return m_saveSystem ? &Spark::ComponentSerializerRegistry::GetInstance() : nullptr;
         }
+        // The SDK adapters a real host exposes: the module registers its commands and state rules through
+        // them, and they forward to this process's SimpleConsole and InvalidStateDetector.
+        Spark::IConsole* GetConsole() override { return &m_console; }
+        Spark::IStateValidation* GetStateValidation() override { return &m_stateValidation; }
         uint32_t GetEngineVersion() const override { return SPARK_ENGINE_VERSION_PACKED; }
         uint32_t GetSDKVersion() const override { return SPARK_SDK_VERSION; }
 
       private:
+        EngineSdkConsole m_console;
+        EngineSdkStateValidation m_stateValidation;
         Spark::SaveSystem* m_saveSystem = nullptr;
     };
 

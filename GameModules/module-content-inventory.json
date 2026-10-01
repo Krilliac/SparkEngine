@@ -26,12 +26,9 @@
         "Engine/SaveSystem/SaveSystem.h",
         "Engine/World/TimeOfDaySystem.h",
         "Graphics/WeatherSystem.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 12,
+      "privateEngineHeaderCount": 9,
       "copiedInfrastructureFiles": []
     },
     {
@@ -67,10 +64,9 @@
         "Engine/UI/UISystem.h",
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 18,
+      "privateEngineHeaderCount": 17,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.cpp"
       ]
@@ -198,14 +194,13 @@
         "Input/InputManager.h",
         "Utils/ContainerUtils.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
         "Utils/LogMacros.h",
         "Utils/PasswordHash.h",
         "Utils/SecureMemory.h",
         "Utils/SecureRandom.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 30,
+      "privateEngineHeaderCount": 29,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp"
       ]
@@ -297,10 +292,9 @@
         "Engine/World/WorldOriginSystem.h",
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 17,
+      "privateEngineHeaderCount": 16,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameOpenWorld/Source/Core/OWEngineSystems.cpp"
       ]
@@ -332,10 +326,9 @@
         "Engine/Replay/ReplaySystem.h",
         "Engine/SaveSystem/SaveSystem.h",
         "Input/InputManager.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 12,
+      "privateEngineHeaderCount": 11,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGamePlatformer/Source/Core/PlatformerEngineSystems.cpp"
       ]
@@ -370,10 +363,9 @@
         "Physics/PhysicsBody.h",
         "Physics/PhysicsSystem.h",
         "Physics/VehiclePhysics.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 15,
+      "privateEngineHeaderCount": 14,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRacing/Source/Core/RacingEngineSystems.cpp"
       ]
@@ -412,10 +404,9 @@
         "Engine/World/TimeOfDaySystem.h",
         "Engine/World/WorldOriginSystem.h",
         "Graphics/WeatherSystem.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 19,
+      "privateEngineHeaderCount": 18,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRPG/Source/Core/RPGEngineSystems.cpp"
       ]
@@ -447,10 +438,9 @@
         "Engine/World/TimeOfDaySystem.h",
         "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
-        "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h"
+        "Utils/EventBus.h"
       ],
-      "privateEngineHeaderCount": 12,
+      "privateEngineHeaderCount": 11,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameRTS/Source/Core/RTSEngineSystems.cpp"
       ]
@@ -477,12 +467,9 @@
         "Engine/ECS/Components.h",
         "Engine/ECS/Components/CoreComponents.h",
         "Engine/ECS/Components/GameplayComponents.h",
-        "Engine/Scripting/AngelScriptEngine.h",
-        "Utils/InvalidStateDetector.h",
-        "Utils/LogMacros.h",
-        "Utils/SparkConsole.h"
+        "Engine/Scripting/AngelScriptEngine.h"
       ],
-      "privateEngineHeaderCount": 9,
+      "privateEngineHeaderCount": 6,
       "copiedInfrastructureFiles": []
     }
   ],

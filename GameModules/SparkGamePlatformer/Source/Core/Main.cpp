@@ -16,11 +16,11 @@
 #include "Hazard/PlatformerHazardSystem.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Camera/PlatformerCameraSystem.h"
-#include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
 #include <Spark/ModuleLog.h>
 
@@ -138,28 +138,34 @@ bool SparkGamePlatformerModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     // Register Platformer-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule({"Platformer.DeadEntityPhysics", "Platformer", Spark::StateViolationSeverity::Warning, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent, RigidBodyComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   auto* rb = w.GetComponent<RigidBodyComponent>(entity);
-                                   if (h && rb && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic)
-                                   {
-                                       float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
-                                                       rb->linearVelocity.z * rb->linearVelocity.z;
-                                       if (speedSq > 4.0f)
-                                       {
-                                           out.push_back({"Platformer.DeadEntityPhysics", static_cast<uint32_t>(entity),
-                                                          "Dead platformer entity still moving horizontally",
-                                                          Spark::StateViolationSeverity::Warning});
-                                       }
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("Platformer.DeadEntityPhysics", "Platformer", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, RigidBodyComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                                    if (h && rb && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic)
+                                    {
+                                        float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                                        rb->linearVelocity.z * rb->linearVelocity.z;
+                                        if (speedSq > 4.0f)
+                                        {
+                                            out.push_back({"Platformer.DeadEntityPhysics",
+                                                           static_cast<uint32_t>(entity),
+                                                           "Dead platformer entity still moving horizontally",
+                                                           Spark::StateViolationSeverity::Warning});
+                                        }
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[Platformer] Host refused the Platformer state-validation rules");
+    }
 
     m_initialized = true;
     Spark::ModuleLog::Info(context, "[Platformer] Spark Platformer module loaded successfully (7 subsystems)");
@@ -183,7 +189,10 @@ void SparkGamePlatformerModule::OnUnload()
 
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them before the module image is unmapped during hot unload/reload.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("Platformer");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("Platformer");
+    }
 
     // Command handlers are std::functions in this DLL too, and they reference the systems torn down below.
     if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)

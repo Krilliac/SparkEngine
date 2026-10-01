@@ -32,7 +32,12 @@
 //     write to the host's in-game console instead of the private LOG_TO_CONSOLE
 //     macros. Migration: rebuild every module against v8; a module that
 //     implements IConsole itself must add Print.
-#define SPARK_SDK_VERSION 8
+// v9: Appended IEngineContext::GetStateValidation() (one vtable slot, MOD-295)
+//     and the IStateValidation interface, so modules register ECS invalid-state
+//     rules through the host instead of the private Utils/InvalidStateDetector.h.
+//     StateViolationSeverity, StateViolation and StateCheckFn moved into the SDK
+//     unchanged.
+#define SPARK_SDK_VERSION 9
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

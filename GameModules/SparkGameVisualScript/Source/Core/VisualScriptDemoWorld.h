@@ -20,6 +20,11 @@
 class World;
 class AngelScriptEngine;
 
+namespace Spark
+{
+    class IEngineContext;
+}
+
 namespace Spark::VisualScriptDemo
 {
     /**
@@ -36,8 +41,10 @@ namespace Spark::VisualScriptDemo
         /**
          * @param world        Live ECS world the demo entities are created in (must outlive this object).
          * @param scriptEngine Initialized AngelScript engine (must outlive this object).
+         * @param context      Host context whose SDK logger (Spark::ModuleLog) receives progress and failure
+         *                     lines; nullptr keeps the builder silent. GetLastError() records failures either way.
          */
-        DemoWorld(World& world, AngelScriptEngine& scriptEngine);
+        DemoWorld(World& world, AngelScriptEngine& scriptEngine, Spark::IEngineContext* context = nullptr);
 
         /// Destroys any entities still owned by this builder.
         ~DemoWorld();
@@ -106,6 +113,7 @@ namespace Spark::VisualScriptDemo
 
         World& m_world;
         AngelScriptEngine& m_scriptEngine;
+        Spark::IEngineContext* m_context;
         std::filesystem::path m_scriptRoot;
         std::unordered_map<std::string, std::string> m_scriptSources;
         std::vector<EntityID> m_entities;

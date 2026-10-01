@@ -20,11 +20,11 @@
 #include "HUD/RacingHUDSystem.h"
 #include <Spark/ModuleLog.h>
 #include <Spark/IConsole.h>
-#include "Utils/InvalidStateDetector.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
 #include <string_view>
 #include <utility>
@@ -132,28 +132,33 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     RegisterConsoleCommands();
 
     // Register Racing-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule({"Racing.StaticVehicleMoving", "Racing", Spark::StateViolationSeverity::Warning, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<RigidBodyComponent>())
-                               {
-                                   auto* rb = w.GetComponent<RigidBodyComponent>(entity);
-                                   if (!rb || rb->type != RigidBodyComponent::Type::Static)
-                                       continue;
-                                   float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
-                                                   rb->linearVelocity.y * rb->linearVelocity.y +
-                                                   rb->linearVelocity.z * rb->linearVelocity.z;
-                                   if (speedSq > 1.0f)
-                                   {
-                                       out.push_back(
-                                           {"Racing.StaticVehicleMoving", static_cast<uint32_t>(entity),
-                                            "Static body has velocity (speedSq=" + std::to_string(speedSq) + ")",
-                                            Spark::StateViolationSeverity::Warning});
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("Racing.StaticVehicleMoving", "Racing", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<RigidBodyComponent>())
+                                {
+                                    auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                                    if (!rb || rb->type != RigidBodyComponent::Type::Static)
+                                        continue;
+                                    float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                                    rb->linearVelocity.y * rb->linearVelocity.y +
+                                                    rb->linearVelocity.z * rb->linearVelocity.z;
+                                    if (speedSq > 1.0f)
+                                    {
+                                        out.push_back(
+                                            {"Racing.StaticVehicleMoving", static_cast<uint32_t>(entity),
+                                             "Static body has velocity (speedSq=" + std::to_string(speedSq) + ")",
+                                             Spark::StateViolationSeverity::Warning});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[Racing] Host refused the Racing state-validation rules");
+    }
 
     m_initialized = true;
     Spark::ModuleLog::Info(m_context, "Racing module loaded successfully");
@@ -183,7 +188,10 @@ void SparkGameRacingModule::OnUnload()
 
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them before the module image is unmapped during hot unload/reload.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("Racing");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("Racing");
+    }
 
     Spark::ModuleLog::Info(m_context, "[Racing] Unloading Spark Racing module...");
     Spark::ModuleLog::Info(m_context, "Racing module shutting down");

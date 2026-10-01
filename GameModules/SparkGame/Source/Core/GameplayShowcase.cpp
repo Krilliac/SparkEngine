@@ -12,13 +12,12 @@
 
 #include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/LogMacros.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/ECS/Components.h"
-#include "Utils/SparkConsole.h"
+#include "Spark/ModuleLog.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -38,11 +37,7 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
         return false;
 
     m_context = context;
-    auto& console = Spark::SimpleConsole::GetInstance();
-
-    console.LogInfo("[Showcase] Initializing gameplay showcase...");
-
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing gameplay showcase");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Initializing gameplay showcase...");
 
     SetupEventSubscriptions();
     SetupLocalization();
@@ -58,18 +53,14 @@ bool GameplayShowcase::Initialize(Spark::IEngineContext* context)
     // Kick off the coroutine demo (spawn → wait → damage → wait → heal)
     StartShowcaseCoroutine();
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Gameplay showcase initialized — %zu entities spawned",
-                   m_spawnedEntities.size());
-    console.LogInfo("[Showcase] Gameplay showcase initialized — " + std::to_string(m_spawnedEntities.size()) +
-                    " entities spawned");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Gameplay showcase initialized — {} entities spawned",
+                           m_spawnedEntities.size());
     return true;
 }
 
 void GameplayShowcase::Shutdown()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down gameplay showcase");
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Showcase] Shutting down gameplay showcase...");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Shutting down gameplay showcase...");
 
     // The lifecycle coroutine's steps capture `this` and their callables live in this
     // module image: stop it (which destroys it outside a scheduler tick) before the
@@ -113,8 +104,9 @@ void GameplayShowcase::Shutdown()
     // Release RAII subscription handles (auto-unsubscribes from EventBus)
     m_subscriptions.clear();
 
+    // Logged before the context is released: ModuleLog is silent without one.
+    Spark::ModuleLog::Info(m_context, "[Showcase] Gameplay showcase shut down");
     m_context = nullptr;
-    console.LogInfo("[Showcase] Gameplay showcase shut down");
 }
 
 // =============================================================================
@@ -146,38 +138,35 @@ void GameplayShowcase::SetupEventSubscriptions()
     if (!eventBus)
         return;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-
     // Track damage events
     m_subscriptions.push_back(eventBus->Subscribe<Spark::EntityDamagedEvent>(
-        [this, &console](const Spark::EntityDamagedEvent& e)
+        [this](const Spark::EntityDamagedEvent& e)
         {
             m_totalDamageEvents++;
             m_totalDamageDealt += e.damage;
-            console.LogInfo("[Showcase] Entity " + std::to_string(e.entityId) + " took " +
-                            std::to_string(static_cast<int>(e.damage)) + " damage from " + e.damageSource);
+            Spark::ModuleLog::Info(m_context, "[Showcase] Entity {} took {} damage from {}", e.entityId,
+                                   static_cast<int>(e.damage), e.damageSource);
         }));
 
     // Track kill events
     m_subscriptions.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
-        [this, &console](const Spark::EntityKilledEvent& e)
+        [this](const Spark::EntityKilledEvent& e)
         {
             m_totalKillEvents++;
-            console.LogInfo("[Showcase] Entity " + std::to_string(e.entityId) + " killed by " +
-                            std::to_string(e.killerId) + " — cause: " + e.cause);
+            Spark::ModuleLog::Info(m_context, "[Showcase] Entity {} killed by {} — cause: {}", e.entityId, e.killerId,
+                                   e.cause);
         }));
 
     // Track weather changes
     m_subscriptions.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
-        [this, &console](const Spark::WeatherChangedEvent& e)
+        [this](const Spark::WeatherChangedEvent& e)
         {
             m_totalWeatherChanges++;
-            console.LogInfo("[Showcase] Weather changed from type " + std::to_string(e.previousType) + " to " +
-                            std::to_string(e.newType) +
-                            " (intensity: " + std::to_string(static_cast<int>(e.intensity * 100.0f)) + "%)");
+            Spark::ModuleLog::Info(m_context, "[Showcase] Weather changed from type {} to {} (intensity: {}%)",
+                                   e.previousType, e.newType, static_cast<int>(e.intensity * 100.0f));
         }));
 
-    console.LogInfo("[Showcase] Subscribed to EntityDamaged, EntityKilled, WeatherChanged events");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Subscribed to EntityDamaged, EntityKilled, WeatherChanged events");
 }
 
 // =============================================================================
@@ -188,11 +177,11 @@ void GameplayShowcase::SetupLocalization()
 {
     // The host's system, never LocalizationSystem::Get(): SparkEngineLib is linked statically into this
     // module, so the singleton here would be a module-local copy the host never reads.
-    auto& console = Spark::SimpleConsole::GetInstance();
     auto* localization = m_context->GetLocalization();
     if (!localization)
     {
-        console.LogWarning("[Showcase] Host exposes no LocalizationSystem; status labels stay in English");
+        Spark::ModuleLog::Warn(m_context,
+                               "[Showcase] Host exposes no LocalizationSystem; status labels stay in English");
         return;
     }
 
@@ -203,9 +192,8 @@ void GameplayShowcase::SetupLocalization()
     if (cwdError || !ShowcaseLocalization::LoadShowcaseStrings(*localization, root, &error))
     {
         const std::string reason = cwdError ? cwdError.message() : error;
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "Showcase string tables not loaded: %s", reason.c_str());
-        console.LogWarning("[Showcase] Showcase string tables not loaded (" + reason +
-                           "); status labels stay in English");
+        Spark::ModuleLog::Warn(
+            m_context, "[Showcase] Showcase string tables not loaded ({}); status labels stay in English", reason);
         return;
     }
 
@@ -215,8 +203,8 @@ void GameplayShowcase::SetupLocalization()
     {
         localization->SetCurrentLanguage("en");
     }
-    console.LogInfo("[Showcase] Loaded showcase strings (en, fr); current language: " +
-                    localization->GetCurrentLanguage());
+    Spark::ModuleLog::Info(m_context, "[Showcase] Loaded showcase strings (en, fr); current language: {}",
+                           localization->GetCurrentLanguage());
 }
 
 // =============================================================================
@@ -234,8 +222,7 @@ void GameplayShowcase::SetupTimeOfDay()
     timeOfDay->SetTimeScale(60.0f);
     timeOfDay->SetPaused(false);
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Showcase] Time of day set to 08:00, time scale 60x (1 sec = 1 min)");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Time of day set to 08:00, time scale 60x (1 sec = 1 min)");
 }
 
 // =============================================================================
@@ -259,8 +246,9 @@ void GameplayShowcase::RegisterCustomSerializer()
     auto* registry = m_context->GetComponentSerializers();
     if (!registry)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game,
-                       "Showcase TagComponent serializer not registered: host exposes no ComponentSerializerRegistry");
+        Spark::ModuleLog::Warn(
+            m_context,
+            "[Showcase] TagComponent serializer not registered: host exposes no ComponentSerializerRegistry");
         return;
     }
 
@@ -305,8 +293,7 @@ void GameplayShowcase::RegisterCustomSerializer()
         m_registeredTagSerializer = true;
     }
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Showcase] Registered TagComponent serializer with SaveSystem");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Registered TagComponent serializer with SaveSystem");
 }
 
 // =============================================================================
@@ -315,13 +302,12 @@ void GameplayShowcase::RegisterCustomSerializer()
 
 void GameplayShowcase::StartShowcaseCoroutine()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
     auto* scheduler = m_context->GetCoroutineScheduler();
     if (!scheduler)
     {
         m_coroutineStage = "unavailable (host exposes no CoroutineScheduler)";
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "Showcase coroutine not started: host exposes no CoroutineScheduler");
-        console.LogWarning("[Showcase] Coroutine sequence unavailable: host exposes no CoroutineScheduler");
+        Spark::ModuleLog::Warn(m_context,
+                               "[Showcase] Coroutine sequence unavailable: host exposes no CoroutineScheduler");
         return;
     }
 
@@ -334,7 +320,7 @@ void GameplayShowcase::StartShowcaseCoroutine()
         .Do([this]() { HealCoroutineTarget(); });
     m_coroutineScheduled = true;
     m_coroutineStage = "scheduled";
-    console.LogInfo("[Showcase] Coroutine sequence scheduled (spawn -> 3s -> damage -> 2s -> heal)");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Coroutine sequence scheduled (spawn -> 3s -> damage -> 2s -> heal)");
 }
 
 void GameplayShowcase::AbortCoroutineSequence(const std::string& reason)
@@ -345,7 +331,7 @@ void GameplayShowcase::AbortCoroutineSequence(const std::string& reason)
     m_coroutineScheduled = false;
     if (auto* scheduler = m_context ? m_context->GetCoroutineScheduler() : nullptr)
         scheduler->StopCoroutine(LifecycleCoroutineName);
-    Spark::SimpleConsole::GetInstance().LogWarning("[Showcase] Coroutine sequence stopped: " + reason);
+    Spark::ModuleLog::Warn(m_context, "[Showcase] Coroutine sequence stopped: {}", reason);
 }
 
 HealthComponent* GameplayShowcase::FindCoroutineTargetHealth()
@@ -372,7 +358,7 @@ void GameplayShowcase::SpawnCoroutineTarget()
 
     m_coroutineTarget = m_spawnedEntities.back();
     m_coroutineStage = "spawned target";
-    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Coroutine: " + result);
+    Spark::ModuleLog::Info(m_context, "[Showcase] Coroutine: {}", result);
 }
 
 void GameplayShowcase::DamageCoroutineTarget()
@@ -407,9 +393,8 @@ void GameplayShowcase::HealCoroutineTarget()
     health->health = std::min(health->maxHealth, health->health + CoroutineHealthDelta);
     m_coroutineScheduled = false;
     m_coroutineStage = "complete";
-    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Coroutine: target healed to " +
-                                                std::to_string(static_cast<int>(health->health)) +
-                                                " HP — sequence complete");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Coroutine: target healed to {} HP — sequence complete",
+                           static_cast<int>(health->health));
 }
 
 // =============================================================================
@@ -495,8 +480,7 @@ std::string GameplayShowcase::CycleWeather()
     weather->SetWeather(newType, -1.0f, 5.0f);
 
     std::string name = Spark::WeatherSystem::GetWeatherTypeName(newType);
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Weather cycling to: %s", name.c_str());
-    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Weather cycling to: " + name);
+    Spark::ModuleLog::Info(m_context, "[Showcase] Weather cycling to: {}", name);
     return "Weather transitioning to: " + name;
 }
 
@@ -513,7 +497,7 @@ std::string GameplayShowcase::DoQuickSave()
 
     if (saveSystem->QuickSave(*world, meta))
     {
-        Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] QuickSave succeeded");
+        Spark::ModuleLog::Info(m_context, "[Showcase] QuickSave succeeded");
         return "QuickSave successful";
     }
     return "QuickSave failed";
@@ -553,8 +537,8 @@ std::string GameplayShowcase::DoQuickLoad()
     std::sort(m_spawnedEntities.begin(), m_spawnedEntities.end());
     m_exhibitEntities.clear();
 
-    Spark::SimpleConsole::GetInstance().LogInfo(
-        "[Showcase] QuickLoad succeeded — " + std::to_string(m_spawnedEntities.size()) + " showcase entities restored");
+    Spark::ModuleLog::Info(m_context, "[Showcase] QuickLoad succeeded — {} showcase entities restored",
+                           m_spawnedEntities.size());
     return "QuickLoad successful (" + std::to_string(m_spawnedEntities.size()) + " showcase entities restored)";
 }
 
@@ -620,8 +604,8 @@ void GameplayShowcase::SpawnExhibit()
         m_exhibitEntities.push_back(static_cast<uint32_t>(entity));
     }
 
-    Spark::SimpleConsole::GetInstance().LogInfo("[Showcase] Placed " + std::to_string(m_exhibitEntities.size()) +
-                                                " exhibit props from Assets/Models/Showcase/Kit");
+    Spark::ModuleLog::Info(m_context, "[Showcase] Placed {} exhibit props from Assets/Models/Showcase/Kit",
+                           m_exhibitEntities.size());
 }
 
 // =============================================================================

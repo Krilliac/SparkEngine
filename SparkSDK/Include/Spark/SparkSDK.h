@@ -7,6 +7,7 @@
  *   - IEngineContext service locator (26 subsystem getters)
  *   - ILogger logging interface
  *   - IConsole console command registration
+ *   - IStateValidation ECS invalid-state rule registration
  *   - SPARK_IMPLEMENT_MODULE macro
  *   - Version and compatibility utilities
  *   - Export macros
@@ -24,6 +25,7 @@
 #include "IModule.h"
 #include "ILogger.h"
 #include "IConsole.h"
+#include "IStateValidation.h"
 #include "ModuleABI.h"
 #include "PluginABI.h"
 #include "ModuleRegistry.h"
