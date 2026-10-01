@@ -30,8 +30,11 @@ set(CMAKE_RC_COMPILER  ${TOOLCHAIN_PREFIX}-windres)
 # the cross-compiler itself runs on this host, so query its predefined macros.
 # An explicit -DSPARK_MODULE_CXX_LANGUAGE_ABI=<value> remains authoritative.
 if(NOT DEFINED SPARK_MODULE_CXX_LANGUAGE_ABI)
+    # Preprocess empty input. Without INPUT_FILE the compiler reads CMake's own
+    # stdin, so a configure run from a terminal or an open pipe blocks forever.
     execute_process(
         COMMAND "${CMAKE_CXX_COMPILER}" -std=c++23 -dM -E -x c++ -
+        INPUT_FILE /dev/null
         RESULT_VARIABLE _spark_mingw_abi_probe_result
         OUTPUT_VARIABLE _spark_mingw_predefined_macros
         ERROR_VARIABLE _spark_mingw_abi_probe_error)
