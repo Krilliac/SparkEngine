@@ -1,13 +1,17 @@
 # SDK-240 / ASSET-220: generate a game with the INSTALLED spark-cli from the
-# SDK component's shipped EmptyProject example and build it from an sdk-only
-# install, with nothing from the engine source or build tree.
+# SDK component's shipped EmptyProject example and build it from a component
+# install (sdk, tools and their declared runtime dependency), with nothing from
+# the engine source or build tree.
 #
 # The sdk component installs Templates/EmptyProject as
 # share/SparkEngine/sdk/examples/EmptyProject and the SDK README calls it
 # buildable, but SparkSDKComponentCompleteness only checks that its files exist
 # and SparkInstalledTemplates builds templates from a FULL install. This runner:
 #
-#   1. installs ONLY the sdk and tools components of the configured engine build;
+#   1. installs ONLY the sdk and tools components of the configured engine build,
+#      plus runtime, which both declare as a dependency (CPACK_COMPONENT_SDK_DEPENDS
+#      and CPACK_COMPONENT_TOOLS_DEPENDS): the bundled SDL2's shared library ships in
+#      runtime while its CMake export ships in sdk, so sdk alone is not installable;
 #   2. runs `python <prefix>/tools/spark-cli/spark_cli.py new SparkGeneratedGame
 #      --template EmptyProject` with SPARK_ENGINE_DIR unset and the working
 #      directory outside the source tree, so the CLI must find the prefix and
@@ -423,7 +427,7 @@ set(_projects "${SPARK_TEST_ROOT}/projects")
 set(_source "${_projects}/${_module_name}")
 set(_build "${SPARK_TEST_ROOT}/b")
 
-foreach(_component IN ITEMS sdk tools)
+foreach(_component IN ITEMS runtime sdk tools)
     _run_checked("Install the ${_component} component"
         "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
         --config "${SPARK_CONFIG}" --prefix "${_prefix}" --component ${_component})
