@@ -30,7 +30,7 @@ Launches SparkEngine exactly as collect_headless_result.py does
   (``PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`` from ``K32GetProcessMemoryInfo``,
   which the OS never trims the way it trims a working set) on Windows,
   sampled every ``--sample-interval`` seconds. The leak
-  slope is an ordinary least-squares fit of RSS against time over
+  slope is a Theil-Sen (median pairwise slope) fit of RSS against time over
   ``[ready + warmup, ready + duration]``. The loop runs at most 60 Hz, so it
   cannot finish before ``ready + duration``: the window never includes
   teardown, whose frees would bias the slope downward.
@@ -103,6 +103,7 @@ TICK_HZ = 60
 MIN_RESULT_DURATION_S = 3600.0
 MAX_DURATION_S = 7 * 24 * 3600.0
 MIN_FIT_SAMPLES = 10
+MAX_THEIL_SEN_SAMPLES = 1500
 # Provisional harness ceiling, not a governed budget. It is loose enough to
 # absorb allocator noise in a two-minute fit window yet still trips on a
 # steady leak of a few KiB per tick (1 KiB/tick at 60 Hz is ~211 MiB/hour).
@@ -343,7 +344,12 @@ def parse_nullrhi_live_resources(stdout_text: str) -> int:
 
 def fit_leak_slope(samples: list[tuple[float, int]], window_start_s: float,
                    window_end_s: float) -> tuple[float | None, int]:
-    """Least-squares RSS slope in bytes/hour over samples inside the window.
+    """Theil-Sen RSS slope in bytes/hour over samples inside the window.
+
+    The median of every pairwise slope: steady growth is recovered exactly, as
+    with least squares, but one late allocator step on an otherwise flat run (a
+    hosted gcc Release soak held 30.3 MB for 100 s, then stepped 2 MB once) no
+    longer reads as a leak. Recurring growth still moves the median.
 
     Returns (None, n) when fewer than MIN_FIT_SAMPLES samples fall inside the
     window or they do not span any time.
@@ -352,13 +358,21 @@ def fit_leak_slope(samples: list[tuple[float, int]], window_start_s: float,
     count = len(window)
     if count < MIN_FIT_SAMPLES:
         return None, count
-    mean_t = sum(t for t, _ in window) / count
-    mean_rss = sum(rss for _, rss in window) / count
-    variance = sum((t - mean_t) ** 2 for t, _ in window)
-    if variance <= 0.0:
+    if count > MAX_THEIL_SEN_SAMPLES:
+        # Pairwise slopes are quadratic; an evenly spaced subset keeps a multi-day run's fit bounded.
+        step = count / MAX_THEIL_SEN_SAMPLES
+        window = [window[int(index * step)] for index in range(MAX_THEIL_SEN_SAMPLES)]
+    slopes = sorted(
+        (window[j][1] - window[i][1]) / (window[j][0] - window[i][0])
+        for i in range(len(window))
+        for j in range(i + 1, len(window))
+        if window[j][0] != window[i][0]
+    )
+    if not slopes:
         return None, count
-    covariance = sum((t - mean_t) * (rss - mean_rss) for t, rss in window)
-    return covariance / variance * 3600.0, count
+    middle = len(slopes) // 2
+    median = slopes[middle] if len(slopes) % 2 else (slopes[middle - 1] + slopes[middle]) / 2.0
+    return median * 3600.0, count
 
 
 def _read_bounded(path: Path) -> str:

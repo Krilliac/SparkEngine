@@ -123,6 +123,26 @@ class LeakFitTests(unittest.TestCase):
         self.assertEqual(count, 31)
         self.assertEqual(slope, 0.0)
 
+    def test_one_late_allocator_step_is_not_a_leak(self) -> None:
+        # The hosted gcc Release shape: flat for 100 s, one 2 MB step, flat again.
+        samples = [(float(t), 30_277_632) for t in range(0, 102)]
+        samples += [(float(t), 32_333_824) for t in range(102, 121)]
+        slope, count = soak_tool.fit_leak_slope(samples, 0.0, 120.0)
+        self.assertEqual(count, 121)
+        self.assertLess(abs(slope), soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR / 10)
+
+    def test_long_run_fit_is_bounded_and_still_recovers_growth(self) -> None:
+        samples = [(float(t), 10_000_000 + t * 500) for t in range(20_000)]
+        slope, count = soak_tool.fit_leak_slope(samples, 0.0, 20_000.0)
+        self.assertEqual(count, 20_000)
+        self.assertAlmostEqual(slope, 500 * 3600, delta=1.0)
+
+    def test_recurring_steps_still_read_as_growth(self) -> None:
+        # A staircase leak: 1 MB every 10 s is 360 MB/h whatever the fit.
+        samples = [(float(t), 30_000_000 + (t // 10) * 1_000_000) for t in range(0, 121)]
+        slope, _ = soak_tool.fit_leak_slope(samples, 0.0, 120.0)
+        self.assertGreater(slope, soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR)
+
     def test_too_few_or_degenerate_samples_give_no_slope(self) -> None:
         few = [(float(t), 1000) for t in range(soak_tool.MIN_FIT_SAMPLES - 1)]
         self.assertEqual(soak_tool.fit_leak_slope(few, 0.0, 100.0), (None, soak_tool.MIN_FIT_SAMPLES - 1))
