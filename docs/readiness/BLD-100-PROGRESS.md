@@ -497,3 +497,203 @@ Shipping has `BUILD_TESTS=OFF`: its verification command is the custom target,
 not a CTest invocation that would select nothing. A clean LTO-on rebuild,
 compiled fixture suite, below-floor execution and exact-SHA hosted CI remain
 unverified. BLD-100 remains open.
+
+## 2026-10-01: Shipping residuals resolved, enforcement re-applied
+
+The residuals that held back the Windows scan were measured again on a fresh
+`windows-shipping` MinSizeRel build of this branch's base (079b99131, LTO off,
+MSVC 14.44.35207, LLVM 22.1.8 `llvm-objdump`/`llvm-pdbutil`). The base scanner
+reported:
+
+| Image | Above-floor | Undecodable |
+|---|---:|---:|
+| SparkEditor.exe | 29 | 1026 |
+| SparkEngine.exe | 25 | 616 |
+| SparkGameFPS.dll | 13 | 324 |
+| SparkLauncher.exe | 2 | 205 |
+| SparkInstaller.exe | 0 | 60 |
+| SparkCooker.exe | 0 | 76 |
+| SparkCrashReporter.exe | 0 | 70 |
+| SparkBuild.exe | 0 | 1 |
+| SparkAutomation, SparkConsole, SparkShaderCompiler, SparkWorker | 0 | 0 |
+
+The libsodium AVX2/AES-NI/AVX-512 findings from the 2026-09-30 table were
+already gone: that table was taken before `cmake/SparkLibsodium.cmake` stopped
+compiling those variants on MSVC. Each remaining class was resolved:
+
+- **Switch tables in `.text` (every undecodable record).** MSVC x64 places
+  jump tables (32-bit RVAs) and byte index tables after the procedure body,
+  inside the extent the PDB records. The sweep decodes them as undecodable
+  bytes or as bogus instructions (one decoded as `vshufps` in
+  `Spark::Json::Detail::PrettyImpl`) and can leave the stream out of step.
+  `tools/isa_code_map.py` now proves each table before treating its bytes as
+  data. The checks: the dispatch idiom with the image base reaching every use;
+  the extent from the bound check, or for `std::variant` (no bound, index -1
+  slot) from entries that name instruction starts; entries landing on rebuilt
+  instructions; no branch into or fallthrough into a table; PDB `noreturn` on
+  the calls in front of tables; and a fixed point when the rebuilt stream is
+  re-read. Out-of-step stretches are re-decoded with the same disassembler.
+  Unexplained bytes stay undecodable. Nothing is exempted by image, procedure
+  or range.
+- **AVX2 loops behind `__isa_available >= 5`** (auto-vectorized
+  `Sha256State::Finalize`): the `__isa_available` guard rule now covers
+  AVX/AVX2 as well as LZCNT at level 5.
+- **EVEX loops behind `__isa_available >= 6`** (`cgltf_calc_index_bound`,
+  `__std_minmax_disp`/`__std_minmax_impl`): a level-6 rule covers only
+  `vpmaxuq`/`vpminuq` (AVX512F/VL). In the vcruntime `__isa_available_init`
+  disassembly, the store of 6 needs `CPUID.7:EBX & 0xD0030000` (F, DQ, CD, BW,
+  VL) and `XCR0 & 0xE0`. Any other EVEX instruction still fails.
+- **`std::_Countl_zero_lzcnt<unsigned __int64>` (LZCNT, out of line).** Its
+  only reference is `_Checked_x86_x64_countl_zero`'s `cmpl $0x5,
+  __isa_available; jge` tail jump. `REVIEWED_CALLER_GUARDED_PROCEDURES` holds
+  this one entry. Each scan re-proves it: every code reference is guarded, the
+  address is never taken, and no data section holds its VA or RVA.
+
+Result with the new scanner, through the real `CpuFloor_IsaBaseline` target
+(`cmake --build build/windows-shipping --config MinSizeRel --target
+CpuFloor_IsaBaseline`): `OK` for all 12 images, 0 above-floor, 0 undecodable.
+SparkEngine had 162 proven tables (14458 bytes), SparkEditor 218, SparkGameFPS
+69 and SparkLauncher 30.
+
+Load-bearing check: a temporary, uncommitted `SparkIsaProbeAvx2` (AVX2
+intrinsics, reachable from `wWinMain`) was added to
+`Core/SparkEngineWindows.cpp`. The rebuilt target then failed with MSB8066:
+`FAIL SparkEngine.exe: ... 5 above-floor`, all five in `SparkIsaProbeAvx2`.
+After restoring the file (the object was recompiled), the target passed again.
+That probe build also exposed a layout-dependent false table rejection in
+`Spark::Net::TrustStoreErrorText`, which is what led to the fixed-point
+requirement. `Tests/Tools/test_isa_code_map.py` was mutation-checked: removing
+the validation, the base-reach check, the reachable-code check on backward
+slots, the case-leader re-match or the caller-guard reasons each fails it.
+
+The enforcement commits 97809e21d and d57694e24 are re-applied. The
+windows-shipping CI step and, with `BUILD_TESTS=ON`, the `CpuFloor_IsaBaseline`
+CTest are fail-closed again.
+
+Entry points: the Windows engine and editor floor checks now compile in a real
+MSVC Shipping build. `SparkEngine.exe --version` runs the passing branch
+(exit 0). The refusal branch has still not run. Running it needs a CPU below
+the floor, or a CPUID emulator such as Intel SDE (an external download not made
+here).
+
+Unverified: hosted CI (the windows-2022 runner's MSVC toolset and LLVM version
+may differ from the reviewed 14.44.35207 and the local LLVM 22.1.8; either can
+turn the scan red), LTO-on images, the `CpuFloor_IsaBaseline` CTest in a
+`windows-release` tree, and below-floor execution.
+
+## 2026-10-01 (cont.): independent review hardening (Codex gpt-6-sol)
+
+An independent review rejected the first cut with four executed synthetic
+checks. All four are fixed, each with a regression test built from the
+reviewer's case, and the real windows-shipping scan still passes on all 12
+images (0 above-floor, 0 undecodable) while the temporary AVX2 probe still
+fails.
+
+1. **A switch table could hide code entered from outside its procedure.** The
+   branch/fall-through checks were per-procedure, so a cross-procedure tail jump
+   (or an address-taken pointer) into a table's bytes was unchecked.
+   `check_isa_baseline.py` now computes image-wide code entry points and rejects
+   any proven table whose bytes they enter (`isa_code_map.ImageBytes.entered_within`).
+   Entries are gathered over the *rebuilt* streams of a first scan pass (so table
+   bytes, which decode as bogus branches on a raw linear sweep, do not pollute
+   them), plus the PE's own exception handlers, exports, base-relocation pointees
+   and guard-CF table. `.pdata` BeginAddress is deliberately excluded: MSVC gives
+   a compiler-placed jump table its own RUNTIME_FUNCTION (observed in
+   `ImGui::ColorConvertHSVtoRGB` and the UCRT wmem* fragments), so a begin can
+   legitimately coincide with table bytes.
+2. **Guard dominance assumed the procedure's entry was the only way in.** A tail
+   jump from another procedure into a guarded AVX block, or a reliable
+   address-taken reference to it, now seeds the reachability analysis as an
+   alternate root, so a block reachable without the guard edge stays a
+   violation. The caller-guarded helper exemption
+   (`std::_Countl_zero_lzcnt`) is withdrawn unless its complete reference set is
+   closed: a computed `mov RVA; add imagebase; call` reference, an export, a
+   relocation or a guard-CF entry now counts as unguarded.
+3. **An unknown VEX mnemonic fell through to plain AVX.** VEX classification now
+   uses an explicit allow-list of the AVX/AVX2 mnemonics llvm-objdump prints
+   (built from the AVX/AVX2 ISA and every VEX mnemonic in the shipped images);
+   anything else fails closed. AVX-VNNI (`vpdpbusd`), AVX-IFMA, AVX-NE-CONVERT
+   and the XOP forms get their own feature classes, so the `__isa_available >= 5`
+   guard cannot excuse them.
+4. **A record without raw bytes disabled rebuilding, and the final check needed
+   only one classified instruction.** `_verify_coverage` now requires that the
+   classified instructions, proven tables and padding tile every executable
+   file-backed byte range with no gap; a record whose size is unknown (no raw
+   bytes) leaves a gap and fails.
+
+Scoping note (learned while fixing 1-2): immediate-materialized addresses are
+used only for the caller-guard reference check, never to reject tables or seed
+guard roots -- a data constant can coincide with a byte inside a real jump table
+or a guarded block, and treating every such immediate as a code entry wrongly
+rejected ~160 legitimate tables and withdrew the UCRT `wmemcmp` guard on a first
+attempt. Only branches and reliable structural pointers enter code.
+
+The MSVC CRT/STL exemptions remain pinned to toolset 14.44.35207; on a PDB built
+by a different toolset the report now prints a "re-review for toolset X" note so
+a hosted-runner red is diagnosable, without loosening anything.
+
+Regression tests: `Tests/Tools/test_isa_code_map.py` (ExternalEntryTests,
+CallerGuardedTests computed/closed-reference cases, CoverageTests),
+`Tests/Tools/test_isa_guard_dominance.py` (alternate-entry and
+separately-bitted-VEX cases), `Tests/Tools/test_check_isa_baseline.py`
+(separately-bitted and unrecognized VEX). Each fix was mutation-checked: removing
+it fails its test. The ISA unit suites pass. Still unverified, as before: the
+below-floor refusal path, and any hosted Windows run.
+
+## 2026-10-01 (cont.): second independent review hardening (Codex gpt-6-sol)
+
+A second review accepted that the four earlier fixes handle their synthetic
+cases but found residual computed control flow and an incomplete toolset pin.
+Three further changes, each with a regression test from the reviewer's
+synthetic; all 12 windows-shipping images still pass with the same proven-table
+counts as before (SparkEngine 162, SparkEditor 218, SparkGameFPS 69,
+SparkLauncher 30, SparkInstaller 16, SparkCooker 3, SparkCrashReporter 1,
+SparkAutomation 1, SparkBuild 8, SparkShaderCompiler 3; 0 above-floor, 0
+undecodable), and the AVX2 probe still fails.
+
+1. **Toolset pinning is now complete.** Previously memcpy/memset were recognised
+   by module-suffix alone and the inline guard rules and caller-guarded helper
+   did not consult the PDB's toolset, so a PDB marked as another toolset still
+   got those exemptions. Every reviewed MSVC CRT/STL exemption is now granted
+   only when the PDB's sole observed toolset is 14.44.35207 (`PdbInfo.reviewed_
+   toolset`); otherwise the instruction is a violation and the report's
+   "re-review for this toolset" note explains the red. The engine's own
+   `Spark::Detail::ReadXcr0` XSAVE review is tagged toolset-independent, so the
+   lld-link fixture (no CRT) still passes.
+
+2. **Computed control flow is resolved by basic-block dataflow, not by treating
+   every immediate as an entry** (which caused the round-1 false positives). The
+   collector tracks an immediate image address materialized into a register
+   (movabs/mov/lea, constant add/sub/inc/dec, and the mov-RVA-plus-image-base
+   idiom) and, when it reaches `jmp *reg` / `call *reg` -- or is stored while the
+   procedure has an indirect branch -- records the target as a computed entry.
+   A computed entry (a) seeds guard dominance as an alternate root
+   (`movabs AVXblock; call *rax` on the scalar path), (b) withdraws the
+   caller-guarded exemption (`movabs helper+1; dec; call *rax`), and (c) rejects
+   a table whose bytes it enters. Separately, for any materialized image address
+   that lands inside proven-table bytes, the bytes are decoded from that offset
+   and the table is rejected if they form an **above-floor** instruction before a
+   terminator. Undecodable bytes at a merely-pointed offset do not reject the
+   table: a byte/jump table's own bytes decode as undecodable garbage (an MSVC
+   index table in SparkGameFPS `_On_type` is pointed into by a data constant),
+   and a computed *jump* into such bytes is caught independently as an image-wide
+   code entry. This is the one deliberate narrowing from the reviewer's "above-
+   floor or undecodable" wording, forced by that real legitimate table; it still
+   catches the reviewer's `c5 f8 77` (vzeroupper) masked-table synthetic.
+
+3. **Residual limit documented** (threat model: compiler-generated MSVC code from
+   this repository, not adversarial binaries). Resolved: direct branches,
+   structural pointers (relocs/exports/handlers/guard-CF) and basic-block-local
+   computed targets. Not resolved: interprocedural or memory-carried computed
+   targets in a fixed-base image. Recorded in the scanner module docstring, here,
+   and the BLD-100[3] note. Coverage is every configured first-party image with
+   its own build PDB; the Microsoft runtime DLLs packaged under `redist/` have no
+   build PDB and are not scanned (Codex round-3 review, ACCEPT-WITH-FIXES).
+
+Each fix was mutation-checked (toolset flag, per-range gate, computed-use,
+constant adjust, stored pointer, above-floor decode-check -- removing any fails
+its test). Regression tests: `test_isa_guard_dominance` (toolset-provenance and
+computed-target guard withdrawal), `test_pe_isa_ranges` (CRT vs engine toolset
+gating), `test_isa_code_map` (ComputedTargetTests, TableMasksCodeTests,
+caller-guard toolset and computed-reference cases). Still unverified, as before:
+the below-floor refusal path, and any hosted Windows run.

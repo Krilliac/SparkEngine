@@ -4,7 +4,8 @@ tools/check_isa_baseline.py exempts an above-floor instruction inlined into an
 arbitrary PE procedure only when it is reachable from the procedure entry and
 unreachable once the edges a reviewed guard compare implies are removed. The
 guard table binds features: _Avx2WmemEnabled(WeakValue) != 0 excuses AVX/AVX2,
-__isa_available >= 5 excuses LZCNT. The disassembly and llvm-pdbutil text here
+__isa_available >= 5 excuses AVX/AVX2/LZCNT, and __isa_available >= 6 excuses
+only the reviewed AVX512F/VL instructions vpmaxuq/vpminuq. The disassembly and llvm-pdbutil text here
 are synthetic in the formats the real tools print, so this runs on every host.
 """
 
@@ -22,7 +23,7 @@ DEFAULT_PUBLICS = (("_Avx2WmemEnabled", "0003:0000"), ("_Avx2WmemEnabledWeakValu
                    ("__isa_available", "0003:0032"), ("SomethingElse", "0003:0064"))
 
 
-def pdb_info(size=0x100, publics=DEFAULT_PUBLICS):
+def pdb_info(size=0x100, publics=DEFAULT_PUBLICS, toolsets=None):
     symbols = ("Mod 0000 | `D:\\app\\GatewayAreaControl.obj`:\n"
                "  4 | S_GPROC32 [size = 52] `wmemchr`\n"
                f"    parent = 0, end = 60, addr = 0001:0000, code size = {size}\n")
@@ -30,13 +31,20 @@ def pdb_info(size=0x100, publics=DEFAULT_PUBLICS):
                           for name, address in publics)
     ranges, procedures = checker._parse_pdb_symbols(symbols.splitlines(), BASE, SECTIONS)
     guards = checker._parse_pdb_guards(public_text.splitlines(), BASE, SECTIONS)
-    return checker.PdbInfo(ranges, procedures, guards)
+    return checker.PdbInfo(ranges, procedures, guards,
+                           frozenset({checker.REVIEWED_TOOLSET}) if toolsets is None else toolsets)
 
 
-def scan(rows, **options):
+def scan(rows, entries=None, **options):
     """rows: (offset, llvm-objdump instruction text); addresses are TEXT + offset."""
     lines = [f"{TEXT:016x} <.text>:"] + [f"{TEXT + offset:x}:     \t{text}" for offset, text in rows]
-    return checker.scan_lines("image.exe", lines, [], pdb_info(**options))
+    return checker.scan_lines("image.exe", lines, [], pdb_info(**options), None, entries)
+
+
+def entries(**fields):
+    base = dict(image_base=BASE, branch_sources={}, computed_targets=set(), other=set())
+    base.update(fields)
+    return checker._ImageEntries(**base)
 
 
 def guard(address, immediate="$0x0"):
@@ -122,9 +130,8 @@ class GuardDominanceTests(unittest.TestCase):
 
     def test_guard_features_are_bound(self):
         self.assertViolation(scan(self.lzcnt_rows(address=WMEM, immediate="$0x0", condition="je")), "LZCNT")
-        # MSVC's auto-vectorizer guards EVEX code with __isa_available >= 6; the
-        # reviewed guard excuses LZCNT only.
-        for text, feature in (("vfmadd231ps\t%ymm2, %ymm1, %ymm0", "FMA"), ("vzeroupper", "AVX (VEX)"),
+        # __isa_available >= 5 proves AVX2 (and LZCNT), nothing stronger.
+        for text, feature in (("vfmadd231ps\t%ymm2, %ymm1, %ymm0", "FMA"),
                               ("shlxq\t%rsi, %rdi, %rax", "BMI2"),
                               ("62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2", "AVX-512")):
             rows = self.lzcnt_rows()
@@ -132,10 +139,75 @@ class GuardDominanceTests(unittest.TestCase):
             with self.subTest(feature=feature):
                 self.assertViolation(scan(rows), feature)
 
+    def test_isa_available_avx2_level_allows_auto_vectorized_avx2(self):
+        # Sha256State::Finalize: "cmpl $0x5, __isa_available; movq; jl scalar".
+        for text, feature in (("vpsrlvq\t%xmm0, %xmm6, %xmm1", "AVX (VEX)"), ("vzeroupper", "AVX (VEX)"),
+                              ("vpaddd\t%ymm0, %ymm1, %ymm2", "AVX/AVX2 (ymm)")):
+            for immediate, allowed in (("$0x5", True), ("$0x4", False)):
+                rows = self.lzcnt_rows(immediate=immediate)
+                rows[2] = (0x09, text)
+                with self.subTest(text=text, immediate=immediate):
+                    if allowed:
+                        self.assertAllowed(scan(rows), feature)
+                    else:
+                        self.assertViolation(scan(rows), feature)
+
+    def test_isa_available_avx512_level_allows_only_reviewed_evex_instructions(self):
+        # cgltf_calc_index_bound: "cmpl $0x6, __isa_available; jl scalar" before vpmaxuq.
+        evex = "62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2"
+        for immediate, allowed in (("$0x6", True), ("$0x5", False), ("$0x4", False)):
+            rows = self.lzcnt_rows(immediate=immediate)
+            rows[2] = (0x09, evex)
+            with self.subTest(immediate=immediate):
+                if allowed:
+                    self.assertAllowed(scan(rows), "AVX-512")
+                else:
+                    self.assertViolation(scan(rows), "AVX-512")
+        # vpermb is AVX512_VBMI, which __isa_available >= 6 does not prove.
+        rows = self.lzcnt_rows(immediate="$0x6")
+        rows[2] = (0x09, "62 f2 75 08 8d c2           \tvpermb\t%xmm2, %xmm1, %xmm0")
+        self.assertViolation(scan(rows), "AVX-512")
+
     def test_evex_xmm_instruction_under_the_wmem_guard_is_a_violation(self):
         rows = list(WMEM_GUARDED)
         rows[2] = (0x09, "62 f2 ed 08 3f d1           \tvpmaxuq\t%xmm1, %xmm2, %xmm2")
         self.assertViolation(scan(rows), "AVX-512")
+
+    def test_separately_bitted_vex_is_a_violation_under_the_isa_guard(self):
+        # AVX-VNNI vpdpbusd has its own CPUID bit; __isa_available >= 5 does not
+        # establish it, so the level-5 guard cannot excuse it.
+        rows = self.lzcnt_rows()
+        rows[2] = (0x09, "vpdpbusd\t%ymm0, %ymm1, %ymm2")
+        self.assertViolation(scan(rows), "AVX-VNNI")
+
+    def test_alternate_entry_past_the_guard_is_a_violation(self):
+        # A tail jump from another procedure lands on the AVX2 block, bypassing
+        # the guard. Without the alternate entry the block is exempt; with it,
+        # the block is reachable without the guard edge, so it is a violation.
+        self.assertAllowed(scan(WMEM_GUARDED), "AVX/AVX2 (ymm)")
+        avx_block = TEXT + 0x09
+        external = {avx_block: {TEXT + 0x9000}}  # a source outside the procedure
+        self.assertViolation(scan(WMEM_GUARDED, entries=entries(branch_sources=external)), "AVX/AVX2 (ymm)")
+        # A reliable address-taken AVX2 block (reloc/guard-CF/export) is likewise
+        # reachable without the guard.
+        self.assertViolation(scan(WMEM_GUARDED, entries=entries(other={avx_block})),
+                             "AVX/AVX2 (ymm)")
+        # A computed indirect target that reaches the block bypasses the guard.
+        self.assertViolation(scan(WMEM_GUARDED, entries=entries(computed_targets={avx_block})),
+                             "AVX/AVX2 (ymm)")
+        # An intra-procedure branch to the same block is a normal edge, still exempt.
+        self.assertAllowed(scan(WMEM_GUARDED, entries=entries(branch_sources={avx_block: {TEXT + 0x20}})),
+                           "AVX/AVX2 (ymm)")
+
+    def test_guard_exemption_requires_reviewed_toolset_provenance(self):
+        # The reviewed inline guards were validated against toolset 14.44.35207.
+        # A PDB whose only provenance is another toolset gets no exemption.
+        self.assertAllowed(scan(WMEM_GUARDED), "AVX/AVX2 (ymm)")
+        self.assertViolation(scan(WMEM_GUARDED, toolsets=frozenset({"14.40.33811"})), "AVX/AVX2 (ymm)")
+        self.assertViolation(scan(WMEM_GUARDED, toolsets=frozenset()), "AVX/AVX2 (ymm)")
+        # A mix that is not exactly the reviewed toolset is also denied.
+        self.assertViolation(scan(WMEM_GUARDED, toolsets=frozenset({checker.REVIEWED_TOOLSET, "14.40.33811"})),
+                             "AVX/AVX2 (ymm)")
 
     def test_compare_against_unreviewed_global_is_a_violation(self):
         self.assertViolation(scan(self.lzcnt_rows(address=OTHER)), "LZCNT")

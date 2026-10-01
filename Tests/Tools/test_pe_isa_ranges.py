@@ -99,7 +99,7 @@ class SectionContributionTests(unittest.TestCase):
     def test_procedure_and_contribution_for_the_same_bytes_count_once(self):
         contribution, _ = parse_contributions(contributions((0, "0001:0016", 32, True)))
         procedure = checker.PdbRange(BASE + 0x1010, BASE + 0x1030, "memcpy", MEMCPY_MODULE)
-        info = checker.PdbInfo(contribution + [procedure], [], {})
+        info = checker.PdbInfo(contribution + [procedure], [], {}, frozenset({checker.REVIEWED_TOOLSET}))
         result = checker.scan_lines("x.dll", [f"{BASE + 0x1010:x}:     \tvmovdqu\t(%rcx), %ymm0"], [], info)
         self.assertEqual(result.allowed["AVX/AVX2 (ymm)"], 1)
         self.assertEqual(result.violations, [])
@@ -128,6 +128,16 @@ class ProcedureRangeTests(unittest.TestCase):
                 self.assertFalse(checker._pdb_allows(feature, ranges[0].start, ranges))
             self.assertEqual(self.parse(module="D:\\build" + suffix, symbol=symbol + "_extra"), [])
             self.assertEqual(self.parse(module=VECTOR_MODULE, symbol=symbol), [])
+
+    def test_crt_pairs_need_reviewed_toolset_but_engine_procedure_does_not(self):
+        # memcpy/memset (CRT) are exempt only with toolset 14.44.35207 provenance.
+        for symbol, suffix in checker.REVIEWED_MSVC_MEMORY_MODULES.items():
+            ranges = self.parse(module="D:\\build" + suffix, symbol=symbol)
+            self.assertTrue(checker._pdb_allows("AVX/AVX2 (ymm)", ranges[0].start, ranges, reviewed_toolset=True))
+            self.assertFalse(checker._pdb_allows("AVX/AVX2 (ymm)", ranges[0].start, ranges, reviewed_toolset=False))
+        # The engine's own ReadXcr0 XSAVE review does not depend on the toolset.
+        ranges = self.parse(module=r"D:\app\main.obj", symbol=checker.SPARK_XSAVE_PROCEDURE)
+        self.assertTrue(checker._pdb_allows("XSAVE", ranges[0].start, ranges, reviewed_toolset=False))
 
     def test_vector_procedures_need_no_symbol_list(self):
         # The contribution ranges cover vector_algorithms.obj; a procedure record alone grants nothing.

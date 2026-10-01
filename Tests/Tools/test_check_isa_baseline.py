@@ -216,6 +216,36 @@ class ClassifierTests(unittest.TestCase):
                 evex, instruction = checker.split_raw_bytes(text)
                 self.assertEqual(checker.classify(*checker.split_instruction(instruction), evex), feature)
 
+    def test_separately_bitted_vex_extensions_are_not_avx(self) -> None:
+        # Each has its own CPUID bit, so an AVX2 guard must never cover it.
+        cases = {
+            "vpdpbusd %xmm0, %xmm1, %xmm2": "AVX-VNNI",
+            "vpdpwssd %ymm0, %ymm1, %ymm2": "AVX-VNNI",
+            "vpmadd52luq %xmm0, %xmm1, %xmm2": "AVX-IFMA",
+            "vcvtneps2bf16 %ymm0, %xmm1": "AVX-NE-CONVERT",
+            "vbcstnebf162ps (%rax), %ymm0": "AVX-NE-CONVERT",
+            "vaesenc %xmm0, %xmm1, %xmm2": "VAES",
+            "vgf2p8mulb %xmm0, %xmm1, %xmm2": "GFNI",
+        }
+        for text, feature in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(self._classify(text), feature)
+
+    def test_unrecognized_vex_mnemonic_fails_closed(self) -> None:
+        # A VEX vector instruction llvm might print that AVX/AVX2 does not
+        # establish must not fall through to plain AVX.
+        for text in ("vfutureop %ymm0, %ymm1, %ymm2", "vpnewthing %xmm0, %xmm1, %xmm2"):
+            with self.subTest(text=text):
+                self.assertEqual(self._classify(text), "AVX (unrecognized VEX)")
+
+    def test_real_avx_avx2_vex_mnemonics_stay_avx(self) -> None:
+        for text, feature in (("vpaddd %ymm0, %ymm1, %ymm2", "AVX/AVX2 (ymm)"),
+                              ("vmovdqu %xmm1, %xmm0", "AVX (VEX)"),
+                              ("vcmpgt_oqpd %ymm0, %ymm1, %ymm2", "AVX/AVX2 (ymm)"),
+                              ("vfmadd231ps %ymm2, %ymm1, %ymm0", "FMA")):
+            with self.subTest(text=text):
+                self.assertEqual(self._classify(text), feature)
+
     def test_undecodable_bytes_are_violations_not_instructions(self) -> None:
         # These may be data or newer instructions. Neither proves floor safety.
         lines = ["140001000: 62 f2 ff        \t<unknown>", "  140001003:\t62 ff    \t(bad)",
