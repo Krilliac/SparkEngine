@@ -54,7 +54,9 @@ namespace
         device.GetD3D11Context()->ClearState();
         device.GetD3D11Context()->Flush();
         queue->ClearStoredMessages();
-        debug->ReportLiveDeviceObjects(static_cast<D3D11_RLDO_FLAGS>(D3D11_RLDO_DETAIL | D3D11_RLDO_IGNORE_INTERNAL));
+        // D3D11_RLDO_IGNORE_INTERNAL; mingw-w64's d3d11sdklayers.h predates that enumerator.
+        constexpr UINT kRldoIgnoreInternal = 0x4;
+        debug->ReportLiveDeviceObjects(static_cast<D3D11_RLDO_FLAGS>(D3D11_RLDO_DETAIL | kRldoIgnoreInternal));
         const uint64_t live = queue->GetNumStoredMessages();
         queue->ClearStoredMessages();
         return live;
