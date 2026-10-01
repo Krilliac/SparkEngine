@@ -399,6 +399,18 @@ class StructuredReferenceTests(ContractTestCase):
         self.mutable["workItems"][0]["sourceContext"].append(path)
         self.assert_rejected(self.mutable, f"referenced path does not exist: {path}")
 
+    def test_source_context_path_casing_matches_the_index(self) -> None:
+        # The index tracks tools/ and Tools/; a case-insensitive checkout finds
+        # Tools/release_notes.py on disk, but Linux CI cannot.
+        path = "Tools/release_notes.py"
+        self.assertIn("tools/release_notes.py", site_data_common.tracked_paths())
+        self.assertNotIn(path, site_data_common.tracked_paths())
+        self.mutable["workItems"][0]["sourceContext"].append(path)
+        self.assert_rejected(
+            self.mutable,
+            f"referenced path {path} differs in case from the tracked path tools/release_notes.py",
+        )
+
     def test_profile_capability_references(self) -> None:
         for field in ("includedCapabilityIds", "experimentalCapabilityIds", "unsupportedCapabilityIds"):
             with self.subTest(field=field):

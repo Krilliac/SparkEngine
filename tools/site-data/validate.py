@@ -2713,6 +2713,39 @@ def _numeric_claim_scan(
     return masked, tuple(block_errors), tuple(claims)
 
 
+@functools.lru_cache(maxsize=1)
+def _tracked_spellings() -> tuple[frozenset[str], dict[str, str]]:
+    """Exact tracked file and directory spellings, plus a case-folded lookup into them.
+
+    The index tracks both ``tools/`` and ``Tools/``. A Windows or macOS checkout
+    resolves either spelling to the same file, so an existence check there passes a
+    reference that Linux CI then rejects. Without git (an exported tree) this
+    returns nothing and only the filesystem check applies.
+    """
+    try:
+        files = tracked_paths()
+    except SiteDataError:
+        return frozenset(), {}
+    exact: set[str] = set()
+    for tracked in files:
+        parts = tracked.split("/")
+        for end in range(1, len(parts) + 1):
+            exact.add("/".join(parts[:end]))
+    folded: dict[str, str] = {}
+    for spelling in sorted(exact):
+        folded.setdefault(spelling.casefold(), spelling)
+    return frozenset(exact), folded
+
+
+def tracked_casing_mismatch(value: str) -> str | None:
+    """The tracked spelling of ``value`` when it differs only in letter case, else None."""
+    exact, folded = _tracked_spellings()
+    normalized = value.rstrip("/")
+    if not exact or normalized in exact:
+        return None
+    return folded.get(normalized.casefold())
+
+
 class Validator:
     def __init__(
         self,
@@ -2774,6 +2807,10 @@ class Validator:
             if any(REPO_ROOT.glob(value)):
                 return
             self.legacy_error(location, f"path pattern matches no file: {value}")
+            return
+        tracked = tracked_casing_mismatch(value)
+        if tracked is not None:
+            self.error(location, f"referenced path {value} differs in case from the tracked path {tracked}")
             return
         if (REPO_ROOT / path).exists():
             return
