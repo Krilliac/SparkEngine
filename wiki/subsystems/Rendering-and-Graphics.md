@@ -725,7 +725,7 @@ Only `D3D11_Validation_` is excluded from the main `SparkEngineTests` run: on a 
 
 ## Console Commands
 
-The graphics engine registers 200+ debug commands. Common ones:
+The graphics engine registers a broad set of debug commands. Common ones:
 
 ```
 graphics_info              # GPU adapter, driver version, VRAM, feature level

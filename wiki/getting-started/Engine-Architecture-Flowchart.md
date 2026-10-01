@@ -3,7 +3,7 @@
 > Complete visual guide to how SparkEngine works, from boot to shutdown.
 
 <!-- AUTO:flowchart_stats -->
-_Generated from 762 headers, 638 source files, 81 ECS components, 11 ECS systems, 64 editor panels, 6 RHI backends._
+_Generated from 763 headers, 639 source files, 81 ECS components, 11 ECS systems, 64 editor panels, 6 RHI backends._
 <!-- /AUTO:flowchart_stats -->
 
 ---
@@ -410,7 +410,7 @@ SparkEngine uses [EnTT](https://github.com/skypjack/entt) as its entity-componen
 **Key files:**
 - `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` — System definitions and execution order
 - `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` — Transform, MeshRenderer, Camera, Script
-- `SparkEngine/Source/Engine/ECS/Components/` — All 12+ domain component headers
+- `SparkEngine/Source/Engine/ECS/Components/` — Domain component headers (see the generated ECS inventory above)
 
 
 ## 5. Rendering Pipeline

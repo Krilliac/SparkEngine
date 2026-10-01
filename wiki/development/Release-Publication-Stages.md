@@ -60,11 +60,17 @@ tree. The entry is an error once the preset exists, the owner is `done`, or the
 owner stops naming it.
 
 Hand-written counts are governed too. `validate.py` uses the publisher's document
-discovery to scan the catalog's root documents and recursive Markdown roots,
-alongside every wiki page and the required public surfaces, for a number followed (within two words)
-by tests, files, panels, modules, subsystems, backends, lines or nodes, including
-`N+`, `~N` and `N/M` forms and phrases wrapped across lines. `<!-- AUTO:* -->`
-blocks, the fully generated `wiki/advanced/Codebase-Statistics.md`, and the
+discovery to scan the catalog's root documents and recursive Markdown roots.
+The same registry always includes Markdown under `wiki/`, `docs/readiness/`, and
+`docs/status/`, even when the publication catalog omits them. It checks a number
+followed (within two words) by tests, files, panels, modules, subsystems, backends,
+lines, nodes, capabilities, features, components, systems, shaders, commands,
+pages, gates, work items or criteria (including singular forms). `N+`, `~N`,
+`N/M` and phrases wrapped across lines are checked; product versions and patch
+identifiers are not inventory totals. `<!-- AUTO:* -->` blocks, fenced code,
+blockquotes explicitly labelled `Acceptance criteria:` or `Ledger note:`,
+generated reference pages under `wiki/reference/` and `docs/api/`, the fully
+generated `wiki/advanced/Codebase-Statistics.md`, and the
 `sed_replace` patterns of `docs/update-readme-badges.sh` are generator-owned and
 skipped. Each pattern is skipped only on the file(s) its own `sed_replace` call
 rewrites (the validator resolves `$readme`, loop variables, and arrays; an
@@ -94,8 +100,11 @@ counts and quoted acceptance criteria; they do not authorize new prose claims.
 The architecture flowchart's panel-header inventory is bound to
 `editor.panelHeaders`. The separate `editor.panels` metric counts factory
 registrations; they describe different inventories. Profile-scope and forbidden
-readiness wording are checked on every discovered authored catalog page too, without
-requiring every page to discuss a release profile.
+readiness wording use the same discovery and prose exemptions, without requiring
+every page to discuss a release profile. Ordinary blockquotes remain checked.
+These vocabulary-based checks do not resolve arbitrary status labels to capability
+entries; RDY-000 tracks that remaining gap. The [claim audit](../../docs/readiness/RDY-000-claim-audit.json)
+records the expanded scan's findings, classifications, and prose corrections.
 
 CTest runs the whole contract suite as `site-data-contract`. The faster
 `readiness-cross-references` runs the strict live validation plus the dependency,

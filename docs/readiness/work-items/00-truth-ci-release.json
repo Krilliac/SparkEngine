@@ -51,9 +51,11 @@
           "state": "unmet",
           "evidence": [
             "tools/site-data/validate.py",
-            "Tests/Tools/test_site_data_contract.py"
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/readiness/RDY-000-claim-audit.json",
+            "wiki/development/Release-Publication-Stages.md"
           ],
-          "note": "The numeric-claim check covers only a fixed set of surfaces and nouns. Wiki and status-claim prose are not checked, and the item still lists outside public claims as open."
+          "note": "Wiki, readiness and status Markdown share numeric/profile claim checks, including catalog-independent discovery and prose exemptions. The audit records 65 findings resolved by rewording or justified exclusions. Universal coverage remains unmet: arbitrary capability-status labels and numbers outside the matcher vocabulary are not contract-bound. Local tests only; no exact-commit CI evidence."
         },
         {
           "criterionDigest": "sha256:f529f9e7254b",

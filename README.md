@@ -197,7 +197,7 @@ UDP client/server with entity replication, dirty property tracking, client-side 
 
 ### ECS and Gameplay
 
-EnTT-backed ECS with 75+ component types. Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
+EnTT-backed ECS; see the [generated component inventory](wiki/subsystems/Entity-Component-System.md). Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
 
 **Large worlds:** Source includes area-streaming and floating-point origin-rebasing implementations. "No load screens" and "100K+ entities per area" are design/load-test targets, not `stable-v1` evidence; the 100K entity-flood test validates entity-count correctness rather than per-area throughput or release performance.
 

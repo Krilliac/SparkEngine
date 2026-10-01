@@ -10,7 +10,7 @@
 
 AI-assisted development has a structural, recurring tendency toward bloat. This is not a defect of any single session — it is a systemic property of how AI assistants make changes. Understanding *why* it happens is required to prevent it. This page is the rationale behind the Anti-Bloat Guidelines in `CLAUDE.md`.
 
-The pattern was discovered through a full audit of the SparkEngine codebase in March 2026, after the engine had been AI-assisted for several months. The original audit found, among other things, a `SparkConsole.cpp` that had grown to roughly 261 KB, a `ConsoleProcessManager` that was fully built but never wired in, 25+ command-registration functions in `SimpleConsole`, and `SimpleConsole::Initialize()` being called from five different code paths.
+The pattern was discovered through a full audit of the SparkEngine codebase in March 2026, after the engine had been AI-assisted for several months. The original audit found, among other things, a `SparkConsole.cpp` that had grown to roughly 261 KB, a `ConsoleProcessManager` that was fully built but never wired in, many command-registration functions in `SimpleConsole`, and `SimpleConsole::Initialize()` being called from five different code paths.
 
 Most of those specific instances have since been fixed (see Source & Freshness). The *pattern* remains the durable lesson.
 

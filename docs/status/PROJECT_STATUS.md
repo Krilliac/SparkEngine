@@ -18,7 +18,7 @@ This page records source presence and implementation maturity only. An **Impleme
 | System | Status | Notes |
 |--------|--------|-------|
 | Engine Framework | **Implemented** | `EngineContext` service locator, phase-based execution |
-| ECS (EnTT) | **Implemented** | Source inventory: 79 component structs across 17 component headers; no canonical system-total claim |
+| ECS (EnTT) | **Implemented** | See the [generated ECS inventory](../../wiki/subsystems/Entity-Component-System.md); no canonical system-total claim |
 | Scene Management | **Implemented** | Serialization, snapshots, streaming |
 | Asset Pipeline | **Implemented** | Native FBX importer + glTF/OBJ loaders, async LRU caching, VRAM budget |
 | Job System | **Implemented** | Multi-threaded task dispatch |

@@ -27,8 +27,8 @@ is follow-up work for decision D8.
 
 ## Third-party inventory
 
-`THIRD_PARTY_NOTICES` covers 16 locked components. All 16 have at least one
-notice file on disk. Seven of them have attention items. The seven editor fonts
+`THIRD_PARTY_NOTICES` covers the locked components. Every locked component has at least one
+notice file on disk. Several have attention items. The editor fonts
 outside `ThirdParty/` have their upstream license text on disk (item 4).
 
 | License family (as declared) | Components | Duty the on-disk text states |

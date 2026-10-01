@@ -81,7 +81,7 @@ cmake --build build --config Release --parallel $(nproc)
 |--------|-------|
 | Entities created/destroyed | 60,000 |
 | EventBus events delivered | 3,000 |
-| ParallelFor batches | 300 (150,000 work items) |
+| ParallelFor batches | 300 (150,000 iterations) |
 | Weather transitions | 26 |
 
 ---

@@ -105,7 +105,7 @@ The full CTest run before the final fixes passed 247 of 257. The ten failures an
 
 1. **Windows MSVC build and tests.** Configure `windows-release` (and `windows-debug`), build everything and run CTest. Expect Windows-only breaks: OD-01 was one, and the `bde4105` Windows host changes were never compiled.
 2. **Hosted CI on PR #587 at one commit.** Fix what fails, then promote criteria to `evidenced` with `ci:` references. Hosted CI is the only way to get evidence.
-3. **Remaining code work:** the 213 unmet criteria are listed by need in the reconciliation commit (`10a0a8b`) and the handoff. The largest code items:
+3. **Remaining code work:** the remaining unmet criteria are listed by need in the reconciliation commit (`10a0a8b`) and the handoff. The largest code items:
    - **NET-100:** the SecureChannel is not wired into NetworkManager, and the plaintext login field is still sent.
    - **NET-110.**
    - **SEC-110/120.**

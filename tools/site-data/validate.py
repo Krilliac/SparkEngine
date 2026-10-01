@@ -1875,7 +1875,8 @@ def validate_public_claim_text(
     text: str,
 ) -> list[str]:
     """Return deterministic public-claim violations without touching the filesystem."""
-    violations: list[str] = []
+    text, block_errors = _mask_public_claim_prose(text)
+    violations = [f"{surface_location}:{message}" for message in block_errors]
     identifier = str(profile.get("id", ""))
     rules_value = profile.get("publicClaimRules")
     if not isinstance(rules_value, dict):
@@ -2189,6 +2190,9 @@ def _profile_public_claim_errors(profile: dict[str, Any], surface_location: str,
 PUBLIC_NUMERIC_CLAIM_NOUNS = (
     "tests", "test", "files", "file", "panels", "panel", "modules", "module",
     "subsystems", "subsystem", "backends", "backend", "lines", "line", "nodes", "node",
+    "capabilities", "capability", "features", "feature", "components", "component",
+    "systems", "system", "shaders", "shader", "commands", "command", "pages", "page",
+    "gates", "gate", "work items", "work item", "criteria", "criterion",
 )
 PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS = {
     # Bound to a METRIC_IDS entry and compared with the value measured from source.
@@ -2204,13 +2208,18 @@ PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS = {"surface", "text", "classification", "owne
 UNMEASURABLE_CLAIM_METRICS = {"docs.authored", "tests.executed", "tests.failed", "tests.skipped"}
 # Fully regenerated pages; `docs/update-codebase-stats.sh check` owns their numbers.
 GENERATED_CLAIM_SURFACES = {"wiki/advanced/Codebase-Statistics.md"}
+# Reference pages mirror source declarations rather than hand-written claims.
+GENERATED_CLAIM_PREFIXES = ("wiki/reference/", "docs/api/")
+# These canonical sources remain governed even if the publication catalog omits
+# them. Numeric and status wording checks share this one discovery inventory.
+PUBLIC_CLAIM_MARKDOWN_ROOTS = ("wiki", "docs/readiness", "docs/status")
 # Regex-managed count lines are owned by this script and its `check` mode.
 MANAGED_CLAIM_SCRIPT = "docs/update-readme-badges.sh"
 _CLAIM_NUMBER = r"\d{1,3}(?:,\d{3})+|\d+"
 PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
     # Not the tail of an identifier, decimal, path, anchor, or ratio, and not a
     # product version such as "DirectX 11" or "version 1".
-    r"(?<![\w.,/#$~-])(?<!DirectX )(?<!Direct3D )(?<!version )(?<!Windows )"
+    r"(?<![\w.,/#$~-])(?<!DirectX )(?<!Direct3D )(?<!version )(?<!Windows )(?<!C\+\+)(?<!patch )"
     rf"(?P<approx>~)?(?P<value>{_CLAIM_NUMBER})(?P<plus>\+)?(?P<ratio>/(?:{_CLAIM_NUMBER})\+?)?"
     r"[`*]{0,2}"
     r"(?:\s+[A-Za-z][\w-]*){0,2}?\s+"
@@ -2283,14 +2292,15 @@ def public_numeric_claim_surfaces(repo_root: Path | None = None) -> set[str]:
         catalog = load_json(catalog_path)
         published = published_catalog_documents(root, catalog)
         surfaces.update(published - generated_public_documents(root, published))
-    wiki_root = root / "wiki"
-    if wiki_root.is_dir():
-        surfaces.update(
-            path.relative_to(root).as_posix()
-            for path in wiki_root.rglob("*.md")
-            if path.is_file()
-        )
-    return surfaces
+    for relative in PUBLIC_CLAIM_MARKDOWN_ROOTS:
+        directory = root / relative
+        if directory.is_dir():
+            surfaces.update(
+                path.relative_to(root).as_posix()
+                for path in directory.rglob("*.md")
+                if path.is_file()
+            )
+    return surfaces - generated_public_documents(root, surfaces)
 # DOC-400: the hand-authored site contract files. Every mutable fact they could
 # state -- a count, a commit, a CI run, the engine version -- has a bundle
 # source (metrics, source.commit, the version single source), so a literal here
@@ -2369,6 +2379,40 @@ def _mask_auto_blocks(text: str) -> tuple[str, list[str]]:
         blanked = re.sub(r"[^\n]", " ", masked[opening.start():closing.end()])
         masked = masked[:opening.start()] + blanked + masked[closing.end():]
         position = closing.end()
+
+
+def _mask_public_claim_prose(text: str) -> tuple[str, list[str]]:
+    """Keep only authored prose, preserving offsets for contract spans and diagnostics.
+
+    Ordinary blockquotes remain public claims. Only explicitly labelled quoted
+    acceptance criteria or ledger notes restate the readiness contract. Fences
+    close with the same character and at least the opening length; example AUTO
+    markers inside code must never hide the prose following the example.
+    """
+    lines: list[str] = []
+    fence = ""
+    ledger_quote = False
+    for line in text.splitlines(keepends=True):
+        content = re.sub(r"^[ \t]*(?:>[ \t]*)*", "", line)
+        marker = re.match(r"(`{3,}|~{3,})(.*)", content)
+        quoted = line.lstrip().startswith(">")
+        if not quoted:
+            ledger_quote = False
+        elif not content.strip() or re.match(r"(?:\*\*)?[A-Za-z][^:\n]{0,60}:", content):
+            ledger_quote = bool(re.match(
+                r"(?:\*\*)?(?:acceptance criteri(?:on|a)|ledger notes?)(?:\*\*)?\s*:",
+                content,
+                re.IGNORECASE,
+            ))
+        masked = bool(fence) or ledger_quote
+        if fence:
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
+                fence = ""
+        elif marker and not (marker[1][0] == "`" and "`" in marker[2]):
+            fence = marker[1]
+            masked = True
+        lines.append(re.sub(r"[^\n\r]", " ", line) if masked else line)
+    return _mask_auto_blocks("".join(lines))
 
 
 def _sed_pattern_to_regex(pattern: str) -> re.Pattern[str]:
@@ -2538,7 +2582,11 @@ def public_numeric_claim_errors(
         ):
             continue
         surface = entry["surface"]
-        if surface not in governed_surfaces or surface in GENERATED_CLAIM_SURFACES:
+        if (
+            surface not in governed_surfaces
+            or surface in GENERATED_CLAIM_SURFACES
+            or surface.startswith(GENERATED_CLAIM_PREFIXES)
+        ):
             errors.append(f"{entry_location}: {surface} is not a governed public claim surface")
             continue
         key = (surface, " ".join(entry["text"].split()))
@@ -2604,7 +2652,7 @@ def public_numeric_claim_errors(
             errors.append(f"{entry_location}: {surface} claims {claimed} but {metric_id} is {actual}")
 
     for surface in sorted(surface_texts):
-        if surface in GENERATED_CLAIM_SURFACES:
+        if surface in GENERATED_CLAIM_SURFACES or surface.startswith(GENERATED_CLAIM_PREFIXES):
             continue
         masked, block_errors, claims = _numeric_claim_scan(surface_texts[surface])
         errors.extend(f"{surface}:{message}" for message in block_errors)
@@ -2634,7 +2682,7 @@ def _numeric_claim_scan(
     made this scan the largest cost of each call. Keyed on the text, so an edit
     or a substituted read is a new key and is scanned afresh.
     """
-    masked, block_errors = _mask_auto_blocks(text)
+    masked, block_errors = _mask_public_claim_prose(text)
     claims: list[tuple[int, int, str, int]] = []
     line = 1
     offset = 0
@@ -3829,6 +3877,8 @@ class Validator:
             known = {value for value in declared if isinstance(value, str)}
             rules = json.dumps(profile["publicClaimRules"], sort_keys=True)
             for path in sorted(public_numeric_claim_surfaces() - known):
+                if path in GENERATED_CLAIM_SURFACES or path.startswith(GENERATED_CLAIM_PREFIXES):
+                    continue
                 resolved = REPO_ROOT / path
                 if resolved.is_file():
                     text = resolved.read_text(encoding="utf-8", errors="replace")

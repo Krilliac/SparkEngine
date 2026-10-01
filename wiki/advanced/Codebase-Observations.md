@@ -197,7 +197,7 @@ The MSVC `/analyze` pass (NativeRecommendedRules, `.github/workflows/msvc.yml`) 
   - `ENABLE_NETWORKING` default OLD `OFF` → NEW `ON` (networking now compiles in standard CI). Updated the most-common-trap framing accordingly.
   - Removed-globals list, `EngineContext`/`EngineRuntime` split, `.promptignore` scope, two `tools/` dirs, and the `head -50` partial-check note all re-verified as still accurate.
   - ThirdParty note expanded: now backed by `ThirdParty/dependencies.lock` + `cmake/SparkThirdPartyAudit.cmake` (both confirmed present).
-  - Noted `docs/api/` may be empty on a fresh checkout (0 generated pages present in the working tree at re-measure time).
+  - Noted `docs/api/` may be empty on a fresh checkout (no generated pages present in the working tree at re-measure time).
 
 ## Related Pages
 

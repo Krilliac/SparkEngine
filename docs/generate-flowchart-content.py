@@ -516,7 +516,7 @@ SparkEngine uses [EnTT](https://github.com/skypjack/entt) as its entity-componen
 **Key files:**
 - `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` — System definitions and execution order
 - `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` — Transform, MeshRenderer, Camera, Script
-- `SparkEngine/Source/Engine/ECS/Components/` — All 12+ domain component headers
+- `SparkEngine/Source/Engine/ECS/Components/` — Domain component headers (see the generated ECS inventory above)
 """)
 
     # ================================================================

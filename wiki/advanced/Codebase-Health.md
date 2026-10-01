@@ -68,7 +68,7 @@ Historical legend: **DONE** = the 2026-03-26 audit marked an implementation pres
 
 | System | Status | Notes |
 |--------|:------:|-------|
-| EnTT registry | **DONE** | Current source inventory finds 79 component structs across 17 component headers |
+| EnTT registry | **DONE** | See the [generated ECS inventory](../subsystems/Entity-Component-System.md) |
 | System execution order | **DONE** | Physics → Animation → AI → Audio → Lifecycle → Render |
 | Reactive systems | **DONE** | Component change detection via EnTT signals |
 
@@ -163,7 +163,7 @@ Historical legend: **DONE** = the 2026-03-26 audit marked an implementation pres
 ### Strengths
 
 - **Modular service locator** — EngineContext provides clean subsystem access with dependency-aware initialization
-- **ECS source breadth** — Current source inventory finds 79 component structs across 17 component headers
+- **ECS source breadth** — See the [generated ECS inventory](../subsystems/Entity-Component-System.md)
 - **Test source inventory** — the generated counts live in README.md and [Codebase Statistics](Codebase-Statistics.md) (`docs/update-codebase-stats.sh`); these counts do not establish execution or pass results
 - **Consistent code style** — clang-format enforced in CI, Allman braces, 120-col limit
 - **RHI abstraction** — Clean backend selection via factory pattern
