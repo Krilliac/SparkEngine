@@ -48,7 +48,7 @@ class FailClosedTests(unittest.TestCase):
     def test_xsave_review_authorizes_only_xgetbv(self):
         proc = checker.SPARK_XSAVE_PROCEDURE
         pe = checker.PdbInfo([checker.PdbRange(0x1000, 0x1020, proc, "MultiISA.obj",
-                                             frozenset({checker.XSAVE}))], [], {})
+                                             frozenset({checker.XSAVE}))], [], {}, frozenset({checker.REVIEWED_TOOLSET}))
         for text in ("xsave64 (%rcx)", "xrstor64 (%rcx)", "xsetbv"):
             for pdb in (None, pe):
                 with self.subTest(text=text, pe=pdb is not None):

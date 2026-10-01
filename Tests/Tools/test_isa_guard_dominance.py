@@ -23,7 +23,7 @@ DEFAULT_PUBLICS = (("_Avx2WmemEnabled", "0003:0000"), ("_Avx2WmemEnabledWeakValu
                    ("__isa_available", "0003:0032"), ("SomethingElse", "0003:0064"))
 
 
-def pdb_info(size=0x100, publics=DEFAULT_PUBLICS):
+def pdb_info(size=0x100, publics=DEFAULT_PUBLICS, toolsets=None):
     symbols = ("Mod 0000 | `D:\\app\\GatewayAreaControl.obj`:\n"
                "  4 | S_GPROC32 [size = 52] `wmemchr`\n"
                f"    parent = 0, end = 60, addr = 0001:0000, code size = {size}\n")
@@ -31,7 +31,8 @@ def pdb_info(size=0x100, publics=DEFAULT_PUBLICS):
                           for name, address in publics)
     ranges, procedures = checker._parse_pdb_symbols(symbols.splitlines(), BASE, SECTIONS)
     guards = checker._parse_pdb_guards(public_text.splitlines(), BASE, SECTIONS)
-    return checker.PdbInfo(ranges, procedures, guards)
+    return checker.PdbInfo(ranges, procedures, guards,
+                           frozenset({checker.REVIEWED_TOOLSET}) if toolsets is None else toolsets)
 
 
 def scan(rows, entries=None, **options):
@@ -41,7 +42,7 @@ def scan(rows, entries=None, **options):
 
 
 def entries(**fields):
-    base = dict(image_base=BASE, branch_sources={}, address_taken=set(), other=set())
+    base = dict(image_base=BASE, branch_sources={}, computed_targets=set(), other=set())
     base.update(fields)
     return checker._ImageEntries(**base)
 
@@ -191,14 +192,22 @@ class GuardDominanceTests(unittest.TestCase):
         # reachable without the guard.
         self.assertViolation(scan(WMEM_GUARDED, entries=entries(other={avx_block})),
                              "AVX/AVX2 (ymm)")
-        # An immediate-scanned address alone does NOT withdraw the exemption: a
-        # data constant may coincide with a code address (false positives there
-        # wrongly failed wmemcmp).
-        self.assertAllowed(scan(WMEM_GUARDED, entries=entries(address_taken={avx_block})),
-                           "AVX/AVX2 (ymm)")
+        # A computed indirect target that reaches the block bypasses the guard.
+        self.assertViolation(scan(WMEM_GUARDED, entries=entries(computed_targets={avx_block})),
+                             "AVX/AVX2 (ymm)")
         # An intra-procedure branch to the same block is a normal edge, still exempt.
         self.assertAllowed(scan(WMEM_GUARDED, entries=entries(branch_sources={avx_block: {TEXT + 0x20}})),
                            "AVX/AVX2 (ymm)")
+
+    def test_guard_exemption_requires_reviewed_toolset_provenance(self):
+        # The reviewed inline guards were validated against toolset 14.44.35207.
+        # A PDB whose only provenance is another toolset gets no exemption.
+        self.assertAllowed(scan(WMEM_GUARDED), "AVX/AVX2 (ymm)")
+        self.assertViolation(scan(WMEM_GUARDED, toolsets=frozenset({"14.40.33811"})), "AVX/AVX2 (ymm)")
+        self.assertViolation(scan(WMEM_GUARDED, toolsets=frozenset()), "AVX/AVX2 (ymm)")
+        # A mix that is not exactly the reviewed toolset is also denied.
+        self.assertViolation(scan(WMEM_GUARDED, toolsets=frozenset({checker.REVIEWED_TOOLSET, "14.40.33811"})),
+                             "AVX/AVX2 (ymm)")
 
     def test_compare_against_unreviewed_global_is_a_violation(self):
         self.assertViolation(scan(self.lzcnt_rows(address=OTHER)), "LZCNT")

@@ -409,12 +409,29 @@ streams, so table bytes do not masquerade as branches), exception handlers,
 exports, base-relocation pointees and the guard-CF table -- and treats an entry
 inside a table, or strictly inside a guarded procedure, as an alternate entry.
 `.pdata` BeginAddress is excluded (MSVC gives a jump table its own
-RUNTIME_FUNCTION), and immediate-materialized addresses are used only for the
-caller-guard reference check, never to reject a table or seed a guard root,
-since a data constant can coincide with a code address. Finally,
+RUNTIME_FUNCTION). A computed indirect target is resolved by basic-block
+dataflow -- an immediate image address materialized into a register
+(movabs/mov/lea, constant add/sub/inc/dec, and the mov-RVA-plus-image-base
+idiom) that reaches `jmp *reg` / `call *reg`, or is stored while the procedure
+has an indirect branch -- and counts as an entry (rejecting a table, seeding a
+guard root, or withdrawing the caller-guard exemption). A bare data constant
+that merely coincides with a code address is not an entry; separately, if such a
+constant lands inside proven-table bytes, those bytes are decoded and the table
+is rejected only when they form an above-floor instruction (undecodable table
+data is kept; a computed jump into it is caught as an entry). Finally,
 `_verify_coverage` requires the classified instructions, proven tables and
 padding to tile every executable file-backed byte with no gap, so a record
 without raw bytes (unknown size) fails rather than being skipped.
+
+The reviewed CRT/STL exemptions (vector_algorithms, memcpy/memset,
+`__isa_available_init` XGETBV, the inline guards and the caller-guarded LZCNT
+helper) are granted only when the PDB's sole observed MSVC toolset is the
+reviewed 14.44.35207; otherwise they become violations and the report prints a
+"re-review for this toolset" note. The scanner's threat model is
+compiler-generated MSVC code from this repository's sources: direct branches,
+structural pointers and basic-block-local computed targets are resolved;
+interprocedural or memory-carried computed targets in a fixed-base image are
+not.
 
 The scanner reads raw instruction bytes, so an EVEX-encoded xmm instruction
 counts as AVX-512 and never as AVX. A VEX instruction is classified by an

@@ -202,6 +202,8 @@ class ImageBytes:
         self._sections = []
         self._data = []
         self._entered: list[int] = []  # sorted; set via set_entered()
+        self._immediates: list[int] = []  # sorted materialized image addresses
+        self._classifier = None           # check_isa_baseline.classify, for table_masks_code
         with open(path, "rb") as handle:
             for target, ranges in ((self._sections, sections), (self._data, data_sections)):
                 for address, size, offset in ranges:
@@ -224,6 +226,48 @@ class ImageBytes:
         import bisect as _bisect
         index = _bisect.bisect_left(self._entered, lo)
         return index < len(self._entered) and self._entered[index] < hi
+
+    def set_immediates(self, addresses, classifier) -> None:
+        """Record materialized image addresses (sorted) and the ISA classifier.
+
+        Used by table_masks_code to decide whether a data constant that points
+        into proven-table bytes actually names an above-floor instruction.
+        """
+        self._immediates = sorted(addresses)
+        self._classifier = classifier
+
+    def immediates_within(self, lo: int, hi: int) -> list[int]:
+        import bisect as _bisect
+        start = _bisect.bisect_left(self._immediates, lo)
+        stop = _bisect.bisect_left(self._immediates, hi)
+        return self._immediates[start:stop]
+
+    def table_masks_code(self, lo: int, hi: int) -> bool:
+        """True when a materialized image address points into [lo, hi) and the
+        bytes there decode as an above-floor instruction before a terminator --
+        a real above-floor sequence a pointer names, not a data constant that
+        merely coincides with floor-safe table bytes.
+
+        Undecodable bytes at a pointed offset do NOT reject the table: a jump or
+        index table's own bytes decode as undecodable garbage (observed for MSVC
+        byte index tables), and a data constant pointing into them is the
+        coincidence this check is meant to tolerate. A computed *jump* into such
+        bytes is a different thing and is rejected separately, as an image-wide
+        code entry (entered_within), not here."""
+        if self._classifier is None:
+            return False
+        for address in self.immediates_within(lo, hi):
+            for record in self.redecode(address, hi):
+                if not (lo <= record.address < hi):
+                    break
+                if record.mnemonic == "<undecodable>":
+                    break  # table data, not proof of an above-floor instruction
+                feature = self._classifier(record.mnemonic, record.operands, record.evex)
+                if feature is not None and feature != "TZCNT":
+                    return True
+                if record.mnemonic in TERMINATORS or record.mnemonic in UNCONDITIONAL_JUMPS:
+                    break
+        return False
 
     def read(self, address: int, size: int) -> bytes | None:
         for start, data in self._sections:
@@ -632,6 +676,8 @@ def map_procedure(records: list[Record], start: int, end: int, image: ImageBytes
         # or guard-CF entry) is not data; keep those bytes classified.
         if wrong is None:
             wrong = next((t for t in tables if image.entered_within(t.start, t.end)), None)
+        if wrong is None:
+            wrong = next((t for t in tables if image.table_masks_code(t.start, t.end)), None)
         if wrong is not None:
             # Drop every table of the contradicted dispatch and rebuild without it.
             tables = [t for t in tables if t.dispatch != wrong.dispatch]

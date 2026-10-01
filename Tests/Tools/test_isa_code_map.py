@@ -45,6 +45,15 @@ class FakeImage:
     def exec_ranges(self):
         return [(self._start, self._start + len(self._data))]
 
+    def set_immediates(self, addresses, classifier):
+        self._immediates = sorted(addresses); self._classifier = classifier
+
+    def immediates_within(self, lo, hi):
+        return [a for a in getattr(self, "_immediates", ()) if lo <= a < hi]
+
+    def table_masks_code(self, lo, hi):
+        return False
+
     def redecode(self, start, stop):
         self.calls.append((start, stop))
         return [r for r in self.redecoded.get(start, []) if r.address < stop]
@@ -237,7 +246,8 @@ class CallerGuardedTests(unittest.TestCase):
         procedures = [checker.Procedure(self.TEXT, self.TEXT + 0x20, "std::_Checked_x86_x64_countl_zero", False),
                       checker.Procedure(self.TEXT + 0x40, self.TEXT + 0x46, self.HELPER, False),
                       checker.Procedure(self.TEXT + 0x50, self.TEXT + 0x60, "Other", False)]
-        return checker.PdbInfo([], procedures, {self.ISA: checker.REVIEWED_MSVC_GUARDS["__isa_available"]})
+        return checker.PdbInfo([], procedures, {self.ISA: checker.REVIEWED_MSVC_GUARDS["__isa_available"]},
+                               frozenset({checker.REVIEWED_TOOLSET}))
 
     def lines(self, caller=None, other=None):
         t = self.TEXT
@@ -253,7 +263,7 @@ class CallerGuardedTests(unittest.TestCase):
         return checker.scan_lines("image.exe", lines, [], self.info(), image, entries)
 
     def entries(self, **fields):
-        base = dict(image_base=BASE, branch_sources={}, address_taken=set(), other=set())
+        base = dict(image_base=BASE, branch_sources={}, computed_targets=set(), other=set())
         base.update(fields)
         return checker._ImageEntries(**base)
 
@@ -261,7 +271,7 @@ class CallerGuardedTests(unittest.TestCase):
         # "mov $RVA,%reg; add imagebase; call *reg" -- an address-taken helper
         # reference the per-call branch logic never sees. It must withdraw the
         # exemption just like a directly taken address.
-        entries = self.entries(address_taken={self.TEXT + 0x40})
+        entries = self.entries(computed_targets={self.TEXT + 0x40})
         self.assertTrue(self.scan(self.lines(), entries=entries).violations)
         other_entry = self.entries(other={self.TEXT + 0x40})  # reloc/export/guard-CF reference
         self.assertTrue(self.scan(self.lines(), entries=other_entry).violations)
@@ -303,6 +313,110 @@ class CallerGuardedTests(unittest.TestCase):
         lines[4] = f"{self.TEXT + 0x40:x}:     \ttzcntq\t%rcx, %rax"
         lines.insert(5, f"{self.TEXT + 0x44:x}:     \tlzcntl\t%ecx, %eax")
         self.assertTrue(self.scan(lines).violations)
+
+
+class ComputedTargetImage:
+    """Minimal image for the entry collector: only section membership matters."""
+
+    def __init__(self, lo=BASE, hi=BASE + 0x100000):
+        self.image_base = BASE
+        self._lo, self._hi = lo, hi
+
+    def section_bounds(self, address):
+        return (self._lo, self._hi) if self._lo <= address < self._hi else None
+
+
+class ComputedTargetTests(unittest.TestCase):
+    """The entry collector follows an immediate address into jmp/call *reg."""
+
+    def collect(self, records):
+        collector = checker._EntryCollector(ComputedTargetImage())
+        collector.record(records)
+        return collector
+
+    def test_movabs_then_indirect_call_is_a_computed_target(self):
+        # finding 2(a): movabs AVXblock,%rax; call *%rax on the scalar path.
+        avx = P + 0x400
+        collector = self.collect([rec(0x00, 10, "movabs", f"$0x{avx:x}, %rax"),
+                                  rec(0x0a, 2, "call", "*%rax"), rec(0x0c, 1, "retq")])
+        self.assertEqual(collector.computed_targets, {avx})
+        self.assertIn(avx, collector.immediate_addresses)
+
+    def test_movabs_adjusted_by_dec_resolves_to_the_helper(self):
+        # finding 2(b): movabs helper+1,%rax; dec %rax; call *%rax.
+        helper = P + 0x500
+        collector = self.collect([rec(0x00, 10, "movabs", f"$0x{helper + 1:x}, %rax"),
+                                  rec(0x0a, 3, "dec", "%rax"), rec(0x0d, 2, "call", "*%rax")])
+        self.assertEqual(collector.computed_targets, {helper})
+
+    def test_mov_rva_plus_image_base_idiom(self):
+        target = BASE + 0x400
+        collector = self.collect([rec(0x00, 5, "mov", "$0x400, %eax"),
+                                  rec(0x05, 7, "lea", "0x0(%rip), %rbx", annotation=BASE),
+                                  rec(0x0c, 3, "add", "%rbx, %rax"), rec(0x0f, 2, "jmp", "*%rax")])
+        self.assertEqual(collector.computed_targets, {target})
+
+    def test_stored_pointer_counts_when_the_procedure_has_an_indirect_branch(self):
+        x = P + 0x600
+        records = [rec(0x00, 10, "movabs", f"$0x{x:x}, %rax"), rec(0x0a, 3, "mov", "%rax, (%rcx)"),
+                   rec(0x0d, 2, "jmp", "*%rdx"), rec(0x0f, 1, "retq")]
+        self.assertIn(x, self.collect(records).computed_targets)
+        # Without any indirect branch in the procedure, a stored pointer is not a target.
+        self.assertEqual(self.collect(records[:2] + [rec(0x0d, 1, "retq")]).computed_targets, set())
+
+    def test_clobbered_or_cross_block_register_is_not_a_target(self):
+        avx = P + 0x400
+        # A branch target (leader) between the load and the use clears tracking.
+        records = [rec(0x00, 10, "movabs", f"$0x{avx:x}, %rax"), rec(0x0a, 2, f"je", f"0x{P + 0x0c:x}"),
+                   rec(0x0c, 2, "call", "*%rax"), rec(0x0e, 1, "retq")]
+        self.assertEqual(self.collect(records).computed_targets, set())
+        # A plain register overwrite clears it too.
+        records = [rec(0x00, 10, "movabs", f"$0x{avx:x}, %rax"), rec(0x0a, 2, "xorl", "%eax, %eax"),
+                   rec(0x0c, 2, "call", "*%rax")]
+        self.assertEqual(self.collect(records).computed_targets, set())
+
+
+class TableMasksCodeTests(unittest.TestCase):
+    """A materialized address inside proven-table bytes rejects the table only
+    when the bytes there decode as an above-floor or undecodable instruction."""
+
+    def image(self, decode):
+        import tempfile
+        handle, path = tempfile.mkstemp(suffix=".bin")
+        import os
+        with os.fdopen(handle, "wb") as out:
+            out.write(b"\x00" * 0x100)
+        img = cm.ImageBytes(path, BASE, [(P, 0x100, 0)], decode)
+        os.unlink(path)
+        return img
+
+    def test_above_floor_bytes_at_a_pointed_offset_reject_the_table(self):
+        slot = P + 0x40
+        img = self.image(lambda s, e: [cm.Record(s, 3, "vzeroupper", "", None, False, "vzeroupper")])
+        img.set_immediates({slot}, checker.classify)
+        self.assertTrue(img.table_masks_code(P + 0x38, P + 0x48))
+
+    def test_undecodable_bytes_at_a_pointed_offset_keep_the_table(self):
+        # A byte/jump table's own bytes decode as undecodable garbage; a data
+        # constant pointing into them is tolerated here. (A computed jump INTO
+        # them is rejected separately as an image-wide code entry.)
+        slot = P + 0x40
+        img = self.image(lambda s, e: [cm.Record(s, 1, "<undecodable>", "", None, False, "(bad)")])
+        img.set_immediates({slot}, checker.classify)
+        self.assertFalse(img.table_masks_code(P + 0x38, P + 0x48))
+
+    def test_floor_safe_bytes_keep_the_table(self):
+        # A data constant that merely coincides with table bytes decoding as a
+        # floor instruction before a terminator does not reject the table.
+        slot = P + 0x40
+        img = self.image(lambda s, e: [cm.Record(s, 1, "retq", "", None, False, "retq")])
+        img.set_immediates({slot}, checker.classify)
+        self.assertFalse(img.table_masks_code(P + 0x38, P + 0x48))
+
+    def test_no_pointer_into_the_table_keeps_it(self):
+        img = self.image(lambda s, e: [cm.Record(s, 3, "vzeroupper", "", None, False, "vzeroupper")])
+        img.set_immediates({P + 0x200}, checker.classify)
+        self.assertFalse(img.table_masks_code(P + 0x38, P + 0x48))
 
 
 class CoverageTests(unittest.TestCase):

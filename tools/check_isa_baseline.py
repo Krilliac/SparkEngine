@@ -72,7 +72,26 @@ feature-scoped mechanisms; anything else fails closed until reviewed:
 Before classifying a PE procedure, tools/isa_code_map.py rebuilds its
 instruction stream around the MSVC switch tables it can prove, so table bytes
 are data rather than undecodable or bogus instructions. Bytes it cannot
-explain stay in the stream and fail the scan.
+explain stay in the stream and fail the scan. A reviewed CRT/STL exemption
+(the vector_algorithms contributions, memcpy/memset, __isa_available_init
+XGETBV, the inline _Avx2Wmem/__isa_available guards and the caller-guarded
+LZCNT helper) is granted only when the PDB's sole observed MSVC toolset is the
+reviewed 14.44.35207; otherwise the instruction is a violation and report()
+emits a "re-review for this toolset" note. The engine's own reviewed procedure
+(Spark::Detail::ReadXcr0) does not depend on the toolset.
+
+Threat model and residual limit. The scans target compiler-generated MSVC code
+built from this repository's own sources, not adversarial or hand-written
+binaries. The scanner resolves direct branches, structural code pointers
+(.pdata exception handlers, exports, base-relocation pointees, the guard-CF
+table) and basic-block-local computed targets -- an immediate image address
+materialized into a register (movabs/mov/lea, with constant add/sub/inc/dec and
+the "mov RVA; add image base" idiom) that reaches a `jmp *reg` / `call *reg`, or
+is stored while the procedure has an indirect branch. Interprocedural or
+memory-carried computed targets in a fixed-base image (a code pointer passed in
+through a register or loaded from memory, built across basic blocks) are not
+resolved; within the threat model MSVC does not generate such control flow into
+the middle of a switch table or past an ISA guard.
 
 Exit status: 0 when no violation remains, 1 when violations remain, 2 on a
 usage or tool error (missing file, no disassembler, not an x86-64 image).
@@ -271,6 +290,10 @@ class PdbRange:
     symbol: str
     module: str
     features: frozenset = REVIEWED_MSVC_FEATURES
+    # True for a reviewed MSVC CRT/STL range (valid only for toolset 14.44.35207);
+    # False for an engine-owned reviewed procedure (e.g. Spark::Detail::ReadXcr0),
+    # whose review does not depend on the MSVC toolset.
+    toolset_sensitive: bool = True
 
 
 # The only toolset whose runtime sources were reviewed. Contribution ranges and
@@ -443,6 +466,13 @@ class PdbInfo:
         self.caller_guarded = {proc.start: REVIEWED_CALLER_GUARDED_PROCEDURES[proc.name]
                                for proc in self.procedures
                                if proc.name in REVIEWED_CALLER_GUARDED_PROCEDURES and not proc.ambiguous}
+        # Every reviewed MSVC CRT/STL exemption (vector_algorithms contributions,
+        # memcpy/memset, __isa_available_init XGETBV, the inline _Avx2Wmem/
+        # __isa_available guards and the caller-guarded LZCNT helper) was
+        # validated against toolset 14.44.35207. Grant them only when that is the
+        # PDB's sole observed toolset; otherwise the instruction is a violation
+        # and report()'s "re-review for toolset X" note explains the red.
+        self.reviewed_toolset = self.toolsets == frozenset({REVIEWED_TOOLSET})
 
     def procedure_at(self, address: int) -> Procedure | None:
         index = bisect.bisect_right(self._starts, address) - 1
@@ -698,7 +728,8 @@ def _parse_pdb_symbols(lines, image_base: int, sections: list[tuple[int, int, bo
         features = reviewed(pending)
         if features:
             start = _code_address(section, offset, size, image_base, sections, pending)
-            ranges.append(PdbRange(start, start + size, pending, module, features))
+            ranges.append(PdbRange(start, start + size, pending, module, features,
+                                   toolset_sensitive=(pending != SPARK_XSAVE_PROCEDURE)))
             awaiting_flags = (start, start + size)
             records[awaiting_flags] += 1
         elif 1 <= section <= len(sections) and size > 0:
@@ -764,8 +795,13 @@ def _parse_pdb_guards(lines, image_base: int, sections: list[tuple[int, int, boo
     return {address: spec for address, spec in guards.items() if address not in conflicts}
 
 
-def _pdb_allows(feature: str, address: int, ranges: list[PdbRange]) -> bool:
-    return any(item.start <= address < item.end and feature in item.features for item in ranges)
+def _pdb_allows(feature: str, address: int, ranges: list[PdbRange], reviewed_toolset: bool = True) -> bool:
+    for item in ranges:
+        if item.start <= address < item.end and feature in item.features:
+            if item.toolset_sensitive and not reviewed_toolset:
+                continue  # a CRT/STL range needs toolset 14.44.35207 provenance
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -1335,7 +1371,8 @@ def _finish_region(result: ScanResult, pdb: PdbInfo, image, region, buffered, en
             result.guarded_references[target] += 1
         else:
             result.unguarded_references[target] += 1
-    held = procedure.start if procedure is not None and procedure.start in pdb.caller_guarded else None
+    held = (procedure.start if procedure is not None and pdb.reviewed_toolset
+            and procedure.start in pdb.caller_guarded else None)
     for index, feature, finding in pending:
         if index in exempt:
             result.allowed[feature] += 1
@@ -1370,9 +1407,10 @@ def _classify(result: ScanResult, insn: Instruction, symbol: str, allow: list[re
             result.allowed[feature] += 1
         else:
             result.violations.append(finding)
-    elif reviewed_instruction and _pdb_allows(feature, insn.address, pdb.ranges):
+    elif reviewed_instruction and _pdb_allows(feature, insn.address, pdb.ranges, pdb.reviewed_toolset):
         result.allowed[feature] += 1
-    elif procedure is not None and any(feature in spec.features for spec in pdb.guards.values()):
+    elif (procedure is not None and pdb.reviewed_toolset
+          and any(feature in spec.features for spec in pdb.guards.values())):
         pending.append((index, feature, finding))
     else:
         result.violations.append(finding)
@@ -1556,33 +1594,30 @@ def _unwind_handler(data: bytes, offset_of, unwind_rva: int) -> int | None:
 class _ImageEntries:
     image_base: int
     branch_sources: dict  # target VA -> set of source VAs (direct jmp/jcc/call)
-    address_taken: set    # VAs materialized as immediates/annotations, in exec
-    other: set            # reliable non-branch code entries: handlers, exports, reloc, guard-CF
+    computed_targets: set  # VAs a tracked immediate reaches via jmp/call *reg (or a stored pointer)
+    other: set             # reliable non-branch code entries: handlers, exports, reloc, guard-CF
 
     def entered(self) -> set:
-        # Addresses reached as code by authoritative control flow, used to reject
-        # a switch table whose bytes they enter: a direct branch/call anywhere in
-        # the image, plus the reliable structural entries. Immediate-materialized
-        # addresses are excluded -- a data constant can coincide with a byte
-        # inside a real jump table, and only branches/pointers actually enter it.
-        return set(self.branch_sources) | self.other
+        # Addresses reached as code: a direct branch/call anywhere in the image,
+        # the reliable structural entries, and a computed indirect target whose
+        # address a basic block materialized (not every immediate -- a data
+        # constant that merely coincides with code bytes is handled, per table,
+        # by ImageBytes.table_masks_code instead).
+        return set(self.branch_sources) | self.other | self.computed_targets
 
     def alternate_roots(self, pdb, start: int, end: int) -> set:
-        """VAs strictly inside (start, end) reached other than by an intra-procedure edge.
-
-        A reliable non-branch code entry (handler/export/reloc/guard-CF) or a
-        branch target whose source is outside the procedure. Immediate-scanned
-        address_taken is deliberately excluded: a data constant can coincide with
-        a code address and would spuriously withdraw a guard exemption."""
-        roots = {a for a in self.other if start < a < end}
+        """VAs strictly inside (start, end) reached other than by an intra-procedure edge:
+        a reliable non-branch entry, a computed indirect target, or a branch
+        target whose source is outside the procedure."""
+        roots = {a for a in self.other | self.computed_targets if start < a < end}
         for target, sources in self.branch_sources.items():
             if start < target < end and any(not (start <= s < end) for s in sources):
                 roots.add(target)
         return roots
 
     def non_branch_reference(self, address: int) -> bool:
-        """True when address is reached indirectly (address-taken, exported, relocated, guard-CF)."""
-        return address in self.address_taken or address in self.other
+        """True when address is reached indirectly (computed call/jmp, exported, relocated, guard-CF)."""
+        return address in self.computed_targets or address in self.other
 
 
 class _EntryCollector:
@@ -1590,28 +1625,127 @@ class _EntryCollector:
 
     Run over the tables-as-data streams of a first scan pass, never the raw
     linear disassembly (there table bytes decode as bogus branches that would
-    point garbage targets into other tables).
+    point garbage targets into other tables). Besides direct branch targets it
+    follows an immediate image address materialized into a register within a
+    basic block (movabs/mov/lea, with constant add/sub/inc/dec adjustments and
+    the "mov RVA; add imagebase" idiom) to the `jmp *reg` / `call *reg` that uses
+    it, or to a store of it when the procedure has an indirect jump/call. Those
+    targets are computed entries; every materialized address is also recorded so
+    ImageBytes.table_masks_code can test a constant that lands in table bytes.
     """
 
     def __init__(self, image):
         self.image = image
         self.branch_sources: dict[int, set[int]] = {}
-        self.address_taken: set[int] = set()
+        self.computed_targets: set[int] = set()
+        self.immediate_addresses: set[int] = set()
 
     def record(self, insns) -> None:
-        base = self.image.image_base
-        for insn in insns:
+        image = self.image
+        index_of = {insn.address: i for i, insn in enumerate(insns)}
+        leaders = {index_of[t] for insn in insns
+                   if (t := code_map.direct_target(insn.mnemonic, insn.operands)) is not None and t in index_of
+                   and insn.mnemonic not in ("call", "callq")}
+        has_indirect = any((code_map.is_jump(insn.mnemonic) or insn.mnemonic in ("call", "callq"))
+                           and insn.operands.startswith("*") for insn in insns)
+        addr: dict[str, int] = {}     # reg family -> absolute image VA it holds
+        rva: dict[str, int] = {}      # reg family -> an RVA awaiting + image base
+        is_base: dict[str, bool] = {}  # reg family -> holds the image base
+        for i, insn in enumerate(insns):
+            if i in leaders:
+                addr.clear(); rva.clear(); is_base.clear()
+            operands = code_map.split_operands(insn.operands)
             target = code_map.direct_target(insn.mnemonic, insn.operands)
-            if target is not None and self.image.section_bounds(target) is not None:
+            if target is not None and image.section_bounds(target) is not None:
                 self.branch_sources.setdefault(target, set()).add(insn.address)
-            if insn.annotation is not None and self.image.section_bounds(insn.annotation) is not None:
-                self.address_taken.add(insn.annotation)
-            for match in _IMMEDIATE_RE.finditer(insn.operands):
-                value = int(match.group(1), 16)
-                if self.image.section_bounds(value) is not None:
-                    self.address_taken.add(value)
-                elif self.image.section_bounds(base + value) is not None:
-                    self.address_taken.add(base + value)
+            # Use of a tracked register as an indirect jump/call target.
+            if (code_map.is_jump(insn.mnemonic) or insn.mnemonic in ("call", "callq")) \
+                    and insn.operands.startswith("*%"):
+                reg = code_map.family(insn.operands[1:])
+                value = self._value(reg, addr, rva, image)
+                if value is not None:
+                    self.computed_targets.add(value)
+            self._update(insn, operands, addr, rva, is_base, image, has_indirect)
+
+    def _value(self, reg, addr, rva, image):
+        if reg in addr:
+            return addr[reg]
+        if reg in rva and image.section_bounds(image.image_base + rva[reg]) is not None:
+            return image.image_base + rva[reg]
+        return None
+
+    def _update(self, insn, operands, addr, rva, is_base, image, has_indirect) -> None:
+        mnemonic = insn.mnemonic
+        base = image.image_base
+        # Materialize an image address into a register.
+        if mnemonic.startswith(("mov", "lea")) and len(operands) == 2 and code_map.family(operands[1]):
+            dest = code_map.family(operands[1])
+            self._clear(dest, addr, rva, is_base)
+            source = operands[0]
+            if mnemonic.startswith("lea") and insn.annotation is not None:
+                if insn.annotation == base:
+                    is_base[dest] = True
+                elif image.section_bounds(insn.annotation) is not None:
+                    addr[dest] = insn.annotation
+                    self.immediate_addresses.add(insn.annotation)
+            elif source.startswith("$"):
+                value = int(source[1:], 0) & 0xFFFFFFFFFFFFFFFF
+                if image.section_bounds(value) is not None:
+                    addr[dest] = value
+                    self.immediate_addresses.add(value)
+                elif value == base:
+                    is_base[dest] = True
+                else:
+                    rva[dest] = value
+                    if image.section_bounds(base + value) is not None:
+                        self.immediate_addresses.add(base + value)
+            elif (source.startswith("%") and mnemonic.startswith("mov")
+                  and code_map.family(source) in addr):
+                addr[dest] = addr[code_map.family(source)]  # reg-to-reg copy of an address
+            return
+        # Adjust a tracked register by a constant, or fold in the image base.
+        if mnemonic.startswith(("add", "sub", "inc", "dec")):
+            if mnemonic.startswith(("inc", "dec")) and len(operands) == 1 and code_map.family(operands[0]):
+                self._adjust(code_map.family(operands[0]), 1 if mnemonic.startswith("inc") else -1,
+                             addr, rva, image)
+                return
+            if len(operands) == 2 and code_map.family(operands[1]):
+                dest = code_map.family(operands[1])
+                if operands[0].startswith("$"):
+                    delta = int(operands[0][1:], 0)
+                    self._adjust(dest, delta if mnemonic.startswith("add") else -delta, addr, rva, image)
+                    return
+                if (operands[0].startswith("%") and mnemonic.startswith("add")
+                        and is_base.get(code_map.family(operands[0])) and dest in rva):
+                    addr[dest] = base + rva.pop(dest)
+                    self.immediate_addresses.add(addr[dest])
+                    return
+                self._clear(dest, addr, rva, is_base)
+                return
+        # A store of a tracked address to memory, in a procedure with an indirect branch.
+        if mnemonic.startswith("mov") and len(operands) == 2 and not code_map.family(operands[1]) \
+                and code_map.family(operands[0]) in addr and has_indirect:
+            self.computed_targets.add(addr[code_map.family(operands[0])])
+            return
+        # Any other write clears the written registers.
+        written = code_map.written_families(insn)
+        if written:
+            for family in written:
+                self._clear(family, addr, rva, is_base)
+
+    @staticmethod
+    def _clear(family, addr, rva, is_base) -> None:
+        addr.pop(family, None)
+        rva.pop(family, None)
+        is_base.pop(family, None)
+
+    def _adjust(self, family, delta, addr, rva, image) -> None:
+        if family in addr:
+            addr[family] += delta
+            if image.section_bounds(addr[family]) is not None:
+                self.immediate_addresses.add(addr[family])
+        elif family in rva:
+            rva[family] += delta
 
 
 def _verify_coverage(result: ScanResult, image) -> None:
@@ -1669,8 +1803,9 @@ def scan(tool: list[str], path: str, allow: list[re.Pattern[str]], pdb: PdbInfo 
         collector = _EntryCollector(image)
         with open(scratch, encoding="utf-8", errors="replace") as lines:
             scan_lines(path, lines, allow, pdb, image, structural, collector)
-        entries = _ImageEntries(base, collector.branch_sources, collector.address_taken, other)
+        entries = _ImageEntries(base, collector.branch_sources, collector.computed_targets, other)
         image.set_entered(entries.entered())
+        image.set_immediates(collector.immediate_addresses, classify)
         with open(scratch, encoding="utf-8", errors="replace") as lines:
             result = scan_lines(path, lines, allow, pdb, image, entries)
     finally:
@@ -1687,11 +1822,11 @@ def report(result: ScanResult, max_report: int) -> None:
     unknown = counts.get("undecodable", 0)
     print(f"{status} {result.path}: {result.instructions} instructions, "
           f"{len(result.violations) - unknown} above-floor, {unknown} undecodable")
-    other_toolsets = sorted(v for v in result.toolsets if v != REVIEWED_TOOLSET)
-    if result.violations and other_toolsets:
-        print(f"  note: MSVC runtime libraries are toolset {', '.join(other_toolsets)}; the reviewed CRT/STL "
-              f"exemptions are pinned to {REVIEWED_TOOLSET} -- re-review for toolset {other_toolsets[0]} "
-              f"before trusting or dismissing these findings")
+    if result.violations and result.toolsets != frozenset({REVIEWED_TOOLSET}):
+        seen = ", ".join(sorted(result.toolsets)) or "none found"
+        print(f"  note: the reviewed CRT/STL exemptions are pinned to MSVC toolset {REVIEWED_TOOLSET}; this PDB's "
+              f"toolset provenance is {{{seen}}}, so those exemptions were NOT applied -- re-review for this "
+              f"toolset before trusting or dismissing these findings")
     if result.switch_tables or result.padding_bytes:
         print(f"  data in code: {result.switch_tables} proven switch tables ({result.table_bytes} bytes), "
               f"{result.padding_bytes} nop/int3 padding bytes after them")

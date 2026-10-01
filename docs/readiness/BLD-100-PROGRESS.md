@@ -637,5 +637,61 @@ CallerGuardedTests computed/closed-reference cases, CoverageTests),
 `Tests/Tools/test_isa_guard_dominance.py` (alternate-entry and
 separately-bitted-VEX cases), `Tests/Tools/test_check_isa_baseline.py`
 (separately-bitted and unrecognized VEX). Each fix was mutation-checked: removing
-it fails its test. 108 ISA unit tests pass. Still unverified, as before: the
+it fails its test. The ISA unit suites pass. Still unverified, as before: the
 below-floor refusal path, and any hosted Windows run.
+
+## 2026-10-01 (cont.): second independent review hardening (Codex gpt-6-sol)
+
+A second review accepted that the four earlier fixes handle their synthetic
+cases but found residual computed control flow and an incomplete toolset pin.
+Three further changes, each with a regression test from the reviewer's
+synthetic; all 12 windows-shipping images still pass with the same proven-table
+counts as before (SparkEngine 162, SparkEditor 218, SparkGameFPS 69,
+SparkLauncher 30, SparkInstaller 16, SparkCooker 3, SparkCrashReporter 1,
+SparkAutomation 1, SparkBuild 8, SparkShaderCompiler 3; 0 above-floor, 0
+undecodable), and the AVX2 probe still fails.
+
+1. **Toolset pinning is now complete.** Previously memcpy/memset were recognised
+   by module-suffix alone and the inline guard rules and caller-guarded helper
+   did not consult the PDB's toolset, so a PDB marked as another toolset still
+   got those exemptions. Every reviewed MSVC CRT/STL exemption is now granted
+   only when the PDB's sole observed toolset is 14.44.35207 (`PdbInfo.reviewed_
+   toolset`); otherwise the instruction is a violation and the report's
+   "re-review for this toolset" note explains the red. The engine's own
+   `Spark::Detail::ReadXcr0` XSAVE review is tagged toolset-independent, so the
+   lld-link fixture (no CRT) still passes.
+
+2. **Computed control flow is resolved by basic-block dataflow, not by treating
+   every immediate as an entry** (which caused the round-1 false positives). The
+   collector tracks an immediate image address materialized into a register
+   (movabs/mov/lea, constant add/sub/inc/dec, and the mov-RVA-plus-image-base
+   idiom) and, when it reaches `jmp *reg` / `call *reg` -- or is stored while the
+   procedure has an indirect branch -- records the target as a computed entry.
+   A computed entry (a) seeds guard dominance as an alternate root
+   (`movabs AVXblock; call *rax` on the scalar path), (b) withdraws the
+   caller-guarded exemption (`movabs helper+1; dec; call *rax`), and (c) rejects
+   a table whose bytes it enters. Separately, for any materialized image address
+   that lands inside proven-table bytes, the bytes are decoded from that offset
+   and the table is rejected if they form an **above-floor** instruction before a
+   terminator. Undecodable bytes at a merely-pointed offset do not reject the
+   table: a byte/jump table's own bytes decode as undecodable garbage (an MSVC
+   index table in SparkGameFPS `_On_type` is pointed into by a data constant),
+   and a computed *jump* into such bytes is caught independently as an image-wide
+   code entry. This is the one deliberate narrowing from the reviewer's "above-
+   floor or undecodable" wording, forced by that real legitimate table; it still
+   catches the reviewer's `c5 f8 77` (vzeroupper) masked-table synthetic.
+
+3. **Residual limit documented** (threat model: compiler-generated MSVC code from
+   this repository, not adversarial binaries). Resolved: direct branches,
+   structural pointers (relocs/exports/handlers/guard-CF) and basic-block-local
+   computed targets. Not resolved: interprocedural or memory-carried computed
+   targets in a fixed-base image. Recorded in the scanner module docstring, here,
+   and the BLD-100[3] note.
+
+Each fix was mutation-checked (toolset flag, per-range gate, computed-use,
+constant adjust, stored pointer, above-floor decode-check -- removing any fails
+its test). Regression tests: `test_isa_guard_dominance` (toolset-provenance and
+computed-target guard withdrawal), `test_pe_isa_ranges` (CRT vs engine toolset
+gating), `test_isa_code_map` (ComputedTargetTests, TableMasksCodeTests,
+caller-guard toolset and computed-reference cases). Still unverified, as before:
+the below-floor refusal path, and any hosted Windows run.
