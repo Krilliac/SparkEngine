@@ -57,14 +57,14 @@ Open **`RDY-000` — Establish the release profiles and capability ledger**. Its
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/readiness/RDY-000-claim-audit.json`, `wiki/development/Release-Publication-Stages.md`
    - Wiki, readiness and status Markdown share numeric/profile claim checks, including catalog-independent discovery and prose exemptions. The audit records 65 findings resolved by rewording or justified exclusions. Universal coverage remains unmet: arbitrary capability-status labels and numbers outside the matcher vocabulary are not contract-bound. Local tests only; no exact-commit CI evidence.
 2. **[implemented]** Every referenced path, gate, work item, metric, and capability exists
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`
-   - FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet.
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`
+   - StructuredReferenceTests mutate paths, gates, work items, metrics and capabilities. Unknown dependencies now report validation errors instead of KeyError. Required build.yml docs-health and Linux CTests run the suite. No exact-SHA hosted proof is claimed.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
 4. **[implemented]** Two clean generations produce byte-identical content except declared timestamps
-   - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`
-   - Tests/Tools/test_site_data_generation_determinism.py runs generate.py twice and compares the bundles byte for byte; comparator mutation cases prove a one-byte or file-set drift fails. Registered as CTest site-data-generation-determinism (Linux, LABELS readiness;site-data;python;slow, TIMEOUT 900); site-data.yml also generates twice. Local only; no hosted run.
+   - Evidence: `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `Tests/Tools/test_site_data_contract.py`
+   - Clean generation rejects dirty paths and independently regenerates health twice, with no timestamp exclusions or shared health file. build.yml/site-data-full-determinism is required. Policy tests pass locally; full clean generation and exact-SHA hosted proof remain pending.
 
 ### Session verification
 
@@ -420,14 +420,14 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `docs/readiness/RDY-000-claim-audit.json`, `wiki/development/Release-Publication-Stages.md`
    - Wiki, readiness and status Markdown share numeric/profile claim checks, including catalog-independent discovery and prose exemptions. The audit records 65 findings resolved by rewording or justified exclusions. Universal coverage remains unmet: arbitrary capability-status labels and numbers outside the matcher vocabulary are not contract-bound. Local tests only; no exact-commit CI evidence.
 2. **[implemented]** Every referenced path, gate, work item, metric, and capability exists
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`
-   - FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet.
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`
+   - StructuredReferenceTests mutate paths, gates, work items, metrics and capabilities. Unknown dependencies now report validation errors instead of KeyError. Required build.yml docs-health and Linux CTests run the suite. No exact-SHA hosted proof is claimed.
 3. **[implemented]** A capability cannot be ready while a blocker or required gate is open
    - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
    - ReadyAndPassingEvidenceTests and TransitiveDependencyTests run the real Validator. They reject open direct or transitive blockers and non-passing required gates. Registered as CTest readiness-cross-references.
 4. **[implemented]** Two clean generations produce byte-identical content except declared timestamps
-   - Evidence: `.github/workflows/site-data.yml`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`
-   - Tests/Tools/test_site_data_generation_determinism.py runs generate.py twice and compares the bundles byte for byte; comparator mutation cases prove a one-byte or file-set drift fails. Registered as CTest site-data-generation-determinism (Linux, LABELS readiness;site-data;python;slow, TIMEOUT 900); site-data.yml also generates twice. Local only; no hosted run.
+   - Evidence: `Tests/Tools/test_site_data_generation_determinism.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`, `Tests/Tools/test_site_data_contract.py`
+   - Clean generation rejects dirty paths and independently regenerates health twice, with no timestamp exclusions or shared health file. build.yml/site-data-full-determinism is required. Policy tests pass locally; full clean generation and exact-SHA hosted proof remain pending.
 
 **Required commands**
 
@@ -532,8 +532,8 @@ Progress: 3 of 4 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/CMakeLists.txt`, `Tests/Fixtures/SecureTestPeer.h`, `Tests/TestFPSMultiplayer.cpp`
    - Local windows-shipping MinSizeRel build with BUILD_TESTS: ModuleProfileLifecycle_SparkGameFPS_D3D11 passes (all module phases evidenced) and -L module-profile is 4/4. SparkTests now builds with networking off (fixture guards). stable-v1 declares only SparkGameFPS. No exact-commit CI yet.
 2. **[implemented]** No copied model or tautological test can satisfy a release-profile gate
-   - Evidence: `Tests/Tools/test_module_evidence.py`, `Tools/test_source_census.py`, `Tests/Tools/test_source_census_profile.py`, `tools/site-data/module_content.py`, `Tests/Tools/test_module_manifest.py`
-   - CTest TestSourceCensus_ProfileSelectors rejects any profile selector that reaches a mirror or tautological TEST. module_content.py fails a manifest whose prefix selects a TEST outside tests.files, lists a census mirror, or selects an EXPECT_TRUE(true)/EXPECT_NO_CRASH-only body; test_module_manifest.py mutates each rule. 11 mirrors retired, ~159 remain outside the gates. Local evidence only.
+   - Evidence: `Tools/test_source_census.py`, `Tests/Tools/test_source_census_profile.py`, `tools/module-evidence/validate_manifest.py`, `Tests/Tools/test_module_evidence.py`, `Tests/TestAssetManifestReal.cpp`
+   - Profile selectors inspect each TEST and reachable helpers for production declarations, excluding utility-only includes and constant assertions. Module expected sets reject copied or tautological bodies. Classification is lexical; raw whole-suite floors still count mirrors. Pure tests pass locally; fixture and hosted proof remain pending.
 3. **[unmet]** Each in-profile module publishes deterministic JUnit and sanitizer evidence
    - Needs hosted JUnit and sanitizer artifacts at the exact commit, consumed by module-evidence. None has been observed.
 4. **[implemented]** Experimental module evidence remains independently owned and cannot block stable-v1
@@ -835,11 +835,11 @@ Progress: 6 of 6 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_docs_health.py`, `docs/update-all-docs.sh`, `tools/docs_currentness.py`
    - Clean WSL Ubuntu clone at 3d330173c: exit 0, all 9 generators current, links valid, and status identical before and after. No exact-SHA hosted run. Not applied in the ledger by this lane, because the header forbids state edits.
 2. **[implemented]** Clean regeneration has no tracked diff and the check leaves the tracked tree byte-identical
-   - Evidence: `docs/generate-flowchart-content.py`, `Tests/Tools/test_docs_health.py`
-   - Committed generated indexes are stale at HEAD, so a clean regeneration would produce a diff.
+   - Evidence: `tools/docs_currentness.py`, `Tests/Tools/test_docs_health.py`, `.github/workflows/build.yml`
+   - CurrentnessRejectionTests cover stale tracked outputs, nondeterministic files and trees, undeclared tracked edits, and tracked-tree mutation. Required docs-health runs the production check. Local temporary-directory permissions block fixture execution; clean regeneration and exact-SHA hosted proof remain pending.
 3. **[implemented]** Every catalogued doc route, source, heading, image, and generated-API target resolves
-   - Evidence: `tools/site-data/validate_docs_links.py`, `.github/workflows/build.yml`, `Tests/Tools/test_docs_health.py`
-   - The earlier failures came from a stale untracked docs/api tree. On a clean Linux clone at d7bde4f71, generate-api-docs.sh then validate_docs_links.py reports every link, anchor, manifest and route valid; the required build.yml docs-health job runs it at every commit. Local only; no exact-commit CI yet.
+   - Evidence: `tools/site-data/validate_docs_links.py`, `tools/site-data/validate.py`, `Tests/Tools/test_docs_health.py`, `.github/workflows/build.yml`
+   - DocsLinksHostileTests cover Markdown/HTML images, present images, source-line bounds and missing root documents. validate_docs_surface runs route and link validation once. Required docs-health generates exact-SHA API targets. Local fixtures and full generated-API validation remain pending.
 4. **[implemented]** Health contains every expected generator exactly once with exit and failure counts consistent
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_currentness.py`, `tools/site-data/generate.py`
    - Tests drive production write_health and summarize_documentation_health. Missing or duplicate generators and inconsistent exit or failure counts are rejected. RepositoryEvidenceTests pins the generator manifest.
@@ -847,8 +847,8 @@ Progress: 6 of 6 implemented, 0 evidenced at an exact commit.
    - Evidence: `Tests/Tools/test_docs_health.py`, `tools/docs_contract.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
    - Two hostile test classes (docs generation, docs links) cover stale docs, symbols, macros, health, links, anchors, route collisions and repository escape against production code.
 6. **[implemented]** A stale generator, missing result, or broken link blocks CI
-   - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-workflow-failure-propagation.py`, `tools/site-data/validate_docs_links.py`, `tools/docs_currentness.py`
-   - docs-health is a Required CI Gate dependency in build.yml, and per-SHA push runs never cancel it. Structural and mutation tests only; no hosted red run. Not applied in the ledger by this lane, because the header forbids state edits.
+   - Evidence: `.github/workflows/build.yml`, `.github/scripts/test-workflow-failure-propagation.py`, `Tests/Tools/test_docs_health.py`, `tools/docs_currentness.py`, `tools/site-data/validate_docs_links.py`
+   - Required build.yml docs-health and validate-ci-tools enforce stale output, missing generator results and broken-link rejection. Direct stale-output and validate_health missing-row tests are added. site-data.yml jobs remain advisory. Local fixtures and a controlled exact-SHA hosted red run are not proven.
 
 **Required commands**
 
@@ -1075,8 +1075,8 @@ Progress: 5 of 8 implemented, 0 evidenced at an exact commit.
    - Evidence: `tools/site-data/documented_commands.py`, `tools/site-data/validate.py`, `Tests/Tools/test_documented_build_commands.py`
    - validate.py checks cmake/ctest/cpack commands in root *.md (not CHANGELOG), wiki, docs, .github prompts, .claude/.codex skills and SparkBuild/SparkSDK/FuzzerTests/GameModules/Templates docs against CMakePresets.json: preset names, preset/-B/script trees across cd, --config/-C on multi-config or generator-less trees, -A/-T pins. Test green locally; no exact-commit CI run yet.
 6. **[implemented]** Experimental platform Shipping matrices remain owned by their platform work items
-   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`
-   - EXPERIMENTAL_SHIPPING_PRESET_OWNERS maps linux-shipping to PLT-210 and macos-shipping to PLT-220; experimental_shipping_preset_errors rejects an unmapped *-shipping preset, one in stable-v1 build scope, a missing or done-but-unevidenced owner, and an owner that no longer configures its preset. macos-shipping has an advisory build-macos-shipping job (continue-on-error), no hosted run yet.
+   - Evidence: `tools/site-data/workflow_ownership.py`, `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `.github/workflows/build.yml`
+   - WorkflowOwnershipTests bind Shipping preset uses, including matrices and environment variables, to platform owners or named test hosts. Platform certification cannot enter Required CI Gate; done owners need evidenced criteria. Six ownership tests pass locally. Host mappings need integration review; hosted proof is pending.
 7. **[implemented]** Configured codemodel evidence is accepted only when its source tree, producer-captured commit, generator, preset build directory, cache values, and reply-file digests match the profile claiming it
    - Evidence: `Tests/Tools/test_build_matrix_parity.py`, `Tools/buildmatrix/inventory.py`, `Tools/buildmatrix/capture_provenance.py`
    - Tests drive inventory.extract_codemodel_targets and reject a mismatched source tree, build directory, generator, cache or commit, caller-asserted commits, and changed, linked or traversing reply files.
@@ -2366,8 +2366,8 @@ Progress: 3 of 5 implemented, 0 evidenced at an exact commit.
 4. **[unmet]** Only signed artifacts can enter the stable channel
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs signed published artifacts and a stable-channel signing gate.
 5. **[implemented]** Experimental platform installers remain owned by their platform work
-   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`
-   - No validator enforces the ownership boundary.
+   - Evidence: `tools/site-data/validate.py`, `tools/site-data/workflow_ownership.py`, `docs/site/readiness.json`, `Tests/Tools/test_site_data_contract.py`, `Tests/Tools/test_release_build_provenance.py`, `.github/scripts/test-workflow-failure-propagation.py`, `.github/workflows/build.yml`
+   - InstallerPlatformOwnershipTests and WorkflowOwnershipTests bind release.yml installer artifacts to explicit experimental products owned by PLT-210/PLT-220. Stable-channel provenance tests are cited. Required docs-health runs contract tests. Local ownership checks pass; hosted proof is pending.
 
 **Required commands**
 
@@ -5985,8 +5985,8 @@ Progress: 2 of 4 implemented, 0 evidenced at an exact commit.
 1. **[unmet]** Every gate listed in requiredGateIds for every target release profile is passing at the candidate SHA
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs every profile gate passing at a candidate SHA. The gates are blocked and there is no hosted evidence.
 2. **[implemented]** Excluded gates may remain blocked and cannot be presented as supported
-   - Evidence: `Tests/Tools/test_site_data_contract.py`, `tools/site-data/validate.py`, `Tests/CMakeLists.txt`
-   - test_excluded_gates_and_work_may_remain_open_when_ready, plus the scope-widening and capability-classification rejection tests, exercise the production validator for this rule.
+   - Evidence: `tools/site-data/validate.py`, `Tests/Tools/test_site_data_contract.py`, `Tests/CMakeLists.txt`, `.github/workflows/build.yml`
+   - ClassificationCoverageTests reject included capabilities and first-party games backed by excluded gates. These and PublicClaimInvariantTests run in readiness-cross-references and required docs-health. The blocked-gate positive control remains. No exact-SHA hosted proof is claimed.
 3. **[unmet]** Published artifacts are immutable and independently verify against the exact qualified candidate
    - Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No published immutable artifacts, and no independent verification against a qualified candidate.
 4. **[implemented]** Website live bundle switches to global ready only after every declared profile is ready and publication evidence exists

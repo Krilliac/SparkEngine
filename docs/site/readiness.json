@@ -2851,5 +2851,29 @@
       "owner": "unassigned",
       "metricId": "modules.discovered"
     }
+  ],
+  "experimentalInstallerProducts": [
+    {
+      "artifact": "SparkInstaller-Linux-x64",
+      "kind": "installer",
+      "applicability": "experimental",
+      "capabilityIds": [
+        "platform.linux"
+      ],
+      "ownerWorkItemId": "PLT-210",
+      "workflow": "release.yml",
+      "job": "build-installer"
+    },
+    {
+      "artifact": "SparkInstaller-macOS-arm64",
+      "kind": "installer",
+      "applicability": "experimental",
+      "capabilityIds": [
+        "platform.macos"
+      ],
+      "ownerWorkItemId": "PLT-220",
+      "workflow": "release.yml",
+      "job": "build-installer"
+    }
   ]
 }

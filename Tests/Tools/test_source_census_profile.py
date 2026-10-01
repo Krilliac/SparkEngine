@@ -70,6 +70,52 @@ def _ctest_entry(name: str, labels: list[str], environment: list[str], command: 
     }
 
 
+class TestBodyClassification(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.census = _load_census()
+
+    def test_constant_assertions_are_not_evidence(self) -> None:
+        for body in ('EXPECT_EQ(1, 1);', 'EXPECT_TRUE(1 == 1);', 'ASSERT_FALSE(false);',
+                     'EXPECT_EQ("same", "same");', 'EXPECT_NE(0x1U, 2U);',
+                     'EXPECT_TRUE((true)); EXPECT_NO_CRASH(engine.Tick());'):
+            with self.subTest(body=body):
+                self.assertTrue(self.census.is_tautological(self.census.cpp_code_only(body)))
+        for body in ('EXPECT_EQ(engine.Value(), 1);', 'EXPECT_TRUE(result);',
+                     'EngineThing thing; EXPECT_EQ(thing.Value(), 1);'):
+            with self.subTest(body=body):
+                self.assertFalse(self.census.is_tautological(self.census.cpp_code_only(body)))
+
+    def test_unrelated_include_cannot_promote_a_copied_test(self) -> None:
+        text = '''#include "Engine/Thing.h"
+TEST(Real) { EngineThing thing; EXPECT_EQ(thing.Value(), 1); }
+TEST(Copy) { int local = 1; EXPECT_EQ(local, 1); }
+TEST(Comment) { /* EngineThing */ EXPECT_EQ("EngineThing", "EngineThing"); }
+'''
+        self.assertEqual({"Real"}, self.census.production_test_bodies(
+            text, REPO_ROOT, {"Engine/Thing.h": frozenset({"EngineThing"})}))
+
+    def test_helpers_reach_production_but_unrelated_helpers_do_not(self) -> None:
+        text = '''#include "Engine/Thing.h"
+int ProductionHelper() { EngineThing engine; return engine.Value(); }
+int CopyHelper() { return 1; }
+TEST(Real) { EXPECT_EQ(ProductionHelper(), 1); }
+TEST(Copy) { EXPECT_EQ(CopyHelper(), 1); }
+'''
+        self.assertEqual({"Real"}, self.census.production_test_bodies(
+            text, REPO_ROOT, {"Engine/Thing.h": frozenset({"EngineThing"})}))
+
+    def test_platform_header_and_local_type_shadow_are_not_production(self) -> None:
+        for text, headers in (
+            ('#include "Core/Platform.h"\nTEST(Copy) { PlatformType p; EXPECT_EQ(p.x, 1); }',
+             {"Core/Platform.h": frozenset({"PlatformType"})}),
+            ('#include "Engine/Thing.h"\nstruct EngineThing { int x; };\n'
+             'TEST(Copy) { EngineThing p; EXPECT_EQ(p.x, 1); }',
+             {"Engine/Thing.h": frozenset({"EngineThing"})}),
+        ):
+            self.assertEqual(set(), self.census.production_test_bodies(text, REPO_ROOT, headers))
+
+
 class ProfileSelectorGuard(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

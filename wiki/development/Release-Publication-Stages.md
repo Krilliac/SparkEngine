@@ -474,6 +474,28 @@ Owner decisions OD-18 and OD-19 (2026-09-24) are recorded in
   rejects the empty baseline. `test_release_stages.py` checks that these fields
   stay empty while any required gate is not passing.
 
+## Experimental build ownership and contract proofs
+
+`tools/site-data/workflow_ownership.py` binds experimental Shipping preset uses
+in workflow commands, including matrices and declared environment variables, to
+platform work or named runtime test hosts. Platform certification stays advisory
+and outside the Required CI Gate. The `experimentalInstallerProducts` registry
+in `docs/site/readiness.json` binds the actual nightly installer matrix artifacts
+to their experimental platform capabilities and work items; it does not add
+those installers to the stable profile.
+
+`build.yml/site-data-full-determinism` compares two clean site-data generations,
+each regenerating documentation health independently. Dirty checkouts fail the
+proof. The existing advisory determinism job still checks its narrower bundle;
+only the required full proof covers independently generated health.
+
+Release-profile SparkTests selectors inspect each test body and reachable local
+helpers for declarations from included production headers. Utility-only includes
+and constant assertions cannot establish production evidence. This source check
+is lexical: it does not prove C++ name resolution or assertion dependence, and
+raw whole-suite count floors remain a separate limitation. Module evidence also
+rejects copied or tautological bodies when deriving its expected test set.
+
 ## Source & Freshness
 
 Implemented 2026-09-21. Sources: [readiness contract](../../docs/site/readiness.json),

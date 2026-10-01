@@ -67,7 +67,13 @@ namespace
     std::set<std::string> LoadManifestPaths()
     {
         std::set<std::string> paths;
-        const std::string text = ReadFile(SourceRoot() / "Assets" / "assets.integrity.json");
+        // Read the manifest through the same asset-root discovery the module uses.
+        const fs::path assetRoot = Spark::FPSAssets::FindAssetRoot({SourceRoot()});
+        if (assetRoot.empty())
+        {
+            return paths;
+        }
+        const std::string text = ReadFile(assetRoot / "assets.integrity.json");
         nlohmann::json manifest;
         try
         {

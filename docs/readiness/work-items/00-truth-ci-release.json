@@ -63,9 +63,10 @@
           "evidence": [
             "tools/site-data/validate.py",
             "Tests/Tools/test_site_data_contract.py",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml"
           ],
-          "note": "FUTURE_ACCEPTANCE_PATHS is retired: entryPoints, documentationUpdates, sourceContext and docs-catalog paths must exist for open and done items (MissingReferencedPathTests in readiness-cross-references; 3 of 4 fail against the old validator). Local Windows run only; no exact-commit CI yet."
+          "note": "StructuredReferenceTests mutate paths, gates, work items, metrics and capabilities. Unknown dependencies now report validation errors instead of KeyError. Required build.yml docs-health and Linux CTests run the suite. No exact-SHA hosted proof is claimed."
         },
         {
           "criterionDigest": "sha256:2c8c4a1437af",
@@ -81,12 +82,12 @@
           "criterionDigest": "sha256:7f44777314f5",
           "state": "implemented",
           "evidence": [
-            ".github/workflows/site-data.yml",
-            "Tests/Tools/test_site_data_contract.py",
             "Tests/Tools/test_site_data_generation_determinism.py",
-            "Tests/CMakeLists.txt"
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "Tests/Tools/test_site_data_contract.py"
           ],
-          "note": "Tests/Tools/test_site_data_generation_determinism.py runs generate.py twice and compares the bundles byte for byte; comparator mutation cases prove a one-byte or file-set drift fails. Registered as CTest site-data-generation-determinism (Linux, LABELS readiness;site-data;python;slow, TIMEOUT 900); site-data.yml also generates twice. Local only; no hosted run."
+          "note": "Clean generation rejects dirty paths and independently regenerates health twice, with no timestamp exclusions or shared health file. build.yml/site-data-full-determinism is required. Policy tests pass locally; full clean generation and exact-SHA hosted proof remain pending."
         }
       ],
       "commands": [
@@ -213,13 +214,13 @@
           "criterionDigest": "sha256:9fe198aadd95",
           "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_module_evidence.py",
             "Tools/test_source_census.py",
             "Tests/Tools/test_source_census_profile.py",
-            "tools/site-data/module_content.py",
-            "Tests/Tools/test_module_manifest.py"
+            "tools/module-evidence/validate_manifest.py",
+            "Tests/Tools/test_module_evidence.py",
+            "Tests/TestAssetManifestReal.cpp"
           ],
-          "note": "CTest TestSourceCensus_ProfileSelectors rejects any profile selector that reaches a mirror or tautological TEST. module_content.py fails a manifest whose prefix selects a TEST outside tests.files, lists a census mirror, or selects an EXPECT_TRUE(true)/EXPECT_NO_CRASH-only body; test_module_manifest.py mutates each rule. 11 mirrors retired, ~159 remain outside the gates. Local evidence only."
+          "note": "Profile selectors inspect each TEST and reachable helpers for production declarations, excluding utility-only includes and constant assertions. Module expected sets reject copied or tautological bodies. Classification is lexical; raw whole-suite floors still count mirrors. Pure tests pass locally; fixture and hosted proof remain pending."
         },
         {
           "criterionDigest": "sha256:641c68cb4915",
@@ -908,10 +909,12 @@
           "criterionDigest": "sha256:029af64cb513",
           "state": "implemented",
           "evidence": [
+            "tools/site-data/workflow_ownership.py",
+            "tools/site-data/validate.py",
             "Tests/Tools/test_site_data_contract.py",
-            "tools/site-data/validate.py"
+            ".github/workflows/build.yml"
           ],
-          "note": "EXPERIMENTAL_SHIPPING_PRESET_OWNERS maps linux-shipping to PLT-210 and macos-shipping to PLT-220; experimental_shipping_preset_errors rejects an unmapped *-shipping preset, one in stable-v1 build scope, a missing or done-but-unevidenced owner, and an owner that no longer configures its preset. macos-shipping has an advisory build-macos-shipping job (continue-on-error), no hosted run yet."
+          "note": "WorkflowOwnershipTests bind Shipping preset uses, including matrices and environment variables, to platform owners or named test hosts. Platform certification cannot enter Required CI Gate; done owners need evidenced criteria. Six ownership tests pass locally. Host mappings need integration review; hosted proof is pending."
         },
         {
           "criterionDigest": "sha256:78f73e6e4ef8",
@@ -1709,11 +1712,12 @@
           "criterionDigest": "sha256:22e8be2baa83",
           "state": "implemented",
           "evidence": [
-            "Tests/Tools/test_site_data_contract.py",
             "tools/site-data/validate.py",
-            "Tests/CMakeLists.txt"
+            "Tests/Tools/test_site_data_contract.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml"
           ],
-          "note": "test_excluded_gates_and_work_may_remain_open_when_ready, plus the scope-widening and capability-classification rejection tests, exercise the production validator for this rule."
+          "note": "ClassificationCoverageTests reject included capabilities and first-party games backed by excluded gates. These and PublicClaimInvariantTests run in readiness-cross-references and required docs-health. The blocked-gate positive control remains. No exact-SHA hosted proof is claimed."
         },
         {
           "criterionDigest": "sha256:5bbbc4190311",

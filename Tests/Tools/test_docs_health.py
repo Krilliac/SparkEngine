@@ -651,6 +651,58 @@ class FooBar {};
             self.assertEqual(1, health["exitCode"])
 
 
+class CurrentnessRejectionTests(unittest.TestCase):
+    """Exercise byte comparisons and the real tracked-tree mutation guard."""
+
+    def test_declared_output_comparisons_fail_closed(self) -> None:
+        for case, message in (
+            ("stale", "tracked generated output is stale"),
+            ("file", "generated file is nondeterministic"),
+            ("tree", "generated tree is nondeterministic"),
+            ("undeclared", "undeclared tracked output"),
+        ):
+            with self.subTest(case=case), tempfile.TemporaryDirectory(prefix="docs-currentness-") as temporary:
+                root = Path(temporary)
+                first, second = root / "first", root / "second"
+                relative = "docs/generated/page.md"
+                for directory in (root, first, second):
+                    write(directory / relative, "current\n")
+                if case == "stale":
+                    write(root / relative, "old\n")
+                elif case == "undeclared":
+                    for directory in (first, second):
+                        write(directory / relative, "changed\n")
+                else:
+                    write(second / relative, "different\n")
+                output = {"path": relative, "tracked": True}
+                if case == "tree":
+                    output = {"path": "docs/generated", "tracked": False, "tree": True}
+                contract = {"generators": [{"outputs": [] if case == "undeclared" else [output]}]}
+                with mock.patch.object(docs_currentness, "REPO_ROOT", root):
+                    with self.assertRaisesRegex(docs_currentness.CurrentnessError, message):
+                        docs_currentness.compare_outputs(contract, first, second, [relative])
+
+    def test_check_rejects_tracked_tree_mutation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-mutation-") as temporary:
+            root = Path(temporary)
+            write(root / "tracked.md", "before\n")
+
+            def mutate(*args: object) -> None:
+                write(root / "tracked.md", "after\n")
+
+            with mock.patch.object(docs_currentness, "REPO_ROOT", root), \
+                 mock.patch.object(docs_currentness, "load_contract", return_value={"generators": []}), \
+                 mock.patch.object(docs_currentness, "exact_identity", return_value=(EXACT_SHA, COMMITTED_AT)), \
+                 mock.patch.object(docs_currentness, "tracked_inventory", return_value=(
+                     ["tracked.md"], {"tracked.md": "100644"})), \
+                 mock.patch.object(docs_currentness, "copy_snapshot"), \
+                 mock.patch.object(docs_currentness, "run_snapshot", side_effect=mutate), \
+                 mock.patch.object(docs_currentness, "validate_health"), \
+                 mock.patch.object(docs_currentness, "compare_outputs"):
+                with self.assertRaisesRegex(docs_currentness.CurrentnessError, "mutated the tracked working tree"):
+                    docs_currentness.check_currentness(EXACT_SHA, COMMITTED_AT)
+
+
 class LinkFixture:
     def __init__(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="docs-link-fixture-")
@@ -709,6 +761,44 @@ class LinkFixture:
 
 
 class DocsLinksHostileTests(unittest.TestCase):
+    def test_missing_images_are_rejected(self) -> None:
+        for markup in ('![alt](missing.png)', '<img src="missing.png">', '<source src="missing.png">'):
+            with self.subTest(markup=markup), LinkFixture() as fixture:
+                write(fixture.docs / "Guide.md", "# Guide\n\n" + markup + "\n")
+                errors = links.validate_docs_links(
+                    fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+                )
+                self.assertTrue(any("target does not exist" in row["error"] for row in errors), errors)
+
+    def test_present_images_resolve(self) -> None:
+        with LinkFixture() as fixture:
+            (fixture.docs / "present.png").write_bytes(b"image fixture")
+            write(fixture.docs / "Guide.md", '# Guide\n![alt](present.png)\n<img src="present.png">\n')
+            self.assertEqual([], links.validate_docs_links(
+                fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+            ))
+
+    def test_source_line_anchor_bounds(self) -> None:
+        for anchor, valid in (("L3", True), ("L1-L3", True), ("L999", False), ("L1-L999", False)):
+            with self.subTest(anchor=anchor), LinkFixture() as fixture:
+                write(fixture.docs / "Target.md", "# Target\nsecond\nthird\n")
+                write(fixture.docs / "Guide.md", f"# Guide\n[x](Target.md#{anchor})\n")
+                errors = links.validate_docs_links(
+                    fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+                )
+                if valid:
+                    self.assertEqual([], errors)
+                else:
+                    self.assertTrue(any("source line anchor exceeds" in row["error"] for row in errors), errors)
+
+    def test_missing_catalog_root_document_is_rejected(self) -> None:
+        with LinkFixture() as fixture:
+            fixture.catalog["include"]["rootDocuments"] = ["missing.md"]
+            errors = links.validate_docs_links(
+                fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+            )
+            self.assertTrue(any("root document is missing" in row["error"] for row in errors), errors)
+
     def test_reference_style_missing_target_is_rejected(self) -> None:
         with LinkFixture() as fixture:
             write(
@@ -969,6 +1059,17 @@ class PublishedDocumentationHealthTests(unittest.TestCase):
     """The bundle's docs health must be measured evidence, never a fallback."""
 
     GENERATORS = docs_currentness.REQUIRED_GENERATORS
+
+    def test_currentness_rejects_missing_generator_result(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-health-missing-") as temporary:
+            path = Path(temporary) / "health.json"
+            payload = self.payload()
+            write(path, json.dumps(payload))
+            docs_currentness.validate_health(path, EXACT_SHA, COMMITTED_AT)
+            payload["results"].pop()
+            write(path, json.dumps(payload))
+            with self.assertRaisesRegex(docs_currentness.CurrentnessError, "every generator exactly once"):
+                docs_currentness.validate_health(path, EXACT_SHA, COMMITTED_AT)
 
     def payload(self, **overrides: object) -> dict:
         base = {
