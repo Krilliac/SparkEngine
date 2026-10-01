@@ -246,6 +246,15 @@ class DocumentedCommandInventoryTests(unittest.TestCase):
         self.assertNotIn("SPARK_TEST_NAME_PREFIX", options["env"])
         self.assertEqual(options["timeout"], checker.CTEST_EXECUTION_TIMEOUT_SECONDS)
 
+    def test_execute_timeout_reports_the_tests_ctest_completed(self) -> None:
+        progress = "1/3 Test #7: SlowOne ....   Passed  600.01 sec\n"
+        timeout = subprocess.TimeoutExpired(["ctest"], checker.CTEST_EXECUTION_TIMEOUT_SECONDS, output=progress)
+        with patch.object(checker.subprocess, "run", side_effect=timeout):
+            with self.assertRaises(RuntimeError) as raised:
+                checker.execute_selected("ctest", Path("build/linux-gcc-release"), None, ["-L", "unit"], 7)
+        self.assertIn(f"timed out after {checker.CTEST_EXECUTION_TIMEOUT_SECONDS} seconds", str(raised.exception))
+        self.assertIn("SlowOne ....   Passed  600.01 sec", str(raised.exception))
+
     def test_expected_count_pins_raise_limit_and_reject_malformed_values(self) -> None:
         tests = [{"properties": [{"name": "ENVIRONMENT", "value": "SPARK_TEST_EXPECT_COUNT=73"}]}]
         self.assertEqual(checker.effective_test_limit(tests, 50), 73)

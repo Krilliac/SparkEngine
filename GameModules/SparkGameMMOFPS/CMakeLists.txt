@@ -96,6 +96,14 @@ spark_exclude_sources_matching(SPARK_GAME_MMOFPS_SOURCES "${CMAKE_CURRENT_SOURCE
 # ---------------------------------------------------------------------
 add_library(SparkGameMMOFPS SHARED ${SPARK_GAME_MMOFPS_SOURCES})
 
+# TFCrypto's PBKDF2 work factor is sized for optimised code, like PasswordHash.cpp
+# in the root CMakeLists.txt: optimise this one hot loop in Debug too (the work
+# factor is unchanged). MSVC Debug keeps /RTC1, which /O2 rejects.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
+    set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Source/Account/TFCrypto.cpp"
+        PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+endif()
+
 if(NOT COMMAND spark_configure_module_abi)
     include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
 endif()

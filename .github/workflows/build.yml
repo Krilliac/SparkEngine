@@ -706,6 +706,10 @@ jobs:
           build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-linux-asan-
 
+    # -no-pie: the PIE SparkTests carries ~29 M relative relocations (mostly UBSan
+    # check data), so every process start rewrites ~1.8 GB of .data. The
+    # process-interruption tests launch it ~400 times; non-PIE cuts a 100-kill
+    # rehearsal from ~98 s to ~30 s. Instrumentation is unchanged.
     - name: Configure CMake (ASan + UBSan + LSan)
       run: |
         spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
@@ -721,7 +725,7 @@ jobs:
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -no-pie" \
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build

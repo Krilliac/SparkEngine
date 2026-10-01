@@ -188,13 +188,13 @@ namespace RTS
         if (it == m_grids.end())
             return;
 
-        auto& grid = it->second;
-        for (auto& cell : grid.cells)
+        // Visible -> Fog (explored but not currently seen); Fog and Unexplored stay. A flat
+        // pointer loop: this runs for every faction every skirmish tick.
+        auto& cells = it->second.cells;
+        for (RTSVisibility *cell = cells.data(), *end = cell + cells.size(); cell != end; ++cell)
         {
-            // Visible -> Fog (explored but not currently seen)
-            // Fog stays Fog, Unexplored stays Unexplored
-            if (cell == RTSVisibility::Visible)
-                cell = RTSVisibility::Fog;
+            if (*cell == RTSVisibility::Visible)
+                *cell = RTSVisibility::Fog;
         }
     }
 

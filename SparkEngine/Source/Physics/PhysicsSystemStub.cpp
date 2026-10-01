@@ -304,7 +304,12 @@ XMMATRIX PhysicsBody::GetInterpolatedTransform(float /*alpha*/) const
 
 void PhysicsBody::StoreCurrentState() {}
 
-void PhysicsBody::UpdateCurrentState() {}
+void PhysicsBody::UpdateCurrentState(const JPH::Body* /*lockedBody*/) {}
+
+JPH::PhysicsSystem* PhysicsBody::ContextJoltSystem()
+{
+    return nullptr;
+}
 
 // ============================================================================
 // PhysicsConstraint — stub
