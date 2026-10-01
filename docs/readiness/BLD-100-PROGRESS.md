@@ -497,3 +497,86 @@ Shipping has `BUILD_TESTS=OFF`: its verification command is the custom target,
 not a CTest invocation that would select nothing. A clean LTO-on rebuild,
 compiled fixture suite, below-floor execution and exact-SHA hosted CI remain
 unverified. BLD-100 remains open.
+
+## 2026-10-01: Shipping residuals resolved, enforcement re-applied
+
+The residuals that held back the Windows scan were measured again on a fresh
+`windows-shipping` MinSizeRel build of this branch's base (079b99131, LTO off,
+MSVC 14.44.35207, LLVM 22.1.8 `llvm-objdump`/`llvm-pdbutil`). The base scanner
+reported:
+
+| Image | Above-floor | Undecodable |
+|---|---:|---:|
+| SparkEditor.exe | 29 | 1026 |
+| SparkEngine.exe | 25 | 616 |
+| SparkGameFPS.dll | 13 | 324 |
+| SparkLauncher.exe | 2 | 205 |
+| SparkInstaller.exe | 0 | 60 |
+| SparkCooker.exe | 0 | 76 |
+| SparkCrashReporter.exe | 0 | 70 |
+| SparkBuild.exe | 0 | 1 |
+| SparkAutomation, SparkConsole, SparkShaderCompiler, SparkWorker | 0 | 0 |
+
+The libsodium AVX2/AES-NI/AVX-512 findings from the 2026-09-30 table were
+already gone: that table was taken before `cmake/SparkLibsodium.cmake` stopped
+compiling those variants on MSVC. Each remaining class was resolved:
+
+- **Switch tables in `.text` (every undecodable record).** MSVC x64 places
+  jump tables (32-bit RVAs) and byte index tables after the procedure body,
+  inside the extent the PDB records. The sweep decodes them as undecodable
+  bytes or as bogus instructions (one decoded as `vshufps` in
+  `Spark::Json::Detail::PrettyImpl`) and can leave the stream out of step.
+  `tools/isa_code_map.py` now proves each table before treating its bytes as
+  data. The checks: the dispatch idiom with the image base reaching every use;
+  the extent from the bound check, or for `std::variant` (no bound, index -1
+  slot) from entries that name instruction starts; entries landing on rebuilt
+  instructions; no branch into or fallthrough into a table; PDB `noreturn` on
+  the calls in front of tables; and a fixed point when the rebuilt stream is
+  re-read. Out-of-step stretches are re-decoded with the same disassembler.
+  Unexplained bytes stay undecodable. Nothing is exempted by image, procedure
+  or range.
+- **AVX2 loops behind `__isa_available >= 5`** (auto-vectorized
+  `Sha256State::Finalize`): the `__isa_available` guard rule now covers
+  AVX/AVX2 as well as LZCNT at level 5.
+- **EVEX loops behind `__isa_available >= 6`** (`cgltf_calc_index_bound`,
+  `__std_minmax_disp`/`__std_minmax_impl`): a level-6 rule covers only
+  `vpmaxuq`/`vpminuq` (AVX512F/VL). In the vcruntime `__isa_available_init`
+  disassembly, the store of 6 needs `CPUID.7:EBX & 0xD0030000` (F, DQ, CD, BW,
+  VL) and `XCR0 & 0xE0`. Any other EVEX instruction still fails.
+- **`std::_Countl_zero_lzcnt<unsigned __int64>` (LZCNT, out of line).** Its
+  only reference is `_Checked_x86_x64_countl_zero`'s `cmpl $0x5,
+  __isa_available; jge` tail jump. `REVIEWED_CALLER_GUARDED_PROCEDURES` holds
+  this one entry. Each scan re-proves it: every code reference is guarded, the
+  address is never taken, and no data section holds its VA or RVA.
+
+Result with the new scanner, through the real `CpuFloor_IsaBaseline` target
+(`cmake --build build/windows-shipping --config MinSizeRel --target
+CpuFloor_IsaBaseline`): `OK` for all 12 images, 0 above-floor, 0 undecodable.
+SparkEngine had 162 proven tables (14458 bytes), SparkEditor 218, SparkGameFPS
+69 and SparkLauncher 30.
+
+Load-bearing check: a temporary, uncommitted `SparkIsaProbeAvx2` (AVX2
+intrinsics, reachable from `wWinMain`) was added to
+`Core/SparkEngineWindows.cpp`. The rebuilt target then failed with MSB8066:
+`FAIL SparkEngine.exe: ... 5 above-floor`, all five in `SparkIsaProbeAvx2`.
+After restoring the file (the object was recompiled), the target passed again.
+That probe build also exposed a layout-dependent false table rejection in
+`Spark::Net::TrustStoreErrorText`, which is what led to the fixed-point
+requirement. `Tests/Tools/test_isa_code_map.py` was mutation-checked: removing
+the validation, the base-reach check, the reachable-code check on backward
+slots, the case-leader re-match or the caller-guard reasons each fails it.
+
+The enforcement commits 97809e21d and d57694e24 are re-applied. The
+windows-shipping CI step and, with `BUILD_TESTS=ON`, the `CpuFloor_IsaBaseline`
+CTest are fail-closed again.
+
+Entry points: the Windows engine and editor floor checks now compile in a real
+MSVC Shipping build. `SparkEngine.exe --version` runs the passing branch
+(exit 0). The refusal branch has still not run. Running it needs a CPU below
+the floor, or a CPUID emulator such as Intel SDE (an external download not made
+here).
+
+Unverified: hosted CI (the windows-2022 runner's MSVC toolset and LLVM version
+may differ from the reviewed 14.44.35207 and the local LLVM 22.1.8; either can
+turn the scan red), LTO-on images, the `CpuFloor_IsaBaseline` CTest in a
+`windows-release` tree, and below-floor execution.

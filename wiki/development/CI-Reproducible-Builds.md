@@ -343,19 +343,23 @@ after building the products. With tests enabled it also registers a CTest.
 Missing tools, missing files and remaining findings fail the scan. Existing ELF
 registration remains in `Tests/CMakeLists.txt`.
 
-Real MSVC images still carry these residuals (including local MinSizeRel
-artifacts with LTO disabled):
+On a local windows-shipping MinSizeRel build (LTO off, MSVC 14.44.35207,
+LLVM 22.1.8) all 12 shipped images pass. The earlier residual classes were
+resolved as follows:
 
-- libsodium's AVX2/AES-NI variants and `sodium_init`'s XGETBV, which the MSVC
-  branch of `cmake/SparkLibsodium.cmake` compiles.
-- EVEX (AVX-512) loops that MSVC's auto-vectorizer adds behind
-  `__isa_available >= 6`. They appear in the STL's `__std_minmax_disp` and in
-  `cgltf_calc_index_bound`.
-- MSVC x64 switch tables inside `.text` that happen to decode as above-floor
-  instructions, and bytes the disassembler cannot decode. Neither is excused
-  without proof of which bytes are data.
+- libsodium's AVX2/AES-NI/AVX-512 variants and `sodium_init`'s XGETBV: no
+  longer compiled on MSVC (`cmake/SparkLibsodium.cmake`).
+- EVEX loops the auto-vectorizer adds behind `__isa_available >= 6`
+  (`cgltf_calc_index_bound`, the STL's `__std_minmax_*`) and AVX2 loops behind
+  `__isa_available >= 5` (`Sha256State::Finalize`): reviewed guard rules.
+- The out-of-line `std::_Countl_zero_lzcnt<unsigned __int64>`, reached only by
+  `_Checked_x86_x64_countl_zero`'s guarded tail jump: a caller-guarded entry,
+  re-proven on every scan.
+- MSVC x64 switch tables inside `.text` (all undecodable records, and bytes
+  that decoded as bogus VEX/EVEX instructions): proven data by
+  `tools/isa_code_map.py`.
 
-The per-image residuals are in `docs/readiness/BLD-100-PROGRESS.md`.
+Per-image measurements are in `docs/readiness/BLD-100-PROGRESS.md`.
 
 The scanner binds each PE to its PDB by RSDS GUID and age. Every exemption is
 scoped to named ISA families and to reviewed provenance:
@@ -371,27 +375,45 @@ scoped to named ISA families and to reviewed provenance:
   vcruntime's `__isa_available_init` and `Spark::Detail::ReadXcr0` are exempt
   for XGETBV only; other XSAVE-family instructions still fail.
 - **Guard dominance.** This covers CRT/STL code the headers inline into
-  arbitrary procedures: UCRT `wmemchr`/`wmemcmp` behind `_Avx2WmemEnabled`
-  (AVX/AVX2), and `<bit>` `countl_zero` behind `__isa_available >= 5`
-  (LZCNT). Such an instruction is exempt when the guard edge is the only way to
+  arbitrary procedures, and auto-vectorized loops: UCRT `wmemchr`/`wmemcmp`
+  behind `_Avx2WmemEnabled` (AVX/AVX2), `__isa_available >= 5` (AVX/AVX2 and
+  LZCNT) and `__isa_available >= 6` (only `vpmaxuq`/`vpminuq`, AVX512F/VL).
+  The vcruntime `__isa_available_init` disassembly was reviewed for what each
+  level proves. Such an instruction is exempt when the guard edge is the only way to
   reach it from its procedure's entry. The analysis builds the procedure's
   control-flow graph from the disassembly. It fails closed on indirect jumps,
   guards in callers, unmatched compare shapes, undecodable bytes and code with
   no procedure record. Guard storage must fit inside the section's virtual
   data extent, including the loader's zero-filled tail.
+- **Caller-guarded procedures.** `REVIEWED_CALLER_GUARDED_PROCEDURES` names
+  out-of-line procedures that only guarded callers reach. An entry holds only
+  when every code reference is a direct branch or call that a guard rule
+  dominates, the address is never taken, and no data section contains it.
+
+**Data in code.** Before classification, `tools/isa_code_map.py` rebuilds each
+procedure's instruction stream around the MSVC switch tables it can prove. The
+dispatch must match MSVC's `lea image base; [movzbl index table]; movl
+RVA(%base,%idx,4); add %base; jmp *reg` idiom, with the image base reaching
+every use. The extent comes from the bound check. Where MSVC omits the bound
+(`std::variant`), it comes from the run of entries that name instruction
+starts. Every entry must land on an instruction of the rebuilt stream. No
+branch may target a table, and no reachable instruction may fall into one. The
+table set must be a fixed point of re-reading the rebuilt stream. The stream
+is re-decoded where the sweep fell out of step. Bytes nothing explains stay
+undecodable and fail.
 
 The scanner reads raw instruction bytes, so an EVEX-encoded xmm instruction
 counts as AVX-512 and never as AVX. VAES, VPCLMULQDQ, GFNI and XOP rotations
 cannot inherit AVX/AVX2 exemptions; mask-register instructions include k0.
 LLVM's separate prefix records are joined only to contiguous instruction bytes.
 Undecodable bytes remain failures and are reported separately from identified
-above-floor instructions. FMA, AVX-512, BMI, other extensions and
+above-floor instructions. FMA, unreviewed AVX-512, BMI, other extensions and
 unknown runtime functions remain failures under these PE mechanisms. `--allow-symbol` affects ELF only. New toolchain or
 runtime variants need a new review.
 
 `CpuFloor_IsaBaselineChecker` covers linked PE fixtures, the PDB contribution
-and procedure parsers and the guard analysis, using synthetic `llvm-objdump`
-and `llvm-pdbutil` text. Native runtime fixture passes establish local scanner
+and procedure parsers, the guard analysis, the switch-table proofs and the
+caller-guarded entries, using synthetic `llvm-objdump` and `llvm-pdbutil` text. Native runtime fixture passes establish local scanner
 behavior. They do not replace an engine image scan or execution on below-floor
 hardware.
 
