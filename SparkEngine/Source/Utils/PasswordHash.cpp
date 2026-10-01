@@ -155,10 +155,13 @@ namespace Spark::PasswordHash
             return state.Finalize();
         }
 
+        // HMAC-SHA256 key schedule (RFC 2104): the SHA-256 states after absorbing K ^ ipad and
+        // K ^ opad. PBKDF2 derives every round from one schedule, so a round costs two
+        // compression-function calls instead of re-absorbing both pad blocks (four calls).
         struct HmacSha256Key
         {
-            std::array<uint8_t, 64> innerPad{};
-            std::array<uint8_t, 64> outerPad{};
+            Sha256State inner;
+            Sha256State outer;
         };
 
         HmacSha256Key PrepareHmacSha256Key(const uint8_t* key, size_t keyLength)
@@ -176,25 +179,26 @@ namespace Spark::PasswordHash
             else if (keyLength > 0)
                 std::memcpy(keyBlock.data(), key, keyLength);
 
+            std::array<uint8_t, 64> pad{};
+            const auto clearPad = Spark::MakeScopeExit([&] { SecureErase(pad.data(), pad.size()); });
             for (size_t i = 0; i < keyBlock.size(); ++i)
-            {
-                prepared.innerPad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
-                prepared.outerPad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
-            }
+                pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
+            prepared.inner.Update(pad.data(), pad.size());
+            for (size_t i = 0; i < keyBlock.size(); ++i)
+                pad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
+            prepared.outer.Update(pad.data(), pad.size());
             return prepared;
         }
 
         Digest HmacSha256(const HmacSha256Key& key, const uint8_t* data, size_t dataLength)
         {
-            Sha256State inner;
+            Sha256State inner = key.inner;
             const auto clearInner = Spark::MakeScopeExit([&] { SecureErase(&inner, sizeof(inner)); });
-            inner.Update(key.innerPad.data(), key.innerPad.size());
             inner.Update(data, dataLength);
             Digest innerHash = inner.Finalize();
             const auto clearInnerHash = Spark::MakeScopeExit([&] { SecureErase(innerHash.data(), innerHash.size()); });
-            Sha256State outer;
+            Sha256State outer = key.outer;
             const auto clearOuter = Spark::MakeScopeExit([&] { SecureErase(&outer, sizeof(outer)); });
-            outer.Update(key.outerPad.data(), key.outerPad.size());
             outer.Update(innerHash.data(), innerHash.size());
             return outer.Finalize();
         }

@@ -9,8 +9,9 @@
  */
 #include "Account/TFCrypto.h"
 
+#include "Utils/SecureMemory.h"
+
 #include <algorithm>
-#include <atomic>
 #include <cstring>
 
 namespace Terrafront::Crypto
@@ -19,16 +20,9 @@ namespace Terrafront::Crypto
     namespace
     {
 
-        void SecureErase(void* data, size_t size) noexcept
-        {
-            auto* bytes = static_cast<volatile uint8_t*>(data);
-            while (bytes && size > 0)
-            {
-                *bytes++ = 0;
-                --size;
-            }
-            std::atomic_signal_fence(std::memory_order_seq_cst);
-        }
+        // One non-elidable bulk erase (Utils/SecureMemory.h): the PBKDF2 loop below
+        // erases its schedule and intermediate states every round.
+        using Spark::SecureErase;
 
         class EraseOnExit
         {

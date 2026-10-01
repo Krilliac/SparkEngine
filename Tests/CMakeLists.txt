@@ -6359,3 +6359,12 @@ unset(_spark_tests_sources)
 unset(_spark_tests_source)
 unset(_spark_tests_source_abs)
 unset(_spark_tests_source_is_test)
+
+# The SparkGameMMOFPS copy of TFCrypto.cpp compiled here gets the same Debug -O2
+# as the module target (see GameModules/SparkGameMMOFPS/CMakeLists.txt): its
+# PBKDF2 work factor is sized for optimised code. Source properties are
+# directory-scoped, so the module's setting does not reach this target.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp"
+        PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+endif()
