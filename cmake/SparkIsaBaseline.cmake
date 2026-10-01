@@ -54,8 +54,12 @@ function(spark_register_isa_baseline_scan)
 
     if(BUILD_TESTS)
         add_test(NAME CpuFloor_IsaBaseline COMMAND ${_spark_isa_command})
+        # "static", not "integration": the scan disassembles every shipped image
+        # without running it. The CTest policy counts an integration-labelled test
+        # that names a binary as that binary's behavioural lane, so an
+        # integration label here would hide every missing runtime lane.
         set_tests_properties(CpuFloor_IsaBaseline PROPERTIES
-            LABELS "build;shipping;integration"
+            LABELS "build;shipping;static"
             RUN_SERIAL TRUE
             TIMEOUT 600)
     endif()
