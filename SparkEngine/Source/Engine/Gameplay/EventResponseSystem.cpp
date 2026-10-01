@@ -9,13 +9,156 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include "Engine/Modding/HeldHandles.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
-#include <sstream>
+#include <optional>
+#include <string>
+#include <vector>
+
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace Spark::Gameplay
 {
+    namespace
+    {
+        std::optional<std::string> ReadRulesFile(const std::string& path, size_t maxBytes)
+        {
+#ifdef _WIN32
+            Spark::HeldHandles::ScopedHandle handle(
+                ::CreateFileW(std::filesystem::path(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
+            if (!handle.IsValid())
+            {
+                return std::nullopt;
+            }
+
+            BY_HANDLE_FILE_INFORMATION info{};
+            LARGE_INTEGER size{};
+            if (::GetFileType(handle.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(handle.Get(), &info) ||
+                (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
+                !::GetFileSizeEx(handle.Get(), &size) || size.QuadPart < 0 ||
+                static_cast<unsigned long long>(size.QuadPart) > maxBytes)
+            {
+                return std::nullopt;
+            }
+
+            std::string text(static_cast<size_t>(size.QuadPart), '\0');
+            size_t offset = 0;
+            while (offset < text.size())
+            {
+                const DWORD request = static_cast<DWORD>(std::min<size_t>(text.size() - offset, 64 * 1024));
+                DWORD read = 0;
+                if (!::ReadFile(handle.Get(), text.data() + offset, request, &read, nullptr) || read == 0)
+                {
+                    return std::nullopt;
+                }
+                offset += read;
+            }
+
+            char extra = 0;
+            DWORD extraRead = 0;
+            if (!::ReadFile(handle.Get(), &extra, 1, &extraRead, nullptr))
+            {
+                if (::GetLastError() != ERROR_HANDLE_EOF)
+                {
+                    return std::nullopt;
+                }
+            }
+            else if (extraRead != 0)
+            {
+                return std::nullopt;
+            }
+
+            BY_HANDLE_FILE_INFORMATION after{};
+            if (!::GetFileInformationByHandle(handle.Get(), &after) ||
+                after.dwVolumeSerialNumber != info.dwVolumeSerialNumber ||
+                after.nFileIndexHigh != info.nFileIndexHigh || after.nFileIndexLow != info.nFileIndexLow ||
+                after.nFileSizeHigh != info.nFileSizeHigh || after.nFileSizeLow != info.nFileSizeLow ||
+                ::CompareFileTime(&after.ftLastWriteTime, &info.ftLastWriteTime) != 0)
+            {
+                return std::nullopt;
+            }
+            return text;
+#else
+            Spark::HeldHandles::ScopedFd handle(::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK));
+            if (handle.Get() < 0)
+            {
+                return std::nullopt;
+            }
+
+            struct stat info
+            {
+            };
+            if (::fstat(handle.Get(), &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+                static_cast<unsigned long long>(info.st_size) > maxBytes)
+            {
+                return std::nullopt;
+            }
+
+            std::string text(static_cast<size_t>(info.st_size), '\0');
+            size_t offset = 0;
+            while (offset < text.size())
+            {
+                const ssize_t read = ::read(handle.Get(), text.data() + offset, text.size() - offset);
+                if (read < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                if (read <= 0)
+                {
+                    return std::nullopt;
+                }
+                offset += static_cast<size_t>(read);
+            }
+
+            char extra = 0;
+            for (;;)
+            {
+                const ssize_t read = ::read(handle.Get(), &extra, 1);
+                if (read < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                if (read > 0)
+                {
+                    return std::nullopt;
+                }
+                if (read < 0)
+                {
+                    return std::nullopt;
+                }
+                break;
+            }
+
+            struct stat after
+            {
+            };
+            if (::fstat(handle.Get(), &after) != 0 || after.st_dev != info.st_dev || after.st_ino != info.st_ino ||
+                after.st_size != info.st_size ||
+#if defined(__APPLE__)
+                after.st_mtimespec.tv_sec != info.st_mtimespec.tv_sec ||
+                after.st_mtimespec.tv_nsec != info.st_mtimespec.tv_nsec
+#else
+                after.st_mtim.tv_sec != info.st_mtim.tv_sec || after.st_mtim.tv_nsec != info.st_mtim.tv_nsec
+#endif
+            )
+            {
+                return std::nullopt;
+            }
+            return text;
+#endif
+        }
+    } // namespace
 
     EventResponseSystem& EventResponseSystem::GetInstance()
     {
@@ -303,28 +446,12 @@ namespace Spark::Gameplay
                                                   const std::vector<GameplayAction>& allActions, size_t actionIndex)
     {
         auto& console = SimpleConsole::GetInstance();
-        auto getStr = [](const ActionParam& p) -> std::string
-        {
-            if (auto* s = std::get_if<std::string>(&p))
-                return *s;
-            return "";
-        };
-        auto getDbl = [](const ActionParam& p) -> double
-        {
-            if (auto* d = std::get_if<double>(&p))
-                return *d;
-            if (auto* i = std::get_if<int64_t>(&p))
-                return static_cast<double>(*i);
-            return 0.0;
-        };
-        auto getInt = [](const ActionParam& p) -> int64_t
-        {
-            if (auto* i = std::get_if<int64_t>(&p))
-                return *i;
-            if (auto* d = std::get_if<double>(&p))
-                return static_cast<int64_t>(*d);
-            return 0;
-        };
+        // The parameter readers live with the rule file format (EventResponseRules.cpp). They
+        // read uint32 parameters (the documented entity-id kind; the old lambdas returned 0
+        // for them) and give 0 for a double outside int64 instead of an undefined conversion.
+        const auto getStr = &ActionParamToString;
+        const auto getDbl = &ActionParamToDouble;
+        const auto getInt = &ActionParamToInt64;
 
         switch (action.type)
         {
@@ -467,218 +594,31 @@ namespace Spark::Gameplay
 
     void EventResponseSystem::FireCustomEvent(const std::string& eventName, uint32_t sourceEntity)
     {
+        // A rule action can fire a custom event that fires the same rule again; a rules file
+        // that closes that loop recursed until the stack overflowed.
+        if (m_customEventDepth >= kMaxCustomEventDepth)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "EventResponseSystem: dropped custom event '%s' nested %u events deep", eventName.c_str(),
+                           m_customEventDepth);
+            return;
+        }
+
+        struct DepthScope
+        {
+            uint32_t& depth;
+            explicit DepthScope(uint32_t& counter) : depth(counter) { ++depth; }
+            ~DepthScope() { --depth; }
+            DepthScope(const DepthScope&) = delete;
+            DepthScope& operator=(const DepthScope&) = delete;
+        };
+        const DepthScope scope(m_customEventDepth);
         EvaluateRules(EventTriggerType::OnCustom, eventName, sourceEntity);
     }
 
     // ========================================================================
-    // JSON Serialization
+    // JSON Serialization (the format lives in EventResponseRules.cpp)
     // ========================================================================
-
-    static std::string TriggerTypeToString(EventTriggerType t)
-    {
-        switch (t)
-        {
-        case EventTriggerType::OnTriggerEnter:
-            return "OnTriggerEnter";
-        case EventTriggerType::OnTriggerExit:
-            return "OnTriggerExit";
-        case EventTriggerType::OnDamaged:
-            return "OnDamaged";
-        case EventTriggerType::OnKilled:
-            return "OnKilled";
-        case EventTriggerType::OnItemPickup:
-            return "OnItemPickup";
-        case EventTriggerType::OnKeyPress:
-            return "OnKeyPress";
-        case EventTriggerType::OnKeyRelease:
-            return "OnKeyRelease";
-        case EventTriggerType::OnCollision:
-            return "OnCollision";
-        case EventTriggerType::OnQuestComplete:
-            return "OnQuestComplete";
-        case EventTriggerType::OnTimer:
-            return "OnTimer";
-        case EventTriggerType::OnStart:
-            return "OnStart";
-        case EventTriggerType::OnWeatherChange:
-            return "OnWeatherChange";
-        case EventTriggerType::OnTimeOfDay:
-            return "OnTimeOfDay";
-        case EventTriggerType::OnEntityCreated:
-            return "OnEntityCreated";
-        case EventTriggerType::OnEntityDestroyed:
-            return "OnEntityDestroyed";
-        case EventTriggerType::OnCustom:
-            return "OnCustom";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static EventTriggerType StringToTriggerType(const std::string& s)
-    {
-        if (s == "OnTriggerEnter")
-            return EventTriggerType::OnTriggerEnter;
-        if (s == "OnTriggerExit")
-            return EventTriggerType::OnTriggerExit;
-        if (s == "OnDamaged")
-            return EventTriggerType::OnDamaged;
-        if (s == "OnKilled")
-            return EventTriggerType::OnKilled;
-        if (s == "OnItemPickup")
-            return EventTriggerType::OnItemPickup;
-        if (s == "OnKeyPress")
-            return EventTriggerType::OnKeyPress;
-        if (s == "OnKeyRelease")
-            return EventTriggerType::OnKeyRelease;
-        if (s == "OnCollision")
-            return EventTriggerType::OnCollision;
-        if (s == "OnQuestComplete")
-            return EventTriggerType::OnQuestComplete;
-        if (s == "OnTimer")
-            return EventTriggerType::OnTimer;
-        if (s == "OnStart")
-            return EventTriggerType::OnStart;
-        if (s == "OnWeatherChange")
-            return EventTriggerType::OnWeatherChange;
-        if (s == "OnTimeOfDay")
-            return EventTriggerType::OnTimeOfDay;
-        if (s == "OnEntityCreated")
-            return EventTriggerType::OnEntityCreated;
-        if (s == "OnEntityDestroyed")
-            return EventTriggerType::OnEntityDestroyed;
-        if (s == "OnCustom")
-            return EventTriggerType::OnCustom;
-        return EventTriggerType::OnStart;
-    }
-
-    static std::string ActionTypeToString(ActionType t)
-    {
-        switch (t)
-        {
-        case ActionType::SpawnEntity:
-            return "SpawnEntity";
-        case ActionType::DestroyEntity:
-            return "DestroyEntity";
-        case ActionType::EnableEntity:
-            return "EnableEntity";
-        case ActionType::DisableEntity:
-            return "DisableEntity";
-        case ActionType::SetPosition:
-            return "SetPosition";
-        case ActionType::MoveToward:
-            return "MoveToward";
-        case ActionType::TeleportEntity:
-            return "TeleportEntity";
-        case ActionType::RotateEntity:
-            return "RotateEntity";
-        case ActionType::SetHealth:
-            return "SetHealth";
-        case ActionType::DealDamage:
-            return "DealDamage";
-        case ActionType::HealEntity:
-            return "HealEntity";
-        case ActionType::PlaySound:
-            return "PlaySound";
-        case ActionType::StopSound:
-            return "StopSound";
-        case ActionType::PlayAnimation:
-            return "PlayAnimation";
-        case ActionType::ApplyForce:
-            return "ApplyForce";
-        case ActionType::ApplyImpulse:
-            return "ApplyImpulse";
-        case ActionType::ShowDialogue:
-            return "ShowDialogue";
-        case ActionType::ShowMessage:
-            return "ShowMessage";
-        case ActionType::SetWeather:
-            return "SetWeather";
-        case ActionType::SetTimeOfDay:
-            return "SetTimeOfDay";
-        case ActionType::SetWorldVariable:
-            return "SetWorldVariable";
-        case ActionType::SetWorldFlag:
-            return "SetWorldFlag";
-        case ActionType::Delay:
-            return "Delay";
-        case ActionType::FireCustomEvent:
-            return "FireCustomEvent";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static ActionType StringToActionType(const std::string& s)
-    {
-        if (s == "SpawnEntity")
-            return ActionType::SpawnEntity;
-        if (s == "DestroyEntity")
-            return ActionType::DestroyEntity;
-        if (s == "EnableEntity")
-            return ActionType::EnableEntity;
-        if (s == "DisableEntity")
-            return ActionType::DisableEntity;
-        if (s == "SetPosition")
-            return ActionType::SetPosition;
-        if (s == "MoveToward")
-            return ActionType::MoveToward;
-        if (s == "TeleportEntity")
-            return ActionType::TeleportEntity;
-        if (s == "RotateEntity")
-            return ActionType::RotateEntity;
-        if (s == "SetHealth")
-            return ActionType::SetHealth;
-        if (s == "DealDamage")
-            return ActionType::DealDamage;
-        if (s == "HealEntity")
-            return ActionType::HealEntity;
-        if (s == "PlaySound")
-            return ActionType::PlaySound;
-        if (s == "StopSound")
-            return ActionType::StopSound;
-        if (s == "PlayAnimation")
-            return ActionType::PlayAnimation;
-        if (s == "ApplyForce")
-            return ActionType::ApplyForce;
-        if (s == "ApplyImpulse")
-            return ActionType::ApplyImpulse;
-        if (s == "ShowDialogue")
-            return ActionType::ShowDialogue;
-        if (s == "ShowMessage")
-            return ActionType::ShowMessage;
-        if (s == "SetWeather")
-            return ActionType::SetWeather;
-        if (s == "SetTimeOfDay")
-            return ActionType::SetTimeOfDay;
-        if (s == "SetWorldVariable")
-            return ActionType::SetWorldVariable;
-        if (s == "SetWorldFlag")
-            return ActionType::SetWorldFlag;
-        if (s == "Delay")
-            return ActionType::Delay;
-        if (s == "FireCustomEvent")
-            return ActionType::FireCustomEvent;
-        return ActionType::ShowMessage;
-    }
-
-    // Minimal JSON writer — avoids external dependency
-    static void WriteJsonString(std::ostream& out, const std::string& s)
-    {
-        out << '"';
-        for (char c : s)
-        {
-            if (c == '"')
-                out << "\\\"";
-            else if (c == '\\')
-                out << "\\\\";
-            else if (c == '\n')
-                out << "\\n";
-            else
-                out << c;
-        }
-        out << '"';
-    }
 
     bool EventResponseSystem::SaveToJson(const std::string& path) const
     {
@@ -691,172 +631,32 @@ namespace Spark::Gameplay
             return false;
         }
 
-        file << "{\n  \"rules\": [\n";
-        for (size_t r = 0; r < m_rules.size(); ++r)
-        {
-            const auto& rule = m_rules[r];
-            file << "    {\n";
-            file << "      \"name\": ";
-            WriteJsonString(file, rule.name);
-            file << ",\n";
-            file << "      \"sourceEntityId\": " << rule.sourceEntityId << ",\n";
-            file << "      \"trigger\": ";
-            WriteJsonString(file, TriggerTypeToString(rule.trigger));
-            file << ",\n";
-            file << "      \"triggerParam\": ";
-            WriteJsonString(file, rule.triggerParam);
-            file << ",\n";
-            file << "      \"enabled\": " << (rule.enabled ? "true" : "false") << ",\n";
-            file << "      \"oneShot\": " << (rule.oneShot ? "true" : "false") << ",\n";
-
-            // Actions
-            file << "      \"actions\": [\n";
-            for (size_t a = 0; a < rule.actions.size(); ++a)
-            {
-                const auto& act = rule.actions[a];
-                file << "        { \"type\": ";
-                WriteJsonString(file, ActionTypeToString(act.type));
-                file << ", \"params\": [";
-                for (size_t p = 0; p < act.params.size(); ++p)
-                {
-                    if (p > 0)
-                        file << ", ";
-                    std::visit(
-                        [&file](auto&& val)
-                        {
-                            using T = std::decay_t<decltype(val)>;
-                            if constexpr (std::is_same_v<T, std::monostate>)
-                                file << "null";
-                            else if constexpr (std::is_same_v<T, std::string>)
-                                WriteJsonString(file, val);
-                            else if constexpr (std::is_same_v<T, int64_t>)
-                                file << val;
-                            else if constexpr (std::is_same_v<T, double>)
-                                file << val;
-                            else if constexpr (std::is_same_v<T, uint32_t>)
-                                file << val;
-                        },
-                        act.params[p]);
-                }
-                file << "] }";
-                if (a + 1 < rule.actions.size())
-                    file << ",";
-                file << "\n";
-            }
-            file << "      ]\n";
-
-            file << "    }";
-            if (r + 1 < m_rules.size())
-                file << ",";
-            file << "\n";
-        }
-        file << "  ]\n}\n";
+        WriteEventResponseRules(file, m_rules);
         return true;
     }
 
     bool EventResponseSystem::LoadFromJson(const std::string& path)
     {
-        std::ifstream file(path);
-        if (!file.is_open())
+        const size_t maxBytes = Spark::Json::JsonLimits{}.maxBytes;
+        const auto text = ReadRulesFile(path, maxBytes);
+        if (!text)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: failed to open file '%s'", path.c_str());
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: failed to open or read regular file '%s'",
+                            path.c_str());
             return false;
         }
 
-        std::stringstream buffer;
-        buffer << file.rdbuf();
-
-        const auto root = Spark::Json::Parse(buffer.str());
-        if (!root.IsObject() || !root.HasKey("rules"))
+        std::vector<EventResponseRule> rules;
+        if (!ParseEventResponseRules(*text, rules, path))
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: invalid root object in '%s'", path.c_str());
-            return false;
-        }
-
-        const auto& rules = root["rules"];
-        if (!rules.IsArray())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "LoadFromJson: 'rules' is not an array in '%s'", path.c_str());
             return false;
         }
 
         m_rules.clear();
         m_timers.clear();
         m_delayedActions.clear();
-
-        for (size_t r = 0; r < rules.Size(); ++r)
+        for (auto& rule : rules)
         {
-            const auto& ruleNode = rules[r];
-            if (!ruleNode.IsObject())
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Game, "LoadFromJson: skipping non-object rule at index %zu", r);
-                continue;
-            }
-
-            EventResponseRule rule;
-            rule.name = ruleNode.HasKey("name") ? ruleNode["name"].AsString() : "";
-            rule.sourceEntityId = ruleNode.HasKey("sourceEntityId") ? ruleNode["sourceEntityId"].AsInt() : 0;
-            rule.trigger = ruleNode.HasKey("trigger") ? StringToTriggerType(ruleNode["trigger"].AsString())
-                                                      : EventTriggerType::OnStart;
-            rule.triggerParam = ruleNode.HasKey("triggerParam") ? ruleNode["triggerParam"].AsString() : "";
-            rule.enabled = !ruleNode.HasKey("enabled") || ruleNode["enabled"].AsBool();
-            rule.oneShot = ruleNode.HasKey("oneShot") && ruleNode["oneShot"].AsBool();
-
-            if (ruleNode.HasKey("actions") && ruleNode["actions"].IsArray())
-            {
-                const auto& actions = ruleNode["actions"];
-                for (size_t a = 0; a < actions.Size(); ++a)
-                {
-                    const auto& actionNode = actions[a];
-                    if (!actionNode.IsObject())
-                    {
-                        SPARK_LOG_WARN(Spark::LogCategory::Game,
-                                       "LoadFromJson: skipping non-object action at rule %zu action %zu", r, a);
-                        continue;
-                    }
-
-                    GameplayAction action;
-                    action.type = actionNode.HasKey("type") ? StringToActionType(actionNode["type"].AsString())
-                                                            : ActionType::ShowMessage;
-
-                    if (actionNode.HasKey("params") && actionNode["params"].IsArray())
-                    {
-                        const auto& params = actionNode["params"];
-                        action.params.reserve(params.Size());
-                        for (size_t p = 0; p < params.Size(); ++p)
-                        {
-                            const auto& paramNode = params[p];
-                            if (paramNode.IsNull())
-                            {
-                                action.params.emplace_back(std::monostate{});
-                            }
-                            else if (paramNode.IsString())
-                            {
-                                action.params.emplace_back(paramNode.AsString());
-                            }
-                            else if (paramNode.IsBool())
-                            {
-                                action.params.emplace_back(static_cast<int64_t>(paramNode.AsBool() ? 1 : 0));
-                            }
-                            else if (paramNode.IsNumber())
-                            {
-                                action.params.emplace_back(paramNode.AsNumber());
-                            }
-                            else
-                            {
-                                SPARK_LOG_WARN(Spark::LogCategory::Game,
-                                               "LoadFromJson: unsupported param type at rule %zu action %zu param %zu; "
-                                               "storing null",
-                                               r, a, p);
-                                action.params.emplace_back(std::monostate{});
-                            }
-                        }
-                    }
-
-                    rule.actions.push_back(std::move(action));
-                }
-            }
-
             AddRule(std::move(rule));
         }
 

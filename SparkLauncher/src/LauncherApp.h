@@ -9,6 +9,7 @@
 
 #include "Core/ProjectManager.h"
 #include "LauncherProcess.h"
+#include "LauncherTemplates.h"
 
 #include <filesystem>
 #include <memory>
@@ -17,15 +18,6 @@
 
 namespace SparkLauncher
 {
-    struct TemplateEntry
-    {
-        std::string directoryName;
-        std::string displayName;
-        std::string description;
-        std::string genre;
-        std::string gameModule;
-    };
-
     class LauncherApp
     {
       public:

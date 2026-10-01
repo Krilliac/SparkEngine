@@ -18,8 +18,6 @@
 #include <ctime>
 #include <exception>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <system_error>
 
 namespace fs = std::filesystem;
@@ -28,35 +26,6 @@ namespace SparkLauncher
 {
     namespace
     {
-        std::string ReadSmallFile(const fs::path& p)
-        {
-            std::ifstream in(p);
-            if (!in)
-                return {};
-            std::ostringstream ss;
-            ss << in.rdbuf();
-            return ss.str();
-        }
-
-        // Very small JSON string-field extractor — matches ProjectManager.cpp's approach.
-        std::string ExtractJsonString(const std::string& json, const std::string& key)
-        {
-            const std::string search = "\"" + key + "\"";
-            size_t pos = json.find(search);
-            if (pos == std::string::npos)
-                return {};
-            pos = json.find(':', pos);
-            if (pos == std::string::npos)
-                return {};
-            pos = json.find('"', pos + 1);
-            if (pos == std::string::npos)
-                return {};
-            size_t end = json.find('"', pos + 1);
-            if (end == std::string::npos)
-                return {};
-            return json.substr(pos + 1, end - pos - 1);
-        }
-
         std::string FormatTimestamp(uint64_t epochSeconds)
         {
             if (epochSeconds == 0)
@@ -111,24 +80,21 @@ namespace SparkLauncher
         {
             return;
         }
-        for (const auto& entry : fs::directory_iterator(templatesDir))
+        // The error_code forms: a directory that cannot be listed, or an entry whose type cannot
+        // be read, ends or skips the scan instead of throwing out of Initialize.
+        std::error_code error;
+        for (fs::directory_iterator it(templatesDir, error), end; !error && it != end; it.increment(error))
         {
-            if (!entry.is_directory())
+            std::error_code typeError;
+            if (!it->is_directory(typeError) || typeError)
+            {
                 continue;
-            const fs::path manifest = entry.path() / "template.json";
-            if (!fs::exists(manifest))
-                continue;
-
-            const std::string json = ReadSmallFile(manifest);
-            TemplateEntry t;
-            t.directoryName = PathToUtf8(entry.path().filename());
-            t.displayName = ExtractJsonString(json, "name");
-            if (t.displayName.empty())
-                t.displayName = t.directoryName;
-            t.description = ExtractJsonString(json, "description");
-            t.genre = ExtractJsonString(json, "genre");
-            t.gameModule = ExtractJsonString(json, "gameModule");
-            m_templates.push_back(std::move(t));
+            }
+            auto entry = ReadTemplateEntry(it->path());
+            if (entry)
+            {
+                m_templates.push_back(std::move(*entry));
+            }
         }
         std::sort(m_templates.begin(), m_templates.end(),
                   [](const TemplateEntry& a, const TemplateEntry& b) { return a.displayName < b.displayName; });

@@ -87,6 +87,23 @@ short of it (`regression-toc-ratio-bomb.spk`, pinned by
 mutation run with the 32 MB quarantine then completed 3.68M executions (peak RSS 112 MB)
 with no finding.
 
+### SEC-120 batch 3 engine and launcher targets
+
+Batch 3 adds production-entry-point targets for `runtime-prefab`, `asset-migration`,
+`ui-layout`, `event-response-definitions`, `achievement-definitions`,
+`asset-cooker-input`, `launcher-template-json`, and `launcher-module-manifest`.
+The CMake targets are `SparkFuzzRuntimePrefab`, `SparkFuzzAssetMigration`,
+`SparkFuzzUILayout`, `SparkFuzzEventResponse`, `SparkFuzzAchievement`,
+`SparkFuzzAssetCooker`, `SparkFuzzLauncherTemplate`, and
+`SparkFuzzLauncherModuleManifest`.
+Each target has a libc++ production adapter, an independent invariant oracle, a
+non-empty valid and malformed seed corpus, exact manifest digest and budget pins,
+and a deterministic `fuzz;fuzz-smoke;security` CTest registration. The launcher
+module target uses the production 1 MiB manifest cap; the other input limits and
+nesting depths are declared in `corpus-manifest.json` and matched by their harnesses.
+The batch remains local structural evidence until an exact-SHA hosted sanitizer
+build and smoke run exists.
+
 ### SEC-120 hardening targets
 
 These targets were added after the first six and all use the libc++ adapter split of
@@ -590,7 +607,7 @@ CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
   LDFLAGS="-stdlib=libstdc++" \
   cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
-cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache
+cmake --build build/fuzz-policy --parallel 4
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
 ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```

@@ -235,16 +235,44 @@ namespace Spark::UI
         std::string m_formattedText;
     };
 
+    /**
+     * @brief Builds widgets under a panel from a hand-written JSON layout.
+     *
+     * The layout is untrusted file content. The structure is preflighted before widgets are
+     * created, so malformed or over-deep input leaves the caller's panel unchanged.
+     *
+     * Thread affinity: game thread (it creates widgets in the caller's panel).
+     * Allocation: one widget per named object, plus a scratch copy of each widget's text.
+     */
     class UILayoutLoader
     {
       public:
+        /// Deepest widget level a layout may create below the parent passed to LoadFromJSON.
+        /// Nested panels recurse, so without a bound a deep enough layout exhausts the stack
+        /// (and every level re-copies its subtree).
+        static constexpr uint32_t kMaxNestingDepth = 64;
+
+        /**
+         * @brief Create the widgets of the "children" array in @p json under @p parent.
+         * @return false for a null parent, empty or malformed text, or a layout that nests
+         *         panels deeper than kMaxNestingDepth (nothing below that depth is created).
+         */
         static bool LoadFromJSON(std::string_view json, UIPanel* parent);
 
       private:
+        enum class LoadStatus : uint8_t
+        {
+            Loaded,
+            Malformed,
+            TooDeep
+        };
+
+        static LoadStatus LoadChildren(std::string_view json, UIPanel* parent, uint32_t depth);
+        static LoadStatus ValidateChildren(std::string_view json, uint32_t depth);
         static size_t FindMatchingBrace(std::string_view json, size_t pos);
         static std::string ExtractString(std::string_view block, std::string_view key);
         static float ExtractFloat(std::string_view block, std::string_view key, float fallback);
-        static void ParseWidgetBlock(std::string_view block, UIPanel* parent);
+        static LoadStatus ParseWidgetBlock(std::string_view block, UIPanel* parent, uint32_t depth);
     };
 
 } // namespace Spark::UI

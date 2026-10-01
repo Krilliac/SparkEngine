@@ -162,6 +162,11 @@ namespace Spark
 
     /**
      * @brief Quick sanity check on a header without reading the full file.
+     *
+     * headerSize may exceed sizeof(AssetFileHeader) (a newer writer's longer header), but a
+     * header that claims to be shorter than the fixed fields would place the payload inside
+     * the header itself.
+     *
      * @param header Header to validate.
      * @return true if magic and basic invariants pass.
      */
@@ -169,7 +174,7 @@ namespace Spark
     {
         if (header.magic != 0x5350524B)
             return false;
-        if (header.headerSize == 0)
+        if (header.headerSize < sizeof(AssetFileHeader))
             return false;
         if (static_cast<uint8_t>(header.assetType) > static_cast<uint8_t>(AssetType::ShaderCache))
             return false;
@@ -298,7 +303,9 @@ namespace Spark
 
             // Greedy forward search: at each step, find a registered migration
             // whose source matches the current version and whose target is closest
-            // to (but not exceeding) the goal. Steps are filtered by asset type.
+            // to (but not exceeding) the goal. Steps are filtered by asset type. A step
+            // must move the version forward, so a step registered with a target at or
+            // below its source cannot stall the search.
             std::vector<IMigrationStep*> path;
             AssetVersion current = from;
 
@@ -309,7 +316,8 @@ namespace Spark
 
                 for (const auto& step : m_steps)
                 {
-                    if (step->GetSourceVersion() == current && step->GetTargetVersion() <= to &&
+                    if (step->GetSourceVersion() == current && step->GetTargetVersion() > current &&
+                        step->GetTargetVersion() <= to &&
                         (step->GetAssetType() == type || step->GetAssetType() == AssetType::Unknown))
                     {
                         if (!bestStep || step->GetTargetVersion() > bestTarget)
@@ -342,6 +350,8 @@ namespace Spark
          *
          * The buffer must begin with a valid AssetFileHeader. After migration,
          * the header is updated with the new version, data size, and checksum.
+         * A buffer that needs migrating is refused (false, left untouched) unless its
+         * dataSize and checksum describe the payload that follows the header.
          */
         bool MigrateAsset(std::vector<uint8_t>& data, AssetType type) const
         {
@@ -368,10 +378,23 @@ namespace Spark
             if (path.empty())
                 return false; // No migration path available
 
-            // Extract payload (everything after the header)
-            size_t payloadOffset = header.headerSize;
+            // Extract payload (everything after the header). Its declared size and CRC are
+            // checked before any step runs: the rebuilt header gets a fresh checksum, so
+            // migrating an unverified payload would certify a truncated or corrupt file.
+            const size_t payloadOffset = header.headerSize;
             if (payloadOffset > data.size())
                 return false;
+            const size_t payloadSize = data.size() - payloadOffset;
+            if (header.dataSize != payloadSize)
+            {
+                return false;
+            }
+            const uint32_t payloadChecksum =
+                payloadSize == 0 ? 0 : ComputeCRC32(data.data() + payloadOffset, payloadSize);
+            if (header.checksum != payloadChecksum)
+            {
+                return false;
+            }
 
             std::vector<uint8_t> payload(data.begin() + static_cast<ptrdiff_t>(payloadOffset), data.end());
 
@@ -392,8 +415,11 @@ namespace Spark
                 payload = writer.GetBuffer();
             }
 
-            // Rebuild the full buffer with an updated header
+            // Rebuild the full buffer with an updated header. Only the fixed header fields are
+            // written back (a longer header's extra bytes are not carried over), so the
+            // header must say so: the payload now starts right after them.
             header.version = targetVer;
+            header.headerSize = static_cast<uint32_t>(sizeof(AssetFileHeader));
             header.dataSize = payload.size();
             header.checksum = payload.empty() ? 0 : ComputeCRC32(payload.data(), payload.size());
 

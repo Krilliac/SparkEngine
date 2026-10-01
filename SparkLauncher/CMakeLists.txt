@@ -25,6 +25,8 @@ set(LAUNCHER_SOURCES
     src/LauncherPaths.h
     src/LauncherProcess.cpp
     src/LauncherProcess.h
+    src/LauncherTemplates.cpp
+    src/LauncherTemplates.h
     src/LauncherBackend.h
 )
 if(WIN32)

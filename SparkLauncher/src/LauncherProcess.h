@@ -54,6 +54,23 @@ namespace SparkLauncher
      */
     [[nodiscard]] std::expected<std::filesystem::path, std::string> PathFromUtf8(std::string_view text);
 
+    /**
+     * @brief Read a regular file of at most @p maxBytes, deciding everything on the opened handle.
+     *
+     * A check by name followed by an open by name reads whatever replaced the file in between,
+     * and opening a FIFO by name blocks until a writer appears. So the file is opened first
+     * (without blocking), then its type and size come from the handle: only a regular file of
+     * at most @p maxBytes is read, exactly that many bytes, and a file that grows or shrinks
+     * during the read is refused.
+     *
+     * @return The file's bytes, or why it was refused, phrased to follow the file's name
+     *         ("is not a regular file", "exceeds the N-byte limit", ...).
+     */
+    [[nodiscard]] std::expected<std::string, std::string> ReadBoundedRegularFile(const std::filesystem::path& path,
+                                                                                 std::size_t maxBytes,
+                                                                                 bool* opened = nullptr,
+                                                                                 bool* missing = nullptr);
+
     /** Build and validate the executable, project, and target-specific inputs. */
     [[nodiscard]] std::expected<LaunchRequest, std::string> BuildLaunchRequest(
         const std::filesystem::path& binaryDirectory, const std::filesystem::path& projectFile, LaunchTarget target);

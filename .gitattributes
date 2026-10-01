@@ -97,6 +97,14 @@ FuzzerTests/corpora/module-abi-sidecar/** -text
 FuzzerTests/corpora/plugin-metadata-json/** -text
 FuzzerTests/corpora/reflection-binary-codec/** -text
 FuzzerTests/corpora/shader-disk-cache-blob/** -text
+FuzzerTests/corpora/runtime-prefab/** -text
+FuzzerTests/corpora/asset-migration/** -text
+FuzzerTests/corpora/ui-layout/** -text
+FuzzerTests/corpora/event-response-definitions/** -text
+FuzzerTests/corpora/achievement-definitions/** -text
+FuzzerTests/corpora/asset-cooker-input/** -text
+FuzzerTests/corpora/launcher-template-json/** -text
+FuzzerTests/corpora/launcher-module-manifest/** -text
 # Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
 FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before

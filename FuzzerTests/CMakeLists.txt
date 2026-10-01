@@ -3273,3 +3273,126 @@ set_tests_properties(FuzzShaderDiskCacheSmoke PROPERTIES
     TIMEOUT 10
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
+
+# SEC-120 batch 3 production entry points.
+add_executable(SparkFuzzRuntimePrefab
+    FuzzRuntimePrefab.cpp FuzzRuntimePrefabProduction.cpp)
+add_executable(SparkFuzzAssetMigration
+    FuzzAssetMigration.cpp FuzzAssetMigrationProduction.cpp)
+add_executable(SparkFuzzAchievement
+    FuzzAchievementProgress.cpp FuzzAchievementProgressProduction.cpp)
+add_executable(SparkFuzzEventResponse
+    FuzzEventResponse.cpp FuzzEventResponseProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Gameplay/EventResponseRules.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp")
+add_executable(SparkFuzzUILayout
+    FuzzUILayout.cpp FuzzUILayoutProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/UI/UIFactory.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/UI/UIWidgets.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp")
+add_executable(SparkFuzzAssetCooker
+    FuzzAssetCooker.cpp FuzzAssetCookerProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkAssetPipelineCore/src/AssetCooker.cpp")
+add_executable(SparkFuzzLauncherTemplate
+    FuzzLauncherTemplate.cpp FuzzLauncherTemplateProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherTemplates.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp")
+add_executable(SparkFuzzLauncherModuleManifest
+    FuzzLauncherModuleManifest.cpp FuzzLauncherModuleManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp")
+
+target_compile_features(SparkFuzzRuntimePrefab PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzAssetMigration PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzAchievement PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzEventResponse PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzUILayout PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzAssetCooker PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzLauncherTemplate PRIVATE cxx_std_23)
+target_compile_features(SparkFuzzLauncherModuleManifest PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzRuntimePrefab PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzAssetMigration PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzAchievement PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzEventResponse PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzUILayout PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzAssetCooker PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzLauncherTemplate PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_compile_options(SparkFuzzLauncherModuleManifest PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -O1 -ffunction-sections -fdata-sections)
+target_link_options(SparkFuzzRuntimePrefab PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzAssetMigration PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzAchievement PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzEventResponse PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzUILayout PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzAssetCooker PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzLauncherTemplate PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_options(SparkFuzzLauncherModuleManifest PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -Wl,--gc-sections)
+target_link_libraries(SparkFuzzRuntimePrefab PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzAssetMigration PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzAchievement PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzEventResponse PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzUILayout PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzAssetCooker PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzLauncherTemplate PRIVATE Threads::Threads c++ c++abi)
+target_link_libraries(SparkFuzzLauncherModuleManifest PRIVATE Threads::Threads c++ c++abi)
+target_compile_definitions(SparkFuzzRuntimePrefab PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzAssetMigration PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzAchievement PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzEventResponse PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzUILayout PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzAssetCooker PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzLauncherTemplate PRIVATE SPARK_SHIPPING=1)
+target_compile_definitions(SparkFuzzLauncherModuleManifest PRIVATE SPARK_SHIPPING=1)
+set_source_files_properties(FuzzRuntimePrefabProduction.cpp FuzzAssetMigrationProduction.cpp
+    FuzzAchievementProgressProduction.cpp FuzzEventResponseProduction.cpp FuzzUILayoutProduction.cpp
+    FuzzAssetCookerProduction.cpp FuzzLauncherTemplateProduction.cpp FuzzLauncherModuleManifestProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/Gameplay/EventResponseRules.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/UI/UILayoutExtensions.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/UI/UIFactory.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Engine/UI/UIWidgets.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/Logger.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkAssetPipelineCore/src/AssetCooker.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherTemplates.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src/LauncherProcess.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++")
+target_include_directories(SparkFuzzRuntimePrefab PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzAssetMigration PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzAchievement PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzEventResponse PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzUILayout PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzEventResponse PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json")
+target_compile_definitions(SparkFuzzEventResponse PRIVATE SPARK_HAS_NLOHMANN_JSON=1)
+target_include_directories(SparkFuzzAssetCooker PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkAssetPipelineCore/include"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json")
+target_compile_definitions(SparkFuzzAssetCooker PRIVATE SPARK_HAS_NLOHMANN_JSON=1)
+target_include_directories(SparkFuzzLauncherTemplate PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json")
+target_include_directories(SparkFuzzLauncherModuleManifest PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkLauncher/src"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json")
+target_compile_definitions(SparkFuzzLauncherTemplate PRIVATE SPARK_HAS_NLOHMANN_JSON=1)
+target_compile_definitions(SparkFuzzLauncherModuleManifest PRIVATE SPARK_HAS_NLOHMANN_JSON=1)
+
+
+
+add_test(NAME FuzzRuntimePrefabSmoke COMMAND $<TARGET_FILE:SparkFuzzRuntimePrefab> -max_len=65536 -timeout=1 -rss_limit_mb=256 -runs=12 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/runtime-prefab")
+add_test(NAME FuzzAssetMigrationSmoke COMMAND $<TARGET_FILE:SparkFuzzAssetMigration> -max_len=65536 -timeout=1 -rss_limit_mb=256 -runs=18 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/asset-migration")
+add_test(NAME FuzzAchievementSmoke COMMAND $<TARGET_FILE:SparkFuzzAchievement> -max_len=65536 -timeout=1 -rss_limit_mb=256 -runs=13 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/achievement-definitions")
+add_test(NAME FuzzEventResponseSmoke COMMAND $<TARGET_FILE:SparkFuzzEventResponse> -max_len=65536 -timeout=1 -rss_limit_mb=256 -runs=17 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/event-response-definitions")
+add_test(NAME FuzzUILayoutSmoke COMMAND $<TARGET_FILE:SparkFuzzUILayout> -max_len=65536 -timeout=1 -rss_limit_mb=256 -runs=14 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/ui-layout")
+add_test(NAME FuzzAssetCookerSmoke COMMAND $<TARGET_FILE:SparkFuzzAssetCooker> -max_len=4096 -timeout=1 -rss_limit_mb=256 -runs=7 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/asset-cooker-input")
+add_test(NAME FuzzLauncherTemplateSmoke COMMAND $<TARGET_FILE:SparkFuzzLauncherTemplate> -max_len=65536 -timeout=1 -rss_limit_mb=256 -runs=14 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/launcher-template-json")
+add_test(NAME FuzzLauncherModuleManifestSmoke COMMAND $<TARGET_FILE:SparkFuzzLauncherModuleManifest> -max_len=1048576 -timeout=1 -rss_limit_mb=256 -runs=8 "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/launcher-module-manifest")
+set_tests_properties(FuzzRuntimePrefabSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzAssetMigrationSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzAchievementSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzEventResponseSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzUILayoutSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzAssetCookerSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzLauncherTemplateSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+set_tests_properties(FuzzLauncherModuleManifestSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
