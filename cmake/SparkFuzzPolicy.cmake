@@ -7,7 +7,18 @@ option(SPARK_ENABLE_FUZZ_POLICY_CHECKS
     "Register the blocking SEC-120 fuzz-policy target and CTest checks (requires Python3)"
     ${BUILD_TESTS})
 
+# ALLOW_SHALLOW (the engine tree): every job running the full CTest suite checks out shallow,
+# so the CTests skip only the fixed_commit history check there, saying so; the dedicated
+# fuzz-policy job builds tools/fuzz-policy without it and must fetch full history.
 function(spark_enable_fuzz_policy source_root)
+    cmake_parse_arguments(PARSE_ARGV 1 _spark_fuzz_policy "ALLOW_SHALLOW" "" "")
+    set(_spark_fuzz_policy_shallow_args "")
+    set(_spark_fuzz_policy_shallow_env "")
+    if(_spark_fuzz_policy_ALLOW_SHALLOW)
+        set(_spark_fuzz_policy_shallow_args --allow-shallow)
+        set(_spark_fuzz_policy_shallow_env ";SPARK_FUZZ_POLICY_ALLOW_SHALLOW=1")
+    endif()
+
     if(NOT SPARK_ENABLE_FUZZ_POLICY_CHECKS)
         message(STATUS "[SEC-120] Fuzz-policy checks disabled (SPARK_ENABLE_FUZZ_POLICY_CHECKS=OFF)")
         return()
@@ -33,7 +44,8 @@ function(spark_enable_fuzz_policy source_root)
         COMMAND "${Python3_EXECUTABLE}"
             "${source_root}/tools/fuzz-policy/check_fuzz_policy.py"
             --source-root "${source_root}"
-            --ci)
+            --ci
+            ${_spark_fuzz_policy_shallow_args})
     set_tests_properties(FuzzPolicy PROPERTIES
         LABELS "security;fuzz-policy"
         WORKING_DIRECTORY "${source_root}"
@@ -68,7 +80,7 @@ function(spark_enable_fuzz_policy source_root)
     # output too so "0 tests ran" can never be read as "nothing failed".
     set_tests_properties(FuzzPolicyAdversarial PROPERTIES
         ENVIRONMENT
-            "TMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TEMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TMPDIR=${CMAKE_BINARY_DIR}/fuzz-policy-tmp"
+            "TMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TEMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TMPDIR=${CMAKE_BINARY_DIR}/fuzz-policy-tmp${_spark_fuzz_policy_shallow_env}"
         FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
         LABELS "security;fuzz-policy;unit"
         WORKING_DIRECTORY "${source_root}"

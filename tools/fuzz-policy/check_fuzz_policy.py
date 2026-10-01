@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from build_binding import commands_named, parse_cmake
-from corpus_manifest import DEFAULT_CORPUS_MANIFEST, build_corpus_report
+from corpus_manifest import DEFAULT_CORPUS_MANIFEST, build_corpus_report, is_shallow_checkout
 from parser_inventory import DEFAULT_INVENTORY, build_inventory_report, load_inventory
 from policy_common import Deadline, PolicyError, load_json_document, read_confined_file
 
@@ -282,13 +282,15 @@ def build_check_report(
     *,
     as_of: Any = None,
     deadline: Deadline | None = None,
+    verify_fix_commits: bool = True,
 ) -> dict[str, Any]:
     deadline = deadline or Deadline(GATE_SECONDS, "fuzz policy gate")
     # One read of the inventory feeds both halves of the report; two independent
     # reads could describe a manifest that was never target-validated.
     inventory_document = load_inventory(root, inventory_path, as_of=as_of)
     inventory = build_inventory_report(root, inventory_path, as_of=as_of, deadline=deadline)
-    corpus = build_corpus_report(root, inventory_document, corpus_path, as_of=as_of, deadline=deadline)
+    corpus = build_corpus_report(root, inventory_document, corpus_path, as_of=as_of, deadline=deadline,
+                                 verify_fix_commits=verify_fix_commits)
 
     blockers: list[str] = []
     if inventory["blocked_count"]:
@@ -383,9 +385,19 @@ def main(argv: list[str] | None = None) -> int:
         help="fail while SEC-120 closure blockers remain (the release gate)",
     )
     parser.add_argument("--emit-json", action="store_true")
+    parser.add_argument(
+        "--allow-shallow",
+        action="store_true",
+        help="in a shallow checkout, skip only the fixed_commit history check; the fuzz-policy job, "
+             "which must fetch full history, always runs it",
+    )
     parser.add_argument("--as-of-date", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(args.source_root)
+    verify_fix_commits = not (args.allow_shallow and is_shallow_checkout(root))
+    if not verify_fix_commits:
+        print("fuzz policy: NOTICE: shallow checkout, so fixed_commit history verification is skipped here; "
+              "the fuzz-policy job verifies it with full history", file=sys.stderr)
     as_of = None
     if args.as_of_date:
         from datetime import date
@@ -396,7 +408,8 @@ def main(argv: list[str] | None = None) -> int:
             print("invalid --as-of-date", file=sys.stderr)
             return 2
     try:
-        report = build_check_report(root, args.inventory, args.corpus, as_of=as_of)
+        report = build_check_report(root, args.inventory, args.corpus, as_of=as_of,
+                                    verify_fix_commits=verify_fix_commits)
         if args.ci:
             inventory = load_inventory(root, args.inventory, as_of=as_of)
             fuzz_targets = tuple(

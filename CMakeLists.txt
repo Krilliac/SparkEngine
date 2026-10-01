@@ -2749,7 +2749,7 @@ endif()
 # ---------------------------------------------------------------------
 option(SPARK_ENABLE_FUZZ_TARGETS "Build production-entry-point libFuzzer targets (Linux Clang only)" OFF)
 include("${CMAKE_SOURCE_DIR}/cmake/SparkFuzzPolicy.cmake")
-spark_enable_fuzz_policy("${CMAKE_SOURCE_DIR}")
+spark_enable_fuzz_policy("${CMAKE_SOURCE_DIR}" ALLOW_SHALLOW)
 
 if(BUILD_TESTS AND EXISTS "${CMAKE_SOURCE_DIR}/Tests/CMakeLists.txt")
     enable_testing()

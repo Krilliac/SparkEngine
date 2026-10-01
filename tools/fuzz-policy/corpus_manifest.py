@@ -258,6 +258,18 @@ def _parse_regressions(value: Any, field: str) -> tuple[RegressionRecord, ...]:
     return tuple(records)
 
 
+def is_shallow_checkout(root: Path) -> bool:
+    """True when ``root`` is a shallow clone, whose history cannot show a recorded fix commit."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
 def validate_regression_fix_commits(root: Path, inventory: Inventory, corpora: tuple[CorpusRecord, ...]) -> None:
     """A recorded fix must exist in this checkout and change the parser it guards."""
     sources = {parser.parser_id: set(parser.source_files) for parser in inventory.parsers}
@@ -546,9 +558,11 @@ def build_corpus_report(
     *,
     as_of: date | None = None,
     deadline: Deadline | None = None,
+    verify_fix_commits: bool = True,
 ) -> dict[str, Any]:
     corpora = load_corpora(root, inventory, corpus_path, as_of=as_of, deadline=deadline)
-    validate_regression_fix_commits(root, inventory, corpora)
+    if verify_fix_commits:
+        validate_regression_fix_commits(root, inventory, corpora)
     return {
         "schema_version": 1,
         "corpus_count": len(corpora),

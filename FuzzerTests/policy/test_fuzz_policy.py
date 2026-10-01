@@ -39,6 +39,12 @@ import policy_common
 import run_campaign
 
 
+def _shallow_history_allowed() -> bool:
+    """The engine tree's CTest opted in (ALLOW_SHALLOW) and this checkout really is shallow."""
+    return (os.environ.get("SPARK_FUZZ_POLICY_ALLOW_SHALLOW") == "1"
+            and corpus_manifest.is_shallow_checkout(REPO_ROOT))
+
+
 # Production policy evaluates expiry and corpus verification in UTC. Keep these
 # tests on that same clock so they do not flip at the local/UTC date boundary.
 TODAY = datetime.now(timezone.utc).date()
@@ -1503,6 +1509,8 @@ class TestRegressionFixtures(FixtureTestCase):
             self.fixture.load_corpora()
 
     def test_fixed_commit_must_exist_and_touch_parser_source(self) -> None:
+        if _shallow_history_allowed():
+            self.skipTest("shallow checkout: the fuzz-policy job runs this with full history")
         corpus = SimpleNamespace(
             corpus_id="fixture", parser_id="material-loader",
             regressions=(SimpleNamespace(file="regression-test", fixed_commit="1ea4d894626117e0b3ac7a362e41379e6d57f10e"),),
@@ -1519,6 +1527,24 @@ class TestRegressionFixtures(FixtureTestCase):
         inventory.parsers[0].source_files = ("src/unrelated.cpp",)
         with self.assertPolicyError("does not touch an inventoried parser source"):
             corpus_manifest.validate_regression_fix_commits(REPO_ROOT, inventory, (corpus,))
+
+    def test_allow_shallow_skips_only_the_history_check_and_only_when_shallow(self) -> None:
+        seen: list[bool] = []
+
+        def report(*args, verify_fix_commits=True, **kwargs):
+            seen.append(verify_fix_commits)
+            raise policy_common.PolicyError("stop after recording the mode")
+
+        cases = ((True, ["--allow-shallow"], False), (False, ["--allow-shallow"], True), (True, [], True))
+        for shallow, extra, expected in cases:
+            with self.subTest(shallow=shallow, extra=extra):
+                seen.clear()
+                with mock.patch.object(check_fuzz_policy, "is_shallow_checkout", return_value=shallow), \
+                        mock.patch.object(check_fuzz_policy, "build_check_report", side_effect=report), \
+                        contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    self.assertEqual(check_fuzz_policy.main(["--source-root", str(REPO_ROOT), *extra]), 1)
+                self.assertEqual(seen, [expected])
+                self.assertEqual("NOTICE: shallow checkout" in stderr.getvalue(), not expected)
 
 
     def test_guard_may_be_a_sparktests_case(self) -> None:
@@ -1976,8 +2002,10 @@ class TestRepositoryIntegration(unittest.TestCase):
         self.assertIn(b"cmake_minimum_required", payload)
 
     def test_repository_policy_report_is_structurally_valid_but_open(self) -> None:
+        # Everything but the fix-commit history check still runs in a shallow engine checkout.
         report = check_fuzz_policy.build_check_report(
-            REPO_ROOT, parser_inventory.DEFAULT_INVENTORY, corpus_manifest.DEFAULT_CORPUS_MANIFEST
+            REPO_ROOT, parser_inventory.DEFAULT_INVENTORY, corpus_manifest.DEFAULT_CORPUS_MANIFEST,
+            verify_fix_commits=not _shallow_history_allowed(),
         )
         self.assertTrue(report["structural_gate"])
         self.assertFalse(report["passed"])
