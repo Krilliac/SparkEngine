@@ -75,6 +75,23 @@ def finding_key(result: object) -> tuple[str, str, str]:
     return result["ruleId"], uri, fingerprint
 
 
+def finding_locations(report: object) -> dict[tuple[str, str, str], list[str]]:
+    """Best-effort 'line N: message' per finding key, so a NEW finding is locatable from the log alone."""
+    locations: dict[tuple[str, str, str], list[str]] = {}
+    for run in report.get("runs", []) if isinstance(report, dict) else []:
+        for result in run.get("results", []) if isinstance(run, dict) else []:
+            try:
+                key = finding_key(result)
+            except ValueError:
+                continue
+            region = result["locations"][0].get("physicalLocation", {}).get("region", {})
+            line = region.get("startLine", "?") if isinstance(region, dict) else "?"
+            message = result.get("message", {})
+            text = message.get("text", "") if isinstance(message, dict) else ""
+            locations.setdefault(key, []).append(f"line {line}: {text[:200]}")
+    return locations
+
+
 def report_findings(report: object) -> list[tuple[str, str, str]]:
     """Validate scanner completion and return every finding's baseline key."""
     if not isinstance(report, dict) or report.get("version") != "2.1.0":
@@ -147,14 +164,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     args = parser.parse_args(argv)
     try:
-        findings = report_findings(_read_json(args.report))
+        report = _read_json(args.report)
+        findings = report_findings(report)
         baseline = load_baseline(_read_json(args.baseline), args.language)
     except (OSError, ValueError, TypeError, AttributeError) as error:
         print(f"analysis: error: {error}", file=sys.stderr)
         return 2
     new, stale = compare(findings, baseline)
+    locations = finding_locations(report)
     for rule, path, fingerprint in new:
         print(f"analysis: NEW finding {rule} at {path} ({fingerprint}); fix it or add a reviewed baseline entry")
+        for detail in locations.get((rule, path, fingerprint), []):
+            print(f"analysis:   {path} {detail}")
     for rule, path, fingerprint in stale:
         print(f"analysis: STALE baseline entry {rule} at {path} ({fingerprint}); remove it from the baseline")
     print(f"analysis: {args.language}: {len(findings)} finding(s), {len(baseline)} baselined, "
