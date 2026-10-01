@@ -270,6 +270,7 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
     }
 
     InitPhysics();
+    GetEngineRuntime().CheckInitializationPointForTesting("host-physics");
 
     if (!g_noJobSystem)
     {

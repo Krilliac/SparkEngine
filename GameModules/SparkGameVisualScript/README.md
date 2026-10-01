@@ -107,3 +107,21 @@ with `-DENABLE_ANGELSCRIPT=OFF`.
 If support is disabled or the vendored SDK is incomplete, SparkEngine keeps its scripting stub so non-scripted targets
 can still compile. This module then rejects `OnLoad` with a clear diagnostic and does not register `vs_status`,
 `vs_restart`, `vs_reload`, or `vs_help`; it never reports a partially working visual-script game.
+
+### Engine dispatch and advisory package execution
+
+The engine-owned ECS `ScriptRuntimeSystem` now calls Start once per attachment
+and Update once per enabled component per frame. The module no longer dispatches
+those callbacks. Pause/resume gates the module's enabled Script components; a
+fresh attachment starts again, while hot reload preserves the documented
+no-restart rule.
+
+The advisory `visual-script-package` job in `.github/workflows/build.yml`
+regenerates scripts with the real graph compiler, builds the engine and module
+with AngelScript enabled, packages them through `spark-cli package`, and runs
+`Tests/run_visual_script_package.py` from a foreign working directory. Its
+`vs_autoplay <x> <z>` timeline places the player at the five authored coin
+positions; the generated collectible and manager scripts decide pickup, score
+and the win. The harness requires one win, clean module lifecycle evidence and
+exit zero. This lane does not certify stable-v1; no hosted run is claimed by
+this source change.

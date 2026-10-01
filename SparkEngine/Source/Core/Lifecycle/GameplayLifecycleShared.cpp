@@ -928,11 +928,13 @@ namespace Spark::Core::Lifecycle
         }
 
         InitCoreGameplaySystems(ctx);
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-core");
 
         // Register snapshot serializers for play-in-editor mode and publish the
         // host registry so module DLLs register into the one SaveSystem consults.
         Spark::Editor::RegisterCoreComponentSerializers();
         ctx->SetComponentSerializers(&Spark::ComponentSerializerRegistry::GetInstance());
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-serializers");
 
         if (auto* eventBus = ctx->GetEventBus())
         {
@@ -943,13 +945,16 @@ namespace Spark::Core::Lifecycle
             SPARK_LOG_WARN(Spark::LogCategory::Core, "EventBus is null — AI/World systems skipped");
         }
         InitRenderingAndUtilitySystems(ctx);
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-utilities");
         InitScriptingAndPlatformSystems(ctx);
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-scripting");
 
         // Canonical ECS phase pipeline (architecture contract, Invariant 3).
         // Registered last so the subsystem pointers CreatePhaseSystemManager
         // reads from the context (physics, audio, graphics) are all set.
         // UpdateGameplaySystemsImpl pumps UpdateAll on this manager each frame.
         InitializeEcsPhaseSystemsImpl();
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-phases");
         return true;
     }
 

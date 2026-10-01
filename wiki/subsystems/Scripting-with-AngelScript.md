@@ -114,13 +114,15 @@ class EnemyBehavior
 
 ### Execution Order
 
-Lifecycle callbacks are dispatched during the **Scripting** phase of the ECS update loop. The overall engine execution order is:
+The engine-owned ScriptRuntimeSystem dispatches enabled ECS Script components in the **Gameplay (Lifecycle)** phase. GameplayLifecycleShared creates the canonical phase manager and ticks it once per frame. The overall engine execution order is:
 
 ```
-Physics -> Animation -> AI -> Scripting -> Audio -> Lifecycle -> Render
+Physics -> Animation -> AI -> Audio -> Lifecycle -> Render
 ```
 
-Within the Scripting phase, `Start()` is called before `Update()` for any newly attached scripts.
+Within the Gameplay (Lifecycle) phase, the engine-owned `ScriptRuntimeSystem`
+calls `Start()` before `Update()` for newly attached scripts. Game modules only
+attach or detach scripts; they do not call lifecycle callbacks themselves.
 
 ### Contact dispatch (engine-owned)
 
@@ -301,9 +303,7 @@ public:
     bool AttachScript(EntityID entity, const std::string& className, const std::string& moduleName);
     void DetachScript(EntityID entity);
 
-    // Lifecycle dispatch
-    void CallStart(EntityID entity);
-    void CallUpdate(EntityID entity, float deltaTime);
+    // Lifecycle callbacks are dispatched by the engine-owned ScriptRuntimeSystem.
     void CallOnCollision(EntityID entity, EntityID other);
     void CallOnTriggerEnter(EntityID entity, EntityID other);
     void CallOnTriggerExit(EntityID entity, EntityID other);
@@ -333,11 +333,12 @@ scriptEngine.Initialize();
 scriptEngine.CompileScriptFile("Assets/Scripts/EnemyAI.as");
 
 // Attach a script class to an entity
+auto& script = world.AddComponent<Script>(enemyEntity);
+script.className = "EnemyBehavior";
+script.moduleName = "EnemyAI";
 scriptEngine.AttachScript(enemyEntity, "EnemyBehavior", "EnemyAI");
 
-// Call lifecycle methods
-scriptEngine.CallStart(enemyEntity);         // Called once
-scriptEngine.CallUpdate(enemyEntity, dt);    // Called every frame
+// ScriptRuntimeSystem dispatches Start() and Update() during the Gameplay phase.
 ```
 
 ### Compile from String
@@ -620,7 +621,7 @@ Script contexts are **not thread-safe**. All script calls must happen on the mai
 
 - `CompileScriptFile()` / `CompileScriptFromString()`
 - `AttachScript()` / `DetachScript()`
-- `CallStart()` / `CallUpdate()` / `CallOnCollision()`
+- Engine-owned `ScriptRuntimeSystem` lifecycle dispatch and `CallOnCollision()`
 - `ScriptHotReloadManager::PollChanges()`
 
 The `ScriptHotReloadManager` file scanning runs on the main thread during `PollChanges()`. It does not use background threads.
@@ -641,7 +642,8 @@ The `ScriptHotReloadManager` file scanning runs on the main thread during `PollC
 
 1. Verify the script file compiles without errors (check `GetLastError()`).
 2. Ensure `AttachScript()` was called with the correct class name and module name.
-3. Confirm `CallStart()` and `CallUpdate()` are being called each frame.
+3. Confirm the engine-owned `ScriptRuntimeSystem` is registered and ticking in
+   the Gameplay phase.
 4. Check the ECS `Script` component fields match the compiled module.
 
 ### Hot-reload not triggering

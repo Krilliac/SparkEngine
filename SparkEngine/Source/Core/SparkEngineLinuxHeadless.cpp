@@ -12,6 +12,7 @@
 #include "SparkEngineLinuxInternal.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "EngineRuntime.h"
+#include "EngineContext.h"
 #include "ModuleManager.h"
 #include "FaultIsolation.h" // SPARK_GUARDED_UPDATE / SubsystemFaultIsolator (mirrors SparkEngineWindows.cpp)
 #include "Engine/Events/EventSystem.h"
@@ -19,6 +20,7 @@
 #include "Input/InputManager.h"
 #include "Audio/AudioEngine.h"
 #include "Utils/Timer.h"
+#include "Utils/ScopeGuard.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "GameplaySystemLifecycle.h"
@@ -39,12 +41,14 @@
 #include "HeadlessTickStats.h"
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <fstream>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
+#include <stdexcept>
 #include <thread>
 
 #ifndef SPARK_PLATFORM_WINDOWS
@@ -76,78 +80,109 @@ static uint64_t ReadOwnPeakRssKib()
  * Initializes server-only subsystems (no graphics, no audio), runs a fixed 60 Hz
  * tick loop, and shuts down cleanly on SIGINT/SIGTERM.
  */
-int RunHeadlessLinux(int argc, char* argv[])
+static int RunHeadlessLinuxImpl(int argc, char* argv[])
 {
-    Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server - Linux) ===");
-
-    // Parity with RunHeadlessWindows: a headless launch runs against an
-    // explicit NullRHI device owned by EngineRuntime (released by the shared
-    // ShutdownEngineAfterPreflight), so tick measurements are taken on the
-    // same no-render backend the linux-nullrhi-ci perf row names.
-    if (!GetEngineRuntime().InitializeHeadlessRhi())
-    {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Linux headless startup could not establish NullRHI");
-        return 1;
-    }
-
-    GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
-    GetEngineRuntime().timer = std::make_unique<Timer>();
-
-    // Headless: no gameplay subsystems (no Weather/UI/Dialogue/Modding)
-    InitLinuxCoreSubsystems(/*registerGameplay=*/false);
-    Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
-
-    if (!InitConsole())
-    {
-        // The lifecycle root already rolled its stages back. No module has been
-        // loaded yet, so the module preflight is vacuous: tear down and fail.
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "RunHeadlessLinux: engine lifecycle failed to initialize");
-        ShutdownLinuxAfterPreflight();
-        return 1;
-    }
-
-    // Minimal-init mode skips module loading and all detector singletons.
-    // See SparkEngine.cpp::g_minimalInit for the full rationale — on a
-    // gVisor sandbox every detector thread is another roll of the dice
-    // against the Wine gs.base race, and the main loop runs fine without
-    // any of them registered.
-    if (!g_minimalInit)
-    {
-        InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
-        Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
-        Spark::FreezeDetector::GetInstance().Start();
-        Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
-        Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
-        Spark::BenchmarkFramework::GetInstance().RegisterConsoleCommands();
-        Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
-        Spark::AssetValidator::GetInstance().RegisterConsoleCommands();
-        Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
-        Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
-        Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
-        Assert::RegisterConsoleCommands();
-    }
-    else
-    {
-        SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
-    }
-
+    bool teardownCompleted = false;
+    bool teardownEligible = false;
     const bool requireGameModule = HasLinuxCommandLineFlag(argc, argv, "-require-game");
-
     int exitCode = 0;
-    if (requireGameModule &&
-        (!GetEngineRuntime().moduleManager || GetEngineRuntime().moduleManager->GetInitializedModuleCount() == 0))
+    try
     {
-        Spark::SimpleConsole::GetInstance().LogError(
-            "Required game module was not initialized; terminating with a failure status.");
-        g_shutdownRequested.store(true, std::memory_order_relaxed);
-        exitCode = 2;
+        Spark::SimpleConsole::GetInstance().LogInfo("=== Spark Engine (Headless/Dedicated Server - Linux) ===");
+
+        // Parity with RunHeadlessWindows: a headless launch runs against an
+        // explicit NullRHI device owned by EngineRuntime (released by the shared
+        // ShutdownEngineAfterPreflight), so tick measurements are taken on the
+        // same no-render backend the linux-nullrhi-ci perf row names.
+        if (!GetEngineRuntime().InitializeHeadlessRhi())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Linux headless startup could not establish NullRHI");
+            return 1;
+        }
+        teardownEligible = true;
+
+        GetEngineRuntime().eventBus = std::make_unique<Spark::EventBus>();
+        GetEngineRuntime().timer = std::make_unique<Timer>();
+
+        // Headless: no gameplay subsystems (no Weather/UI/Dialogue/Modding)
+        InitLinuxCoreSubsystems(/*registerGameplay=*/false);
+        GetEngineRuntime().CheckInitializationPointForTesting("host-core");
+        Spark::Cinematic::SequencerManager::GetInstance().SetAudioBackend(nullptr);
+
+        if (!InitConsole())
+        {
+            // The lifecycle root already rolled its stages back. Still honor the
+            // shared shutdown preflight before releasing the host's resources.
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "RunHeadlessLinux: engine lifecycle failed to initialize");
+            if (CanShutdownEngine())
+            {
+                teardownCompleted = true;
+                ShutdownLinuxAfterPreflight();
+            }
+            return 1;
+        }
+
+        // Minimal-init mode skips module loading and all detector singletons.
+        // See SparkEngine.cpp::g_minimalInit for the full rationale — on a
+        // gVisor sandbox every detector thread is another roll of the dice
+        // against the Wine gs.base race, and the main loop runs fine without
+        // any of them registered.
+        if (!g_minimalInit)
+        {
+            InitLinuxModulesAndCommands(argc, argv, /*initAudio=*/false);
+            GetEngineRuntime().CheckInitializationPointForTesting("host-modules");
+            Spark::FreezeDetector::GetInstance().RegisterConsoleCommands();
+            Spark::FreezeDetector::GetInstance().Start();
+            Spark::DeadlockDetector::GetInstance().RegisterConsoleCommands();
+            Spark::HitchDetector::GetInstance().RegisterConsoleCommands();
+            Spark::BenchmarkFramework::GetInstance().RegisterConsoleCommands();
+            Spark::AssetStallDetector::GetInstance().RegisterConsoleCommands();
+            Spark::AssetValidator::GetInstance().RegisterConsoleCommands();
+            Spark::NetworkHealthMonitor::GetInstance().RegisterConsoleCommands();
+            Spark::GPUResourceLeakDetector::GetInstance().RegisterConsoleCommands();
+            Spark::InvalidStateDetector::GetInstance().RegisterConsoleCommands();
+            Assert::RegisterConsoleCommands();
+        }
+        else
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessLinux: modules + detectors skipped (-minimal-init)");
+        }
+
+        if (requireGameModule &&
+            (!GetEngineRuntime().moduleManager || GetEngineRuntime().moduleManager->GetInitializedModuleCount() == 0))
+        {
+            Spark::SimpleConsole::GetInstance().LogError(
+                "Required game module was not initialized; terminating with a failure status.");
+            g_shutdownRequested.store(true, std::memory_order_relaxed);
+            exitCode = 2;
+        }
+        // -scene: a scene that cannot load must fail the launch, not run an empty
+        // engine. Leave through the ordinary shutdown preflight like -require-game.
+        if (exitCode == 0 && !LoadLinuxLaunchScene(argc, argv))
+        {
+            g_shutdownRequested.store(true, std::memory_order_relaxed);
+            exitCode = kLinuxSceneLoadFailedExitCode;
+        }
     }
-    // -scene: a scene that cannot load must fail the launch, not run an empty
-    // engine. Leave through the ordinary shutdown preflight like -require-game.
-    if (exitCode == 0 && !LoadLinuxLaunchScene(argc, argv))
+    catch (const std::exception& error)
     {
-        g_shutdownRequested.store(true, std::memory_order_relaxed);
-        exitCode = kLinuxSceneLoadFailedExitCode;
+        // A failed teardown must reach main's fatal path without another attempt.
+        if (teardownCompleted)
+        {
+            throw;
+        }
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "Headless startup failed: %s", error.what());
+        // The RHI checkpoint can throw after publishing the device but before
+        // InitializeHeadlessRhi returns and marks the remaining startup eligible.
+        if ((teardownEligible || GetEngineRuntime().headlessRhiBridge) && CanShutdownEngine())
+        {
+            teardownCompleted = true;
+            ShutdownLinuxAfterPreflight();
+            return 1;
+        }
+        // No ordinary teardown ran: rethrow to main's fatal path, which leaks the
+        // live engine instead of destroying it with the static runtime at exit.
+        throw;
     }
 
     // Fixed 60 Hz server loop
@@ -283,6 +318,64 @@ int RunHeadlessLinux(int argc, char* argv[])
     // unless the bridge disappeared mid-run, which the frame counts expose.
     tickStats.EmitRecord(/*nullRhiActive=*/nullRhiFrameCount == frameCount, ReadOwnPeakRssKib());
     return exitCode;
+}
+
+int RunHeadlessLinux(int argc, char* argv[])
+{
+    auto& runtime = GetEngineRuntime();
+#ifdef SPARK_LIFECYCLE_TEST_HOOKS
+    // Only explicitly opted-in test hosts expose fault injection. The callback is
+    // private to this startup thread and never crosses the game-module ABI.
+    const char* requested = std::getenv("SPARK_TEST_INIT_FAILURE");
+    const std::string point = requested != nullptr ? requested : "";
+    int hits = 0;
+    if (!point.empty())
+    {
+        runtime.initializationCheckpointForTesting = [&](std::string_view reached)
+        {
+            if (reached == point)
+            {
+                ++hits;
+                throw std::runtime_error("injected host initialization failure");
+            }
+        };
+    }
+#endif
+    // Clear the checkpoint however the run ends, without catching: an exception
+    // main does not handle still reaches std::terminate at its throw site, so the
+    // crash report keeps that stack.
+    auto clearCheckpoint = Spark::MakeScopeExit([&runtime] { runtime.initializationCheckpointForTesting = {}; });
+    const int result = RunHeadlessLinuxImpl(argc, argv);
+    clearCheckpoint.Dismiss();
+    runtime.initializationCheckpointForTesting = {};
+#ifdef SPARK_LIFECYCLE_TEST_HOOKS
+    if (!point.empty())
+    {
+        extern std::unique_ptr<::World> g_engineEcsWorld;
+        unsigned owners =
+            static_cast<unsigned>(runtime.graphics != nullptr) + static_cast<unsigned>(runtime.input != nullptr) +
+            static_cast<unsigned>(runtime.timer != nullptr) + static_cast<unsigned>(runtime.eventBus != nullptr) +
+            static_cast<unsigned>(runtime.moduleManager != nullptr) +
+            static_cast<unsigned>(runtime.audioEngine != nullptr) +
+            static_cast<unsigned>(runtime.audioBackend != nullptr) +
+            static_cast<unsigned>(runtime.moduleHotReload != nullptr) +
+            static_cast<unsigned>(runtime.fileCache != nullptr) +
+            static_cast<unsigned>(runtime.assetRegistry != nullptr) +
+            static_cast<unsigned>(runtime.headlessRhiBridge != nullptr) +
+            static_cast<unsigned>(runtime.weaponSystem != nullptr);
+#ifdef SPARK_JOLT_PHYSICS_AVAILABLE
+        owners += static_cast<unsigned>(runtime.physics != nullptr);
+#endif
+        const int live = runtime.headlessRhiLiveResourcesAtShutdown.has_value()
+                             ? static_cast<int>(*runtime.headlessRhiLiveResourcesAtShutdown)
+                             : -1;
+        std::fprintf(stdout, "SPARK_INIT_FAILURE point=%s hits=%d owners=%u context=%d world=%d live=%d\n",
+                     point.c_str(), hits, owners, EngineContext::Get() != nullptr ? 1 : 0,
+                     g_engineEcsWorld != nullptr ? 1 : 0, live);
+        std::fflush(stdout);
+    }
+#endif
+    return result;
 }
 #endif // SPARK_HEADLESS_SUPPORT
 

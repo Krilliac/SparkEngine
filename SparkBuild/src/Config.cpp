@@ -219,6 +219,9 @@ namespace SparkBuild
                                   OptionCategory::EditorTools});
         config.options.push_back(
             {"BUILD_TESTS", "Unit Tests", "Build the CTest test suite", true, true, OptionCategory::EditorTools});
+        config.options.push_back({"SPARK_LIFECYCLE_TEST_HOOKS", "Lifecycle Test Hooks",
+                                  "Enable process-level lifecycle fault-injection hooks for dedicated test lanes",
+                                  false, false, OptionCategory::EditorTools});
         config.options.push_back({"BUILD_GAME_MODULES", "Game Modules", "Build the in-tree game modules", true, true,
                                   OptionCategory::EditorTools});
         config.options.push_back(
@@ -382,7 +385,7 @@ namespace SparkBuild
                 opt.cmakeVar == "ENABLE_NETWORKING" || opt.cmakeVar == "ENABLE_SERVER_PROCESSES" ||
                 opt.cmakeVar == "ENABLE_VULKAN" || opt.cmakeVar == "ENABLE_OPENGL" || opt.cmakeVar == "ENABLE_SDL2" ||
                 opt.cmakeVar == "ENABLE_METAL" || opt.cmakeVar == "ENABLE_VR" || opt.cmakeVar == "ENABLE_MOBILE" ||
-                opt.cmakeVar == "SPARK_NATIVE_ARCH" ||
+                opt.cmakeVar == "SPARK_NATIVE_ARCH" || opt.cmakeVar == "SPARK_LIFECYCLE_TEST_HOOKS" ||
                 // windows-shipping sets ENABLE_LTO=OFF so the installed SDK's
                 // SparkEngineLib.lib stays linkable by other MSVC toolset builds
                 // (/GL objects are C1047-bound to the exact compiler).

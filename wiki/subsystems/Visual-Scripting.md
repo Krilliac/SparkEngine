@@ -542,3 +542,13 @@ The compiler's `PinTypeString()` maps each `PinKind` to its AngelScript equivale
 | `Vector3` | `vec3` |
 | `Entity` | `uint` |
 | `Execution` | (flow control, no type) |
+
+
+The separate advisory `visual-script-package` workflow job builds a real
+AngelScript-enabled host and module, regenerates the module scripts from its
+graphs, and packages through `spark-cli`. `Tests/run_visual_script_package.py`
+launches that package from a foreign directory and checks a deterministic
+waypoint playthrough for one win, clean module teardown and exit zero. The
+source change adds this executable lane; its hosted result remains unverified.
+Engine-owned ECS lifecycle dispatch replaces the module's direct Start/Update
+calls, and the in-process gameplay fixture uses the same script system.

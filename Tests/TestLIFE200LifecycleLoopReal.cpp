@@ -506,6 +506,108 @@ TEST(LifecycleLoop_ThrowingUpdateStageDoesNotLeakAcrossCycles)
 
 namespace
 {
+    struct InitializationFaultScope final
+    {
+        EngineRuntime& runtime;
+        std::function<void(std::string_view)> previous;
+        explicit InitializationFaultScope(EngineRuntime& owner)
+            : runtime(owner), previous(std::move(owner.initializationCheckpointForTesting))
+        {
+        }
+        ~InitializationFaultScope() { runtime.initializationCheckpointForTesting = std::move(previous); }
+    };
+} // namespace
+
+TEST(LifecycleLoop_InjectedFailureInsideGameplayStageUnwinds)
+{
+    EngineContext* ctx = PrepareContext();
+    ConsoleScope consoleScope;
+    LifecycleLoop::CycleWatchdog watchdog(kCycleDeadline);
+    const CycleFootprint baseline = FreshBootBaseline(*ctx, consoleScope.console, watchdog, "partial gameplay init");
+    ASSERT_TRUE(baseline.threads > 0);
+    const std::size_t baselineHandles = LifecycleLoop::CountProcessHandles();
+    ASSERT_TRUE(baselineHandles > 0);
+#if defined(_WIN32)
+    // Loader/thread-pool activity can retain a few handles after warm-up.
+    // Keep this allowance fixed against the original baseline: leaking one
+    // handle per failure still exceeds it across the ten failure cycles.
+    constexpr std::size_t handleSlack = 4;
+#else
+    constexpr std::size_t handleSlack = 0;
+#endif
+    InitializationFaultScope faultScope(GetEngineRuntime());
+    constexpr std::array checkpoints = {"gameplay-core", "gameplay-serializers", "gameplay-utilities",
+                                        "gameplay-scripting", "gameplay-phases"};
+    for (const std::string_view checkpoint : checkpoints)
+    {
+        for (const bool unknownException : {false, true})
+        {
+            int hits = 0;
+            GetEngineRuntime().initializationCheckpointForTesting = [&](std::string_view point)
+            {
+                if (point != checkpoint)
+                {
+                    return;
+                }
+                ++hits;
+                // Prove this is a partial production stage, not a boundary
+                // inserted before the stage acquired anything.
+                EXPECT_TRUE(ctx->GetConditions() != nullptr);
+                if (unknownException)
+                {
+                    throw 200;
+                }
+                throw std::runtime_error("LIFE-200 partial gameplay initialization");
+            };
+            watchdog.Arm("partial gameplay init: " + std::string(checkpoint));
+            auto failed = MakeProductionRoot();
+            EXPECT_FALSE(failed->RunInitialize());
+            EXPECT_EQ(hits, 1);
+            EXPECT_TRUE(failed->GetState() == LifecycleRootState::Failed);
+            EXPECT_TRUE(ServicesWithdrawn(*ctx));
+            EXPECT_EQ(PhaseSystemCount(), std::size_t{0});
+            failed.reset();
+            GetEngineRuntime().initializationCheckpointForTesting = {};
+            EXPECT_EQ(SampleFootprint(consoleScope.console).consoleCommands, baseline.consoleCommands);
+            const std::size_t afterThreads = LifecycleLoop::CountProcessThreads();
+            const std::size_t afterHandles = LifecycleLoop::CountProcessHandles();
+            EXPECT_TRUE(afterThreads > 0);
+            EXPECT_TRUE(afterHandles > 0);
+            EXPECT_LE(afterThreads, baseline.threads + LifecycleLoop::kOsThreadSlack);
+            EXPECT_LE(afterHandles, baselineHandles + handleSlack);
+            CleanCycle(*ctx, consoleScope.console);
+            watchdog.Disarm();
+        }
+    }
+}
+
+TEST(LifecycleLoop_NullRhiInitializationFailureReleasesDevice)
+{
+    EngineRuntime runtime;
+    int hits = 0;
+    runtime.initializationCheckpointForTesting = [&](std::string_view point)
+    {
+        if (point == "headless-rhi-ready")
+        {
+            ++hits;
+            EXPECT_TRUE(runtime.headlessRhiBridge != nullptr);
+            throw std::runtime_error("LIFE-200 host RHI initialization");
+        }
+    };
+    EXPECT_THROW((void)runtime.InitializeHeadlessRhi(), std::runtime_error);
+    EXPECT_EQ(hits, 1);
+    runtime.ShutdownHeadlessRhi();
+    EXPECT_TRUE(runtime.headlessRhiBridge == nullptr);
+    ASSERT_TRUE(runtime.headlessRhiLiveResourcesAtShutdown.has_value());
+    EXPECT_EQ(*runtime.headlessRhiLiveResourcesAtShutdown, uint32_t{0});
+    runtime.initializationCheckpointForTesting = {};
+    ASSERT_TRUE(runtime.InitializeHeadlessRhi());
+    runtime.ShutdownHeadlessRhi();
+    EXPECT_EQ(*runtime.headlessRhiLiveResourcesAtShutdown, uint32_t{0});
+}
+
+namespace
+{
     /// A script engine some other owner started. Shut down on scope exit, so a
     /// failed assertion never leaves GetInstance() naming a destroyed engine.
     struct ForeignScriptEngine final

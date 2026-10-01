@@ -1056,6 +1056,7 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
     instance.className = className;
     instance.moduleName = moduleName;
     instance.entity = entity;
+    instance.generation = ++m_nextScriptGeneration;
 
     CacheScriptMethods(instance);
 
@@ -1082,6 +1083,7 @@ void AngelScriptEngine::CallStart(EntityID entity)
 {
     if (ScriptInstance* inst = GetScriptInstance(entity))
     {
+        inst->started = true;
         DispatchCallback(*inst, inst->startMethod, "Start()", {});
     }
 }
@@ -1093,6 +1095,39 @@ void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
         DispatchCallback(*inst, inst->updateMethod, "Update()",
                          [deltaTime](asIScriptContext* ctx) { ctx->SetArgFloat(0, deltaTime); });
     }
+}
+
+void AngelScriptEngine::PruneInvalidScripts(const World& world)
+{
+    for (auto it = m_entityScripts.begin(); it != m_entityScripts.end();)
+    {
+        if (!world.GetRegistry().valid(it->first))
+        {
+            CleanupScriptInstance(it->second);
+            it = m_entityScripts.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+uint64_t AngelScriptEngine::GetScriptGeneration(EntityID entity) const
+{
+    const auto it = m_entityScripts.find(entity);
+    return it == m_entityScripts.end() ? 0 : it->second.generation;
+}
+
+bool AngelScriptEngine::IsScriptStarted(EntityID entity) const
+{
+    const auto it = m_entityScripts.find(entity);
+    return it != m_entityScripts.end() && it->second.started;
+}
+
+std::size_t AngelScriptEngine::GetAttachedScriptCount() const
+{
+    return m_entityScripts.size();
 }
 
 void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
@@ -1625,6 +1660,26 @@ void AngelScriptEngine::CallStart(EntityID /*entity*/)
 void AngelScriptEngine::CallUpdate(EntityID /*entity*/, float /*deltaTime*/)
 {
     // No-op without AngelScript.
+}
+
+void AngelScriptEngine::PruneInvalidScripts(const World& /*world*/)
+{
+    // No-op without AngelScript.
+}
+
+uint64_t AngelScriptEngine::GetScriptGeneration(EntityID /*entity*/) const
+{
+    return 0;
+}
+
+bool AngelScriptEngine::IsScriptStarted(EntityID /*entity*/) const
+{
+    return false;
+}
+
+std::size_t AngelScriptEngine::GetAttachedScriptCount() const
+{
+    return 0;
 }
 
 void AngelScriptEngine::CallOnCollision(EntityID /*entity*/, EntityID /*other*/)

@@ -16,6 +16,7 @@
 #include "../Utils/JobSystem.h"
 
 // Forward declarations
+class AngelScriptEngine;
 class GraphicsEngine;
 class PhysicsSystem;
 class AudioEngine;
@@ -61,6 +62,10 @@ namespace Spark::EngineSetup
 
         // Gameplay phase — lifecycle, ability cooldowns, projectiles
         mgr.AddSystem<LifecycleSystem>(Phase::Gameplay);
+        if (auto* scriptEngine = ctx.GetScriptEngine())
+        {
+            mgr.AddSystem<ScriptRuntimeSystem>(Phase::Gameplay, scriptEngine);
+        }
         mgr.AddSystem<AbilityUpdateSystem>(Phase::Gameplay);
         mgr.AddSystem<ProjectileSystem>(Phase::Gameplay);
 

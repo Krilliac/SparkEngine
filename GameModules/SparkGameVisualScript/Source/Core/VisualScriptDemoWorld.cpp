@@ -446,8 +446,6 @@ namespace Spark::VisualScriptDemo
             return false;
         }
 
-        m_scriptEngine.CallStart(entity);
-        m_world.GetComponent<Script>(entity)->started = true;
         return true;
     }
 

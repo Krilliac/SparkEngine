@@ -22,6 +22,7 @@
 #include "Engine/ECS/Components/FPSComponents.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include "../../../Utils/DeferredDeletion.h"
 #include "Utils/Cooldown.h"
 #include "Utils/DebugHookManager.h"
@@ -368,6 +369,71 @@ namespace Spark::ECS
         if (newDeaths > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame", newDeaths);
+        }
+    }
+
+    // ============================================================================
+    // ScriptRuntimeSystem
+    // ============================================================================
+
+    void ScriptRuntimeSystem::Update(World& world, float deltaTime)
+    {
+        if (m_scriptEngine == nullptr)
+        {
+            return;
+        }
+
+        AngelScriptEngine::BindWorld(&world);
+        m_scriptEngine->PruneInvalidScripts(world);
+        auto view = world.GetEntitiesWith<Script>();
+        m_entities.clear();
+        for (const EntityID entity : view)
+        {
+            m_entities.push_back(entity);
+        }
+
+        for (const EntityID entity : m_entities)
+        {
+            if (!world.GetRegistry().valid(entity))
+            {
+                continue;
+            }
+
+            Script* script = world.GetRegistry().try_get<Script>(entity);
+            if (script == nullptr || !script->enabled)
+            {
+                continue;
+            }
+
+            const uint64_t generation = m_scriptEngine->GetScriptGeneration(entity);
+            if (generation == 0)
+            {
+                continue;
+            }
+            // The VM's per-instance flag is the truth (it survives hot reload); the
+            // component mirrors it for code that reads the ECS.
+            script->started = m_scriptEngine->IsScriptStarted(entity);
+            if (!script->started)
+            {
+                // Latch before calling user code. Start can publish an event that
+                // destroys/replaces the component or attaches another instance.
+                script->started = true;
+                m_scriptEngine->CallStart(entity);
+                if (!world.GetRegistry().valid(entity) || m_scriptEngine->GetScriptGeneration(entity) != generation)
+                {
+                    continue;
+                }
+                script = world.GetRegistry().try_get<Script>(entity);
+                if (script == nullptr)
+                {
+                    continue;
+                }
+            }
+
+            if (script->enabled)
+            {
+                m_scriptEngine->CallUpdate(entity, deltaTime);
+            }
         }
     }
 

@@ -62,15 +62,16 @@
 #include "../../../Utils/DeferredDeletion.h"
 #include "../../../Utils/Validate.h"
 #include <functional>
-#include <vector>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // Forward declarations for engine subsystems that systems depend on.
 // Full headers are included in the .cpp implementations.
-class GraphicsEngine; ///< Rendering backend (DirectX 11)
-class PhysicsSystem;  ///< Bullet Physics simulation world
-class AudioEngine;    ///< XAudio2 audio backend
+class GraphicsEngine;    ///< Rendering backend (DirectX 11)
+class PhysicsSystem;     ///< Bullet Physics simulation world
+class AudioEngine;       ///< XAudio2 audio backend
+class AngelScriptEngine; ///< AngelScript VM and entity callback dispatcher
 
 namespace Spark::ECS
 {
@@ -326,6 +327,32 @@ namespace Spark::ECS
         void Update(World& world, float deltaTime) override;
 
         const char* GetName() const override { return "LifecycleSystem"; }
+    };
+
+    /**
+     * @class ScriptRuntimeSystem
+     * @brief Dispatches ECS Script components through the engine AngelScript VM.
+     *
+     * Runs on the game thread in the Lifecycle phase. Each attached script
+     * instance receives Start exactly once (hot reload keeps that; detach and
+     * re-attach makes a new instance) and Update once per phase tick. The system
+     * owns no script instances; AngelScriptEngine owns those resources and is
+     * held here as a non-owning pointer from EngineContext.
+     * Linear in attached components/instances. The entity snapshot retains its
+     * high-water capacity; allocation occurs only when the entity count grows.
+     */
+    class ScriptRuntimeSystem : public ISystem
+    {
+      public:
+        explicit ScriptRuntimeSystem(AngelScriptEngine* scriptEngine) : m_scriptEngine(scriptEngine) {}
+
+        void Update(World& world, float deltaTime) override;
+
+        const char* GetName() const override { return "ScriptRuntimeSystem"; }
+
+      private:
+        AngelScriptEngine* m_scriptEngine = nullptr;
+        std::vector<EntityID> m_entities;
     };
 
     // =============================================================================

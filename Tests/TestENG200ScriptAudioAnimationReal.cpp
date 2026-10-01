@@ -27,6 +27,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -228,11 +230,39 @@ TEST(ScriptBindings_ENG200_MediaAudioSystemDrainsCues)
     // A drained queue is not replayed on the next tick.
     silentSystem.Update(fx.world, 0.016f);
     EXPECT_EQ(cues.dropped, 2u);
+}
+
+// The live-voice half needs a real audio backend (XAudio2, Windows only). It is a
+// separate test so the device-free cue-drain checks above report as passed on
+// every lane instead of being folded into this test's skip.
+TEST(ScriptBindings_ENG200_MediaAudioCueStartsLiveVoice)
+{
+    ScriptMediaFixture fx;
+    ASSERT_TRUE(fx.ready);
 
 #ifdef _WIN32
     // With an XAudio2 device the same cue path must start a live voice at the cue position.
     AudioEngine audio;
-    if (SUCCEEDED(audio.Initialize(2)))
+    const bool requireAudioDevice = []
+    {
+        const char* value = std::getenv("SPARK_REQUIRE_AUDIO_DEVICE");
+        return value != nullptr && std::strcmp(value, "1") == 0;
+    }();
+    const HRESULT audioResult = audio.Initialize(2);
+    if (FAILED(audioResult))
+    {
+        if (requireAudioDevice)
+        {
+            EXPECT_TRUE(false);
+            std::printf("Audio device required by SPARK_REQUIRE_AUDIO_DEVICE=1; Initialize failed: 0x%08lX\n",
+                        static_cast<unsigned long>(audioResult));
+            return;
+        }
+
+        std::printf("SKIP: XAudio2 device unavailable (set SPARK_REQUIRE_AUDIO_DEVICE=1 to make this a failure)\n");
+        SKIP_TEST("XAudio2 device unavailable");
+    }
+    else
     {
         const std::wstring wav = WriteSilentWav(L"eng200_coin_pickup");
         ASSERT_TRUE(!wav.empty());
@@ -259,6 +289,19 @@ TEST(ScriptBindings_ENG200_MediaAudioSystemDrainsCues)
         audio.Shutdown();
     }
 #endif // _WIN32
+#ifndef _WIN32
+    const char* requireDevice = std::getenv("SPARK_REQUIRE_AUDIO_DEVICE");
+    if (requireDevice != nullptr && std::strcmp(requireDevice, "1") == 0)
+    {
+        std::printf("Audio device required by SPARK_REQUIRE_AUDIO_DEVICE=1, but this lane has no XAudio2 backend\n");
+        EXPECT_TRUE(false);
+    }
+    else
+    {
+        std::printf("SKIP: live audio voice assertion requires the Windows XAudio2 backend\n");
+        SKIP_TEST("live audio voice assertion requires Windows XAudio2");
+    }
+#endif // !_WIN32
 }
 
 TEST(ScriptBindings_ENG200_MediaPlayAnimationDrivesController)

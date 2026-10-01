@@ -76,6 +76,7 @@ install(TARGETS SparkLauncher RUNTIME DESTINATION bin COMPONENT runtime)
 
 if(BUILD_TESTS)
     enable_testing()
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_test(NAME SparkLauncherHelp COMMAND $<TARGET_FILE:SparkLauncher> --help)
     set(_sparklauncher_version_test_script
         "${CMAKE_CURRENT_BINARY_DIR}/VerifySparkLauncherVersion.cmake")
@@ -108,7 +109,11 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkLauncher>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkLauncher ${PROJECT_VERSION}"
             -P "${_sparklauncher_version_test_script}")
-    set_tests_properties(SparkLauncherHelp SparkLauncherVersion PROPERTIES
+    add_test(NAME SparkLauncherHeadlessSmoke
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/Tests/Tools/run_launcher_headless_smoke.py"
+            "$<TARGET_FILE:SparkLauncher>")
+    set_tests_properties(SparkLauncherHelp SparkLauncherVersion SparkLauncherHeadlessSmoke PROPERTIES
         TIMEOUT 10
         LABELS "launcher;cli;integration;process")
     unset(_sparklauncher_version_test_script)
