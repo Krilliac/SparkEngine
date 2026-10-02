@@ -1630,7 +1630,7 @@
 | `FrameBreakCondition` | struct | SparkEngine | [FrameInspector.h:L110](../../SparkEngine/Source/Utils/FrameInspector.h#L110) | Conditional break predicate |
 | `FrameClock` | class | Tests | [FPSLANLoopbackPeer.cpp:L257](../../Tests/Fixtures/FPSLANLoopbackPeer.cpp#L257) |  |
 | `FrameContent` | struct | SparkEngine | [GoldenImageTest.h:L124](../../SparkEngine/Source/Utils/GoldenImageTest.h#L124) | Colour statistics used to reject blank (uniform) frames. |
-| `FrameData` | struct | SparkEngine | [GPUTimestampQuery.h:L451](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L451) | Per-frame query data |
+| `FrameData` | struct | SparkEngine | [GPUTimestampQuery.h:L464](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L464) | Per-frame query data |
 | `FrameData` | struct | SparkEngine | [TemporalEffectsTypes.h:L208](../../SparkEngine/Source/Graphics/TemporalEffectsTypes.h#L208) |  |
 | `FrameData` | struct | SparkEngine | [TemporalTypes.h:L211](../../SparkEngine/Source/Graphics/TemporalTypes.h#L211) |  |
 | `FrameData` | struct | Tests | [TestTemporalEffects.cpp:L99](../../Tests/TestTemporalEffects.cpp#L99) |  |
@@ -3085,7 +3085,7 @@
 | `Party` | struct | GameModules | [MMOPartySystem.h:L47](../../GameModules/SparkGameMMO/Source/Party/MMOPartySystem.h#L47) | A party/group of players |
 | `PartyMember` | struct | GameModules | [MMOPartySystem.h:L25](../../GameModules/SparkGameMMO/Source/Party/MMOPartySystem.h#L25) | A member within a party |
 | `PassConfig` | struct | Tests | [TestPostProcessingPipeline.cpp:L32](../../Tests/TestPostProcessingPipeline.cpp#L32) |  |
-| `PassHistory` | struct | SparkEngine | [GPUTimestampQuery.h:L429](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L429) | Rolling history buffer for a single pass |
+| `PassHistory` | struct | SparkEngine | [GPUTimestampQuery.h:L442](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L442) | Rolling history buffer for a single pass |
 | `PassInfo` | struct | Tests | [TestExtendedSystems.cpp:L871](../../Tests/TestExtendedSystems.cpp#L871) |  |
 | `PassiveTrait` | struct | GameModules | [ClassSystem.h:L61](../../GameModules/SparkGameFPS/Source/Game/ClassSystem.h#L61) | Passive trait that modifies class behavior |
 | `PassMetrics` | struct | SparkEngine | [PostProcessingTypes.h:L297](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L297) | Performance metrics for a single post-processing pass |
@@ -4161,7 +4161,7 @@
 | `ScopedTimeOfDayState` | class | Tests | [TestEditorPanelsRealBackends.cpp:L94](../../Tests/TestEditorPanelsRealBackends.cpp#L94) | Restores the process-wide time-of-day clock however the test exits. |
 | `ScopedTimer` | class | GameModules | [TFPerfCounters.h:L81](../../GameModules/SparkGameMMOFPS/Source/Utils/TFPerfCounters.h#L81) |  |
 | `ScopedTimer` | class | SparkEngine | [ScopedTimer.h:L44](../../SparkEngine/Source/Utils/ScopedTimer.h#L44) | Measures elapsed time from construction to destruction. |
-| `ScopedTimestamp` | class | SparkEngine | [GPUTimestampQuery.h:L533](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L533) | RAII scoped timestamp — begins on construction, ends on destruction |
+| `ScopedTimestamp` | class | SparkEngine | [GPUTimestampQuery.h:L550](../../SparkEngine/Source/Graphics/GPUTimestampQuery.h#L550) | RAII scoped timestamp — begins on construction, ends on destruction |
 | `ScopedTraceEvent` | class | SparkEngine | [ChromeTracing.h:L189](../../SparkEngine/Source/Utils/ChromeTracing.h#L189) |  |
 | `ScopedUnboundedFileSize` | class | Tests | [ScopedUnboundedFileSize.h:L25](../../Tests/Fixtures/ScopedUnboundedFileSize.h#L25) |  |
 | `ScopedWinHttpHandle` | class | SparkBuild | [Downloader.cpp:L26](../../SparkBuild/src/Downloader.cpp#L26) |  |
@@ -4424,7 +4424,7 @@
 | `SimplificationVertex` | struct | SparkEngine | [MeshLOD.h:L75](../../SparkEngine/Source/Graphics/MeshLOD.h#L75) |  |
 | `SimScoreEntry` | struct | SparkEditor | [GameViewPanel.h:L197](../../SparkEditor/Source/Panels/GameViewPanel.h#L197) |  |
 | `SinkSetup` | struct | SparkEngine | [Logger.h:L455](../../SparkEngine/Source/Utils/Logger.h#L455) | Which destinations InstallDefaultSinks() should install |
-| `Size` | struct | Tests | [TestRHI210D3D11DeviceLossReal.cpp:L187](../../Tests/TestRHI210D3D11DeviceLossReal.cpp#L187) |  |
+| `Size` | struct | Tests | [TestRHI210D3D11DeviceLossReal.cpp:L192](../../Tests/TestRHI210D3D11DeviceLossReal.cpp#L192) |  |
 | `SizeBudgetReport` | struct | SparkEditor | [AssetAuditGraph.h:L90](../../SparkEditor/Source/Panels/AssetAuditGraph.h#L90) | Size budget for a level/scene |
 | `Skeleton` | struct | SparkEngine | [Skeleton.h:L90](../../SparkEngine/Source/Engine/Animation/Skeleton.h#L90) |  |
 | `Skeleton` | struct | Tests | [TestAnimationStress.cpp:L211](../../Tests/TestAnimationStress.cpp#L211) |  |
@@ -5334,7 +5334,7 @@
 | `UIImageWidget` | class | SparkEngine | [UISystem.h:L279](../../SparkEngine/Source/Engine/UI/UISystem.h#L279) | Image display widget. |
 | `UILabel` | class | GameModules | [ARPGHud.h:L26](../../GameModules/SparkGameARPG/Source/UI/ARPGHud.h#L26) |  |
 | `UILabel` | class | SparkEngine | [UISystem.h:L193](../../SparkEngine/Source/Engine/UI/UISystem.h#L193) | Text label widget. |
-| `UILayoutLoader` | class | SparkEngine | [UILayoutExtensions.h:L247](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L247) | Builds widgets under a panel from a hand-written JSON layout. |
+| `UILayoutLoader` | class | SparkEngine | [UILayoutExtensions.h:L249](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L249) | Builds widgets under a panel from a hand-written JSON layout. |
 | `UIPanel` | class | SparkEngine | [UISystem.h:L303](../../SparkEngine/Source/Engine/UI/UISystem.h#L303) | Container widget that holds child widgets with layout. |
 | `UIPassData` | struct | SparkEngine | [RenderGraphBuilder.h:L161](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L161) | UI pass outputs placed on the blackboard. |
 | `UIProgressBar` | class | GameModules | [ARPGHud.h:L27](../../GameModules/SparkGameARPG/Source/UI/ARPGHud.h#L27) |  |

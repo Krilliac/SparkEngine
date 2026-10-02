@@ -219,7 +219,9 @@ TEST(VisualScriptGameplay_ScriptCuesReachAudioQueueAndAnimationControllers)
     ASSERT_TRUE(patroller != entt::null);
     const auto* patrol = registry.try_get<AnimationController>(patroller);
     ASSERT_TRUE(patrol != nullptr);
-    EXPECT_EQ(patrol->currentAnimation, std::string("idle"));
+    // The fixture's zero-delta startup tick runs both Start() and Update(), selecting the patrol clip.
+    EXPECT_EQ(patrol->currentAnimation, std::string("walk"));
+    EXPECT_EQ(patrol->currentTime, 0.0f);
 
     constexpr int kFrameBudget = 60 * 60;
     int frame = 0;

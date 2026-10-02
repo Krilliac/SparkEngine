@@ -14,7 +14,7 @@ servers and agents, covering both SparkEngine and SparkEditor. Current runtime
 proof is pending: the last documented hosted run built successfully but failed
 Wine tests. This remains outside stable-v1 support and does not certify native Windows or D3D12.
 
-The acceptance path uses DXVK 2.5.3 and Mesa Lavapipe; WineD3D/llvmpipe remains
+The acceptance path uses DXVK 3.1.1 and Mesa Lavapipe; WineD3D/llvmpipe remains
 a fallback for development.
 
 NullRHI rasterizes nothing. Native Linux fallback does not exercise Windows.

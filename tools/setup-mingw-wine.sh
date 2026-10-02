@@ -16,10 +16,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DXVK_VERSION="2.5.3"
-DXVK_URL="https://github.com/doitsujin/dxvk/releases/download/v2.5.3/dxvk-2.5.3.tar.gz"
-# Independently recorded by Winetricks tag 20260125, load_dxvk2053().
-DXVK_SHA256="d8e6ef7d1168095165e1f8a98c7d5a4485b080467bb573d2a9ef3e3d79ea1eb8"
+DXVK_VERSION="3.1.1"
+DXVK_URL="https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz"
+# GitHub release asset digest: doitsujin/dxvk v3.1.1 (verified 2026-10-01).
+DXVK_SHA256="40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608"
 DXVK_DIR="$PROJECT_ROOT/ThirdParty/dxvk"
 
 RED='\033[0;31m'

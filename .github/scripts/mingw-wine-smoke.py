@@ -35,10 +35,16 @@ def wine_path(path):
 def check_cpu_log(directory):
     logs = list(directory.glob("*_d3d11.log"))
     require(logs, "No fresh DXVK D3D11 log")
-    text = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in logs)
-    require(re.search(r"DXVK:\s+v?2\.5\.3\b", text), "Pinned DXVK did not run")
-    require(re.search(r"(?:Device(?: name)?|Adapter)\s*:\s*(?:llvmpipe|lavapipe)\b", text, re.I),
-            "DXVK did not identify a CPU adapter")
+    for log in logs:
+        # DXVK 3.x writes its version in DXGI's log and the selected device in
+        # D3D11's log. Require the matching pair from this fresh launch directory.
+        dxgi = log.with_name(log.name.removesuffix("_d3d11.log") + "_dxgi.log")
+        require(dxgi.is_file(), "No matching fresh DXVK DXGI log")
+        version = dxgi.read_text(encoding="utf-8", errors="replace")
+        require(re.search(r"DXVK:\s+v?3\.1\.1\b", version), "Pinned DXVK did not run")
+        device = log.read_text(encoding="utf-8", errors="replace")
+        require(re.search(r"info:\s+Creating device:\s*\ninfo:\s+(?:llvmpipe|lavapipe)\b", device, re.I),
+                "DXVK did not identify a CPU adapter")
 
 
 def check_capture(path):
@@ -210,7 +216,7 @@ def execute(phase, build, directory):
     require(scene.is_file() and json.loads(scene.read_text(encoding="utf-8")).get("entities"),
             "Editor did not save the seeded scene")
     # The second launch must create its own DXVK log, not reuse save-only device initialization.
-    for log in directory.glob("*_d3d11.log"):
+    for log in (*directory.glob("*_d3d11.log"), *directory.glob("*_dxgi.log")):
         log.unlink()
     run_wine(exe, ["--test-mode", "--test-frames", str(FRAMES), "--project", wine_path(project),
                    "--open-scene", wine_path(scene), "--smoke-result", wine_path(directory / "editor-result.json")],

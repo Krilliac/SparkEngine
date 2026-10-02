@@ -16,15 +16,36 @@ certified Windows release row. D3D12 remains excluded from the MinGW build.
 The last supplied hosted evidence (2026-09-15, run 34983218822, job 104483285541)
 configured and built successfully, then failed during Wine tests. The owner
 reports the same build-success/test-failure result in four dispatch runs.
-Those runs do not prove the new engine/editor smokes. Current local Wine
-execution and an exact-commit hosted run remain pending; CI-100[2] is `unmet`.
-The 2026-10-01 implementation session could not run WSL, Wine or a C++ build.
+Those runs do not prove the new engine/editor smokes. CI-100[2] remains
+`unmet`: the engine rendering check and exact-commit hosted evidence are pending.
 Historical March timing and test counts are not current acceptance evidence.
+
+Local diagnosis on 2026-10-01 found an integer divide-by-zero in DXVK 2.5.3's
+DXGI refresh-period calculation with Xvfb's zero refresh rate. The approved
+DXVK 3.1.1 archive matched GitHub's asset SHA-256 and its 18,041,512-byte size;
+that version guards a zero refresh numerator or denominator.
+
+Using existing MinGW binaries in the checkout at `f6f4590d5b5c6ce4646221152726ee7c8d6a576a`,
+DXVK 3.1.1 removed that crash. The editor smoke saved/reopened its scene and
+presented 60 D3D11 frames on Lavapipe with zero presentation failures. The engine
+reached frame 59 and responded to agent commands, but its smoke still failed:
+the seeded scene produced zero draw calls and triangles. This is partial local
+verification, not qualification of the current integration commit.
+
+DXVK 3.1.1 splits its evidence across logs: the matching `_dxgi.log` supplies
+the pinned version, while `_d3d11.log` identifies the selected CPU device after
+`Creating device:`. The smoke requires both from the fresh launch directory;
+an unrelated process log, older version, or GPU selection cannot satisfy it.
 
 ## Stack and prerequisites
 
-Windows D3D11 engine/editor -> MinGW-w64 -> Wine -> DXVK 2.5.3 -> Mesa Lavapipe
+Windows D3D11 engine/editor -> MinGW-w64 -> Wine -> DXVK 3.1.1 -> Mesa Lavapipe
 (CPU Vulkan). WineD3D + llvmpipe remains a development fallback.
+
+DXVK 3.1.1 lists Wine 10.0 or newer in its upstream requirements. The local
+smoke used Wine 10.0 and Mesa 26.0.8. The hosted Ubuntu 24.04 job still installs
+its distribution Wine/Mesa packages; verify those versions and compatibility
+before treating a future dispatch as qualification of this upgrade.
 
 NullRHI rasterizes nothing. Native Linux fallback does not exercise Windows.
 Neither diagnostic fallback proves this capability.
@@ -95,7 +116,7 @@ they are not inferred from old binaries. The CI job supplies actual step outcome
   `Present == S_OK` calls, zero presentation failures and exit 0. Occluded
   presentation statuses do not count. This uses existing CLI commands, not a
   claim that the separate EditorAutomation registry has a CLI bridge.
-- **CPU path:** both smokes require fresh DXVK 2.5.3 D3D11 logs naming a
+- **CPU path:** both smokes require fresh DXVK 3.1.1 D3D11 logs naming a
   llvmpipe/Lavapipe device. Both Vulkan loader variables point only to the
   Lavapipe ICD; hardware fallback cannot satisfy the checks.
 - **Tests:** the runner uses the exact named exclusions below, removes inherited

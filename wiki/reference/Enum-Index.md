@@ -438,7 +438,7 @@
 | `LoadResult` | enum | GameModules | [TFDatabase.h:L356](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L356) |  |
 | `LoadResult` | enum | GameModules | [TFOutfitStore.h:L152](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFOutfitStore.h#L152) |  |
 | `LoadStatus` | enum | SparkEngine | [DirectStorageLoader.h:L53](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L53) | Completion status for async loads |
-| `LoadStatus` | enum | SparkEngine | [UILayoutExtensions.h:L263](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L263) | Create the widgets of the "children" array in @p json under @p parent. |
+| `LoadStatus` | enum | SparkEngine | [UILayoutExtensions.h:L265](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L265) | Create the widgets of the "children" array in @p json under @p parent. |
 | `LoadStatus` | enum | Tests | [TestDirectStorageLoader.cpp:L33](../../Tests/TestDirectStorageLoader.cpp#L33) |  |
 | `LockAxis` | enum | SparkEngine | [PlacementComponents.h:L326](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L326) |  |
 | `LODLevel` | enum | SparkEditor | [LevelStreamingTypes.h:L42](../../SparkEditor/Source/LevelStreaming/LevelStreamingTypes.h#L42) | Level of detail settings |

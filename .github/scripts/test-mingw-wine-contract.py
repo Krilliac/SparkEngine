@@ -48,13 +48,47 @@ class WineEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 SMOKE.check_cpu_log(directory)
             log = directory / "SparkEngine_d3d11.log"
-            for text in ("info: DXVK: v2.5.3\ninfo: Device name: NVIDIA GPU\n",
-                         "info: Device name: llvmpipe (LLVM)\n", "info: DXVK: v2.5.3\n"):
-                log.write_text(text)
-                with self.assertRaises(ValueError):
+            dxgi = directory / "SparkEngine_dxgi.log"
+            cpu = "info:  Creating device:\ninfo:  llvmpipe (LLVM 21.1.8, 256 bits):\n"
+            log.write_text(cpu)
+            with self.assertRaises(ValueError):
+                SMOKE.check_cpu_log(directory)  # D3D11 alone is not version proof.
+            for version, device in (("2.5.3", cpu), ("3.1.10", cpu),
+                                    ("3.1.1", "info:  Creating device:\ninfo:  NVIDIA GPU:\n"),
+                                    ("3.1.1", "info:  llvmpipe (LLVM):\n")):
+                dxgi.write_text("info:  DXVK: v" + version + "\n")
+                log.write_text(device)
+                with self.subTest(version=version, device=device), self.assertRaises(ValueError):
                     SMOKE.check_cpu_log(directory)
-            log.write_text("info: DXVK: v2.5.3\ninfo: Device name: llvmpipe (LLVM)\n")
+            dxgi.write_text("info:  DXVK: v3.1.1\n")
+            log.write_text(cpu)
             SMOKE.check_cpu_log(directory)
+            dxgi.rename(directory / "OtherProcess_dxgi.log")
+            with self.assertRaises(ValueError):
+                SMOKE.check_cpu_log(directory)  # A different process cannot supply the pin.
+
+    @unittest.skipUnless(os.name == "posix", "Wine execution contract runs on POSIX")
+    def test_editor_discards_both_save_only_logs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            d3d11 = directory / "SparkEditor_d3d11.log"
+            dxgi = directory / "SparkEditor_dxgi.log"
+
+            def launch(executable, args, output, env, log_name, seconds):
+                if log_name == "editor-save.log":
+                    scene = Path(args[args.index("--save-scene") + 1].removeprefix("Z:"))
+                    scene.write_text(json.dumps({"entities": [{"id": 1}]}))
+                    d3d11.write_text("save-only device evidence")
+                    dxgi.write_text("save-only version evidence")
+                else:
+                    self.assertFalse(d3d11.exists())
+                    self.assertFalse(dxgi.exists())
+
+            with patch.object(SMOKE, "run_wine", side_effect=launch) as run, \
+                    patch.object(SMOKE, "check_editor", return_value={"fresh": True}), \
+                    patch.object(Path, "is_file", return_value=True):
+                self.assertEqual(SMOKE.execute("editor", directory / "build", directory), {"fresh": True})
+                self.assertEqual(run.call_count, 2)
 
     def test_editor_rejects_launch_only_occlusion_and_no_project(self):
         baseline = dict(schema=1, status="passed", projectLoaded=True, runResult=0,
@@ -149,8 +183,8 @@ class WineEvidenceTests(unittest.TestCase):
 
     def test_setup_is_hash_pinned_and_directxmath_has_one_owner(self):
         source = (ROOT / "tools/setup-mingw-wine.sh").read_text(encoding="utf-8")
-        self.assertIn('DXVK_URL="https://github.com/doitsujin/dxvk/releases/download/v2.5.3/dxvk-2.5.3.tar.gz"', source)
-        self.assertIn('DXVK_SHA256="d8e6ef7d1168095165e1f8a98c7d5a4485b080467bb573d2a9ef3e3d79ea1eb8"', source)
+        self.assertIn('DXVK_URL="https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz"', source)
+        self.assertIn('DXVK_SHA256="40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608"', source)
         self.assertLess(source.index('sha256sum --check --strict -'), source.index('tar xzf'))
         self.assertNotIn('install_directxmath', source)
         self.assertNotIn('DirectXMath/main', source)

@@ -1044,7 +1044,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*734 test-bearing `.cpp`/`.mm` files, 8507 source-level test definitions*
+*734 test-bearing `.cpp`/`.mm` files, 8508 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1371,7 +1371,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestLagCompensation` | 12 |
 | `TestLagCompensationIntegration` | 4 |
 | `TestLauncherPaths` | 4 |
-| `TestLauncherProcess` | 12 |
+| `TestLauncherProcess` | 13 |
 | `TestLegacyGameObjectMaterial` | 5 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
 | `TestLifecycleCompositionRootFailure` | 10 |
