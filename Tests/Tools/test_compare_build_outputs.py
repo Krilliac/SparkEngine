@@ -566,6 +566,50 @@ class TwoTreeCommandTests(unittest.TestCase):
             self.assertNotIn("--config", command)
 
 
+class TwoTreeCleanupTests(unittest.TestCase):
+    """Exercise terminal cleanup orchestration without builds or filesystem deletion."""
+
+    def test_cleanup_tracks_layout_and_retains_failed_comparisons(self) -> None:
+        for normalized in (False, True):
+            for equivalent in (False, True):
+                with self.subTest(normalized=normalized, equivalent=equivalent):
+                    work = (REPO_ROOT / "fixture-work").resolve()
+                    roots = {work / "a", work / ("b" if normalized else "tree-b")}
+                    remaining = set(roots)
+
+                    def remove(path, **kwargs):
+                        if path == work and kwargs == {"ignore_errors": True}:
+                            return  # Existing work-root reset, also mocked.
+                        if path not in remaining:
+                            raise FileNotFoundError(str(path))
+                        remaining.remove(path)
+
+                    entry = {"path": "fixture.lib", "kind": "ar", "size": 8,
+                             "sha256": "0" * 64, "identity": {}, "sections": [],
+                             "normalizedMembers": []}
+                    manifests = [{"schema": tool.SCHEMA, "entries": [entry]},
+                                 {"schema": tool.SCHEMA, "entries": [
+                                     dict(entry, sha256=("0" if equivalent else "1") * 64)]}]
+                    argv = ["two-tree", "--source", str(REPO_ROOT / "fixture-source"),
+                            "--work", str(work), "--target", "Fixture", "--scan", "lib"]
+                    if normalized:
+                        argv.append("--normalize-coff-build-root")
+                    with unittest.mock.patch.object(Path, "is_file", return_value=True), \
+                         unittest.mock.patch.object(Path, "mkdir"), \
+                         unittest.mock.patch.object(tool.shutil, "rmtree", side_effect=remove) as removed, \
+                         unittest.mock.patch.object(tool, "copy_source"), \
+                         unittest.mock.patch.object(tool, "_run_logged") as commands, \
+                         unittest.mock.patch.object(tool, "build_manifest", side_effect=manifests), \
+                         unittest.mock.patch.object(tool, "_write_json") as writes, \
+                         unittest.mock.patch("sys.stdout", new_callable=io.StringIO):
+                        self.assertEqual(tool.main(argv), 0 if equivalent else 1)
+                    self.assertEqual(remaining, set() if equivalent else roots)
+                    self.assertEqual(removed.call_count, 3 if equivalent else 1)
+                    self.assertEqual(commands.call_count, 4)
+                    self.assertEqual({call.args[0] for call in writes.call_args_list},
+                                     {work / "manifest-a.json", work / "manifest-b.json", work / "report.json"})
+
+
 class TwoTreeRegistrationTests(unittest.TestCase):
     """The CTest registrations hand each lane's own toolchain choice to the inner builds."""
 

@@ -673,3 +673,24 @@ Owners must provision the trusted publisher certificate identity and a secure si
 The diagnostic JSON records the exact source commit, artifact SHA-256 values, publisher and timestamp certificate subjects/thumbprints, native signature status, and pass/failure. Each file is hashed before and after the native signature query; a second workflow check requires the same bytes after MSI qualification and immediately before package upload. Diagnostics are retained on failure as well as success. Injected-process tests cover rejected status, catalog signatures, mismatched signer, absent timestamp, malformed responses, process failures, file substitution, and selection defects. Windows-only unsigned-fixture subtests exercise the real PowerShell command independently for EXE and MSI in ordinary VS 2022 Release PR CI before compilation and early in the stable release job; local Linux runs skip them. A second-artifact-only rejection fixture also proves that a valid EXE result cannot hide an unsigned MSI.
 
 This is a bounded first slice of REL-110, which remains open. It verifies only the outer NSIS EXE and MSI; it does not verify ZIP contents or internal PE payload signatures, prove NSIS installation behavior, provide independent consumer verification, or complete signing, scanning, protected approval, or Windows 11 qualification. Native signed-artifact success evidence remains pending the owner's signing setup and hosted run.
+
+## Bounded diagnostics and successful two-tree cleanup
+
+Windows SDE installation has a five-minute step limit and logs download,
+digest verification, extraction and executable-validation boundaries. The pinned
+URL/hash and exactly-one-executable requirement remain. Timeout is a failure,
+not CPU-floor evidence; these markers do not repair an unknown installation hang.
+
+The comparator cleans up the actual `a`/`b` layout for permitted COFF build-root
+normalization and `a`/`tree-b` in ordinary mode only after an equivalent result.
+Failed comparisons retain both trees. This corrects successful cleanup without
+changing byte comparison, OD-24 normalization or unresolved archive differences.
+
+Shipping retains a separate diagnostic-only JSON bundle for parity findings,
+inventory and the pending receipt when present. Its provenance records missing
+inputs explicitly; missing receipts are never synthesized. The bundle caps JSON
+at 12 MiB expanded and its inner ZIP at 960 KiB. Retrieval still requires checking
+the hosted outer artifact against the approved 1 MiB download cap and accounting
+for both archive layers. Existing full products, validators and failures remain.
+Unreviewed findings are labelled FINDINGS; only an exact reviewed baseline earns
+REVIEWED FINDINGS. No diagnostic bundle is release acceptance evidence.

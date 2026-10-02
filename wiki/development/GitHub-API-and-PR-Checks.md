@@ -123,3 +123,15 @@ pass to cause a real pixel mismatch while unaffected scenes still match.
 These diagnostics preserve disabled CTest flags and cannot promote release
 acceptance. The generated SDK consumer test also loads its exact module through
 the installed host; compilation or sidecar validation alone is insufficient.
+
+## Reliability follow-up source qualification
+
+The isolated combined-reliability branch runs one20-minute Ubuntu source-contract
+job. It verifies the exact checkout, cleanup/report contracts, the full existing
+license/supply-chain checker, workflow propagation and privileges, documentation
+currentness/determinism and inventory. It uses the runner's existing Python/YAML
+environment and adds no dependency install, compiler, engine execution, artifact
+publication or native matrix. These checks do not transfer the earlier native
+candidate results to a new source SHA. Its draft targets the combined candidate
+branch, so the existing Working/claude-targeted native and analysis workflows are
+not duplicated by this source-only qualification.

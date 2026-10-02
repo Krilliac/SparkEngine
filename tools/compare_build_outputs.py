@@ -738,7 +738,7 @@ def two_tree(args: argparse.Namespace) -> int:
         # Two source copies and two build trees take over a gigabyte; after an
         # equivalent result only the manifests, report and log are kept. A
         # failure keeps everything for diagnosis.
-        for tree in (work / "a", work / "tree-b"):
+        for tree in (work / "a", work / ("b" if normalize_coff_build_root else "tree-b")):
             shutil.rmtree(tree)
     return status
 

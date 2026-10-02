@@ -11869,7 +11869,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "8577567674208e5b"
+            "runDigest": "9913a9200b579ce7"
           },
           {
             "index": 8,
@@ -12167,7 +12167,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 25,
+        "stepCount": 27,
         "steps": [
           {
             "index": 0,
@@ -12447,6 +12447,30 @@
           },
           {
             "index": 23,
+            "name": "Bundle bounded build-matrix diagnostics",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "2c87576df40aa153"
+          },
+          {
+            "index": 24,
+            "name": "Upload build-matrix report diagnostics",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 25,
             "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12458,7 +12482,7 @@
             "runDigest": ""
           },
           {
-            "index": 24,
+            "index": 26,
             "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",

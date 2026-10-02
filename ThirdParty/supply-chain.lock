@@ -778,6 +778,21 @@
       "verification": "get-file-hash"
     },
     {
+      "name": "sccache v0.17.0 Windows archive (combined-source qualification)",
+      "class": "downloads",
+      "license_spdx": "MIT OR Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "The combined-source diagnostic workflow installs the same reviewed hash-checked sccache compiler cache archive.",
+      "path": ".github/workflows/combined-source-qualification.yml",
+      "pin_path": ".github/workflows/combined-source-qualification.yml",
+      "command": "try { Invoke-WebRequest -Uri $url -OutFile $archive; break }",
+      "source_url": "https://github.com/mozilla/sccache/releases/download/$env:SCCACHE_VERSION/$name.tar.gz",
+      "url": "https://github.com/mozilla/sccache/releases/download/v0.17.0/sccache-v0.17.0-x86_64-pc-windows-msvc.tar.gz",
+      "sha256": "caf1932d76a909c909b7a2e41443cdfe3c79a49a380da1a22fa422e1d00d3ca7",
+      "output": "archive",
+      "verification": "get-file-hash"
+    },
+    {
       "name": "DirectXMath oct2024 source archive",
       "class": "downloads",
       "license_spdx": "MIT",

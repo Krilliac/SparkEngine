@@ -274,7 +274,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 75
     env:
       CCACHE_MAXSIZE: 3G
     steps:
@@ -433,7 +433,6 @@ jobs:
         fi
         exit "$failed"
   build-windows-vs2026:
-    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: windows-2025-vs2026
     env:
       SCCACHE_IDLE_TIMEOUT: '0'

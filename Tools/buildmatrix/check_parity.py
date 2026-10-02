@@ -3,7 +3,7 @@
 
 Exit codes are part of the CI contract:
   0: no blocking findings
-  1: reviewed, current configuration findings remain
+  1: current configuration findings remain (reviewed when --baseline matches)
   2: the reviewed baseline is malformed or has drifted
   3: the checker or an authoritative input failed internally
 
@@ -2111,8 +2111,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"BASELINE DRIFT: regenerate and review {args.baseline}", file=sys.stderr)
                 return EXIT_BASELINE_DRIFT
         if report["errorCount"]:
+            label = "REVIEWED FINDINGS" if args.baseline else "FINDINGS"
             print(
-                f"REVIEWED FINDINGS: {report['errorCount']} blocking, {report['warningCount']} advisory",
+                f"{label}: {report['errorCount']} blocking, {report['warningCount']} advisory",
                 file=sys.stderr,
             )
             return EXIT_FINDINGS
