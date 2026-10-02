@@ -125,3 +125,12 @@ assumes one producing process; a fork child must not reuse its parent's prepared
 root. The alternate signal stack belongs to the installing thread. Frame-chain
 walking may stop at an unreadable or invalid frame and is not full unwind
 equivalence, particularly for optimized leaves or other architectures.
+
+## Isolated TSan qualification
+
+The branch-scoped Signal TSan qualification workflow reuses the complete existing
+Linux TSan job with its 120-minute limit, full-suite selection, minimum count and
+exact-commit sanitizer evidence verification. It runs on the commit carrying the
+workflow. Its result does not qualify an earlier source head or replace Required
+CI Gate. Wine and SDE qualification remain separate. Native results were pending
+when this diagnostic route was introduced.
