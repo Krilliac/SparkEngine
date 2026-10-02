@@ -1766,6 +1766,7 @@ jobs:
 
     - name: Install Intel SDE 10.13.1 for CPU-floor process test
       if: matrix.config == 'Release'
+      timeout-minutes: 5
       shell: pwsh
       run: |
         $url = 'https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz'
@@ -1773,11 +1774,15 @@ jobs:
         $dest = Join-Path $env:RUNNER_TEMP 'intel-sde-10.13.1'
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
         $archive = Join-Path $dest 'sde-win.tar.xz'
+        Write-Host "Intel SDE: downloading pinned archive"
         Invoke-WebRequest -Uri $url -OutFile $archive
+        Write-Host "Intel SDE: download completed; verifying digest"
         $actualSha256 = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
         if ($actualSha256 -ne $expectedSha256) { throw "Intel SDE archive hash mismatch: $actualSha256" }
+        Write-Host "Intel SDE: digest verified; extracting archive"
         & (Join-Path $env:SystemRoot 'System32\tar.exe') -xf $archive -C $dest
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host "Intel SDE: extraction completed; locating executable"
         $executables = @(Get-ChildItem -LiteralPath $dest -Recurse -File -Filter 'sde.exe')
         if ($executables.Count -ne 1) { throw "Expected one sde.exe, found $($executables.Count)" }
         Add-Content -Path $env:GITHUB_ENV -Value "SPARK_SDE_EXECUTABLE=$($executables[0].FullName.Replace('\', '/'))" -Encoding utf8
@@ -2438,6 +2443,21 @@ jobs:
         path: |
           msi-cpack.log
           build/ci-msi-package/_CPack_Packages/**/wix.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+    # Diagnostic-only: preserve exact JSON bytes and record absent producers.
+    - name: Bundle bounded build-matrix diagnostics
+      if: always()
+      shell: pwsh
+      run: python Tools/buildmatrix/bundle_diagnostics.py --output build-matrix-report-diagnostics.zip
+
+    - name: Upload build-matrix report diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: build-matrix-reports-${{ github.sha }}-${{ github.run_attempt }}
+        path: build-matrix-report-diagnostics.zip
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: ignore
 
