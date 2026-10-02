@@ -97,3 +97,40 @@ The automatic Issue is only a signal, not a triage-ready bug report. The playtes
 - Explicit upload consent and delivery state machine
 - Private symbol publication and a release-crash canary through a relay (Shipping builds produce split symbols and a build-id manifest; the local Linux build-id canary above covers symbolication only)
 - CI jobs and reviewed privacy/retention/runbook evidence
+
+## Linux fatal-signal candidate and qualification limits
+
+The Linux fatal path uses fixed buffers, installation-time diagnostic snapshots
+and bounded manifest formatting instead of the allocator-backed best-effort
+report path. It preserves the manifest consent fields, private artifact root,
+default kernel-core suppression and explicit local full-dump opt-in. Optional
+thread/diagnostic sections are labelled installation snapshots, not crash-time
+state. Windows behavior and the separate non-Linux POSIX path are unchanged.
+
+Installation reserves one of the existing 32 ready-manifest slots for a fatal
+report. Incomplete directory enumeration or close failure counts as a full
+queue. Short writes and EINTR are handled; incomplete or non-private files do
+not authorize a ready manifest. Publication uses Linux renameat2 with no replace
+and fails closed when unavailable. This is not an fsync durability guarantee.
+
+The four CrashSignalManifest_ regressions cover schema/consent/date output,
+buffer/date boundaries, the reserved slot, and failed queue scans. They are
+deterministic helper tests, not proof of signal-handler integration. The source
+candidate still requires native compilation, focused Linux sanitizer evidence,
+supported-filesystem publication and crash-time symbolication qualification.
+No suppression, skip policy or release gate is relaxed by this change.
+
+Installation/reinstallation requires a quiescent lifecycle. The private queue
+assumes one producing process; a fork child must not reuse its parent's prepared
+root. The alternate signal stack belongs to the installing thread. Frame-chain
+walking may stop at an unreadable or invalid frame and is not full unwind
+equivalence, particularly for optimized leaves or other architectures.
+
+## Isolated TSan qualification
+
+The branch-scoped Signal TSan qualification workflow reuses the complete existing
+Linux TSan job with its 120-minute limit, full-suite selection, minimum count and
+exact-commit sanitizer evidence verification. It runs on the commit carrying the
+workflow. Its result does not qualify an earlier source head or replace Required
+CI Gate. Wine and SDE qualification remain separate. Native results were pending
+when this diagnostic route was introduced.

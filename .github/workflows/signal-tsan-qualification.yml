@@ -1,0 +1,162 @@
+# Diagnostic native qualification only; not a replacement for Required CI Gate.
+# Reuses the complete existing TSan job without changing its test selectors,
+# minimum count, sanitizer options, evidence verification or failure behavior.
+name: Signal TSan qualification
+on:
+  push:
+    branches: [codex/signal-followthrough-20261002]
+    paths: [.github/workflows/signal-tsan-qualification.yml]
+permissions:
+  contents: read
+concurrency:
+  group: signal-tsan-qualification-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  ARTIFACT_RETENTION_DAYS: 1
+  ERROR_RETENTION_DAYS: 1
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPRESSLEVEL: "6"
+  CCACHE_MAXSIZE: "1G"
+  CCACHE_SLOPPINESS: "pch_defines,time_macros,include_file_mtime,file_stat_matches"
+  CCACHE_BASEDIR: ${{ github.workspace }}
+jobs:
+  build-linux-tsan:
+    runs-on: ubuntu-24.04
+    # 120/3000: the hosted 4-vCPU runner needs ~2,400-2,700 s for the full TSan suite (run 36811181228).
+    timeout-minutes: 120
+    steps:
+    - name: Define TSan evidence directory
+      shell: bash
+      run: echo "SANITIZER_EVIDENCE_DIR=${RUNNER_TEMP}/spark-sanitizer-tsan-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-build-linux-tsan" >> "$GITHUB_ENV"
+
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+
+    - name: Setup ccache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.ccache
+        key: ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-tsan-
+
+    - name: Restore build directory
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: build
+        key: build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-tsan-
+
+    - name: Configure CMake (TSan)
+      run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
+        command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
+        cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DBUILD_TESTS=ON \
+          -DCMAKE_C_COMPILER=gcc-14 \
+          -DCMAKE_CXX_COMPILER=g++-14 \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+          -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=thread"
+
+    - name: Build
+      run: |
+        set -o pipefail
+        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+
+    - name: Print ccache stats
+      if: always()
+      run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
+
+    - name: Run Tests under TSan
+      env:
+        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
+      run: |
+        bash .github/scripts/run-sanitizer-tests.sh \
+          --evidence-root "${{ runner.temp }}" \
+          --sanitizer tsan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job "${{ github.job }}" \
+          --expected-selector all \
+          --minimum-tests 6900 \
+          --timeout-seconds 3000 \
+          --runtime-env TSAN_OPTIONS \
+          -- build/bin/SparkTests --warn-is-error --shuffle 123
+
+    - name: Summarize TSan exact-commit test evidence
+      run: |
+        python3 .github/scripts/summarize-test-results.py \
+          "$SANITIZER_EVIDENCE_DIR/junit.xml" \
+          --min-tests 6900 \
+          --title "SparkTests — Linux TSan" \
+          --json "$SANITIZER_EVIDENCE_DIR/test-stats-linux-tsan.json"
+
+    - name: Verify published TSan exact-commit evidence
+      run: |
+        python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+          --evidence-dir "$SANITIZER_EVIDENCE_DIR" \
+          --stats "$SANITIZER_EVIDENCE_DIR/test-stats-linux-tsan.json" \
+          --sanitizer tsan \
+          --lane linux-tsan \
+          --expected-sha "${{ github.sha }}" \
+          --run-id "${{ github.run_id }}" \
+          --run-attempt "${{ github.run_attempt }}" \
+          --job build-linux-tsan \
+          --minimum-tests 6900 \
+          --timeout-seconds 3000
+
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-tsan" \
+          error-summary.json \
+          cmake-build.log \
+          "$SANITIZER_EVIDENCE_DIR/console.txt" \
+          "$SANITIZER_EVIDENCE_DIR/process-footer.txt" \
+          "$SANITIZER_EVIDENCE_DIR/metadata.json" \
+          "$SANITIZER_EVIDENCE_DIR"/runtime/sanitizer.*
+
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-linux-tsan
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+    - name: Upload TSan report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: sanitizer-report-tsan
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
+        if-no-files-found: error
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+
+    - name: Upload TSan exact-commit test evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: test-results-linux-tsan
+        path: ${{ env.SANITIZER_EVIDENCE_DIR }}
+        if-no-files-found: error
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
