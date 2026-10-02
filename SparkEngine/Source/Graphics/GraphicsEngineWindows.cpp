@@ -46,6 +46,7 @@ using Spark::Graphics::PostProcessingPipeline;
 #endif // SPARK_PLATFORM_WINDOWS
 
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <string>
 
@@ -384,6 +385,20 @@ void GraphicsEngine::Shutdown()
     m_backBufferSRV.Reset();
     m_renderTargetView.Reset();
     m_swapChain.Reset();
+
+    // RHI-210: one fixed, logger-free validation record per debug-layer run, so
+    // a smoke or CI parser can gate on it without trusting log decorations.
+    if (m_infoQueue)
+    {
+        AccumulateValidationMessages(m_infoQueue.Get(), m_validationCounts);
+        m_infoQueue.Reset();
+        std::fprintf(stdout, "SPARK_D3D11_VALIDATION corruption=%llu errors=%llu warnings=%llu\n",
+                     static_cast<unsigned long long>(m_validationCounts.corruption),
+                     static_cast<unsigned long long>(m_validationCounts.errors),
+                     static_cast<unsigned long long>(m_validationCounts.warnings));
+        std::fflush(stdout);
+    }
+
     m_context.Reset();
     m_device.Reset();
 

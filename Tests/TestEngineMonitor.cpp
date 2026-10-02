@@ -377,7 +377,13 @@ TEST(Monitor_WeatherCycling)
 
     // Weather updates should be fast (generous for Debug/ASan builds)
     EXPECT_TRUE(stats.AverageUs() < 10000.0); // < 10ms
-    EXPECT_TRUE(stats.severeSpikes <= 5);
+    // Hitches are judged against an absolute budget, not the average: one update averages
+    // well under a microsecond, so "10x average" counted ordinary scheduler preemption on a
+    // shared CI runner as a spike. An update over 1% of a 60 Hz frame (166 us) is a real
+    // hitch; allow 1% of the frames over it for preemption.
+    const auto overBudget =
+        std::count_if(stats.frameTimes.begin(), stats.frameTimes.end(), [](double us) { return us > 166.0; });
+    EXPECT_TRUE(overBudget <= static_cast<std::ptrdiff_t>(stats.frameTimes.size() / 100));
 
     // Final state should be valid
     auto finalState = weather->GetCurrentState();

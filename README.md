@@ -4,6 +4,15 @@ A C++23 source-available 3D game engine with multiple graphics backends behind a
 
 Website: [sparkengine.dev](https://sparkengine.dev/)
 
+MinGW/Wine is experimental; its advisory CI lane runs only on manual
+`workflow_dispatch`. It targets CPU rendering for GPU-less servers and AI agents
+in both the engine and editor. Current runtime proof is pending; the last
+documented hosted Wine tests failed. See the [MinGW/Wine guide](wiki/development/MinGW-Wine-Cross-Compilation.md).
+
+[![Explore the engine in 3D](https://img.shields.io/badge/Explore-the_engine_in_3D-8a2be2?style=for-the-badge&logo=threedotjs&logoColor=white)](https://krilliac.github.io/SparkEngine/)
+
+The **Code City** is an interactive 3D map of the source tree: every source file is a building sized by its line count, grouped into subsystem districts, with include-dependency arcs, recent churn and readiness work-item overlays. It is regenerated from `Working` by the `Code City Pages` workflow and is a visualization, not readiness evidence. To build it locally: `python3 tools/architecture-viz/generate_code_city.py`, then open `build/code-city/index.html`.
+
 [![Trusted exact-source CI](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml?query=branch%3AWorking)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
 [![C++ lines of code](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Floc.json&style=flat-square)](https://github.com/Krilliac/SparkEngine)
@@ -57,8 +66,9 @@ cmake --build --preset windows-release
 ./build.sh release
 ```
 
-Visual Studio and Ninja Multi-Config builds keep binaries isolated under
-`build/bin/<Config>` (for example, `build/bin/Release/SparkEditor.exe`).
+Each preset builds into `build/<preset>`; Visual Studio and Ninja Multi-Config builds keep
+binaries isolated under `bin/<Config>` there (for example,
+`build/windows-release/bin/Release/SparkEditor.exe`).
 
 Requirements: MSVC 19.36+ / GCC 13+ / Clang 17+, CMake 3.25+.  
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
@@ -66,7 +76,9 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
 **Create a game module:**
 
 ```bash
-cmake --install build --prefix ~/SparkEngine-install
+# Install the engine you built above (pick the line for your build path)
+cmake --install build/windows-release --config Release --prefix ~/SparkEngine-install  # Windows preset
+cmake --install build --prefix ~/SparkEngine-install                                   # ./generate.sh + ./build.sh
 cp -r Templates/EmptyProject MyGame && cd MyGame
 cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
 cmake --build build --config Release
@@ -173,8 +185,8 @@ The active backend selection is XAudio2 on Windows or OpenAL on non-Windows host
 ### Scripting
 
 - **AngelScript** — hot-reload via file watcher, bindings for selected engine APIs, per-file module isolation, client/server context separation
-- **Visual scripting** — 64 node palette entries across 9 categories, compiles to AngelScript and uses the existing script runtime
-- **Shader Graph** — 35+ nodes, HLSL generation, live preview
+- **Visual scripting** — 69 node palette entries across 10 categories, compiles to AngelScript and uses the existing script runtime
+- **Shader Graph** — 34 node types, HLSL generation, live preview
 
 ### AI and Navigation
 
@@ -186,7 +198,7 @@ UDP client/server with entity replication, dirty property tracking, client-side 
 
 ### ECS and Gameplay
 
-EnTT-backed ECS with 75+ component types. Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
+EnTT-backed ECS; see the [generated component inventory](wiki/subsystems/Entity-Component-System.md). Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
 
 **Large worlds:** Source includes area-streaming and floating-point origin-rebasing implementations. "No load screens" and "100K+ entities per area" are design/load-test targets, not `stable-v1` evidence; the 100K entity-flood test validates entity-count correctness rather than per-area throughput or release performance.
 
@@ -214,7 +226,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 7,567 test definitions across 632 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 8,508 test definitions across 734 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -254,7 +266,6 @@ Key CMake options:
 
 | Option | Default | Description |
 |---|:---:|---|
-| `ENABLE_GRAPHICS` | ON | Declared option, but currently not consumed by target/source selection; setting it OFF does not strip the RHI |
 | `ENABLE_EDITOR` | ON | ImGui editor |
 | `ENABLE_NETWORKING` | ON | UDP multiplayer |
 | `ENABLE_VULKAN` | ON | Vulkan backend |
@@ -276,7 +287,7 @@ cmake --build build --config Release
 ./build/bin/SparkEngine -headless -game <module-path>
 ```
 
-`ENABLE_GRAPHICS=OFF` is currently inert. Compile-time graphics removal remains
+There is no compile-time graphics switch; graphics removal remains
 unproven; the headless entry points use runtime wiring and `HEAD-220` is open.
 
 ---
@@ -291,7 +302,7 @@ below. Everything else in this table is experimental or uncertified.
 
 | | Minimum | Recommended |
 |---|---|---|
-| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 12+ | Windows 11 / Ubuntu 24.04 |
+| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 13.3+ | Windows 11 / Ubuntu 24.04 |
 | Compiler | MSVC 19.36, GCC 13, Clang 17 | MSVC 19.36+, GCC 13+, Clang 17+ |
 | C++ | C++23 | C++23 |
 | GPU | Any DirectX 11 capable | RTX 2080+ for ray tracing |
@@ -359,7 +370,7 @@ uncertified.
 | [Versioned Plugin ABI](docs/guides/plugin-abi.md) | Versioned C plugin boundary, sidecar integrity, tasks, and hot reload |
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
-| [Wiki](wiki/) | 202 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
+| [Wiki](wiki/) | 206 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
 
 ---
 
@@ -383,8 +394,8 @@ SparkEngine/
 ├── SparkEditor/Source/    64 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 7,567 test definitions, 632 files
-├── wiki/                  202 Markdown pages excluding _Sidebar.md (inventory only)
+├── Tests/                 8,508 test definitions, 734 files
+├── wiki/                  206 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
 

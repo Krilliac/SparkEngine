@@ -86,6 +86,10 @@ namespace OpenWorld
         /// @brief Player joins an active event
         bool JoinEvent(uint32_t eventId);
 
+        /// @brief Nearest running event within maxDistance of (x, z) the player has not joined yet
+        /// @return The event id, or 0 when none is in range (ties resolve to the lower id)
+        uint32_t FindJoinableEventNear(float x, float z, float maxDistance) const;
+
         DynamicEventSaveState CaptureSaveState() const;
         bool RestoreSaveState(const DynamicEventSaveState& state, std::string* error = nullptr);
 

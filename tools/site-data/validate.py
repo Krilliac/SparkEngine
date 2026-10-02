@@ -5,32 +5,46 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import functools
 import hashlib
 import html
+import json
 import re
 import sys
 import unicodedata
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from assets import validate_assets
 from module_content import validate as validate_module_content
 from common import (
+    ACCEPTANCE_CI_REFERENCE,
+    ACCEPTANCE_STATES,
     METRIC_IDS,
     REPO_ROOT,
     SCHEMA_VERSION,
     SiteDataError,
+    collect_document_sources,
     decode_json_bytes,
     load_contract,
     load_json,
+    criterion_digest,
     read_bytes_stable,
+    tracked_paths,
 )
-from contract_selectors import resolve_ci_job, resolve_test_selector
+from contract_selectors import (WorkflowJob, cmake_preset_index, command_tokens, ctest_filter_errors,
+                                preset_references, required_gate_jobs, resolve_ci_job, resolve_test_selector,
+                                shell_segments, workflow_jobs)
+from docs_parity import published_docs_parity_errors
+from workflow_ownership import installer_workflow_errors, shipping_workflow_errors
+from documented_commands import check_documents as check_documented_build_commands
 from exact_evidence import ExactEvidenceError, validate_manifest as validate_exact_evidence_manifest
+from publication_status import STATUS_MAX_BYTES, validate_status as validate_publication_status
 from release_stages import (candidate_readiness_errors, finalization_contract_errors,
-                            predecessor_candidate_readiness_errors)
+                            nminus1_evidence_errors, predecessor_candidate_readiness_errors,
+                            predecessor_evidence_reuse_errors)
 
 
 IMPLEMENTATION_STATES = {"absent", "stub", "partial", "functional", "complete"}
@@ -165,54 +179,96 @@ REQUIRED_NULLRHI_CONFLICTS = {
     "render in software",
 }
 
-# Deliberate outputs of unfinished work items. A missing path not listed here is
-# a contract error, not a soft warning.
-FUTURE_ACCEPTANCE_PATHS = {
-    "GameModules/SparkGame/README.md",
-    "GameModules/SparkGameARPG/README.md",
-    "GameModules/SparkGameFPS/README.md",
-    "GameModules/SparkGameFPS/Source/Multiplayer",
-    "GameModules/SparkGameMMO/README.md",
-    "GameModules/SparkGameOpenWorld/README.md",
-    "GameModules/SparkGamePlatformer/README.md",
-    "GameModules/SparkGameRPG/README.md",
-    "GameModules/SparkGameRTS/README.md",
-    "GameModules/SparkGameRTS/Source/AI",
-    "GameModules/SparkGameRTS/Source/Fog",
-    "GameModules/SparkGameRacing/README.md",
-    "GameModules/SparkGameVisualScript/README.md",
-    "SparkEditor/Source/Commands",
-    "SparkEngine/Source/Platform",
-    "SparkSDK/README.md",
-    "THIRD_PARTY_NOTICES",
-    "Tests/Benchmarks",
-    "Tests/Fixtures/Compatibility",
-    "Tests/Fuzz",
-    "Tests/ModuleKit",
-    "ThirdParty/README.md",
-    "Tools/spark-cli/README.md",
-    "docs/operations/server-runbook.md",
-    "docs/specs/online-services.md",
-    "docs/specs/persistence.md",
-    "docs/specs/telemetry.md",
-    "wiki/advanced/Crash-Reporting.md",
-    "wiki/gameplay-tools/Visual-Scripting.md",
-    "wiki/getting-started/Building-from-Source.md",
-    "wiki/subsystems/Scripting.md",
-}
-GENERATED_PATHS = {"docs/readiness/ENGINE_READINESS_HANDOFF.md"}
+# CMake presets a work item deliberately introduces, keyed to that owning item.
+# Only the owner's configure/build commands may name one, and never a CTest
+# test tree: an unwritten preset cannot prove it builds tests. The list prunes
+# itself (Validator.validate_work_item_presets): an entry whose preset now
+# exists, whose owner is done or missing, or that the owner no longer
+# references is an error.
+PLANNED_CMAKE_PRESETS: dict[str, str] = {}
+
+# CI-120: every platform Shipping preset outside the stable-v1 build matrix stays
+# owned by its experimental platform work item, so a Linux or macOS Shipping
+# matrix can never slide into Windows release scope unowned.
+EXPERIMENTAL_SHIPPING_PRESET_OWNERS = {"linux-shipping": "PLT-210", "macos-shipping": "PLT-220"}
+STABLE_SHIPPING_PROFILE = "stable-v1"
+
+
+def experimental_shipping_preset_errors(contract: dict[str, Any], configure_presets: Iterable[str]) -> list[str]:
+    """Every experimental ``*-shipping`` configure preset has one open, experimental owner."""
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    profile = next(
+        (
+            entry
+            for entry in contract.get("readiness", {}).get("releaseProfiles", [])
+            if isinstance(entry, dict) and entry.get("id") == STABLE_SHIPPING_PROFILE
+        ),
+        {},
+    )
+    configurations = [entry for entry in profile.get("buildConfigurations", []) if isinstance(entry, dict)]
+    stable_presets = {entry.get("preset") for entry in configurations if entry.get("preset")}
+    configuration_presets = {entry.get("id"): entry.get("preset") for entry in configurations}
+    product_presets = {
+        configuration_presets.get(product.get("buildProfile"), product.get("buildProfile"))
+        for product in profile.get("buildProducts", [])
+        if isinstance(product, dict)
+    }
+
+    configurers: dict[str, set[str]] = {}
+    for identifier, item in items.items():
+        for command in item.get("commands", []):
+            if not isinstance(command, str):
+                continue
+            for reference in preset_references(command):
+                if reference.tool == "cmake" and reference.kind == "configure":
+                    configurers.setdefault(reference.name, set()).add(identifier)
+
+    errors: list[str] = []
+    shipping = {name for name in configure_presets if name.endswith("-shipping")}
+    for preset in sorted(shipping - stable_presets - set(EXPERIMENTAL_SHIPPING_PRESET_OWNERS)):
+        errors.append(
+            f"experimentalShipping.{preset}: Shipping preset is outside {STABLE_SHIPPING_PROFILE} and has no "
+            "owning platform work item in EXPERIMENTAL_SHIPPING_PRESET_OWNERS"
+        )
+    for preset, owner_id in sorted(EXPERIMENTAL_SHIPPING_PRESET_OWNERS.items()):
+        location = f"experimentalShipping.{preset}"
+        if preset not in shipping:
+            errors.append(f"{location}: preset no longer exists in CMakePresets.json; remove the owner entry")
+            continue
+        if preset in stable_presets or preset in product_presets:
+            errors.append(f"{location}: experimental Shipping preset is in {STABLE_SHIPPING_PROFILE} build scope")
+        owner = items.get(owner_id)
+        if owner is None:
+            errors.append(f"{location}: owner {owner_id} is not a work item")
+            continue
+        if owner.get("status") == "done" and any(
+            entry.get("state") != "evidenced" for entry in owner.get("acceptanceStatus", []) if isinstance(entry, dict)
+        ):
+            errors.append(f"{location}: owner {owner_id} is done without evidenced criteria")
+        if owner.get("profileApplicability", {}).get(STABLE_SHIPPING_PROFILE) == "required":
+            errors.append(f"{location}: owner {owner_id} must not be required by {STABLE_SHIPPING_PROFILE}")
+        if owner_id not in configurers.get(preset, set()):
+            errors.append(f"{location}: owner {owner_id} must configure the preset in its own commands")
+        related = {*owner.get("parallelWith", []), *owner.get("dependencies", []), owner_id}
+        for stranger in sorted(configurers.get(preset, set()) - related):
+            errors.append(
+                f"{location}: {stranger} configures an experimental Shipping preset owned by {owner_id}; "
+                f"list it in {owner_id}.parallelWith or dependencies"
+            )
+    errors.extend(shipping_workflow_errors(contract, EXPERIMENTAL_SHIPPING_PRESET_OWNERS))
+    return errors
 
 WORK_ITEM_REQUIRED_KEYS = {
     "id", "title", "priority", "status", "blocking", "wave", "area", "owner",
     "profileApplicability",
     "rationale", "dependencies", "parallelWith", "sourceContext", "entryPoints",
-    "implementationScope", "acceptanceCriteria", "commands", "testSelectors",
+    "implementationScope", "acceptanceCriteria", "acceptanceStatus", "commands", "testSelectors",
     "requiredCiJobs", "performanceBudgets", "documentationUpdates", "readinessChanges",
     "websiteImpact", "risks", "outOfScope", "definitionOfDone",
 }
 WORK_ITEM_LIST_KEYS = {
     "dependencies", "parallelWith", "sourceContext", "entryPoints", "implementationScope",
-    "acceptanceCriteria", "commands", "testSelectors", "requiredCiJobs",
+    "acceptanceCriteria", "acceptanceStatus", "commands", "testSelectors", "requiredCiJobs",
     "performanceBudgets", "documentationUpdates", "readinessChanges", "websiteImpact",
     "risks", "outOfScope", "definitionOfDone",
 }
@@ -232,12 +288,16 @@ CURRENT_LICENSE_DECLARATION = {
 }
 # These are project-facing surfaces whose license terminology can be mistaken
 # for the repository's own legal classification.  Generated guidance files are
-# included so regeneration cannot silently restore a stale public claim.
-LEGAL_PUBLIC_WORDING_SURFACES = {
+# included so regeneration cannot silently restore a stale public claim.  Every
+# governed public claim surface is covered, so a surface added to the global
+# claim contract is wording-checked without a second registration.
+LEGAL_PUBLIC_WORDING_SURFACES = REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | {
     ".github/copilot-instructions.md",
     ".github/prompts/copilot-instructions.md",
+    "CONTRIBUTING.md",
     "README.md",
     "wiki/Home.md",
+    "wiki/advanced/Contributing.md",
     "wiki/getting-started/FAQ.md",
 }
 PROJECT_OPEN_SOURCE_WORDING = re.compile(r"\bopen(?:-| )source\b", re.IGNORECASE)
@@ -269,7 +329,7 @@ def executable_ctest_segments(command: str) -> list[str]:
     """
     return [
         segment.strip()
-        for segment in re.split(r"[;&|\r\n]+", command)
+        for segment in shell_segments(command)
         if _CTEST_COMMAND_TOKEN.search(segment)
     ]
 
@@ -303,6 +363,1100 @@ def legal_public_wording_errors(
                     f"{location}:{number}: contains unreviewed open-source wording "
                     "while the declared license is non-OSI"
                 )
+    return errors
+
+
+# OD-08 (NET-110): identity, matchmaking, fleet, entitlement and billing services
+# are out of engine scope and the engine ships no hosted online services. These
+# surfaces describe online features directly, in addition to every governed
+# public claim surface.
+ONLINE_SERVICE_BOUNDARY_SURFACES = {
+    "docs/site/readiness.json",
+    "docs/specs/online-services.md",
+    "wiki/advanced/Online-Service-Boundary.md",
+    "wiki/gameplay-tools/Online-Services.md",
+}
+_HOSTED_SERVICE_NOUN = (
+    r"(?:online\s+services?|backend(?:\s+services?)?|identity(?:\s+services?)?|accounts?(?:\s+services?)?"
+    r"|login\s+services?|matchmak(?:ing|er)(?:\s+services?)?|lobby\s+services?|(?:server\s+)?fleets?"
+    r"|entitlements?(?:\s+services?)?|billing|payments?|leaderboards?|cloud[\s-]+saves?"
+    r"|player\s+data|live\s+services?)"
+)
+HOSTED_ONLINE_SERVICE_CLAIM = re.compile(
+    r"\b(?:hosted|managed|turnkey|cloud-hosted|built-in|out-of-the-box)\s+" + _HOSTED_SERVICE_NOUN + r"\b"
+    r"|\b(?:SparkEngine|the\s+engine)\s+(?:provides|ships|includes|offers|hosts|operates|runs)\s+"
+    r"(?:an?\s+|its\s+own\s+)?(?:hosted\s+)?(?:identity|account|login|matchmaking|lobby|fleet|entitlement"
+    r"|billing|payment|leaderboard|cloud[\s-]+save|online)\s+(?:services?|servers?|backends?)\b",
+    re.IGNORECASE,
+)
+# A sentence or table row that negates the claim ("ships no hosted
+# matchmaking", "is not a hosted service") documents the boundary instead.
+_SERVICE_CLAIM_NEGATION = re.compile(
+    r"\b(?:no|not|never|none|without|nothing|neither|nor|isn't|aren't|doesn't|don't|won't|cannot"
+    r"|out\s+of\s+(?:engine\s+)?scope|outside)\b",
+    re.IGNORECASE,
+)
+_SERVICE_CLAIM_SENTENCE_SPLIT = re.compile(r"[.;!?](?=\s|$)")
+
+
+def hosted_online_service_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public claims that SparkEngine hosts or operates online services (OD-08).
+
+    The check is per sentence, or per row for a Markdown table row: a sentence
+    or row that also carries a negation documents the boundary and is allowed.
+    """
+
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: online-service wording source must be text")
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            is_table_row = line.lstrip().startswith("|")
+            for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+                match = HOSTED_ONLINE_SERVICE_CLAIM.search(unit)
+                if match is None or _SERVICE_CLAIM_NEGATION.search(unit):
+                    continue
+                errors.append(
+                    f"{location}:{number}: claims hosted online services ({match.group(0)!r}); "
+                    "the engine ships none (OD-08, wiki/advanced/Online-Service-Boundary.md)"
+                )
+    return errors
+
+
+# NET-110: the boundary specification must keep naming every trust/ownership
+# boundary and every adapter the code actually contains, not just exist.
+ONLINE_SERVICE_SPEC = "docs/specs/online-services.md"
+ONLINE_SERVICE_INTERFACES = ("IOnlinePlatform", "IGatewayAuthenticator", "IAreaControlPlane", "ITransport")
+ONLINE_SERVICE_ADAPTER_CLASS = re.compile(
+    r"^[ \t]*(?:class|struct)\s+(\w+)\b[^;{]*?:[^;{]*?\bpublic\s+(" + "|".join(ONLINE_SERVICE_INTERFACES) + r")\b",
+    re.MULTILINE,
+)
+# The only descriptions spec section 6 permits; "production" is deliberately absent.
+ONLINE_SERVICE_ADAPTER_LABELS = frozenset(
+    {"local, deterministic", "local reference", "stub", "local/LAN, experimental", "engine guard"}
+)
+_SOURCE_SUFFIXES = (".h", ".hpp", ".cpp")
+
+
+@functools.lru_cache(maxsize=8192)
+def _cached_source_text(path: Path) -> str | None:
+    """File text read once per validation run; the contract suite has a tight time budget."""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _markdown_section(text: str, heading: str) -> str | None:
+    """Body of the Markdown heading that starts with ``heading``, up to the next heading of its level or higher."""
+    level = len(heading) - len(heading.lstrip("#"))
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if not line.startswith(heading):
+            continue
+        body: list[str] = []
+        for following in lines[index + 1:]:
+            stripped = following.lstrip("#")
+            following_level = len(following) - len(stripped)
+            if 0 < following_level <= level and stripped.startswith(" "):
+                break
+            body.append(following)
+        return "\n".join(body)
+    return None
+
+
+def _markdown_table_rows(section: str) -> list[list[str]]:
+    """Data rows of the first Markdown table in ``section`` (header and separator dropped)."""
+    rows: list[list[str]] = []
+    started = False
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            if started:
+                break
+            continue
+        started = True
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        rows.append(cells)
+    return [row for row in rows[1:] if not all(re.fullmatch(r":?-+:?", cell) for cell in row)]
+
+
+def _backticked(cell: str) -> list[str]:
+    return re.findall(r"`([^`]+)`", cell)
+
+
+def online_service_adapter_classes(
+    repo_root: Path, source_paths: Iterable[str] | None = None
+) -> dict[str, tuple[str, str]]:
+    """Map every class implementing an online-service seam to (source path, interface).
+
+    ``source_paths`` are repository-relative; by default every tracked C++ source
+    outside Tests/, whose fakes are test doubles rather than shipped adapters.
+    """
+    if source_paths is None:
+        source_paths = sorted(
+            path for path in tracked_paths() if path.endswith(_SOURCE_SUFFIXES) and not path.startswith("Tests/")
+        )
+    adapters: dict[str, tuple[str, str]] = {}
+    for relative in source_paths:
+        text = _cached_source_text(repo_root / relative)
+        if text is None:
+            continue
+        for name, interface in _online_service_adapter_matches(text):
+            adapters.setdefault(name, (relative, interface))
+    return adapters
+
+
+@functools.lru_cache(maxsize=16384)
+def _online_service_adapter_matches(text: str) -> tuple[tuple[str, str], ...]:
+    """(class, interface) pairs one source text declares, scanned once per exact text.
+
+    Keyed on the text, not the path, so an edited or substituted source is a new key.
+    """
+    if not any(interface in text for interface in ONLINE_SERVICE_INTERFACES):
+        return ()
+    return tuple(
+        (match.group(1), match.group(2))
+        for match in ONLINE_SERVICE_ADAPTER_CLASS.finditer(text)
+        if match.group(1) not in ONLINE_SERVICE_INTERFACES
+    )
+
+
+def _symbol_defined_under(repo_root: Path, relative: str, symbol: str) -> bool | None:
+    """Whether ``symbol`` occurs as a word in the file, or in any C++ source under the directory.
+
+    Returns None when the path does not exist.
+    """
+    path = repo_root / relative
+    if path.is_file():
+        candidates = [path]
+    elif path.is_dir():
+        candidates = sorted(candidate for candidate in path.rglob("*") if candidate.suffix in _SOURCE_SUFFIXES)
+    else:
+        return None
+    pattern = re.compile(r"\b" + re.escape(symbol) + r"\b")
+    return any(pattern.search(_cached_source_text(candidate) or "") for candidate in candidates)
+
+
+def online_service_spec_contract_errors(
+    spec_text: str, repo_root: Path, source_paths: Iterable[str] | None = None
+) -> list[str]:
+    """Content contract for the online-service boundary specification (NET-110).
+
+    The deployment diagram and the trust-boundary table must name the same
+    boundaries, every boundary names who is trusted and how it is enforced,
+    every engine interface the spec cites still exists where it says, and every
+    class implementing an online-service seam is in the adapter register with a
+    permitted, non-production label.
+    """
+    location = ONLINE_SERVICE_SPEC
+    errors: list[str] = []
+
+    diagram = _markdown_section(spec_text, "## 3. Deployment diagram")
+    mermaid = re.search(r"```mermaid\n(.*?)```", diagram or "", re.DOTALL)
+    if mermaid is None:
+        errors.append(f"{location}: section 3 must contain a ```mermaid deployment diagram")
+    diagram_ids = {int(value) for value in re.findall(r'"B(\d+):', mermaid.group(1))} if mermaid else set()
+
+    boundaries = _markdown_section(spec_text, "## 4. Trust boundaries")
+    table_ids: list[int] = []
+    for row in _markdown_table_rows(boundaries or ""):
+        identifier = re.fullmatch(r"B(\d+)", row[0])
+        if identifier is None:
+            errors.append(f"{location}: trust-boundary row {row[0]!r} is not a B<n> id")
+            continue
+        table_ids.append(int(identifier.group(1)))
+        if len(row) < 5 or not row[3] or not row[4]:
+            errors.append(f"{location}: trust boundary {row[0]} must name who is trusted and the enforcing mechanism")
+    if not table_ids:
+        errors.append(f"{location}: section 4 must contain the trust-boundary table")
+    if table_ids != list(range(1, len(table_ids) + 1)):
+        errors.append(f"{location}: trust-boundary ids must run contiguously from B1 (found {table_ids})")
+    for missing in sorted(diagram_ids - set(table_ids)):
+        errors.append(f"{location}: diagram boundary B{missing} has no row in the trust-boundary table")
+    for undrawn in sorted(set(table_ids) - diagram_ids):
+        errors.append(f"{location}: trust boundary B{undrawn} is not drawn on the deployment diagram")
+
+    interfaces = _markdown_section(spec_text, "### 2.1 Engine SDK interfaces")
+    interface_rows = _markdown_table_rows(interfaces or "")
+    if not interface_rows:
+        errors.append(f"{location}: section 2.1 must contain the engine-interface table")
+    for row in interface_rows:
+        paths = _backticked(row[1]) if len(row) > 1 else []
+        symbols = [symbol.split("::")[-1] for symbol in _backticked(row[0])]
+        if not paths or not symbols:
+            errors.append(f"{location}: engine-interface row {row[0]!r} must name a symbol and a source path")
+            continue
+        for relative in paths:
+            for symbol in symbols:
+                found = _symbol_defined_under(repo_root, relative.rstrip("/"), symbol)
+                if found is None:
+                    errors.append(f"{location}: engine-interface source {relative!r} does not exist")
+                    break
+                if not found:
+                    errors.append(f"{location}: engine interface {symbol!r} is not found in {relative!r}")
+
+    register = _markdown_section(spec_text, "## 6. Adapter status register")
+    labels: dict[str, str] = {}
+    for row in _markdown_table_rows(register or ""):
+        label = row[2].replace("*", "").strip() if len(row) > 2 else ""
+        for name in _backticked(row[0]):
+            labels[name] = label
+    for name, label in sorted(labels.items()):
+        if label not in ONLINE_SERVICE_ADAPTER_LABELS:
+            errors.append(f"{location}: adapter {name} has label {label!r}; permitted labels are "
+                          f"{sorted(ONLINE_SERVICE_ADAPTER_LABELS)}")
+    for name, (relative, interface) in sorted(online_service_adapter_classes(repo_root, source_paths).items()):
+        if name not in labels:
+            errors.append(f"{location}: {name} ({relative}) implements {interface} but is not in the "
+                          "section 6 adapter register")
+    return errors
+
+
+# HEAD-220 ships a Windows NullRHI package; production operations stay with G12 and OPS-110.
+OPERATIONS_BOUNDARY_TERMS = (
+    "network administration",
+    "remote admin",
+    "fleet",
+    "telemetry",
+    "backup",
+    "restore",
+    "incident",
+    "alert",
+    "runbook",
+    "server_",
+)
+OPERATIONS_OWNER_SCOPE = ("administration", "telemetry", "backup", "incident")
+OPERATIONS_GATE_CRITERIA = ("telemetry", "backups", "incident drills")
+
+
+def operations_boundary_errors(contract: dict[str, Any]) -> list[str]:
+    """HEAD-220 never absorbs production operations; OPS-110 and gate G12 keep owning them."""
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    gates = {gate.get("id"): gate for gate in contract.get("readiness", {}).get("gates", []) if isinstance(gate, dict)}
+
+    def lowered(record: dict[str, Any], *fields: str) -> list[tuple[str, str]]:
+        return [
+            (field, str(value).lower())
+            for field in fields
+            for value in record.get(field, [])
+            if isinstance(record.get(field), list)
+        ]
+
+    errors: list[str] = []
+    headless = items.get("HEAD-220")
+    if headless is None:
+        errors.append("operationsBoundary.HEAD-220: work item is missing")
+    else:
+        for field, value in lowered(headless, "implementationScope", "commands", "testSelectors", "requiredCiJobs"):
+            for term in OPERATIONS_BOUNDARY_TERMS:
+                if term in value:
+                    errors.append(
+                        f"operationsBoundary.HEAD-220.{field}: {value!r} names production operations "
+                        f"({term!r}); that scope belongs to OPS-110 under G12"
+                    )
+    operations = items.get("OPS-110")
+    if operations is None:
+        errors.append("operationsBoundary.OPS-110: work item is missing")
+    else:
+        owned = " ".join(value for _, value in lowered(operations, "implementationScope", "acceptanceCriteria"))
+        for term in OPERATIONS_OWNER_SCOPE:
+            if term not in owned:
+                errors.append(f"operationsBoundary.OPS-110: scope and criteria must own {term}")
+    gate = gates.get("G12")
+    if gate is None:
+        errors.append("operationsBoundary.G12: gate is missing")
+    else:
+        blockers = gate.get("blockingWorkItemIds", [])
+        if "OPS-110" not in blockers:
+            errors.append("operationsBoundary.G12.blockingWorkItemIds: must list OPS-110")
+        if "HEAD-220" in blockers:
+            errors.append("operationsBoundary.G12.blockingWorkItemIds: must not list HEAD-220")
+        criteria = " ".join(value for _, value in lowered(gate, "acceptanceCriteria"))
+        for term in OPERATIONS_GATE_CRITERIA:
+            if term not in criteria:
+                errors.append(f"operationsBoundary.G12.acceptanceCriteria: must require {term}")
+    return errors
+
+
+# NET-110: no local JSON store, demo service or owner-local reference process
+# may be described as production infrastructure anywhere in the documentation.
+LOCAL_STORE_PRODUCTION_CLAIM = re.compile(
+    r"\b(?:production[\s-](?:ready|grade|quality|infrastructure|database|backend|service|server)s?"
+    r"|scalable\s+backends?|enterprise[\s-]grade|battle[\s-]tested)\b",
+    re.IGNORECASE,
+)
+LOCAL_STORE_NOUN = re.compile(
+    r"\b(?:TFDatabase|TFWorldSave|TFOutfitStore|JSON\s+(?:store|database|file)s?"
+    r"|MMO(?:FPS)?\s+(?:persistence|database|backend)s?|account\s+databases?|NullOnlinePlatform"
+    r"|KeyFileAuthenticator|SparkGateway|SparkDaemon|demo\s+(?:server|service|backend)s?|AsyncDatabase)\b",
+    re.IGNORECASE,
+)
+# Quoted acceptance criteria and ledger notes restate these rules; they are not claims.
+_LOCAL_STORE_CLAIM_EXCLUDED = ("docs/readiness/work-items/",)
+_ADAPTER_NAME_LITERAL = re.compile(
+    r"\b(?:GetPlatformName|GetLastError|GetName)\s*\(\s*\)\s*const\s*(?:override\s*|final\s*|noexcept\s*)*"
+    r"\{\s*return\s+\"([^\"]*)\"",
+)
+
+
+def local_store_production_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject sentences or table rows that call a local store or demo service production infrastructure.
+
+    Same unit and negation rules as ``hosted_online_service_claim_errors``: a
+    unit that also carries a negation documents the boundary and is allowed.
+    """
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        errors.extend(_local_store_surface_errors(location, text))
+    return errors
+
+
+# Pure in (location, text), so memoized: the contract suite runs the full validator once
+# per hostile case over the same unchanged documentation tree.
+@functools.lru_cache(maxsize=16384)
+def _local_store_surface_errors(location: str, text: str) -> tuple[str, ...]:
+    errors: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        is_table_row = line.lstrip().startswith("|")
+        for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+            claim = LOCAL_STORE_PRODUCTION_CLAIM.search(unit)
+            if claim is None or _SERVICE_CLAIM_NEGATION.search(unit):
+                continue
+            noun = LOCAL_STORE_NOUN.search(unit)
+            if noun is None:
+                continue
+            errors.append(
+                f"{location}:{number}: markets {noun.group(0)!r} as {claim.group(0)!r}; local stores, "
+                "demo services and reference processes are not production infrastructure (NET-110)"
+            )
+    return tuple(errors)
+
+
+def _json_strings(value: Any) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _json_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _json_strings(item)
+
+
+def local_store_claim_surfaces(repo_root: Path, paths: Iterable[str] | None = None) -> dict[str, str]:
+    """Documentation text the local-store production-claim rule governs.
+
+    Tracked Markdown under wiki/ and docs/ (minus the readiness ledger and
+    handoff, which quote the criteria), the root and module READMEs and DESIGN
+    documents, module.json descriptions, and every string in docs/site/*.json.
+    """
+    if paths is None:
+        paths = tracked_paths()
+    surfaces: dict[str, str] = {}
+    for relative in sorted(paths):
+        if relative.startswith(_LOCAL_STORE_CLAIM_EXCLUDED) or (
+            relative.startswith("docs/readiness/") and "HANDOFF" in relative
+        ):
+            continue
+        is_markdown = relative.endswith(".md") and (
+            relative.startswith(("wiki/", "docs/"))
+            or relative == "README.md"
+            or fnmatch.fnmatch(relative, "GameModules/*/README.md")
+            or fnmatch.fnmatch(relative, "GameModules/*/DESIGN.md")
+        )
+        is_module_manifest = fnmatch.fnmatch(relative, "GameModules/*/module.json")
+        is_site_json = fnmatch.fnmatch(relative, "docs/site/*.json")
+        if not (is_markdown or is_module_manifest or is_site_json):
+            continue
+        text = _cached_source_text(repo_root / relative)
+        if text is None:
+            continue
+        if is_markdown:
+            surfaces[relative] = text
+            continue
+        try:
+            encoded = text.encode("utf-8")
+            document = decode_json_bytes(encoded, relative, maximum=len(encoded))
+        except SiteDataError:
+            continue  # malformed JSON is reported by the validators that own the file
+        if is_module_manifest:
+            description = document.get("description") if isinstance(document, dict) else None
+            if isinstance(description, str):
+                surfaces[f"{relative}#description"] = description
+        else:
+            surfaces[relative] = "\n".join(_json_strings(document))
+    return surfaces
+
+
+def adapter_name_production_errors(repo_root: Path, source_paths: Iterable[str] | None = None) -> list[str]:
+    """An online-service adapter's reported name or error text must not call it production."""
+    errors: list[str] = []
+    adapter_files = sorted({relative for relative, _ in online_service_adapter_classes(repo_root, source_paths).values()})
+    for relative in adapter_files:
+        text = _cached_source_text(repo_root / relative) or ""
+        for match in _ADAPTER_NAME_LITERAL.finditer(text):
+            if re.search(r"production", match.group(1), re.IGNORECASE):
+                number = text.count("\n", 0, match.start()) + 1
+                errors.append(
+                    f"{relative}:{number}: adapter reports {match.group(1)!r}; no adapter in this repository "
+                    "is production (docs/specs/online-services.md section 6)"
+                )
+    return errors
+
+
+# OD-12 (docs/readiness/OWNER-DECISIONS.md): mobile, OpenXR and console support
+# are deferred from stable-v1. Until the owning item is done the capability stays
+# unsupported and blocked, and public wording names these platforms only with a
+# planned/unsupported/framework qualifier. Console additionally needs platform
+# authority (agreements, SDK access, dev kits) that no record in this repository
+# may assert.
+DEFERRED_PLATFORMS = {
+    "platform.mobile": ("PLT-230", "OD-12"),
+    "platform.vr": ("PLT-240", "OD-12"),
+    "platform.console": ("PLT-250", "OD-12"),
+}
+CONSOLE_AUTHORITY_CAPABILITY = "platform.console"
+DEFERRED_PLATFORM_CLAIM = re.compile(
+    r"\b(?:supports?|supported\s+on|ships?\s+(?:on|for|to)|runs?\s+on|deploys?\s+to|targets?|available\s+on"
+    r"|provides\s+(?:an?\s+)?(?:\w+\s+){0,3}(?:for|on))\b",
+    re.IGNORECASE,
+)
+# "console" alone is the developer console; only the platform senses count.
+DEFERRED_PLATFORM_TOKEN = re.compile(
+    r"\b(?:iOS|Android|mobile\s+(?:devices?|platforms?)|OpenXR|VR\s+headsets?|Meta\s+Quest|SteamVR"
+    r"|PlayStation|PS[45]|Xbox|Nintendo\s+Switch|(?:game\s+)?consoles|game\s+console"
+    r"|console\s+(?:platforms?|hardware|targets?|SDKs?|certification))\b",
+    re.IGNORECASE,
+)
+_DEFERRED_PLATFORM_QUALIFIER = re.compile(
+    r"\b(?:not|no|never|unsupported|planned|deferred|stub|framework|experimental|roadmap|future"
+    r"|OD-12|PLT-2[345]0)\b",
+    re.IGNORECASE,
+)
+
+
+def deferred_platform_support_errors(contract: dict[str, Any]) -> list[str]:
+    """A deferred platform capability stays unsupported and blocked until its owning item is done (OD-12)."""
+
+    errors: list[str] = []
+    readiness = contract.get("readiness", {})
+    capabilities = {
+        capability.get("id"): capability
+        for capability in readiness.get("capabilities", [])
+        if isinstance(capability, dict)
+    }
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    for capability_id, (item_id, decision) in sorted(DEFERRED_PLATFORMS.items()):
+        location = f"capabilities.{capability_id}"
+        capability = capabilities.get(capability_id)
+        if capability is None:
+            errors.append(f"{location}: deferred platform capability is missing ({decision}, {item_id})")
+            continue
+        item = items.get(item_id)
+        if item is None:
+            errors.append(f"{location}: owning work item {item_id} is missing")
+            continue
+        if item.get("status") == "done":
+            continue
+        if capability.get("support") != "unsupported":
+            errors.append(
+                f"{location}: support is {capability.get('support')!r} but {item_id} is not done; the platform "
+                f"is deferred from stable-v1 ({decision}, docs/readiness/OWNER-DECISIONS.md) and must stay "
+                "'unsupported'"
+            )
+        if capability.get("release") != "blocked":
+            errors.append(
+                f"{location}: release is {capability.get('release')!r} but {item_id} is not done; a deferred "
+                f"platform ({decision}) must stay 'blocked'"
+            )
+        if capability_id == CONSOLE_AUTHORITY_CAPABILITY and "platformAuthority" in capability:
+            errors.append(
+                f"{location}: platformAuthority is not accepted while {item_id} is open; console authority "
+                "(agreements, SDK access, dev kits) needs an owner-signed decision in "
+                "docs/readiness/OWNER-DECISIONS.md and a separately controlled workstream"
+            )
+    return errors
+
+
+def _unqualified_platform_claims(
+    surfaces: dict[str, str],
+    claim_pattern: re.Pattern[str],
+    platform_pattern: re.Pattern[str],
+    qualifier_pattern: re.Pattern[str],
+    kind: str,
+    boundary: str,
+) -> list[str]:
+    """Support claims naming a platform, per sentence or Markdown table row, outside fenced code.
+
+    A unit that also carries a qualifier states the boundary and is allowed.
+    """
+    errors: list[str] = []
+    for location, text in sorted(surfaces.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: {kind} wording source must be text")
+            continue
+        errors.extend(
+            _unqualified_platform_claims_in_text(
+                location, text, claim_pattern, platform_pattern, qualifier_pattern, boundary
+            )
+        )
+    return errors
+
+
+@functools.lru_cache(maxsize=4096)
+def _unqualified_platform_claims_in_text(
+    location: str,
+    text: str,
+    claim_pattern: re.Pattern[str],
+    platform_pattern: re.Pattern[str],
+    qualifier_pattern: re.Pattern[str],
+    boundary: str,
+) -> tuple[str, ...]:
+    """One surface's unqualified platform support claims, scanned once per exact input."""
+    errors: list[str] = []
+    in_fence = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        is_table_row = line.lstrip().startswith("|")
+        for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+            claim = claim_pattern.search(unit)
+            platform = platform_pattern.search(unit)
+            if claim is None or platform is None or qualifier_pattern.search(unit):
+                continue
+            errors.append(
+                f"{location}:{number}: {claim.group(0)!r} {platform.group(0)!r} reads as a support claim; "
+                f"{boundary}"
+            )
+    return tuple(errors)
+
+
+def deferred_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public wording that claims support for a deferred platform (OD-12).
+
+    A unit that also carries a planned/unsupported/framework qualifier (or
+    names OD-12 or the owning PLT item) states the boundary and is allowed.
+    """
+    return _unqualified_platform_claims(
+        surfaces,
+        DEFERRED_PLATFORM_CLAIM,
+        DEFERRED_PLATFORM_TOKEN,
+        _DEFERRED_PLATFORM_QUALIFIER,
+        "deferred-platform",
+        "mobile, OpenXR and console are deferred from stable-v1 (OD-12, PLT-230/PLT-240/PLT-250) "
+        "and public wording must say planned, unsupported or framework",
+    )
+
+
+# OD-10/OD-11 (PLT-210, PLT-220): Linux and macOS are experimental hosts outside
+# stable-v1. Until the owning item is done the capability stays experimental (or
+# unsupported) and not release-promoted, and public wording never summarizes the
+# row as supported without an experimental/build-only qualifier.
+EXPERIMENTAL_PLATFORMS = {
+    "platform.linux": ("PLT-210", "OD-10"),
+    "platform.macos": ("PLT-220", "OD-11"),
+}
+EXPERIMENTAL_PLATFORM_DOCUMENTATION = ("wiki/platform/System-Requirements.md",)
+_EXPERIMENTAL_PLATFORM_NAMES = r"(?:Linux|Ubuntu|macOS|Mac\s+OS|Apple\s+Silicon|Intel\s+Macs?)\b"
+EXPERIMENTAL_PLATFORM_TOKEN = re.compile(r"\b" + _EXPERIMENTAL_PLATFORM_NAMES, re.IGNORECASE)
+# "support" as a noun ("Linux support matrix") and "runs on all hosts" are not
+# claims; a host verb must sit directly before the platform name.
+EXPERIMENTAL_PLATFORM_CLAIM = re.compile(
+    r"\b(?:(?:supports|we\s+support|(?:is|are)\s+(?:fully\s+|officially\s+)?supported|fully\s+supported"
+    r"|supported\s+(?:on|hosts?|platforms?))\b"
+    r"|(?:runs?|ships?|certified)\s+(?:natively\s+)?(?:on|for)\s+(?:both\s+)?(?=" + _EXPERIMENTAL_PLATFORM_NAMES + r"))",
+    re.IGNORECASE,
+)
+_EXPERIMENTAL_PLATFORM_QUALIFIER = re.compile(
+    r"\b(?:experimental|not|no|unsupported|uncertified|deferred|planned|OD-1[01]|PLT-2[12]0"
+    r"|builds?|compiles?|CI|sanitizers?|presets?|cross-compil\w*)\b",
+    re.IGNORECASE,
+)
+
+
+def experimental_platform_support_errors(contract: dict[str, Any]) -> list[str]:
+    """An experimental host row stays experimental and unpromoted until its owning item is done."""
+    errors: list[str] = []
+    readiness = contract.get("readiness", {})
+    capabilities = {
+        capability.get("id"): capability
+        for capability in readiness.get("capabilities", [])
+        if isinstance(capability, dict)
+    }
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    for capability_id, (item_id, decision) in sorted(EXPERIMENTAL_PLATFORMS.items()):
+        location = f"capabilities.{capability_id}"
+        capability = capabilities.get(capability_id)
+        if capability is None:
+            errors.append(f"{location}: experimental platform capability is missing ({decision}, {item_id})")
+            continue
+        item = items.get(item_id)
+        if item is None:
+            errors.append(f"{location}: owning work item {item_id} is missing")
+            continue
+        if item.get("status") == "done":
+            continue
+        if capability.get("support") not in {"experimental", "unsupported"}:
+            errors.append(
+                f"{location}: support is {capability.get('support')!r} but {item_id} is not done; the host is "
+                f"experimental outside stable-v1 ({decision}) and must stay 'experimental' or 'unsupported'"
+            )
+        if capability.get("release") in {"candidate", "ready"}:
+            errors.append(
+                f"{location}: release is {capability.get('release')!r} but {item_id} is not done; an experimental "
+                f"host ({decision}) cannot be release-promoted"
+            )
+    return errors
+
+
+def experimental_platform_claim_errors(surfaces: dict[str, str]) -> list[str]:
+    """Reject public wording that summarizes the experimental Linux or macOS row as supported."""
+    return _unqualified_platform_claims(
+        surfaces,
+        EXPERIMENTAL_PLATFORM_CLAIM,
+        EXPERIMENTAL_PLATFORM_TOKEN,
+        _EXPERIMENTAL_PLATFORM_QUALIFIER,
+        "experimental-platform",
+        "Linux and macOS are experimental hosts outside stable-v1 (OD-10/OD-11, PLT-210/PLT-220) and public "
+        "wording must say experimental, not certified, or name the build/CI scope",
+    )
+
+
+def experimental_platform_claim_surfaces(
+    repo_root: Path, contract: dict[str, Any]
+) -> tuple[dict[str, str], list[str]]:
+    """Texts the experimental-platform wording rule governs, and the governed paths that are missing."""
+    paths = set(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES) | set(EXPERIMENTAL_PLATFORM_DOCUMENTATION)
+    for capability in contract.get("readiness", {}).get("capabilities", []):
+        if isinstance(capability, dict) and capability.get("id") in EXPERIMENTAL_PLATFORMS:
+            paths.update(page for page in capability.get("documentation", []) if isinstance(page, str))
+    surfaces: dict[str, str] = {}
+    missing: list[str] = []
+    for relative in sorted(paths):
+        path = repo_root / relative
+        if path.is_file():
+            surfaces[relative] = path.read_text(encoding="utf-8", errors="replace")
+        else:
+            missing.append(relative)
+    return surfaces, missing
+
+
+def deferred_platform_claim_surfaces(repo_root: Path, contract: dict[str, Any]) -> tuple[dict[str, str], list[str]]:
+    """Texts the deferred-platform wording rule governs, and the governed paths that are missing.
+
+    Every global public claim surface plus each deferred capability's
+    documentation pages from the readiness contract.
+    """
+
+    paths = set(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES)
+    for capability in contract.get("readiness", {}).get("capabilities", []):
+        if isinstance(capability, dict) and capability.get("id") in DEFERRED_PLATFORMS:
+            paths.update(page for page in capability.get("documentation", []) if isinstance(page, str))
+    surfaces: dict[str, str] = {}
+    missing: list[str] = []
+    for relative in sorted(paths):
+        path = repo_root / relative
+        if path.is_file():
+            surfaces[relative] = path.read_text(encoding="utf-8", errors="replace")
+        else:
+            missing.append(relative)
+    return surfaces, missing
+
+
+# PLT-250 ("No public source or CI implies certification"): without platform
+# authority nothing in the repository may read as a console build target or a
+# certification claim. CI and CMake must not name a console runner, job, matrix
+# value, option or preset at all; docs and engine source may name a console
+# program next to a certification term only with a planned/unsupported
+# qualifier (the same one OD-12 wording uses).
+# Underscore separates words here, so ENABLE_PLAYSTATION and SPARK_TARGET_XBOX match.
+CONSOLE_PLATFORM_IDENTIFIER = re.compile(
+    r"(?<![A-Za-z0-9])(?:ps[45]|playstation|xbox|gdkx?|nintendo|switch-nx|prospero|orbis|scarlett)(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+CONSOLE_CERTIFICATION_PLATFORM = re.compile(
+    r"\b(?:ps[45]|playstation|xbox|gdkx?|nintendo|switch-nx|prospero|orbis|scarlett"
+    r"|(?:game\s+)?consoles|game\s+console|console\s+(?:platforms?|hardware|targets?|SDKs?|certification))\b",
+    re.IGNORECASE,
+)
+CONSOLE_CERTIFICATION_TERM = re.compile(r"\b(?:certif(?:ied|ication)|TRCs?|TCRs?|lotcheck|XR-\d+)\b", re.IGNORECASE)
+CONSOLE_SOURCE_ROOTS = (
+    "SparkEngine/Source",
+    "SparkEditor/Source",
+    "SparkSDK",
+    "GameModules",
+    "SparkConsole/src",
+    "SparkShaderCompiler/src",
+)
+_CONSOLE_SOURCE_SUFFIXES = frozenset({".h", ".hpp", ".cpp", ".inl"})
+_CONSOLE_DOC_ROOTS = ("wiki", "docs")
+# Generated indexes mirror source that is scanned directly; the readiness ledger
+# names the certification gate it tracks.
+_CONSOLE_DOC_EXCLUDED_PREFIXES = ("wiki/reference/", "docs/api/", "docs/readiness/")
+
+
+def _is_console_identifier_surface(location: str) -> bool:
+    name = location.rsplit("/", 1)[-1]
+    return (
+        location.startswith(".github/workflows/")
+        or name in {"CMakeLists.txt", "CMakePresets.json"}
+        or name.endswith(".cmake")
+    )
+
+
+def console_certification_implication_errors(files: dict[str, str]) -> list[str]:
+    """Reject CI, build configuration, docs or source that implies console certification (PLT-250).
+
+    Workflows and CMake files (``.github/workflows/*``, ``CMakeLists.txt``,
+    ``CMakePresets.json``, ``*.cmake``) may not carry a console identifier on
+    any non-comment line: a runner label, job id, matrix value, option or
+    preset naming a console reads as a console build lane. Every other file is
+    checked per sentence (per row for a Markdown table row): a unit naming a
+    console program together with a certification term (certified,
+    certification, TRC, TCR, lotcheck, XR-nnn) must also carry the OD-12
+    planned/unsupported qualifier.
+    """
+
+    errors: list[str] = []
+    for location, text in sorted(files.items()):
+        if not isinstance(text, str):
+            errors.append(f"{location}: console-certification source must be text")
+            continue
+        errors.extend(_console_certification_file_errors(location, text))
+    return errors
+
+
+# Pure in (location, text), so memoized: the governed tree is ~28 MB of source and
+# docs, and the contract suite runs the full validator once per hostile case over
+# the same unchanged tree. The case-insensitive whole-text scan dominated each run.
+@functools.lru_cache(maxsize=16384)
+def _console_certification_file_errors(location: str, text: str) -> tuple[str, ...]:
+    identifier_surface = _is_console_identifier_surface(location)
+    if not identifier_surface and CONSOLE_CERTIFICATION_TERM.search(text) is None:
+        return ()
+    errors: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if identifier_surface:
+            if line.lstrip().startswith("#"):
+                continue
+            console = CONSOLE_PLATFORM_IDENTIFIER.search(line)
+            if console is not None:
+                errors.append(
+                    f"{location}:{number}: {console.group(0)!r} names a console build lane; console support "
+                    "is planned and uncertified (OD-12, PLT-250), so CI and CMake carry no console runner, "
+                    "job, matrix value, option or preset"
+                )
+            continue
+        is_table_row = line.lstrip().startswith("|")
+        for unit in [line] if is_table_row else _SERVICE_CLAIM_SENTENCE_SPLIT.split(line):
+            console = CONSOLE_CERTIFICATION_PLATFORM.search(unit)
+            term = CONSOLE_CERTIFICATION_TERM.search(unit)
+            if console is None or term is None or _DEFERRED_PLATFORM_QUALIFIER.search(unit):
+                continue
+            errors.append(
+                f"{location}:{number}: {console.group(0)!r} with {term.group(0)!r} implies console "
+                "certification; console support is planned and uncertified (OD-12, PLT-250), so the "
+                "wording must say planned, unsupported or not certified"
+            )
+    return tuple(errors)
+
+
+def console_certification_surfaces(repo_root: Path) -> dict[str, str]:
+    """Every file the PLT-250 certification-implication rule governs.
+
+    CI workflows, the root CMake files and ``cmake/*.cmake``, every global
+    public claim surface, hand-written wiki and docs Markdown, and engine,
+    editor, SDK, console, shader-compiler and game-module C++ source.
+    """
+
+    source_roots = tuple(f"{root}/" for root in CONSOLE_SOURCE_ROOTS)
+    doc_roots = tuple(f"{root}/" for root in _CONSOLE_DOC_ROOTS)
+    relatives = {"CMakeLists.txt", "CMakePresets.json", *REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES}
+    for relative in tracked_paths():
+        directory, _, name = relative.rpartition("/")
+        suffix = name[name.rfind("."):] if "." in name else ""
+        if (
+            (directory == ".github/workflows" and suffix in {".yml", ".yaml"})
+            or (relative.startswith("cmake/") and suffix == ".cmake")
+            or (relative.startswith(doc_roots) and suffix == ".md")
+            or (
+                relative.startswith(source_roots)
+                and (name == "CMakeLists.txt" or suffix in _CONSOLE_SOURCE_SUFFIXES)
+            )
+        ):
+            relatives.add(relative)
+    surfaces: dict[str, str] = {}
+    for relative in sorted(relatives):
+        if relative.startswith(_CONSOLE_DOC_EXCLUDED_PREFIXES):
+            continue
+        text = _cached_source_text(repo_root / relative)
+        if text is not None:
+            surfaces[relative] = text
+    return surfaces
+
+
+# INST-130: the nightly also publishes SparkInstaller-Linux-x64 and
+# SparkInstaller-macOS-arm64 (release.yml build-installer). Those installers are
+# experimental and owned by their platform capability and PLT-* work, never by
+# the Windows installer certification that stable-v1 requires.
+INSTALLER_PRODUCT_KINDS = frozenset({"installer", "package"})
+NON_WINDOWS_INSTALLER_CAPABILITIES = ("platform.linux", "platform.macos")
+_NON_WINDOWS_INSTALLER_WORDING = re.compile(
+    r"\b(?:linux|macos|mac\s+os|os\s+x|appimage|flatpak|snap|deb|rpm|dmg|notari[sz]\w*)\b",
+    re.IGNORECASE,
+)
+
+
+# REL-200: the live bundle turns globally ready only on exact-commit publication evidence.
+PUBLICATION_JOB = "verify-stable-publication"
+WORKFLOW_ROOT = REPO_ROOT / ".github" / "workflows"
+
+
+def publication_workflows() -> set[str]:
+    """Workflow file names that define the stable publication verification job."""
+    return {
+        path.name
+        for path in sorted(WORKFLOW_ROOT.glob("*.yml"))
+        if path.is_file() and PUBLICATION_JOB in workflow_jobs(path)
+    }
+
+
+def publication_evidence_errors(contract: dict[str, Any], workflows: set[str] | None = None) -> list[str]:
+    """A ready profile, or a globally ready release, carries same-commit publication evidence.
+
+    Every publicationFinalization work item must require the publication
+    verification job and evidence each criterion with a ``ci:<workflow>/<run>@<sha>``
+    reference from a workflow defining that job; all such citations share one
+    commit, and the finalization gate is passing with evidence.
+    """
+    readiness = contract.get("readiness", {})
+    global_ready = readiness.get("globalRelease", {}).get("state") == "ready"
+    if not global_ready and not any(
+        isinstance(profile, dict) and profile.get("state") == "ready" for profile in readiness.get("releaseProfiles", [])
+    ):
+        return []
+    if workflows is None:
+        workflows = publication_workflows()
+    items = {item.get("id"): item for item in contract.get("workItems", []) if isinstance(item, dict)}
+    gates = {gate.get("id"): gate for gate in readiness.get("gates", []) if isinstance(gate, dict)}
+    errors: list[str] = []
+    if not workflows:
+        return [f"publicationEvidence: no workflow defines the {PUBLICATION_JOB} job"]
+    # A global release is one source commit: its profiles cannot each cite their own.
+    release_commits: set[str] = set()
+    for profile in readiness.get("releaseProfiles", []):
+        if not isinstance(profile, dict) or (profile.get("state") != "ready" and not global_ready):
+            continue
+        finalization = profile.get("publicationFinalization")
+        location = f"publicationEvidence.{profile.get('id')}"
+        if not isinstance(finalization, dict):
+            errors.append(f"{location}: a ready profile requires publicationFinalization")
+            continue
+        commits: set[str] = set()
+        for work_id in finalization.get("workItemIds", []):
+            item = items.get(work_id)
+            if item is None:
+                errors.append(f"{location}.{work_id}: finalization work item is missing")
+                continue
+            if PUBLICATION_JOB not in item.get("requiredCiJobs", []):
+                errors.append(f"{location}.{work_id}: requiredCiJobs must include {PUBLICATION_JOB}")
+            for index, entry in enumerate(item.get("acceptanceStatus", [])):
+                references = [
+                    value
+                    for value in (entry.get("evidence", []) if isinstance(entry, dict) else [])
+                    if isinstance(value, str)
+                    and ACCEPTANCE_CI_REFERENCE.match(value)
+                    and value[len("ci:"):].split("/", 1)[0] in workflows
+                ]
+                if not isinstance(entry, dict) or entry.get("state") != "evidenced" or not references:
+                    errors.append(
+                        f"{location}.{work_id}.acceptanceStatus[{index}]: must be evidenced by a "
+                        f"ci:<{'|'.join(sorted(workflows))}>/<run>@<sha> publication reference"
+                    )
+                commits.update(reference.rsplit("@", 1)[1] for reference in references)
+        if len(commits) > 1:
+            errors.append(f"{location}: publication evidence cites different commits {sorted(commits)}")
+        release_commits.update(commits)
+        gate = gates.get(finalization.get("gateId"))
+        if gate is None or gate.get("state") != "passing" or not gate.get("evidence"):
+            errors.append(
+                f"{location}: finalization gate {finalization.get('gateId')} must be passing with evidence"
+            )
+        else:
+            gate_commits: set[str] = set()
+            for evidence in gate.get("evidence", []):
+                reference = evidence.get("reference") if isinstance(evidence, dict) else evidence
+                if (isinstance(reference, str) and ACCEPTANCE_CI_REFERENCE.fullmatch(reference)
+                        and reference[len("ci:"):].split("/", 1)[0] in workflows):
+                    gate_commits.add(reference.rsplit("@", 1)[1])
+            if not gate_commits:
+                errors.append(
+                    f"{location}: finalization gate {finalization.get('gateId')} must carry exact-commit CI evidence"
+                )
+            elif commits and gate_commits != commits:
+                errors.append(
+                    f"{location}: finalization gate {finalization.get('gateId')} evidence commits "
+                    f"{sorted(gate_commits)} do not match publication evidence {sorted(commits)}"
+                )
+    if global_ready and len(release_commits) > 1:
+        errors.append(
+            "publicationEvidence: publication evidence cites different commits across profiles "
+            f"{sorted(release_commits)}"
+        )
+    return errors
+
+
+WINDOWS_CERTIFICATION_CAPABILITY = "platform.windows"
+_SANITIZER_ARTIFACT = re.compile(r"sanitizer|(?<![a-z])[atm]san(?![a-z])", re.IGNORECASE)
+
+
+def windows_row_evidence_errors(
+    contract: dict[str, Any], jobs_of: Callable[[str], dict[str, WorkflowJob]] | None = None
+) -> list[str]:
+    """CI-110: Linux sanitizer evidence never promotes a Windows-only profile's certification row by itself.
+
+    For each profile whose supported hosts are all Windows, promoted
+    platform.windows cites at least one job on a ``windows-*`` runner, and no
+    promoted included capability or passing required gate has a Linux
+    sanitizer lane as its only job evidence. The work items blocking
+    platform.windows cannot evidence a criterion with sanitizer-derived
+    repository artifacts alone.
+    """
+    if jobs_of is None:
+        jobs_of = lambda path: workflow_jobs(REPO_ROOT / path)  # noqa: E731
+    readiness = contract.get("readiness", {})
+    capabilities = {entry.get("id"): entry for entry in readiness.get("capabilities", []) if isinstance(entry, dict)}
+    gates = {entry.get("id"): entry for entry in readiness.get("gates", []) if isinstance(entry, dict)}
+    items = {entry.get("id"): entry for entry in contract.get("workItems", []) if isinstance(entry, dict)}
+
+    def cited_jobs(record: dict[str, Any]) -> list[tuple[str, WorkflowJob | None]]:
+        cited: list[tuple[str, WorkflowJob | None]] = []
+        for evidence in record.get("evidence", []):
+            if not isinstance(evidence, dict) or evidence.get("type") != "workflow" or not evidence.get("job"):
+                continue
+            path = str(evidence.get("path", ""))
+            try:
+                job = jobs_of(path).get(evidence["job"])
+            except SiteDataError:
+                job = None
+            cited.append((f"{path}#{evidence['job']}", job))
+        return cited
+
+    def row_errors(location: str, record: dict[str, Any], *, windows_required: bool) -> list[str]:
+        cited = cited_jobs(record)
+        errors: list[str] = []
+        if windows_required and not any(job is not None and job.windows for _, job in cited):
+            errors.append(f"{location}: promoted Windows row cites no workflow job on a windows-* runner")
+        if cited and all(job is not None and job.sanitizer for _, job in cited):
+            names = ", ".join(name for name, _ in cited)
+            errors.append(f"{location}: Linux sanitizer evidence ({names}) cannot promote a Windows row by itself")
+        return errors
+
+    errors: list[str] = []
+    for profile in readiness.get("releaseProfiles", []):
+        hosts = profile.get("supportedHosts", []) if isinstance(profile, dict) else []
+        if not hosts or not all(str(host).startswith("Windows") for host in hosts):
+            continue
+        prefix = f"windowsRowEvidence.{profile.get('id')}"
+        for capability_id in profile.get("includedCapabilityIds", []):
+            capability = capabilities.get(capability_id)
+            if capability is None:
+                continue
+            promoted = capability.get("verification") != "none" or capability.get("release") in {"candidate", "ready"}
+            if promoted:
+                errors.extend(
+                    row_errors(
+                        f"{prefix}.{capability_id}",
+                        capability,
+                        windows_required=capability_id == WINDOWS_CERTIFICATION_CAPABILITY,
+                    )
+                )
+        for gate_id in profile.get("requiredGateIds", []):
+            gate = gates.get(gate_id)
+            if gate is not None and gate.get("state") == "passing":
+                errors.extend(row_errors(f"{prefix}.{gate_id}", gate, windows_required=False))
+    windows_row = capabilities.get(WINDOWS_CERTIFICATION_CAPABILITY, {})
+    for owner_id in windows_row.get("blockingWorkItemIds", []):
+        for index, entry in enumerate(items.get(owner_id, {}).get("acceptanceStatus", [])):
+            if not isinstance(entry, dict) or entry.get("state") != "evidenced":
+                continue
+            artifacts = [
+                value for value in entry.get("evidence", []) if isinstance(value, str) and not value.startswith("ci:")
+            ]
+            if artifacts and all(_SANITIZER_ARTIFACT.search(value) for value in artifacts):
+                errors.append(
+                    f"windowsRowEvidence.{owner_id}.acceptanceStatus[{index}]: sanitizer-derived artifacts alone "
+                    "cannot evidence Windows certification work"
+                )
+    return errors
+
+
+def installer_platform_ownership_errors(contract: dict[str, Any]) -> list[str]:
+    """Keep experimental non-Windows installers out of stable installer certification."""
+
+    errors: list[str] = []
+    readiness = contract.get("readiness", {})
+    capabilities = {
+        capability.get("id"): capability for capability in readiness.get("capabilities", [])
+    }
+
+    for profile in readiness.get("releaseProfiles", []):
+        profile_id = profile.get("id", "?")
+        included = set(profile.get("includedCapabilityIds", []))
+        for owner in NON_WINDOWS_INSTALLER_CAPABILITIES:
+            if profile_id == "stable-v1" and owner in included:
+                errors.append(
+                    f"releaseProfiles.{profile_id}.includedCapabilityIds: {owner} owns an experimental "
+                    "installer and cannot be part of stable-v1"
+                )
+        for index, product in enumerate(profile.get("buildProducts", [])):
+            if product.get("target") != "SparkInstaller" and product.get("kind") not in INSTALLER_PRODUCT_KINDS:
+                continue
+            build_profile = str(product.get("buildProfile", ""))
+            if build_profile.startswith("windows-"):
+                continue
+            location = f"releaseProfiles.{profile_id}.buildProducts[{index}] ({product.get('target')})"
+            if product.get("applicability") == "required":
+                errors.append(
+                    f"{location}: non-Windows installer build {build_profile!r} cannot be required; "
+                    "it stays experimental under its platform work"
+                )
+            owners = set(product.get("capabilityIds", []))
+            if "platform.windows" in owners or not owners.intersection(NON_WINDOWS_INSTALLER_CAPABILITIES):
+                errors.append(
+                    f"{location}: non-Windows installer must be owned by "
+                    f"{' or '.join(NON_WINDOWS_INSTALLER_CAPABILITIES)}, not platform.windows"
+                )
+
+    for item in contract.get("workItems", []):
+        if item.get("area") != "installer":
+            continue
+        if item.get("profileApplicability", {}).get("stable-v1") != "required":
+            continue
+        for field in ("implementationScope", "acceptanceCriteria", "definitionOfDone"):
+            for index, text in enumerate(item.get(field, [])):
+                match = _NON_WINDOWS_INSTALLER_WORDING.search(str(text))
+                if match:
+                    errors.append(
+                        f"workItems.{item.get('id')}.{field}[{index}]: stable-v1 installer work names a "
+                        f"non-Windows installer ({match.group(0)!r}); that certification belongs to PLT-* work"
+                    )
+
+    errors.extend(installer_workflow_errors(contract))
+    for owner in NON_WINDOWS_INSTALLER_CAPABILITIES:
+        capability = capabilities.get(owner)
+        if capability is None:
+            errors.append(f"capabilities.{owner}: installer-owning platform capability is missing")
+            continue
+        if not any(str(item).startswith("PLT-") for item in capability.get("blockingWorkItemIds", [])):
+            errors.append(
+                f"capabilities.{owner}: owns an experimental installer but lists no PLT-* blocking work item"
+            )
     return errors
 
 
@@ -420,29 +1574,55 @@ def _html_accessibility_text(value: str) -> str:
     return " ".join(parser.rendered)
 
 
+# Characters claim normalization deletes: format and combining marks plus the
+# invisible Hangul/halfwidth fillers, memoized per distinct character.
+_CLAIM_INVISIBLE_FILLERS = frozenset({"\u115f", "\u1160", "\u3164", "\uffa0"})
+_CLAIM_HIDDEN_CHARACTERS: set[str] = set()
+_CLAIM_CLASSIFIED_CHARACTERS: set[str] = set()
+_CLAIM_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_CLAIM_MARKDOWN_ESCAPE = re.compile(r"\\([\\`*_{}\[\]()#+\-.!~|>])")
+_CLAIM_INLINE_LINK = re.compile(r"!?\[([^\]\n]+)\]\([^\)\n]*\)")
+_CLAIM_REFERENCE_LINK = re.compile(r"!?\[([^\]\n]+)\]\[[^\]\n]*\]")
+_CLAIM_SHORTCUT_LINK = re.compile(r"!?\[([^\]\n]+)\]")
+_CLAIM_OPEN_TAG = re.compile(r"<[A-Za-z][^>\n]*>", re.IGNORECASE)
+_CLAIM_CLOSE_TAG = re.compile(r"</[A-Za-z][^>\n]*>")
+_CLAIM_EMPHASIS = re.compile(r"[`*_~]+")
+_CLAIM_WHITESPACE = re.compile(r"\s+")
+
+
+# Claim normalization is a pure function of its input and one validate() pass
+# normalizes the same public strings tens of thousands of times; the cache keeps
+# the contract suite inside its CI time bound without changing any result.
+@functools.lru_cache(maxsize=65536)
 def _normalized_claim_text(value: str) -> str:
     accessibility_text = _html_accessibility_text(value)
     source = f"{value}\n{accessibility_text}" if accessibility_text else value
     normalized = unicodedata.normalize("NFKC", html.unescape(source).lower())
-    invisible_fillers = {"\u115f", "\u1160", "\u3164", "\uffa0"}
-    normalized = "".join(
-        character
-        for character in normalized
-        if unicodedata.category(character) not in {"Cf", "Mn", "Me"}
-        and character not in invisible_fillers
-    )
-    normalized = re.sub(r"<!--.*?-->", "", normalized, flags=re.DOTALL)
-    normalized = re.sub(
-        r"\\([\\`*_{}\[\]()#+\-.!~|>])",
-        r"\1",
-        normalized,
-    )
-    normalized = re.sub(r"!?\[([^\]\n]+)\]\([^\)\n]*\)", r"\1", normalized)
-    normalized = re.sub(r"!?\[([^\]\n]+)\]\[[^\]\n]*\]", r"\1", normalized)
-    normalized = re.sub(r"!?\[([^\]\n]+)\]", r"\1", normalized)
+    # Drop format/combining marks and invisible fillers with str.translate,
+    # classifying each distinct character once, rather than testing every
+    # character of every discovered wiki page in Python. Each substitution
+    # below is skipped only when a literal character its pattern requires is
+    # absent, which cannot change the result.
+    characters = set(normalized)
+    for character in characters - _CLAIM_CLASSIFIED_CHARACTERS:
+        if unicodedata.category(character) in {"Cf", "Mn", "Me"} or character in _CLAIM_INVISIBLE_FILLERS:
+            _CLAIM_HIDDEN_CHARACTERS.add(character)
+        _CLAIM_CLASSIFIED_CHARACTERS.add(character)
+    hidden = characters & _CLAIM_HIDDEN_CHARACTERS
+    if hidden:
+        normalized = normalized.translate(dict.fromkeys(map(ord, hidden)))
+    if "<!--" in normalized:
+        normalized = _CLAIM_COMMENT.sub("", normalized)
+    if "\\" in normalized:
+        normalized = _CLAIM_MARKDOWN_ESCAPE.sub(r"\1", normalized)
+    if "[" in normalized:
+        normalized = _CLAIM_INLINE_LINK.sub(r"\1", normalized)
+        normalized = _CLAIM_REFERENCE_LINK.sub(r"\1", normalized)
+        normalized = _CLAIM_SHORTCUT_LINK.sub(r"\1", normalized)
 
-    normalized = re.sub(r"<[A-Za-z][^>\n]*>", " ", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"</[A-Za-z][^>\n]*>", " ", normalized)
+    if "<" in normalized:
+        normalized = _CLAIM_OPEN_TAG.sub(" ", normalized)
+        normalized = _CLAIM_CLOSE_TAG.sub(" ", normalized)
     normalized = normalized.translate(
         str.maketrans(
             {
@@ -456,10 +1636,11 @@ def _normalized_claim_text(value: str) -> str:
             }
         )
     )
-    normalized = re.sub(r"[`*_~]+", "", normalized)
-    return re.sub(r"\s+", " ", normalized).strip()
+    normalized = _CLAIM_EMPHASIS.sub("", normalized)
+    return _CLAIM_WHITESPACE.sub(" ", normalized).strip()
 
 
+@functools.lru_cache(maxsize=4096)
 def _claim_phrase_pattern(value: str) -> str:
     normalized = _normalized_claim_text(value)
     tokens = [token for token in re.split(r"[\s-]+", normalized) if token]
@@ -694,9 +1875,12 @@ def _explicitly_distinguishes(value: str, term: str, conflict: str) -> bool:
     )
 
 
+@functools.lru_cache(maxsize=1024)
 def contains_release_profile_identifier(identifier: str, text: str) -> bool:
     """Match a profile identifier without accepting a wider near-match token."""
 
+    # Cached on the exact pair: whole public pages are normalized here, and the
+    # shared normalizer cache is churned by the many short strings one pass sees.
     normalized_identifier = _normalized_claim_text(identifier)
     marker = re.compile(
         rf"(?<![A-Za-z0-9_-]){re.escape(normalized_identifier)}(?![A-Za-z0-9_-])",
@@ -711,7 +1895,8 @@ def validate_public_claim_text(
     text: str,
 ) -> list[str]:
     """Return deterministic public-claim violations without touching the filesystem."""
-    violations: list[str] = []
+    text, block_errors = _mask_public_claim_prose(text)
+    violations = [f"{surface_location}:{message}" for message in block_errors]
     identifier = str(profile.get("id", ""))
     rules_value = profile.get("publicClaimRules")
     if not isinstance(rules_value, dict):
@@ -899,7 +2084,11 @@ def validate_public_claim_text(
 
     def widened_claims(value: str) -> list[str]:
         widened: list[str] = []
-        for token in breadth_tokens:
+        # Universal claims are equally broad whether phrased as "any" (the
+        # contract vocabulary) or as "all/every" in prose.
+        universal_scope = ("all platforms", "all hosts", "all compilers", "every platform", "every host",
+                           "every compiler")
+        for token in (*breadth_tokens, *universal_scope):
             for match in re.finditer(_claim_phrase_pattern(token), value):
                 prefix = value[max(0, match.start() - 48):match.start()]
                 suffix = value[match.end():match.end() + 48]
@@ -978,6 +2167,599 @@ def validate_public_claim_text(
     return violations
 
 
+@functools.lru_cache(maxsize=512)
+def _discovered_public_claim_errors(identifier: str, rules: str, path: str, text: str) -> tuple[str, ...]:
+    """Cache only exact content/rule pairs, so edits and rule mutations invalidate the result."""
+    return tuple(validate_public_claim_text({"id": identifier, "publicClaimRules": json.loads(rules)}, path, text))
+
+
+def _is_exact_json(value: Any) -> bool:
+    """Whether ``value`` survives a json.dumps/json.loads round trip unchanged (types and key order)."""
+    if value is None or type(value) in (str, int, float, bool):
+        return True
+    if type(value) is list:
+        return all(_is_exact_json(item) for item in value)
+    if type(value) is dict:
+        return all(type(key) is str and _is_exact_json(item) for key, item in value.items())
+    return False
+
+
+@functools.lru_cache(maxsize=2048)
+def _declared_public_claim_errors(identifier: str, rules: str, path: str, text: str) -> tuple[str, ...]:
+    return tuple(validate_public_claim_text({"id": identifier, "publicClaimRules": json.loads(rules)}, path, text))
+
+
+def _profile_public_claim_errors(profile: dict[str, Any], surface_location: str, text: str) -> list[str]:
+    """validate_public_claim_text, memoized on the exact profile id, rules, location, and text.
+
+    The result depends on nothing else, and the contract suite re-validates the
+    same declared surfaces under the same rules on almost every call. The rules
+    key keeps their key order, and rules that would not round-trip exactly
+    through JSON (a hostile contract can hold any Python value) are never cached.
+    """
+    rules = profile.get("publicClaimRules")
+    if not isinstance(rules, dict) or not _is_exact_json(rules):
+        return validate_public_claim_text(profile, surface_location, text)
+    return list(_declared_public_claim_errors(str(profile.get("id", "")), json.dumps(rules), surface_location, text))
+
+
+# Hand-written counts on the governed public surfaces ("50+ other subsystems",
+# "2,509 tests") go stale silently, because no generator owns them. Every such
+# claim must either sit in generator-owned text or resolve to a reviewed
+# readiness.publicNumericClaims entry.
+PUBLIC_NUMERIC_CLAIM_NOUNS = (
+    "tests", "test", "files", "file", "panels", "panel", "modules", "module",
+    "subsystems", "subsystem", "backends", "backend", "lines", "line", "nodes", "node",
+    "capabilities", "capability", "features", "feature", "components", "component",
+    "systems", "system", "shaders", "shader", "commands", "command", "pages", "page",
+    "gates", "gate", "work items", "work item", "criteria", "criterion",
+)
+PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS = {
+    # Bound to a METRIC_IDS entry and compared with the value measured from source.
+    "metric": {"metricId"},
+    # A recorded past state (changelog entry, dated audit) that is not re-measured.
+    "historical": set(),
+    # A design constant or fixed inventory, justified by the cited source path.
+    "static-fact": {"evidencePath"},
+}
+PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS = {"surface", "text", "classification", "owner"}
+# Metrics that describe a CI execution or the generated docs bundle, not the
+# source tree, so a hand-written number cannot be checked against them here.
+UNMEASURABLE_CLAIM_METRICS = {"docs.authored", "tests.executed", "tests.failed", "tests.skipped"}
+# Fully regenerated pages; `docs/update-codebase-stats.sh check` owns their numbers.
+GENERATED_CLAIM_SURFACES = {"wiki/advanced/Codebase-Statistics.md"}
+# Reference pages mirror source declarations rather than hand-written claims.
+GENERATED_CLAIM_PREFIXES = ("wiki/reference/", "docs/api/")
+# These canonical sources remain governed even if the publication catalog omits
+# them. Numeric and status wording checks share this one discovery inventory.
+PUBLIC_CLAIM_MARKDOWN_ROOTS = ("wiki", "docs/readiness", "docs/status")
+# Regex-managed count lines are owned by this script and its `check` mode.
+MANAGED_CLAIM_SCRIPT = "docs/update-readme-badges.sh"
+_CLAIM_NUMBER = r"\d{1,3}(?:,\d{3})+|\d+"
+PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
+    # Not the tail of an identifier, decimal, path, anchor, or ratio, and not a
+    # product version such as "DirectX 11" or "version 1".
+    r"(?<![\w.,/#$~-])(?<!DirectX )(?<!Direct3D )(?<!version )(?<!Windows )(?<!C\+\+)(?<!patch )"
+    rf"(?P<approx>~)?(?P<value>{_CLAIM_NUMBER})(?P<plus>\+)?(?P<ratio>/(?:{_CLAIM_NUMBER})\+?)?"
+    r"[`*]{0,2}"
+    r"(?:\s+[A-Za-z][\w-]*){0,2}?\s+"
+    rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b",
+    re.IGNORECASE,
+)
+
+
+def published_catalog_documents(root: Path, catalog: dict[str, Any]) -> set[str]:
+    """Use the publisher's inventory, including generated documents."""
+    return set(_catalog_documents(str(root), json.dumps(catalog, sort_keys=True)))
+
+
+@functools.lru_cache(maxsize=16)
+def _catalog_documents(root: str, catalog_json: str) -> frozenset[str]:
+    """Walk the document tree once per (root, catalog) in a process.
+
+    One validation needs the inventory three times and the contract suite validates
+    hundreds of mutated contracts against the same tree, so the walk dominated the
+    suite; keyed on the catalog's content, a substituted catalog is never served a
+    stale inventory.
+    """
+    base = Path(root)
+    return frozenset(path.relative_to(base).as_posix()
+                     for path in collect_document_sources(json.loads(catalog_json), base))
+
+
+def generated_public_documents(root: Path, published: set[str]) -> set[str]:
+    """Outputs governed by their producers, checked by validate_generated_public_documents.
+
+    The handoff quotes the structured readiness contract; API pages are rebuilt
+    from source before publication. Neither is a hand-authored claim surface.
+    """
+    from render_handoff import OUTPUT_PATH
+
+    handoff = OUTPUT_PATH.relative_to(REPO_ROOT).as_posix()
+    # This is the API producer's output in the existing documentation contract,
+    # not an additional exclusion in the publication catalog.
+    manifest_path = root / "docs/generated-docs-manifest.json"
+    manifest = load_json(manifest_path) if manifest_path.is_file() else {}
+    api_roots = tuple(
+        output["path"].rstrip("/") + "/"
+        for generator in manifest.get("generators", []) if generator.get("id") == "api-docs"
+        for output in generator.get("outputs", []) if output.get("tree") is True
+    )
+    return {path for path in published if path == handoff or path.startswith(api_roots)}
+
+
+def validate_generated_public_documents(contract: dict[str, Any]) -> None:
+    """Fail closed on edits or missing provenance in generated published pages."""
+    import docs_contract
+    from render_handoff import OUTPUT_PATH, render_handoff
+
+    published = published_catalog_documents(REPO_ROOT, contract["docsCatalog"])
+    generated = generated_public_documents(REPO_ROOT, published)
+    handoff = OUTPUT_PATH.relative_to(REPO_ROOT).as_posix()
+    if handoff in generated and OUTPUT_PATH.read_text(encoding="utf-8") != render_handoff(contract):
+        raise SiteDataError(f"{handoff} is stale; run tools/site-data/render_handoff.py")
+    if generated - {handoff}:
+        # Bind the declared API output to the real producer's destination. Moving
+        # a prose directory into the manifest must not exempt it from claim checks.
+        api_root = REPO_ROOT / "docs/api"
+        if any(not path.startswith("docs/api/") for path in generated - {handoff}):
+            raise SiteDataError("API output in the docs manifest differs from the site-data producer")
+        errors = docs_contract.validate_api_manifest(api_root)
+        if errors:
+            raise SiteDataError("Generated public API documents: " + "; ".join(errors))
+
+
+def public_numeric_claim_surfaces(repo_root: Path | None = None) -> set[str]:
+    """Return every repository surface whose public prose can carry a numeric claim.
+
+    The contract keeps explicit entries for individual claims, while the surface
+    inventory is derived from the public documentation tree. This prevents a
+    newly added wiki page from silently escaping RDY-000 just because it was not
+    added to a hand-maintained allow-list. The site JSON contract is checked by
+    ``hardcoded_site_claim_errors`` as well, so it remains in this inventory for
+    one consistent public-surface definition.
+    """
+    root = REPO_ROOT if repo_root is None else repo_root
+    surfaces = set(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES)
+    catalog_path = root / "docs/site/docs-catalog.json"
+    if catalog_path.is_file():
+        catalog = load_json(catalog_path)
+        published = published_catalog_documents(root, catalog)
+        surfaces.update(published - generated_public_documents(root, published))
+    for relative in PUBLIC_CLAIM_MARKDOWN_ROOTS:
+        directory = root / relative
+        if directory.is_dir():
+            surfaces.update(
+                path.relative_to(root).as_posix()
+                for path in directory.rglob("*.md")
+                if path.is_file()
+            )
+    return surfaces - generated_public_documents(root, surfaces)
+# DOC-400: the hand-authored site contract files. Every mutable fact they could
+# state -- a count, a commit, a CI run, the engine version -- has a bundle
+# source (metrics, source.commit, the version single source), so a literal here
+# goes stale the moment Working moves. There is deliberately no waiver list,
+# not even publicNumericClaims: the copy must name a bundle metric identifier.
+HARDCODED_CLAIM_SURFACES = {
+    "docs/site/content.json": "content",
+    "docs/site/docs-catalog.json": "docsCatalog",
+}
+HARDCODED_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("count claim", PUBLIC_NUMERIC_CLAIM_PATTERN),
+    # A 7-64 character lowercase hex token with at least one digit and one
+    # letter, so ordinary words such as "defaced" never match.
+    (
+        "commit SHA",
+        re.compile(r"(?<![0-9A-Za-z])(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,64}(?![0-9A-Za-z])"),
+    ),
+    # GitHub Actions run/job URLs and bare run-sized identifiers (8+ digits).
+    ("CI run ID", re.compile(r"/runs/\d+|/job/\d+|(?<![\w.])\d{8,}(?![\w.])")),
+    # A three-part release version, or any v-prefixed dotted version. IPv4
+    # addresses and two-part tool minimums such as "CMake 3.25+" do not match.
+    (
+        "version string",
+        re.compile(r"(?<![\w.])(?:v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?|v\d+\.\d+)(?![\w.])"),
+    ),
+)
+
+
+def _json_string_values(value: Any, location: str) -> Iterable[tuple[str, str]]:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _json_string_values(child, f"{location}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _json_string_values(child, f"{location}[{index}]")
+    elif isinstance(value, str):
+        yield location, value
+
+
+def hardcoded_site_claim_errors(documents: dict[str, Any]) -> list[str]:
+    """Return one error per mutable-claim literal in the site contract documents.
+
+    ``documents`` maps a surface path from HARDCODED_CLAIM_SURFACES to its parsed
+    JSON. Every string value is scanned, links and commands included.
+    """
+    errors: list[str] = []
+    for surface, document in sorted(documents.items()):
+        for location, text in _json_string_values(document, surface):
+            for kind, pattern in HARDCODED_CLAIM_PATTERNS:
+                for match in pattern.finditer(text):
+                    errors.append(
+                        f"{location}: hardcoded {kind} {match.group(0)!r}; reference a bundle "
+                        "metric identifier (or source.commit / the version single source) instead"
+                    )
+    return errors
+
+
+_AUTO_BLOCK_OPEN = re.compile(r"<!--\s*AUTO:(?P<name>[\w-]+)\s*-->")
+
+
+def _mask_auto_blocks(text: str) -> tuple[str, list[str]]:
+    """Blank generator-owned AUTO blocks while keeping offsets and line numbers."""
+    errors: list[str] = []
+    masked = text
+    position = 0
+    while True:
+        opening = _AUTO_BLOCK_OPEN.search(masked, position)
+        if opening is None:
+            return masked, errors
+        name = opening.group("name")
+        closing = re.compile(rf"<!--\s*/AUTO:{re.escape(name)}\s*-->").search(masked, opening.end())
+        if closing is None:
+            line = masked.count("\n", 0, opening.start()) + 1
+            errors.append(f"{line}: unterminated AUTO block {name!r}")
+            return masked, errors
+        blanked = re.sub(r"[^\n]", " ", masked[opening.start():closing.end()])
+        masked = masked[:opening.start()] + blanked + masked[closing.end():]
+        position = closing.end()
+
+
+def _mask_public_claim_prose(text: str) -> tuple[str, list[str]]:
+    """Keep only authored prose, preserving offsets for contract spans and diagnostics.
+
+    Ordinary blockquotes remain public claims. Only explicitly labelled quoted
+    acceptance criteria or ledger notes restate the readiness contract. Fences
+    close with the same character and at least the opening length; example AUTO
+    markers inside code must never hide the prose following the example.
+    """
+    lines: list[str] = []
+    fence = ""
+    ledger_quote = False
+    for line in text.splitlines(keepends=True):
+        content = re.sub(r"^[ \t]*(?:>[ \t]*)*", "", line)
+        marker = re.match(r"(`{3,}|~{3,})(.*)", content)
+        quoted = line.lstrip().startswith(">")
+        if not quoted:
+            ledger_quote = False
+        elif not content.strip() or re.match(r"(?:\*\*)?[A-Za-z][^:\n]{0,60}:", content):
+            ledger_quote = bool(re.match(
+                r"(?:\*\*)?(?:acceptance criteri(?:on|a)|ledger notes?)(?:\*\*)?\s*:",
+                content,
+                re.IGNORECASE,
+            ))
+        masked = bool(fence) or ledger_quote
+        if fence:
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
+                fence = ""
+        elif marker and not (marker[1][0] == "`" and "`" in marker[2]):
+            fence = marker[1]
+            masked = True
+        lines.append(re.sub(r"[^\n\r]", " ", line) if masked else line)
+    return _mask_auto_blocks("".join(lines))
+
+
+def _sed_pattern_to_regex(pattern: str) -> re.Pattern[str]:
+    """Translate the POSIX basic regular expressions used by sed_replace."""
+    parts: list[str] = []
+    index = 0
+    while index < len(pattern):
+        character = pattern[index]
+        if character == "[":
+            end = pattern.index("]", index + 1)
+            parts.append(pattern[index:end + 1])
+            index = end + 1
+            continue
+        if character in "*.":
+            parts.append(character)
+        elif character == "\\" and index + 1 < len(pattern):
+            index += 1
+            parts.append(re.escape(pattern[index]))
+        else:
+            parts.append(re.escape(character))
+        index += 1
+    return re.compile("".join(parts))
+
+
+_SHELL_VARIABLE = re.compile(r"\$(?:\{(\w+)\}|(\w+))")
+
+
+def _managed_claim_bindings(script: str) -> dict[str, tuple[str, ...]]:
+    """Collect the values each badge-script variable can hold.
+
+    Scalars (`local x="..."`), arrays (`local x=( ... )`), and loop variables
+    (`for x in "${array[@]}"`) are recorded. A name bound to two different value
+    sets is ambiguous, so resolving it later fails closed.
+    """
+    bindings: dict[str, set[tuple[str, ...]]] = {}
+
+    def bind(name: str, values: tuple[str, ...]) -> None:
+        bindings.setdefault(name, set()).add(values)
+
+    for match in re.finditer(r'^[ \t]*(?:local[ \t]+)?(\w+)="([^"]*)"[ \t]*$', script, re.MULTILINE):
+        bind(match.group(1), (match.group(2),))
+    arrays: dict[str, tuple[str, ...]] = {}
+    for match in re.finditer(r"^[ \t]*(?:local[ \t]+)?(\w+)=\(([^)]*)\)", script, re.MULTILINE):
+        items = tuple(item.strip("\"'") for item in match.group(2).split())
+        arrays[match.group(1)] = items
+        bind(match.group(1), items)
+    for match in re.finditer(r'\bfor[ \t]+(\w+)[ \t]+in[ \t]+"\$\{(\w+)\[@\]\}"', script):
+        if match.group(2) in arrays:
+            bind(match.group(1), arrays[match.group(2)])
+    return {
+        name: next(iter(value_sets)) if len(value_sets) == 1 else ()
+        for name, value_sets in bindings.items()
+    }
+
+
+def _resolve_managed_claim_target(target: str, bindings: dict[str, tuple[str, ...]]) -> list[str]:
+    """Expand a `sed_replace` target argument into repository-relative paths."""
+    resolved: list[str] = []
+    pending = [target]
+    for _ in range(16):
+        next_pending: list[str] = []
+        for value in pending:
+            if value.startswith("$PROJECT_ROOT/"):
+                value = value.removeprefix("$PROJECT_ROOT/")
+            variable = _SHELL_VARIABLE.search(value)
+            if variable is None:
+                resolved.append(value)
+                continue
+            name = variable.group(1) or variable.group(2)
+            # $PROJECT_ROOT is only meaningful as the leading prefix stripped above.
+            values = () if name == "PROJECT_ROOT" else bindings.get(name, ())
+            if not values:
+                raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: cannot resolve sed_replace target {target!r}")
+            next_pending.extend(value[:variable.start()] + option + value[variable.end():] for option in values)
+        if not next_pending:
+            break
+        pending = next_pending
+    else:
+        raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: sed_replace target {target!r} does not terminate")
+    for path in resolved:
+        if not path or path.startswith("/") or ".." in path.split("/"):
+            raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT}: sed_replace target {target!r} is not a repository path")
+    return resolved
+
+
+@functools.lru_cache(maxsize=1)
+def managed_numeric_claim_patterns() -> dict[str, tuple[re.Pattern[str], ...]]:
+    """Map each surface the badge script rewrites to the count patterns it owns.
+
+    The script is the single definition: each `sed_replace` pattern exempts its
+    matches only on the file(s) that call rewrites, so a managed sentence copied
+    onto another page -- even one the script rewrites for a different pattern --
+    does not inherit the exemption. An unresolvable target fails closed.
+    """
+    script = (REPO_ROOT / MANAGED_CLAIM_SCRIPT).read_text(encoding="utf-8")
+    bindings = _managed_claim_bindings(script)
+    managed: dict[str, list[re.Pattern[str]]] = {}
+    for match in re.finditer(r"\bsed_replace[ \t]+\"([^\"]*)\"[ \t]*\\[ \t]*\n\s*'([^']*)'", script):
+        pattern = _sed_pattern_to_regex(match.group(2))
+        for path in _resolve_managed_claim_target(match.group(1), bindings):
+            managed.setdefault(path, []).append(pattern)
+    if not managed:
+        raise SiteDataError(f"{MANAGED_CLAIM_SCRIPT} declares no managed count patterns or files")
+    return {path: tuple(patterns) for path, patterns in sorted(managed.items())}
+
+
+@functools.lru_cache(maxsize=1)
+def source_metric_values() -> dict[str, int | float]:
+    """Metric values measured from the checked-out tree, as the generator publishes them."""
+    from generate import collect_metrics, module_statistics
+
+    return {
+        row["id"]: row["value"]
+        for row in collect_metrics(0, module_statistics())
+        if row["id"] not in UNMEASURABLE_CLAIM_METRICS
+    }
+
+
+def _claim_number(value: str) -> int:
+    return int(value.replace(",", ""))
+
+
+def public_numeric_claim_errors(
+    surface_texts: dict[str, str],
+    entries: Any,
+    metric_values: Any,
+    managed_patterns: dict[str, tuple[re.Pattern[str], ...]],
+) -> list[str]:
+    """Return errors for public numeric claims that no contract entry or generator owns.
+
+    ``metric_values`` is a callable returning the measured metric map; it is only
+    invoked when an entry binds a metric, so pure-text checks stay cheap.
+    """
+    errors: list[str] = []
+    governed_surfaces = public_numeric_claim_surfaces()
+    location = "readiness.publicNumericClaims"
+    if not isinstance(entries, list):
+        return [f"{location}: must be an array of objects"]
+
+    valid_entries: list[tuple[int, dict[str, Any]]] = []
+    seen: set[tuple[str, str]] = set()
+    for index, entry in enumerate(entries):
+        entry_location = f"{location}[{index}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{entry_location}: must be an object")
+            continue
+        classification = entry.get("classification")
+        if classification not in PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS:
+            errors.append(
+                f"{entry_location}: classification must be one of "
+                f"{sorted(PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS)}"
+            )
+            continue
+        extra_keys = PUBLIC_NUMERIC_CLAIM_CLASSIFICATIONS[classification]
+        missing = sorted((PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS | extra_keys) - set(entry))
+        unexpected = sorted(set(entry) - PUBLIC_NUMERIC_CLAIM_REQUIRED_KEYS - extra_keys)
+        for key in missing:
+            errors.append(f"{entry_location}: {key} is required for a {classification} claim")
+        if unexpected:
+            errors.append(f"{entry_location}: unexpected field(s) {unexpected} for a {classification} claim")
+        for key in ("surface", "text", "owner", *extra_keys):
+            if key in entry and (not isinstance(entry[key], str) or not entry[key].strip()):
+                errors.append(f"{entry_location}: {key} must be a non-empty string")
+        if missing or unexpected or any(
+            not isinstance(entry.get(key), str) or not entry[key].strip()
+            for key in ("surface", "text", "owner", *extra_keys)
+        ):
+            continue
+        surface = entry["surface"]
+        if (
+            surface not in governed_surfaces
+            or surface in GENERATED_CLAIM_SURFACES
+            or surface.startswith(GENERATED_CLAIM_PREFIXES)
+        ):
+            errors.append(f"{entry_location}: {surface} is not a governed public claim surface")
+            continue
+        key = (surface, " ".join(entry["text"].split()))
+        if key in seen:
+            errors.append(f"{entry_location}: duplicate entry for {surface}: {entry['text']!r}")
+            continue
+        seen.add(key)
+        valid_entries.append((index, entry))
+
+    measured: dict[str, int | float] | None = None
+    covered: dict[str, list[tuple[int, int]]] = {}
+    for index, entry in valid_entries:
+        entry_location = f"{location}[{index}]"
+        surface = entry["surface"]
+        text = surface_texts.get(surface)
+        if text is None:
+            errors.append(f"{entry_location}: surface {surface} could not be read")
+            continue
+        claims = list(PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(entry["text"]))
+        if not claims:
+            errors.append(f"{entry_location}: text {entry['text']!r} contains no numeric claim")
+            continue
+        phrase = r"\s+".join(re.escape(word) for word in entry["text"].split())
+        spans = [
+            (match.start(), match.end())
+            # The phrase must not be the tail of a larger number, approximation,
+            # ratio, anchor, or bound: "64 nodes" never covers "~64 nodes".
+            for match in re.finditer(rf"(?<![\w.,/#$~+-]){phrase}(?![\w])", text)
+        ]
+        if not spans:
+            errors.append(f"{entry_location}: text {entry['text']!r} does not occur in {surface}")
+            continue
+        covered.setdefault(surface, []).extend(spans)
+        if entry["classification"] != "metric":
+            continue
+        metric_id = entry["metricId"]
+        if metric_id not in METRIC_IDS:
+            errors.append(f"{entry_location}: unknown metric {metric_id}")
+            continue
+        if len(claims) != 1:
+            errors.append(f"{entry_location}: a metric entry must hold exactly one numeric claim")
+            continue
+        claim = claims[0]
+        if claim.group("approx") or claim.group("ratio"):
+            errors.append(
+                f"{entry_location}: approximate or ratio claims cannot bind {metric_id}; "
+                "state the exact value or an N+ lower bound"
+            )
+            continue
+        if measured is None:
+            measured = dict(metric_values())
+        if metric_id not in measured:
+            errors.append(f"{entry_location}: metric {metric_id} is not measurable from the source tree")
+            continue
+        actual = measured[metric_id]
+        claimed = _claim_number(claim.group("value"))
+        if claim.group("plus"):
+            if claimed > actual:
+                errors.append(
+                    f"{entry_location}: {surface} claims at least {claimed} but {metric_id} is {actual}"
+                )
+        elif claimed != actual:
+            errors.append(f"{entry_location}: {surface} claims {claimed} but {metric_id} is {actual}")
+
+    for surface in sorted(surface_texts):
+        if surface in GENERATED_CLAIM_SURFACES or surface.startswith(GENERATED_CLAIM_PREFIXES):
+            continue
+        masked, block_errors, claims = _numeric_claim_scan(surface_texts[surface])
+        errors.extend(f"{surface}:{message}" for message in block_errors)
+        exempt = list(covered.get(surface, []))
+        for pattern in managed_patterns.get(surface, ()):
+            exempt.extend((match.start(), match.end()) for match in pattern.finditer(masked) if match.group(0))
+        for claim_start, claim_end, claim_text, line in claims:
+            # Only a claim wholly inside an owned span is exempt; an overlapping
+            # claim carries a qualifier or number the owner never reviewed.
+            if any(start <= claim_start and claim_end <= end for start, end in exempt):
+                continue
+            errors.append(
+                f"{surface}:{line}: unclaimed numeric claim {claim_text!r}; bind it to a metric "
+                "or add a reviewed readiness.publicNumericClaims entry"
+            )
+    return errors
+
+
+@functools.lru_cache(maxsize=1024)
+def _numeric_claim_scan(
+    text: str,
+) -> tuple[str, tuple[str, ...], tuple[tuple[int, int, str, int], ...]]:
+    """Mask AUTO blocks and locate every numeric claim (start, end, text, line) once per exact text.
+
+    Every wiki page is a governed surface and the contract suite validates the
+    unchanged tree over a hundred times; the multi-megabyte generated indexes
+    made this scan the largest cost of each call. Keyed on the text, so an edit
+    or a substituted read is a new key and is scanned afresh.
+    """
+    masked, block_errors = _mask_public_claim_prose(text)
+    claims: list[tuple[int, int, str, int]] = []
+    line = 1
+    offset = 0
+    for claim in PUBLIC_NUMERIC_CLAIM_PATTERN.finditer(masked):
+        line += masked.count("\n", offset, claim.start())
+        offset = claim.start()
+        claims.append((claim.start(), claim.end(), claim.group(0), line))
+    return masked, tuple(block_errors), tuple(claims)
+
+
+@functools.lru_cache(maxsize=1)
+def _tracked_spellings() -> tuple[frozenset[str], dict[str, str]]:
+    """Exact tracked file and directory spellings, plus a case-folded lookup into them.
+
+    The index tracks both ``tools/`` and ``Tools/``. A Windows or macOS checkout
+    resolves either spelling to the same file, so an existence check there passes a
+    reference that Linux CI then rejects. Without git (an exported tree) this
+    returns nothing and only the filesystem check applies.
+    """
+    try:
+        files = tracked_paths()
+    except SiteDataError:
+        return frozenset(), {}
+    exact: set[str] = set()
+    for tracked in files:
+        parts = tracked.split("/")
+        for end in range(1, len(parts) + 1):
+            exact.add("/".join(parts[:end]))
+    folded: dict[str, str] = {}
+    for spelling in sorted(exact):
+        folded.setdefault(spelling.casefold(), spelling)
+    return frozenset(exact), folded
+
+
+def tracked_casing_mismatch(value: str) -> str | None:
+    """The tracked spelling of ``value`` when it differs only in letter case, else None."""
+    exact, folded = _tracked_spellings()
+    normalized = value.rstrip("/")
+    if not exact or normalized in exact:
+        return None
+    return folded.get(normalized.casefold())
+
+
 class Validator:
     def __init__(
         self,
@@ -1025,13 +2807,7 @@ class Validator:
                 self.error(location, f"duplicate id {value!r}")
         return {value for value in values if isinstance(value, str) and value}
 
-    @staticmethod
-    def is_future_path(value: str) -> bool:
-        return value in GENERATED_PATHS or any(
-            fnmatch.fnmatchcase(value, pattern) for pattern in FUTURE_ACCEPTANCE_PATHS
-        )
-
-    def require_path(self, value: Any, location: str, *, allow_future: bool = False) -> None:
+    def require_path(self, value: Any, location: str) -> None:
         if not isinstance(value, str) or not value:
             self.error(location, "path must be a non-empty string")
             return
@@ -1046,11 +2822,99 @@ class Validator:
                 return
             self.legacy_error(location, f"path pattern matches no file: {value}")
             return
+        tracked = tracked_casing_mismatch(value)
+        if tracked is not None:
+            self.error(location, f"referenced path {value} differs in case from the tracked path {tracked}")
+            return
         if (REPO_ROOT / path).exists():
             return
-        if allow_future and self.is_future_path(value):
-            return
         self.error(location, f"referenced path does not exist: {value}")
+
+    def validate_acceptance_status(self, item: dict[str, Any], location: str) -> None:
+        """Per-criterion progress must line up with the criteria and never outrun the item status.
+
+        Entry i records the state of acceptanceCriteria[i]; its criterionDigest binds it to
+        that criterion's exact wording, so rewording a criterion forces a fresh assessment.
+        "implemented" needs repository evidence, "evidenced" additionally needs an
+        exact-commit CI reference, an item with any progress cannot still be "open", and a
+        "done" item must have every criterion evidenced.
+        """
+        criteria = item.get("acceptanceCriteria")
+        entries = item.get("acceptanceStatus")
+        if not isinstance(criteria, list) or not isinstance(entries, list):
+            return  # the list-type check above already reported it
+        status_location = f"{location}.acceptanceStatus"
+        if len(entries) != len(criteria):
+            self.error(
+                status_location,
+                f"must hold one entry per acceptance criterion ({len(criteria)}), found {len(entries)}",
+            )
+            return
+        states: list[str] = []
+        for index, (criterion, entry) in enumerate(zip(criteria, entries)):
+            entry_location = f"{status_location}[{index}]"
+            if not isinstance(entry, dict):
+                self.error(entry_location, "must be an object")
+                continue
+            unknown = set(entry).difference({"criterionDigest", "state", "evidence", "note"})
+            self.require(not unknown, entry_location, f"unknown fields: {', '.join(sorted(unknown))}")
+            if isinstance(criterion, str):
+                self.require(
+                    entry.get("criterionDigest") == criterion_digest(criterion),
+                    entry_location,
+                    "criterionDigest does not match acceptanceCriteria[{}]; the criterion changed, so "
+                    "re-assess it and record {}".format(index, criterion_digest(criterion)),
+                )
+            state = entry.get("state")
+            if state not in ACCEPTANCE_STATES:
+                self.error(entry_location, f"state must be one of {', '.join(ACCEPTANCE_STATES)}")
+                continue
+            states.append(state)
+            note = entry.get("note")
+            self.require(
+                isinstance(note, str) and bool(note.strip()) and len(note) <= 400,
+                entry_location,
+                "note must be a non-empty string of at most 400 characters",
+            )
+            evidence = entry.get("evidence")
+            if not isinstance(evidence, list) or not all(isinstance(value, str) for value in evidence):
+                self.error(entry_location, "evidence must be an array of strings")
+                continue
+            ci_references = [value for value in evidence if value.startswith("ci:")]
+            for value in ci_references:
+                self.require(
+                    bool(ACCEPTANCE_CI_REFERENCE.match(value)),
+                    entry_location,
+                    f"CI evidence must look like ci:<workflow>/<run id>@<40-hex commit>: {value}",
+                )
+            for evidence_index, value in enumerate(evidence):
+                if not value.startswith("ci:"):
+                    self.require_path(value, f"{entry_location}.evidence[{evidence_index}]")
+            if state != "unmet":
+                self.require(
+                    any(not value.startswith("ci:") for value in evidence),
+                    entry_location,
+                    f"a {state} criterion must cite the committed test or check that proves it",
+                )
+            if state == "evidenced":
+                self.require(
+                    bool(ci_references),
+                    entry_location,
+                    "an evidenced criterion must cite the exact-commit CI run (ci:<workflow>/<run id>@<commit>)",
+                )
+        status = item.get("status")
+        if status == "open":
+            self.require(
+                all(state == "unmet" for state in states),
+                status_location,
+                "an open work item has no implemented or evidenced criteria; set its status to in-progress",
+            )
+        if status == "done":
+            self.require(
+                bool(states) and all(state == "evidenced" for state in states),
+                status_location,
+                "a done work item must have every acceptance criterion evidenced",
+            )
 
     def validate_selectors(self, item: dict[str, Any], location: str) -> None:
         """Resolve requiredCiJobs and testSelectors, or require declared debt."""
@@ -1096,10 +2960,96 @@ class Validator:
                 f"schemaVersion must be {SCHEMA_VERSION}",
             )
 
+    def validate_work_item_presets(
+        self,
+        identifier: str,
+        commands: list[Any],
+        location: str,
+        planned_uses: dict[str, set[str]],
+    ) -> None:
+        """Resolve every preset and build tree a work item's commands name.
+
+        A ``--preset`` must exist in its CMake family, a ``build/<dir>`` tree
+        must be some configure preset's binaryDir, and a CTest run must target a
+        configure preset that builds tests. A preset that sets BUILD_TESTS=OFF
+        is accepted for CTest only when the same item configures that preset
+        with -DBUILD_TESTS=ON.
+        """
+        index = cmake_preset_index()
+        references = [
+            (command_index, reference)
+            for command_index, command in enumerate(commands)
+            if isinstance(command, str)
+            for reference in preset_references(command)
+        ]
+        test_enabled = {
+            reference.name
+            for _, reference in references
+            if reference.kind == "configure" and reference.enables_tests
+        }
+        for command_index, reference in references:
+            command_location = f"{location}.commands[{command_index}]"
+            preset_name = reference.name
+            if reference.kind == "binaryDir":
+                preset_name = reference.name.split("/", 1)[1]
+                if reference.name not in index.binary_dirs:
+                    if self._planned_preset_allowed(identifier, preset_name, reference.tool, planned_uses):
+                        continue
+                    self.error(
+                        command_location,
+                        f"build tree {reference.name!r} is not the binaryDir of any configure preset "
+                        "in CMakePresets.json",
+                    )
+                    continue
+            elif not index.exists(reference.kind, preset_name):
+                if reference.kind in {"configure", "build"} and self._planned_preset_allowed(
+                    identifier, preset_name, reference.tool, planned_uses
+                ):
+                    continue
+                self.error(
+                    command_location,
+                    f"--preset {preset_name!r} names no {reference.kind} preset in CMakePresets.json",
+                )
+                continue
+            if reference.tool != "ctest":
+                continue
+            configure_name = index.configure_for(reference)
+            if configure_name is None:
+                self.error(command_location, f"CTest target {reference.name!r} resolves to no configure preset")
+            elif not index.builds_tests(configure_name) and configure_name not in test_enabled:
+                self.error(
+                    command_location,
+                    f"CTest runs against configure preset {configure_name!r}, which sets BUILD_TESTS=OFF; "
+                    "use a validation preset or configure it with -DBUILD_TESTS=ON in this work item",
+                )
+
+    @staticmethod
+    def _planned_preset_allowed(
+        identifier: str, preset_name: str, tool: str, planned_uses: dict[str, set[str]]
+    ) -> bool:
+        if tool != "cmake" or PLANNED_CMAKE_PRESETS.get(preset_name) != identifier:
+            return False
+        planned_uses.setdefault(preset_name, set()).add(identifier)
+        return True
+
+    def validate_planned_presets(self, by_id: dict[Any, dict[str, Any]], planned_uses: dict[str, set[str]]) -> None:
+        index = cmake_preset_index()
+        for preset_name, owner in sorted(PLANNED_CMAKE_PRESETS.items()):
+            entry_location = f"PLANNED_CMAKE_PRESETS[{preset_name!r}]"
+            if index.exists("configure", preset_name) or index.exists("build", preset_name):
+                self.error(entry_location, "preset now exists in CMakePresets.json; remove the planned entry")
+            elif owner not in by_id:
+                self.error(entry_location, f"owner {owner} is not a work item")
+            elif by_id[owner].get("status") == "done":
+                self.error(entry_location, f"owner {owner} is done, so the planned preset must exist or be removed")
+            elif owner not in planned_uses.get(preset_name, set()):
+                self.error(entry_location, f"owner {owner} no longer references this preset; remove the entry")
+
     def validate_work_items(self) -> set[str]:
         items = self.contract["workItems"]
         item_ids = self.unique_ids(items, "workItems")
         by_id = {item.get("id"): item for item in items}
+        planned_preset_uses: dict[str, set[str]] = {}
         for item in items:
             identifier = item.get("id", "?")
             location = f"workItems.{identifier}"
@@ -1131,6 +3081,9 @@ class Validator:
             for key in WORK_ITEM_LIST_KEYS:
                 self.require(isinstance(item.get(key), list), location, f"{key} must be an array")
             commands = item.get("commands", [])
+            planned_selectors = [
+                value for value in item.get("plannedTestSelectors") or [] if isinstance(value, str)
+            ]
             if isinstance(commands, list):
                 for index, command in enumerate(commands):
                     command_location = f"{location}.commands[{index}]"
@@ -1157,6 +3110,11 @@ class Validator:
                                 "executable CTest commands must include --no-tests=error "
                                 "unless they are --show-only=json-v1 discovery commands",
                             )
+                            # CI-110: -L/-R must select something registered, or be declared debt.
+                            for message in ctest_filter_errors(command_tokens(arguments), planned_selectors):
+                                self.error(command_location, message)
+            if isinstance(commands, list):
+                self.validate_work_item_presets(identifier, commands, location, planned_preset_uses)
             for dependency in item.get("dependencies", []):
                 self.require(dependency in item_ids, location, f"unknown dependency {dependency}")
                 self.require(dependency != identifier, location, "cannot depend on itself")
@@ -1165,10 +3123,18 @@ class Validator:
                 self.require(parallel != identifier, location, "cannot be parallel with itself")
             for index, source_path in enumerate(item.get("sourceContext", [])):
                 self.require_path(source_path, f"{location}.sourceContext[{index}]")
+            # Open and done items alike: a planned output is referenced only after
+            # it lands (not-yet-written tests and jobs go in plannedTestSelectors
+            # and plannedCiJobs instead).
             for key in ("entryPoints", "documentationUpdates"):
                 for index, target_path in enumerate(item.get(key, [])):
-                    self.require_path(target_path, f"{location}.{key}[{index}]", allow_future=True)
+                    self.require_path(target_path, f"{location}.{key}[{index}]")
             self.validate_selectors(item, location)
+            self.validate_acceptance_status(item, location)
+        self.validate_planned_presets(by_id, planned_preset_uses)
+        self.errors.extend(
+            experimental_shipping_preset_errors(self.contract, cmake_preset_index().names["configure"])
+        )
 
         visiting: set[str] = set()
         visited: set[str] = set()
@@ -1253,6 +3219,13 @@ class Validator:
                 ]
                 self.require(not unfinished, location, f"ready capability has unfinished blockers: {unfinished}")
                 self.require(not nonpassing, location, f"ready capability has non-passing gates: {nonpassing}")
+                # Without a gate or evidence, "ready" would rest on nothing checkable.
+                self.require(
+                    bool(capability.get("requiredGateIds")),
+                    location,
+                    "ready capability must name at least one required gate",
+                )
+                self.require(bool(capability.get("evidence")), location, "ready capability requires evidence")
                 transitive = self.unfinished_dependency_paths(capability.get("blockingWorkItemIds", []), item_by_id)
                 self.require(
                     not transitive,
@@ -1276,6 +3249,7 @@ class Validator:
                     if work_id in item_by_id and item_by_id[work_id].get("status") != "done"
                 ]
                 self.require(not unfinished, location, f"passing gate has unfinished blockers: {unfinished}")
+                self.require(bool(gate.get("evidence")), location, "passing gate requires evidence")
                 transitive = self.unfinished_dependency_paths(gate.get("blockingWorkItemIds", []), item_by_id)
                 self.require(
                     not transitive,
@@ -1931,7 +3905,7 @@ class Validator:
                     surface_location,
                     f"public surface does not reference release profile {identifier!r}",
                 )
-                for violation in validate_public_claim_text(profile, surface_location, text):
+                for violation in _profile_public_claim_errors(profile, surface_location, text):
                     self.errors.append(violation)
 
         all_profiles_ready = bool(profiles) and all(
@@ -1950,6 +3924,99 @@ class Validator:
                 "global release must be ready when every declared release profile is ready",
             )
         return profile_ids
+
+    def validate_no_hardcoded_claims(self) -> None:
+        """DOC-400: site contract copy states no count, SHA, CI run, or version literal."""
+        documents = {surface: self.contract.get(key) for surface, key in HARDCODED_CLAIM_SURFACES.items()}
+        for message in hardcoded_site_claim_errors(documents):
+            self.error("no-hardcoded-claims", message)
+
+    def validate_discovered_public_claims(self) -> None:
+        """Apply profile boundaries to all discovered pages, including newly added wiki pages."""
+        # This dependent scan requires a valid profile/claim contract. Earlier
+        # findings already reject publication; do not interpret invalid rules
+        # against the entire wiki merely to add secondary diagnostics.
+        if self.errors:
+            return
+        for profile in self.contract["readiness"].get("releaseProfiles", []):
+            # Schema errors have already been reported by validate_release_profiles.
+            if not isinstance(profile, dict) or not isinstance(profile.get("publicClaimRules"), dict):
+                continue
+            declared = profile.get("publicClaimSurfaces", [])
+            if not isinstance(declared, list):
+                continue
+            known = {value for value in declared if isinstance(value, str)}
+            rules = json.dumps(profile["publicClaimRules"], sort_keys=True)
+            for path in sorted(public_numeric_claim_surfaces() - known):
+                if path in GENERATED_CLAIM_SURFACES or path.startswith(GENERATED_CLAIM_PREFIXES):
+                    continue
+                resolved = REPO_ROOT / path
+                if resolved.is_file():
+                    text = resolved.read_text(encoding="utf-8", errors="replace")
+                    self.errors.extend(_discovered_public_claim_errors(str(profile.get("id", "")), rules, path, text))
+
+    def validate_public_numeric_claims(self) -> None:
+        """Every hand-written count on a governed surface resolves to a contract entry."""
+        entries = self.contract["readiness"].get("publicNumericClaims")
+        if entries is None:
+            self.error("readiness.publicNumericClaims", "is required")
+            return
+        texts: dict[str, str] = {}
+        for surface in sorted(public_numeric_claim_surfaces()):
+            path = REPO_ROOT / surface
+            if path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        if isinstance(entries, list):
+            for index, entry in enumerate(entries):
+                if isinstance(entry, dict) and entry.get("classification") == "static-fact" and "evidencePath" in entry:
+                    self.require_path(entry["evidencePath"], f"readiness.publicNumericClaims[{index}].evidencePath")
+        self.errors.extend(
+            public_numeric_claim_errors(texts, entries, source_metric_values, managed_numeric_claim_patterns())
+        )
+
+    def validate_online_service_boundary(self) -> None:
+        """Online-service boundary (OD-08, NET-110): no hosted-service or local-store production claim,
+        a boundary specification whose diagram, boundary table and adapter register match the code, and no
+        adapter that reports itself as production."""
+        texts: dict[str, str] = {}
+        for surface in sorted(REQUIRED_GLOBAL_PUBLIC_CLAIM_SURFACES | ONLINE_SERVICE_BOUNDARY_SURFACES):
+            path = REPO_ROOT / surface
+            if surface in ONLINE_SERVICE_BOUNDARY_SURFACES:
+                self.require(path.is_file(), f"onlineServiceBoundary.{surface}", "boundary surface must exist")
+            if path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        for violation in hosted_online_service_claim_errors(texts):
+            self.error("onlineServiceBoundary", violation)
+        if ONLINE_SERVICE_SPEC in texts:
+            for violation in online_service_spec_contract_errors(texts[ONLINE_SERVICE_SPEC], REPO_ROOT):
+                self.error("onlineServiceBoundary", violation)
+        for violation in local_store_production_claim_errors(local_store_claim_surfaces(REPO_ROOT)):
+            self.error("onlineServiceBoundary", violation)
+        for violation in adapter_name_production_errors(REPO_ROOT):
+            self.error("onlineServiceBoundary", violation)
+        self.errors.extend(operations_boundary_errors(self.contract))
+
+    def validate_deferred_platforms(self) -> None:
+        """OD-12 (PLT-230/PLT-240/PLT-250): deferred platforms stay unsupported and blocked, console carries
+        no platform authority, no public surface claims support for them, and no CI, build configuration, doc
+        or source implies console certification (PLT-250). OD-10/OD-11 (PLT-210/PLT-220): the experimental
+        Linux and macOS rows stay experimental and are never summarized as supported."""
+        for message in deferred_platform_support_errors(self.contract):
+            self.error("deferredPlatforms", message)
+        surfaces, missing = deferred_platform_claim_surfaces(REPO_ROOT, self.contract)
+        for relative in missing:
+            self.error(f"deferredPlatforms.{relative}", "governed wording surface must exist")
+        for violation in deferred_platform_claim_errors(surfaces):
+            self.error("deferredPlatforms", violation)
+        for message in experimental_platform_support_errors(self.contract):
+            self.error("experimentalPlatforms", message)
+        surfaces, missing = experimental_platform_claim_surfaces(REPO_ROOT, self.contract)
+        for relative in missing:
+            self.error(f"experimentalPlatforms.{relative}", "governed wording surface must exist")
+        for violation in experimental_platform_claim_errors(surfaces):
+            self.error("experimentalPlatforms", violation)
+        for violation in console_certification_implication_errors(console_certification_surfaces(REPO_ROOT)):
+            self.error("consoleCertification", violation)
 
     def validate_build_matrix_evidence(self) -> None:
         """The build-matrix configuration evidence is part of the contract, not beside it.
@@ -2001,7 +4068,8 @@ class Validator:
         first = execution.get("firstUnblockedWorkItemId")
         self.require(first is None or first in item_ids, "execution.firstUnblockedWorkItemId", "unknown work item")
         if first in by_id:
-            unfinished = [dependency for dependency in by_id[first].get("dependencies", []) if by_id[dependency].get("status") != "done"]
+            unfinished = [dependency for dependency in by_id[first].get("dependencies", [])
+                          if dependency in by_id and by_id[dependency].get("status") != "done"]
             self.require(not unfinished, "execution.firstUnblockedWorkItemId", f"has unfinished dependencies: {unfinished}")
             self.require(by_id[first].get("status") != "done", "execution.firstUnblockedWorkItemId", "item is already done")
 
@@ -2122,6 +4190,13 @@ class Validator:
         )
 
         if strict_public_wording:
+            from policy import validate as validate_support_policy
+
+            try:
+                for violation in validate_support_policy(REPO_ROOT):
+                    self.error("content.legal.supportPolicy", violation)
+            except (OSError, ValueError) as error:
+                self.error("content.legal.supportPolicy", f"cannot validate policy sources: {error}")
             public_surfaces: dict[str, str] = {}
             for path in sorted(LEGAL_PUBLIC_WORDING_SURFACES):
                 resolved = REPO_ROOT / path
@@ -2146,11 +4221,13 @@ class Validator:
             policy_gaps = legal.get("policyGaps")
             policy_location = "content.legal.policyGaps"
             status = gov_items[0].get("status")
-            if status == "open" or policy_gaps is not None:
+            # Any status short of done (open, in-progress, blocked) leaves the legal gaps unresolved.
+            unfinished = status != "done"
+            if unfinished or policy_gaps is not None:
                 self.require(
                     isinstance(policy_gaps, list),
                     policy_location,
-                    "must be a list of non-empty unique strings while GOV-400 is open",
+                    "must be a list of non-empty unique strings while GOV-400 is not done",
                 )
             if isinstance(policy_gaps, list):
                 all_non_empty_strings = all(
@@ -2167,11 +4244,11 @@ class Validator:
                         policy_location,
                         "must contain unique strings",
                     )
-                if status == "open":
+                if unfinished:
                     self.require(
                         bool(policy_gaps),
                         policy_location,
-                        "must contain at least one policy gap while GOV-400 is open",
+                        "must contain at least one policy gap while GOV-400 is not done",
                     )
                 if status == "done":
                     self.require(
@@ -2247,18 +4324,6 @@ class Validator:
                 f"{entry['target']}: {entry['error']}",
             )
 
-        from validate_docs_links import validate_docs_links, validate_docs_routes
-
-        route_errors = validate_docs_routes(catalog)
-        for entry in route_errors:
-            self.error(f"docsCatalog.routeOverrides.{entry['target']}", entry["error"])
-        link_errors = validate_docs_links(catalog)
-        for entry in link_errors:
-            self.error(
-                f"{entry['source']}:{entry['line']}",
-                f"broken link to {entry['target']}: {entry['error']}",
-            )
-
     def validate_docs_catalog(self) -> None:
         catalog = self.contract["docsCatalog"]
         include = catalog.get("include", {})
@@ -2270,9 +4335,51 @@ class Validator:
         for index, rule in enumerate(catalog.get("classificationRules", [])):
             self.require(rule.get("section") in section_ids, f"docsCatalog.classificationRules[{index}]", f"unknown section {rule.get('section')}")
         for index, path in enumerate(catalog.get("featuredSourcePaths", [])):
-            self.require_path(path, f"docsCatalog.featuredSourcePaths[{index}]", allow_future=True)
+            self.require_path(path, f"docsCatalog.featuredSourcePaths[{index}]")
         for path in catalog.get("routeOverrides", {}):
-            self.require_path(path, f"docsCatalog.routeOverrides.{path}", allow_future=True)
+            self.require_path(path, f"docsCatalog.routeOverrides.{path}")
+
+    def validate_prose_references(self, item_ids: set[str], gate_ids: set[str]) -> None:
+        """Require every work-item or gate ID named in contract text to be declared.
+
+        Structured ID fields are checked where they are declared; this covers the
+        free text (rationale, readinessChanges, summaries, limitations, website
+        copy) where a renamed or deleted item would otherwise linger unnoticed.
+        Work-item prefixes come from the declared IDs, so "SHA-256" or "UTF-8"
+        never read as references.
+        """
+        prefixes = sorted({identifier.split("-", 1)[0] for identifier in item_ids if "-" in identifier})
+        if not prefixes:
+            return
+        reference = re.compile(rf"\b(?:(?:{'|'.join(map(re.escape, prefixes))})-\d{{3}}|G\d{{2}})\b")
+
+        def walk(value: Any, location: str) -> None:
+            if isinstance(value, str):
+                for token in dict.fromkeys(reference.findall(value)):
+                    if "-" not in token:
+                        self.require(token in gate_ids, location, f"names unknown gate {token}")
+                    else:
+                        self.require(token in item_ids, location, f"names unknown work item {token}")
+            elif isinstance(value, list):
+                for entry in value:
+                    walk(entry, location)
+            elif isinstance(value, dict):
+                for key, entry in value.items():
+                    walk(entry, f"{location}.{key}")
+
+        for item in self.contract["workItems"]:
+            walk(item, f"workItems.{item.get('id', '?')}")
+        readiness = self.contract["readiness"]
+        for capability in readiness.get("capabilities", []):
+            walk(capability, f"capabilities.{capability.get('id', '?')}")
+        for gate in readiness.get("gates", []):
+            walk(gate, f"gates.{gate.get('id', '?')}")
+        for profile in readiness.get("releaseProfiles", []):
+            walk(profile, f"releaseProfiles.{profile.get('id', '?')}")
+        for key, value in readiness.items():
+            if key not in {"capabilities", "gates", "releaseProfiles"}:
+                walk(value, f"readiness.{key}")
+        walk(self.contract["content"], "content")
 
     def validate_modules(self) -> None:
         discovered = sorted(
@@ -2288,6 +4395,85 @@ class Validator:
             self.require(len(values) == len(dimensions), f"parity.{module}", "score count differs from dimensions")
             for value in values:
                 self.require(value in {0, 1, 2, 3, "N/A"}, f"parity.{module}", f"invalid score {value!r}")
+        self.validate_parity_evidence(dimensions, scores, parity.get("parityEvidence", {}))
+
+    def validate_parity_evidence(self, dimensions: list[Any], scores: dict[str, Any], evidence: Any) -> None:
+        """A score of 3 ("validated shipping candidate") must be backed by evidence.
+
+        Hand-written scores cost nothing to raise, so a 3 is accepted only when the
+        module is included in a release profile and parityEvidence names, for that
+        module and dimension, a registered test selector and a CI job that the
+        required-ci-gate aggregate depends on. Every evidence entry must resolve,
+        whatever the score it sits under, so stale evidence cannot linger.
+        """
+        location = "parityDimensions.parityEvidence"
+        if not isinstance(evidence, dict):
+            self.error(location, "must be an object keyed by module")
+            return
+        required_jobs = required_gate_jobs()
+        manifest = load_json(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        in_profile = {
+            module
+            for profile in manifest.get("profiles", [])
+            for module in profile.get("includedModules", [])
+        }
+        resolved: dict[tuple[str, str], dict[str, list[str]]] = {}
+        for module, by_dimension in evidence.items():
+            module_location = f"{location}.{module}"
+            if module not in scores:
+                self.error(module_location, "names no scored module")
+                continue
+            if not isinstance(by_dimension, dict) or not by_dimension:
+                self.error(module_location, "must be a non-empty object keyed by dimension")
+                continue
+            for dimension, entry in by_dimension.items():
+                entry_location = f"{module_location}.{dimension}"
+                if dimension not in dimensions:
+                    self.error(entry_location, "names no parity dimension")
+                    continue
+                if not isinstance(entry, dict) or set(entry) - {"testSelectors", "requiredCiJobs"}:
+                    self.error(entry_location, "must be an object with only testSelectors and requiredCiJobs")
+                    continue
+                accepted: dict[str, list[str]] = {"testSelectors": [], "requiredCiJobs": []}
+                for key, resolves, reason in (
+                    ("testSelectors", resolve_test_selector, "no CTest test, label, or SparkTests definition matches"),
+                    ("requiredCiJobs", resolve_ci_job, "no workflow job is defined with this id"),
+                ):
+                    values = entry.get(key, [])
+                    if not isinstance(values, list):
+                        self.error(f"{entry_location}.{key}", "must be an array")
+                        continue
+                    for index, value in enumerate(values):
+                        value_location = f"{entry_location}.{key}[{index}]"
+                        if not isinstance(value, str) or not value:
+                            self.error(value_location, "must be a non-empty string")
+                        elif not resolves(value):
+                            self.error(value_location, f"{value!r} resolves to nothing: {reason}")
+                        elif key == "requiredCiJobs" and value not in required_jobs:
+                            self.error(value_location, f"{value!r} is not a need of required-ci-gate")
+                        else:
+                            accepted[key].append(value)
+                resolved[(module, dimension)] = accepted
+        for module, values in scores.items():
+            if not isinstance(values, list):
+                continue
+            for dimension, value in zip(dimensions, values):
+                if value != 3:
+                    continue
+                cell = f"parity.{module}.{dimension}"
+                self.require(
+                    module in in_profile,
+                    cell,
+                    "score 3 (validated shipping candidate) requires the module to be included in a release "
+                    "profile in tools/module-evidence/manifest.json",
+                )
+                accepted = resolved.get((module, dimension), {})
+                self.require(
+                    bool(accepted.get("testSelectors")) and bool(accepted.get("requiredCiJobs")),
+                    cell,
+                    "score 3 (validated shipping candidate) requires parityEvidence naming at least one resolving "
+                    "test selector and one required-ci-gate job",
+                )
 
     def validate(
         self,
@@ -2305,9 +4491,14 @@ class Validator:
         self.validate_modules()
         item_ids = self.validate_work_items()
         capability_ids, gate_ids = self.validate_readiness(item_ids)
+        self.validate_prose_references(item_ids, gate_ids)
         profile_ids = self.validate_release_profiles(item_ids, capability_ids, gate_ids)
         for message in finalization_contract_errors(self.contract):
             self.error("publicationFinalization", message)
+        self.errors.extend(publication_evidence_errors(self.contract))
+        # REL-191/REL-192: evidence never crosses the predecessor substitution boundary.
+        for message in nminus1_evidence_errors(self.contract) + predecessor_evidence_reuse_errors(self.contract):
+            self.error("predecessor evidence boundary", message)
         if require_candidate_ready:
             for message in candidate_readiness_errors(self.contract):
                 self.error("candidate readiness", message)
@@ -2316,12 +4507,23 @@ class Validator:
                 self.error("predecessor candidate readiness", message)
         self.validate_execution(item_ids)
         self.validate_content(capability_ids, profile_ids)
+        self.validate_no_hardcoded_claims()
         for location, message in validate_assets():
             self.error(location, message)
         for location, message in validate_module_content(REPO_ROOT):
             self.error(location, message)
         self.validate_docs_catalog()
         self.validate_build_matrix_evidence()
+        # CI-120: README/wiki/CLAUDE.md quick starts resolve against CMakePresets.json.
+        for finding in check_documented_build_commands():
+            self.error(f"{finding.path}:{finding.line}", finding.message)
+        self.validate_public_numeric_claims()
+        self.validate_discovered_public_claims()
+        self.validate_online_service_boundary()
+        for message in installer_platform_ownership_errors(self.contract):
+            self.error("installerPlatformOwnership", message)
+        self.errors.extend(windows_row_evidence_errors(self.contract))
+        self.validate_deferred_platforms()
         self.validate_legal(strict_public_wording=legal)
         if assets:
             self.validate_asset_surface()
@@ -2383,6 +4585,7 @@ def validate_contract(
         docs=docs,
         capability=capability,
     )
+    validate_generated_public_documents(contract)
     return contract
 
 
@@ -2458,7 +4661,7 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
             errors.append("current publication does not have a successful conclusion")
         exact_evidence = publication.get("exactEvidence")
         if exact_evidence is None:
-            if require_exact_evidence:
+            if require_exact_evidence or publication.get("state") == "current":
                 errors.append("current publication has no durable exact CI evidence")
         elif not isinstance(exact_evidence, dict):
             errors.append("publication exactEvidence is not an object")
@@ -2506,10 +4709,11 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
         if isinstance(search_pointer, dict):
             if bundle.get("docs", {}).get("searchPath") != search_pointer.get("path") or bundle.get("docs", {}).get("searchSha256") != search_pointer.get("sha256") or bundle.get("docs", {}).get("searchBytes") != search_pointer.get("bytes"):
                 errors.append("bundle docs search pointer differs from latest")
+        errors.extend(published_docs_parity_errors(root, bundle, latest))
 
     exact_pointer = latest.get("files", {}).get("exactCiEvidence")
     if exact_pointer is None:
-        if require_exact_evidence:
+        if require_exact_evidence or latest.get("publication", {}).get("state") == "current":
             errors.append("latest files have no durable exact CI evidence pointer")
     else:
         _, exact_bytes = verified(exact_pointer, "exact CI evidence", 32 * 1024)
@@ -2528,6 +4732,28 @@ def validate_published_bundle(root: Path, *, require_exact_evidence: bool = Fals
         if label == "bundle":
             continue
         verified(pointer, f"latest file {label}")
+    status_path = root / "status.json"
+    if status_path.is_symlink():
+        errors.append("status.json must not be a symlink")
+    elif status_path.exists():
+        try:
+            status = validate_publication_status(
+                decode_json_bytes(
+                    read_bytes_stable(status_path, STATUS_MAX_BYTES, "site status.json"),
+                    "site status.json",
+                    STATUS_MAX_BYTES,
+                )
+            )
+            if status["contentCommit"] != latest.get("source", {}).get("commit"):
+                errors.append("status contentCommit differs from retained latest.json")
+            if status["state"] == "current":
+                build = latest.get("publication", {}).get("exactEvidence", {}).get("build", {})
+                if (status["sourceCommit"] != latest.get("source", {}).get("commit") or
+                        status["run"]["id"] != build.get("runId") or
+                        status["run"]["attempt"] != build.get("runAttempt")):
+                    errors.append("current status differs from bundle Build evidence")
+        except SiteDataError as error:
+            errors.append(f"site status.json is invalid: {error}")
     if errors:
         detail = "\n".join(f"  - {message}" for message in errors)
         raise SiteDataError(f"published bundle validation failed with {len(errors)} error(s):\n{detail}")

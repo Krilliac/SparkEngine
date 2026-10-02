@@ -248,3 +248,33 @@ TEST(FPSRespawn_RebindWithoutAuthoredSpawnsRestoresFallbackNotStaleSpawn)
     EXPECT_NEAR(fallback.position.z, -20.0f, 0.001f);
     EXPECT_EQ(static_cast<int>(respawn.GetSpawnPoints().size()), 1);
 }
+
+// ============================================================================
+// Headless arena: data-only SceneManager without GraphicsEngine or InputManager
+// ============================================================================
+
+TEST(FPSScene_DataOnlyLoadNeedsNoGraphicsOrInput)
+{
+    // The headless FPS arena constructs SceneManager with null graphics and
+    // input; the constructor used to reject that before any load could run.
+    SceneManager scene(nullptr, nullptr);
+    ASSERT_TRUE(scene.LoadScene(FPSAssets::Resolve(L"Scenes/level1.scene")));
+    EXPECT_TRUE(scene.GetNodeCount() > 0);
+    EXPECT_EQ(scene.GetObjects().size(), static_cast<size_t>(scene.GetNodeCount()));
+    for (const auto& object : scene.GetObjects())
+        EXPECT_TRUE(object == nullptr);
+    EXPECT_EQ(RespawnSystem::CollectAuthoredSpawnPoints(scene).size(), static_cast<size_t>(4));
+
+    // The legacy space-delimited format needs a device and must be refused,
+    // leaving the loaded arena intact.
+    const std::filesystem::path temp = MakeMod310TempDir("data_only_legacy");
+    const std::filesystem::path legacyPath = temp / "legacy.scene";
+    {
+        std::ofstream legacy(legacyPath);
+        legacy << "Cube 0 0 0 1\n";
+    }
+    const int arenaNodes = scene.GetNodeCount();
+    EXPECT_FALSE(scene.LoadScene(legacyPath.wstring()));
+    EXPECT_EQ(scene.GetNodeCount(), arenaNodes);
+    RemoveMod310Tree(temp);
+}

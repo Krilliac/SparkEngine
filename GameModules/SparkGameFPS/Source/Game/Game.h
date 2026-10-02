@@ -16,7 +16,6 @@
 #include "Spark/SparkExport.h"
 #include "Spark/IEngineContext.h"
 #include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
-#include "Utils/Assert.h"
 #include "ClassSystem.h"
 #include "VehicleSystem.h"
 #include "GravitySystem.h"
@@ -31,6 +30,7 @@
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
 #include "FPSLocalProfile.h"
+#include "FPSArenaAutopilot.h"
 #include "Engine/Networking/NetworkManager.h"
 #include "Game/FPSWeatherPort.h"
 #include "Game/FPSWeatherIntegration.h"
@@ -486,6 +486,12 @@ class SPARK_GAME_API Game
     void RenderDebugUI();
 
     /**
+     * @brief Start or stop the arena autopilot (developer command `fps_autoplay`).
+     * @return false when there is no live player, camera, input, game mode or respawn system to drive.
+     */
+    bool SetArenaAutopilot(bool enabled);
+
+    /**
      * @brief Get current scene object count
      * @return Number of active game objects in scene
      */
@@ -546,7 +552,7 @@ class SPARK_GAME_API Game
 
     /**
      * @brief Get list of available scenes
-     * @return Vector of scene file paths
+     * @return Vector of scene file paths (UTF-8)
      */
     std::vector<std::string> GetAvailableScenes() const;
 
@@ -607,6 +613,11 @@ class SPARK_GAME_API Game
     // material paths remain functional for both startup and console reloads.
     void BindSceneMaterialRoots();
 
+    // Log the startup scene identity marker: the authored scene's name and node
+    // count, or that only the procedural fallback arena is live. Package smokes
+    // read this marker because the fallback arena renders a plausible frame.
+    void LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) const;
+
     // Invalidate cached authored/procedural BasicMaterials after a successful
     // scene replacement so the next render observes on-disk material edits.
     void InvalidateSceneBasicMaterials();
@@ -633,6 +644,9 @@ class SPARK_GAME_API Game
      * @param dt Delta time for frame-rate independent input handling
      */
     void HandleInput(float dt);
+
+    /// @brief Step the arena autopilot when enabled and fire when it is on target.
+    void UpdateArenaAutopilot(float dt);
 
     /**
      * @brief Create initial test objects for the scene
@@ -703,12 +717,22 @@ class SPARK_GAME_API Game
     std::vector<Spark::SubscriptionHandle> m_eventSubscriptions; ///< Keeps EventBus callbacks active
 
 #ifdef ENABLE_NETWORKING
-    bool m_networkInitialized{false}; ///< Whether networking subsystem was initialized
+    /**
+     * @brief Tick the FPS multiplayer session and send local input at its fixed 60 Hz step.
+     * @param dt Frame delta (seconds)
+     */
+    void UpdateMultiplayer(float dt);
+
+    bool m_networkInitialized{false};      ///< Whether a multiplayer session initialized NetworkManager
+    float m_networkInputAccumulator{0.0f}; ///< Unsent simulated time toward the next 60 Hz input
 #endif
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene
     std::vector<Enemy*> m_enemies;                          ///< Non-owning refs to enemies in m_gameObjects
+
+    SparkFPS::FPSArenaAutopilot m_arenaAutopilot;           ///< Developer arena-loop driver (off by default)
+    std::vector<DirectX::XMFLOAT3> m_arenaAutopilotTargets; ///< Reused per-frame target list (no steady-state alloc)
 
     bool m_isPaused{false};   ///< Current pause state of the game
     bool m_isShutDown{false}; ///< Guards against double-shutdown

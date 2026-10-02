@@ -219,6 +219,10 @@ namespace Spark
                 // NullBuffers returns their slots through the release hook.
                 m_transientBuffers.Shutdown(this);
 
+                // Anything still counted now is held by a caller past device
+                // shutdown: the headless host's leak-at-teardown signal.
+                m_liveResourcesAtShutdown = GetLiveResourceCount();
+
                 // Advance the epoch before clearing so objects created before
                 // this Shutdown cannot release a slot reused after the next
                 // Initialize (Clear resets slot generations).
@@ -370,6 +374,24 @@ namespace Spark
              * check must fail rather than trust them.
              */
             uint32_t GetUntrackedResourceCount() const { return m_tracker->untracked; }
+
+            /** @brief Every live Null resource: all pool counts plus untracked objects. */
+            uint32_t GetLiveResourceCount() const
+            {
+                const ResourceTracker& tracker = *m_tracker;
+                return tracker.buffers.Count() + tracker.textures.Count() + tracker.shaders.Count() +
+                       tracker.samplers.Count() + tracker.pipelines.Count() + tracker.untracked;
+            }
+
+            /**
+             * @brief Resources still live when the last Shutdown ran, after the device
+             *        released its own transient buffers.
+             *
+             * Non-zero means some caller kept a Null resource past device shutdown
+             * (the headless host reports it as SPARK_HEADLESS_NULLRHI_RESOURCES).
+             */
+            uint32_t GetLiveResourceCountAtShutdown() const { return m_liveResourcesAtShutdown; }
+
             TransientBufferAllocator& GetTransientBuffers() { return m_transientBuffers; }
             const TransientBufferAllocator& GetTransientBuffers() const { return m_transientBuffers; }
 
@@ -436,6 +458,7 @@ namespace Spark
             NullStats m_stats;
             NullCommandList m_commandList;
             bool m_initialized = false;
+            uint32_t m_liveResourcesAtShutdown = 0;
 
             // Resource tracking pools. Populated on Create*, released when the
             // object is destroyed, cleared on Shutdown. Declared before the

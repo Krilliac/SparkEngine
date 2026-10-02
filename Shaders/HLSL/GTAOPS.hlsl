@@ -41,6 +41,16 @@ cbuffer PostProcessParams : register(b0)
 };
 
 static const float GTAO_PI = 3.14159265;
+static const float GTAO_HALF_PI = 1.57079633;
+// Cosine-weighted visibility of one slice (Jimenez et al. 2016, "Practical Realtime
+// Strategies for Accurate Indirect Occlusion"). Angles are measured from the view
+// vector inside the slice; n is the angle of the normal projected into the slice and
+// h0 <= n <= h1 are the horizons already clamped to the normal's hemisphere. An open
+// plane facing the viewer (n = 0, h = -pi/2, +pi/2) gives (2 + 2) / 4 = 1.
+float GTAOSliceArc(float h, float n)
+{
+    return 0.25 * (-cos(2.0 * h - n) + cos(n) + 2.0 * h * sin(n));
+}
 
 float3 ReconstructNormalFromDepth(float2 uv, float2 texelSize, float centerDepth)
 {
@@ -68,6 +78,9 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
     float falloffEnd = params2.y * radius;
 
     float3 normal = ReconstructNormalFromDepth(uv, texelSize, depth);
+    // View space here is (screen offset, depth): +z points away from the camera, so the
+    // view vector (surface to camera) is -z, and the reconstructed normal faces it.
+    float3 viewVec = float3(0.0, 0.0, -1.0);
     float screenRadius = clamp(radius * projScale / max(depth, 0.001), 1.0, 256.0);
     float totalAO = 0.0;
 
@@ -76,8 +89,18 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
     {
         float angle = GTAO_PI * (float)d / max((float)directions, 1.0);
         float2 dir = float2(cos(angle), sin(angle));
-        float maxH = -1.0;
-        float maxHNeg = -1.0;
+        // Slice frame: project the normal into the plane spanned by dir and the view vector.
+        float3 sliceDir = float3(dir, 0.0);
+        float3 sliceAxis = cross(sliceDir, viewVec);
+        float3 projN = normal - sliceAxis * dot(normal, sliceAxis);
+        float projLen = length(projN);
+        float cosN = saturate(dot(projN, viewVec) / max(projLen, 0.0001));
+        float n = (dot(projN, sliceDir) < 0.0 ? -1.0 : 1.0) * acos(cosN);
+        // Horizon cosines (from the view vector) start at the tangent plane: unoccluded.
+        float lowCos = cos(n + GTAO_HALF_PI);
+        float lowCosNeg = cos(n - GTAO_HALF_PI);
+        float maxH = lowCos;
+        float maxHNeg = lowCosNeg;
 
         [loop]
         for (int s = 1; s <= steps; s++)
@@ -96,10 +119,10 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
                     float len = length(delta);
                     if (len > 0.0001)
                     {
-                        float hc = dot(delta, normal) / len;
+                        float hc = dot(delta, viewVec) / len;
                         float falloff = 1.0 - saturate((len - falloffStart) /
                                                        max(falloffEnd - falloffStart, 0.001));
-                        maxH = max(maxH, hc * falloff);
+                        maxH = max(maxH, lerp(lowCos, hc, falloff));
                     }
                 }
             }
@@ -114,19 +137,19 @@ float4 main(float4 pos : SV_Position, float2 uv : TEXCOORD0) : SV_Target
                     float lenN = length(deltaN);
                     if (lenN > 0.0001)
                     {
-                        float hcN = dot(deltaN, normal) / lenN;
+                        float hcN = dot(deltaN, viewVec) / lenN;
                         float falloffN = 1.0 - saturate((lenN - falloffStart) /
                                                         max(falloffEnd - falloffStart, 0.001));
-                        maxHNeg = max(maxHNeg, hcN * falloffN);
+                        maxHNeg = max(maxHNeg, lerp(lowCosNeg, hcN, falloffN));
                     }
                 }
             }
         }
 
-        float h1 = acos(clamp(maxH, -1.0, 1.0));
-        float h2 = acos(clamp(maxHNeg, -1.0, 1.0));
-        float vis = 0.25 * (-cos(2.0 * h1) + 2.0 * h1 + -cos(2.0 * h2) + 2.0 * h2) / GTAO_PI;
-        totalAO += saturate(vis);
+        // Signed horizon angles (the -dir side is negative), clamped to the normal's hemisphere.
+        float h0 = n + clamp(-acos(clamp(maxHNeg, -1.0, 1.0)) - n, -GTAO_HALF_PI, GTAO_HALF_PI);
+        float h1 = n + clamp(acos(clamp(maxH, -1.0, 1.0)) - n, -GTAO_HALF_PI, GTAO_HALF_PI);
+        totalAO += max(projLen * (GTAOSliceArc(h0, n) + GTAOSliceArc(h1, n)), 0.0);
     }
 
     float ao = pow(saturate(totalAO / max((float)directions, 1.0)), max(power, 0.01));

@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import dependency_authority as da
+import pe_imports
 import safe_fs
 
 # ── Resource limits ────────────────────────────────────────────────────────
@@ -312,4 +313,63 @@ def check_dependency_closure(
                 f"which the dependency authority requires for row {row_id!r}"
             )
 
+    return errors
+
+
+def check_measured_closure(
+    evidence: dict[str, Any],
+    *,
+    artifact_root: Path,
+    row_id: str,
+    authority: da.Authority,
+) -> list[str]:
+    """Bind a record's dependencyClosure to the import graph it was measured from.
+
+    The dependency_closure probe must carry exactly one PE import graph
+    (``*.imports.json``).  Every measured non-API-set import has to appear in
+    the closure, every closure entry has to be imported by something, and no
+    import may be unresolved.  A closure with no graph behind it is a typed
+    list, and a typed list cannot certify.
+    """
+    probe = (evidence.get("probes") or {}).get("dependency_closure")
+    artifacts = probe.get("artifacts") if isinstance(probe, dict) else None
+    graphs = [
+        artifact
+        for artifact in (artifacts if isinstance(artifacts, list) else [])
+        if isinstance(artifact, dict)
+        and isinstance(artifact.get("path"), str)
+        and artifact["path"].endswith(pe_imports.GRAPH_SUFFIX)
+    ]
+    if len(graphs) != 1:
+        return [
+            f"probes.dependency_closure must carry exactly one PE import graph "
+            f"(*{pe_imports.GRAPH_SUFFIX}); found {len(graphs)}, so the closure "
+            f"was not measured from the package"
+        ]
+
+    declared = graphs[0]
+    row_root = artifact_root / row_id
+    try:
+        target = safe_fs.resolve_under(row_root, declared["path"])
+        safe_fs.assert_path_chain_safe(row_root, target)
+        raw = safe_fs.read_bounded(target, max_bytes=pe_imports.MAX_DOCUMENT_BYTES)
+    except safe_fs.FileSecurityError as exc:
+        return [f"PE import graph cannot be read: {exc}"]
+    if hashlib.sha256(raw).hexdigest() != declared.get("sha256"):
+        return ["PE import graph changed after the bundle was measured"]
+
+    try:
+        graph = pe_imports.validate_graph(
+            pe_imports.load_json_bytes(raw, declared["path"])
+        )
+    except pe_imports.ClosureError as exc:
+        return [f"PE import graph is malformed: {exc}"]
+
+    errors = pe_imports.graph_authority_errors(graph, authority)
+    errors.extend(
+        f"dependency closure: {message}"
+        for message in pe_imports.closure_errors(
+            graph, evidence.get("dependencyClosure"), authority
+        )
+    )
     return errors

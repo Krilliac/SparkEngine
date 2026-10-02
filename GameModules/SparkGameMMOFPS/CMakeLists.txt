@@ -16,7 +16,7 @@ cmake_minimum_required(VERSION 3.25)
 # ================================================================
 
 if(NOT CMAKE_PROJECT_NAME OR CMAKE_PROJECT_NAME STREQUAL "SparkGameMMOFPS")
-    project(SparkGameMMOFPS LANGUAGES CXX)
+    project(SparkGameMMOFPS LANGUAGES C CXX)
     set(SPARK_GAME_MMOFPS_STANDALONE TRUE)
 else()
     set(SPARK_GAME_MMOFPS_STANDALONE FALSE)
@@ -41,7 +41,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------
 if(SPARK_GAME_MMOFPS_STANDALONE)
     if(NOT SPARK_ENGINE_DIR)
-        set(SPARK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." CACHE PATH
+        set(SPARK_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH
             "Path to SparkEngine root directory")
     endif()
 
@@ -79,6 +79,13 @@ else()
     set(ENGINE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/SparkEngine/Source")
 endif()
 
+# TFCrypto uses the libsodium SHA-256 and HMAC state APIs directly.  The
+# standalone module has no root project to create spark_sodium, so reuse the
+# engine's canonical wrapper against the configured engine source tree.
+if(SPARK_GAME_MMOFPS_STANDALONE AND NOT TARGET spark_sodium)
+    include("${SPARK_ENGINE_DIR}/cmake/SparkLibsodium.cmake")
+endif()
+
 # ---------------------------------------------------------------------
 # Collect SparkGameMMOFPS source files
 # ---------------------------------------------------------------------
@@ -88,13 +95,21 @@ file(GLOB_RECURSE SPARK_GAME_MMOFPS_SOURCES
     "Source/*.h"
     "Source/*.hpp"
 )
-list(FILTER SPARK_GAME_MMOFPS_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
-list(FILTER SPARK_GAME_MMOFPS_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+spark_exclude_sources_matching(SPARK_GAME_MMOFPS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Tt]est.*")
+spark_exclude_sources_matching(SPARK_GAME_MMOFPS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Ee]xample.*")
 
 # ---------------------------------------------------------------------
 # Create the game as a SHARED library (DLL)
 # ---------------------------------------------------------------------
 add_library(SparkGameMMOFPS SHARED ${SPARK_GAME_MMOFPS_SOURCES})
+
+# TFCrypto's PBKDF2 work factor is sized for optimised code, like PasswordHash.cpp
+# in the root CMakeLists.txt: optimise this one hot loop in Debug too (the work
+# factor is unchanged). MSVC Debug keeps /RTC1, which /O2 rejects.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT MSVC)
+    set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/Source/Account/TFCrypto.cpp"
+        PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>")
+endif()
 
 if(NOT COMMAND spark_configure_module_abi)
     include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkGameModule.cmake")
@@ -102,6 +117,13 @@ endif()
 spark_configure_module_abi(SparkGameMMOFPS)
 
 target_compile_definitions(SparkGameMMOFPS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
+
+if(TARGET spark_sodium)
+    target_link_libraries(SparkGameMMOFPS PRIVATE spark_sodium)
+    target_compile_definitions(SparkGameMMOFPS PRIVATE SPARK_HAS_LIBSODIUM=1)
+else()
+    message(FATAL_ERROR "SparkGameMMOFPS requires the spark_sodium target")
+endif()
 
 # ---------------------------------------------------------------------
 # Link against SparkEngineLib
@@ -228,13 +250,9 @@ if(FEATURE_DEFINITIONS)
 endif()
 
 # ---------------------------------------------------------------------
-# Post-build: Asset directories
+# Post-build: runtime content, staged where the engine executable runs
 # ---------------------------------------------------------------------
-add_custom_command(TARGET SparkGameMMOFPS POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameMMOFPS>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameMMOFPS>/Assets"
-    COMMENT "Creating SparkGameMMOFPS asset directory structure"
-)
+spark_stage_game_module_content(SparkGameMMOFPS DIRECTORIES Shaders Assets)
 
 # Copy shaders from engine. In-tree builds stage them once through the shared
 # SparkRuntimeShaders target: every module copying the same files into the
@@ -251,15 +269,7 @@ else()
     endif()
     if(EXISTS "${SHADER_SOURCE_DIR}")
         file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
-        foreach(SHADER_FILE ${SHADER_FILES})
-            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-            add_custom_command(TARGET SparkGameMMOFPS POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${SHADER_FILE}
-                    "$<TARGET_FILE_DIR:SparkGameMMOFPS>/Shaders/${SHADER_NAME}"
-                COMMENT "Copying shader ${SHADER_NAME}"
-            )
-        endforeach()
+        spark_stage_game_module_content(SparkGameMMOFPS COPY_FILES Shaders ${SHADER_FILES})
     endif()
 endif()
 

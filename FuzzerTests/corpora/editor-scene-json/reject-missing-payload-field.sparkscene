@@ -1,0 +1,247 @@
+{
+  "sceneName": "Courtyard",
+  "version": 2,
+  "description": "Three objects, a hierarchy, payload components and asset references",
+  "objectCount": 3,
+  "componentCount": 5,
+  "assetReferenceCount": 2,
+  "timestamp": 1790000000,
+  "gravity": [
+    0.0,
+    -9.81,
+    0.0
+  ],
+  "ambientColor": [
+    0.2,
+    0.25,
+    0.3,
+    1.0
+  ],
+  "ambientIntensity": 0.75,
+  "objects": [
+    {
+      "id": 1,
+      "name": "Gate",
+      "tag": "Structure",
+      "layer": 0,
+      "active": true,
+      "staticObject": true,
+      "transform": {
+        "position": [
+          0.0,
+          0.0,
+          5.0
+        ],
+        "rotation": [
+          0.0,
+          0.7071068,
+          0.0,
+          0.7071068
+        ],
+        "scale": [
+          2.0,
+          3.0,
+          0.5
+        ],
+        "parentID": 0,
+        "childIDs": [
+          2,
+          3
+        ]
+      },
+      "componentTypes": [
+        "Transform",
+        "MeshRenderer"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Lantern",
+      "tag": "Light",
+      "layer": 1,
+      "active": true,
+      "staticObject": false,
+      "transform": {
+        "position": [
+          0.5,
+          2.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "parentID": 1
+      },
+      "componentTypes": [
+        "Transform",
+        "Light"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Latch",
+      "tag": "Default",
+      "layer": -4,
+      "active": false,
+      "staticObject": false,
+      "transform": {
+        "position": [
+          -0.5,
+          1.0,
+          0.0
+        ],
+        "parentID": 1
+      },
+      "componentTypes": [
+        "Script"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "type": "Transform",
+      "objectID": 1,
+      "enabled": true
+    },
+    {
+      "type": "MeshRenderer",
+      "objectID": 1,
+      "enabled": true,
+      "data": {
+        "schema": 1,
+        "fields": {
+          "meshAssetPath": "Meshes/crate.obj",
+          "materialAssetPath": "Materials/wood.sparkmat",
+          "castShadows": true,
+          "receiveShadows": false,
+          "renderLayer": 2,
+          "tintColor": [
+            1.0,
+            0.5,
+            0.25,
+            1.0
+          ]
+        }
+      }
+    },
+    {
+      "type": "Transform",
+      "objectID": 2,
+      "enabled": true
+    },
+    {
+      "type": "Light",
+      "objectID": 2,
+      "enabled": false,
+      "data": {
+        "schema": 1,
+        "fields": {
+          "type": 2,
+          "color": [
+            1.0,
+            0.9,
+            0.8
+          ],
+          "intensity": 3.5,
+          "range": 25.0,
+          "spotAngle": 60.0,
+          "spotInnerAngle": 45.0,
+          "castShadows": true
+        }
+      }
+    },
+    {
+      "type": "Script",
+      "objectID": 3,
+      "enabled": true,
+      "data": {
+        "schema": 1,
+        "fields": {
+          "scriptPath": "Scripts/door.as",
+          "className": "Door",
+          "autoStart": true
+        }
+      }
+    }
+  ],
+  "environment": {
+    "skyType": 2,
+    "skyColor": [
+      0.4,
+      0.6,
+      0.9,
+      1.0
+    ],
+    "horizonColor": [
+      0.8,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "skyboxAssetPath": "Textures/sky.dds",
+    "fogEnabled": true,
+    "fogColor": [
+      0.6,
+      0.6,
+      0.6,
+      1.0
+    ],
+    "fogDensity": 0.02,
+    "fogStart": 5.0,
+    "fogEnd": 80.0,
+    "windDirection": [
+      1.0,
+      0.0,
+      0.5
+    ],
+    "windStrength": 2.0,
+    "windTurbulence": 0.3,
+    "bloomEnabled": true,
+    "bloomIntensity": 1.5,
+    "bloomThreshold": 0.9,
+    "tonemappingEnabled": true,
+    "exposure": 1.2,
+    "gamma": 2.2
+  },
+  "defaultCamera": {
+    "projectionType": 1,
+    "fieldOfView": 60.0,
+    "orthographicSize": 8.0,
+    "nearPlane": 0.05,
+    "farPlane": 500.0,
+    "clearColor": [
+      0.1,
+      0.1,
+      0.12,
+      1.0
+    ],
+    "isMainCamera": true,
+    "renderTargetWidth": 1280,
+    "renderTargetHeight": 720
+  },
+  "assetReferences": [
+    {
+      "assetPath": "Meshes/crate.obj",
+      "assetType": "mesh",
+      "lastModified": 1789999999,
+      "fileSize": 40960,
+      "checksum": "9f86d081884c7d65",
+      "dependencies": [
+        "Materials/wood.sparkmat",
+        "Textures/wood_albedo.dds"
+      ]
+    },
+    {
+      "assetPath": "Scripts/door.as",
+      "assetType": "script"
+    }
+  ]
+}

@@ -146,9 +146,10 @@ Work-item schema (every field required by `validate.py`): `id`, `title`, `priori
 `rationale`, `sourceContext`, `entryPoints`, `implementationScope`, `acceptanceCriteria`,
 `commands`, `testSelectors`, `requiredCiJobs`, `performanceBudgets`,
 `documentationUpdates`, `readinessChanges`, `websiteImpact`, `risks`, `outOfScope`,
-`definitionOfDone`. Validation is fail-closed: every referenced path must exist unless
-listed in `FUTURE_ACCEPTANCE_PATHS` inside `validate.py` (deliberate outputs of
-unfinished items).
+`definitionOfDone`. Validation is fail-closed: every `entryPoints`,
+`documentationUpdates`, `sourceContext` and docs-catalog path must exist, for open and
+done items alike. A planned output is referenced only after it lands; use
+`plannedTestSelectors` / `plannedCiJobs` for tests and jobs that do not exist yet.
 
 ## Runbook 1 — Answer "what is the status of X?"
 
@@ -200,8 +201,8 @@ Checklist per new/changed system:
 
 - [ ] **Caller** — `Initialize()` invoked in the startup path (`SparkEngine.cpp` /
   `EngineContext` / `EditorApplication`), not just defined.
-- [ ] **Registration** — registered via `EngineContext` `RegisterSystem<T>()` /
-  `RegisterSubsystem<T>()`; panels in `EditorPanelFactory`; tests in `Tests/CMakeLists.txt`.
+- [ ] **Registration** — published via `EngineContext` `RegisterSystem<T>()` / named
+  setter (owned in `EngineRuntime`, created in a `LifecycleCompositionRoot` stage); panels in `EditorPanelFactory`; tests in `Tests/CMakeLists.txt`.
 - [ ] **Tick** — `Update()`/`ProcessCommands()` appears in the main loop.
 - [ ] **Teardown** — shutdown/unload path is real. Clean module/resource teardown is
   gate `G10` territory and tracked as open item `LIFE-200` — if your teardown is

@@ -9,7 +9,9 @@
  */
 
 #include "InspectorPanel.h"
+#include "InspectorWorldAssetDrop.h"
 #include "SelectionManager.h"
+#include "../AssetPipeline/EditorAssetDrag.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../Core/EditorUI.h"
@@ -23,6 +25,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cstring>
+#include <optional>
+#include <utility>
 
 namespace SparkEditor
 {
@@ -1338,12 +1342,50 @@ namespace SparkEditor
                     const std::string before = (m_editorUI && !m_pendingWorldEdit.HasPending())
                                                    ? m_editorUI->CaptureDocumentSnapshot()
                                                    : std::string{};
-                    const bool changed = RenderReflectedFields(comp, ti->fields);
+                    // An asset dropped on a path field is only captured while
+                    // the fields render: applying it replaces the registry and
+                    // would leave `comp` dangling for the remaining fields.
+                    std::string droppedField;
+                    std::string droppedReference;
+                    const bool changed = RenderReflectedFields(
+                        comp, ti->fields,
+                        [&type, &droppedField, &droppedReference](const Spark::FieldInfo& field)
+                        {
+                            const std::optional<EditorAssetKind> kind = AssetKindForField(type, field.fieldName);
+                            if (!kind || field.readOnly || !ImGui::BeginDragDropTarget())
+                            {
+                                return;
+                            }
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                            {
+                                std::string reference;
+                                if (DecodeAssetDragPayload(payload->Data, payload->DataSize, *kind, reference))
+                                {
+                                    droppedField = field.fieldName;
+                                    droppedReference = std::move(reference);
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        });
                     if (changed)
                     {
                         m_pendingWorldEdit.NoteChange(world, entity, before, "Edit " + type,
                                                       static_cast<uint32_t>(ImGui::GetActiveID()),
                                                       Spark::Editor::CommandHistory::GetInstance().GetEditSequence());
+                    }
+                    if (!droppedField.empty() && m_editorUI)
+                    {
+                        // An open typing gesture is recorded first, so it and
+                        // the drop undo as two steps in reverse order.
+                        FlushPendingWorldEdit();
+                        const AssetDropResult result = ApplyWorldAssetDrop(
+                            *world, entity, type, droppedField, droppedReference,
+                            [this]() { return m_editorUI->CaptureDocumentSnapshot(); }, WorldEditCommitter());
+                        if (result == AssetDropResult::Rejected || result == AssetDropResult::NoComponent)
+                        {
+                            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Inspector: asset drop onto %s.%s was rejected",
+                                           type.c_str(), droppedField.c_str());
+                        }
                     }
 
                     if (type != "NameComponent" && type != "Transform")

@@ -1,5 +1,6 @@
 #include "ConsoleApp.h"
 #include "CommandParser.h"
+#include "ConsoleHistoryPolicy.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -24,6 +25,7 @@ namespace
     }
 } // namespace
 #else
+#include <cerrno>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/select.h>
@@ -269,8 +271,8 @@ void ConsoleApp::PollStandaloneInput(std::string& input)
         input.erase(input.find_last_not_of(" \t") + 1);
         if (!input.empty())
         {
-            AddToHistory(input);
             std::string resolved = ResolveAlias(input);
+            AddToHistory(input, resolved);
             if (resolved == "exit" || resolved == "quit")
             {
                 PrintLog(L"Console shutting down...");
@@ -316,8 +318,8 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
             {
                 if (!input.empty())
                 {
-                    AddToHistory(input);
                     std::string resolved = ResolveAlias(input);
+                    AddToHistory(input, resolved);
                     if (resolved == "exit" || resolved == "quit")
                     {
                         PrintLog(L"Console shutting down...");
@@ -519,7 +521,7 @@ void ConsoleApp::ReadEngineInputWindows()
     }
 
     OutputDebugStringA("ReadEngineInput: Engine input reader thread terminated\n");
-    PrintLog(L"Engine input reader thread terminated.");
+    OnEnginePipeClosed();
 }
 #else
 void ConsoleApp::ReadEngineInputPosix()
@@ -557,17 +559,40 @@ void ConsoleApp::ReadEngineInputPosix()
                 PrintLog(L"Engine pipe connection closed.");
                 break;
             }
+            else if (errno != EINTR && errno != EAGAIN)
+            {
+                PrintLog(L"Engine pipe read error.");
+                break;
+            }
         }
-        else if (ret < 0)
+        else if (ret < 0 && errno != EINTR)
         {
             PrintLog(L"Engine pipe read error.");
             break;
         }
     }
 
-    PrintLog(L"Engine input reader thread terminated.");
+    OnEnginePipeClosed();
 }
 #endif // SPARK_PLATFORM_WINDOWS
+
+void ConsoleApp::OnEnginePipeClosed()
+{
+    PrintLog(L"Engine input reader thread terminated.");
+    if (!m_running)
+    {
+        return;
+    }
+
+    // The engine closed (or lost) its end of the pipe: it shut down or died.
+    // A pipe child has no reason to outlive it. Ending here lets the engine's
+    // Shutdown() see a graceful exit instead of killing us after its grace
+    // period, and stops an orphan from idling forever after an engine crash —
+    // headless there is no terminal to type "exit" into. Run() and the keyboard
+    // thread both poll m_running.
+    PrintLog(L"Engine disconnected. Console exiting.");
+    m_running = false;
+}
 
 void ConsoleApp::ReadEngineInput()
 {
@@ -803,44 +828,14 @@ void ConsoleApp::ExecuteCommand(const std::string& cmdLine)
     if (!CommandParser::ParseCommandLine(cmdLine, command, args))
         return;
 
-    // Check if this is an engine command first, then forward it
-    if (ShouldForwardToEngine(command))
-    {
-        std::cout << cmdLine << std::endl;
-        std::cout.flush();
-        PrintResult("Command sent to engine: " + cmdLine);
-    }
-    else
-    {
-        std::string result = m_commandRegistry.ExecuteCommand(command, args);
-        PrintResult(result);
-    }
-}
-
-bool ConsoleApp::ShouldForwardToEngine(const std::string& command)
-{
-    static const std::vector<std::string> engineCommands = {"fps",
-                                                            "info",
-                                                            "test_assert",
-                                                            "test_null_access",
-                                                            "test_assert_not_null",
-                                                            "test_assert_range",
-                                                            "crash_mode",
-                                                            "memory_info",
-                                                            "assert_test",
-                                                            "crash_test",
-                                                            "assert_mode",
-                                                            "graphics_info",
-                                                            "engine_status",
-                                                            "render_debug",
-                                                            "shader_debug",
-                                                            "test_engine",
-                                                            "minimal_test",
-                                                            "console_status",
-                                                            "quit",
-                                                            "help"};
-
-    return std::find(engineCommands.begin(), engineCommands.end(), command) != engineCommands.end();
+    // Engine commands travel only on the engine-pipe keyboard path, which
+    // forwards EVERY line to the engine's full SimpleConsole registry
+    // (PipeKeyboardThreadFunc -> ConsoleProcessManager::DispatchConsoleCommand).
+    // This path serves standalone and batch mode, where stdout is not an engine
+    // channel, so only console-local commands can run here. The old hard-coded
+    // "forward these 20 names" list only echoed the line (credentials included)
+    // to a stdout nobody read.
+    PrintResult(m_commandRegistry.ExecuteCommand(command, args));
 }
 
 void ConsoleApp::RegisterDefaultCommands()
@@ -1164,8 +1159,20 @@ void ConsoleApp::RegisterAliasCommands()
     m_aliases["pt"] = "pipe_test";
 }
 
-void ConsoleApp::AddToHistory(const std::string& cmd)
+void ConsoleApp::AddToHistory(const std::string& typedLine, const std::string& resolvedLine)
 {
+    // Only a console-local command's arguments are known to be secret-free;
+    // engine commands may be credential commands (see ConsoleHistoryPolicy.h).
+    std::string resolvedName;
+    CommandArgs resolvedArgs;
+    const bool argumentsTrusted = CommandParser::ParseCommandLine(resolvedLine, resolvedName, resolvedArgs) &&
+                                  resolvedName != "alias" && m_commandRegistry.HasCommand(resolvedName);
+    const std::string cmd = ConsoleHistoryPolicy::EntryFor(typedLine, argumentsTrusted);
+    if (cmd.empty())
+    {
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(m_historyMutex);
 
     if (!m_commandHistory.empty() && m_commandHistory.back() == cmd)

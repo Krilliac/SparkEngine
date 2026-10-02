@@ -15,6 +15,7 @@
 
 #include "Spark/SparkSDK.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
@@ -23,6 +24,13 @@ namespace SparkGameFPS
 {
     class EngineWeatherAdapter;
 }
+
+namespace Spark
+{
+    class GameMode;
+    class ProgressionSystem;
+    class RespawnSystem;
+} // namespace Spark
 
 // Forward declarations
 class Game;
@@ -59,10 +67,56 @@ class SparkGameModule : public Spark::IModule
     void Shutdown();
     void RegisterGameConsoleCommands();
 
+    /**
+     * @brief Load the authored arena for the no-render headless lifecycle.
+     *
+     * Parses Scenes/level1.scene through the data-only SceneManager path (no
+     * GraphicsEngine or InputManager), binds the RespawnSystem and GameMode to
+     * its authored default spawns and starts a Deathmatch match that OnUpdate
+     * ticks. Fails closed when the scene or its spawns are unusable.
+     */
+    bool LoadHeadlessArena();
+
+    /**
+     * @brief Print the SPARK_FPS_HEADLESS_ARENA record and release the arena.
+     *
+     * Emitted once, only when LoadHeadlessArena() succeeded, so the record is
+     * evidence of a real scene load plus the ticks that followed it.
+     */
+    void ShutdownHeadlessArena();
+
+    /**
+     * @brief Register the headless level/xp/quicksave/quickload commands.
+     *
+     * Same names and output text as the windowed commands, backed by the
+     * headless ProgressionSystem and arena scoreboard (HeadlessPersistence.cpp).
+     * Tracked in m_registeredConsoleCommands, so Shutdown() removes them before
+     * the state they capture is released.
+     */
+    void RegisterHeadlessPersistenceCommands();
+
+    /// Write the local profile to the fps_quicksave slot; returns the console result text.
+    std::string HeadlessQuickSave() const;
+
+    /// Restore progression, play time and score from fps_quicksave; returns the console result text.
+    std::string HeadlessQuickLoad();
+
     Spark::IEngineContext* m_context{nullptr};
     std::unique_ptr<SparkGameFPS::EngineWeatherAdapter> m_weatherAdapter;
     std::vector<std::string> m_registeredConsoleCommands;
     bool m_initialized{false};
+
+    // Headless arena simulation state (null outside the headless lifecycle).
+    std::unique_ptr<Spark::RespawnSystem> m_headlessRespawn;
+    std::unique_ptr<Spark::GameMode> m_headlessMode;
+    int m_headlessArenaObjects{0};
+    int m_headlessArenaSpawns{0};
+    int m_headlessArenaBoundSpawns{0};
+    std::uint64_t m_headlessArenaTicks{0};
+
+    // Headless local-profile state persisted by quicksave/quickload.
+    std::unique_ptr<Spark::ProgressionSystem> m_headlessProgression;
+    float m_headlessPlayTime{0.0f};
 };
 
 // Installed SDK module exports consumed by ModuleManager.

@@ -9,13 +9,14 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from build_binding import verify_cmake_registration
+from build_binding import commands_named, parse_cmake, verify_cmake_registration
 from harness_shape import assert_entry_symbol_in_sources, verify_harness
 from parser_inventory import (
     ALLOWED_SOURCE_EXTENSIONS,
@@ -54,10 +55,38 @@ CORPUS_SCAN_SECONDS = 60
 
 # Seeds live in one reviewed tree. A corpus that pointed at a source root would
 # count production .cpp files as fuzz seeds.
-CORPUS_ROOT = "Tests/fuzz-corpora"
+CORPUS_ROOT = "FuzzerTests/corpora"
 CMAKE_FILE_NAMES = {"CMakeLists.txt"}
 CMAKE_FILE_SUFFIXES = {".cmake"}
 HARNESS_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".m", ".mm"}
+
+# Every found issue lands as a minimized seed named regression-<slug>.<ext> and
+# a record naming the finding and the test that fails without its fix.
+REGRESSION_PREFIX = "regression-"
+REGRESSION_FILE_PATTERN = re.compile(r"^regression-[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+$")
+REGRESSION_FOUND_BY = frozenset({"campaign", "smoke", "review", "report"})
+REGRESSION_PLACEHOLDER = "TODO"
+MAX_REGRESSIONS_PER_CORPUS = 1024
+MAX_FINDING_CHARS = 300
+GUARD_TEST_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
+COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+REPLAY_RUNS_FLAG = "-runs="
+# libFuzzer flags that make a replay depend on wall-clock time or on parallel
+# worker scheduling. A blocking smoke is a deterministic replay of the reviewed
+# seeds, so none of these may appear on its add_test.
+NONDETERMINISTIC_REPLAY_FLAGS = ("-max_total_time=", "-jobs=", "-workers=", "-fork=")
+
+# Guard tests resolve against first-party registrations: CTest names in any
+# CMake listfile and TEST/TEST_F cases under Tests/. Vendored and build trees
+# never count, and the walk is bounded like every other scan in this gate.
+GUARD_SCAN_SKIP_DIRS = frozenset({"ThirdParty", "Assets", "Art", "node_modules"})
+GUARD_SCAN_MAX_FILE_BYTES = 8 * 1024 * 1024
+GUARD_SCAN_MAX_FILES = 20_000
+_CTEST_REGISTRATION = re.compile(r"\badd_test\s*\(\s*NAME\s+([A-Za-z0-9_.\-]+)")
+_SPARK_TEST_DEFINITION = re.compile(
+    r"^[ \t]*TEST(?:_F)?[ \t]*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:,\s*([A-Za-z_][A-Za-z0-9_]*)\s*)?\)",
+    re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -72,6 +101,15 @@ class ResourceBudget:
 
 
 @dataclass(frozen=True)
+class RegressionRecord:
+    file: str
+    finding: str
+    found_by: str
+    guard_test: str
+    fixed_commit: str
+
+
+@dataclass(frozen=True)
 class CorpusRecord:
     corpus_id: str
     parser_id: str
@@ -81,6 +119,7 @@ class CorpusRecord:
     budget: ResourceBudget
     seed_count: int
     seed_bytes: int
+    regressions: tuple[RegressionRecord, ...]
 
 
 def _parse_budget(value: Any, field: str) -> ResourceBudget:
@@ -108,14 +147,17 @@ def _parse_budget(value: Any, field: str) -> ResourceBudget:
     )
 
 
-def _scan_corpus(
+def scan_corpus(
     root: Path,
     corpus_dir: str,
     budget: ResourceBudget,
     field: str,
     deadline: Deadline,
-) -> tuple[int, int, str]:
-    """Count, bound, and actually read every seed, returning a content digest.
+) -> tuple[int, int, str, tuple[str, ...]]:
+    """Count, bound, and actually read every seed.
+
+    Returns the seed count, total bytes, content digest and each seed's path
+    relative to ``corpus_dir``.
 
     stat() alone proves a seed exists, not that it can be read. Each seed is
     opened through the confinement helper so an unreadable or aliased seed is a
@@ -179,7 +221,141 @@ def _scan_corpus(
         rollup.update(b"\0")
         rollup.update(digest.encode("ascii"))
         rollup.update(b"\0")
-    return entries, total_bytes, rollup.hexdigest()
+    seeds = tuple(sorted(relative[len(corpus_dir) + 1:] for relative, _ in digests))
+    return entries, total_bytes, rollup.hexdigest(), seeds
+
+
+def _require_not_placeholder(value: str, field: str) -> str:
+    if value.strip().upper() == REGRESSION_PLACEHOLDER:
+        raise PolicyError(f"{field} is still the import placeholder {REGRESSION_PLACEHOLDER!r}; record the real value")
+    return value
+
+
+def _parse_regressions(value: Any, field: str) -> tuple[RegressionRecord, ...]:
+    records: list[RegressionRecord] = []
+    for index, item in enumerate(require_list(value, field, maximum=MAX_REGRESSIONS_PER_CORPUS)):
+        item_field = f"{field}[{index}]"
+        item = require_exact_keys(item, item_field, {"file", "finding", "found_by", "guard_test", "fixed_commit"})
+        file_name = require_token(item["file"], f"{item_field}.file", REGRESSION_FILE_PATTERN)
+        finding = _require_not_placeholder(
+            require_string(item["finding"], f"{item_field}.finding", maximum=MAX_FINDING_CHARS),
+            f"{item_field}.finding",
+        )
+        if "\n" in finding or "\r" in finding:
+            raise PolicyError(f"{item_field}.finding must be one line")
+        found_by = require_string(item["found_by"], f"{item_field}.found_by", maximum=32)
+        if found_by not in REGRESSION_FOUND_BY:
+            raise PolicyError(f"{item_field}.found_by must be one of {', '.join(sorted(REGRESSION_FOUND_BY))}")
+        guard_test = _require_not_placeholder(
+            require_token(item["guard_test"], f"{item_field}.guard_test", GUARD_TEST_PATTERN),
+            f"{item_field}.guard_test",
+        )
+        fixed_commit = require_token(item["fixed_commit"], f"{item_field}.fixed_commit", COMMIT_PATTERN, maximum=40)
+        records.append(RegressionRecord(file_name, finding, found_by, guard_test, fixed_commit))
+    files = [record.file for record in records]
+    if len(files) != len(set(files)):
+        raise PolicyError(f"{field} declares a regression file twice")
+    return tuple(records)
+
+
+def is_shallow_checkout(root: Path) -> bool:
+    """True when ``root`` is a shallow clone, whose history cannot show a recorded fix commit."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-shallow-repository"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def validate_regression_fix_commits(root: Path, inventory: Inventory, corpora: tuple[CorpusRecord, ...]) -> None:
+    """A recorded fix must exist in this checkout and change the parser it guards."""
+    sources = {parser.parser_id: set(parser.source_files) for parser in inventory.parsers}
+    changed_by_commit: dict[str, set[str]] = {}
+    for corpus in corpora:
+        for record in corpus.regressions:
+            commit = record.fixed_commit
+            if commit not in changed_by_commit:
+                try:
+                    kind = subprocess.run(
+                        ["git", "-C", str(root), "cat-file", "-t", commit],
+                        capture_output=True, text=True, timeout=30, check=False,
+                    )
+                    if kind.returncode != 0 or kind.stdout.strip() != "commit":
+                        raise PolicyError(f"{corpus.corpus_id} regression {record.file} fixed_commit is not a commit: {commit}")
+                    diff = subprocess.run(
+                        ["git", "-C", str(root), "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", commit],
+                        capture_output=True, text=True, timeout=30, check=False,
+                    )
+                except (OSError, subprocess.TimeoutExpired) as exc:
+                    raise PolicyError(f"cannot verify fixed_commit {commit}: {exc}") from exc
+                if diff.returncode != 0:
+                    raise PolicyError(f"cannot inspect fixed_commit {commit}: {diff.stderr.strip()}")
+                changed_by_commit[commit] = set(diff.stdout.splitlines())
+            if not (sources[corpus.parser_id] & changed_by_commit[commit]):
+                raise PolicyError(
+                    f"{corpus.corpus_id} regression {record.file} fixed_commit {commit} "
+                    "does not touch an inventoried parser source"
+                )
+
+
+def _require_declared_regressions(
+    regressions: tuple[RegressionRecord, ...], seeds: tuple[str, ...], field: str
+) -> None:
+    """Every regression-* seed is declared and every declared fixture is a seed."""
+    present = {seed for seed in seeds if PurePosixPath(seed).name.startswith(REGRESSION_PREFIX)}
+    declared = {record.file for record in regressions}
+    undeclared = sorted(present - declared)
+    if undeclared:
+        raise PolicyError(f"{field} has undeclared regression fixtures (add a regressions record): {undeclared}")
+    missing = sorted(declared - set(seeds))
+    if missing:
+        raise PolicyError(f"{field}.regressions names fixtures that are not corpus seeds: {missing}")
+
+
+def registered_test_names(root: Path, deadline: Deadline) -> frozenset[str]:
+    """CTest names from every first-party CMake listfile plus SparkTests TEST/TEST_F names."""
+    names: set[str] = set()
+    scanned = 0
+
+    def read(path: Path) -> str | None:
+        nonlocal scanned
+        deadline.check()
+        scanned += 1
+        if scanned > GUARD_SCAN_MAX_FILES:
+            raise PolicyError(f"guard-test scan exceeds {GUARD_SCAN_MAX_FILES} files")
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > GUARD_SCAN_MAX_FILE_BYTES:
+            return None
+        return path.read_bytes().decode("utf-8", errors="replace")
+
+    for directory, subdirectories, files in os.walk(root):
+        subdirectories[:] = sorted(
+            name
+            for name in subdirectories
+            if not name.startswith(".")
+            and not name.startswith("build")
+            and name not in GUARD_SCAN_SKIP_DIRS
+            and not os.path.islink(os.path.join(directory, name))
+        )
+        current = Path(directory)
+        for name in sorted(files):
+            if name in CMAKE_FILE_NAMES or (current.name == "cmake" and PurePosixPath(name).suffix in CMAKE_FILE_SUFFIXES):
+                text = read(current / name)
+                if text is not None:
+                    names.update(match.group(1) for match in _CTEST_REGISTRATION.finditer(text))
+    tests_root = root / "Tests"
+    if tests_root.is_dir():
+        for path in sorted(tests_root.rglob("*.cpp")):
+            text = read(path)
+            if text is None:
+                continue
+            for match in _SPARK_TEST_DEFINITION.finditer(text):
+                names.add(match.group(1))
+                if match.group(2):
+                    names.add(f"{match.group(1)}.{match.group(2)}")
+    return frozenset(names)
 
 
 def _require_corpus_dir(value: Any, field: str, roots: tuple[str, ...]) -> str:
@@ -205,7 +381,7 @@ def _parse_corpus(
 ) -> CorpusRecord:
     field = f"corpus_manifest.corpora[{index}]"
     value = require_exact_keys(
-        value, field, {"id", "parser_id", "corpus_dir", "last_verified", "content_digest", "budget"}
+        value, field, {"id", "parser_id", "corpus_dir", "last_verified", "content_digest", "budget", "regressions"}
     )
     corpus_id = require_token(value["id"], f"{field}.id", ID_PATTERN)
     parser_id = require_token(value["parser_id"], f"{field}.parser_id", ID_PATTERN)
@@ -218,14 +394,18 @@ def _parse_corpus(
         raise PolicyError(f"{field} corpus is stale ({age} days; maximum {MAX_STALENESS_DAYS})")
     declared_digest = require_token(value["content_digest"], f"{field}.content_digest", SHA256_PATTERN, maximum=64)
     budget = _parse_budget(value["budget"], f"{field}.budget")
-    seed_count, seed_bytes, digest = _scan_corpus(root, corpus_dir, budget, field, deadline)
+    regressions = _parse_regressions(value["regressions"], f"{field}.regressions")
+    seed_count, seed_bytes, digest, seeds = scan_corpus(root, corpus_dir, budget, field, deadline)
+    _require_declared_regressions(regressions, seeds, field)
     # last_verified only means something when it is pinned to exact content.
     if digest != declared_digest:
         raise PolicyError(
             f"{field} corpus content changed since {verified.isoformat()}; "
             "re-verify the seeds and update content_digest"
         )
-    return CorpusRecord(corpus_id, parser_id, corpus_dir, verified, declared_digest, budget, seed_count, seed_bytes)
+    return CorpusRecord(
+        corpus_id, parser_id, corpus_dir, verified, declared_digest, budget, seed_count, seed_bytes, regressions
+    )
 
 
 def _require_artifact_shapes(parser: ParserRecord, owned_sources: set[str]) -> None:
@@ -278,6 +458,7 @@ def _validate_target_binding(root: Path, parser: ParserRecord, corpus: CorpusRec
         max_input_bytes=budget.max_input_bytes,
         field=field,
     )
+    _verify_replay_runs(root, target["cmake_file"], target["test_selector"], corpus.seed_count, field)
     assert_entry_symbol_in_sources(root, parser.source_files, target["entry_symbol"], field)
     if target["binding_source"] is not None:
         assert_entry_symbol_in_sources(
@@ -286,6 +467,34 @@ def _validate_target_binding(root: Path, parser: ParserRecord, corpus: CorpusRec
             target["entry_symbol"],
             f"{field}.target.binding_source",
         )
+
+
+def _verify_replay_runs(root: Path, cmake_file: str, test_selector: str, seed_count: int, field: str) -> None:
+    """The blocking smoke must replay every seed, regression fixtures included, exactly once."""
+    payload = read_confined_file(root, cmake_file, f"{field}.cmake_file", max_bytes=1024 * 1024)
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise PolicyError(f"{field}.cmake_file must be strict UTF-8") from exc
+    for command in commands_named(parse_cmake(text, f"{field}.cmake_file"), "add_test"):
+        if len(command.arguments) > 1 and command.arguments[0].upper() == "NAME" and command.arguments[1] == test_selector:
+            nondeterministic = [
+                argument for argument in command.arguments if argument.startswith(NONDETERMINISTIC_REPLAY_FLAGS)
+            ]
+            if nondeterministic:
+                raise PolicyError(
+                    f"{field} add_test {test_selector!r} passes {nondeterministic}; the blocking smoke must be a "
+                    "deterministic replay of the reviewed seeds, not a time- or worker-bounded campaign"
+                )
+            runs = [argument for argument in command.arguments if argument.startswith(REPLAY_RUNS_FLAG)]
+            expected = f"{REPLAY_RUNS_FLAG}{seed_count}"
+            if runs != [expected]:
+                raise PolicyError(
+                    f"{field} add_test {test_selector!r} passes {runs or 'no -runs'}; the corpus holds {seed_count} "
+                    f"seeds, so the replay must pass exactly {expected}"
+                )
+            return
+    raise PolicyError(f"{field} has no add_test registering {test_selector!r}")
 
 
 def load_corpora(
@@ -328,6 +537,17 @@ def load_corpora(
         if parser.target["corpus_id"] != corpus.corpus_id:
             raise PolicyError(f"{parser_id}.target.corpus_id does not name its corpus")
         _validate_target_binding(root, parser, corpus, owned_sources)
+
+    if any(corpus.regressions for corpus in corpora):
+        # A guard that names no registered test proves nothing about the fix.
+        registered = registered_test_names(root, deadline)
+        for corpus in corpora:
+            for record in corpus.regressions:
+                if record.guard_test not in registered:
+                    raise PolicyError(
+                        f"{corpus.corpus_id} regression {record.file} names guard_test {record.guard_test!r}, "
+                        "which is neither a registered CTest nor a Tests/ TEST case"
+                    )
     return corpora
 
 
@@ -338,13 +558,17 @@ def build_corpus_report(
     *,
     as_of: date | None = None,
     deadline: Deadline | None = None,
+    verify_fix_commits: bool = True,
 ) -> dict[str, Any]:
     corpora = load_corpora(root, inventory, corpus_path, as_of=as_of, deadline=deadline)
+    if verify_fix_commits:
+        validate_regression_fix_commits(root, inventory, corpora)
     return {
         "schema_version": 1,
         "corpus_count": len(corpora),
         "seed_count": sum(corpus.seed_count for corpus in corpora),
         "seed_bytes": sum(corpus.seed_bytes for corpus in corpora),
+        "regression_count": sum(len(corpus.regressions) for corpus in corpora),
         "bound_target_count": len(corpora),
         "max_staleness_days": MAX_STALENESS_DAYS,
         "corpora": [
@@ -353,6 +577,7 @@ def build_corpus_report(
                 "parser_id": corpus.parser_id,
                 "seed_count": corpus.seed_count,
                 "seed_bytes": corpus.seed_bytes,
+                "regression_count": len(corpus.regressions),
                 "last_verified": corpus.last_verified.isoformat(),
             }
             for corpus in corpora

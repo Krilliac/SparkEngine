@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fs_security import FileMetadata, FilesystemPolicyError, SecureRoot, validate_portable_filename
-from secret_policy import SecretFinding, redact_text, scan_json_values, scan_payload
+from secret_policy import JsonScanLimitError, SecretFinding, redact_text, scan_json_values, scan_payload
 from ops_strict_json import StrictJsonError, loads_strict
 
 
@@ -75,7 +75,10 @@ class ArtifactScanner:
             except StrictJsonError as exc:
                 self._error(source, f"JSON cannot receive structured secret inspection: {exc}")
             else:
-                self.findings.extend(scan_json_values(value, location=source))
+                try:
+                    self.findings.extend(scan_json_values(value, location=source))
+                except JsonScanLimitError as exc:
+                    self._error(source, f"JSON cannot receive complete structured secret inspection: {exc}")
         if time.monotonic() > self._deadline:
             self._error(source, "content inspection exceeded the scan deadline")
 

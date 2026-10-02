@@ -12,7 +12,9 @@
 #endif
 
 #include <algorithm>
+#include <limits>
 #include <sstream>
+#include <unordered_set>
 
 namespace MMO
 {
@@ -66,7 +68,7 @@ namespace MMO
     uint32_t MMOGuildSystem::CreateGuild(const std::string& name, const std::string& tag, uint32_t founderId,
                                          const std::string& founderName)
     {
-        if (static_cast<int>(m_guilds.size()) >= MAX_GUILDS || FindByName(name))
+        if (name.empty() || static_cast<int>(m_guilds.size()) >= MAX_GUILDS || FindByName(name))
             return 0;
 
         Guild guild;
@@ -250,6 +252,81 @@ namespace MMO
         if (!member)
             return false;
         return MMO::HasPermission(GetRankPerms(*guild, member->rank), perm);
+    }
+
+    std::vector<Guild> MMOGuildSystem::CaptureGuilds() const
+    {
+        std::vector<Guild> guilds;
+        guilds.reserve(m_guilds.size());
+        for (const auto& [id, guild] : m_guilds)
+        {
+            guilds.push_back(guild);
+        }
+        std::sort(guilds.begin(), guilds.end(), [](const Guild& a, const Guild& b) { return a.id < b.id; });
+        return guilds;
+    }
+
+    bool MMOGuildSystem::RestoreGuilds(std::vector<Guild> guilds, uint32_t nextGuildId, std::string* error)
+    {
+        const auto fail = [error](const std::string& message)
+        {
+            if (error)
+            {
+                *error = message;
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Guild restore refused: %s", message.c_str());
+            return false;
+        };
+        if (static_cast<int>(guilds.size()) > MAX_GUILDS)
+        {
+            return fail(std::to_string(guilds.size()) + " guilds exceed the limit of " + std::to_string(MAX_GUILDS));
+        }
+
+        std::unordered_map<uint32_t, Guild> restored;
+        std::unordered_set<std::string> names;
+        uint32_t next = std::max<uint32_t>(nextGuildId, 1);
+        for (Guild& guild : guilds)
+        {
+            const std::string label = "guild " + std::to_string(guild.id);
+            if (guild.id == 0 || guild.id == std::numeric_limits<uint32_t>::max() || restored.contains(guild.id))
+            {
+                return fail(label + ": invalid or duplicate ID");
+            }
+            if (guild.name.empty() || !names.insert(guild.name).second)
+            {
+                return fail(label + ": empty or duplicate name");
+            }
+            if (guild.members.empty() || guild.GetMemberCount() > guild.maxMembers)
+            {
+                return fail(label + ": no members or more than " + std::to_string(guild.maxMembers));
+            }
+            // Only within a guild: the running system lets one player found or
+            // join several (mmo_guild_create always founds as player 1).
+            std::unordered_set<uint32_t> memberIds;
+            for (GuildMember& member : guild.members)
+            {
+                if (!memberIds.insert(member.playerId).second)
+                {
+                    return fail(label + ": player " + std::to_string(member.playerId) + " listed twice");
+                }
+                member.isOnline = false;
+            }
+            const GuildMember* leader = FindMember(guild, guild.leaderId);
+            if (!leader || leader->rank != GuildRank::Leader)
+            {
+                return fail(label + ": leader " + std::to_string(guild.leaderId) + " is not its Leader-rank member");
+            }
+            SetDefaultPermissions(guild);
+            next = std::max(next, guild.id + 1);
+            const uint32_t id = guild.id;
+            restored.emplace(id, std::move(guild));
+        }
+
+        m_guilds = std::move(restored);
+        m_nextGuildId = next;
+        SPARK_LOG_INFO(Spark::LogCategory::Game, "Restored %zu guilds (next guild ID %u)", m_guilds.size(),
+                       m_nextGuildId);
+        return true;
     }
 
     std::string MMOGuildSystem::GetGuildInfoString(uint32_t guildId) const

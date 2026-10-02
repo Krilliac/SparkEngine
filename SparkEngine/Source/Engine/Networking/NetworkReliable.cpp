@@ -141,7 +141,9 @@ namespace Spark::Net
     {
         peer.receivedSequences[seq] = m_serverTime;
 
-        if (seq > peer.remoteSequenceHighest)
+        // Serial-number comparison keeps the ACK window correct when a long-lived
+        // stream wraps past 0xFFFFFFFF back to 1: the wrapped sequence is newer.
+        if (peer.remoteSequenceHighest == 0 || IsSequenceNewer(seq, peer.remoteSequenceHighest))
         {
             if (peer.remoteSequenceHighest == 0)
             {
@@ -160,7 +162,7 @@ namespace Spark::Net
 
             peer.remoteSequenceHighest = seq;
         }
-        else if (seq < peer.remoteSequenceHighest)
+        else if (seq != peer.remoteSequenceHighest)
         {
             // Set the corresponding bit for this older sequence
             uint32_t offset = peer.remoteSequenceHighest - seq - 1;
@@ -188,7 +190,7 @@ namespace Spark::Net
 
         outMessage = std::move(it->second);
         peer.orderedBuffer.erase(it);
-        peer.expectedOrderedSequence++;
+        peer.expectedOrderedSequence = NextReliableSequence(peer.expectedOrderedSequence);
         return true;
     }
 

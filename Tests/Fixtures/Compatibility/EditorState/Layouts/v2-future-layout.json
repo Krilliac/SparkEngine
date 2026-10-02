@@ -1,0 +1,25 @@
+{
+  "layout": {
+    "name": "v2-future-layout",
+    "description": "Written by a newer editor",
+    "version": 2,
+    "panels": [
+      {
+        "name": "Hierarchy",
+        "displayName": "Hierarchy",
+        "dock": 0,
+        "sizeX": 999,
+        "sizeY": 999,
+        "posX": 5,
+        "posY": 5,
+        "visible": false,
+        "floating": true,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.5,
+        "tabOrder": 7,
+        "parentDock": "FutureDock"
+      }
+    ]
+  }
+}

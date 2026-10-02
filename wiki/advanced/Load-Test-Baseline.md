@@ -8,7 +8,7 @@
 
 ## Overview
 
-Baseline performance numbers from a full engine load test. These serve as regression benchmarks — future runs should compare against them to catch performance regressions before they ship. The baseline below was captured 2026-03-26 on Linux x86_64 / GCC Release. The test harness (`Tests/TestEngineLoadTest.cpp`, 1,716 lines) and all of its scenarios are confirmed present as of 2026-06-08; baseline numbers should be re-captured on a controlled machine before being treated as a hard gate.
+Baseline performance numbers from a full engine load test. These serve as regression benchmarks — future runs should compare against them to catch performance regressions before they ship. The baseline below was captured 2026-03-26 on Linux x86_64 / GCC Release. The test harness (`Tests/TestEngineLoadTest.cpp`) and all of its scenarios are confirmed present as of 2026-06-08; baseline numbers should be re-captured on a controlled machine before being treated as a hard gate.
 
 ---
 
@@ -16,7 +16,7 @@ Baseline performance numbers from a full engine load test. These serve as regres
 
 The load test lives in `Tests/TestEngineLoadTest.cpp`. It:
 
-1. **Initializes the full engine** (25+ subsystems via `InitLoadTestEngine()`).
+1. **Initializes the full engine** (via `InitLoadTestEngine()`).
 2. **Runs 3,000 heavy frames**, each exercising: physics stepping, weather transitions (every 120 frames), TimeOfDay advancement, coroutine scheduling, tween updates, ability ticking, instance manager updates, 20 entity create/destroy cycles (Transform + HealthComponent), EventBus publish (1 event/frame, 10 subscribers), a NullRHI frame cycle with periodic resource creation, GPU perf-counter tracking (50 draw calls + 5,000 primitives/frame), a profiler frame cycle, and a JobSystem `ParallelFor` (500 items every 10 frames).
 3. **Samples OS resources** every 50 frames via `/proc/self/status` + `getrusage()`.
 4. **Reports** frame-timing percentiles, CPU user/system/total, and memory RSS/VSZ.
@@ -81,7 +81,7 @@ cmake --build build --config Release --parallel $(nproc)
 |--------|-------|
 | Entities created/destroyed | 60,000 |
 | EventBus events delivered | 3,000 |
-| ParallelFor batches | 300 (150,000 work items) |
+| ParallelFor batches | 300 (150,000 iterations) |
 | Weather transitions | 26 |
 
 ---
@@ -172,7 +172,7 @@ If a future run shows any of these, investigate before merging:
 - **Original baseline:** `.claude/knowledge/load-test-baseline.md`, dated 2026-03-26.
 - **Re-measured against codebase 2026-06-08** (harness presence verified; baseline numbers carried forward, not re-run).
 - OLD → NEW notes:
-  - `Tests/TestEngineLoadTest.cpp` confirmed present and is now **1,716 lines**.
+  - `Tests/TestEngineLoadTest.cpp` confirmed present in the recorded source snapshot.
   - All listed scenarios verified present in the current file (full-engine, adverse, severe, save/load, network churn).
   - Frame-timing, CPU, memory, and stress numbers are unchanged from the 2026-03-26 capture — they are hardware-specific and should be re-captured on a controlled machine before being enforced as a CI gate.
 - Findings now resolved/changed: none — the test exists and matches its documented structure.

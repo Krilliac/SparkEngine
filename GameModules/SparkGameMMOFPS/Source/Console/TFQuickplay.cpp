@@ -49,9 +49,8 @@ namespace Terrafront
         const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(options.password); });
         if (!IsLocalListenHostReady(ctx))
             return "[TF] quickplay is local listen-host only; run tf_host first";
-        if (options.username.size() >= sizeof(TF_AuthRequest{}.user) ||
-            options.password.size() >= sizeof(TF_AuthRequest{}.pass))
-            return "[TF] quickplay username/password exceeds the onboarding wire limit";
+        if (options.username.size() >= sizeof(TF_LoginStart{}.user))
+            return "[TF] quickplay username exceeds the onboarding wire limit";
 
         const PlayerId player = ctx.clientNet->LocalPlayerId();
         if (player == kInvalidPlayer)
@@ -65,26 +64,15 @@ namespace Terrafront
         // Every accepted invocation starts from a fresh session and authenticates
         // its supplied credentials. A cached session is rejected above rather
         // than silently applying different credentials to the old account.
-        {
-            TF_AuthRequest registration{};
-            const auto clearRegistration =
-                Spark::MakeScopeExit([&] { Spark::SecureErase(&registration, sizeof(registration)); });
-            std::strncpy(registration.user, options.username.c_str(), sizeof(registration.user) - 1);
-            std::strncpy(registration.pass, options.password.c_str(), sizeof(registration.pass) - 1);
-            ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &registration, sizeof(registration));
-        }
+        // NET-100: registration sends a client-derived SCRAM verifier and login is a SCRAM
+        // exchange; the password itself never leaves this process.
+        (void)ctx.clientNet->Register(options.username, options.password);
 
         const auto registerError = static_cast<TFAuthErr>(ctx.clientNet->LastAuthError());
         if (registerError != TFAuthErr::Ok && registerError != TFAuthErr::UsernameTaken)
             return "[TF] quickplay registration failed: err=" + std::to_string(static_cast<int>(registerError));
 
-        {
-            TF_AuthRequest login{};
-            const auto clearLogin = Spark::MakeScopeExit([&] { Spark::SecureErase(&login, sizeof(login)); });
-            std::strncpy(login.user, options.username.c_str(), sizeof(login.user) - 1);
-            std::strncpy(login.pass, options.password.c_str(), sizeof(login.pass) - 1);
-            ctx.clientNet->SendMsg(TFMsg::LoginRequest, &login, sizeof(login));
-        }
+        ctx.clientNet->BeginLogin(options.username, options.password);
         Spark::SecureClear(options.password);
         if (!ctx.clientNet->IsLoggedIn())
             return "[TF] quickplay login failed: err=" +

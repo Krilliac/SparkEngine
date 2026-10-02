@@ -35,6 +35,7 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Body/BodyLockMulti.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
@@ -507,6 +508,66 @@ void PhysicsSystem::Shutdown()
     SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Physics", 0.0);
 }
 
+namespace
+{
+    /// The Jolt body IDs of @p bodies, index-aligned (a null body maps to an invalid ID). The
+    /// buffer is reused across steps so the per-step read-back does not allocate.
+    const std::vector<JPH::BodyID>& CollectBodyIds(const std::vector<std::shared_ptr<PhysicsBody>>& bodies)
+    {
+        thread_local std::vector<JPH::BodyID> ids;
+        ids.clear();
+        for (const auto& body : bodies)
+        {
+            ids.emplace_back(body ? JPH::BodyID(body->GetJoltBodyID()) : JPH::BodyID());
+        }
+        return ids;
+    }
+
+    /// Refresh every body's current pose after a step. All bodies are read under one
+    /// multi-body read lock (each Jolt body mutex taken once) instead of one EngineContext
+    /// lookup and one lock per body, through the same EngineContext physics system the
+    /// PhysicsBody accessors resolve.
+    void ReadBackBodyStates(const std::vector<std::shared_ptr<PhysicsBody>>& bodies)
+    {
+        JPH::PhysicsSystem* const jolt = PhysicsBody::ContextJoltSystem();
+        if (!jolt || bodies.empty())
+        {
+            return;
+        }
+        const std::vector<JPH::BodyID>& ids = CollectBodyIds(bodies);
+        const JPH::BodyLockMultiRead lock(jolt->GetBodyLockInterface(), ids.data(), static_cast<int>(ids.size()));
+        for (size_t index = 0; index < bodies.size(); ++index)
+        {
+            if (bodies[index])
+            {
+                bodies[index]->UpdateCurrentState(lock.GetBody(static_cast<int>(index)));
+            }
+        }
+    }
+
+    /// Bodies that PhysicsBody::IsActive() reports active, counted under one multi-body lock.
+    uint32_t CountActiveBodies(const std::vector<std::shared_ptr<PhysicsBody>>& bodies)
+    {
+        JPH::PhysicsSystem* const jolt = PhysicsBody::ContextJoltSystem();
+        if (!jolt || bodies.empty())
+        {
+            return 0;
+        }
+        const std::vector<JPH::BodyID>& ids = CollectBodyIds(bodies);
+        const JPH::BodyLockMultiRead lock(jolt->GetBodyLockInterface(), ids.data(), static_cast<int>(ids.size()));
+        uint32_t active = 0;
+        for (size_t index = 0; index < bodies.size(); ++index)
+        {
+            const JPH::Body* body = lock.GetBody(static_cast<int>(index));
+            if (body && body->IsInBroadPhase() && body->IsActive())
+            {
+                ++active;
+            }
+        }
+        return active;
+    }
+} // namespace
+
 void PhysicsSystem::Update(float deltaTime)
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Physics);
@@ -542,13 +603,7 @@ void PhysicsSystem::Update(float deltaTime)
                 m_joltSystem->Update(m_timeStep, 1, m_tempAllocator.get(), m_jobSystem.get());
 
                 // Read back new state from Jolt
-                for (auto& body : m_bodies)
-                {
-                    if (body)
-                    {
-                        body->UpdateCurrentState();
-                    }
-                }
+                ReadBackBodyStates(m_bodies);
 
                 m_accumulator -= m_timeStep;
             }
@@ -623,13 +678,7 @@ uint32_t PhysicsSystem::StepFixed(uint32_t stepCount, float interpolationAlpha)
 
         m_joltSystem->Update(m_timeStep, 1, m_tempAllocator.get(), m_jobSystem.get());
 
-        for (auto& body : m_bodies)
-        {
-            if (body)
-            {
-                body->UpdateCurrentState();
-            }
-        }
+        ReadBackBodyStates(m_bodies);
     }
 
     ProcessCollisions();
@@ -666,9 +715,8 @@ void PhysicsSystem::UpdateMetrics()
     m_metrics.timeStep = m_timeStep;
     m_metrics.debugDrawEnabled = m_debugDrawEnabled;
 
-    // Count active rigid bodies
-    m_metrics.activeRigidBodies = static_cast<uint32_t>(
-        std::count_if(m_bodies.begin(), m_bodies.end(), [](const auto& body) { return body && body->IsActive(); }));
+    // Count active rigid bodies with PhysicsBody::IsActive() semantics (added and active).
+    m_metrics.activeRigidBodies = CountActiveBodies(m_bodies);
 
     // Jolt body stats
     m_metrics.collisionPairs = m_joltSystem->GetNumActiveBodies(JPH::EBodyType::RigidBody);
@@ -676,6 +724,20 @@ void PhysicsSystem::UpdateMetrics()
 
     m_metrics.substeps = static_cast<uint32_t>(m_maxSubsteps);
 }
+
+namespace
+{
+    /// Assigns the EventBus roles of one sensor overlap: triggerId is the sensor body's entity and entityId the
+    /// body that entered it, whatever order Jolt reported the pair in. Two sensors keep the reported order.
+    Spark::TriggerEnterEvent MakeTriggerEnterEvent(const PhysicsBody& bodyA, const PhysicsBody& bodyB)
+    {
+        if (bodyA.IsTrigger() && !bodyB.IsTrigger())
+        {
+            return Spark::TriggerEnterEvent{bodyB.GetEntityID(), bodyA.GetEntityID()};
+        }
+        return Spark::TriggerEnterEvent{bodyA.GetEntityID(), bodyB.GetEntityID()};
+    }
+} // namespace
 
 void PhysicsSystem::ProcessCollisions()
 {
@@ -685,6 +747,20 @@ void PhysicsSystem::ProcessCollisions()
     std::vector<std::pair<PhysicsBody*, PhysicsBody*>> currentTriggerPairs;
     currentTriggerPairs.reserve(m_activeTriggerPairs.size());
     DispatchCollisionCallbacks(currentTriggerPairs);
+
+    // Jolt stops reporting contacts for a body that goes to sleep, so an overlap whose bodies are all asleep (or
+    // static, like most sensors) has no report this step although nothing moved. Keep such a pair active instead of
+    // exiting it: the exit fires once a woken body is no longer reported inside, and waking inside the sensor
+    // re-reports the overlap as the already-active pair, so no second enter fires either.
+    for (const auto& prev : m_activeTriggerPairs)
+    {
+        if (std::find(currentTriggerPairs.begin(), currentTriggerPairs.end(), prev) == currentTriggerPairs.end() &&
+            !prev.first->IsActive() && !prev.second->IsActive())
+        {
+            currentTriggerPairs.push_back(prev);
+        }
+    }
+
     UpdateTriggerExitEvents(currentTriggerPairs);
     m_activeTriggerPairs = std::move(currentTriggerPairs);
 }
@@ -710,27 +786,28 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
         {
             PhysicsBody* first = (bodyA < bodyB) ? bodyA : bodyB;
             PhysicsBody* second = (bodyA < bodyB) ? bodyB : bodyA;
-            outTriggerPairs.push_back({first, second});
 
-            if (m_triggerCallback)
+            // A multi-tick StepFixed() drains both the add and the persist report of one overlap (and a compound
+            // shape reports one manifold per sub-shape): record each pair once so it enters and exits once.
+            const std::pair<PhysicsBody*, PhysicsBody*> pair{first, second};
+            if (std::find(outTriggerPairs.begin(), outTriggerPairs.end(), pair) != outTriggerPairs.end())
+                continue;
+            outTriggerPairs.push_back(pair);
+
+            const bool wasActive =
+                std::find(m_activeTriggerPairs.begin(), m_activeTriggerPairs.end(), pair) != m_activeTriggerPairs.end();
+            if (!wasActive)
             {
-                bool wasActive = false;
-                for (const auto& prev : m_activeTriggerPairs)
-                {
-                    if (prev.first == first && prev.second == second)
-                    {
-                        wasActive = true;
-                        break;
-                    }
-                }
-                if (!wasActive)
+                if (m_triggerCallback)
                 {
                     m_triggerCallback(bodyA, bodyB, true);
+                }
 
-                    if (m_eventBus)
-                    {
-                        m_eventBus->Publish(Spark::TriggerEnterEvent{bodyA->GetEntityID(), bodyB->GetEntityID()});
-                    }
+                // Published whether or not a trigger callback is installed: the EventBus is how engine-owned
+                // consumers (script OnTriggerEnter/OnTriggerExit dispatch) observe sensor overlaps.
+                if (m_eventBus)
+                {
+                    m_eventBus->Publish(MakeTriggerEnterEvent(*bodyA, *bodyB));
                 }
             }
             continue;
@@ -762,7 +839,7 @@ void PhysicsSystem::DispatchCollisionCallbacks(std::vector<std::pair<PhysicsBody
 void PhysicsSystem::UpdateTriggerExitEvents(
     const std::vector<std::pair<PhysicsBody*, PhysicsBody*>>& currentTriggerPairs)
 {
-    if (!m_triggerCallback)
+    if (!m_triggerCallback && !m_eventBus)
         return;
 
     for (const auto& prev : m_activeTriggerPairs)
@@ -778,13 +855,15 @@ void PhysicsSystem::UpdateTriggerExitEvents(
         }
         if (!stillActive)
         {
-            m_triggerCallback(prev.first, prev.second, false);
+            if (m_triggerCallback)
+            {
+                m_triggerCallback(prev.first, prev.second, false);
+            }
 
             if (m_eventBus)
             {
-                auto idA = prev.first->GetEntityID();
-                auto idB = prev.second->GetEntityID();
-                m_eventBus->Publish(Spark::TriggerExitEvent{idA, idB});
+                const Spark::TriggerEnterEvent roles = MakeTriggerEnterEvent(*prev.first, *prev.second);
+                m_eventBus->Publish(Spark::TriggerExitEvent{roles.entityId, roles.triggerId});
             }
         }
     }

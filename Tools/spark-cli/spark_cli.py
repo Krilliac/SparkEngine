@@ -5,29 +5,27 @@ spark-cli — SparkEngine project scaffolding, build, and packaging tool
 Usage:
     spark new <project-name> [--template <template>] [--output <directory>]
     spark build [--config <Debug|Release>]
-    spark run [--config <Debug|Release>]
-    spark package [--config Release] [--platform windows] [--strip] [--compress]
-    spark validate [path] [--strict] [--format text|json]
-    spark migrate [path] [--dry-run] [--backup]
+    spark run [--config <Debug|Release>] [--no-build] [--package <dir>] [-- runtime arguments]
+    spark package [--config Release] [--output <dir>] [--platform windows] [--strip] [--compress] [--force]
+    spark validate [path] [--format text|json]
+    spark migrate [path]
     spark templates
     spark info
     spark tools [--config <Debug|Release>] [--format text|json]
     spark <server|gateway|daemon|orchestrator|collab|cooker|worker|automation> [options] -- [tool arguments]
+    spark pak <inspect|list|verify|diff> ...
 
-Templates:
-    EmptyProject    — Empty project with minimal boilerplate (default)
-    FPSStarter      — First-person shooter template with weapons, AI, HUD
-    RPGStarter      — RPG template with inventory, dialogue, quests
-    PlatformerKit   — 2D/3D platformer with character controller
-    MultiplayerArena — Bounded local arena rules and lobby simulation
+`spark templates` lists the templates the resolved engine root provides.
+Tools/spark-cli/README.md documents every command and option; claims.json
+maps each documented behaviour to the tests that prove it.
 
 Examples:
     spark new MyGame
     spark new MyGame --template FPSStarter --output ~/Projects
     spark build --config Release
-    spark package --config Release --strip --compress
-    spark validate Assets/ --strict
-    spark migrate Assets/ --dry-run
+    spark package --config Release
+    spark validate . --format json
+    spark migrate Assets/
     spark pak inspect Data/base.spk --format json
     spark pak list Data/base.spk
     spark pak verify Data/base.spk
@@ -494,16 +492,29 @@ def _write_development_manifest(path, resolved_modules):
     return _write_text(path, json.dumps(manifest, indent=2) + "\n")
 
 
+INSTALLED_PACKAGE_CONFIG = Path("lib") / "cmake" / "SparkEngine" / "SparkEngineConfig.cmake"
+
+
+def is_install_prefix(engine_root):
+    """True when engine_root is an installed SDK prefix rather than a source tree."""
+    return (Path(engine_root) / INSTALLED_PACKAGE_CONFIG).is_file()
+
+
 def find_engine_root():
-    """Find the SparkEngine root directory."""
-    # Check environment variable first
+    """Find the SparkEngine root: a source tree or an install prefix.
+
+    SPARK_ENGINE_DIR wins. Otherwise walk up from this script: an install puts
+    it at <prefix>/tools/spark-cli, below <prefix>/lib/cmake/SparkEngine; a
+    source tree has SparkSDK/ and SparkEngine/ at its root.
+    """
     env_root = os.environ.get("SPARK_ENGINE_DIR")
     if env_root and os.path.isdir(env_root):
         return Path(env_root)
 
-    # Walk up from this script's location
     current = Path(__file__).resolve().parent
     while current != current.parent:
+        if is_install_prefix(current):
+            return current
         if (current / "SparkSDK").is_dir() and (current / "SparkEngine").is_dir():
             return current
         current = current.parent
@@ -512,7 +523,18 @@ def find_engine_root():
 
 
 def get_templates_dir(engine_root):
-    """Get the templates directory."""
+    """Get the project templates directory for a source tree or an install prefix.
+
+    A full install carries every template under share/SparkEngine/templates; an
+    sdk-only install carries the EmptyProject example under
+    share/SparkEngine/sdk/examples.
+    """
+    engine_root = Path(engine_root)
+    if is_install_prefix(engine_root):
+        installed = engine_root / "share" / "SparkEngine" / "templates"
+        if installed.is_dir():
+            return installed
+        return engine_root / "share" / "SparkEngine" / "sdk" / "examples"
     return engine_root / "Templates"
 
 
@@ -643,7 +665,7 @@ def cmd_new(args):
     templates_dir = get_templates_dir(engine_root)
     template_path = templates_dir / template_name
     if not template_path.is_dir():
-        available = [d.name for d in templates_dir.iterdir() if d.is_dir()]
+        available = [d.name for d in templates_dir.iterdir() if d.is_dir()] if templates_dir.is_dir() else []
         print(f"Error: Template '{template_name}' not found.")
         print(f"Available templates: {', '.join(available) if available else 'none'}")
         return 1
@@ -699,6 +721,11 @@ def cmd_new(args):
     print()
     print("Next steps:")
     print(f"  1. cd {project_path}")
+    if is_install_prefix(engine_root):
+        package_dir = (Path(engine_root) / INSTALLED_PACKAGE_CONFIG).parent.resolve()
+        print(f"  2. cmake -B build -DSparkEngine_DIR={package_dir.as_posix()}")
+        print(f"  3. cmake --build build")
+        return 0
     print(f"  2. cmake -B build -DSparkEngine_DIR=<path-to-engine-install>/lib/cmake/SparkEngine")
     print(f"  3. cmake --build build")
     print()
@@ -1559,10 +1586,10 @@ def cmd_validate(args):
 
     Only files that are actually parsed and checked are counted. A run that
     inspects nothing fails, so a wrong path cannot masquerade as a clean
-    project.
+    project. Every finding is an error, so --strict (kept for compatibility)
+    changes nothing and the JSON report's "warnings" list is always empty.
     """
     target_path = Path(args.path)
-    strict = args.strict
     output_format = args.format
 
     if not target_path.exists():
@@ -1574,7 +1601,6 @@ def cmd_validate(args):
         print(f"Validating assets in '{target_path}' (project root '{project_root}')...")
 
     errors = []
-    warnings = []
     checked = 0
 
     # Materials: every texture-ish or *Path string must resolve inside the project.
@@ -1645,15 +1671,14 @@ def cmd_validate(args):
             "suggestion": "Point spark validate at a project directory containing .sparkscene, .scene or .material files",
         })
 
-    total_issues = len(errors) + len(warnings)
-    passed = not errors and not (strict and warnings)
+    passed = not errors
 
     if output_format == "json":
         report = {
             "projectRoot": str(project_root),
             "totalChecked": checked,
             "errors": errors,
-            "warnings": warnings,
+            "warnings": [],
             "passed": passed,
         }
         print(json.dumps(report, indent=2))
@@ -1665,15 +1690,11 @@ def cmd_validate(args):
                 print(f"    [{e['severity'].upper()}] {e['file']}: {e['message']}")
                 if e.get("suggestion"):
                     print(f"             -> {e['suggestion']}")
-        if warnings:
-            print(f"\n  WARNINGS ({len(warnings)}):")
-            for w in warnings:
-                print(f"    [{w['severity'].upper()}] {w['file']}: {w['message']}")
 
-        if total_issues == 0:
+        if passed:
             print("\n  All references validated successfully.")
         else:
-            print(f"\n  {len(errors)} errors, {len(warnings)} warnings")
+            print(f"\n  {len(errors)} errors")
 
     return 0 if passed else 1
 
@@ -1889,7 +1910,8 @@ def cmd_pak(args):
         return exc.exit_code
 
 
-def main():
+def build_parser():
+    """The complete `spark` command surface: every subcommand, alias and option."""
     parser = argparse.ArgumentParser(
         prog="spark",
         description="SparkEngine project, package, service, and automation command surface"
@@ -1905,8 +1927,8 @@ def main():
                            help="Output directory (default: current directory)")
 
     # spark build
-    build_parser = subparsers.add_parser("build", help="Build the current project")
-    build_parser.add_argument("--config", "-c", default="Debug",
+    build_cmd_parser = subparsers.add_parser("build", help="Build the current project")
+    build_cmd_parser.add_argument("--config", "-c", default="Debug",
                              choices=["Debug", "Release", "RelWithDebInfo", "MinSizeRel"],
                              help="Build configuration (default: Debug)")
 
@@ -1947,7 +1969,7 @@ def main():
     val_parser.add_argument("path", nargs="?", default=".",
                            help="Path to validate (default: current directory)")
     val_parser.add_argument("--strict", action="store_true",
-                           help="Treat warnings as errors")
+                           help="Accepted for compatibility; every finding is already an error")
     val_parser.add_argument("--format", default="text",
                            choices=["text", "json"],
                            help="Output format (default: text)")
@@ -1999,7 +2021,11 @@ def main():
     pak_diff = pak_subparsers.add_parser("diff", help="Compare two archives by decompressed content")
     pak_diff.add_argument("left")
     pak_diff.add_argument("right")
+    return parser
 
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.command is None:

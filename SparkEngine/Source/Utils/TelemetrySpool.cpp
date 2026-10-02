@@ -8,6 +8,7 @@
 
 #include "Utils/Telemetry.h"
 
+#include <chrono>
 #include <system_error>
 
 #ifdef _WIN32
@@ -166,17 +167,19 @@ namespace Spark::TelemetryDetail
 #endif
     }
 
-    TelemetrySpoolResult TelemetrySpool::Configure(std::string_view directory, uint64_t maxBytes, uint32_t maxEvents)
+    TelemetrySpoolResult TelemetrySpool::Configure(std::string_view directory, uint64_t maxBytes, uint32_t maxEvents,
+                                                   uint64_t maxAgeMilliseconds)
     {
         m_directory.clear();
         m_artifactPath.clear();
         m_stagingPath.clear();
         m_maxBytes = 0;
         m_maxEvents = 0;
+        m_maxAgeMilliseconds = 0;
 
         if (directory.empty())
             return TelemetrySpoolResult::Disabled;
-        if (maxBytes < kHeaderBytes || maxEvents == 0 || maxEvents > kAbsoluteMaxEvents)
+        if (maxBytes < kHeaderBytes || maxEvents == 0 || maxEvents > kAbsoluteMaxEvents || maxAgeMilliseconds == 0)
             return TelemetrySpoolResult::Rejected;
 
         std::error_code error;
@@ -211,11 +214,13 @@ namespace Spark::TelemetryDetail
         m_stagingPath = m_directory / std::string(kStagingName);
         m_maxBytes = maxBytes;
         m_maxEvents = maxEvents;
+        m_maxAgeMilliseconds = maxAgeMilliseconds;
         if (!ValidateDirectory())
         {
             m_directory.clear();
             m_artifactPath.clear();
             m_stagingPath.clear();
+            m_maxAgeMilliseconds = 0;
             return TelemetrySpoolResult::Rejected;
         }
 
@@ -241,8 +246,8 @@ namespace Spark::TelemetryDetail
         return TelemetrySpoolResult::Success;
     }
 
-    uint64_t TelemetrySpool::Constrain(std::vector<TelemetryEvent>& events,
-                                       std::vector<uint64_t>* droppedSequences) const
+    uint64_t TelemetrySpool::Constrain(std::vector<TelemetryEvent>& events, std::vector<uint64_t>* droppedSequences,
+                                       uint64_t nowMilliseconds) const
     {
         if (!IsConfigured())
             return 0;
@@ -252,11 +257,21 @@ namespace Spark::TelemetryDetail
         size_t bytes = kHeaderBytes;
         uint64_t dropped = 0;
         uint64_t previousSequence = 0;
+        const uint64_t now = nowMilliseconds != 0
+                                 ? nowMilliseconds
+                                 : static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                             std::chrono::system_clock::now().time_since_epoch())
+                                                             .count());
         for (auto& event : events)
         {
+            // The age bound applies in both directions: a wall-clock step backwards
+            // must not discard freshly recorded events, while a forged or corrupt
+            // far-future stamp cannot pin itself in the spool indefinitely.
+            const uint64_t clockDistance = event.timestamp > now ? event.timestamp - now : now - event.timestamp;
             size_t eventBytes = 0;
             if (accepted.size() >= m_maxEvents || !EventSerializedSize(event, eventBytes) ||
-                event.sequence <= previousSequence || eventBytes > m_maxBytes - bytes)
+                event.sequence <= previousSequence || eventBytes > m_maxBytes - bytes ||
+                clockDistance > m_maxAgeMilliseconds)
             {
                 if (droppedSequences != nullptr)
                     droppedSequences->push_back(event.sequence);

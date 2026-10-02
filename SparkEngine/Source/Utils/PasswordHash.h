@@ -1,6 +1,6 @@
 /**
  * @file PasswordHash.h
- * @brief Portable PBKDF2-HMAC-SHA256 password hashing helpers.
+ * @brief libsodium-backed PBKDF2-HMAC-SHA256 password hashing helpers.
  */
 #pragma once
 
@@ -14,7 +14,7 @@ namespace Spark::PasswordHash
 {
     using Sha256Digest = std::array<uint8_t, 32>;
 
-    /** Compute HMAC-SHA256 using the engine's portable, self-contained implementation. */
+    /** Compute HMAC-SHA256 using libsodium's streaming API. */
     [[nodiscard]] Sha256Digest ComputeHmacSha256(std::span<const uint8_t> key, std::span<const uint8_t> data);
 
     /** Create a self-describing PBKDF2-SHA256 password hash with a fresh 128-bit salt. */

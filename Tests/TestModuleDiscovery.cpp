@@ -276,8 +276,9 @@ TEST(ModuleDiscovery_ManifestGenerationSingleModule)
 
 TEST(ModuleDiscovery_ManifestGenerationMultipleModules)
 {
-    // A multi-entry selection whose second image is absent still loads the real
-    // first image, and only that image is reported as loaded.
+    // A manifest names the exact module set. A multi-entry selection whose
+    // second image is absent fails as a whole: the real first image is not
+    // left loaded as a partial set, and the error names the missing image.
     const ScratchDirectory dir("spark-module-discovery-manifest-multi");
     const std::filesystem::path image = dir.CopyCompatibleFixture("SparkDiscoveryManifestFirst");
 
@@ -294,10 +295,9 @@ TEST(ModuleDiscovery_ManifestGenerationMultipleModules)
 
     {
         ModuleManager manager;
-        EXPECT_TRUE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
-        const auto loaded = manager.GetLoadedModuleInfo();
-        ASSERT_EQ(loaded.size(), size_t{1});
-        EXPECT_EQ(Filename(loaded[0].path), PathToUtf8(image.filename()));
+        EXPECT_FALSE(manager.LoadModulesFromManifest(PathToUtf8(manifestPath)));
+        EXPECT_STR_CONTAINS(manager.GetLastLoadError(), "SparkDiscoveryManifestMissingGame");
+        EXPECT_TRUE(manager.GetLoadedModuleInfo().empty());
         manager.UnloadAll();
     }
 }

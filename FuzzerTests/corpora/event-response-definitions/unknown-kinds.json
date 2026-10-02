@@ -1,0 +1,1 @@
+{"rules":[{"name":"x","trigger":"OnNothing","actions":[{"type":"Explode"},{"params":[1]}]}]}

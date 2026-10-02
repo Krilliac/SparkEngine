@@ -32,6 +32,11 @@ from validate_budget import (  # noqa: E402
     validate_suite,
 )
 
+# validate_directory_path refuses aliased governance roots, and hosted Windows
+# runners set TEMP to an 8.3 short path (C:\Users\RUNNER~1\...). Build every
+# fixture under the canonical long-name spelling instead.
+tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
+
 RESULT_SHA = "c" * 40
 BASELINE_SHA = "a" * 40
 APPROVAL_SHA = "b" * 40
@@ -756,16 +761,48 @@ class TestFinalAuditClosure(unittest.TestCase):
             errors = validate_suite(root)
         self.assertTrue(any("filename case" in error for error in errors))
 
-        if os.path.normcase("Budget.JSON") != os.path.normcase("budget.json"):
-            with tempfile.TemporaryDirectory() as temporary:
-                root = Path(temporary)
-                _write_suite(root)
-                (root / "Budget.JSON").write_text(
-                    json.dumps(budget), encoding="utf-8",
-                )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _write_suite(root)
+            (root / "Budget.JSON").write_text(
+                json.dumps(budget), encoding="utf-8",
+            )
+            with os.scandir(root) as listing:
+                on_disk = {entry.name for entry in listing}
+            if {"budget.json", "Budget.JSON"} <= on_disk:
                 errors = validate_suite(root)
-            self.assertTrue(any("ambiguous case alias" in error
-                                for error in errors))
+            else:
+                # Case-insensitive filesystem (NTFS, default APFS): the second
+                # write reused the existing directory entry, so two spellings
+                # cannot coexist on disk. os.path.normcase is not a filesystem
+                # probe (it is the identity on macOS). Present the enumeration
+                # a case-sensitive volume would return so the ambiguous-alias
+                # branch is exercised on every host.
+                real_scandir = os.scandir
+
+                class _AliasEntry:
+                    name = "Budget.JSON"
+
+                class _AliasListing:
+                    def __init__(self, directory: Any) -> None:
+                        self._inner = real_scandir(directory)
+                        self._alias = Path(directory) == root
+
+                    def __enter__(self) -> "_AliasListing":
+                        return self
+
+                    def __exit__(self, *exc: object) -> None:
+                        self._inner.close()
+
+                    def __iter__(self) -> Any:
+                        yield from self._inner
+                        if self._alias:
+                            yield _AliasEntry()
+
+                with mock.patch("validate_budget.os.scandir", _AliasListing):
+                    errors = validate_suite(root)
+        self.assertTrue(any("ambiguous case alias" in error
+                            for error in errors), errors)
 
     def test_hard_linked_governance_file_is_rejected(self) -> None:
         hardware = _hardware()
@@ -928,6 +965,7 @@ class TestMeasurementIntegrity(unittest.TestCase):
         ("frame_time", "ms", "p50"),
         ("tick_time", "ms", "p50"),
         ("startup_time", "ms", None),
+        ("shutdown_time", "ms", None),
         ("memory", "megabytes", None),
         ("package_size", "megabytes", None),
     )
@@ -952,6 +990,24 @@ class TestMeasurementIntegrity(unittest.TestCase):
                     _metric_of(category, unit, percentile), 1.5, 1000,
                 )
                 self.assertTrue(report.passed, report.errors)
+
+    def test_committed_shutdown_ceiling_is_enforceable(self) -> None:
+        # Tests/PackageSmoke/run_headless_boot_loop.py enforces this ceiling on
+        # every headless boot; certified numbers remain PERF-100 evidence, so
+        # the comparator keeps it out of the hosted budget verdict.
+        suite = REPO_ROOT / "perf-budgets" / "v1"
+        self.assertEqual(validate_suite(suite), [])
+        budget = json.loads((suite / "budget.json").read_text(encoding="utf-8"))
+        matches = [metric for metric in budget["metrics"]
+                   if metric["id"] == "nullrhi.headless.shutdown_time"]
+        self.assertEqual(len(matches), 1)
+        metric = matches[0]
+        self.assertEqual(metric["category"], "shutdown_time")
+        self.assertEqual((metric["unit"], metric["direction"], metric["backend"]),
+                         ("ms", "lower_is_better", "nullrhi"))
+        self.assertIsInstance(metric["budget"], (int, float))
+        self.assertGreater(metric["budget"], 0)
+        self.assertEqual(metric["status"], "suspended")
 
     def test_zero_soak_crash_count_is_a_legitimate_pass(self) -> None:
         metric = _metric_of("soak", "count", None, budget=0.0)
@@ -995,6 +1051,26 @@ class TestMeasurementIntegrity(unittest.TestCase):
                 ])
         self.assertEqual(code, 1)
         self.assertIn("FAIL", out.getvalue())
+
+    def test_cli_over_budget_regression_is_blocking(self) -> None:
+        """The command boundary must fail when a real measurement exceeds budget."""
+        metric = _metric_of("frame_time", "ms", "p50", budget=16.0)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_suite(root, budget=_budget([metric]))
+            result_path = root / "result.json"
+            result_path.write_text(json.dumps(_result([{
+                "metricId": metric["id"],
+                "value": 20.0,
+                "unit": "ms",
+                "sampleCount": 1000,
+            }])), encoding="utf-8")
+            with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                code = compare_main([
+                    str(root), str(result_path), "--expected-sha", RESULT_SHA,
+                ])
+        self.assertEqual(code, 1)
+        self.assertIn("REGRESSION", out.getvalue())
 
 
 if __name__ == "__main__":

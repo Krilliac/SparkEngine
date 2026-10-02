@@ -21,7 +21,23 @@
 //     (four vtable slots). IsSDKCompatible is exact equality, so a module built
 //     against v4 must not be accepted by a v3 host: the host's vtable is shorter
 //     and the call would run off the end of it.
-#define SPARK_SDK_VERSION 4
+// v5: Removed IEngineContext::InitializeAll()/ShutdownAll() (two vtable slots,
+//     OD-01): EngineRuntime owns subsystem lifecycle, so every later slot moved.
+// v6: Appended IEngineContext::GetLogger() (one vtable slot, MOD-295) so modules
+//     log through the host's ILogger instead of the private console headers.
+// v7: Appended IEngineContext::GetConsole() (one vtable slot, MOD-295) and the
+//     IConsole interface, so modules register console commands through the host
+//     instead of the private Utils/SparkConsole.h.
+// v8: Appended IConsole::Print() (one IConsole vtable slot, MOD-310) so modules
+//     write to the host's in-game console instead of the private LOG_TO_CONSOLE
+//     macros. Migration: rebuild every module against v8; a module that
+//     implements IConsole itself must add Print.
+// v9: Appended IEngineContext::GetStateValidation() (one vtable slot, MOD-295)
+//     and the IStateValidation interface, so modules register ECS invalid-state
+//     rules through the host instead of the private Utils/InvalidStateDetector.h.
+//     StateViolationSeverity, StateViolation and StateCheckFn moved into the SDK
+//     unchanged.
+#define SPARK_SDK_VERSION 9
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

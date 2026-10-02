@@ -1,38 +1,98 @@
 {
   "manifestVersion": 1,
   "package": "SparkGameVisualScript",
-  "license": "Spark Open License 1.0; repository-original generated scripts",
+  "license": "Spark Open License 1.0; repository-original graphs, the scripts generated from them, and procedurally composed cue audio (CC0)",
   "assets": [
     {
+      "path": "Audio/VisualScript/coin_pickup.wav",
+      "kind": "Sound cue (mono 16-bit 22050 Hz WAV) the Collectible script plays with playSound(\"coin_pickup\")",
+      "origin": "Repository-original procedural audio composed by tools/audio/compose_visualscript_cues.py (public domain/CC0); bytes reproduce exactly",
+      "sha256": "acedfd1de374b6985317baa788656cf96f793263305e98b2c60d8c9e26707c1e"
+    },
+    {
+      "path": "Audio/VisualScript/enemy_attack.wav",
+      "kind": "Sound cue (mono 16-bit 22050 Hz WAV) the EnemyPatrol script plays with playSound(\"enemy_attack\")",
+      "origin": "Repository-original procedural audio composed by tools/audio/compose_visualscript_cues.py (public domain/CC0); bytes reproduce exactly",
+      "sha256": "c5c39180b67b28fa40d81ed5fa95e862ce0405b1b274777c35762969d5d96464"
+    },
+    {
+      "path": "Audio/VisualScript/health_pickup.wav",
+      "kind": "Sound cue (mono 16-bit 22050 Hz WAV) the HealthPickup script plays with playSound(\"health_pickup\")",
+      "origin": "Repository-original procedural audio composed by tools/audio/compose_visualscript_cues.py (public domain/CC0); bytes reproduce exactly",
+      "sha256": "08f80a2bab584b4dc4ec5c20c800d8b2359bf20fec2e1f554691518fb52a5690"
+    },
+    {
+      "path": "Audio/VisualScript/pickup_respawn.wav",
+      "kind": "Sound cue (mono 16-bit 22050 Hz WAV) the HealthPickup script plays with playSound(\"pickup_respawn\")",
+      "origin": "Repository-original procedural audio composed by tools/audio/compose_visualscript_cues.py (public domain/CC0); bytes reproduce exactly",
+      "sha256": "0d43a4a604c71b773d1dd14b80dfcb2bef117dceca70e6b3a5a0238510156e82"
+    },
+    {
+      "path": "Audio/VisualScript/victory_fanfare.wav",
+      "kind": "Sound cue (mono 16-bit 22050 Hz WAV) the GameManager script plays with playSound(\"victory_fanfare\")",
+      "origin": "Repository-original procedural audio composed by tools/audio/compose_visualscript_cues.py (public domain/CC0); bytes reproduce exactly",
+      "sha256": "d6ec4b1e5fd554e19e933acf78ea7314b3049024fc56a3a71415cdb0f6282cf9"
+    },
+    {
+      "path": "Graphs/Collectible.vscript",
+      "kind": "Visual-script graph source (.vscript, read by VisualScriptGraphIO)",
+      "origin": "SparkEngine project-authored visual-script graph",
+      "sha256": "f602bf1ac4b8ec855a9a1e632292d035f4010cb362a8e8b2d356b4abe522357f"
+    },
+    {
+      "path": "Graphs/EnemyPatrol.vscript",
+      "kind": "Visual-script graph source (.vscript, read by VisualScriptGraphIO)",
+      "origin": "SparkEngine project-authored visual-script graph",
+      "sha256": "658a282e845367d35c20af859692cdc43db4bbc9afe6cc992b8e3b9d19adb965"
+    },
+    {
+      "path": "Graphs/GameManager.vscript",
+      "kind": "Visual-script graph source (.vscript, read by VisualScriptGraphIO)",
+      "origin": "SparkEngine project-authored visual-script graph",
+      "sha256": "6cfe44224748b89e00d3be349c955ffef9a1682b29a73bc10d7eb0fec24df366"
+    },
+    {
+      "path": "Graphs/HealthPickup.vscript",
+      "kind": "Visual-script graph source (.vscript, read by VisualScriptGraphIO)",
+      "origin": "SparkEngine project-authored visual-script graph",
+      "sha256": "5fd1d7978850630df083ad0b3ca04ddcfd0d9be592fe0d219b01ecfc58721c0e"
+    },
+    {
+      "path": "Graphs/PlayerController.vscript",
+      "kind": "Visual-script graph source (.vscript, read by VisualScriptGraphIO)",
+      "origin": "SparkEngine project-authored visual-script graph",
+      "sha256": "3e83829ced7a4467c7b43709ce60660287ef5e25db03af757c729f646f9a6200"
+    },
+    {
       "path": "Scripts/Generated/Collectible.as",
-      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
-      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "be90fb33f9c95e79972cf55c7637e37664e39128e16f7a7681b8df1dab6a84f8"
+      "kind": "AngelScript gameplay script compiled by VisualScriptCompiler from Graphs/Collectible.vscript",
+      "origin": "SparkEngine project-authored; generated from the module's checked-in visual-script graph",
+      "sha256": "2b6f474545185c243521d784b6cb170053f4efb0bc1f563f5587a1152ebe85cb"
     },
     {
       "path": "Scripts/Generated/EnemyPatrol.as",
-      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
-      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "ded6dbb7a87a970469cf7689cfeac8a6de3cb29a3d125ff4ce27fd0872274b55"
+      "kind": "AngelScript gameplay script compiled by VisualScriptCompiler from Graphs/EnemyPatrol.vscript",
+      "origin": "SparkEngine project-authored; generated from the module's checked-in visual-script graph",
+      "sha256": "83eddbe788fc6ded794c8a7061d1c6d200435941306c513901d2f0940b2e782e"
     },
     {
       "path": "Scripts/Generated/GameManager.as",
-      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
-      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "e3f0ae7107fafa2bd208d6cf1417961bd1a9520a99ce778b4b9ecc6c2e16f4f4"
+      "kind": "AngelScript gameplay script compiled by VisualScriptCompiler from Graphs/GameManager.vscript",
+      "origin": "SparkEngine project-authored; generated from the module's checked-in visual-script graph",
+      "sha256": "6d2218ef7377a9bcc77222c72b49af88948066e7f084f7e990a53c5fd4e6fbbf"
     },
     {
       "path": "Scripts/Generated/HealthPickup.as",
-      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
-      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "089bbfe2f37bb8fccfe36bd50ab51fd399eab4ca12e6bb2ae2f35203873b99d3"
+      "kind": "AngelScript gameplay script compiled by VisualScriptCompiler from Graphs/HealthPickup.vscript",
+      "origin": "SparkEngine project-authored; generated from the module's checked-in visual-script graph",
+      "sha256": "f7855464935a1f533f755b18b8eb481e9210faa1ed56a07517e0f2afc6b5e6f5"
     },
     {
       "path": "Scripts/Generated/PlayerController.as",
-      "kind": "AngelScript gameplay script emitted by the SparkGameVisualScript graph compiler",
-      "origin": "SparkEngine project-authored; generated from the module's visual-script graphs",
-      "sha256": "ca15bbdd6aa003ad6d0b086543eadd356918fb4b7f4e97d0856a005f3fa3aaba"
+      "kind": "AngelScript gameplay script compiled by VisualScriptCompiler from Graphs/PlayerController.vscript",
+      "origin": "SparkEngine project-authored; generated from the module's checked-in visual-script graph",
+      "sha256": "8e30e8fc3c33d2a40e605c012fb67f23bcc06b615241010a426f8235b278ef6b"
     }
   ],
-  "notes": "Generated AngelScript sources checked in so the module runs without a graph-compilation step. Regenerate them from the module's graphs and update the SHA-256 values in the same change."
+  "notes": "Graphs/*.vscript are the gameplay sources; Scripts/Generated/*.as are compiled from them and checked in so the module runs without a graph-compilation step. VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts fails when a script no longer matches its graph. After editing a graph, regenerate the scripts (see README.md) and update the SHA-256 values here in the same change. Audio/VisualScript/*.wav are the playSound() cues, regenerated by tools/audio/compose_visualscript_cues.py; update their SHA-256 values here when that script changes."
 }

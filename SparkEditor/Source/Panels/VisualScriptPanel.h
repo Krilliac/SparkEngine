@@ -16,6 +16,7 @@
 #include "../UndoRedo/UndoRedoManager.h"
 #include "Engine/Scripting/VisualScriptCompiler.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -114,11 +115,15 @@ namespace SparkEditor
             Spark::Scripting::ScriptConnection connection;
         };
 
+        /// Buffer size holding any name the .vscript loader accepts (256 bytes) plus the terminator,
+        /// so a loaded graph is never truncated on its way back to disk.
+        static constexpr size_t kNameBufferBytes = 257;
+
         struct VariableUI
         {
-            char name[64] = {};
+            char name[kNameBufferBytes] = {};
             int typeIndex = 2; // Default: Float
-            char defaultValue[64] = {};
+            char defaultValue[kNameBufferBytes] = {};
         };
 
       private:
@@ -145,6 +150,7 @@ namespace SparkEditor
         void RenderPendingConnection();
 
         // -- Compilation --
+        Spark::Scripting::VisualScriptGraph BuildGraph() const;
         void CompileGraph();
         void SaveGraph(const std::string& path);
         void LoadGraph(const std::string& path);
@@ -153,6 +159,10 @@ namespace SparkEditor
         std::vector<NodeUI> m_nodes;
         std::vector<ConnectionUI> m_connections;
         std::vector<VariableUI> m_variables;
+        /// Function sub-graphs and custom events have no canvas UI yet; a loaded graph's
+        /// definitions are kept here and written back so Load then Save loses nothing.
+        std::vector<Spark::Scripting::FunctionGraph> m_functions;
+        std::vector<Spark::Scripting::CustomEventDef> m_customEvents;
 
         // Canvas state
         float m_canvasOffsetX = 0.0f;
@@ -179,7 +189,8 @@ namespace SparkEditor
         std::string m_lastCompiledSource;
         std::vector<std::string> m_compileErrors;
         bool m_compileSuccess = false;
-        char m_scriptName[128] = "MyScript";
+        char m_scriptName[kNameBufferBytes] = "MyScript";
+        std::string m_description; ///< Carried through .vscript load/save; emitted as a header comment
         char m_savePath[256] = "Assets/Scripts/Generated/";
 
         // Node ID counter

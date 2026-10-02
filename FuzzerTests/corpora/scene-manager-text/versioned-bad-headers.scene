@@ -1,0 +1,7 @@
+# SparkEngine Scene v1.0
+# gravity:
+# ambient: 1 nan 1
+Cube "Unterminated 0 0 0
+Cube Big 1e39 0 0
+  #Type Hidden 0 0 0
+Cube Props 0 0 0 0 0 0 1 1 1 -1 "" "" 18446744073709551615 "k" "v"

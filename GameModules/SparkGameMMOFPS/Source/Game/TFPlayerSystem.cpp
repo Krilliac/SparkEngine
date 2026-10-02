@@ -276,8 +276,7 @@ namespace Terrafront
 
         if (HealthComponent* hc = world->GetComponent<HealthComponent>(e))
         {
-            hc->health = std::max(0.0f, health);
-            hc->isDead = hc->health <= 0.0f;
+            hc->SetHealth(std::max(0.0f, health));
         }
         if (TFShieldComp* sc = world->GetComponent<TFShieldComp>(e))
         {

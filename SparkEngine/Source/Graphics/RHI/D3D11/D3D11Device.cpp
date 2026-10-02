@@ -19,6 +19,7 @@
 #include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
+#include <climits>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -31,6 +32,11 @@ namespace Spark
     {
         namespace D3D11
         {
+            namespace
+            {
+                /// D3DCompile source name for a shader with neither a debug name nor a file path.
+                const std::string kUnnamedShaderSource = "SparkShader";
+            } // namespace
 
             // ============================================================================
             // D3D11 BUFFER
@@ -809,6 +815,18 @@ namespace Spark
                 if (FAILED(hr))
                     return false;
 
+                if (desc.enableDebugLayer)
+                {
+                    // A debug device always exposes its info queue; failing here means
+                    // validation was requested but cannot be observed. The default
+                    // storage limit stays: nothing drains this queue every frame.
+                    hr = m_device.As(&m_infoQueue);
+                    if (FAILED(hr))
+                        return false;
+                    m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+                    m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
+                }
+
                 // Get DXGI factory
                 ComPtr<IDXGIDevice> dxgiDevice;
                 hr = m_device.As(&dxgiDevice);
@@ -833,6 +851,10 @@ namespace Spark
                 m_capabilities.deviceName = deviceName;
                 m_capabilities.dedicatedVideoMemory = adapterDesc.DedicatedVideoMemory;
                 m_capabilities.sharedSystemMemory = adapterDesc.SharedSystemMemory;
+                // On a GPU-less host the hardware driver type succeeds on the Microsoft Basic Render
+                // Driver (1414:008C), which is WARP: report it as software like the explicit fallback.
+                if (adapterDesc.VendorId == 0x1414 && adapterDesc.DeviceId == 0x8C)
+                    m_isSoftwareDevice = true;
 
                 switch (adapterDesc.VendorId)
                 {
@@ -915,6 +937,7 @@ namespace Spark
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
                 m_dxgiFactory.Reset();
+                m_infoQueue.Reset();
                 m_device.Reset();
             }
 
@@ -1456,23 +1479,30 @@ namespace Spark
                     case RHIShaderStage::Compute:
                         target = "cs_5_0";
                         break;
-                    default:
-                        return nullptr; // RT stages not supported in D3D11
+                    default: // RT stages are not supported in D3D11
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "CreateShader (%s): stage %d has no D3D11 compile target",
+                                        desc.debugName.c_str(), static_cast<int>(desc.stage));
+                        return nullptr;
                     }
 
                     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 
-                    HRESULT hr = D3DCompile(desc.sourceCode.c_str(), desc.sourceCode.size(), desc.debugName.c_str(),
+                    // D3D_COMPILE_STANDARD_FILE_INCLUDE resolves #include relative to the source name,
+                    // and an empty name fails the whole compile with ERROR_INVALID_NAME and no error
+                    // blob. Prefer the debug name, then the file the source came from.
+                    const std::string& sourceName = !desc.debugName.empty()  ? desc.debugName
+                                                    : !desc.filePath.empty() ? desc.filePath
+                                                                             : kUnnamedShaderSource;
+                    HRESULT hr = D3DCompile(desc.sourceCode.c_str(), desc.sourceCode.size(), sourceName.c_str(),
                                             nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, desc.entryPoint.c_str(), target,
                                             flags, 0, &bytecodeBlob, &errorBlob);
                     if (FAILED(hr))
                     {
-                        if (errorBlob)
-                        {
-                            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s): %s",
-                                            desc.debugName.c_str(),
-                                            static_cast<const char*>(errorBlob->GetBufferPointer()));
-                        }
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s, hr=0x%08lX): %s",
+                                        sourceName.c_str(), static_cast<unsigned long>(hr),
+                                        errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer())
+                                                  : "no compiler diagnostics");
                         return nullptr;
                     }
                 }
@@ -1480,11 +1510,18 @@ namespace Spark
                 {
                     HRESULT hr = D3DCreateBlob(desc.bytecodeSize, &bytecodeBlob);
                     if (FAILED(hr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "Shader bytecode blob allocation failed (%s, hr=0x%08lX)",
+                                        desc.debugName.c_str(), static_cast<unsigned long>(hr));
                         return nullptr;
+                    }
                     memcpy(bytecodeBlob->GetBufferPointer(), desc.bytecode, desc.bytecodeSize);
                 }
                 else
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "CreateShader (%s): neither source nor bytecode given", desc.debugName.c_str());
                     return nullptr;
                 }
 
@@ -1547,12 +1584,19 @@ namespace Spark
                         cs.As(&shaderObj);
                     break;
                 }
-                default:
-                    return nullptr; // RT stages not supported in D3D11
+                default: // RT stages are not supported in D3D11
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "CreateShader (%s): stage %d has no D3D11 shader object", desc.debugName.c_str(),
+                                    static_cast<int>(desc.stage));
+                    return nullptr;
                 }
 
                 if (FAILED(hr) || !shaderObj)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader object creation failed (%s, hr=0x%08lX)",
+                                    desc.debugName.c_str(), static_cast<unsigned long>(hr));
                     return nullptr;
+                }
 
                 return std::make_unique<D3D11Shader>(desc, std::move(shaderObj), std::move(bytecodeBlob));
             }
@@ -1724,6 +1768,23 @@ namespace Spark
             void D3D11Device::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* d3dBuf = static_cast<D3D11Buffer*>(buffer);
+                if (!d3dBuf || !data)
+                    return;
+                // Reject a range outside the buffer before either path: the Dynamic path memcpys
+                // into a mapping of exactly GetSize() bytes, and the static path narrows the range
+                // to UINT for the D3D11_BOX. D3D11 ByteWidth is a UINT, so a larger size is invalid.
+                const uint64_t bufferSize = d3dBuf->GetSize();
+                if (!IsBufferRangeValid(bufferSize, offset, size) || bufferSize > UINT_MAX)
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D11Device::UpdateBuffer: range [%llu, +%llu) outside '%s' (%llu bytes) "
+                                            "- update dropped",
+                                            static_cast<unsigned long long>(offset),
+                                            static_cast<unsigned long long>(size), d3dBuf->GetDebugName().c_str(),
+                                            static_cast<unsigned long long>(bufferSize));
+                    return;
+                }
+
                 if (d3dBuf->GetDesc().access == RHIBufferAccess::Dynamic)
                 {
                     void* mapped = MapBuffer(buffer);
@@ -1737,7 +1798,6 @@ namespace Spark
                 {
                     // A null D3D11_BOX updates the whole resource and ignores size/offset.
                     // For a partial update, describe the exact byte range to write.
-                    const uint64_t bufferSize = d3dBuf->GetSize();
                     if (offset != 0 || size < bufferSize)
                     {
                         D3D11_BOX box = {};

@@ -1,6 +1,6 @@
 /**
  * @file RTSUnitSystem.h
- * @brief Unit management: templates, spawning, stats, and AI states
+ * @brief Unit management: templates, spawning, stats, and behavioral state
  * @author Spark Engine Team
  * @date 2026
  *
@@ -65,7 +65,7 @@ namespace RTS
     };
 
     /**
-     * @brief Manages unit templates, spawning, lifecycle, and simple AI
+     * @brief Manages unit templates, spawning, and lifecycle (Update removes dead units)
      */
     class RTSUnitSystem
     {
@@ -91,8 +91,21 @@ namespace RTS
         const UnitTemplate* GetTemplate(RTSUnitType type, RTSFaction faction) const;
         std::string GetUnitListString() const;
 
-        /** Replace all runtime units from a validated persistence snapshot. */
-        bool RestoreState(const std::vector<UnitData>& units);
+        /** @brief Id the next spawned unit receives (ids are never reused, so this is persistent state). */
+        uint32_t GetNextUnitId() const;
+
+        /**
+         * @brief Replace all runtime units from a validated persistence snapshot.
+         * @param nextUnitId  Id the next spawn receives; 0 derives it as one past the highest restored id,
+         *                    otherwise it must exceed every restored id.
+         * @return false (leaving state untouched) if any record or the id counter is invalid.
+         */
+        bool RestoreState(const std::vector<UnitData>& units, uint32_t nextUnitId = 0);
+
+        /// Largest visionRange a restored unit may carry (RTSPersistence validates saves against it too).
+        /// A gameplay bound, not a map bound: templates use 7-12, and every unit's reveal pass visits up to
+        /// (2 * range + 1)^2 fog cells each tick, so a map-sized range would let one save cost ~1e10 cells.
+        static constexpr float MAX_VISION_RANGE = 64.0f;
 
         // === Unit state ===
         void SetUnitState(uint32_t unitId, RTSUnitState state);
@@ -100,7 +113,6 @@ namespace RTS
 
       private:
         void RegisterFactionTemplates(RTSFaction faction);
-        void UpdateUnitAI(UnitData& unit, float deltaTime);
 
         Spark::IEngineContext* m_context{nullptr};
 

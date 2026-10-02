@@ -88,6 +88,10 @@ namespace Spark
     }
     void Process::Kill() {}
     void Process::WriteStdin(std::string_view) {}
+    std::size_t Process::WriteStdinFor(std::string_view, std::chrono::milliseconds)
+    {
+        return 0;
+    }
     void Process::CloseStdin() {}
     bool Process::TryReadLine(std::string&)
     {

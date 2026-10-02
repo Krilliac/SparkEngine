@@ -4,15 +4,20 @@
  */
 
 #include "ModuleManager.h"
+#include "ModuleSidecar.h"
 #include "Contracts.h"
 #include "EngineContext.h"
 #include "FaultIsolation.h"
 #include "IGameModule.h"
 #include "Spark/ModuleABI.h"
 #include "Spark/Version.h"
+#include "Utils/CrashHandler.h"
+#include "Engine/SaveSystem/SaveSystem.h"
+#ifdef ENABLE_NETWORKING
+#include "Engine/Networking/NetworkManager.h"
+#endif
 #include "Utils/SparkConsole.h"
 #include "Utils/InvalidStateDetector.h"
-#include "Utils/LocalFileCache.h"
 #include "Utils/JsonUtils.h"
 #include "Utils/Validate.h"
 
@@ -22,6 +27,7 @@
 #include <charconv>
 #include <chrono>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <exception>
@@ -30,6 +36,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -65,6 +72,40 @@ namespace
         return std::string(moduleName) + "#" +
                std::to_string(s_moduleRegistrationSerial.fetch_add(1, std::memory_order_relaxed));
     }
+
+    /// Whether a registration scope wraps a module's OnLoad or its OnUnload.
+    enum class ModuleRegistrationPhase : uint8_t
+    {
+        Load,
+        Teardown,
+    };
+
+    /// Attributes every host registry write and name-based removal to one module image.
+    /// Module teardown removes registrations by shared names; this scope keeps an
+    /// outgoing image from removing what its hot-reload replacement registered.
+    /// A Teardown scope also stops the outgoing image from overwriting a network
+    /// handler the replacement installed (see NetworkManager::ScopedRegistrationOwner).
+    struct ModuleRegistrationScope final
+    {
+        ModuleRegistrationScope(const std::string& ownerId, ModuleRegistrationPhase phase)
+            : console(Spark::SimpleConsole::GetInstance(), ownerId),
+              detector(Spark::InvalidStateDetector::GetInstance(), ownerId),
+              serializers(Spark::ComponentSerializerRegistry::GetInstance(), ownerId)
+#ifdef ENABLE_NETWORKING
+              ,
+              network(Spark::Net::NetworkManager::GetInstance(), ownerId, phase == ModuleRegistrationPhase::Teardown)
+#endif
+        {
+            (void)phase;
+        }
+
+        Spark::SimpleConsole::ScopedRegistrationOwner console;
+        Spark::InvalidStateDetector::ScopedRegistrationOwner detector;
+        Spark::ComponentSerializerRegistry::ScopedRegistrationOwner serializers;
+#ifdef ENABLE_NETWORKING
+        Spark::Net::NetworkManager::ScopedRegistrationOwner network;
+#endif
+    };
 
     void AccumulateLifecycleEvidence(ModuleManager::LifecycleEvidence& target,
                                      const ModuleManager::LifecycleEvidence& source)
@@ -108,18 +149,15 @@ namespace
         return std::filesystem::u8path(path.begin(), path.end());
     }
 
+    using Spark::ModuleSidecar::SidecarPath;
+    using Spark::ModuleSidecar::ValidateModuleSidecar;
+
     std::string PathToUtf8(const std::filesystem::path& path)
     {
         const std::u8string utf8 = path.generic_u8string();
         return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
     }
 
-    std::filesystem::path SidecarPath(const std::filesystem::path& modulePath)
-    {
-        std::filesystem::path sidecar = modulePath;
-        sidecar += ".sparkabi";
-        return sidecar;
-    }
 
     /**
      * @brief Rewrite a module path into the shared-library form this host builds.
@@ -187,254 +225,98 @@ namespace
 #endif
     }
 
-    constexpr uint32_t RotateRight(uint32_t value, uint32_t bits)
+    /// Upper bound for spark.modules.json; real manifests are well under 1 KiB.
+    constexpr std::uintmax_t kMaxManifestBytes = std::uintmax_t{1024} * 1024;
+
+    /// One module's declared dependencies, as the graph check sees them.
+    struct ModuleDependencyNode
     {
-        return (value >> bits) | (value << (32u - bits));
-    }
-
-    class ModuleSha256
-    {
-      public:
-        void Update(const uint8_t* data, size_t size)
-        {
-            for (size_t i = 0; i < size; ++i)
-            {
-                m_buffer[m_bufferSize++] = data[i];
-                if (m_bufferSize == m_buffer.size())
-                {
-                    Transform(m_buffer.data());
-                    m_bitLength += 512;
-                    m_bufferSize = 0;
-                }
-            }
-        }
-
-        std::string Finalize()
-        {
-            m_bitLength += static_cast<uint64_t>(m_bufferSize) * 8u;
-            m_buffer[m_bufferSize++] = 0x80u;
-
-            if (m_bufferSize > 56)
-            {
-                while (m_bufferSize < 64)
-                    m_buffer[m_bufferSize++] = 0;
-                Transform(m_buffer.data());
-                m_bufferSize = 0;
-            }
-
-            while (m_bufferSize < 56)
-                m_buffer[m_bufferSize++] = 0;
-            for (size_t i = 0; i < 8; ++i)
-                m_buffer[63 - i] = static_cast<uint8_t>(m_bitLength >> (i * 8u));
-            Transform(m_buffer.data());
-
-            static constexpr char kHex[] = "0123456789abcdef";
-            std::string result;
-            result.resize(64);
-            for (size_t i = 0; i < m_state.size(); ++i)
-            {
-                for (size_t byte = 0; byte < 4; ++byte)
-                {
-                    const uint8_t value = static_cast<uint8_t>(m_state[i] >> ((3u - byte) * 8u));
-                    const size_t offset = (i * 8u) + (byte * 2u);
-                    result[offset] = kHex[value >> 4u];
-                    result[offset + 1] = kHex[value & 0x0fu];
-                }
-            }
-            return result;
-        }
-
-      private:
-        void Transform(const uint8_t* block)
-        {
-            static constexpr std::array<uint32_t, 64> kRoundConstants = {
-                0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u, 0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
-                0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u, 0x72be5d74u, 0x80deb1feu, 0x9bdc06a7u, 0xc19bf174u,
-                0xe49b69c1u, 0xefbe4786u, 0x0fc19dc6u, 0x240ca1ccu, 0x2de92c6fu, 0x4a7484aau, 0x5cb0a9dcu, 0x76f988dau,
-                0x983e5152u, 0xa831c66du, 0xb00327c8u, 0xbf597fc7u, 0xc6e00bf3u, 0xd5a79147u, 0x06ca6351u, 0x14292967u,
-                0x27b70a85u, 0x2e1b2138u, 0x4d2c6dfcu, 0x53380d13u, 0x650a7354u, 0x766a0abbu, 0x81c2c92eu, 0x92722c85u,
-                0xa2bfe8a1u, 0xa81a664bu, 0xc24b8b70u, 0xc76c51a3u, 0xd192e819u, 0xd6990624u, 0xf40e3585u, 0x106aa070u,
-                0x19a4c116u, 0x1e376c08u, 0x2748774cu, 0x34b0bcb5u, 0x391c0cb3u, 0x4ed8aa4au, 0x5b9cca4fu, 0x682e6ff3u,
-                0x748f82eeu, 0x78a5636fu, 0x84c87814u, 0x8cc70208u, 0x90befffau, 0xa4506cebu, 0xbef9a3f7u, 0xc67178f2u,
-            };
-
-            std::array<uint32_t, 64> words{};
-            for (size_t i = 0; i < 16; ++i)
-            {
-                const size_t offset = i * 4;
-                words[i] = (static_cast<uint32_t>(block[offset]) << 24u) |
-                           (static_cast<uint32_t>(block[offset + 1]) << 16u) |
-                           (static_cast<uint32_t>(block[offset + 2]) << 8u) | static_cast<uint32_t>(block[offset + 3]);
-            }
-            for (size_t i = 16; i < words.size(); ++i)
-            {
-                const uint32_t s0 =
-                    RotateRight(words[i - 15], 7) ^ RotateRight(words[i - 15], 18) ^ (words[i - 15] >> 3u);
-                const uint32_t s1 =
-                    RotateRight(words[i - 2], 17) ^ RotateRight(words[i - 2], 19) ^ (words[i - 2] >> 10u);
-                words[i] = words[i - 16] + s0 + words[i - 7] + s1;
-            }
-
-            uint32_t a = m_state[0];
-            uint32_t b = m_state[1];
-            uint32_t c = m_state[2];
-            uint32_t d = m_state[3];
-            uint32_t e = m_state[4];
-            uint32_t f = m_state[5];
-            uint32_t g = m_state[6];
-            uint32_t h = m_state[7];
-            for (size_t i = 0; i < words.size(); ++i)
-            {
-                const uint32_t sum1 = RotateRight(e, 6) ^ RotateRight(e, 11) ^ RotateRight(e, 25);
-                const uint32_t choose = (e & f) ^ (~e & g);
-                const uint32_t temp1 = h + sum1 + choose + kRoundConstants[i] + words[i];
-                const uint32_t sum0 = RotateRight(a, 2) ^ RotateRight(a, 13) ^ RotateRight(a, 22);
-                const uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
-                const uint32_t temp2 = sum0 + majority;
-                h = g;
-                g = f;
-                f = e;
-                e = d + temp1;
-                d = c;
-                c = b;
-                b = a;
-                a = temp1 + temp2;
-            }
-
-            m_state[0] += a;
-            m_state[1] += b;
-            m_state[2] += c;
-            m_state[3] += d;
-            m_state[4] += e;
-            m_state[5] += f;
-            m_state[6] += g;
-            m_state[7] += h;
-        }
-
-        std::array<uint32_t, 8> m_state = {0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au,
-                                           0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u};
-        std::array<uint8_t, 64> m_buffer{};
-        size_t m_bufferSize = 0;
-        uint64_t m_bitLength = 0;
+        std::string name;
+        std::vector<std::string> dependencies;
     };
 
-    std::optional<std::string> ComputeModuleSha256(const std::filesystem::path& path)
+    /**
+     * @brief Describe why a module dependency graph cannot be initialized.
+     *
+     * SortModules orders what it can and appends the rest, so a declared
+     * dependency that is not loaded, or a dependency cycle, would otherwise
+     * start a module before (or without) the modules it said it needs.
+     *
+     * @return An empty string when every dependency names a node and the graph
+     *         is acyclic; otherwise the first problem found.
+     */
+    std::string DescribeDependencyGraphError(const std::vector<ModuleDependencyNode>& nodes)
     {
-        std::ifstream file(path, std::ios::binary);
-        if (!file)
-            return std::nullopt;
+        std::unordered_map<std::string, size_t> nameToIndex;
+        for (size_t i = 0; i < nodes.size(); ++i)
+            nameToIndex.emplace(nodes[i].name, i);
 
-        ModuleSha256 sha;
-        std::vector<uint8_t> buffer(64 * 1024);
-        while (file)
+        std::vector<std::vector<size_t>> dependents(nodes.size());
+        std::vector<size_t> unmet(nodes.size(), 0);
+        for (size_t i = 0; i < nodes.size(); ++i)
         {
-            file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
-            const std::streamsize count = file.gcount();
-            if (count > 0)
-                sha.Update(buffer.data(), static_cast<size_t>(count));
-        }
-        if (!file.eof())
-            return std::nullopt;
-        return sha.Finalize();
-    }
-
-    bool ParseSidecarUInt(const std::unordered_map<std::string, std::string>& values, std::string_view key,
-                          uint32_t& output, std::string& error)
-    {
-        const auto it = values.find(std::string(key));
-        if (it == values.end())
-        {
-            error = "missing field '" + std::string(key) + "'";
-            return false;
-        }
-
-        const char* begin = it->second.data();
-        const char* end = begin + it->second.size();
-        const auto [parsedEnd, parseError] = std::from_chars(begin, end, output);
-        if (parseError != std::errc{} || parsedEnd != end)
-        {
-            error = "invalid integer field '" + std::string(key) + "'";
-            return false;
-        }
-        return true;
-    }
-
-    bool ValidateModuleSidecar(const std::filesystem::path& modulePath, std::string& error)
-    {
-        const std::filesystem::path sidecarPath = SidecarPath(modulePath);
-        std::ifstream sidecar(sidecarPath, std::ios::binary);
-        if (!sidecar)
-        {
-            error = "missing mandatory ABI sidecar '" + PathToUtf8(sidecarPath) + "'";
-            return false;
-        }
-
-        std::unordered_map<std::string, std::string> values;
-        std::string line;
-        while (std::getline(sidecar, line))
-        {
-            if (!line.empty() && line.back() == '\r')
-                line.pop_back();
-            const size_t separator = line.find('=');
-            if (separator == std::string::npos || separator == 0 || separator + 1 >= line.size())
+            for (const std::string& dependency : nodes[i].dependencies)
             {
-                error = "malformed ABI sidecar line";
-                return false;
-            }
-            if (!values.emplace(line.substr(0, separator), line.substr(separator + 1)).second)
-            {
-                error = "duplicate ABI sidecar field";
-                return false;
+                const auto it = nameToIndex.find(dependency);
+                if (it == nameToIndex.end())
+                {
+                    return "Module '" + nodes[i].name + "' depends on '" + dependency + "', which is not loaded";
+                }
+                dependents[it->second].push_back(i);
+                ++unmet[i];
             }
         }
 
-        SparkModuleCompatibilityDescriptor descriptor{};
-        if (!ParseSidecarUInt(values, "struct_size", descriptor.structSize, error) ||
-            !ParseSidecarUInt(values, "magic", descriptor.magic, error) ||
-            !ParseSidecarUInt(values, "format", descriptor.descriptorVersion, error) ||
-            !ParseSidecarUInt(values, "sdk_version", descriptor.sdkVersion, error) ||
-            !ParseSidecarUInt(values, "runtime_abi_version", descriptor.runtimeABIVersion, error) ||
-            !ParseSidecarUInt(values, "compiler_family", descriptor.compilerFamily, error) ||
-            !ParseSidecarUInt(values, "compiler_abi_version", descriptor.compilerABIVersion, error) ||
-            !ParseSidecarUInt(values, "cxx_language_level", descriptor.cxxLanguageLevel, error) ||
-            !ParseSidecarUInt(values, "runtime_library", descriptor.runtimeLibrary, error) ||
-            !ParseSidecarUInt(values, "iterator_debug_level", descriptor.iteratorDebugLevel, error) ||
-            !ParseSidecarUInt(values, "pointer_size", descriptor.pointerSize, error))
+        std::vector<size_t> ready;
+        for (size_t i = 0; i < nodes.size(); ++i)
         {
-            return false;
+            if (unmet[i] == 0)
+            {
+                ready.push_back(i);
+            }
+        }
+        size_t resolved = 0;
+        while (!ready.empty())
+        {
+            const size_t node = ready.back();
+            ready.pop_back();
+            ++resolved;
+            for (const size_t dependent : dependents[node])
+            {
+                if (--unmet[dependent] == 0)
+                {
+                    ready.push_back(dependent);
+                }
+            }
+        }
+        if (resolved == nodes.size())
+        {
+            return {};
         }
 
-        const auto hashIt = values.find("binary_sha256");
-        if (hashIt == values.end() || hashIt->second.size() != 64)
+        std::string cycle;
+        for (size_t i = 0; i < nodes.size(); ++i)
         {
-            error = "missing or invalid binary_sha256 field";
-            return false;
+            if (unmet[i] != 0)
+            {
+                cycle += (cycle.empty() ? "'" : ", '") + nodes[i].name + "'";
+            }
         }
-        if (values.size() != 12)
-        {
-            error = "unexpected ABI sidecar fields";
-            return false;
-        }
+        return "Circular module dependency involving " + cycle;
+    }
 
-        const Spark::ModuleCompatibilityStatus status = Spark::CheckModuleCompatibility(&descriptor);
-        if (status != Spark::ModuleCompatibilityStatus::Compatible)
+    ModuleDependencyNode MakeDependencyNode(const std::string& name, const Spark::IModule& instance)
+    {
+        ModuleDependencyNode node{name, {}};
+        const Spark::ModuleInfo info = instance.GetModuleInfo();
+        for (int d = 0; d < info.dependencyCount && info.dependencies; ++d)
         {
-            error = Spark::ModuleCompatibilityStatusName(status);
-            return false;
+            if (info.dependencies[d])
+            {
+                node.dependencies.emplace_back(info.dependencies[d]);
+            }
         }
-
-        const std::optional<std::string> actualHash = ComputeModuleSha256(modulePath);
-        if (!actualHash)
-        {
-            error = "failed to hash module binary";
-            return false;
-        }
-        if (*actualHash != hashIt->second)
-        {
-            error = "ABI sidecar binary hash mismatch";
-            return false;
-        }
-        return true;
+        return node;
     }
 
 #ifndef _WIN32
@@ -568,8 +450,10 @@ namespace
                     std::filesystem::remove_all(stagingDirectory, ignored);
                     continue;
                 }
+                // remove_all: a copy that failed part-way (EFBIG, ENOSPC) leaves the
+                // partial image behind, and remove() of a non-empty directory fails.
                 std::error_code ignored;
-                std::filesystem::remove(stagingDirectory, ignored);
+                std::filesystem::remove_all(stagingDirectory, ignored);
                 error = "failed to stage module image: " + copyError.message();
                 return false;
             }
@@ -704,6 +588,36 @@ ModuleManager::LifecycleEvidence ModuleManager::GetLastTeardownLifecycleEvidence
     return s_lastTeardownLifecycleEvidence;
 }
 
+void ModuleManager::PublishLifecycleEvidence() const
+{
+    PublishTeardownLifecycleEvidence(m_lifecycleEvidence);
+}
+
+std::string ModuleManager::LibraryTargetName(std::string_view libraryPath)
+{
+    // Split on either separator so a Windows-style path is handled on POSIX too.
+    const size_t separator = libraryPath.find_last_of("/\\");
+    std::string_view filename = separator == std::string_view::npos ? libraryPath : libraryPath.substr(separator + 1);
+    const size_t extension = filename.rfind('.');
+    if (extension != std::string_view::npos && extension > 0)
+        filename = filename.substr(0, extension);
+#ifndef _WIN32
+    // CMAKE_SHARED_LIBRARY_PREFIX is "lib" on Linux and macOS; the Windows
+    // record names the bare target, so strip it to keep one identity.
+    if (filename.size() > 3 && filename.starts_with("lib"))
+        filename.remove_prefix(3);
+#endif
+    return std::string(filename);
+}
+
+std::string ModuleManager::FormatLifecycleRecord(const ModuleLifecycleRecord& record)
+{
+    return std::format("SPARK_MODULE_LIFECYCLE module={} create={} load={} update={} fixed={} render={} unload={} "
+                       "destroy={} faults={}",
+                       LibraryTargetName(record.libraryPath), record.createModule, record.onLoad, record.onUpdate,
+                       record.onFixedUpdate, record.onRender, record.onUnload, record.destroyModule, record.faults);
+}
+
 bool ModuleManager::LoadModule(const std::string& path)
 {
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -711,7 +625,11 @@ bool ModuleManager::LoadModule(const std::string& path)
 
     const auto failLoad = [&](std::string message)
     {
+        // A rejection after dlopen has already unmapped the image; drop its
+        // recorded range so a later crash never attributes frames to it.
+        RefreshCrashModuleIdentities();
         m_lastLoadError = std::move(message);
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "%s", m_lastLoadError.c_str());
         console.LogError(m_lastLoadError);
         return false;
     };
@@ -729,7 +647,22 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad("Module path rejected — contains '..' traversal: " + path);
     }
 
+#ifdef _WIN32
+    // The image the sidecar hashes must be the image the loader maps. A bare
+    // or relative name would be hashed relative to the working directory but
+    // resolved by LoadLibrary through the DLL search order, so pin, validate
+    // and load one absolute path. LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR below also
+    // requires an absolute path.
+    std::error_code absolutePathError;
+    const std::filesystem::path modulePath = std::filesystem::absolute(PathFromUtf8(path), absolutePathError);
+    if (absolutePathError)
+    {
+        return failLoad(
+            std::format("Failed to resolve module path '{}' for validation: {}", path, absolutePathError.message()));
+    }
+#else
     const std::filesystem::path modulePath = PathFromUtf8(path);
+#endif
 
 #ifndef _WIN32
     // A compiler or build system may atomically replace the source .so/.dylib
@@ -750,7 +683,7 @@ bool ModuleManager::LoadModule(const std::string& path)
 
 #ifdef _WIN32
     // Prevent a concurrent rebuild, rename, or delete from changing the image
-    // between the sidecar hash check and LoadLibraryW. The loader may still
+    // between the sidecar hash check and LoadLibraryExW. The loader may still
     // acquire its own read handle, while writers and delete/replace operations
     // remain excluded until the mapped image has been opened.
     HANDLE pinnedModule = CreateFileW(modulePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
@@ -776,12 +709,18 @@ bool ModuleManager::LoadModule(const std::string& path)
     // Load the shared library only after the non-executing compatibility gate.
     void* handle = nullptr;
 #ifdef _WIN32
-    handle = LoadLibraryW(modulePath.c_str());
+    // The sidecar hash covers only this image. Its static imports are resolved
+    // from the module's own directory, then the application directory,
+    // AddDllDirectory entries and System32 -- never the current directory or
+    // PATH, where a planted dependency would run DllMain before the in-image
+    // descriptor is read. DynamicPluginHost uses the same search set.
+    handle = LoadLibraryExW(modulePath.c_str(), nullptr,
+                            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     CloseHandle(pinnedModule);
     if (!handle)
     {
         DWORD err = GetLastError();
-        return failLoad(std::format("Failed to load module '{}' with LoadLibraryW (error {})", path, err));
+        return failLoad(std::format("Failed to load module '{}' with LoadLibraryExW (error {})", path, err));
     }
 #else
     const std::string loadPath = PathToUtf8(validatedModulePath);
@@ -792,6 +731,9 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad(std::format("Failed to load module '{}' (staged as '{}') with dlopen(RTLD_NOW): {}", path,
                                     loadPath, err ? err : "unknown dynamic-loader error"));
     }
+    // Record the module's build-id before any export is called, so a crash in
+    // it symbolicates from the symbol store (tools/ops/symbolicate_crash.py).
+    RefreshCrashModuleIdentities();
 #endif
 
     // Re-read the in-image descriptor as defense in depth after the sidecar
@@ -810,14 +752,12 @@ bool ModuleManager::LoadModule(const std::string& path)
         return failLoad(message);
     }
 
-    const SparkModuleCompatibilityDescriptor* compatibility = compatibilityFn();
-    const Spark::ModuleCompatibilityStatus compatibilityStatus = Spark::CheckModuleCompatibility(compatibility);
-    if (compatibilityStatus != Spark::ModuleCompatibilityStatus::Compatible)
+    const std::string compatibilityRejection = DescribeModuleCompatibilityRejection(compatibilityFn());
+    if (!compatibilityRejection.empty())
     {
         const std::string message =
-            std::format("Module '{}' rejected before injection/factory: {}. Rebuild it with the same "
-                        "Spark SDK, compiler ABI, C++ mode, architecture, and runtime configuration.",
-                        path, Spark::ModuleCompatibilityStatusName(compatibilityStatus));
+            std::format("Module '{}' in-image compatibility descriptor rejected before injection/factory: {}", path,
+                        compatibilityRejection);
         CloseModuleLibrary(handle);
         return failLoad(message);
     }
@@ -899,11 +839,15 @@ bool ModuleManager::LoadModule(const std::string& path)
 
         auto info = instance->GetModuleInfo();
 
-        // SDK version compatibility check
+        // Defense in depth: the sidecar and in-image descriptor already pinned
+        // sdk_version before OS load, so this only fires for a module whose
+        // hand-written ModuleInfo contradicts its own compatibility descriptor.
         if (!Spark::IsSDKCompatible(info.sdkVersion))
         {
-            const std::string message = std::format("Module '{}' SDK version mismatch (module={}, engine={})",
-                                                    info.name, info.sdkVersion, SPARK_SDK_VERSION);
+            const std::string message =
+                std::format("Module '{}' ('{}') rejected: ModuleInfo field 'sdkVersion' host expects {}, module "
+                            "declares {}; stable-v1 module ABI is exact-match only (N-1 modules are not loaded)",
+                            info.name, path, SPARK_SDK_VERSION, info.sdkVersion);
             destroyFn(instance);
 #ifdef _WIN32
             FreeLibrary(static_cast<HMODULE>(handle));
@@ -954,7 +898,14 @@ bool ModuleManager::LoadModule(const std::string& path)
         console.LogSuccess(std::format("Loaded module: {} v{}", info.name, info.version));
         m_modules.push_back(std::move(entry));
         if (!m_modules.back().isLegacyAdapter)
-            ++FindOrCreateLifecycleRecord(m_modules.back().name).createModule;
+        {
+            ModuleLifecycleRecord& record = FindOrCreateLifecycleRecord(m_modules.back().name);
+            ++record.createModule;
+            // A hot-reload replacement is created by a staged manager from a
+            // shadow copy; merging its evidence keeps this live-manager path.
+            record.libraryPath = path;
+            record.kind = info.kind;
+        }
 #ifndef _WIN32
         stagedImage.Disarm();
 #endif
@@ -1061,79 +1012,87 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
     const std::filesystem::path manifestFile = PathFromUtf8(manifestPath);
     m_lastLoadError.clear();
 
-    std::string content;
-
-#ifndef _WIN32
-    // LocalFileCache's string-only FileUtils backend is UTF-8-safe on POSIX,
-    // but cannot open arbitrary Unicode paths on Windows. Use the native path
-    // stream below there so the manifest stays wide end-to-end.
-    if (m_fileCache)
+    const auto failManifest = [&](std::string message)
     {
-        auto result = m_fileCache->ReadText(manifestPath);
-        if (result.IsOk())
-        {
-            content = result.Value();
-        }
+        m_lastLoadError = std::move(message);
+        console.LogError(m_lastLoadError);
+        return false;
+    };
+
+    // A manifest is a small regular file. A FIFO, a device or a symlink to one
+    // (/dev/zero, /dev/urandom) has no usable size and could stream forever or
+    // block the open, so refuse anything that is not a regular file before
+    // opening it, and refuse a regular file past the budget before reading it.
+    std::error_code statusError;
+    const bool isRegularFile = std::filesystem::is_regular_file(manifestFile, statusError);
+    if (statusError || !isRegularFile)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' as a regular file",
+                        manifestPath.c_str());
+        return failManifest("Could not open module manifest as a regular file: " + manifestPath);
     }
-#endif
-
-    if (content.empty())
+    std::error_code sizeError;
+    const std::uintmax_t manifestBytes = std::filesystem::file_size(manifestFile, sizeError);
+    if (sizeError)
     {
-        std::ifstream file(manifestFile);
-        if (!file.is_open())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
-                            manifestPath.c_str(), errno);
-            m_lastLoadError = "Could not open module manifest: " + manifestPath;
-            console.LogWarning(m_lastLoadError);
-            return false;
-        }
-        content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        file.close();
+        return failManifest("Could not read module manifest size: " + manifestPath);
+    }
+    if (manifestBytes > kMaxManifestBytes)
+    {
+        return failManifest(std::format("Module manifest exceeds {} bytes: {}", kMaxManifestBytes, manifestPath));
+    }
+
+    // Always read the manifest straight from disk, bounded to one byte past the
+    // budget: the file can still grow (or be swapped) after the checks above.
+    // LocalFileCache is deliberately not used here; its whole-file read has no
+    // limit and a cached copy would outlive an edited manifest.
+    std::ifstream file(manifestFile, std::ios::binary);
+    if (!file.is_open())
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "ModuleManager: cannot open manifest '%s' (errno=%d)",
+                        manifestPath.c_str(), errno);
+        m_lastLoadError = "Could not open module manifest: " + manifestPath;
+        console.LogWarning(m_lastLoadError);
+        return false;
+    }
+    std::string content(static_cast<std::size_t>(kMaxManifestBytes) + 1, '\0');
+    file.read(content.data(), static_cast<std::streamsize>(content.size()));
+    content.resize(static_cast<std::size_t>(std::max<std::streamsize>(file.gcount(), 0)));
+    if (content.size() > kMaxManifestBytes)
+    {
+        return failManifest(std::format("Module manifest exceeds {} bytes: {}", kMaxManifestBytes, manifestPath));
     }
 
     const std::filesystem::path manifestDir = manifestFile.parent_path();
-    bool anyLoaded = false;
 
     Spark::Json::Value manifest;
     std::string parseError;
     if (!Spark::Json::ParseStrict(content, &manifest, &parseError) || !manifest.IsObject())
     {
-        m_lastLoadError = "Module manifest is not valid JSON: " + manifestPath +
-                          (parseError.empty() ? std::string{} : " (" + parseError + ")");
-        console.LogError(m_lastLoadError);
-        return false;
+        return failManifest("Module manifest is not valid JSON: " + manifestPath +
+                            (parseError.empty() ? std::string{} : " (" + parseError + ")"));
     }
 
     const Spark::Json::Value& modules = manifest["modules"];
     if (!modules.IsArray() || modules.Size() == 0)
-    {
-        m_lastLoadError = "Module manifest must contain a non-empty modules array: " + manifestPath;
-        console.LogError(m_lastLoadError);
-        return false;
-    }
+        return failManifest("Module manifest must contain a non-empty modules array: " + manifestPath);
 
+    // The manifest names the exact module set this process runs. Resolve every
+    // entry before loading any of them, so a malformed or missing entry fails
+    // the manifest instead of starting a partial module set.
+    std::vector<std::filesystem::path> resolvedPaths;
+    resolvedPaths.reserve(modules.Size());
     for (size_t index = 0; index < modules.Size(); ++index)
     {
         const Spark::Json::Value& module = modules[index];
-        if (!module.IsObject())
+        if (!module.IsObject() || !module["path"].IsString())
         {
-            console.LogWarning(std::format("Module manifest entry {} has no string path", index));
-            continue;
-        }
-        const Spark::Json::Value& path = module["path"];
-        if (!path.IsString())
-        {
-            console.LogWarning(std::format("Module manifest entry {} has no string path", index));
-            continue;
+            return failManifest(std::format("Module manifest entry {} has no string path: {}", index, manifestPath));
         }
 
-        const std::string modulePath = path.AsString();
+        const std::string modulePath = module["path"].AsString();
         if (modulePath.empty())
-        {
-            console.LogWarning(std::format("Module manifest entry {} has an empty path", index));
-            continue;
-        }
+            return failManifest(std::format("Module manifest entry {} has an empty path: {}", index, manifestPath));
 
         // Resolve relative paths against manifest directory
         std::filesystem::path fullPath = PathFromUtf8(modulePath);
@@ -1155,23 +1114,49 @@ bool ModuleManager::LoadModulesFromManifest(const std::string& manifestPath)
             }
         }
 
-        if (std::filesystem::exists(fullPath))
+        if (!std::filesystem::exists(fullPath))
         {
-            if (LoadModule(PathToUtf8(fullPath)))
-                anyLoaded = true;
+            return failManifest("Module not found: " + PathToUtf8(fullPath));
         }
-        else
-        {
-            m_lastLoadError = "Module not found: " + PathToUtf8(fullPath);
-            console.LogWarning(m_lastLoadError);
-        }
+        resolvedPaths.push_back(std::move(fullPath));
     }
 
-    if (anyLoaded)
-        m_lastLoadError.clear();
-    else if (m_lastLoadError.empty())
-        m_lastLoadError = "Module manifest did not contain a loadable module: " + manifestPath;
-    return anyLoaded;
+    // Modules loaded before this call are not part of this manifest's rollback.
+    std::vector<std::string> preexistingOwners;
+    preexistingOwners.reserve(m_modules.size());
+    for (const auto& entry : m_modules)
+    {
+        preexistingOwners.push_back(entry.registrationOwner);
+    }
+
+    for (const auto& fullPath : resolvedPaths)
+    {
+        if (LoadModule(PathToUtf8(fullPath)))
+        {
+            continue;
+        }
+
+        // A rejected entry (ABI, hash, identity or policy) fails the manifest.
+        // Every module this call loaded is still uninitialized; unload them so
+        // the host never initializes a partial set.
+        const std::string rejection = m_lastLoadError;
+        for (auto entry = m_modules.begin(); entry != m_modules.end();)
+        {
+            if (std::find(preexistingOwners.begin(), preexistingOwners.end(), entry->registrationOwner) !=
+                preexistingOwners.end())
+            {
+                ++entry;
+                continue;
+            }
+            UnregisterModuleRegistrations(*entry);
+            UnloadEntry(*entry);
+            entry = m_modules.erase(entry);
+        }
+        return failManifest(std::format("Module manifest {} rejected: {}", manifestPath, rejection));
+    }
+
+    m_lastLoadError.clear();
+    return true;
 }
 
 bool ModuleManager::LoadModulesFromDirectory(const std::string& directory)
@@ -1306,6 +1291,26 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
         return false;
     }
 
+    if (m_validateDependencyGraph)
+    {
+        std::vector<ModuleDependencyNode> graph;
+        graph.reserve(m_modules.size());
+        for (const auto& entry : m_modules)
+        {
+            if (entry.instance)
+            {
+                graph.push_back(MakeDependencyNode(entry.name, *entry.instance));
+            }
+        }
+        const std::string graphError = DescribeDependencyGraphError(graph);
+        if (!graphError.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Refusing to initialize modules: %s", graphError.c_str());
+            console.LogError("Refusing to initialize modules: " + graphError);
+            return false;
+        }
+    }
+
     bool allInitialized = true;
     for (auto& entry : m_modules)
     {
@@ -1318,11 +1323,41 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
             continue;
         }
 
+        // The graph check above only proves every dependency is loaded. One can
+        // still fail (or throw from) its own OnLoad earlier in this pass, which
+        // destroys its instance; the modules sorted after it must then not start
+        // without it. Require every declared dependency to be initialized right
+        // now. A skipped module stays uninitialized, so its own dependents are
+        // skipped in turn (the order is topological). The reload staging
+        // manager holds only the replacement and checks the live graph instead.
+        if (m_validateDependencyGraph)
+        {
+            const ModuleDependencyNode node = MakeDependencyNode(entry.name, *entry.instance);
+            const auto unmetDependency =
+                std::find_if(node.dependencies.begin(), node.dependencies.end(),
+                             [this](const std::string& dependency)
+                             {
+                                 return std::none_of(m_modules.begin(), m_modules.end(),
+                                                     [&dependency](const LoadedModule& provider) {
+                                                         return provider.name == dependency && provider.initialized &&
+                                                                provider.instance != nullptr;
+                                                     });
+                             });
+            if (unmetDependency != node.dependencies.end())
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "Module '%s' not initialized: its dependency '%s' is not initialized",
+                                entry.name.c_str(), unmetDependency->c_str());
+                console.LogError("Module initialization skipped: " + entry.name + " (dependency '" + *unmetDependency +
+                                 "' is not initialized)");
+                allInitialized = false;
+                continue;
+            }
+        }
+
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Initializing module: %s", entry.name.c_str());
         console.LogInfo("Initializing module: " + entry.name);
-        Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
-        auto& detector = Spark::InvalidStateDetector::GetInstance();
-        Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
+        ModuleRegistrationScope registrationScope(entry.registrationOwner, ModuleRegistrationPhase::Load);
         bool loadSucceeded = false;
         try
         {
@@ -1373,13 +1408,17 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
             // instance NOW, while every engine service it may reference
             // (physics, ECS world, event bus) is still alive. OnUnload() runs
             // first so the module can deregister anything its partial OnLoad
-            // installed. The DLL itself stays mapped until the normal
-            // UnloadAll so any registrations that survive (console commands,
-            // event channels) never point at unmapped code.
+            // installed. The host removes only owner-scoped registrations
+            // (console, invalid-state rules, serializers); an EventBus,
+            // network or timer callback the partial OnLoad left behind can
+            // still point into the image, so it is never unmapped (see
+            // LoadedModule::retainImage), including a failed hot-reload
+            // replacement whose staging manager unloads it immediately.
             SPARK_LOG_WARN(Spark::LogCategory::Core,
                            "Module '%s' failed OnLoad — destroying its instance immediately "
-                           "(DLL stays mapped until engine shutdown)",
+                           "(its image stays mapped for the rest of the process)",
                            entry.name.c_str());
+            entry.retainImage = true;
             bool unloadCompleted = false;
             try
             {
@@ -1402,11 +1441,21 @@ bool ModuleManager::InitializeAll(Spark::IEngineContext* context)
                 if (!entry.isLegacyAdapter)
                     ++FindOrCreateLifecycleRecord(entry.name).onUnload;
             }
-            if (entry.destroyFn)
+            if (unloadCompleted && entry.destroyFn)
             {
                 entry.destroyFn(entry.instance);
                 if (!entry.isLegacyAdapter)
                     ++FindOrCreateLifecycleRecord(entry.name).destroyModule;
+            }
+            else if (!unloadCompleted)
+            {
+                // The partial OnUnload did not finish, so callbacks it should
+                // have removed may still capture this instance. Leak it rather
+                // than turn their next dispatch into a use-after-free.
+                SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                "Module '%s' instance quarantined, not destroyed: its partial OnUnload did not "
+                                "complete",
+                                entry.name.c_str());
             }
             entry.instance = nullptr;
             entry.destroyFn = nullptr;
@@ -1566,9 +1615,7 @@ void ModuleManager::ShutdownAllAfterPreflight()
         if (it->initialized && it->instance)
         {
             console.LogInfo("Shutting down module: " + it->name);
-            Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, it->registrationOwner);
-            auto& detector = Spark::InvalidStateDetector::GetInstance();
-            Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, it->registrationOwner);
+            ModuleRegistrationScope registrationScope(it->registrationOwner, ModuleRegistrationPhase::Teardown);
             it->instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!it->isLegacyAdapter)
@@ -1636,6 +1683,30 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         const std::filesystem::path sourceSidecar = SidecarPath(sourcePath);
         const std::filesystem::path shadowSidecar = SidecarPath(shadowPath);
 
+        // A replacement whose OnLoad failed keeps its shadow mapped until its
+        // process exits (LoadedModule::retainImage), so the file outlives it.
+        // Remove this module's earlier shadows; one still mapped by a live
+        // process cannot be deleted and is skipped.
+        {
+            const std::string shadowPrefix = PathToUtf8(sourcePath.stem()) + ".spark-reload-";
+            std::vector<std::filesystem::path> staleShadows;
+            std::error_code sweepError;
+            for (std::filesystem::directory_iterator it(sourcePath.parent_path(), sweepError), end;
+                 !sweepError && it != end; it.increment(sweepError))
+            {
+                if (PathToUtf8(it->path().filename()).starts_with(shadowPrefix) &&
+                    it->path().extension() == sourcePath.extension())
+                {
+                    staleShadows.push_back(it->path());
+                }
+            }
+            for (const auto& staleShadow : staleShadows)
+            {
+                std::error_code removeError;
+                std::filesystem::remove(staleShadow, removeError);
+            }
+        }
+
         auto removeShadowFiles = [&]()
         {
             std::error_code cleanupError;
@@ -1674,7 +1745,6 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
 
         ModuleManager stagedManager;
         stagedManager.m_publishTeardownLifecycleEvidence = false;
-        stagedManager.m_fileCache = m_fileCache;
         if (!stagedManager.LoadModule(PathToUtf8(shadowPath)))
         {
             const std::string detail = stagedManager.GetLastLoadError();
@@ -1717,9 +1787,36 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
             }
         }
 
+        // The staged manager holds only the replacement, so check its declared
+        // dependencies against the live graph with the replacement swapped in.
+        // The replacement's OnLoad runs below, so only initialized modules can
+        // satisfy a dependency: one that is loaded but never started (or was
+        // skipped because its own dependency failed) must not count.
+        std::vector<ModuleDependencyNode> graph;
+        graph.reserve(m_modules.size());
+        for (size_t otherIndex = 0; otherIndex < m_modules.size(); ++otherIndex)
+        {
+            if (otherIndex == index)
+            {
+                graph.push_back(MakeDependencyNode(name, *stagedManager.m_modules.front().instance));
+            }
+            else if (m_modules[otherIndex].initialized && m_modules[otherIndex].instance)
+            {
+                graph.push_back(MakeDependencyNode(m_modules[otherIndex].name, *m_modules[otherIndex].instance));
+            }
+        }
+        if (std::string graphError = DescribeDependencyGraphError(graph); !graphError.empty())
+        {
+            stagedManager.UnloadAll();
+            removeShadowFiles();
+            return failReload(
+                std::format("Staged replacement dependency graph is invalid for '{}': {}", name, graphError));
+        }
+
         // Initialize the replacement before touching the working instance. A
         // failed OnLoad is cleaned up by InitializeAll and leaves the old
         // module, including its in-memory state and registry callbacks, intact.
+        stagedManager.m_validateDependencyGraph = false;
         stagedManager.InitializeAll(context);
         AccumulateLifecycleEvidence(m_lifecycleEvidence, stagedManager.m_lifecycleEvidence);
         stagedManager.m_lifecycleEvidence = {};
@@ -1747,9 +1844,7 @@ bool ModuleManager::ReloadModule(const std::string& name, Spark::IEngineContext*
         // Commit only after the replacement is fully usable.
         if (entry.initialized && entry.instance)
         {
-            Spark::SimpleConsole::ScopedRegistrationOwner consoleOwner(console, entry.registrationOwner);
-            auto& detector = Spark::InvalidStateDetector::GetInstance();
-            Spark::InvalidStateDetector::ScopedRegistrationOwner detectorOwner(detector, entry.registrationOwner);
+            ModuleRegistrationScope registrationScope(entry.registrationOwner, ModuleRegistrationPhase::Teardown);
             entry.instance->OnUnload();
             ++m_lifecycleEvidence.unloaded;
             if (!entry.isLegacyAdapter)
@@ -1951,11 +2046,22 @@ void ModuleManager::UnregisterModuleRegistrations(const LoadedModule& entry)
     auto& console = Spark::SimpleConsole::GetInstance();
     const size_t removedCommands = console.UnregisterCommandsByOwner(entry.registrationOwner);
     const size_t removedRules = Spark::InvalidStateDetector::GetInstance().RemoveRulesByOwner(entry.registrationOwner);
-    if (removedCommands != 0 || removedRules != 0)
+    const size_t removedSerializers =
+        Spark::ComponentSerializerRegistry::GetInstance().UnregisterByOwner(entry.registrationOwner);
+    size_t removedNetworkHandlers = 0;
+#ifdef ENABLE_NETWORKING
+    // Every caller runs this while the module image is still mapped: a network callback whose invoker or
+    // destructor lives in that image must be destroyed now, not by a later packet, a later replacement or the
+    // engine-shutdown ClearHandlers after FreeLibrary/dlclose.
+    removedNetworkHandlers =
+        Spark::Net::NetworkManager::GetInstance().UnregisterHandlersByOwner(entry.registrationOwner);
+#endif
+    if (removedCommands != 0 || removedRules != 0 || removedSerializers != 0 || removedNetworkHandlers != 0)
     {
         SPARK_LOG_INFO(Spark::LogCategory::Core,
-                       "Removed %zu console command(s) and %zu invalid-state rule(s) owned by module '%s'",
-                       removedCommands, removedRules, entry.name.c_str());
+                       "Removed %zu console command(s), %zu invalid-state rule(s), %zu save serializer(s) and %zu "
+                       "network handler(s) owned by module '%s'",
+                       removedCommands, removedRules, removedSerializers, removedNetworkHandlers, entry.name.c_str());
     }
 }
 
@@ -1989,7 +2095,14 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
     entry.createFn = nullptr;
     entry.destroyFn = nullptr;
 
-    if (entry.libraryHandle)
+    if (entry.libraryHandle && entry.retainImage)
+    {
+        // Deliberately leak the mapping: see LoadedModule::retainImage.
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "Module '%s' failed OnLoad; its image stays mapped until process exit",
+                       entry.name.c_str());
+        entry.libraryHandle = nullptr;
+    }
+    else if (entry.libraryHandle)
     {
 #ifdef _WIN32
         FreeLibrary(static_cast<HMODULE>(entry.libraryHandle));
@@ -1997,6 +2110,9 @@ void ModuleManager::UnloadEntry(LoadedModule& entry)
         dlclose(entry.libraryHandle);
 #endif
         entry.libraryHandle = nullptr;
+        // The unmapped range may be reused by a later mapping; forget it so
+        // crash frames there are never resolved against this module.
+        RefreshCrashModuleIdentities();
     }
 
     if (!entry.transientImagePath.empty())

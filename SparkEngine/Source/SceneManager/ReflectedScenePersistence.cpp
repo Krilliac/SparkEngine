@@ -4,8 +4,14 @@
 #include "Engine/ECS/Components.h"
 #include "Utils/LogMacros.h"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <format>
 #include <fstream>
 #include <filesystem>
+#include <new>
+#include <string>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -23,13 +29,72 @@ namespace Spark
 {
     namespace
     {
-        bool ReadTextFile(const std::filesystem::path& path, std::string& text)
+        /// Read a scene document of at most kMaxSceneDocumentBytes. The size is
+        /// checked before anything is allocated, and the read itself stops one byte
+        /// past the limit, so a file that grows between the size check and the read
+        /// is rejected too. On failure @p reason names the cause.
+        bool ReadTextFile(const std::filesystem::path& path, std::string& text, std::string& reason)
         {
+            text.clear();
+            std::error_code statusError;
+            if (!std::filesystem::is_regular_file(path, statusError))
+            {
+                reason = "file is not a regular file";
+                return false;
+            }
+            const std::uintmax_t declaredSize = std::filesystem::file_size(path, statusError);
+            if (statusError)
+            {
+                reason = "file size could not be read: " + statusError.message();
+                return false;
+            }
+            if (declaredSize > kMaxSceneDocumentBytes)
+            {
+                reason = std::format("file is {} bytes; the scene size limit is {} bytes", declaredSize,
+                                     kMaxSceneDocumentBytes);
+                return false;
+            }
+
             std::ifstream input(path, std::ios::binary);
             if (!input.is_open())
+            {
+                reason = "file could not be read";
                 return false;
-            text.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-            return input.good() || input.eof();
+            }
+            try
+            {
+                text.reserve(static_cast<size_t>(declaredSize));
+                constexpr size_t kChunkBytes = size_t{1024} * 1024u;
+                std::string chunk(kChunkBytes, '\0');
+                while (input)
+                {
+                    input.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+                    const auto got = static_cast<size_t>(input.gcount());
+                    if (got == 0)
+                        break;
+                    if (static_cast<uint64_t>(text.size()) + got > kMaxSceneDocumentBytes)
+                    {
+                        text.clear();
+                        reason = std::format("file grew past the scene size limit of {} bytes while being read",
+                                             kMaxSceneDocumentBytes);
+                        return false;
+                    }
+                    text.append(chunk.data(), got);
+                }
+            }
+            catch (const std::bad_alloc&)
+            {
+                text.clear();
+                reason = "not enough memory to read the file";
+                return false;
+            }
+            if (input.bad())
+            {
+                text.clear();
+                reason = "file could not be read";
+                return false;
+            }
+            return true;
         }
 
         bool FlushFileDurably(const std::filesystem::path& path, std::error_code& error)
@@ -130,8 +195,30 @@ namespace Spark
         }
     } // namespace
 
-    bool SaveWorld(const World& world, const std::string& path)
+    bool SaveWorld(const World& world, const std::string& path, std::string* error)
     {
+        if (error)
+        {
+            error->clear();
+        }
+
+        // Serialize before touching any file. A world the reader would refuse (a
+        // NaN/Inf field, or a document over the size or value caps) must fail here:
+        // writing it would make LoadWorld reject the new primary and silently fall
+        // back to the older .bak, discarding everything since that save.
+        std::string serialized;
+        std::string serializeReason;
+        if (!TrySerializeWorld(world, serialized, &serializeReason))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "[ReflectedScene] refusing to save %s: %s", path.c_str(),
+                            serializeReason.c_str());
+            if (error)
+            {
+                *error = "Scene '" + path + "' was not saved: " + serializeReason + ".";
+            }
+            return false;
+        }
+
         const std::filesystem::path destination = std::filesystem::u8path(path);
         std::filesystem::path temporary = destination;
         temporary += ".tmp";
@@ -143,64 +230,83 @@ namespace Spark
         RemoveFileNoThrow(temporary);
         RemoveFileNoThrow(backupTemporary);
 
-        const std::string serialized = SerializeWorld(world);
-        std::error_code error;
-        if (!WriteDurableText(temporary, serialized, error))
+        const auto fail = [&](const char* stage, const std::error_code& ioError)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] durable staging write failed for %s: %s",
-                           path.c_str(), error.message().c_str());
-            RemoveFileNoThrow(temporary);
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] %s failed for %s: %s", stage, path.c_str(),
+                           ioError.message().c_str());
+            if (error)
+            {
+                *error = "Scene '" + path + "' was not saved: " + stage + " failed: " + ioError.message() + ".";
+            }
             return false;
+        };
+
+        std::error_code ioError;
+        if (!WriteDurableText(temporary, serialized, ioError))
+        {
+            RemoveFileNoThrow(temporary);
+            return fail("durable staging write", ioError);
         }
 
         // Preserve the previous image only when it is a loadable scene. A
         // corrupt destination must never displace the last known-good backup.
+        // A destination over the size limit is not loadable, so it is treated like
+        // any other invalid previous image: never read whole, never kept as .bak.
         std::string previous;
-        if (ReadTextFile(destination, previous))
+        std::string previousReason;
+        if (ReadTextFile(destination, previous, previousReason))
         {
             World validationWorld(World::EntityEventCleanupMode::Suppressed);
             if (DeserializeInto(validationWorld, previous))
             {
-                if (!WriteDurableText(backupTemporary, previous, error) ||
-                    !ReplaceFileAtomically(backupTemporary, backup, error))
+                if (!WriteDurableText(backupTemporary, previous, ioError) ||
+                    !ReplaceFileAtomically(backupTemporary, backup, ioError))
                 {
-                    SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] previous-good backup failed for %s: %s",
-                                   path.c_str(), error.message().c_str());
                     RemoveFileNoThrow(temporary);
                     RemoveFileNoThrow(backupTemporary);
-                    return false;
+                    return fail("previous-good backup", ioError);
                 }
             }
         }
 
-        if (!ReplaceFileAtomically(temporary, destination, error))
+        if (!ReplaceFileAtomically(temporary, destination, ioError))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] atomic replace failed for %s: %s", path.c_str(),
-                           error.message().c_str());
             RemoveFileNoThrow(temporary);
-            return false;
+            return fail("atomic replace", ioError);
         }
         return true;
     }
 
-    bool LoadWorld(World& world, const std::string& path)
+    bool LoadWorld(World& world, const std::string& path, std::string* error)
     {
+        if (error)
+            error->clear();
+
         const std::filesystem::path primary = std::filesystem::u8path(path);
         std::filesystem::path backup = primary;
         backup += ".bak";
 
-        const auto loadCandidate = [&](const std::filesystem::path& candidatePath) -> bool
+        const auto loadCandidate = [&](const std::filesystem::path& candidatePath, std::string& reason) -> bool
         {
-            std::string text;
-            if (!ReadTextFile(candidatePath, text))
+            std::error_code existsError;
+            if (!std::filesystem::exists(candidatePath, existsError))
+            {
+                reason = "file does not exist";
                 return false;
+            }
+
+            std::string text;
+            if (!ReadTextFile(candidatePath, text, reason))
+            {
+                return false;
+            }
 
             // Deserialize into an isolated world first. A malformed document
             // can fail after creating entities or components; applying that
             // attempt directly to the caller would contaminate a later backup
             // recovery (and could leave a live editor document partially read).
             World staged;
-            if (!DeserializeInto(staged, text))
+            if (!DeserializeInto(staged, text, SceneDeserializeMode::Permissive, &reason))
                 return false;
 
             // The editor and runtime replace the loaded document. Install only
@@ -210,14 +316,23 @@ namespace Spark
             return true;
         };
 
-        if (loadCandidate(primary))
+        std::string primaryReason;
+        if (loadCandidate(primary, primaryReason))
             return true;
 
-        if (!loadCandidate(backup))
+        std::string backupReason;
+        if (!loadCandidate(backup, backupReason))
+        {
+            if (error)
+            {
+                *error = "Scene '" + path + "' was rejected: " + primaryReason + ". Previous-good backup '" + path +
+                         ".bak' was not usable: " + backupReason + ".";
+            }
             return false;
+        }
 
-        SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] recovering %s from previous-good backup",
-                       path.c_str());
+        SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] recovering %s from previous-good backup (%s)",
+                       path.c_str(), primaryReason.c_str());
         return true;
     }
 } // namespace Spark

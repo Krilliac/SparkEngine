@@ -438,18 +438,6 @@ namespace Spark
             class VulkanDevice : public RHIDeviceBase
             {
               public:
-                struct D3D11ParityMilestones
-                {
-                    bool frameLifecycle = false;
-                    bool resourceBarriersAndSynchronization = false;
-                    bool descriptorBindingModel = false;
-                    bool shadowAndDeferredPassRoute = false;
-                    bool postProcessRoute = false;
-                    bool goldenSceneRenderRoute = false;
-                    bool ciVulkanPresetAssertion = false;
-                    bool ciShaderCompilePathAssertion = false;
-                };
-
                 VulkanDevice();
                 ~VulkanDevice() override;
 
@@ -494,8 +482,6 @@ namespace Spark
                 bool SupportsHostImageCopy() const { return m_hostImageCopySupported; }
                 /// VK_EXT_headless_surface was enabled, so a VulkanSwapChain can be built without a window.
                 bool SupportsHeadlessSurface() const { return m_headlessSurfaceEnabled; }
-                D3D11ParityMilestones GetD3D11ParityMilestones() const;
-                std::vector<uint8_t> RenderCanonicalGoldenScene(uint32_t width, uint32_t height) const;
                 /// Copies mip 0 of a color texture to host memory as tightly packed rows (blocking). Returns an
                 /// empty vector for depth, compressed or unsupported formats, or textures without TransferSrc.
                 std::vector<uint8_t> ReadbackTexture(IRHITexture* texture);

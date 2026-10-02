@@ -20,7 +20,7 @@
 | Windows 11 x64 | `stable-v1` target — blocked/uncertified | MSVC v143 (VS 2022) |
 | Windows 10 x64 | Documented development path — outside `stable-v1` | MSVC development toolchains |
 | Linux x64 | Experimental | GCC 13+, Clang 17+ |
-| macOS 11+ | Experimental | Apple Clang with C++23 |
+| macOS 13.3+ | Experimental | Apple Clang with C++23 |
 
 See [System Requirements](platform/System-Requirements.md) for minimum and
 recommended hardware per platform (CPU, RAM, GPU, VRAM), runtime resource
@@ -96,11 +96,11 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 1016 |
-| Struct declarations in 17 component headers | 79 |
-| Engine System Classes | 75 |
+| Header files | 1094 |
+| Struct declarations in 17 component headers | 81 |
+| Engine System Classes | 76 |
 | `*Panel.h` class inventory | 64 |
-| Test-bearing `.cpp`/`.mm` files | 632 |
-| Source-level test definitions | 7567 |
-| Wiki pages | 202 |
+| Test-bearing `.cpp`/`.mm` files | 734 |
+| Source-level test definitions | 8508 |
+| Wiki pages | 206 |
 <!-- /AUTO:stats -->

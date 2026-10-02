@@ -39,9 +39,9 @@ namespace Terrafront
         // TF_WorldWelcome above is now gated behind a successful EnterWorldReq —
         // it is no longer sent immediately on connect (see TFServerSim.cpp
         // PollClientJoinsLeaves / HandleEnterWorld).
-        LoginRequest = 0x5412,    // C->S  TF_AuthRequest
-        LoginReply = 0x5413,      // S->C  TF_AuthReply
-        RegisterRequest = 0x5414, // C->S  TF_AuthRequest
+        LoginRequest = 0x5412,    // C->S  TF_LoginStart (NET-100: username only; SCRAM continues below)
+        LoginReply = 0x5413,      // S->C  TF_AuthReply (with ServerSignature)
+        RegisterRequest = 0x5414, // C->S  TF_RegisterRequest (client-derived SCRAM verifier)
         RegisterReply = 0x5415,   // S->C  TF_AuthReply
         CharListRequest = 0x5416, // C->S  (empty payload)
         CharListReply = 0x5417,   // S->C  TF_CharListReply
@@ -148,21 +148,41 @@ namespace Terrafront
         // per that doc's stated upgrade path. Unlike the travel lane's block
         // (owned in World/TFTravelSystem.h, its own channel), this one is
         // dispatched through the SAME RouteClientMessage choke point as the
-        // other onboarding/gameplay ids, so — like TF_AuthRequest/TF_AuthReply
+        // other onboarding/gameplay ids, so — like TF_LoginStart/TF_AuthReply
         // above — its structs live directly here rather than in an in-lane
         // header. Net/TFServerSim.cpp owns the handler and answers from
         // World/TFTravelSystem.h's continents.json-sourced registry
         // (TFTravelSystem::LookupContinentEndpoint) rather than letting the
         // client's own copy of that file dictate where it connects next —
-        // the server is the trust boundary. 0x548E-0x548F free.
+        // the server is the trust boundary.
         ContinentHopRequest = 0x548C, // C->S  TF_ContinentHopRequest
         ContinentHopReply = 0x548D,   // S->C  TF_ContinentHopReply
+
+        // NET-100 SCRAM login continuation (the block's last two ids, routed through
+        // the same RouteClientMessage choke point as LoginRequest; structs in
+        // Net/TFNetProtocolOnboarding.h). The block is now full.
+        LoginChallenge = 0x548E, // S->C  TF_LoginChallenge
+        LoginProof = 0x548F,     // C->S  TF_LoginProof
+
+        // 0x5490-0x5493: continent-identity block (TF-120, docs/TERRAFRONT_MULTIMAP.md).
+        // TF_WorldWelcome and TF_ContinentInfo are frozen and carry no continent key
+        // (TF_ContinentInfo's mapId is positional), so the server names the continent
+        // it hosts in its own message, sent just before TF_WorldWelcome. A client that
+        // loaded another continent's scene and lattice disconnects instead of entering
+        // the world. Struct in Net/TFNetProtocol.h. 0x5491-0x5493 free.
+        ContinentIdentity = 0x5490, // S->C  TF_ContinentIdentity (reliable)
     };
 
-    /** @brief Credential-bearing onboarding requests that must remain loopback-only. */
+    /**
+     * @brief Credential-derived onboarding requests (a SCRAM proof or verifier)
+     *
+     * Neither carries a password (NET-100), but both are marked sensitive so every
+     * transport copy is wiped, and NetworkManager refuses a sensitive message
+     * unless a sealed channel to its destination exists.
+     */
     [[nodiscard]] inline constexpr bool IsTFCredentialOnboardingMessage(TFMsg id) noexcept
     {
-        return id == TFMsg::LoginRequest || id == TFMsg::RegisterRequest;
+        return id == TFMsg::LoginProof || id == TFMsg::RegisterRequest;
     }
 
     struct TFMessageSecurityMetadata
@@ -171,11 +191,17 @@ namespace Terrafront
         bool localOnly = false;
     };
 
-    /** @brief Sender-owned security metadata applied by TFClientNet before payload allocation. */
+    /**
+     * @brief Sender-owned security metadata applied by TFClientNet before payload allocation
+     *
+     * Credential requests are sensitive but no longer local-only: the sealed NET-100
+     * transport refuses them without a channel, and they carry no reusable secret.
+     * Whether a remote client may onboard at all is still the server's decision
+     * (CanUseCredentialOnboarding).
+     */
     [[nodiscard]] inline constexpr TFMessageSecurityMetadata GetTFMessageSecurityMetadata(TFMsg id) noexcept
     {
-        const bool credentialRequest = IsTFCredentialOnboardingMessage(id);
-        return TFMessageSecurityMetadata{credentialRequest, credentialRequest};
+        return TFMessageSecurityMetadata{IsTFCredentialOnboardingMessage(id), false};
     }
 
 } // namespace Terrafront

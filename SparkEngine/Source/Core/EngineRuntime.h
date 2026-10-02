@@ -17,8 +17,13 @@
 
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 class GraphicsEngine;
 class InputManager;
@@ -63,6 +68,31 @@ struct EngineRuntime
     EngineRuntime(const EngineRuntime&) = delete;
     EngineRuntime& operator=(const EngineRuntime&) = delete;
 
+    /// Startup-thread-only fault seam. Empty in production; tests restore it on
+    /// scope exit. Checkpoints run after real ownership/publication changes, so
+    /// a throwing callback exercises ordinary partial-initialization teardown.
+    std::function<void(std::string_view)> initializationCheckpointForTesting;
+    void CheckInitializationPointForTesting(std::string_view point) const
+    {
+        if (initializationCheckpointForTesting)
+        {
+            initializationCheckpointForTesting(point);
+        }
+    }
+
+    /**
+     * [shutdown thread] Managers that headless POSIX teardown keeps alive, with their
+     * module images, until process exit instead of unloading them (one per teardown,
+     * so a repeated teardown never orphans an earlier manager). Never deleted.
+     *
+     * The list itself is immortal rather than a member: the static EngineRuntime is
+     * destroyed before LeakSanitizer's exit-time scan, and a member vector would free
+     * the only pointers to these deliberate process-lifetime objects first.
+     * Caveat: LeakSanitizer treats all module-owned heap reachable from these
+     * managers as live, so it cannot see module-side leaks on this path.
+     */
+    static std::vector<ModuleManager*>& ResidentModuleManagers();
+
     std::unique_ptr<GraphicsEngine> graphics;
     std::unique_ptr<InputManager> input;
     std::unique_ptr<Timer> timer;
@@ -103,8 +133,15 @@ struct EngineRuntime
     /** [startup thread] Create the owned NullRHI bridge for a headless host. */
     [[nodiscard]] bool InitializeHeadlessRhi();
 
-    /** [shutdown thread] Release the owned headless RHI after module teardown. */
+    /**
+     * [shutdown thread] Release the owned headless RHI after module teardown and
+     * record headlessRhiLiveResourcesAtShutdown.
+     */
     void ShutdownHeadlessRhi() noexcept;
+
+    /// NullRHI resources some owner still held when ShutdownHeadlessRhi released
+    /// the device (0 on a leak-free teardown); empty until that has happened.
+    std::optional<uint32_t> headlessRhiLiveResourcesAtShutdown;
 };
 
 /**

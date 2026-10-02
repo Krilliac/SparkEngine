@@ -1,0 +1,8 @@
+SPARKPREFAB 1
+name Old Crate
+components 1
+component Transform
+properties 3
+position float3 1 2 3
+rotation float4 0 0 0 1
+label string two words here

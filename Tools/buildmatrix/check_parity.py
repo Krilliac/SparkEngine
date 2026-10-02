@@ -248,6 +248,33 @@ def check_duplicate_options(declarations: list[dict[str, Any]]) -> list[Finding]
     return findings
 
 
+def check_unread_options(
+    declarations: list[dict[str, Any]], reads: list[str]
+) -> list[Finding]:
+    """CI-120: a guarded option nothing reads is an unused option and fails.
+
+    Passing it configures "successfully" and changes nothing, which is the same
+    silent drift the configure-time guard rejects for undeclared names.
+    """
+    read = set(reads)
+    locations: dict[str, list[str]] = defaultdict(list)
+    for declaration in declarations:
+        name = declaration["name"]
+        if inventory_tool.GUARDED_OPTION_PATTERN.match(name) and name not in read:
+            locations[name].append(f"{declaration['file']}:{declaration['line']}")
+    return [
+        Finding(
+            "declared-option-unread",
+            "error",
+            f"CMake option '{name}' is declared but nothing reads it",
+            f"Declared in {', '.join(sorted(places))}. No if(), ${{}}, generator expression, "
+            "compile definition, forwarded -D or configure_file template consumes it, so setting "
+            "it has no effect. Wire it in or delete the declaration.",
+        )
+        for name, places in sorted(locations.items())
+    ]
+
+
 def check_preset_workflow_parity(
     presets: dict[str, Any], workflow_references: list[str]
 ) -> list[Finding]:
@@ -385,7 +412,7 @@ def check_shipping_preset_options(
     for name, expected, detail in (
         ("SPARK_STRICT_DEPS", "ON", "Stable-v1 must fail on a missing critical dependency."),
         ("SPARK_NATIVE_ARCH", "OFF", "Distributed binaries cannot inherit the build host CPU."),
-        ("STRIP_DEBUG_SYMBOLS", "ON", "Shipping binaries must not emit debug symbols or PDB paths."),
+        ("STRIP_DEBUG_SYMBOLS", "ON", "Private symbols must stay out of the Shipping runtime package."),
         ("CMAKE_BUILD_TYPE", "MINSIZEREL", "Shipping must stay distinct from the Debug and Release configurations."),
         ("ENABLE_PROFILING", "OFF", "Profiling instrumentation is a development-only toggle."),
         ("ENABLE_CONSOLE_IN_SHIPPING", "OFF", "The developer console must not ship in stable-v1 binaries."),
@@ -1951,7 +1978,7 @@ def _validate_inventory_shape(data: dict[str, Any]) -> None:
         raise inventory_tool.InventoryError("inventory schemaVersion must be 3")
     required = {
         "profile", "cmakeOptionDeclarations", "cmakeOptions", "allCmakeOptionDeclarations",
-        "cmakePresets", "cmakeTargetDeclarations", "cmakeTargets", "configuredTargetEvidence",
+        "cmakeOptionReads", "cmakePresets", "cmakeTargetDeclarations", "cmakeTargets", "configuredTargetEvidence",
         "sparkBuildOptions", "workflow", "workflowCmakeConfigs", "stableV1Products",
     }
     missing = sorted(required - data.keys())
@@ -1989,6 +2016,9 @@ def run_all_checks(data: dict[str, Any] | None = None) -> list[Finding]:
         check_sparkbuild_defaults(active_options, current["sparkBuildOptions"], option_applicability)
     )
     findings.extend(check_duplicate_options(current["cmakeOptionDeclarations"]))
+    findings.extend(
+        check_unread_options(current["allCmakeOptionDeclarations"], current["cmakeOptionReads"])
+    )
     findings.extend(check_preset_binary_dirs(current["cmakePresets"]))
     findings.extend(check_dependent_preset_linkage(current["cmakePresets"]))
     findings.extend(check_profile_presets(current))

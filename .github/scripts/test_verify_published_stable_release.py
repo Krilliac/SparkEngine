@@ -15,6 +15,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from verify_published_stable_release import asset_identity, expected_assets, release_identity, unique_object, verify
+from record_release_approval import canonical_bytes
 import receipt_publication
 from receipt_publication import MAX_RECEIPT_BYTES, ReceiptPublicationError, publish_receipt_no_replace
 
@@ -30,6 +31,17 @@ class PublishedConsumerTests(unittest.TestCase):
         self.assets = [{"id": index, "name": name, "size": len(data), "state": "uploaded",
                         "digest": "sha256:" + hashlib.sha256(data).hexdigest()}
                        for index, (name, data) in enumerate(sorted(self.payloads.items()), 1)]
+        self.approval_record = {"schemaVersion": 1, "kind": "spark-stable-release-approval",
+                                "sourceCommit": self.sha, "run": {"id": 456, "attempt": 1}}
+        self.approval_calls = []
+
+    def approval_arguments(self, *, digest=None, attempt=1, record=None):
+        def collector(**identity):
+            self.approval_calls.append(identity)
+            return record if record is not None else self.approval_record
+        expected = digest or hashlib.sha256(canonical_bytes(self.approval_record)).hexdigest()
+        return {"approval_record_sha256": expected, "approval_run_attempt": attempt,
+                "approval_collector": collector}
 
     def test_rejects_nightly_draft_prerelease_and_wrong_version(self):
         for field, value in (("draft", True), ("prerelease", True), ("tag_name", "v1.2.2"), ("immutable", False)):
@@ -53,6 +65,15 @@ class PublishedConsumerTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=kind):
                 asset_identity(assets, self.tag)
 
+    def test_requires_durable_lock_reconciliation_and_toolchain_evidence(self):
+        required = {"SparkEngine-Lock-SBOM.spdx.json", "reconcile-Windows-MinSizeRel.json",
+                    "build-provenance-Windows-MinSizeRel.json"}
+        self.assertTrue(required <= expected_assets(self.tag))
+        for name in required:
+            with self.subTest(missing=name), self.assertRaisesRegex(ValueError, "asset count"):
+                asset_identity([asset for asset in self.assets if asset["name"] != name], self.tag)
+        self.assertEqual(set(asset_identity(self.assets, self.tag)), expected_assets(self.tag))
+
     def run_consumer(self, root, *, tamper=False, drift=False, signature_failure=False):
         tag_record = {"ref": "refs/tags/" + self.tag, "object": {"type": "commit", "sha": self.sha}}
         api = Mock()
@@ -69,8 +90,8 @@ class PublishedConsumerTests(unittest.TestCase):
                             directory=root / "download", signature_directory=root / "signatures",
                             fingerprint="b" * 64, gate_output=root / "gate.txt", receipt=root / "receipt.json",
                             run_id=456, run_attempt=2, api=api, bundle_verifier=bundle,
-                            provenance_verifier=provenance)
-        self.assertEqual(api.download.call_count, 7)
+                            provenance_verifier=provenance, **self.approval_arguments())
+        self.assertEqual(api.download.call_count, len(expected_assets(self.tag)))
         bundle.assert_called_once()
         provenance.assert_called_once()
         api.verify_attestation.assert_called_once_with(self.tag)
@@ -84,6 +105,52 @@ class PublishedConsumerTests(unittest.TestCase):
             self.assertEqual(result["sourceCommit"], self.sha)
             self.assertEqual(result["verifier"]["runId"], 456)
             self.assertEqual(json.loads((root / "receipt.json").read_text()), result)
+
+    def test_receipt_binds_the_independently_rebuilt_release_approval(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self.run_consumer(Path(temporary))
+        self.assertEqual(self.approval_calls, [{"repository": "owner/repo", "run_id": 456, "run_attempt": 1,
+                                                "source_commit": self.sha}])
+        self.assertEqual(result["releaseApproval"]["record"], self.approval_record)
+        self.assertEqual(result["releaseApproval"]["sha256"],
+                         hashlib.sha256(canonical_bytes(self.approval_record)).hexdigest())
+        self.assertIn("protected-release-approval", result["checks"])
+
+    def test_missing_mismatched_or_future_approval_never_emits_receipt(self):
+        other = {**self.approval_record, "sourceCommit": "c" * 40}
+        faults = {"missing-digest": {"digest": ""}, "malformed-digest": {"digest": "Z" * 64},
+                  "different-record": {"record": other}, "wrong-digest": {"digest": "d" * 64},
+                  "future-attempt": {"attempt": 3}, "zero-attempt": {"attempt": 0}}
+        for fault, arguments in faults.items():
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                approval = self.approval_arguments(**arguments)
+                if fault == "missing-digest":
+                    approval["approval_record_sha256"] = ""
+                api = Mock()
+                api.json.side_effect = AssertionError("no release metadata may be read before approval")
+                with self.assertRaises(ValueError):
+                    verify(repository="owner/repo", tag=self.tag, source_commit=self.sha,
+                           directory=root / "download", signature_directory=root / "signatures",
+                           fingerprint="b" * 64, gate_output=root / "gate.txt", receipt=root / "receipt.json",
+                           run_id=456, run_attempt=2, api=api, bundle_verifier=Mock(),
+                           provenance_verifier=Mock(), **approval)
+                api.download.assert_not_called()
+                self.assertFalse((root / "receipt.json").exists())
+
+    def test_collector_failure_never_emits_receipt(self):
+        def refuse(**_identity):
+            raise ValueError("the stable-release deployment review was rejected")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            approval = {**self.approval_arguments(), "approval_collector": refuse}
+            with self.assertRaisesRegex(ValueError, "rejected"):
+                verify(repository="owner/repo", tag=self.tag, source_commit=self.sha,
+                       directory=root / "download", signature_directory=root / "signatures",
+                       fingerprint="b" * 64, gate_output=root / "gate.txt", receipt=root / "receipt.json",
+                       run_id=456, run_attempt=2, api=Mock(), bundle_verifier=Mock(),
+                       provenance_verifier=Mock(), **approval)
+            self.assertFalse((root / "receipt.json").exists())
 
     def test_tamper_signature_failure_or_publication_drift_never_emits_receipt(self):
         for fault in ("tamper", "signature_failure", "drift"):
@@ -128,9 +195,10 @@ class PublishedConsumerTests(unittest.TestCase):
                                 directory=root / "download", signature_directory=root / "signatures",
                                 fingerprint="b" * 64, gate_output=root / "gate.txt", receipt=root / "receipt.json",
                                 run_id=456, run_attempt=2, api=api, bundle_verifier=bundle,
-                                provenance_verifier=provenance, signature_control_asset=control_name)
+                                provenance_verifier=provenance, signature_control_asset=control_name,
+                                **self.approval_arguments())
             self.assertEqual(result["state"], "publication-verified")
-            self.assertEqual(api.download.call_count, 8)
+            self.assertEqual(api.download.call_count, len(expected_assets(self.tag)) + 1)
             bundle.assert_called_once()
             self.assertTrue((root / "signatures" / "release-signatures.json").is_file())
             bad = copy.deepcopy(assets)

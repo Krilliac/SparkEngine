@@ -73,12 +73,50 @@ The `ModuleInfo` struct provides metadata about your module:
 | `sdkVersion` | `uint32_t` | SDK version this module was built against (`SPARK_SDK_VERSION`) |
 | `loadOrder` | `int` | Initialization priority (lower = earlier, default 1000) |
 
-`SPARK_SDK_VERSION` is **4** (`SparkSDK/include/Spark/Version.h`) after `IEngineContext` gained
-`GetInvalidStateDetector()` and `GetComponentSerializers()`. `IsSDKCompatible` is exact equality, so
-a v3 module is refused by a v4 host and a v4 module by a v3 host — there is no forward or backward
-window. `Spark/IEngineContext.h` pins `EngineContextVirtualCount = 90` with a `static_assert` tying
+`SPARK_SDK_VERSION` is **8** (`SparkSDK/Include/Spark/Version.h`): v5 dropped `IEngineContext`'s
+`InitializeAll()` and `ShutdownAll()` (owner decision OD-01: `EngineRuntime` owns subsystem lifecycle),
+v6 appended `IEngineContext::GetLogger()`, v7 appended `GetConsole()` (MOD-295), v8 appended
+`IConsole::Print()` (MOD-310), and v9 appended `GetStateValidation()` (MOD-295).
+`IsSDKCompatible` is exact equality, so a v7 module is refused by a v8 host and a v8 module by a v7
+host — there is no forward or backward window; rebuild modules against the current SDK.
+`Spark/IEngineContext.h` pins `EngineContextVirtualCount = 91` with a `static_assert` tying
 it to the version constant: adding or removing a virtual means updating **both** together, or an old
 host will accept a module that calls off the end of its vtable.
+
+### Public console, logging and gameplay types
+
+ARPG, RPG, Racing, OpenWorld, RTS, Platformer, the SparkGame showcase and
+VisualScript register commands through the host's `IConsole` and log through
+`Spark::ModuleLog`. Every FPS source does too:
+`SparkGameModule::OnLoad` calls `Spark::ModuleLog::Bind(context)` (and unbinds
+on a failed load and in `Shutdown`), and FPS's `Source/Core/FPSLog.h` macros
+log through the bound context's `ILogger` and print in-game console lines through
+`IConsole::Print`. Each module retains only the
+names the host accepted and unregisters them before releasing its state and
+context. A missing optional console leaves no registered callbacks.
+FPS preconditions use `FPS_REQUIRE_MSG` and `FPS_REQUIRE_NOT_NULL`, which remain
+active in Release and terminate even if the SDK logger is missing or throws.
+The private `Utils/Validate.h` is no longer a direct FPS dependency. Stop module
+worker callbacks before unbinding the borrowed logging context.
+
+Include `<Spark/GameTypes.h>` for shared gameplay enums. The SDK owns the
+declarations used by the runtime, editor and FPS; the private runtime header
+only forwards to it. The former FPS copy is removed. Enum names, representation
+and values are preserved, so this extraction left SDK ABI v7 unchanged. The header-only
+`<Spark/StateMachine.h>` and `<Spark/AngleUtils.h>` follow the same single-definition
+pattern: the engine's `Utils/StateMachine.h` and `Utils/AngleUtils.h` only include them.
+
+These migrations do not complete the installed-SDK-only module boundary. FPS
+still needs concrete rendering, scene, input, physics and save APIs; its CMake
+target still links the engine library on Windows. Prototype integration files
+also retain private subsystem APIs. The current remaining dependencies are
+recorded in [`module-content-inventory.json`](../../GameModules/module-content-inventory.json).
+SDK-only package consumers separately exercise the migrated logging helpers,
+cross-library binding isolation, rate limits, and always-on preconditions. Those
+bounded consumers do not prove the full FPS module meets MOD-310.
+`FPSPublicSDK_PrivateIncludeRatchet`, `FPSPublicSDK_GameTypes` and
+`PrototypeModuleKit_PublicConsoleBoundary` lock in the migrated boundaries;
+full package builds and runtime smokes remain separate verification.
 
 ### IModule Method Reference
 
@@ -236,7 +274,7 @@ target_include_directories(MyGame PRIVATE "Source")
 Configure and launch an in-tree module from the repository root. With a multi-config generator, keep the configuration segment in both paths:
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -T v143
 cmake --build build --config Release --target SparkEngine MyGame
 .\build\bin\Release\SparkEngine.exe -game .\build\bin\Release\MyGame.dll
 ```
@@ -329,6 +367,45 @@ Module manifest whose loader consumes each non-empty `path` entry:
 
 For the engine-directory fallback, place `spark.modules.json` next to the executable: `build/bin/<Config>/` for a multi-config root build and `build/bin/` for a single-config root build. An explicit `-manifest <path>` may name a regular manifest file elsewhere.
 
+### Per-module module.json (in-tree modules)
+
+Every directory under `GameModules/` must carry a `module.json` that records per-module facts. The runtime loader does not read it; `python3 tools/site-data/validate.py --modules` (through `tools/site-data/module_content.py`) and the `ModuleManifest_Contract` CTest do. Release-profile policy (`profileApplicability`, evidence bindings) lives only in `tools/module-evidence/manifest.json`, so any key outside the schema below is rejected.
+
+```json
+{
+    "schemaVersion": 1,
+    "name": "SparkGameRTS",
+    "cmakeTarget": "SparkGameRTS",
+    "sourceDirectory": "GameModules/SparkGameRTS/Source",
+    "assets": { "state": "none", "reason": "No asset root exists for this module: the Audio/Music/RTS/*.ogg tracks its sources register are not in the repository." },
+    "tests": { "files": ["Tests/TestGameModuleRTS.cpp"], "prefixes": [ { "prefix": "RTS_", "count": 44 } ] },
+    "docs": { "readme": "GameModules/SparkGameRTS/README.md" },
+    "parity": { "notApplicable": [ { "dimension": "networking", "reason": "Single-player module: ..." } ] }
+}
+```
+
+| Field | Rule the validator enforces |
+|-------|-----------------------------|
+| `name`, `cmakeTarget`, `sourceDirectory` | Equal to the directory name and to the module's entry in `tools/module-evidence/manifest.json`; the source directory must exist |
+| `assets` | `state: "none"` with a written reason, or `state: "declared"` with `roots` of `{directory, manifest}`. Each directory must exist and hold files, and its manifest (the `Assets/assets.integrity.json` integrity manifest or a module package `manifest.json`) must list every file under it. A module must declare every root it ships: a `GameModules/<Name>/Assets` payload, any non-empty shared root named after the module (`Assets/<Kind>/<Suffix>` or a subdirectory of `Assets/<Suffix>`, where `<Suffix>` is the name without `SparkGame`, e.g. `Assets/Models/MMO`, `Assets/MMOFPS/Data`), and FPS's shared `Assets/Models` and `Assets/Scenes` roots. A module with any of these cannot declare `state: "none"`. The rule cannot check that a `none` reason is truthful about assets the sources reference but the repository lacks |
+| `tests` | Every file exists under `Tests/`, is registered in `Tests/CMakeLists.txt`, and defines at least one `TEST(` matching a declared prefix; every prefix matches at least one `TEST(` in the listed files; each `count` is a positive integer equal to the number of `TEST(` definitions, across every source registered in `Tests/CMakeLists.txt`, whose name starts with the prefix (the anchored rule `SPARK_TEST_NAME_PREFIX` applies, so `RPG_` does not count `ARPG_*` tests). When a family has `TEST(` definitions inside an `#ifdef _WIN32` / `SPARK_PLATFORM_WINDOWS` branch (or its `#ifndef`/`#else` complement), `count` is `{"windows": N, "other": M}` with different values; other preprocessor conditions are assumed true. An optional `requires` list (currently only `"angelscript"`) names build features the family needs to compile; `count` is then the feature-on count |
+| `docs.readme` | Must be `GameModules/<Name>/README.md`, and the file must exist |
+| `parity.notApplicable` | Exactly the dimensions whose cell is `"N/A"` in `parityDimensions.currentScores` (`docs/readiness/work-items/30-game-modules.json`), each with a written reason |
+
+Test registration is generated from these manifests. For each `tests.prefixes` entry, `Tests/CMakeLists.txt` reads the manifest with `string(JSON)` and registers the CTest `ModuleManifest_<Module>_<Prefix>` (trailing underscores dropped), labelled `module-kit`. It runs `SparkTests --empty-is-error` with `SPARK_TEST_NAME_PREFIX=<prefix>` (only names that start with the prefix run) and `SPARK_TEST_EXPECT_COUNT=<count>` (the `windows` or `other` value of a per-platform count), so a selector that names a missing, renamed or emptied test family fails ctest. These tests are registered only when ImGui is available, because several module sources compile into `SparkTests` only then. A selector whose `requires` lists a feature the build disables (for example `"angelscript"` with `ENABLE_ANGELSCRIPT=OFF`) is not registered, because its `TEST(` family is compiled out. When you add or remove a test in a declared family, update its `count`. `ctest --test-dir build/linux-gcc-release -L module-kit --output-on-failure` runs them all.
+
+Parity scores in `parityDimensions.currentScores` are written by hand, so the top score ("validated shipping candidate") is accepted only with evidence. `validate.py --modules` rejects that score unless the module is in a release profile's `includedModules` (`tools/module-evidence/manifest.json`) and `parityDimensions.parityEvidence.<Module>.<dimension>` names at least one resolving test selector and one job that `required-ci-gate` needs in `.github/workflows/build.yml`:
+
+```json
+"parityEvidence": {
+    "SparkGameFPS": {
+        "lifecycle": { "testSelectors": ["ModuleProfileLifecycle_SparkGameFPS_D3D11"], "requiredCiJobs": ["module-profile-lifecycle"] }
+    }
+}
+```
+
+Every evidence entry must resolve, even under a lower score, so evidence cannot go stale. Lower scores need no evidence binding.
+
 ### One Game Module Plus Addons
 
 The loader rejects a second `ModuleKind::Game` module because two games would own the same simulation. A manifest can include the selected Game module plus compatible `ModuleKind::Addon` modules (library/extension-style modules); their kinds and lifecycle dependencies come from their `ModuleInfo`, not manifest `loadOrder` metadata:
@@ -375,12 +452,15 @@ Module Discovery Flow
 ```
 Engine Startup
     │
+    ├── Validate <module>.sparkabi sidecar (exact match + binary SHA-256)
+    │   └── Mismatch? → Reject before OS load (no module code runs)
     ├── Load DLL/SO (platform LoadLibrary / dlopen)
-    ├── Resolve CreateModule() symbol
+    ├── Re-check in-image SparkGetModuleCompatibility() descriptor
+    │   └── Mismatch? → Unload, reject before injection/factory
     ├── Call CreateModule()          ← allocate module instance
-    ├── Call GetModuleInfo()         ← metadata, SDK version check
-    ├── Validate SDK version
-    │   └── Mismatch? → Log warning, skip module
+    ├── Call GetModuleInfo()         ← metadata
+    ├── Re-check ModuleInfo sdkVersion (defense in depth)
+    │   └── Mismatch? → DestroyModule(), unload, reject
     ├── Call OnLoad(context)         ← initialization
     │   └── Returns false? → Call DestroyModule(), skip
     │
@@ -393,6 +473,8 @@ Engine Startup
     ├── Call DestroyModule()        ← deallocate module instance
     └── Unload DLL/SO (FreeLibrary / dlclose)
 ```
+
+Anything a module hands to an engine registry — a behavior tree, a `std::make_shared` animation clip, a `std::function` callback — carries a vtable or destructor that lives in the module image. At engine shutdown, gameplay teardown empties those registries after `OnUnload()` and before the image is unmapped (`AIIntegratedSystem::Shutdown`, `DestructionSystem::Shutdown`, `AnimationManager::Clear`, alongside the existing sequencer, network-handler, ECS-world and physics releases in `ShutdownEngineAfterPreflight`). An engine singleton that keeps such an object until process exit runs module code after unload: the installed ARPG and RPG packages crashed that way at shutdown. A callback that captures `this` should still be removed in your own `OnUnload()` (keep the id `OnDestruction()` returns and pass it to `RemoveDestructionCallback()`), because a hot reload does not run engine teardown.
 
 The process hosts one Game module. Compatible `ModuleKind::Addon` modules (library/extension-style modules), when present, follow their own `ModuleInfo` lifecycle rules; manifest `loadOrder` is not a runtime control.
 
@@ -458,6 +540,55 @@ concrete host's `RegisterSystem<T>()` or `GetSystem<T>()` registry APIs. Keep
 game-specific managers in module-owned state, communicate through the public
 event bus or named getters, or define an explicit addon interface. Do not
 downcast `IEngineContext` to the private engine implementation.
+
+### Logging
+
+Log through the host with `IEngineContext::GetLogger()`, normally via the
+`std::format` helpers in `<Spark/ModuleLog.h>`:
+
+```cpp
+#include <Spark/ModuleLog.h>
+
+Spark::ModuleLog::Info(context, "[MyGame] wave {} started", wave);
+Spark::ModuleLog::Error(context, "[MyGame] save slot not found: {}", slot);
+```
+
+The engine routes these to its log file, stderr and console under
+`LogCategory::Game`; the helpers do nothing when the context or its logger is
+null. A module DLL's own `Utils/SparkConsole.h` / `Utils/LogMacros.h`
+singletons are DLL-local copies of private engine headers, so prefer the SDK
+logger. SparkGameRTS and SparkGamePlatformer log their engine-system wiring
+this way (`PrototypeModuleKit_Helpers` CTest).
+
+### Invalid-state rules
+
+Add ECS invariant rules to the host's invalid-state detector with
+`IEngineContext::GetStateValidation()` (`<Spark/IStateValidation.h>`) instead
+of the private `Utils/InvalidStateDetector.h`, and remove every category you
+added in `OnUnload`:
+
+```cpp
+#include <Spark/IStateValidation.h>
+
+if (Spark::IStateValidation* rules = context->GetStateValidation())
+{
+    rules->AddRule("MyGame.DeadButMoving", "MyGame", Spark::StateViolationSeverity::Warning,
+                   [](World& world, std::vector<Spark::StateViolation>& out) { /* scan components */ });
+}
+// OnUnload:
+if (Spark::IStateValidation* rules = m_context ? m_context->GetStateValidation() : nullptr)
+{
+    rules->RemoveRulesByCategory("MyGame");
+}
+```
+
+`AddRule` refuses an empty name, category or check. A rule added before the host
+detector starts (the windowed hosts load modules ahead of the gameplay lifecycle)
+is kept and runs once the detector does. Registrations and removals made during a module's
+`OnLoad`/`OnUnload` are attributed to that module, so removing a category never
+drops another module's rules. Every prototype module registers its rules this
+way (`PrototypeModuleKit_PublicConsoleBoundary` and `PrototypeModuleKit_Helpers`
+CTests).
 
 ## Subscribing to Events
 
@@ -538,7 +669,7 @@ Common causes of module load failures:
 |---------|-------|-----|
 | DLL not found | Wrong path in manifest | Check `spark.modules.json` path |
 | `CreateModule` symbol not found | Missing `SPARK_IMPLEMENT_MODULE` macro | Add macro to exactly one .cpp file |
-| SDK version mismatch | Module built with different SDK version | Rebuild module against current SDK |
+| `rejected before OS load: SDK ABI version mismatch: field 'sdk_version' host expects 5, module declares 4` | Module built against a different SDK (stable-v1 ABI is exact-match only; N-1 modules are not loaded) | Rebuild module against the host's SDK and toolchain; the named field says which descriptor value differs |
 | `OnLoad()` returns false | Initialization error in module code | Check module logs for details |
 | Missing DLL dependency | Module links against absent library | Use `dumpbin /dependents` (Windows) or `ldd` (Linux) |
 
@@ -568,7 +699,7 @@ module_reload <name># Hot-reload a module (development only)
 
 5. **Avoid global state** -- Keep all state inside your module class. Global variables in a DLL can cause issues with hot-reload and multiple module instances.
 
-6. **Match SDK versions** -- Always build your module against the same SDK version as the engine. The engine logs a warning on version mismatch.
+6. **Match SDK versions** -- Always build your module against the same SDK version and toolchain as the engine. The stable-v1 module ABI is exact-match only: any descriptor difference, including an N-1 SDK version, rejects the module before it is loaded, and the error names the field, the host's expected value, and the module's declared value.
 
 ## Next Steps
 

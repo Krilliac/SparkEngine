@@ -19,6 +19,15 @@
 
 namespace MMO
 {
+    namespace
+    {
+        /// Verification target for unknown usernames: the production scheme, iteration count,
+        /// salt length and key length of Spark::PasswordHash::Create, so Verify performs the same
+        /// derivation work. The derived key is arbitrary; no known password produces it.
+        constexpr std::string_view kDummyPasswordHash =
+            "pbkdf2-sha256$600000$5f0c3a9e71d24b86a0e4c7b21d9f3e58$"
+            "8c1e4f7a02b95d36e7a1c0f48b2d69e53a7f1c04d8e6b92a5c3f07e1d4a86b29";
+    } // namespace
 
     bool MMOAccountSystem::Initialize(Spark::IEngineContext* context)
     {
@@ -136,16 +145,23 @@ namespace MMO
         AuthResult result;
         uint64_t now = GetTimestamp();
 
-        // Find account
+        // Scan the complete account set for every username. Stopping at a match would make
+        // lookup work depend on the account's container position, leaving a timing signal before
+        // the equal PBKDF2 verification below.
         AccountData* account = nullptr;
         for (auto& [id, acct] : m_accounts)
         {
             if (acct.username == username)
             {
                 account = &acct;
-                break;
             }
         }
+
+        // For supported password lengths, every attempt performs exactly one full PBKDF2
+        // verification before any outcome is decided. This removes the expensive-work difference
+        // between unknown, active and restricted accounts. Unknown usernames verify against a
+        // dummy hash with production parameters; even a match is never accepted without an account.
+        const bool passwordMatches = VerifyPassword(password, account ? account->passwordHash : kDummyPasswordHash);
 
         if (!account)
         {
@@ -153,7 +169,7 @@ namespace MMO
             return result;
         }
 
-        // Check account status
+        // Check account status. A restricted account is refused without counting a failure.
         if (account->status == AccountStatus::Banned)
         {
             if (account->banExpiry == 0 || account->banExpiry > now)
@@ -179,8 +195,7 @@ namespace MMO
             return result;
         }
 
-        // Verify password
-        if (!Spark::PasswordHash::Verify(password, account->passwordHash))
+        if (!passwordMatches)
         {
             account->failedLoginAttempts++;
             if (account->failedLoginAttempts >= MAX_FAILED_LOGINS)
@@ -534,6 +549,25 @@ namespace MMO
             ImGui::TreePop();
         }
 #endif
+    }
+
+#ifdef SPARK_TEST_MMO_AUTH_VERIFIER
+    void MMOAccountSystem::SetPasswordVerifier(PasswordVerifier verifier)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        m_passwordVerifier = verifier;
+    }
+#endif
+
+    bool MMOAccountSystem::VerifyPassword(std::string_view password, std::string_view encodedHash) const
+    {
+#ifdef SPARK_TEST_MMO_AUTH_VERIFIER
+        if (m_passwordVerifier)
+        {
+            return m_passwordVerifier(password, encodedHash);
+        }
+#endif
+        return Spark::PasswordHash::Verify(password, encodedHash);
     }
 
     size_t MMOAccountSystem::GetOnlineCount() const

@@ -10,6 +10,7 @@
  * the root.
  */
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 
 #include "Graphics/GraphicsEngine.h"
@@ -29,40 +30,10 @@ namespace fs = std::filesystem;
 
 namespace
 {
-    // Directory link that an unprivileged test can create: a symlink where
-    // allowed, otherwise (Windows without Developer Mode) an NTFS junction.
-    bool MakeDirectoryLink(const fs::path& target, const fs::path& link)
-    {
-        std::error_code error;
-        fs::create_directory_symlink(target, link, error);
-        if (!error)
-            return true;
-#if defined(_WIN32)
-        const std::wstring command =
-            L"cmd /c mklink /J \"" + link.wstring() + L"\" \"" + target.wstring() + L"\" >nul 2>&1";
-        return _wsystem(command.c_str()) == 0 && fs::exists(fs::symlink_status(link, error));
-#else
-        return false;
-#endif
-    }
-
-    bool IsLink(const fs::path& path)
-    {
-        std::error_code error;
-        const auto type = fs::symlink_status(path, error).type();
-#if defined(_WIN32)
-        if (type == fs::file_type::junction)
-            return true;
-#endif
-        return type == fs::file_type::symlink;
-    }
-
-    // Removes the link itself, never the directory it points at.
-    void RemoveDirectoryLink(const fs::path& link)
-    {
-        std::error_code error;
-        fs::remove(link, error);
-    }
+    // Directory links come from the shared helper: an NTFS junction on Windows
+    // (no privilege needed), a directory symlink elsewhere.
+    using SparkTestLinks::MakeDirectoryLink;
+    using SparkTestLinks::RemoveDirectoryLink;
 
     size_t CountEntries(const fs::path& directory)
     {
@@ -100,7 +71,7 @@ namespace
             std::error_code error;
             for (fs::directory_iterator it(Root(), error), end; !error && it != end; it.increment(error))
             {
-                if (IsLink(it->path()))
+                if (SparkTestLinks::IsDirectoryLink(it->path()))
                     RemoveDirectoryLink(it->path());
             }
             error.clear();
@@ -198,8 +169,7 @@ TEST(SceneSaveConfined_RefusesLinkedDirectoryComponent)
 {
     SaveSandbox sandbox;
     ASSERT_TRUE(sandbox.Ready());
-    if (!MakeDirectoryLink(sandbox.Outside(), sandbox.Root() / "Escape"))
-        SKIP_TEST("cannot create a directory symlink or junction on this host");
+    ASSERT_TRUE(MakeDirectoryLink(sandbox.Outside(), sandbox.Root() / "Escape"));
     ASSERT_TRUE(MakeDirectoryLink(sandbox.Root() / "Levels", sandbox.Root() / "Alias"));
 
     GraphicsEngine graphics;
@@ -250,8 +220,7 @@ TEST(SceneSaveConfined_ComponentSwapRaceNeverWritesOutsideRoot)
     ASSERT_TRUE(sandbox.Ready());
     const fs::path levels = sandbox.Root() / "Levels";
     const fs::path parked = sandbox.Root() / "Parked";
-    if (!MakeDirectoryLink(sandbox.Outside(), sandbox.Root() / "probe"))
-        SKIP_TEST("cannot create a directory symlink or junction on this host");
+    ASSERT_TRUE(MakeDirectoryLink(sandbox.Outside(), sandbox.Root() / "probe"));
     RemoveDirectoryLink(sandbox.Root() / "probe");
 
     GraphicsEngine graphics;
@@ -277,10 +246,13 @@ TEST(SceneSaveConfined_ComponentSwapRaceNeverWritesOutsideRoot)
                 {
                     swaps.fetch_add(1);
                     std::this_thread::yield();
-                    RemoveDirectoryLink(levels);
                 }
                 do
                 {
+                    // Unlinking can fail while a save briefly holds the junction open to
+                    // inspect it, so retry it with the rename rather than leaving the
+                    // junction in place and spinning on a rename that can never succeed.
+                    SparkTestLinks::RemoveDirectoryLink(levels);
                     error.clear();
                     fs::rename(parked, levels, error);
                 } while (error && !stop.load());
@@ -300,6 +272,7 @@ TEST(SceneSaveConfined_ComponentSwapRaceNeverWritesOutsideRoot)
     attacker.join();
     // Restore the layout if the attacker stopped mid-swap.
     std::error_code error;
+    SparkTestLinks::RemoveDirectoryLink(levels);
     if (!fs::exists(fs::symlink_status(levels, error)))
         fs::rename(parked, levels, error);
 

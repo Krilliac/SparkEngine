@@ -19,6 +19,10 @@
 #include "../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h"
 #include "../GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.h"
 
+#ifdef SPARK_TEST_HAS_PHYSICS
+#include "RacingPhysicsTestWorld.h"
+#endif
+
 #include <cmath>
 
 using namespace Racing;
@@ -49,27 +53,44 @@ namespace
 // RacingVehicleSystem
 // ============================================================================
 
-TEST(Racing_VehicleSystem_Initialize)
+TEST(Racing_VehicleSystem_InitializeRequiresSharedPhysics)
 {
+    // Racing vehicles only exist as Jolt bodies: no context, or a context without physics, is refused.
     RacingVehicleSystem sys;
-    EXPECT_TRUE(sys.Initialize(nullptr));
+    EXPECT_FALSE(sys.Initialize(nullptr));
+    RacingTestContext noPhysics;
+    EXPECT_FALSE(sys.Initialize(&noPhysics));
+    EXPECT_EQ(sys.CreateVehicle("Orphan", VehicleType::SportsCar, true, {}), 0u);
+    EXPECT_EQ(sys.GetVehicleCount(), 0u);
+#ifdef SPARK_TEST_HAS_PHYSICS
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
+    EXPECT_TRUE(sys.Initialize(world.Context()));
+#endif
     sys.Shutdown();
 }
 
+#ifdef SPARK_TEST_HAS_PHYSICS
 TEST(Racing_VehicleSystem_CreateAndGetVehicle)
 {
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
     RacingVehicleSystem sys;
-    sys.Initialize(nullptr);
+    ASSERT_TRUE(sys.Initialize(world.Context()));
 
-    uint32_t id = sys.CreateVehicle("Speedster", VehicleType::SportsCar, true);
+    uint32_t id = sys.CreateVehicle("Speedster", VehicleType::SportsCar, true, {12.0f, 0.0f, -4.0f, 0.5f});
     EXPECT_GT(id, 0u);
 
     const VehicleInstance* vehicle = sys.GetVehicle(id);
     ASSERT_TRUE(vehicle != nullptr);
     EXPECT_EQ(vehicle->name, std::string("Speedster"));
     EXPECT_TRUE(vehicle->isPlayer);
+    EXPECT_TRUE(sys.HasChassis(id));
+    EXPECT_NEAR(vehicle->positionX, 12.0f, 0.001f);
+    EXPECT_NEAR(vehicle->heading, 0.5f, 0.001f);
     sys.Shutdown();
 }
+#endif
 
 TEST(Racing_VehicleSystem_GetDefaultStats)
 {
@@ -89,15 +110,18 @@ TEST(Racing_VehicleSystem_GetSurfaceGrip)
     EXPECT_GT(asphaltGrip, iceGrip); // Asphalt should grip better than ice
 }
 
+#ifdef SPARK_TEST_HAS_PHYSICS
 TEST(Racing_VehicleSystem_VehicleCountAndList)
 {
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
     RacingVehicleSystem sys;
-    sys.Initialize(nullptr);
+    ASSERT_TRUE(sys.Initialize(world.Context()));
 
     EXPECT_EQ(sys.GetVehicleCount(), 0u);
 
-    sys.CreateVehicle("Car A", VehicleType::MuscleCar);
-    sys.CreateVehicle("Car B", VehicleType::Kart);
+    sys.CreateVehicle("Car A", VehicleType::MuscleCar, false, {0.0f, 0.0f, 0.0f, 0.0f});
+    sys.CreateVehicle("Car B", VehicleType::Kart, false, {6.0f, 0.0f, 0.0f, 0.0f});
     EXPECT_EQ(sys.GetVehicleCount(), 2u);
 
     std::string list = sys.GetVehicleListString();
@@ -105,43 +129,98 @@ TEST(Racing_VehicleSystem_VehicleCountAndList)
     sys.Shutdown();
 }
 
+namespace
+{
+    struct FrameRateRun
+    {
+        float nitro = 0.0f;
+        float speed = 0.0f;
+        float positionX = 0.0f;
+        float positionZ = 0.0f;
+        bool ok = false;
+    };
+
+    // Drives one car for two seconds of game time on a fresh Jolt world, rendering frames at framesPerSecond and
+    // stepping the vehicle system at the fixed 60 Hz physics rate from an accumulator (the module's frame loop).
+    FrameRateRun DriveAtFrameRate(int framesPerSecond)
+    {
+        FrameRateRun run;
+        RacingPhysicsTestWorld world;
+        if (!world.ready)
+            return run;
+        RacingTrackSystem track;
+        RacingVehicleSystem vehicles;
+        track.Initialize(world.Context());
+        if (!vehicles.Initialize(world.Context()))
+            return run;
+
+        const auto& start = track.GetWaypoint(0);
+        const auto& next = track.GetWaypoint(1);
+        const float heading = std::atan2(next.x - start.x, next.z - start.z);
+        vehicles.CreateVehicle("Player", VehicleType::SportsCar, true, {start.x, start.y, start.z, heading});
+
+        constexpr float kFixedStep = 1.0f / 60.0f;
+        const float frameTime = 1.0f / static_cast<float>(framesPerSecond);
+        float accumulator = 0.0f;
+        for (int frame = 0; frame < 2 * framesPerSecond; ++frame)
+        {
+            vehicles.ApplyInput(0.75f, 0.0f, 0.0f, true, false, frameTime);
+            vehicles.Update(frameTime);
+            accumulator += frameTime;
+            while (accumulator >= kFixedStep - 1.0e-6f)
+            {
+                vehicles.FixedUpdate(kFixedStep);
+                accumulator -= kFixedStep;
+            }
+        }
+
+        const VehicleInstance* player = vehicles.GetPlayerVehicle();
+        if (player)
+        {
+            run.nitro = player->nitro;
+            run.speed = player->speed;
+            run.positionX = player->positionX;
+            run.positionZ = player->positionZ;
+            run.ok = vehicles.GetStepCount() == 120u;
+        }
+        vehicles.Shutdown();
+        track.Shutdown();
+        return run;
+    }
+} // namespace
+
 TEST(Racing_VehicleSystem_InputIsFrameRateIndependent)
 {
-    RacingVehicleSystem sixtyHz;
-    RacingVehicleSystem thirtyHz;
-    sixtyHz.Initialize(nullptr);
-    thirtyHz.Initialize(nullptr);
-    sixtyHz.CreateVehicle("60 Hz", VehicleType::SportsCar, true);
-    thirtyHz.CreateVehicle("30 Hz", VehicleType::SportsCar, true);
+    // The same held input at 60 and 30 rendered frames per second yields the same car after two seconds: nitro
+    // drains by elapsed time, and the latched command drives the same 120 fixed Jolt ticks either way.
+    const FrameRateRun sixtyHz = DriveAtFrameRate(60);
+    const FrameRateRun thirtyHz = DriveAtFrameRate(30);
+    ASSERT_TRUE(sixtyHz.ok);
+    ASSERT_TRUE(thirtyHz.ok);
 
-    for (int frame = 0; frame < 60; ++frame)
-        sixtyHz.ApplyInput(1.0f, 0.0f, 0.0f, true, false, 1.0f / 60.0f);
-    for (int frame = 0; frame < 30; ++frame)
-        thirtyHz.ApplyInput(1.0f, 0.0f, 0.0f, true, false, 1.0f / 30.0f);
-
-    EXPECT_NEAR(sixtyHz.GetPlayerVehicle()->speed, thirtyHz.GetPlayerVehicle()->speed, 1.0f);
-    EXPECT_NEAR(sixtyHz.GetPlayerVehicle()->nitro, thirtyHz.GetPlayerVehicle()->nitro, 0.001f);
-    EXPECT_GE(sixtyHz.GetPlayerVehicle()->nitro, 0.0f);
-    EXPECT_GE(thirtyHz.GetPlayerVehicle()->nitro, 0.0f);
-
-    sixtyHz.Shutdown();
-    thirtyHz.Shutdown();
+    EXPECT_NEAR(sixtyHz.nitro, thirtyHz.nitro, 0.001f);
+    EXPECT_GT(sixtyHz.speed, 20.0f); // the car really drove
+    EXPECT_NEAR(sixtyHz.speed, thirtyHz.speed, 0.02f * sixtyHz.speed);
+    EXPECT_NEAR(sixtyHz.positionX, thirtyHz.positionX, 0.25f);
+    EXPECT_NEAR(sixtyHz.positionZ, thirtyHz.positionZ, 0.25f);
 }
 
 TEST(Racing_VehicleSystem_InputRejectsInvalidDeltaTime)
 {
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
     RacingVehicleSystem sys;
-    sys.Initialize(nullptr);
-    sys.CreateVehicle("Player", VehicleType::SportsCar, true);
+    ASSERT_TRUE(sys.Initialize(world.Context()));
+    sys.CreateVehicle("Player", VehicleType::SportsCar, true, {});
 
-    const float initialSpeed = sys.GetPlayerVehicle()->speed;
     sys.ApplyInput(1.0f, 0.0f, 1.0f, true, true, 0.0f);
-    EXPECT_EQ(sys.GetPlayerVehicle()->speed, initialSpeed);
+    EXPECT_EQ(sys.GetPlayerVehicle()->throttleInput, 0.0f);
     EXPECT_EQ(sys.GetPlayerVehicle()->steerAngle, 0.0f);
     EXPECT_EQ(sys.GetPlayerVehicle()->nitro, 1.0f);
 
     sys.Shutdown();
 }
+#endif
 
 // ============================================================================
 // RacingTrackSystem
@@ -322,25 +401,25 @@ TEST(Racing_RaceManager_RefreshesCurrentFrameStandings)
     race.Shutdown();
 }
 
+#ifdef SPARK_TEST_HAS_PHYSICS
 TEST(Racing_RaceFlow_AIDriverMovesAlongAuthoredTrack)
 {
-    RacingTestContext context;
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
     RacingTrackSystem track;
     RacingVehicleSystem vehicles;
     RacingAIDriver ai;
-    track.Initialize(&context);
-    vehicles.Initialize(&context);
-    EXPECT_TRUE(ai.Initialize(&context));
+    track.Initialize(world.Context());
+    ASSERT_TRUE(vehicles.Initialize(world.Context()));
+    EXPECT_TRUE(ai.Initialize(world.Context()));
 
-    const uint32_t vehicleId = vehicles.CreateVehicle("AI", VehicleType::SportsCar, false);
-    VehicleInstance* vehicle = vehicles.GetVehicle(vehicleId);
-    ASSERT_TRUE(vehicle != nullptr);
     const auto& start = track.GetWaypoint(0);
     const auto& next = track.GetWaypoint(1);
-    vehicle->positionX = start.x;
-    vehicle->positionY = start.y;
-    vehicle->positionZ = start.z;
-    vehicle->heading = std::atan2(next.x - start.x, next.z - start.z);
+    const float heading = std::atan2(next.x - start.x, next.z - start.z);
+    const uint32_t vehicleId =
+        vehicles.CreateVehicle("AI", VehicleType::SportsCar, false, {start.x, start.y, start.z, heading});
+    const VehicleInstance* vehicle = vehicles.GetVehicle(vehicleId);
+    ASSERT_TRUE(vehicle != nullptr);
 
     AIDriverConfig config{};
     config.vehicleId = vehicleId;
@@ -351,17 +430,21 @@ TEST(Racing_RaceFlow_AIDriverMovesAlongAuthoredTrack)
     ASSERT_TRUE(state != nullptr);
     EXPECT_GT(state->throttle, 0.0f);
 
-    const float startX = vehicle->positionX;
-    const float startZ = vehicle->positionZ;
-    vehicles.ApplyInputToVehicle(vehicleId, state->throttle, state->brake, ComputeTrackSteer(*vehicle, track),
-                                 state->useNitro, state->useDrift, 0.1f);
-    vehicles.FixedUpdate(0.1f);
-    EXPECT_TRUE(vehicle->positionX != startX || vehicle->positionZ != startZ);
+    // One second of the AI's command through the shared Jolt world moves the car along the track.
+    for (int tick = 0; tick < 60; ++tick)
+    {
+        vehicles.ApplyInputToVehicle(vehicleId, state->throttle, state->brake, ComputeTrackSteer(*vehicle, track),
+                                     state->useNitro, state->useDrift, 1.0f / 60.0f);
+        vehicles.FixedUpdate(1.0f / 60.0f);
+    }
+    EXPECT_GT(std::hypot(vehicle->positionX - start.x, vehicle->positionZ - start.z), 1.0f);
+    EXPECT_GT(vehicle->speed, 5.0f);
 
     ai.Shutdown();
     vehicles.Shutdown();
     track.Shutdown();
 }
+#endif
 
 TEST(Racing_Presentation_CameraAndHUDSnapshotsStaySynchronized)
 {
@@ -390,16 +473,26 @@ TEST(Racing_Presentation_CameraAndHUDSnapshotsStaySynchronized)
     camera.Shutdown();
 }
 
+#ifdef SPARK_TEST_HAS_PHYSICS
 TEST(Racing_RaceFlow_TerminalRacersStopWhileAnotherRacerContinues)
 {
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
+    RacingTrackSystem track;
     RacingRaceManager race;
     RacingVehicleSystem vehicles;
+    track.Initialize(world.Context());
     race.Initialize(nullptr);
-    vehicles.Initialize(nullptr);
+    ASSERT_TRUE(vehicles.Initialize(world.Context()));
 
-    const uint32_t playerId = vehicles.CreateVehicle("Finished Player", VehicleType::SportsCar, true);
-    const uint32_t dnfAIId = vehicles.CreateVehicle("DNF AI", VehicleType::SportsCar, false);
-    const uint32_t activeAIId = vehicles.CreateVehicle("Active AI", VehicleType::SportsCar, false);
+    // Three cars side by side at the circuit start line, all facing +Z.
+    const TrackWaypoint& start = track.GetWaypoint(0);
+    const uint32_t playerId =
+        vehicles.CreateVehicle("Finished Player", VehicleType::SportsCar, true, {start.x - 4.0f, 0.0f, start.z, 0.0f});
+    const uint32_t dnfAIId =
+        vehicles.CreateVehicle("DNF AI", VehicleType::SportsCar, false, {start.x, 0.0f, start.z, 0.0f});
+    const uint32_t activeAIId =
+        vehicles.CreateVehicle("Active AI", VehicleType::SportsCar, false, {start.x + 4.0f, 0.0f, start.z, 0.0f});
     race.RegisterRacer(playerId, "Finished Player", true);
     race.RegisterRacer(dnfAIId, "DNF AI", false);
     race.RegisterRacer(activeAIId, "Active AI", false);
@@ -409,11 +502,7 @@ TEST(Racing_RaceFlow_TerminalRacersStopWhileAnotherRacerContinues)
     race.MarkDNF(dnfAIId);
 
     EXPECT_TRUE(race.GetState() == RaceState::Racing);
-    vehicles.GetVehicle(playerId)->speed = 120.0f;
-    vehicles.GetVehicle(playerId)->steerAngle = 0.8f;
-    vehicles.GetVehicle(playerId)->boostTimer = 1.0f;
-    vehicles.GetVehicle(dnfAIId)->speed = 100.0f;
-    vehicles.GetVehicle(dnfAIId)->steerAngle = -0.5f;
+    vehicles.ApplyInputToVehicle(playerId, 1.0f, 0.0f, 0.8f, true, false, 1.0f / 60.0f);
     vehicles.GetVehicle(dnfAIId)->driftState = DriftState::Drifting;
 
     const float playerStartZ = vehicles.GetVehicle(playerId)->positionZ;
@@ -422,23 +511,33 @@ TEST(Racing_RaceFlow_TerminalRacersStopWhileAnotherRacerContinues)
     EXPECT_TRUE(StopTerminalRacer(race, vehicles, playerId));
     EXPECT_TRUE(StopTerminalRacer(race, vehicles, dnfAIId));
     EXPECT_FALSE(StopTerminalRacer(race, vehicles, activeAIId));
+    EXPECT_FALSE(vehicles.HasChassis(playerId));
+    EXPECT_FALSE(vehicles.HasChassis(dnfAIId));
+    EXPECT_TRUE(vehicles.HasChassis(activeAIId));
 
-    vehicles.ApplyInputToVehicle(activeAIId, 1.0f, 0.0f, 0.0f, false, false, 0.1f);
-    vehicles.FixedUpdate(0.1f);
+    for (int tick = 0; tick < 60; ++tick)
+    {
+        vehicles.ApplyInputToVehicle(activeAIId, 1.0f, 0.0f, 0.0f, false, false, 1.0f / 60.0f);
+        vehicles.FixedUpdate(1.0f / 60.0f);
+    }
 
     EXPECT_NEAR(vehicles.GetVehicle(playerId)->positionZ, playerStartZ, 0.001f);
     EXPECT_NEAR(vehicles.GetVehicle(dnfAIId)->positionZ, dnfStartZ, 0.001f);
-    EXPECT_GT(vehicles.GetVehicle(activeAIId)->positionZ, activeStartZ);
+    EXPECT_GT(vehicles.GetVehicle(activeAIId)->positionZ, activeStartZ + 1.0f);
     EXPECT_NEAR(vehicles.GetVehicle(playerId)->speed, 0.0f, 0.001f);
     EXPECT_NEAR(vehicles.GetVehicle(dnfAIId)->speed, 0.0f, 0.001f);
     EXPECT_NEAR(vehicles.GetVehicle(playerId)->steerAngle, 0.0f, 0.001f);
+    EXPECT_NEAR(vehicles.GetVehicle(playerId)->throttleInput, 0.0f, 0.001f);
+    EXPECT_NEAR(vehicles.GetVehicle(playerId)->boostTimer, 0.0f, 0.001f);
     EXPECT_TRUE(vehicles.GetVehicle(dnfAIId)->driftState == DriftState::None);
     EXPECT_TRUE(vehicles.GetVehicle(playerId)->isActive);
     EXPECT_TRUE(vehicles.GetVehicle(dnfAIId)->isActive);
 
     vehicles.Shutdown();
     race.Shutdown();
+    track.Shutdown();
 }
+#endif
 
 TEST(Racing_RaceFlow_RepeatedDNFDoesNotReawardChampionshipPoints)
 {
@@ -465,24 +564,28 @@ TEST(Racing_RaceFlow_RepeatedDNFDoesNotReawardChampionshipPoints)
     race.Shutdown();
 }
 
+#ifdef SPARK_TEST_HAS_PHYSICS
 TEST(Racing_RaceFlow_TerminalRacersRetainNonDrivingControlEdges)
 {
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
     RacingTestContext context;
     RacingRaceManager race;
     RacingVehicleSystem vehicles;
     RacingCameraSystem camera;
     race.Initialize(nullptr);
-    vehicles.Initialize(nullptr);
+    ASSERT_TRUE(vehicles.Initialize(world.Context()));
     EXPECT_TRUE(camera.Initialize(&context));
 
-    const uint32_t playerId = vehicles.CreateVehicle("Finished Player", VehicleType::SportsCar, true);
-    const uint32_t activeAIId = vehicles.CreateVehicle("Active AI", VehicleType::SportsCar, false);
+    const uint32_t playerId = vehicles.CreateVehicle("Finished Player", VehicleType::SportsCar, true, {});
+    const uint32_t activeAIId =
+        vehicles.CreateVehicle("Active AI", VehicleType::SportsCar, false, {6.0f, 0.0f, 0.0f, 0.0f});
     race.RegisterRacer(playerId, "Finished Player", true);
     race.RegisterRacer(activeAIId, "Active AI", false);
     race.StartRace(RaceMode::SingleRace, 1);
     race.Update(3.1f);
     race.OnLapCompleted(playerId);
-    vehicles.GetVehicle(playerId)->speed = 120.0f;
+    vehicles.ApplyInput(1.0f, 0.0f, 0.0f, false, false, 1.0f / 60.0f);
 
     bool restartHeld = false;
     bool cameraHeld = false;
@@ -508,6 +611,7 @@ TEST(Racing_RaceFlow_TerminalRacersRetainNonDrivingControlEdges)
     vehicles.Shutdown();
     race.Shutdown();
 }
+#endif
 
 // ============================================================================
 // Racing persistence
@@ -524,23 +628,25 @@ TEST(Racing_Persistence_ValidatesPortableSlotNames)
     EXPECT_FALSE(RacingPersistence::IsValidSlotName("slot name"));
 }
 
+#ifdef SPARK_TEST_HAS_PHYSICS
 TEST(Racing_Persistence_RoundTripsAndAtomicallyRestoresRaceState)
 {
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
     RacingTrackSystem tracks;
-    EXPECT_TRUE(tracks.Initialize(nullptr));
+    EXPECT_TRUE(tracks.Initialize(world.Context()));
     RacingVehicleSystem vehicles;
-    EXPECT_TRUE(vehicles.Initialize(nullptr));
+    ASSERT_TRUE(vehicles.Initialize(world.Context()));
     RacingRaceManager race;
     EXPECT_TRUE(race.Initialize(nullptr));
     RacingAIDriver ai;
     ASSERT_TRUE(ai.Initialize(nullptr));
 
-    const uint32_t playerId = vehicles.CreateVehicle("Player \"One\"", VehicleType::SuperCar, true);
+    const uint32_t playerId =
+        vehicles.CreateVehicle("Player \"One\"", VehicleType::SuperCar, true, {17.25f, 0.0f, -44.5f, 1.25f});
     VehicleInstance* player = vehicles.GetVehicle(playerId);
     ASSERT_TRUE(player != nullptr);
-    player->positionX = 17.25f;
-    player->positionZ = -44.5f;
-    player->heading = 1.25f;
+    // A car captured mid-race: the snapshot records its chassis speed and gameplay state.
     player->speed = 211.75f;
     player->nitro = 0.375f;
     player->damage = 12.5f;
@@ -562,8 +668,7 @@ TEST(Racing_Persistence_RoundTripsAndAtomicallyRestoresRaceState)
     ASSERT_TRUE(RacingPersistence::Deserialize(encoded, decoded, error));
     EXPECT_EQ(RacingPersistence::Serialize(decoded), encoded);
 
-    player->positionX = 999.0f;
-    player->speed = 0.0f;
+    ASSERT_TRUE(vehicles.SetVehiclePose(playerId, {999.0f, 0.0f, 0.0f, 0.0f}));
     tracks.LoadDemoTrack(2);
     race.StartRace(RaceMode::TimeTrial, 5);
     ai.SetGlobalDifficulty(AIDifficulty::Easy);
@@ -574,13 +679,83 @@ TEST(Racing_Persistence_RoundTripsAndAtomicallyRestoresRaceState)
     ASSERT_TRUE(restoredPlayer != nullptr);
     EXPECT_NEAR(restoredPlayer->positionX, 17.25f, 0.001f);
     EXPECT_NEAR(restoredPlayer->speed, 211.75f, 0.001f);
+    EXPECT_TRUE(vehicles.HasChassis(playerId));
     EXPECT_TRUE(race.GetState() == RaceState::Finished);
     EXPECT_TRUE(race.GetMode() == RaceMode::Championship);
     const RacerState* restoredRacer = race.GetRacer(playerId);
     ASSERT_TRUE(restoredRacer != nullptr);
     EXPECT_EQ(restoredRacer->lapTimes.size(), static_cast<size_t>(1));
     EXPECT_TRUE(ai.GetGlobalDifficulty() == AIDifficulty::Hard);
+
+    // The rebuilt chassis carries the saved speed into the next physics tick.
+    vehicles.FixedUpdate(1.0f / 60.0f);
+    EXPECT_GT(vehicles.GetVehicle(playerId)->speed, 190.0f);
+
+    vehicles.Shutdown();
+    tracks.Shutdown();
 }
+
+TEST(Racing_Persistence_RejectsOutOfRangeVehicleSnapshotsWithoutTouchingTheRace)
+{
+    // Saved vehicle values go straight into Jolt on restore, so a hand-edited save that is merely finite must still
+    // be refused: foreign stats (mass/torque/gearing), runaway speed or an off-world position.
+    RacingPhysicsTestWorld world;
+    ASSERT_TRUE(world.ready);
+    RacingTrackSystem tracks;
+    EXPECT_TRUE(tracks.Initialize(world.Context()));
+    RacingVehicleSystem vehicles;
+    ASSERT_TRUE(vehicles.Initialize(world.Context()));
+    RacingRaceManager race;
+    EXPECT_TRUE(race.Initialize(nullptr));
+    RacingAIDriver ai;
+    ASSERT_TRUE(ai.Initialize(nullptr));
+
+    const uint32_t playerId = vehicles.CreateVehicle("Player", VehicleType::Formula, true, {5.0f, 0.0f, -3.0f, 0.25f});
+    ASSERT_TRUE(playerId != 0u);
+    race.RegisterRacer(playerId, "Player", true);
+    race.StartRace(RaceMode::TimeTrial, 2);
+
+    const RacingPersistenceSnapshot valid = RacingPersistence::Capture(tracks, vehicles, race, ai);
+    std::string error;
+    ASSERT_TRUE(RacingPersistence::Validate(valid, error));
+    ASSERT_EQ(valid.vehicles.size(), static_cast<size_t>(1));
+
+    std::vector<RacingPersistenceSnapshot> corrupt(5, valid);
+    corrupt[0].vehicles[0].baseStats.weight = 3.0e38f; // overflows Jolt inertia
+    corrupt[1].vehicles[0].baseStats = RacingVehicleSystem::GetDefaultStats(VehicleType::Kart); // wrong type
+    corrupt[2].vehicles[0].speed = 1.0e6f;     // above the body's limit
+    corrupt[3].vehicles[0].positionX = 1.0e7f; // off the world
+    corrupt[4].vehicles[0].rpm = 1.0e9f;
+
+    const RacingRaceSnapshot raceBefore = race.CaptureState();
+    for (const RacingPersistenceSnapshot& snapshot : corrupt)
+    {
+        EXPECT_FALSE(RacingVehicleSystem::ValidateSnapshot(snapshot.vehicles));
+        EXPECT_FALSE(RacingPersistence::Validate(snapshot, error));
+        EXPECT_FALSE(error.empty());
+        EXPECT_FALSE(RacingPersistence::Apply(snapshot, tracks, vehicles, race, ai, error));
+        EXPECT_FALSE(vehicles.RestoreState(snapshot.vehicles));
+
+        // The running race keeps its car, chassis, stats and pose.
+        const VehicleInstance* player = vehicles.GetVehicle(playerId);
+        ASSERT_TRUE(player != nullptr);
+        EXPECT_TRUE(vehicles.HasChassis(playerId));
+        EXPECT_EQ(player->baseStats.weight, RacingVehicleSystem::GetDefaultStats(VehicleType::Formula).weight);
+        EXPECT_NEAR(player->positionX, 5.0f, 0.001f);
+        EXPECT_EQ(vehicles.GetVehicleCount(), static_cast<size_t>(1));
+        EXPECT_TRUE(race.GetMode() == RaceMode::TimeTrial);
+        EXPECT_EQ(race.CaptureState().racers.size(), raceBefore.racers.size());
+    }
+
+    // The untouched capture still restores.
+    EXPECT_TRUE(RacingPersistence::Apply(valid, tracks, vehicles, race, ai, error));
+    EXPECT_TRUE(vehicles.HasChassis(playerId));
+
+    ai.Shutdown();
+    vehicles.Shutdown();
+    tracks.Shutdown();
+}
+#endif
 
 TEST(Racing_Persistence_RejectsCorruptionWithoutReplacingOutput)
 {

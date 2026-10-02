@@ -9,19 +9,29 @@ Static regressions for the strict Windows Shipping configuration surface:
 * the windows-shipping preset cannot re-enable development-only toggles;
 * optimized configurations request reproducible outputs (no PE timestamps,
   no absolute source paths through __FILE__);
-* first-party sources never embed build-time clocks.
+* first-party sources never embed build-time clocks;
+* every first-party CMake call that gives MinSizeRel SPARK_BUILD_SHIPPING also
+  gives it SPARK_SHIPPING, the switch the debug-hook and detector headers use to
+  compile their instrumentation out.
 
-These checks read source only. They do not prove a compiled binary is
-byte-for-byte reproducible; that requires the reproducibility-windows CI job
-comparing two clean hosted builds.
+Most checks read source only. ShippingConfiguredGraphTests drive
+tools/check_shipping_configuration.py, which reads a configured tree's CMake
+File API codemodel, against synthetic replies. None of this proves a compiled
+binary is byte-for-byte reproducible; that requires two clean builds compared by
+tools/compare_build_outputs.py.
 """
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import io
+import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -32,6 +42,9 @@ sys.path.insert(0, str(TOOLS_ROOT))
 
 import check_parity  # noqa: E402
 import inventory  # noqa: E402
+
+sys.path.insert(0, str(REPO_ROOT / "tools"))
+import check_shipping_configuration  # noqa: E402
 
 CONFIG_CPP = REPO_ROOT / "SparkBuild" / "src" / "Config.cpp"
 ROOT_CMAKE = REPO_ROOT / "CMakeLists.txt"
@@ -235,11 +248,117 @@ class ReproducibleOutputFlagTests(unittest.TestCase):
             " ".join(_cmake_calls(self.text, "add_compile_options")),
         )
 
+    def test_gnu_clang_build_root_is_mapped_after_the_source_root(self) -> None:
+        # The DWARF comp_dir is each target's binary directory. GCC and Clang
+        # apply the last matching map, so the build-root map must follow the
+        # source-root map to win for a build tree inside the source tree.
+        source_map = '"$<$<NOT:$<CONFIG:Debug>>:-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=>"'
+        build_map = '"$<$<NOT:$<CONFIG:Debug>>:-ffile-prefix-map=${CMAKE_BINARY_DIR}=.>"'
+        compile_args = " ".join(_cmake_calls(self.text, "add_compile_options"))
+        self.assertIn(build_map, compile_args)
+        self.assertLess(compile_args.index(source_map), compile_args.index(build_map))
+        # GCC LTO compiles the LTRANS units at link time, so the link repeats both maps.
+        gcc_lto = re.search(
+            r'if\(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND ENABLE_LTO\)(.*?)\n    endif\(\)', self.text, re.S
+        )
+        self.assertIsNotNone(gcc_lto, "GCC LTO link-time prefix maps are missing")
+        link_args = " ".join(_cmake_calls(gcc_lto.group(1), "add_link_options"))
+        self.assertLess(link_args.index(source_map), link_args.index(build_map))
+        # Without a seed GCC names LTO IR sections from the clock and pid.
+        self.assertIn(
+            'string(APPEND CMAKE_${_spark_repro_lang}_COMPILE_OBJECT " -frandom-seed=<OBJECT>")',
+            gcc_lto.group(1),
+        )
+
     def test_shipping_never_links_incrementally(self) -> None:
         # /INCREMENTAL pads images and defeats /Brepro; it must stay Debug-only.
         for call in _cmake_calls(self.root + self.text, "add_link_options"):
             for token in re.findall(r"\S*/INCREMENTAL\S*", call):
                 self.assertEqual(token, "$<$<CONFIG:Debug>:/INCREMENTAL>")
+
+
+SHIPPING_PROFILE_DEFINE = "$<$<CONFIG:MinSizeRel>:SPARK_BUILD_SHIPPING>"
+SHIPPING_GATE_DEFINE = "$<$<CONFIG:MinSizeRel>:SPARK_SHIPPING=1>"
+DEBUG_HOOK_HEADER = REPO_ROOT / "SparkEngine" / "Source" / "Utils" / "DebugHookManager.h"
+CMAKE_DEFINITION_COMMANDS = ("list", "target_compile_definitions", "add_compile_definitions")
+
+
+def _first_party_cmake_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "--", "CMakeLists.txt", "*/CMakeLists.txt", "*.cmake"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [
+        REPO_ROOT / name
+        for name in result.stdout.splitlines()
+        if not name.startswith(("ThirdParty/", "build/")) and (REPO_ROOT / name).is_file()
+    ]
+
+
+def shipping_definition_gaps(files: dict[str, str]) -> list[str]:
+    """Return every definition call that marks MinSizeRel as Shipping without SPARK_SHIPPING.
+
+    ``files`` maps a display name to CMake text. A call names the Shipping
+    profile when it contains SPARK_BUILD_SHIPPING under a MinSizeRel generator
+    expression; it must then also carry SPARK_SHIPPING=1 for MinSizeRel.
+    """
+
+    gaps = []
+    for name, text in files.items():
+        stripped = _strip_cmake_comments(text)
+        for command in CMAKE_DEFINITION_COMMANDS:
+            for call in _cmake_calls(stripped, command):
+                compact = re.sub(r"\s+", "", call)
+                if SHIPPING_PROFILE_DEFINE in compact and SHIPPING_GATE_DEFINE not in compact:
+                    gaps.append(f"{name}: {command}({call.strip()[:120]}...)")
+    return gaps
+
+
+class ShippingDefinitionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.root = ROOT_CMAKE.read_text(encoding="utf-8")
+
+    def test_first_party_shipping_profiles_define_spark_shipping(self) -> None:
+        files = {
+            str(path.relative_to(REPO_ROOT)): path.read_text(encoding="utf-8")
+            for path in _first_party_cmake_files()
+        }
+        self.assertIn("CMakeLists.txt", files)
+        self.assertEqual(shipping_definition_gaps(files), [])
+
+    def test_root_feature_definitions_carry_both_shipping_defines(self) -> None:
+        stripped = _strip_cmake_comments(self.root)
+        profile_calls = [
+            re.sub(r"\s+", "", call)
+            for call in _cmake_calls(stripped, "list")
+            if "FEATURE_DEFINITIONS" in call and "SPARK_BUILD_SHIPPING" in call
+        ]
+        self.assertEqual(len(profile_calls), 1, "expected one per-configuration FEATURE_DEFINITIONS block")
+        self.assertIn(SHIPPING_PROFILE_DEFINE, profile_calls[0])
+        self.assertIn(SHIPPING_GATE_DEFINE, profile_calls[0])
+        # PUBLIC so the executables, game modules and tests that link
+        # SparkEngineLib compile the same hook gates as the library.
+        applied = [
+            re.sub(r"\s+", " ", call).strip() for call in _cmake_calls(stripped, "target_compile_definitions")
+        ]
+        self.assertIn("SparkEngineLib PUBLIC ${FEATURE_DEFINITIONS}", applied)
+
+    def test_gap_detector_flags_profile_without_gate(self) -> None:
+        broken = self.root.replace(SHIPPING_GATE_DEFINE, "", 1)
+        self.assertNotEqual(broken, self.root)
+        gaps = shipping_definition_gaps({"CMakeLists.txt": broken})
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("FEATURE_DEFINITIONS", gaps[0])
+
+    def test_debug_hook_header_rejects_profile_without_gate(self) -> None:
+        text = DEBUG_HOOK_HEADER.read_text(encoding="utf-8")
+        guard = text.find("#if defined(SPARK_BUILD_SHIPPING) && !defined(SPARK_SHIPPING)")
+        self.assertGreater(guard, 0, "DebugHookManager.h lost its SPARK_BUILD_SHIPPING/SPARK_SHIPPING guard")
+        self.assertIn("#error", text[guard : text.find("#endif", guard)])
+        self.assertLess(guard, text.find("#define SPARK_DEBUG_HOOKS_ENABLED 0"))
 
 
 FIRST_PARTY_ROOTS = (
@@ -289,6 +408,154 @@ class BuildClockTests(unittest.TestCase):
         # git grep: 0 = matches, 1 = no matches, anything else = the scan failed.
         self.assertIn(result.returncode, (0, 1), result.stderr)
         self.assertEqual(result.stdout.strip(), "", "build-clock macros break reproducible Shipping outputs")
+
+
+def _synthetic_target(name: str, configuration: str, defines: list[str], link_flags: str) -> dict[str, Any]:
+    directory = "bin" if name == "SparkEngine" else "lib"
+    suffix = ".exe" if name == "SparkEngine" else ".lib"
+    document: dict[str, Any] = {
+        "name": name,
+        "id": f"{name}::@root",
+        "type": "EXECUTABLE" if name == "SparkEngine" else "STATIC_LIBRARY",
+        "nameOnDisk": name + suffix,
+        "artifacts": [{"path": f"{directory}/{configuration}/{name}{suffix}"}]
+        + ([{"path": f"{directory}/{configuration}/{name}.pdb"}] if name == "SparkEngine" else []),
+        "compileGroups": [{"language": "CXX", "defines": [{"define": define} for define in defines]}],
+    }
+    if name == "SparkEngine":
+        document["link"] = {"commandFragments": [{"fragment": link_flags, "role": "flags"}]}
+    return document
+
+
+def _shipping_graph() -> dict[str, dict[str, Any]]:
+    """{config: {target: document}} of a correct windows-shipping tree."""
+    common = ["WIN32_LEAN_AND_MEAN", "NOMINMAX"]
+    per_config = {
+        "Debug": (common + ["SPARK_BUILD_DEBUG"], "/machine:x64 /debug /INCREMENTAL /DEBUG"),
+        "Release": (
+            common + ["SPARK_BUILD_RELEASE"],
+            "/machine:x64 /INCREMENTAL:NO /DEBUG /PDBALTPATH:SparkEngine.pdb /Brepro",
+        ),
+        "MinSizeRel": (
+            common + ["SPARK_BUILD_SHIPPING", "SPARK_SHIPPING=1"],
+            "/machine:x64 /INCREMENTAL:NO /DEBUG /PDBALTPATH:SparkEngine.pdb /Brepro",
+        ),
+    }
+    return {
+        configuration: {
+            target: _synthetic_target(target, configuration, defines, flags)
+            for target in check_shipping_configuration.CHECKED_TARGETS
+        }
+        for configuration, (defines, flags) in per_config.items()
+    }
+
+
+def _write_reply(build: Path, graph: dict[str, dict[str, Any]]) -> None:
+    reply = build / ".cmake" / "api" / "v1" / "reply"
+    reply.mkdir(parents=True)
+    configurations = []
+    for configuration, targets in graph.items():
+        references = []
+        for target, document in targets.items():
+            json_file = f"target-{target}-{configuration}.json"
+            (reply / json_file).write_text(json.dumps(document), encoding="utf-8")
+            references.append({"name": target, "id": document["id"], "jsonFile": json_file})
+        configurations.append({"name": configuration, "targets": references})
+    (reply / "codemodel-v2-0.json").write_text(json.dumps({"configurations": configurations}), encoding="utf-8")
+    index = {
+        "objects": [{"kind": "codemodel", "version": {"major": 2, "minor": 8}, "jsonFile": "codemodel-v2-0.json"}],
+        "reply": {},
+    }
+    (reply / "index-2026-01-01T00-00-00-0000.json").write_text(json.dumps(index), encoding="utf-8")
+
+
+class ShippingConfiguredGraphTests(unittest.TestCase):
+    """tools/check_shipping_configuration.py against synthetic codemodel replies."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.build = Path(self.temp.name) / "build"
+        self.build.mkdir()
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def run_checker(self, graph: dict[str, dict[str, Any]], *extra: str) -> tuple[int, str]:
+        _write_reply(self.build, graph)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = check_shipping_configuration.main(["--build-dir", str(self.build), *extra])
+        return code, stdout.getvalue() + stderr.getvalue()
+
+    def test_distinct_shipping_graph_passes(self) -> None:
+        code, output = self.run_checker(_shipping_graph(), "--require-preset", "windows-shipping")
+        self.assertEqual(code, 0, output)
+        self.assertIn("ShippingConfiguration: distinct (6 target configurations checked)", output)
+
+    def test_shipping_without_spark_shipping_fails(self) -> None:
+        graph = _shipping_graph()
+        defines = graph["MinSizeRel"]["SparkEngineLib"]["compileGroups"][0]["defines"]
+        defines.remove({"define": "SPARK_SHIPPING=1"})
+        code, output = self.run_checker(graph)
+        self.assertEqual(code, 1, output)
+        self.assertIn("SparkEngineLib MinSizeRel does not define SPARK_SHIPPING=1", output)
+
+    def test_release_carrying_shipping_define_fails(self) -> None:
+        graph = _shipping_graph()
+        graph["Release"]["SparkEngine"]["compileGroups"][0]["defines"].append({"define": "SPARK_BUILD_SHIPPING"})
+        code, output = self.run_checker(graph)
+        self.assertEqual(code, 1, output)
+        self.assertIn("SparkEngine Release defines Shipping-only SPARK_BUILD_SHIPPING", output)
+
+    def test_identical_artifact_paths_fail(self) -> None:
+        graph = _shipping_graph()
+        graph["MinSizeRel"]["SparkEngine"]["artifacts"][0] = {"path": "bin/Release/SparkEngine.exe"}
+        code, output = self.run_checker(graph)
+        self.assertEqual(code, 1, output)
+        self.assertIn("SparkEngine Release and MinSizeRel share artifact bin/Release/SparkEngine.exe", output)
+
+    def test_shipping_link_without_private_symbols_fails(self) -> None:
+        graph = _shipping_graph()
+        graph["MinSizeRel"]["SparkEngine"]["link"]["commandFragments"][0]["fragment"] = "/machine:x64 /Brepro"
+        code, output = self.run_checker(graph)
+        self.assertEqual(code, 1, output)
+        self.assertIn("SparkEngine MinSizeRel link does not carry /DEBUG", output)
+        self.assertIn("SparkEngine MinSizeRel link does not carry /PDBALTPATH:", output)
+
+    def test_escaped_pdbaltpath_from_the_visual_studio_generator_fails(self) -> None:
+        # What CMake's Visual Studio generator made of /PDBALTPATH:%_PDB%.
+        graph = _shipping_graph()
+        graph["MinSizeRel"]["SparkEngine"]["link"]["commandFragments"][0]["fragment"] = (
+            "/machine:x64 /DEBUG /PDBALTPATH:%%_PDB%% /Brepro"
+        )
+        code, output = self.run_checker(graph)
+        self.assertEqual(code, 1, output)
+        self.assertIn("/PDBALTPATH:%%_PDB%% is not the bare name of its PDB artifact (sparkengine.pdb)", output)
+
+    def test_preset_development_toggle_reaching_shipping_fails(self) -> None:
+        graph = _shipping_graph()
+        graph["MinSizeRel"]["SparkEngineLib"]["compileGroups"][0]["defines"].append({"define": "PROFILING_ENABLED"})
+        self.assertEqual(self.run_checker(copy.deepcopy(graph))[0], 0)
+        shutil.rmtree(self.build / ".cmake")
+        code, output = self.run_checker(graph, "--require-preset", "windows-shipping")
+        self.assertEqual(code, 1, output)
+        self.assertIn("defines PROFILING_ENABLED, which windows-shipping turns off", output)
+
+    def test_missing_configuration_or_target_fails(self) -> None:
+        graph = _shipping_graph()
+        del graph["Debug"]
+        del graph["MinSizeRel"]["SparkEngine"]
+        code, output = self.run_checker(graph)
+        self.assertEqual(code, 1, output)
+        self.assertIn("configuration Debug is absent from the codemodel", output)
+        self.assertIn("SparkEngine is not configured for MinSizeRel", output)
+
+    def test_tree_without_reply_is_an_error_not_a_pass(self) -> None:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(io.StringIO()):
+            code = check_shipping_configuration.main(["--build-dir", str(self.build)])
+        self.assertEqual(code, 2)
+        self.assertIn("no CMake File API reply", stderr.getvalue())
 
 
 if __name__ == "__main__":

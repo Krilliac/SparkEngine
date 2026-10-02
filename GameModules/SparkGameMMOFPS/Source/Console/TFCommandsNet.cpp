@@ -33,6 +33,7 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace Terrafront;
@@ -158,29 +159,22 @@ namespace
         const std::string charName = "Acceptance" + suffix;
 
         {
-            TF_AuthRequest reg{};
-            const auto clearRegister = Spark::MakeScopeExit([&] { Spark::SecureErase(&reg, sizeof(reg)); });
-            std::strncpy(reg.user, user.c_str(), sizeof(reg.user) - 1);
-            std::strncpy(reg.pass, pass.c_str(), sizeof(reg.pass) - 1);
-            ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &reg, sizeof(reg));
+            // NET-100: the client derives the SCRAM verifier; the password is not sent.
+            (void)ctx.clientNet->Register(user, pass);
             const auto regErr = static_cast<TFAuthErr>(ctx.clientNet->LastAuthError());
             check(regErr == TFAuthErr::Ok, "unique per-run acceptance account registered");
         }
         {
-            TF_AuthRequest login{};
-            const auto clearLogin = Spark::MakeScopeExit([&] { Spark::SecureErase(&login, sizeof(login)); });
-            std::strncpy(login.user, user.c_str(), sizeof(login.user) - 1);
-            std::strncpy(login.pass, pass.c_str(), sizeof(login.pass) - 1);
-            ctx.clientNet->SendMsg(TFMsg::LoginRequest, &login, sizeof(login));
+            ctx.clientNet->BeginLogin(user, pass);
             check(ctx.clientNet->IsLoggedIn(),
-                  "login succeeded (LoginReply delivered + TFAccountSystem verified the hash)");
+                  "login succeeded (SCRAM proof verified by TFAccountSystem, server signature verified)");
         }
 
         ctx.clientNet->SendMsg(TFMsg::CharListRequest, nullptr, 0);
         uint64_t charId = 0;
         for (const TF_CharBrief& c : ctx.clientNet->CharacterList())
         {
-            if (charName == c.name)
+            if (charName == std::string_view(c.name, strnlen(c.name, sizeof(c.name))))
             {
                 charId = c.id;
                 break;
@@ -238,13 +232,7 @@ namespace
             const uint64_t boundAccount = ctx.account ? ctx.account->AccountForClient(me) : 0;
             const size_t characterCount = ctx.characters ? ctx.characters->List(boundAccount).size() : 0;
 
-            {
-                TF_AuthRequest reauth{};
-                const auto clearReauth = Spark::MakeScopeExit([&] { Spark::SecureErase(&reauth, sizeof(reauth)); });
-                std::strncpy(reauth.user, user.c_str(), sizeof(reauth.user) - 1);
-                std::strncpy(reauth.pass, pass.c_str(), sizeof(reauth.pass) - 1);
-                ctx.clientNet->SendMsg(TFMsg::LoginRequest, &reauth, sizeof(reauth));
-            }
+            ctx.clientNet->BeginLogin(user, pass);
             check(static_cast<TFAuthErr>(ctx.clientNet->LastAuthError()) == TFAuthErr::SessionActive,
                   "re-authentication while in-world is rejected by the authority");
             check(ctx.clientNet->IsLoggedIn() && ctx.clientNet->AccountId() == boundAccount,
@@ -299,11 +287,7 @@ namespace
                   "session)");
 
             // Re-login (a fresh account session) then re-enter the SAME character.
-            TF_AuthRequest relogin{};
-            const auto clearRelogin = Spark::MakeScopeExit([&] { Spark::SecureErase(&relogin, sizeof(relogin)); });
-            std::strncpy(relogin.user, user.c_str(), sizeof(relogin.user) - 1);
-            std::strncpy(relogin.pass, pass.c_str(), sizeof(relogin.pass) - 1);
-            ctx.clientNet->SendMsg(TFMsg::LoginRequest, &relogin, sizeof(relogin));
+            ctx.clientNet->BeginLogin(user, pass);
             check(ctx.clientNet->IsLoggedIn(), "re-login succeeded after the simulated disconnect");
 
             TF_EnterWorldRequest rew{};
@@ -378,15 +362,16 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
         {
             if (args.size() < 2)
                 return "[TF] usage: tf_register <user> <pass>";
-            if (args[0].size() >= sizeof(TF_AuthRequest{}.user) || args[1].size() >= sizeof(TF_AuthRequest{}.pass))
-                return "[TF] tf_register: username/password too long";
+            if (args[0].size() >= sizeof(TF_RegisterRequest{}.user))
+                return "[TF] tf_register: username too long";
             if (!ClientConnected(m_ctx))
                 return "[TF] not connected - use tf_host or tf_connect first";
-            TF_AuthRequest req{};
-            const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-            std::strncpy(req.user, args[0].c_str(), sizeof(req.user) - 1);
-            std::strncpy(req.pass, args[1].c_str(), sizeof(req.pass) - 1);
-            m_ctx.clientNet->SendMsg(TFMsg::RegisterRequest, &req, sizeof(req));
+            // NET-100: sends a client-derived SCRAM verifier, never the password.
+            if (!m_ctx.clientNet->Register(args[0], args[1]))
+            {
+                return "[TF] register '" + args[0] +
+                       "': refused locally, err=" + std::to_string((int)m_ctx.clientNet->LastAuthError());
+            }
             if (!m_ctx.IsAuthority())
                 return "[TF] registration request sent - awaiting server reply";
             const auto err = static_cast<TFAuthErr>(m_ctx.clientNet->LastAuthError());
@@ -401,15 +386,12 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
         {
             if (args.size() < 2)
                 return "[TF] usage: tf_login <user> <pass>";
-            if (args[0].size() >= sizeof(TF_AuthRequest{}.user) || args[1].size() >= sizeof(TF_AuthRequest{}.pass))
-                return "[TF] tf_login: username/password too long";
+            if (args[0].size() >= sizeof(TF_LoginStart{}.user))
+                return "[TF] tf_login: username too long";
             if (!ClientConnected(m_ctx))
                 return "[TF] not connected - use tf_host or tf_connect first";
-            TF_AuthRequest req{};
-            const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-            std::strncpy(req.user, args[0].c_str(), sizeof(req.user) - 1);
-            std::strncpy(req.pass, args[1].c_str(), sizeof(req.pass) - 1);
-            m_ctx.clientNet->SendMsg(TFMsg::LoginRequest, &req, sizeof(req));
+            // NET-100: SCRAM; the password stays in this process.
+            m_ctx.clientNet->BeginLogin(args[0], args[1]);
             if (!m_ctx.IsAuthority())
                 return "[TF] login request sent - awaiting server reply";
             return m_ctx.clientNet->IsLoggedIn()
@@ -459,8 +441,8 @@ void TerrafrontModule::RegisterConsoleCommandsNet()
             for (size_t i = 0; i < list.size(); ++i)
             {
                 const TF_CharBrief& c = list[i];
-                os << "\n  [" << i << "] " << c.name << "  " << FactionTag(static_cast<FactionId>(c.faction))
-                   << "  rank " << c.rank << "  id " << c.id;
+                os << "\n  [" << i << "] " << std::string_view(c.name, strnlen(c.name, sizeof(c.name))) << "  "
+                   << FactionTag(static_cast<FactionId>(c.faction)) << "  rank " << c.rank << "  id " << c.id;
             }
             return os.str();
         },

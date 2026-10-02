@@ -45,6 +45,22 @@ namespace Spark
         namespace D3D12
         {
 
+            /**
+             * @brief Debug-layer message counts from the device's ID3D12InfoQueue.
+             *
+             * Only warning and higher severities are stored (Initialize() installs a storage
+             * filter), so `discarded` counts warnings or worse lost to the queue's message
+             * limit: when it is non-zero the other counts are a floor, not a total.
+             */
+            struct D3D12ValidationCounts
+            {
+                bool active = false; ///< False when the debug layer was not requested or is not installed.
+                uint64_t corruption = 0;
+                uint64_t errors = 0;
+                uint64_t warnings = 0;
+                uint64_t discarded = 0;
+            };
+
             // ============================================================================
             // D3D12 DEVICE
             // ============================================================================
@@ -94,11 +110,22 @@ namespace Spark
                                                                        IRHIShader* pixelShader) override;
 
                 // -- D3D12-specific: Deferred GPU resource release ----------------------
-                // These enqueue GPU resources for deferred deletion (fence-synchronized)
-                // since D3D12 resources may still be in-flight on the GPU when destroyed.
+                // Buffers and textures created here release through a fence-tagged queue
+                // from their own destructors (see D3D12DeferredReleaseQueue), so every
+                // destruction route -- unique_ptr reset, RHIAdapter::DestroyTexture -- waits
+                // for in-flight GPU work before the resource and its descriptors are recycled.
 
-                void DeferredReleaseBuffer(D3D12Buffer* buffer);
-                void DeferredReleaseTexture(D3D12Texture* texture);
+                /// Entries still waiting on the GPU fence (0 before Initialize / after Shutdown).
+                size_t GetPendingReleaseCount() const;
+
+                // -- D3D12-specific: Debug-layer validation --------------------------------
+                // With RHIDeviceDesc::enableDebugLayer the device stores every warning,
+                // error and corruption message. It breaks into the debugger on errors only
+                // when one is attached, so a validation run without a debugger counts errors
+                // instead of dying on a breakpoint exception. Shutdown() logs the totals.
+
+                /// Stored debug-layer messages by severity. Game thread; walks the queue, not for per-frame use.
+                D3D12ValidationCounts GetValidationCounts() const;
 
                 // -- IRHIDevice: Resource updates -----------------------------------------
 
@@ -152,17 +179,21 @@ namespace Spark
                 // -- Root signature helpers -----------------------------------------------
 
                 /**
-                 * @brief Creates a default root signature suitable for most shaders.
+                 * @brief Creates the root signature layout D3D12CommandList binds against
+                 *        (DefaultRootLayout). CreatePipelineState() shares one instance of it.
                  *
-                 * The layout provides:
-                 *   - Root parameter 0: CBV descriptor table (b0-b13, all stages)
-                 *   - Root parameter 1: SRV descriptor table (t0-t31, PS)
-                 *   - Root parameter 2: Sampler descriptor table (s0-s15, PS)
-                 *   - Root parameter 3: UAV descriptor table (u0-u7, all stages)
+                 * The layout provides (all parameters visible to every stage):
+                 *   - Root parameters 0-7: root CBVs b0-b7 (data volatile, as on D3D11)
+                 *   - Root parameter 8: SRV descriptor table t0-t31
+                 *   - Root parameter 9: sampler descriptor table s0-s15
+                 *   - Root parameter 10: UAV descriptor table u0-u7
                  *
                  * @return The created root signature, or nullptr on failure.
                  */
                 ComPtr<ID3D12RootSignature> CreateDefaultRootSignature() const;
+
+                /// Shader-visible table pools (test seam: free-page counts prove pages recycle).
+                D3D12DescriptorTables* GetDescriptorTables() const { return m_descriptorTables.get(); }
 
                 /**
                  * @brief Creates a root signature from a serialized blob.
@@ -179,6 +210,7 @@ namespace Spark
                 bool CreateCommandQueues();
                 bool CreateDescriptorHeaps();
                 bool CreateFrameResources();
+                bool CreateDescriptorTables();
                 void DetectCapabilities();
                 void DetectDXRSupport();
 
@@ -220,11 +252,20 @@ namespace Spark
                 std::mutex m_submitMutex;
 
                 // -- Descriptor heaps -----------------------------------------------------
+                // All CPU-only: CopyDescriptors cannot read from a shader-visible heap, so views
+                // live here and command lists copy them into m_descriptorTables per draw.
 
                 DescriptorHeapAllocator m_cbvSrvUavHeap;
                 DescriptorHeapAllocator m_rtvHeap;
                 DescriptorHeapAllocator m_dsvHeap;
                 DescriptorHeapAllocator m_samplerHeap;
+
+                /// Shader-visible table pages shared with every command list (see D3D12CommandList).
+                std::shared_ptr<D3D12DescriptorTables> m_descriptorTables;
+
+                /// DefaultRootLayout instance shared by every pipeline, so switching pipelines
+                /// does not change the root signature and invalidate the staged root arguments.
+                ComPtr<ID3D12RootSignature> m_defaultRootSignature;
 
                 // -- Per-frame resources --------------------------------------------------
 
@@ -244,20 +285,10 @@ namespace Spark
                 // -- Deferred deletion queue ----------------------------------------------
 
                 /**
-                 * @brief Resources queued for deferred deletion.
-                 *
-                 * When a resource is destroyed it may still be referenced by an
-                 * in-flight command list. The resource is moved into this queue
-                 * along with the current fence value. Once the GPU passes that
-                 * fence value the resource is released.
+                 * @brief Fence-tagged release queue shared with every buffer and texture this
+                 *        device creates. Created in Initialize(), drained and reset in Shutdown().
                  */
-                struct DeferredRelease
-                {
-                    ComPtr<IUnknown> resource;
-                    uint64_t fenceValue = 0;
-                };
-                std::queue<DeferredRelease> m_deferredReleaseQueue;
-                std::mutex m_deferredReleaseMutex;
+                std::shared_ptr<D3D12DeferredReleaseQueue> m_releaseQueue;
 
                 /**
                  * @brief Processes the deferred-release queue, freeing resources

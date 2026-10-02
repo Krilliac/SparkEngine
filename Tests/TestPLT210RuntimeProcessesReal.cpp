@@ -14,12 +14,15 @@
 
 #include "TestFramework.h"
 
+#include "Fixtures/ScopedUnboundedFileSize.h"
+
 #if defined(__linux__)
 
 #include "Graphics/GraphicsEngine.h"
 #include "Utils/Process.h"
 
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <string>
 #include <thread>
@@ -32,6 +35,8 @@ namespace
         const auto exe = std::filesystem::read_symlink("/proc/self/exe", error);
         return error ? std::filesystem::path{} : exe.parent_path();
     }
+
+    using SparkTestFixtures::ScopedUnboundedFileSize;
 } // namespace
 
 TEST(PLT210_GraphicsBasicPath_MMOFPSSurfaceDefinedOnLinux)
@@ -61,6 +66,7 @@ TEST(PLT210_Module_MMOFPSLoadsInHeadlessEngine)
     if (!std::filesystem::is_regular_file(engine, error) || !std::filesystem::is_regular_file(module, error))
         SKIP_TEST("SparkEngine or libSparkGameMMOFPS.so was not built in this configuration");
 
+    const ScopedUnboundedFileSize fileSizeLimit;
     auto launched = Spark::Process::Builder(engine.string())
                         .Arg("-headless")
                         .Arg("-no-subprocess")
@@ -77,8 +83,16 @@ TEST(PLT210_Module_MMOFPSLoadsInHeadlessEngine)
 
     const std::string output = launched->ReadAllStdout();
     // -require-game exits 2 when no module initialized (e.g. dlopen failed).
-    EXPECT_EQ(launched->WaitForExit(), 0);
+    const int exitCode = launched->WaitForExit();
+    EXPECT_EQ(exitCode, 0);
     EXPECT_STR_CONTAINS(output, "SPARK_MODULE_READY count=1");
+    if (exitCode != 0)
+    {
+        // Assertion messages truncate the child output; print the tail, where the load error is.
+        constexpr size_t kTailBytes = 4096;
+        std::fprintf(stderr, "---- SparkEngine child output (tail) ----\n%s\n----\n",
+                     output.substr(output.size() > kTailBytes ? output.size() - kTailBytes : 0).c_str());
+    }
 }
 
 TEST(PLT210_SparkConsole_EnginePipeStdoutCarriesOnlyCommands)

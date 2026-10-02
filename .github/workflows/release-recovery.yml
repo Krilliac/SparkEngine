@@ -88,9 +88,11 @@ jobs:
           REMOTE_OBJECT="$(git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
             ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
           if [[ -z "$REMOTE_OBJECT" ]]; then
-            echo "No durable release-counter state exists; there is no staged publication to recover."
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            # A lost tag also loses any pending-publication marker, so "nothing
+            # to recover" cannot be concluded from its absence.
+            echo "Durable release-counter state tag $STATE_REF is missing; cannot determine whether a" >&2
+            echo "staged publication needs recovery. Restore the tag before recovering." >&2
+            exit 1
           fi
           git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
             fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"

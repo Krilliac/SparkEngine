@@ -5,167 +5,25 @@
  * @brief Shader resource binding for PBR materials
  *
  * Contains BindToShader, CompileMaterial (D3D11 pipeline state creation),
- * texture loading/unloading via WIC, constant buffer creation and updates,
- * texture slot setup, and sampler state creation.
+ * texture slot unloading, and constant buffer creation and updates.
+ * Materials do not read texture files: callers hand them shader resource
+ * views through Material::SetTexture().
  * Core material state is in PBRMaterial.cpp.
- * Serialization and reload logic is in PBRMaterialLighting.cpp.
+ * Reflection and shader permutation logic is in PBRMaterialLighting.cpp.
  */
 
 #include "MaterialSystem.h"
 #include "../Utils/Assert.h"
-#include "../Utils/ContainerUtils.h"
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
-#include <filesystem>
 #include <cstring>
 #include <vector>
 
 #ifdef SPARK_PLATFORM_WINDOWS
-#include <wincodec.h>
-#endif // SPARK_PLATFORM_WINDOWS
-#include <wincodecsdk.h>
-
-#ifdef SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// MATERIAL CLASS — Texture Loading & Shader Binding (Windows)
+// MATERIAL CLASS — Texture Slots & Shader Binding (Windows)
 // ============================================================================
-
-bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath, ID3D11Device* device)
-{
-    if (!device)
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Device is null");
-        return false;
-    }
-
-    if (filePath.empty())
-    {
-        Spark::SimpleConsole::GetInstance().LogError("File path is empty");
-        return false;
-    }
-
-    if (!std::filesystem::exists(filePath))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Texture file not found: " + filePath);
-        return false;
-    }
-
-    // Check if texture already loaded
-    if (Spark::ContainerUtils::Contains(m_textures, type))
-    {
-        Spark::SimpleConsole::GetInstance().LogInfo("Texture of type " + std::to_string(static_cast<int>(type)) +
-                                                    " already loaded for material '" + m_name + "'");
-        return true;
-    }
-
-    // Load texture using WIC
-    ComPtr<IWICImagingFactory> wicFactory;
-    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&wicFactory));
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Imaging Factory");
-        return false;
-    }
-
-    ComPtr<IWICBitmapDecoder> decoder;
-    hr = wicFactory->CreateDecoderFromFilename(std::wstring(filePath.begin(), filePath.end()).c_str(), nullptr,
-                                               GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Decoder for file: " + filePath);
-        return false;
-    }
-
-    ComPtr<IWICBitmapFrameDecode> frame;
-    hr = decoder->GetFrame(0, &frame);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to get frame from WIC Decoder for file: " + filePath);
-        return false;
-    }
-
-    ComPtr<IWICFormatConverter> converter;
-    hr = wicFactory->CreateFormatConverter(&converter);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create WIC Format Converter");
-        return false;
-    }
-
-    hr = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr, 0.0,
-                               WICBitmapPaletteTypeCustom);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to initialize WIC Format Converter");
-        return false;
-    }
-
-    UINT width, height;
-    hr = converter->GetSize(&width, &height);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to get image size from WIC Converter");
-        return false;
-    }
-
-    if (width > 65536 || height > 65536)
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Image dimensions too large for PBR binding");
-        return false;
-    }
-    std::vector<BYTE> imageData(static_cast<size_t>(width) * height * 4); // 4 bytes per pixel (RGBA)
-    hr = converter->CopyPixels(nullptr, width * 4, static_cast<UINT>(imageData.size()), imageData.data());
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to copy pixels from WIC Converter");
-        return false;
-    }
-
-    // Create Direct3D texture
-    D3D11_TEXTURE2D_DESC texDesc = {};
-    texDesc.Width = width;
-    texDesc.Height = height;
-    texDesc.MipLevels = 1;
-    texDesc.ArraySize = 1;
-    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    texDesc.SampleDesc.Count = 1;
-    texDesc.Usage = D3D11_USAGE_DEFAULT;
-    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-    D3D11_SUBRESOURCE_DATA initData = {};
-    initData.pSysMem = imageData.data();
-    initData.SysMemPitch = width * 4;
-
-    ComPtr<ID3D11Texture2D> texture;
-    hr = device->CreateTexture2D(&texDesc, &initData, &texture);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create Direct3D texture for file: " + filePath);
-        return false;
-    }
-
-    // Create shader resource view
-    ComPtr<ID3D11ShaderResourceView> srv;
-    hr = device->CreateShaderResourceView(texture.Get(), nullptr, &srv);
-    if (FAILED(hr))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to create Shader Resource View for texture: " + filePath);
-        return false;
-    }
-
-    // Store texture
-    MaterialTexture matTexture;
-    matTexture.texture = srv;
-    matTexture.filePath = filePath;
-    matTexture.enabled = true;
-    m_textures[type] = matTexture;
-
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Loaded texture '%s' to slot %d for material '%s' (%ux%u)",
-                   filePath.c_str(), static_cast<int>(type), m_name.c_str(), width, height);
-    Spark::SimpleConsole::GetInstance().LogInfo("Loaded texture: " + filePath + " for material '" + m_name + "'");
-    return true;
-}
 
 void Material::UnloadTexture(MaterialTextureType type)
 {
@@ -178,21 +36,6 @@ void Material::UnloadTexture(MaterialTextureType type)
     {
         Spark::SimpleConsole::GetInstance().LogWarning("Material '" + m_name + "' does not have texture of type " +
                                                        std::to_string(static_cast<int>(type)) + " to unload");
-    }
-}
-
-void Material::Console_ReloadTextures(ID3D11Device* device)
-{
-    if (!device)
-        return;
-
-    for (auto& pair : m_textures)
-    {
-        if (!pair.second.filePath.empty())
-        {
-            // Reload the texture from file
-            LoadTexture(pair.first, pair.second.filePath, device);
-        }
     }
 }
 
@@ -486,34 +329,14 @@ HRESULT Material::CompileMaterial(ID3D11Device* device)
 #else // !SPARK_PLATFORM_WINDOWS
 
 #include "MaterialSystem.h"
-#include <cstdio>
 
 // ============================================================================
-// Material (Linux) — Texture Loading & Shader Binding
+// Material (Linux) — Texture Slots & Shader Binding
 // ============================================================================
-
-bool Material::LoadTexture(MaterialTextureType type, const std::string& filePath, ID3D11Device* /*device*/)
-{
-    // On Linux we store CPU-side data only; no GPU texture creation
-    MaterialTexture tex;
-    tex.filePath = filePath;
-    tex.enabled = true;
-    tex.intensity = 1.0f;
-    tex.tiling = {1.0f, 1.0f};
-    tex.offset = {0.0f, 0.0f};
-    m_textures[type] = tex;
-    return true;
-}
 
 void Material::UnloadTexture(MaterialTextureType type)
 {
     m_textures.erase(type);
-}
-
-void Material::Console_ReloadTextures(ID3D11Device* /*device*/)
-{
-    // No-op on Linux - GPU textures not available
-    fprintf(stderr, "[Material] Console_ReloadTextures: No-op on Linux (no GPU textures)\n");
 }
 
 void Material::BindToShader(ID3D11DeviceContext* /*context*/) const

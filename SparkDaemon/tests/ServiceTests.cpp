@@ -9,9 +9,16 @@
 
 #include <cstdlib>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <limits>
+#include <new>
+#include <optional>
+#include <string>
 #include <thread>
 
 #if defined(__linux__)
@@ -21,6 +28,44 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
+
+namespace
+{
+    /// Largest single operator-new request since the last reset. The wire-codec
+    /// test reads it to prove a decoder never reserves records its payload cannot hold.
+    std::atomic<size_t> g_largestAllocation{0};
+} // namespace
+
+// Replaceable global allocation functions ([new.delete.single]); the array forms
+// forward to these by default, so every container allocation is observed. GCC
+// must not inline them: once std::free is visible at a call site that got its
+// pointer from operator new, -Wmismatched-new-delete (an error here) fires.
+#if defined(__GNUC__)
+#define SPARK_SERVICE_TESTS_NOINLINE __attribute__((noinline))
+#else
+#define SPARK_SERVICE_TESTS_NOINLINE
+#endif
+
+SPARK_SERVICE_TESTS_NOINLINE void* operator new(size_t size)
+{
+    size_t largest = g_largestAllocation.load(std::memory_order_relaxed);
+    while (size > largest && !g_largestAllocation.compare_exchange_weak(largest, size, std::memory_order_relaxed))
+    {
+    }
+    if (void* memory = std::malloc(size == 0 ? 1 : size))
+        return memory;
+    throw std::bad_alloc();
+}
+
+SPARK_SERVICE_TESTS_NOINLINE void operator delete(void* memory) noexcept
+{
+    std::free(memory);
+}
+
+SPARK_SERVICE_TESTS_NOINLINE void operator delete(void* memory, size_t) noexcept
+{
+    std::free(memory);
+}
 
 namespace
 {
@@ -95,6 +140,77 @@ namespace
         payload[0] = 2;
         Check(!Spark::Daemon::DecodeProcessDefinition(payload, decodedKey, decoded),
               "process decoder rejects unknown schema");
+    }
+
+    /// Run the decode call @p decode and report whether no single allocation it
+    /// made reached @p limit bytes.
+    template <typename Decode> bool DecodesWithoutAllocatingOver(size_t limit, Decode&& decode)
+    {
+        g_largestAllocation.store(0, std::memory_order_relaxed);
+        decode();
+        return g_largestAllocation.load(std::memory_order_relaxed) < limit;
+    }
+
+    void TestWireDecodersRejectCountsThePayloadCannotHold()
+    {
+        // Every count below is within its decoder's cap but claims far more records
+        // than the few bytes after it could encode. Each must be rejected before the
+        // decoder reserves or sizes a container for the claimed count.
+        constexpr size_t kAllocationLimit = 1024;
+
+        for (int emptyLists = 0; emptyLists < 3; ++emptyLists)
+        {
+            Spark::Daemon::Wire::Writer writer;
+            Spark::Daemon::Wire::WriteVersion(writer);
+            writer.WriteString("scene", Spark::Daemon::kMaximumSessionIdLength);
+            writer.Write<uint64_t>(1);
+            for (int list = 0; list < emptyLists; ++list)
+                writer.Write<uint32_t>(0);
+            writer.Write<uint32_t>(emptyLists == 0 ? 1024u : 65'536u); // peers, then locks, then edits
+            const std::vector<uint8_t> payload = writer.Take();
+
+            Spark::Daemon::CollaborationSnapshot snapshot;
+            snapshot.sessionId = "sentinel";
+            bool decoded = true;
+            Check(DecodesWithoutAllocatingOver(kAllocationLimit,
+                                               [&] { decoded = Spark::Daemon::DecodeSnapshot(payload, snapshot); }),
+                  "snapshot decoder does not reserve records its payload cannot hold");
+            Check(!decoded && snapshot.sessionId == "sentinel", "snapshot count overclaim is rejected untouched");
+        }
+
+        {
+            Spark::Daemon::Wire::Writer writer;
+            Spark::Daemon::Wire::WriteVersion(writer);
+            writer.Write<uint32_t>(1024);
+            const std::vector<uint8_t> payload = writer.Take();
+            std::vector<Spark::Daemon::ProcessStatus> statuses;
+            bool decoded = true;
+            Check(
+                DecodesWithoutAllocatingOver(
+                    kAllocationLimit, [&] { decoded = Spark::Daemon::DecodeProcessStatuses(payload, statuses, 1024); }),
+                "status list decoder does not size records its payload cannot hold");
+            Check(!decoded, "status count overclaim is rejected");
+        }
+
+        {
+            Spark::Daemon::Wire::Writer writer;
+            Spark::Daemon::Wire::WriteVersion(writer);
+            writer.WriteString("client", Spark::Daemon::kMaximumClientInstanceLength);
+            writer.Write<uint64_t>(1);
+            writer.WriteString("world-1", Spark::Daemon::kMaximumProcessIdLength);
+            writer.WriteString("/bin/true", Spark::Daemon::kMaximumProcessPathLength);
+            writer.WriteString("/bin", Spark::Daemon::kMaximumProcessPathLength);
+            writer.Write<uint32_t>(static_cast<uint32_t>(Spark::Daemon::kMaximumProcessArguments));
+            const std::vector<uint8_t> payload = writer.Take();
+            Spark::Daemon::MutationKey key;
+            Spark::Daemon::ProcessDefinition definition;
+            bool decoded = true;
+            Check(DecodesWithoutAllocatingOver(
+                      kAllocationLimit,
+                      [&] { decoded = Spark::Daemon::DecodeProcessDefinition(payload, key, definition); }),
+                  "process definition decoder does not size arguments its payload cannot hold");
+            Check(!decoded, "argument count overclaim is rejected");
+        }
     }
 
     void TestCollaborationCapabilitiesAndLocks()
@@ -326,12 +442,15 @@ namespace
             {"recover-client", 7, {static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StopResponse), {1, 0}}});
         Check(Spark::Daemon::CompactOrchestrationJournal(journal, state), "journal compacts atomically");
 
-        Spark::Daemon::OrchestrationIntent interrupted{
-            {"torn-client", 9},
-            static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StartRequest),
-            "stale",
-            999999,
-            42};
+        // Field-by-field rather than nested aggregate braces: GCC 15 at -O3 reports a false
+        // maybe-uninitialized on key.clientInstance for the nested brace form (-Werror target).
+        Spark::Daemon::OrchestrationIntent interrupted;
+        interrupted.key.clientInstance = "torn-client";
+        interrupted.key.sequence = 9;
+        interrupted.messageType = static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StartRequest);
+        interrupted.processId = "stale";
+        interrupted.processIdBefore = 999999;
+        interrupted.processStartTokenBefore = 42;
         Check(Spark::Daemon::AppendOrchestrationIntent(journal, interrupted), "journal intent is durable");
         {
             std::ofstream torn(journal.string() + ".wal", std::ios::binary | std::ios::app);
@@ -375,6 +494,62 @@ namespace
         const auto recovered = Spark::Daemon::LoadOrchestrationJournal(journal, 4, 4);
         Check(recovered && recovered->mutations.size() == 1 && recovered->mutations.front().sequence == 1,
               "oversized journal rejection preserves the prior readable snapshot");
+    }
+
+    /// SparkFuzzOrchestrationJournal's regression seeds: a snapshot the service could
+    /// not restore faithfully is refused whole (fail closed), not partially applied.
+    void TestJournalRejectsRecordsTheServiceCannotRestore(const std::filesystem::path& scratch)
+    {
+        const auto journal = scratch / "damaged.state";
+        Spark::Daemon::JournalProcess process;
+        process.definition.id = "server";
+        process.definition.executable = "/opt/spark/bin/SparkServer";
+        process.status.id = "server";
+        const Spark::Daemon::JournalMutation committed{
+            "cli-a", 7, {static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::StopResponse), {1, 0}}};
+
+        Spark::Daemon::OrchestrationJournalState valid;
+        valid.processes.push_back(process);
+        valid.mutations.push_back(committed);
+        Check(Spark::Daemon::WriteOrchestrationJournal(journal, valid) &&
+                  Spark::Daemon::LoadOrchestrationJournal(journal, 16, 16).has_value(),
+              "a well-formed journal still loads");
+        const auto readBytes = [&]()
+        {
+            std::ifstream input(journal, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        };
+        const std::string goodBytes = readBytes();
+        const auto refusesAndPreserves =
+            [&](const Spark::Daemon::OrchestrationJournalState& state, const char* description)
+        {
+            Check(!Spark::Daemon::WriteOrchestrationJournal(journal, state), description);
+            const auto recovered = Spark::Daemon::LoadOrchestrationJournal(journal, 16, 16);
+            Check(std::filesystem::exists(journal) && readBytes() == goodBytes && recovered &&
+                      recovered->processes.size() == 1 && recovered->mutations.size() == 1 &&
+                      recovered->mutations.front().sequence == committed.sequence,
+                  "refused journal preserves the previous readable snapshot on disk");
+        };
+
+        // OrchestrationService converts each persisted Unix time to a system_clock time
+        // point; INT64_MIN or INT64_MAX milliseconds overflow that conversion.
+        auto crashBeforeEpoch = valid;
+        crashBeforeEpoch.processes.front().crashTimestampsUnixMilliseconds = {std::numeric_limits<int64_t>::min()};
+        refusesAndPreserves(crashBeforeEpoch, "journal refuses a crash timestamp system_clock cannot represent");
+        auto drainOverflow = valid;
+        drainOverflow.processes.front().status.drainDeadlineUnixMilliseconds = std::numeric_limits<int64_t>::max();
+        refusesAndPreserves(drainOverflow, "journal refuses a drain deadline system_clock cannot represent");
+
+        auto duplicateProcess = valid;
+        duplicateProcess.processes.push_back(process);
+        refusesAndPreserves(duplicateProcess, "journal refuses two records for one process id");
+        auto duplicateClient = valid;
+        duplicateClient.mutations.push_back(committed);
+        duplicateClient.mutations.back().sequence = 8;
+        refusesAndPreserves(duplicateClient, "journal refuses two committed mutations for one client instance");
+        auto emptyClient = valid;
+        emptyClient.mutations.front().clientInstance.clear();
+        refusesAndPreserves(emptyClient, "journal refuses a committed mutation with an empty client instance");
     }
 
     void TestPersistentOrchestratorIdentity(const std::filesystem::path& scratch)
@@ -523,6 +698,80 @@ namespace
 #endif
     }
 
+    /// A Restart the caller is told was rejected must not leave desiredRunning committed to the
+    /// journal: recovery after an abrupt daemon exit would turn it into a Backoff launch.
+    void TestRejectedRestartDoesNotPersistDesiredRunning(const std::filesystem::path& executable,
+                                                         const std::filesystem::path& scratch)
+    {
+        const auto allowed = scratch / "restart-allowed";
+        std::filesystem::create_directories(allowed);
+        const auto busyExecutable = allowed / executable.filename();
+        std::filesystem::copy_file(executable, busyExecutable, std::filesystem::copy_options::overwrite_existing);
+        auto vanishingName = executable.stem().string() + "-vanishing" + executable.extension().string();
+        const auto vanishingExecutable = allowed / vanishingName;
+        std::filesystem::copy_file(executable, vanishingExecutable, std::filesystem::copy_options::overwrite_existing);
+
+        Spark::Daemon::OrchestrationConfig config;
+        config.allowedExecutableRoots = {allowed};
+        config.journalPath = scratch / "restart-reject.state";
+        config.maximumRunningProcesses = 1;
+        config.maximumGracefulStopMilliseconds = 1000;
+
+        const auto persistedDesiredRunning = [&config](const std::string& id) -> std::optional<bool>
+        {
+            const auto state = Spark::Daemon::RecoverOrchestrationJournal(config.journalPath, 16, 16);
+            if (!state)
+                return std::nullopt;
+            for (const auto& process : state->processes)
+                if (process.definition.id == id)
+                    return process.desiredRunning;
+            return std::nullopt;
+        };
+
+        Spark::Daemon::OrchestrationService service(config);
+        uint64_t sequence = 0;
+        std::vector<uint8_t> payload;
+        const auto define = [&](const std::string& id, const std::filesystem::path& program)
+        {
+            Spark::Daemon::ProcessDefinition definition;
+            definition.id = id;
+            definition.executable = program.string();
+            definition.workingDirectory = allowed.string();
+            definition.arguments = {"--supervised-child"};
+            definition.gracefulStopMilliseconds = 200;
+            Spark::Daemon::EncodeProcessDefinition({"restart-client", ++sequence}, definition, payload);
+            return *service.HandleMessage(static_cast<uint16_t>(Spark::Daemon::OrchestrationMessage::DefineRequest),
+                                          payload);
+        };
+        const auto mutate = [&](Spark::Daemon::OrchestrationMessage message, const std::string& id)
+        {
+            Spark::Daemon::EncodeProcessMutation({"restart-client", ++sequence}, id, payload);
+            return *service.HandleMessage(static_cast<uint16_t>(message), payload);
+        };
+
+        Check(!IsError(define("busy", busyExecutable)), "restart fixture defines the busy process");
+        Check(!IsError(define("idle", busyExecutable)), "restart fixture defines the idle process");
+        Check(!IsError(define("vanishing", vanishingExecutable)), "restart fixture defines the vanishing process");
+        Check(!IsError(mutate(Spark::Daemon::OrchestrationMessage::StartRequest, "busy")),
+              "busy process fills the one-process cap");
+
+        // Rejected by the running-process cap.
+        Check(IsError(mutate(Spark::Daemon::OrchestrationMessage::RestartRequest, "idle")),
+              "restart of an idle process is rejected at the process cap");
+        Check(persistedDesiredRunning("idle") == std::optional<bool>(false),
+              "cap-rejected restart does not persist desiredRunning");
+
+        // Rejected by LaunchLocked: the executable disappeared after Define.
+        Check(!IsError(mutate(Spark::Daemon::OrchestrationMessage::StopRequest, "busy")), "busy process stops");
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::error_code removeError;
+        std::filesystem::remove(vanishingExecutable, removeError);
+        Check(IsError(mutate(Spark::Daemon::OrchestrationMessage::RestartRequest, "vanishing")),
+              "restart of a process whose executable vanished is rejected");
+        Check(persistedDesiredRunning("vanishing") == std::optional<bool>(false),
+              "launch-rejected restart does not persist desiredRunning");
+    }
+
     void TestWindowsOrPosixLaunchAndDurableReplay(const std::filesystem::path& executable,
                                                   const std::filesystem::path& scratch)
     {
@@ -589,15 +838,18 @@ int main(int argc, char** argv)
         ("spark-daemon-tests-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(scratch);
     TestStrictProcessCodec();
+    TestWireDecodersRejectCountsThePayloadCannotHold();
     TestCollaborationCapabilitiesAndLocks();
     TestCollaborationSnapshotByteBudget();
     TestSupervisorFailClosedConfiguration();
     TestSupervisorRevalidatesExecutableAtLaunch(executable, scratch);
     TestJournalTornTailAndStalePid(scratch, executable);
     TestJournalWriteBoundsPreservePublishedSnapshot(scratch);
+    TestJournalRejectsRecordsTheServiceCannotRestore(scratch);
     TestPersistentOrchestratorIdentity(scratch);
     TestPreExecReleaseFailsClosedAfterAbruptDaemonDeath(executable, scratch);
     TestWindowsOrPosixLaunchAndDurableReplay(executable, scratch);
+    TestRejectedRestartDoesNotPersistDesiredRunning(executable, scratch);
     std::error_code cleanupError;
     std::filesystem::remove_all(scratch, cleanupError);
     if (g_failures != 0)

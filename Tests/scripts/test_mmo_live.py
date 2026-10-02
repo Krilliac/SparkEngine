@@ -41,9 +41,15 @@ def _packet(msg_type: int, channel: int, sender: int, seq: int, ts: float, paylo
     return hdr + payload
 
 
+# Connect payload prefix: handshake magic "SPNH" + protocol version (NetworkManager.h).
+HANDSHAKE_MAGIC = 0x484E5053
+PROTOCOL_VERSION = 1
+
+
 def connect_pkt(name: str) -> bytes:
     nb = name.encode()
-    return _packet(1, 1, 0, 0, 0.0, struct.pack('<H', len(nb)) + nb)
+    payload = struct.pack('<IH', HANDSHAKE_MAGIC, PROTOCOL_VERSION) + struct.pack('<H', len(nb)) + nb
+    return _packet(1, 1, 0, 0, 0.0, payload)
 
 
 def chat_pkt(sender: int, name: str, text: str) -> bytes:
@@ -117,6 +123,17 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=27015)
     args = parser.parse_args()
+
+    # NET-100 protocol version 2 seals every datagram after an X25519/Ed25519 handshake
+    # (docs/specs/networking-wire-format.md). This script speaks the retired plaintext
+    # version-1 wire and has no crypto implementation, so against a current server every
+    # step below would fail for the wrong reason. Refuse clearly instead of reporting noise;
+    # the in-process equivalents are Tests/TestNetworkMMOIntegration.cpp and
+    # Tests/TestSecureTransportWired.cpp.
+    print(f"test_mmo_live.py speaks protocol version {PROTOCOL_VERSION}; the server requires the sealed "
+          "version 2 transport (NET-100). Use the SparkTests MMOIntegration_ / SecureTransport_ families.",
+          file=sys.stderr)
+    return 2
 
     server = (args.host, args.port)
     # Time to wait for server ticks (60 Hz = 16.7 ms; use ~50 ms margin)

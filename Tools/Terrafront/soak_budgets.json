@@ -1,0 +1,17 @@
+{
+  "schema": "terrafront-soak-budgets/1",
+  "provisional": true,
+  "$comment": "TF-110 soak guards read by multiclient.py --soak-seconds. PROVISIONAL harness guards with headroom for shared-host noise, not SLOs (GameModules/SparkGameMMOFPS/DESIGN.md section 8). Tick numbers come from tf_perf (Utils/TFPerfCounters.h): maxTickAvgP95Ms bounds the 95th percentile of the ~2 s mean tick sampled every sampleIntervalS, maxTickPeakMs bounds the sum of per-phase peaks since the previous sample (an upper bound on the worst single tick). bots is capped by kTFMaxBots (32), so the run holds 34 actors, not the 100 the W13 perf pass targets.",
+  "bots": 32,
+  "sampleIntervalS": 10,
+  "warmupS": 30,
+  "tickHz": 60,
+  "maxTickAvgP95Ms": 16.7,
+  "maxTickPeakMs": 250,
+  "replicationHz": 20,
+  "minClientPacketsPerSecond": 15,
+  "maxClientDownlinkKBps": 256,
+  "maxDroppedPacketFraction": 0.05,
+  "maxRssSlopeMiBPerHour": 256,
+  "rssSampleIntervalS": 1
+}

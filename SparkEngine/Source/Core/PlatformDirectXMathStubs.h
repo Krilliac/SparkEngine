@@ -645,12 +645,13 @@ namespace DirectX
         return {n.x * s, n.y * s, n.z * s, cosf(halfAngle)};
     }
 
+    /// DirectXMath returns the Hamilton product q2*q1: the rotation q1 followed by q2.
     inline XMVECTOR XMQuaternionMultiply(XMVECTOR q1, XMVECTOR q2)
     {
-        return {q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
-                q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
-                q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w,
-                q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z};
+        return {q2.w * q1.x + q2.x * q1.w + q2.y * q1.z - q2.z * q1.y,
+                q2.w * q1.y - q2.x * q1.z + q2.y * q1.w + q2.z * q1.x,
+                q2.w * q1.z + q2.x * q1.y - q2.y * q1.x + q2.z * q1.w,
+                q2.w * q1.w - q2.x * q1.x - q2.y * q1.y - q2.z * q1.z};
     }
 
     inline XMVECTOR XMQuaternionNormalize(XMVECTOR q)
@@ -662,14 +663,37 @@ namespace DirectX
         return {q.x * inv, q.y * inv, q.z * inv, q.w * inv};
     }
 
+    /// Spherical interpolation with DirectXMath's XMQuaternionSlerp semantics: it takes the shorter
+    /// arc (negating b's weight when the dot product is negative). Nearly parallel inputs, where
+    /// sin(omega) would divide by ~0, fall back to a lerp that is normalized here, so unit inputs
+    /// always give a unit result.
     inline XMVECTOR XMQuaternionSlerp(XMVECTOR a, XMVECTOR b, float t)
     {
-        return XMVectorLerp(a, b, t); // Simplified linear interpolation
+        constexpr float kOneMinusEpsilon = 1.0f - 0.00001f;
+        float cosOmega = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+        const float sign = cosOmega < 0.0f ? -1.0f : 1.0f;
+        cosOmega *= sign;
+
+        const bool nearlyParallel = cosOmega >= kOneMinusEpsilon;
+        float weightA = 1.0f - t;
+        float weightB = t;
+        if (!nearlyParallel)
+        {
+            const float sinOmega = sqrtf(1.0f - cosOmega * cosOmega);
+            const float omega = atan2f(sinOmega, cosOmega);
+            weightA = sinf((1.0f - t) * omega) / sinOmega;
+            weightB = sinf(t * omega) / sinOmega;
+        }
+        weightB *= sign;
+        const XMVECTOR result = {a.x * weightA + b.x * weightB, a.y * weightA + b.y * weightB,
+                                 a.z * weightA + b.z * weightB, a.w * weightA + b.w * weightB};
+        return nearlyParallel ? XMQuaternionNormalize(result) : result;
     }
 
+    /// Row-vector convention (v' = v * M), matching DirectXMath. Like DirectXMath, the input is
+    /// assumed to be a unit quaternion and is not normalized.
     inline XMMATRIX XMMatrixRotationQuaternion(XMVECTOR q)
     {
-        // Simplified quaternion to matrix
         float x = q.x, y = q.y, z = q.z, w = q.w;
         XMMATRIX m = XMMatrixIdentity();
         m.m[0][0] = 1 - 2 * (y * y + z * z);
@@ -684,10 +708,12 @@ namespace DirectX
         return m;
     }
 
+    /// DirectXMath normalizes the axis first; an unnormalized one would scale and shear.
     inline XMMATRIX XMMatrixRotationAxis(XMVECTOR axis, float angle)
     {
+        const XMVECTOR n = XMVector3Normalize(axis);
         float c = cosf(angle), s = sinf(angle), t = 1.0f - c;
-        float x = axis.x, y = axis.y, z = axis.z;
+        float x = n.x, y = n.y, z = n.z;
         XMMATRIX m = XMMatrixIdentity();
         m.m[0][0] = t * x * x + c;
         m.m[0][1] = t * x * y + s * z;
@@ -711,17 +737,122 @@ namespace DirectX
         return XMMatrixScaling(v.x, v.y, v.z);
     }
 
+    /// Unit quaternion from the upper 3x3 of an orthonormal rotation matrix (DirectXMath's
+    /// branch-on-largest-component formulation, which stays accurate near 180 degrees).
+    inline XMVECTOR XMQuaternionRotationMatrix(const XMMATRIX& m)
+    {
+        const float r22 = m.m[2][2];
+        if (r22 <= 0.0f) // x^2 + y^2 >= z^2 + w^2
+        {
+            const float dif10 = m.m[1][1] - m.m[0][0];
+            const float omr22 = 1.0f - r22;
+            if (dif10 <= 0.0f) // x^2 >= y^2
+            {
+                const float fourXSqr = omr22 - dif10;
+                const float inv4x = 0.5f / sqrtf(fourXSqr);
+                return {fourXSqr * inv4x, (m.m[0][1] + m.m[1][0]) * inv4x, (m.m[0][2] + m.m[2][0]) * inv4x,
+                        (m.m[1][2] - m.m[2][1]) * inv4x};
+            }
+            const float fourYSqr = omr22 + dif10;
+            const float inv4y = 0.5f / sqrtf(fourYSqr);
+            return {(m.m[0][1] + m.m[1][0]) * inv4y, fourYSqr * inv4y, (m.m[1][2] + m.m[2][1]) * inv4y,
+                    (m.m[2][0] - m.m[0][2]) * inv4y};
+        }
+
+        const float sum10 = m.m[1][1] + m.m[0][0];
+        const float opr22 = 1.0f + r22;
+        if (sum10 <= 0.0f) // z^2 >= w^2
+        {
+            const float fourZSqr = opr22 - sum10;
+            const float inv4z = 0.5f / sqrtf(fourZSqr);
+            return {(m.m[0][2] + m.m[2][0]) * inv4z, (m.m[1][2] + m.m[2][1]) * inv4z, fourZSqr * inv4z,
+                    (m.m[0][1] - m.m[1][0]) * inv4z};
+        }
+        const float fourWSqr = opr22 + sum10;
+        const float inv4w = 0.5f / sqrtf(fourWSqr);
+        return {(m.m[1][2] - m.m[2][1]) * inv4w, (m.m[2][0] - m.m[0][2]) * inv4w, (m.m[0][1] - m.m[1][0]) * inv4w,
+                fourWSqr * inv4w};
+    }
+
+    /// Splits an affine S*R*T matrix the way DirectXMath does. Rows are the scaled basis vectors
+    /// (row-vector convention), so each row's length is that axis' scale. A basis vector whose scale
+    /// is below the epsilon is rebuilt from the others, a mirrored basis is folded into a negative
+    /// scale on the largest axis, and a sheared (non-orthogonal) basis returns false. On failure the
+    /// rotation is a best-effort unit quaternion; DirectXMath leaves it unwritten.
     inline bool XMMatrixDecompose(XMVECTOR* outScale, XMVECTOR* outRotQuat, XMVECTOR* outTrans, const XMMATRIX& m)
     {
-        // Extract translation
-        *outTrans = {m.m[3][0], m.m[3][1], m.m[3][2], 1.0f};
-        // Extract scale (column lengths)
-        float sx = sqrtf(m.m[0][0] * m.m[0][0] + m.m[0][1] * m.m[0][1] + m.m[0][2] * m.m[0][2]);
-        float sy = sqrtf(m.m[1][0] * m.m[1][0] + m.m[1][1] * m.m[1][1] + m.m[1][2] * m.m[1][2]);
-        float sz = sqrtf(m.m[2][0] * m.m[2][0] + m.m[2][1] * m.m[2][1] + m.m[2][2] * m.m[2][2]);
-        *outScale = {sx, sy, sz, 0.0f};
-        *outRotQuat = {0, 0, 0, 1}; // Identity quaternion as stub
-        return true;
+        constexpr float kDecompEpsilon = 0.0001f;
+        struct Rank
+        {
+            int largest, middle, smallest;
+        };
+        // Indices of x, y, z from largest to smallest, tie-broken as DirectXMath's XM3RANKDECOMPOSE.
+        const auto rank = [](float x, float y, float z) -> Rank
+        {
+            if (x < y)
+            {
+                if (y < z)
+                {
+                    return {2, 1, 0};
+                }
+                return x < z ? Rank{1, 2, 0} : Rank{1, 0, 2};
+            }
+            if (x < z)
+            {
+                return {2, 0, 1};
+            }
+            return y < z ? Rank{0, 2, 1} : Rank{0, 1, 2};
+        };
+        const XMVECTOR canonical[3] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+
+        *outTrans = m.r[3];
+
+        XMVECTOR basis[3];
+        float scale[3];
+        for (int row = 0; row < 3; ++row)
+        {
+            basis[row] = {m.m[row][0], m.m[row][1], m.m[row][2], 0.0f};
+            scale[row] = XMVectorGetX(XMVector3Length(basis[row]));
+        }
+
+        const Rank order = rank(scale[0], scale[1], scale[2]);
+        const int a = order.largest, b = order.middle, c = order.smallest;
+        if (scale[a] < kDecompEpsilon)
+        {
+            basis[a] = canonical[a];
+        }
+        basis[a] = XMVector3Normalize(basis[a]);
+        if (scale[b] < kDecompEpsilon)
+        {
+            // Any vector perpendicular to basis[a]: cross it with the canonical axis it leans on least.
+            const Rank lean = rank(fabsf(basis[a].x), fabsf(basis[a].y), fabsf(basis[a].z));
+            basis[b] = XMVector3Cross(basis[a], canonical[lean.smallest]);
+        }
+        basis[b] = XMVector3Normalize(basis[b]);
+        if (scale[c] < kDecompEpsilon)
+        {
+            basis[c] = XMVector3Cross(basis[a], basis[b]);
+        }
+        basis[c] = XMVector3Normalize(basis[c]);
+
+        float det = XMVectorGetX(XMVector3Dot(basis[0], XMVector3Cross(basis[1], basis[2])));
+        if (det < 0.0f)
+        {
+            scale[a] = -scale[a];
+            basis[a] = XMVectorNegate(basis[a]);
+            det = -det;
+        }
+        *outScale = {scale[0], scale[1], scale[2], 0.0f};
+
+        XMMATRIX rotation = XMMatrixIdentity();
+        for (int row = 0; row < 3; ++row)
+        {
+            rotation.r[row] = basis[row];
+        }
+        *outRotQuat = XMQuaternionNormalize(XMQuaternionRotationMatrix(rotation));
+
+        // An orthonormal basis has determinant 1; anything else is shear.
+        return (det - 1.0f) * (det - 1.0f) <= kDecompEpsilon;
     }
 
     // XMMATRIX 16-float constructor

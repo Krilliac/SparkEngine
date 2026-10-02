@@ -97,7 +97,7 @@ namespace Terrafront
         // W11 impact-broadcast: 0x54F5 authoritative impact point -> the
         // surface-flavored puff (Game/TFImpactFx). Registered here because this
         // system already owns the pure-client fx handler lifecycle (and its
-        // Shutdown no-op replacement keeps module unload dangle-free).
+        // Shutdown UnregisterHandler keeps module unload dangle-free).
         nm.RegisterHandler(static_cast<MessageType>(kTFFxMsg_ImpactFx),
                            [this](const NetworkMessage& m)
                            {
@@ -116,13 +116,13 @@ namespace Terrafront
 
     void TFAudioAmbience::ReleaseNetHandlers()
     {
-        // NetworkManager has no per-type removal; replace with a no-op so no
-        // dangling `this` survives module shutdown (TFSocialSystem pattern).
+        // Remove (never replace) these observers. An empty placeholder lambda is itself code in this module
+        // image: it outlived unload, and during hot reload it overwrote the replacement module's handler.
+        // Inside the module's teardown scope NetworkManager leaves a slot the replacement already owns
+        // untouched.
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_RemoteFire),
-                           [](const Spark::Net::NetworkMessage&) {});
-        nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_ImpactFx),
-                           [](const Spark::Net::NetworkMessage&) {});
+        nm.UnregisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_RemoteFire));
+        nm.UnregisterHandler(static_cast<Spark::Net::MessageType>(kTFFxMsg_ImpactFx));
         m_netHandlers = false;
     }
 

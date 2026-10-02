@@ -24,11 +24,11 @@
  */
 
 #include "TestFramework.h"
+#include "Utils/GoldenImageTest.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
-#include <set>
 #include <vector>
 
 #ifdef _WIN32
@@ -38,45 +38,6 @@
 #include <windows.h>
 #include <wrl/client.h>
 #endif
-
-namespace
-{
-    /// Minimal golden-frame content check for tightly packed RGBA8 pixels.
-    struct FrameContent
-    {
-        size_t distinctColors = 0;
-        double dominantFraction = 1.0; ///< Share of pixels equal to the most common colour
-    };
-
-    FrameContent AnalyzeFrame(const std::vector<uint8_t>& rgba)
-    {
-        FrameContent result;
-        const size_t pixelCount = rgba.size() / 4;
-        if (pixelCount == 0)
-            return result;
-
-        std::vector<uint32_t> packed(pixelCount);
-        for (size_t i = 0; i < pixelCount; ++i)
-            packed[i] = (uint32_t(rgba[i * 4 + 0]) << 16) | (uint32_t(rgba[i * 4 + 1]) << 8) | rgba[i * 4 + 2];
-
-        std::set<uint32_t> distinct(packed.begin(), packed.end());
-        result.distinctColors = distinct.size();
-
-        size_t dominant = 0;
-        for (uint32_t color : distinct)
-            dominant = std::max<size_t>(dominant, std::count(packed.begin(), packed.end(), color));
-        result.dominantFraction = double(dominant) / double(pixelCount);
-        return result;
-    }
-
-    /// A frame passes only if it has at least two colours and no single colour
-    /// covers more than maxDominantFraction of it. A uniform frame always fails.
-    bool FrameHasRenderedContent(const std::vector<uint8_t>& rgba, double maxDominantFraction)
-    {
-        const FrameContent content = AnalyzeFrame(rgba);
-        return content.distinctColors >= 2 && content.dominantFraction <= maxDominantFraction;
-    }
-} // namespace
 
 TEST(D3D11_Golden_UniformFrameIsRejected)
 {
@@ -89,16 +50,18 @@ TEST(D3D11_Golden_UniformFrameIsRejected)
         uniform[i + 2] = 70;
         uniform[i + 3] = 255;
     }
-    EXPECT_FALSE(FrameHasRenderedContent(uniform, 0.95));
+    EXPECT_FALSE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(uniform, 0.95));
 
     // One stray pixel does not rescue a blank frame either.
     uniform[0] = 255;
-    EXPECT_FALSE(FrameHasRenderedContent(uniform, 0.95));
+    EXPECT_FALSE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(uniform, 0.95));
 
     // A frame with a real second region passes.
     for (size_t i = 0; i < uniform.size() / 4; i += 4)
+    {
         uniform[i] = 200;
-    EXPECT_TRUE(FrameHasRenderedContent(uniform, 0.95));
+    }
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(uniform, 0.95));
 }
 
 #ifdef _WIN32
@@ -132,14 +95,18 @@ namespace
 
         ComPtr<ID3D11Texture2D> staging;
         if (FAILED(device.GetD3D11Device()->CreateTexture2D(&stagingDesc, nullptr, &staging)))
+        {
             return pixels;
+        }
 
         ID3D11DeviceContext1* context = device.GetD3D11Context();
         context->CopyResource(staging.Get(), resource);
 
         D3D11_MAPPED_SUBRESOURCE mapped{};
         if (FAILED(context->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+        {
             return pixels;
+        }
 
         pixels.resize(size_t(width) * height * 4);
         for (uint32_t y = 0; y < height; ++y)
@@ -192,8 +159,7 @@ namespace
 TEST(D3D11_Resource_WrapNativeRenderTargetCreatesRTV)
 {
     Spark::RHI::D3D11::D3D11Device device;
-    if (!TryCreateD3D11Device(device))
-        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+    ASSERT_TRUE(TryCreateD3D11Device(device));
 
     constexpr uint32_t kSize = 16;
     ComPtr<ID3D11Texture2D> native = CreateNativeRenderTarget(device, kSize);
@@ -224,8 +190,7 @@ TEST(D3D11_Resource_WrapNativeRenderTargetCreatesRTV)
 TEST(D3D11_Resource_SetRenderTargetsClampsToEightSlots)
 {
     Spark::RHI::D3D11::D3D11Device device;
-    if (!TryCreateD3D11Device(device))
-        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+    ASSERT_TRUE(TryCreateD3D11Device(device));
 
     constexpr uint32_t kSize = 8;
     auto first = device.CreateTexture(RenderTargetDesc(kSize, "RHI210_First"));
@@ -246,8 +211,12 @@ TEST(D3D11_Resource_SetRenderTargetsClampsToEightSlots)
     device.GetD3D11Context()->OMGetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, bound, nullptr);
     const bool secondBound = bound[0] == second->GetRenderTargetView();
     for (auto* view : bound)
+    {
         if (view)
+        {
             view->Release();
+        }
+    }
     EXPECT_TRUE(secondBound);
 
     first.reset();
@@ -258,8 +227,7 @@ TEST(D3D11_Resource_SetRenderTargetsClampsToEightSlots)
 TEST(D3D11_Golden_RHITriangleFrameIsNotUniform)
 {
     Spark::RHI::D3D11::D3D11Device device;
-    if (!TryCreateD3D11Device(device))
-        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+    ASSERT_TRUE(TryCreateD3D11Device(device));
 
     using namespace Spark::RHI;
     constexpr uint32_t kSize = 64;
@@ -324,8 +292,8 @@ TEST(D3D11_Golden_RHITriangleFrameIsNotUniform)
     ASSERT_EQ(pixels.size(), size_t(kSize) * kSize * 4);
 
     // The golden assertion: a blank/uniform frame fails here.
-    const FrameContent content = AnalyzeFrame(pixels);
-    EXPECT_TRUE(FrameHasRenderedContent(pixels, 0.95));
+    const Spark::FrameContent content = Spark::GoldenImageTestRunner::AnalyzeFrame(pixels);
+    EXPECT_TRUE(Spark::GoldenImageTestRunner::FrameHasRenderedContent(pixels, 0.95));
 
     // Geometry lands where the draw put it: triangle colour in the centre,
     // clear colour in the corners (0.3 -> 77 in UNORM8).

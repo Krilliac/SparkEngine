@@ -3,10 +3,10 @@
 ## Scope
 
 This policy governs all code and data under `ThirdParty/`. New third-party code
-belongs there and nowhere else — but note that this is a review rule, not a
-tooling guarantee: no check currently scans the rest of the repository for
-vendored code, so a library dropped into `SparkEngine/Source/` would be outside
-every check described below.
+belongs there. Anything the build, CI, or a tool page takes from outside that
+directory must be declared as described in
+[Dependencies outside ThirdParty/](#dependencies-outside-thirdparty). The
+checker scans the rest of the repository for undeclared ones.
 
 ## Authoritative Lockfiles
 
@@ -45,9 +45,60 @@ the normal case. Every record must contain exactly these fields: `id`, `scope`,
 owners must name a maintainer, justifications must explain the temporary
 exception, and `expires` must be a valid `YYYY-MM-DD` date. Missing, malformed,
 duplicate, placeholder-owned, or unknown fields are checker errors (exit 2),
-and an expired record is a policy violation (exit 1). Exception records document
-reviewed risk; they never waive an inventory, hash, license, action-pin, or
-manifest check. The checker bounds the collection at 256 records.
+and an expired or more-than-366-day record is a policy violation (exit 1).
+Exception records document reviewed risk; they do not waive container,
+license, action-pin, or manifest checks. The checker bounds the collection at
+256 records. A `download-<command digest>` record may temporarily waive only
+that exact raw-download call in its `scope` script; an edited call makes the
+exception unused and fails the check. The MinGW/Wine exceptions expire on
+2026-10-08 and must be removed as its pinned downloads land.
+
+The same records are the only way to accept a Critical or High vulnerability in
+a release. The release job scans the generated SPDX SBOM with grype, and
+`.github/scripts/verify_vulnerability_findings.py` blocks publication unless
+every Critical/High finding is covered by a record whose `scope` is
+`vulnerability:<package name>` (the package name as grype reports it) and whose
+`id` is the advisory id grype reports (for example `GHSA-...`) or a related id
+it lists (for example the `CVE-...` behind it). Both must match. The package
+part of the scope is any printable text without leading or trailing whitespace,
+so names such as `libstdc++`, `@scope/pkg` or a PE-derived
+`Microsoft Visual C++ ... Runtime` are written exactly as grype prints them;
+every other scope keeps the path-like form. Records are unique on the pair
+(`id`, `scope`), compared case-insensitively, so one advisory reported against
+two packages (for example `zlib` and `zlib-ng`) takes one record per package. A
+record is current through its `expires` date (UTC); `tools/check-supply-chain.py`
+uses the same UTC day. The gate also fails on an expired vulnerability record,
+on one that names a package present in the scanned SBOM but matches no
+Critical/High finding (remove it once the package is fixed), on an SBOM with no
+packages, and on a failed or incomplete scan. The stable channel scans only the
+Windows Shipping packages while nightly scans every platform, so a current
+record whose package is absent from the scanned SBOM is reported as not
+applicable to that run instead of unused; its expiry still bounds it. It validates records with the same
+`validate_exception_records` function as `tools/check-supply-chain.py`.
+
+The release SBOM is catalogued from packaged binaries, where statically linked
+vendored code is not visible. So every pull request also runs the gate in the
+required `dependency-policy` job of `build.yml`, over the SBOM that
+`tools/generate-sbom.py` derives from the dependency lock. For that SBOM to be
+matchable, each `license_policy.dependencies` record carries its vulnerability
+identity:
+
+- `cpe`: the NVD CPE 2.3 application name, whose version is the upstream
+  release; or `cpe_unavailable_reason`, the reviewed reason there is none (no
+  NVD product, or a repository-authored stub in place of the upstream code).
+  Exactly one of the two.
+- `upstream_version`: the upstream release the code derives from, written
+  `2.32.0` for the release itself or `2.32.0+231` for 231 commits past it.
+  Every submodule needs one, because its pin is a commit that no advisory
+  names. It is backed by `upstream_tag_commit`, the release tag's commit, which
+  the generator checks against the gitlink (the gitlink is that commit exactly
+  when there is no `+N`); or, when upstream publishes no tags, by
+  `upstream_version_source`, which says where the version was read.
+
+The generator emits the CPE as a `cpe23Type` reference and the upstream release
+as the package version and a `pkg:generic` purl. It refuses a lock where any of
+this is missing or inconsistent, so a dependency cannot drop out of the scan
+silently.
 
 ## Adding a New Dependency
 
@@ -131,6 +182,22 @@ Sentinel files are additionally rejected if they are hardlinked or if they
 resolve outside the repository root. The walk is bounded in depth and entry
 count and never descends through a rejected entry.
 
+Submodules are identified by their mode-160000 gitlink in the superproject
+index, which exists whether or not the submodule is initialized, so the
+verdict must not depend on `git submodule update`. Inside an initialized
+submodule whose gitlink matches the lock, one narrow allowance applies: a true
+symbolic link (never a junction or other reparse point) is accepted only if
+the *locked* upstream commit tracks it at that exact path as mode 120000, its
+on-disk target equals the tracked target, the target is relative, and it
+resolves to an existing path inside the submodule root. Untracked links, links
+added off the pin, retargeted, absolute, dangling, or escaping links, and every
+link in the superproject are still rejected. Accepted links are never
+descended into. The locked tree is read with `git --no-replace-objects`, so a
+`refs/replace/*` entry in the submodule's object store cannot substitute a
+forged tree for the pin. On Windows, the `\` separators Git for Windows writes
+into on-disk link targets are mapped back to git's `/` form before the target
+is compared with the tracked blob.
+
 Container declarations must be pairwise disjoint across
 `managed_vendored_dirs`, `project_owned_dirs`, and `submodule_gitlinks`; no
 container may be nested inside another; and case-variant aliases are rejected,
@@ -169,6 +236,79 @@ those forms can carry an unpinned reference past the check.
 
 A missing `.github/workflows` directory is an error, not a warning — a check
 that did not run is not a check that passed.
+
+## Dependencies outside ThirdParty/
+
+The `external_dependencies` list in `supply-chain.lock` declares every
+dependency that does not live in a `ThirdParty/` container. Each record has a
+`name`, a `class`, a `license_spdx` expression, a named `owner`, and a
+`justification` of at least 16 characters. The class adds fields:
+
+| Class | Extra fields | What the checker scans |
+|---|---|---|
+| `system_libraries` | `identifiers`: `cmake:<Package>` or `pkg-config:<module>` | `find_package`, `find_dependency`, `pkg_check_modules`, and `pkg_search_module` calls in every tracked `CMakeLists.txt`, `*.cmake`, and `*.cmake.in`, with comments removed |
+| `ci_packages` | `identifiers`: `apt:<package>`, `brew:<formula>`, or `pip:<project>` | `apt-get install`, `apt install`, `brew install`, and `pip install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. A `pip install` must read a repository-relative requirements file (`-r`) whose every line is an exact `name==version` pin with `--hash=sha256:` digests; a package named on the command line cannot carry a hash and fails. |
+| `web_runtime` | `url` with an exact version (`name@1.2.3/`), and `sri` (`sha384-` or `sha512-`) | `<script src>`, import maps, and module `import` statements in tracked `.html`, `.js`, and `.mjs` files. Import-map specifiers are resolved first. |
+| `vendored_outside_thirdparty` | `paths`: tracked files, or directories ending in `/` | Tracked files outside `ThirdParty/` that contain an MIT, Apache-2.0, or BSD license grant phrase. The scan reads the index with `git grep --cached`, so binary files are included. |
+| `downloads` | `path`, `pin_path`, normalized `command`, `source_url`, resolved `url`, `sha256`, `output`, and `verification` | Artifact fetches in tracked shell/PowerShell scripts, workflow `run:` blocks, and CMake `file(DOWNLOAD)`, `FetchContent_Declare`, or `ExternalProject_Add` calls outside `ThirdParty/`. The fetching file must tie the locked URL and SHA-256 to the fetched output; CMake's `URL_HASH` and `EXPECTED_HASH` count as built-in verification. GitHub API JSON reads for publication are not third-party artifacts. |
+
+The rules:
+
+- Every scanned use must match a declared identifier, URL, or path. The only
+  CMake packages that need no record are first-party or build tooling:
+  `SparkEngine`, `Python3`, `Git`, and `PkgConfig`.
+- A remote script must name an exact version. The page must also carry the
+  declared SRI hash, either as the `<script integrity=...>` attribute or in the
+  import map's `integrity` section. A plain JavaScript module cannot carry SRI
+  for its own imports, so a remote import in a `.js` or `.mjs` file always
+  fails.
+- `license_spdx` must be an SPDX expression. Only `ci_packages` records may use
+  `NOASSERTION`, because those packages are build tools and are never
+  redistributed. The `license_policy` allow-list covers `dependencies.lock`
+  entries only. Each external record's license is reviewed by its owner. The
+  editor fonts' `OFL-1.1` is not on that allow-list; approving it is a pending
+  owner decision (GOV-400).
+- Record names, identifiers, URLs, and paths are unique without regard to case.
+  A duplicate or a case collision is a schema error (exit 2).
+- A declared system/package identifier or web runtime URL that nothing uses is
+  a warning. An unused declared download or temporary download exception is an
+  error. A declared vendored path with no tracked file is also an error.
+- Some files may contain license phrases because they quote license text
+  rather than vendor code. The checker exempts them, and each exemption has a
+  recorded reason in `FOREIGN_LICENSE_EXEMPTIONS`: `Tests/**`,
+  `.github/scripts/test_*`, `cmake/Test*.cmake`, `THIRD_PARTY_NOTICES`,
+  `LICENSE`, and the checker itself. The list is in reviewed code, not in the
+  lockfile, so a change cannot exempt itself.
+
+`--update` copies `external_dependencies` unchanged. The declarations are human
+decisions and are never derived.
+
+## SBOM and Package Reconciliation
+
+`tools/generate-sbom.py` renders the two lockfiles as a deterministic SPDX 2.3
+JSON document: one package per `dependencies.lock` entry with its locked
+version, source location, the SPDX license resolved through `license_policy`,
+and its integrity pin (submodule gitlink or vendored tree digest). The document
+names the source commit and the SHA-256 of the committed `dependencies.lock`
+blob, the same digest REL-100 build provenance records, so an SBOM and a
+provenance record for one release join on that value. Generation refuses a
+checkout whose lockfiles differ from their committed blobs, and `--check FILE`
+regenerates and requires byte equality, which lets a consumer holding the
+source verify an SBOM it was given.
+
+`generate-sbom.py reconcile` compares a shipped package with the lock. It takes
+a CMake `install_manifest.txt` (`--install-manifest`) or a staged package tree
+(`--package-root`) and classifies each file with
+`cmake/PackageNoticeCoverageRules.json`, the rule set the package
+notice-coverage gate uses. It fails when a third-party install path maps to no
+rule, a file or rule names a component the lock does not lock, a locked
+component with install payload rules ships no file, or the package's
+`THIRD_PARTY_NOTICES.txt` inventory differs from the locked names and versions.
+A configuration that legitimately omits a component names it with
+`--not-configured NAME`; the declaration fails if that component is present,
+so it cannot outlive the configuration it describes. Header-only dependencies
+compiled into binaries install no file of their own and are reported as
+`compiledInOnly`, never as verified.
 
 ## Enforcement
 

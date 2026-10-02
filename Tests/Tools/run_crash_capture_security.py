@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Validate untouched production crash artifacts through both existing consumers."""
+"""Validate untouched production crash artifacts through both existing consumers.
+
+The producer also holds a per-run canary on its stack and heap while it writes
+the report (OPS-100); no captured artifact may contain it as ASCII or UTF-16LE.
+"""
 from __future__ import annotations
 
 import argparse
@@ -8,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 import subprocess
 import sys
@@ -32,6 +37,16 @@ from validate_crash_package import (
 
 PRODUCER_TEST = "CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot"
 VALIDATOR = OPS / "validate_crash_package.py"
+# The Windows producer writes a minidump beside its log. The POSIX producer's
+# ungated assertion report is log-only: a process image exists only for signal
+# crashes, where the kernel core_pattern owns it, so its manifest must carry an
+# empty dumpFile rather than a dangling or fabricated reference.
+WINDOWS_PRODUCER_FIELDS = ("logFile", "dumpFile")
+POSIX_PRODUCER_FIELDS = ("logFile",)
+PRODUCER_ARTIFACT_FIELDS = WINDOWS_PRODUCER_FIELDS if os.name == "nt" else POSIX_PRODUCER_FIELDS
+# OPS-100: the producer holds this per-run secret on its stack and heap while it
+# writes the report; no captured artifact may contain it in any encoding.
+CANARY_PREFIX = "SPARKCANARY-"
 MAX_PROCESS_OUTPUT = 1024 * 1024
 PROCESS_POLL_INTERVAL = 0.02
 PROCESS_KILL_TIMEOUT = 2.0
@@ -49,13 +64,30 @@ def directory_identity(path: Path) -> tuple[int, int]:
     return info.st_dev, info.st_ino
 
 
-def producer_environment(temp_root: Path) -> dict[str, str]:
+def make_canary() -> str:
+    return CANARY_PREFIX + secrets.token_hex(8)
+
+
+def producer_environment(temp_root: Path, canary: str) -> dict[str, str]:
     env = {key: value for key, value in os.environ.items()
            if not key.upper().startswith("SPARK_TEST_")}
     env.update(TEMP=str(temp_root), TMP=str(temp_root), TMPDIR=str(temp_root),
                SPARK_TEST_NAME=PRODUCER_TEST, SPARK_TEST_EXPECT_COUNT="1",
-               SPARK_TEST_KEEP_CRASH_ARTIFACTS="1")
+               SPARK_TEST_KEEP_CRASH_ARTIFACTS="1", SPARK_TEST_CRASH_CANARY=canary)
     return env
+
+
+def artifacts_containing(root: Path, canary: str) -> list[str]:
+    """Names of captured files holding the canary as ASCII/UTF-8 or UTF-16LE bytes."""
+    needles = (canary.encode("ascii"), canary.encode("utf-16-le"))
+    hits = []
+    deadline = time.monotonic() + 15
+    with SecureRoot(root) as pinned:
+        for name in sorted(pinned.iter_names(max_entries=MAX_DIRECTORY_ENTRIES, deadline=deadline)):
+            data, _ = pinned.read_file(name, max_bytes=MAX_ARTIFACT_BYTES, deadline=deadline)
+            if any(needle in data for needle in needles):
+                hits.append(name)
+    return hits
 
 
 def run_process(command: list[str], cwd: Path, *, env: dict[str, str] | None = None,
@@ -159,7 +191,9 @@ def read_manifest(root: Path, producer_pid: int) -> tuple[str, dict]:
                             max_string_bytes=MAX_JSON_STRING_BYTES)
     if not isinstance(manifest, dict) or manifest.get("enginePID") != str(producer_pid):
         raise CaptureError("manifest does not identify the producer process")
-    if any(not isinstance(manifest.get(key), str) or not manifest[key] for key in ("logFile", "dumpFile")):
+    if "dumpFile" not in PRODUCER_ARTIFACT_FIELDS and manifest.get("dumpFile") != "":
+        raise CaptureError("POSIX assertion producer must not reference a process dump")
+    if any(not isinstance(manifest.get(key), str) or not manifest[key] for key in PRODUCER_ARTIFACT_FIELDS):
         diagnostic = ""
         if not manifest.get("dumpFile") and isinstance(manifest.get("logFile"), str):
             try:
@@ -175,7 +209,8 @@ def read_manifest(root: Path, producer_pid: int) -> tuple[str, dict]:
                         break
             except (FilesystemPolicyError, OSError, UnicodeError):
                 diagnostic = "; dump diagnostic unavailable"
-        raise CaptureError("real producer must emit both log and dump references" + diagnostic)
+        raise CaptureError("real producer must emit its " + " and ".join(PRODUCER_ARTIFACT_FIELDS)
+                           + " references" + diagnostic)
     if (manifest.get("screenshotFile") != "" or manifest.get("zipFile") != ""
             or manifest.get("requireConsent") is not False
             or manifest.get("promptUserDescription") is not False
@@ -216,15 +251,57 @@ def copy_case(source: Path, destination: Path, manifest_name: str, manifest: dic
                 output.write(data)
 
 
+def posix_identity_bound_removal_available() -> bool:
+    required = {os.open, os.stat, os.unlink, os.rmdir}
+    return (os.name == "posix" and hasattr(os, "fwalk") and hasattr(os, "O_DIRECTORY")
+            and hasattr(os, "O_NOFOLLOW") and required <= os.supports_dir_fd)
+
+
 def remove_owned_tree(root: Path, identity: tuple[int, int]) -> bool:
-    """Retain the capsule until identity-bound recursive deletion is available."""
+    """Delete the owned capsule only through a directory fd pinned to its recorded identity."""
     if directory_identity(root) != identity or root.resolve(strict=True) != root:
         raise CaptureError("cleanup refused a replaced or aliased owned root")
-    # SecureRoot provides pinned reads, not deletion. In particular, Windows
-    # shutil.rmtree cannot bind every removal to those pinned identities. A
-    # path precheck followed by unpinned recursive deletion is not a substitute.
-    print(f"Retained crash-security evidence (identity-bound cleanup unavailable): {root}", file=sys.stderr)
-    return False
+    if not posix_identity_bound_removal_available():
+        # Windows shutil.rmtree cannot bind every removal to a pinned directory
+        # identity, and a path precheck followed by unpinned recursive deletion
+        # is not a substitute, so the capsule is retained there.
+        print(f"Retained crash-security evidence (identity-bound cleanup unavailable): {root}", file=sys.stderr)
+        return False
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    parent_fd = os.open(root.parent, flags)
+    try:
+        root_fd = os.open(root.name, flags, dir_fd=parent_fd)
+        try:
+            pinned = os.fstat(root_fd)
+            if (pinned.st_dev, pinned.st_ino) != identity:
+                print(f"Retained crash-security evidence (owned root replaced before cleanup): {root}",
+                      file=sys.stderr)
+                return False
+            # fwalk re-verifies each subdirectory it enters against the entry it
+            # listed and never follows symlinks, so every unlink/rmdir is relative
+            # to a descriptor inside the pinned root rather than a re-resolved path.
+            for _, dirnames, filenames, dir_fd in os.fwalk(".", topdown=False, follow_symlinks=False,
+                                                           dir_fd=root_fd):
+                for name in filenames:
+                    os.unlink(name, dir_fd=dir_fd)
+                for name in dirnames:
+                    if stat.S_ISLNK(os.stat(name, dir_fd=dir_fd, follow_symlinks=False).st_mode):
+                        os.unlink(name, dir_fd=dir_fd)
+                    else:
+                        os.rmdir(name, dir_fd=dir_fd)
+        finally:
+            os.close(root_fd)
+        # rmdir removes only an empty directory, so a same-name replacement that
+        # appeared after the pinned walk can never lose data here.
+        current = os.stat(root.name, dir_fd=parent_fd, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != identity:
+            print(f"Retained crash-security evidence (owned root replaced during cleanup): {root}", file=sys.stderr)
+            return False
+        os.rmdir(root.name, dir_fd=parent_fd)
+    finally:
+        os.close(parent_fd)
+    return True
 
 
 def capture_security(producer: Path, reporter: Path, *, keep_work: bool = False) -> dict:
@@ -234,19 +311,23 @@ def capture_security(producer: Path, reporter: Path, *, keep_work: bool = False)
     try:
         temp_root = work / "tmp"
         temp_root.mkdir(mode=0o700)
+        canary = make_canary()
         pid, status, _ = run_process([str(producer), "--warn-is-error", "--empty-is-error"], work,
-                                    env=producer_environment(temp_root), timeout=40)
+                                    env=producer_environment(temp_root, canary), timeout=40)
         if status != 0:
             raise CaptureError("isolated production capture test failed")
         artifact_root = discover_capture(temp_root, pid)
         manifest_name, manifest = read_manifest(artifact_root, pid)
         before = snapshot(artifact_root)
+        leaked = artifacts_containing(artifact_root, canary)
+        if leaked:
+            raise CaptureError("crash artifacts hold the producer's stack/heap canary: " + ", ".join(leaked))
         _, status, _ = run_process([str(reporter), "--report", str(artifact_root / manifest_name)], work)
         if status != 0:
             raise CaptureError("native reporter rejected untouched producer output")
         validate_package(artifact_root, work)
-        if any(before[1].get(manifest[key], (0, 0, 0))[2] == 0 for key in ("logFile", "dumpFile")):
-            raise CaptureError("captured log or dump is empty or absent")
+        if any(before[1].get(manifest[key], (0, 0, 0))[2] == 0 for key in PRODUCER_ARTIFACT_FIELDS):
+            raise CaptureError("captured producer artifact is empty or absent")
         if snapshot(artifact_root) != before:
             raise CaptureError("native/Python consumers changed captured identities or bytes")
 
@@ -279,7 +360,7 @@ def capture_security(producer: Path, reporter: Path, *, keep_work: bool = False)
         validate_package(legacy, work, expected_check="writer-field")
         if snapshot(legacy) != case_before or snapshot(artifact_root) != before:
             raise CaptureError("negative controls changed original or copied artifacts")
-        result = {"passed": True, "producer_pid": pid, "artifact_count": len(before[1]),
+        result = {"passed": True, "producer_pid": pid, "artifact_count": len(before[1]), "canary_absent": True,
                   "native_and_python_read_only": True, "traversal_rejected": True,
                   "legacy_field_native_accepted_python_rejected": True,
                   "work_root": str(work) if keep_work else None}

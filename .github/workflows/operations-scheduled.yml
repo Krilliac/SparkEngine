@@ -1,0 +1,241 @@
+# Scheduled operations rehearsal: recovery drill, server soak and NullRHI soak.
+#
+# DATA-120 needs the backup/restore and recovery drills rehearsed regularly,
+# OPS-110 needs a 30-minute release smoke plus a longer scheduled server soak,
+# and PERF-100 needs a >= 1 h NullRHI soak. Each job builds the exact commit
+# it was triggered on and passes that SHA to the harness, which refuses a
+# server that reports any other commit or a dirty tree. Every job is blocking
+# for this workflow (no continue-on-error): a red run is an operations
+# regression to investigate from the uploaded summaries.
+#
+# This workflow is deliberately NOT a need of required-ci-gate. A run is
+# evidence only for the SHA it names; the rehearsal and soak criteria need
+# a history of these runs, not the existence of this file.
+name: Operations schedule
+
+on:
+  schedule:
+    # Nightly: recovery drill, 30-minute server release smoke, 1 h NullRHI soak.
+    - cron: '41 4 * * *'
+    # Weekly (Sunday): the same jobs with the 4 h server soak instead of the smoke.
+    - cron: '23 6 * * 0'
+  workflow_dispatch:
+    inputs:
+      long_server_soak:
+        description: "Run the 4 h server soak instead of the 30-minute release smoke"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: operations-scheduled-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  recovery-drill:
+    name: "Recovery drill (${{ matrix.os }})"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            preset: linux-shipping
+            build_dir: build/linux-shipping
+          - os: windows-2022
+            preset: windows-release
+            build_dir: build/windows-release
+    steps:
+    - name: Checkout the exact commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Setup MSVC
+      if: runner.os == 'Windows'
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+    - name: Configure
+      shell: bash
+      env:
+        PRESET: ${{ matrix.preset }}
+      run: |
+        set -o pipefail
+        cmake --preset "$PRESET" -DBUILD_TESTS=ON 2>&1 | tee recovery-drill-configure.log
+
+    - name: Build the drill processes (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel "$(nproc)" --target SparkTests SparkServer SparkGame \
+          2>&1 | tee recovery-drill-build.log
+
+    # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
+    - name: Build the drill processes (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        set -o pipefail
+        cmake --build --preset windows-release --parallel 1 --target SparkTests SparkServer SparkGame \
+          2>&1 | tee recovery-drill-build.log
+
+    - name: Run the recovery drill (Linux)
+      if: runner.os == 'Linux'
+      env:
+        BUILD_DIR: ${{ matrix.build_dir }}
+      run: |
+        set -o pipefail
+        mkdir -p ops-evidence
+        ctest --test-dir "$BUILD_DIR" -L recovery-drill --output-on-failure --no-tests=error \
+          --output-junit "$GITHUB_WORKSPACE/ops-evidence/recovery-drill-junit.xml" 2>&1 | tee recovery-drill.log
+
+    - name: Run the recovery drill (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      env:
+        BUILD_DIR: ${{ matrix.build_dir }}
+      run: |
+        set -o pipefail
+        mkdir -p ops-evidence
+        ctest --test-dir "$BUILD_DIR" -C Release -L recovery-drill --output-on-failure --no-tests=error \
+          --output-junit "$GITHUB_WORKSPACE/ops-evidence/recovery-drill-junit.xml" 2>&1 | tee recovery-drill.log
+
+    - name: Upload recovery drill evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: recovery-drill-${{ matrix.os }}-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          ops-evidence/
+          recovery-drill*.log
+        if-no-files-found: error
+        retention-days: 90
+
+  server-soak:
+    name: "Server soak"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the exact commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping 2>&1 | tee server-soak-configure.log
+
+    - name: Build SparkServer and SparkGame
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel "$(nproc)" --target SparkServer SparkGame \
+          2>&1 | tee server-soak-build.log
+        test -x build/linux-shipping/bin/SparkServer
+        test -f build/linux-shipping/bin/libSparkGame.so
+
+    - name: Run the 30-minute release smoke
+      if: github.event.schedule != '23 6 * * 0' && !inputs.long_server_soak
+      run: |
+        mkdir -p ops-evidence
+        python3 tools/ops/server_soak.py --server build/linux-shipping/bin/SparkServer \
+          --module build/linux-shipping/bin/libSparkGame.so --duration 1800 \
+          --expected-sha "${{ github.sha }}" --summary ops-evidence/server-soak-summary.json \
+          --work-dir ops-evidence/server-soak-work
+
+    - name: Run the weekly long soak
+      if: github.event.schedule == '23 6 * * 0' || inputs.long_server_soak
+      run: |
+        mkdir -p ops-evidence
+        python3 tools/ops/server_soak.py --server build/linux-shipping/bin/SparkServer \
+          --module build/linux-shipping/bin/libSparkGame.so --duration 14400 \
+          --expected-sha "${{ github.sha }}" --summary ops-evidence/server-soak-summary.json \
+          --work-dir ops-evidence/server-soak-work
+
+    - name: Upload server soak summary
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: server-soak-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          ops-evidence/
+          server-soak-*.log
+        if-no-files-found: error
+        retention-days: 90
+
+  soak-scheduled:
+    name: "NullRHI soak"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the exact commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping 2>&1 | tee nullrhi-soak-configure.log
+
+    - name: Build the headless host and SparkGame
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel "$(nproc)" --target SparkEngine SparkGame \
+          2>&1 | tee nullrhi-soak-build.log
+        test -x build/linux-shipping/bin/SparkEngine
+        test -f build/linux-shipping/bin/libSparkGame.so
+
+    # A one-hour headless-soak-1h run on the uncertified linux-nullrhi-ci row;
+    # --out writes a validate_result document only for a completed or crashed
+    # run, and never for a hang or a truncated soak.
+    - name: Run the one-hour NullRHI soak
+      run: |
+        mkdir -p ops-evidence
+        python3 tools/perf-budget/run_nullrhi_soak.py --engine build/linux-shipping/bin/SparkEngine \
+          --module build/linux-shipping/bin/libSparkGame.so --duration 3600 \
+          --expected-sha "${{ github.sha }}" --out ops-evidence/nullrhi-soak-result.json \
+          --report ops-evidence/nullrhi-soak-report.json
+
+    - name: Upload NullRHI soak result
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: nullrhi-soak-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          ops-evidence/
+          nullrhi-soak-*.log
+        if-no-files-found: error
+        retention-days: 90

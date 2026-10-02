@@ -7,6 +7,7 @@
     "ThirdParty/ECS/entt": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
     "ThirdParty/SDL2": "5882a4f13d3bf374d2345280c679173f4ff324da",
     "ThirdParty/Scripting/angelscript-mirror": "c81df254037524b18cd41a57805cfec76acd05bf",
+    "ThirdParty/Security/libsodium": "77e1ce5d6dee871c49ef211222ba18ef0c486bda",
     "ThirdParty/UI/imgui": "fd13a1e8923a0a7077b404fc36fd063b25a0c0b5",
     "ThirdParty/Utils/miniz": "77d0dce8627735138c51770d1799a1ef48f2117d"
   },
@@ -43,8 +44,8 @@
       "file_count": 1
     },
     "ThirdParty/Licenses": {
-      "digest": "a434291e70aca16dbc83ae9d81a1e4466df1a930026d83fcb766c044452fe6c0",
-      "file_count": 6
+      "digest": "b3ed029e2b10940b19816fd29ec55385035233738ed9ab1b12e0a687ca379050",
+      "file_count": 10
     },
     "ThirdParty/OpenGL/GL": {
       "digest": "9e48a292728a4133072206dd7f0d5f96cd6e2acbd3e4e4f57d1e688d43a0e5fc",
@@ -55,7 +56,7 @@
       "file_count": 1240
     },
     "ThirdParty/Scripting/patches": {
-      "digest": "d9cc2c676d74d480816c204a2b75b7adf2af9572f160e386bf673a2d928c0e4e",
+      "digest": "5c8e38e7f831e2192af56e9c7beb9c6c77b8e95ec805632d32eb02919710382b",
       "file_count": 3
     },
     "ThirdParty/Utils/cgltf": {
@@ -63,11 +64,11 @@
       "file_count": 3
     },
     "ThirdParty/Utils/json": {
-      "digest": "1d07bcda482d85b618027363009a90c1a3bba21c60141d7087ee71730ecd0f49",
+      "digest": "02b2493bffe9eb331b88048adab48fc80827ebd9c7a813a9e853c89fa0eb9af4",
       "file_count": 2
     },
     "ThirdParty/Utils/stb": {
-      "digest": "f34101878d6bcc48ff6f6ac577c2eebb9b5b203d4799edbc9395568af0852d5d",
+      "digest": "ab77139092057e9abe4548401a2966d2d6c7ea25c52b0475305e3ffce7817c24",
       "file_count": 4
     },
     "ThirdParty/Utils/tinyexr": {
@@ -132,6 +133,12 @@
       "sha256": "173506a2d6f7fb67990d257fb2507f188690eca39060c39469ae7bef43aae2a3",
       "git_blob": "d5ba3155f0f438ba765551a5e2419bf3eaa8be64",
       "size": 1083,
+      "type": "license"
+    },
+    "ThirdParty/Licenses/libsodium-LICENSE.txt": {
+      "sha256": "508a76d186356c0dd807a670ef510964f8724557024796a2c426c6c0e19ab683",
+      "git_blob": "95c22fbadfa457cd7898ebe96aaa05147589b655",
+      "size": 823,
       "type": "license"
     },
     "ThirdParty/Licenses/miniz-LICENSE.txt": {
@@ -201,9 +208,9 @@
       "type": "license"
     },
     "ThirdParty/Utils/json/nlohmann_json.h": {
-      "sha256": "987fa16c3142ed2eebbedffe7a52a375f4370f9199981126eb265d2cd01457ad",
-      "git_blob": "9c8af5d9821e05048ab59dbf9d834dffa968820c",
-      "size": 24287,
+      "sha256": "1a11778c4c9a20fed8ad61c11c306346cc28476319f53d3797f7e152ab431e04",
+      "git_blob": "6c2f494c72415e0e3f6230ea21e21b7d0366ecfb",
+      "size": 31932,
       "type": "source"
     },
     "ThirdParty/Utils/stb/LICENSE": {
@@ -213,9 +220,9 @@
       "type": "license"
     },
     "ThirdParty/Utils/stb/stb_image.h": {
-      "sha256": "944ad92741601aef94e8758ecc4241038f80635fefffbbaacc61f87054365087",
-      "git_blob": "edff2054dfc231fe42c34bf620c913a90842c5c8",
-      "size": 15225,
+      "sha256": "cef4203f79217e8d0faf0bf565b0d678c17029ae2b26c01be7c36e2cb25f3660",
+      "git_blob": "171777073167bd4dee30e8a1c8ed8e737fc5047b",
+      "size": 18070,
       "type": "source"
     },
     "ThirdParty/Utils/stb/stb_image_write.h": {
@@ -343,6 +350,12 @@
     "actions/checkout": [
       "3d3c42e5aac5ba805825da76410c181273ba90b1"
     ],
+    "actions/configure-pages": [
+      "45bfe0192ca1faeb007ade9deae92b16b8254a0d"
+    ],
+    "actions/deploy-pages": [
+      "368f82528645a54fb793d4d04e342629a3f51346"
+    ],
     "actions/download-artifact": [
       "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     ],
@@ -352,8 +365,14 @@
     "actions/upload-artifact": [
       "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     ],
+    "actions/upload-pages-artifact": [
+      "fc324d3547104276b827a68afc52ff2a11cc49c9"
+    ],
     "anchore/sbom-action": [
       "3ad7283483fc7af8ff2b4ea19663c2d5ca935e26"
+    ],
+    "anchore/scan-action": [
+      "27805bf3b4e84b4a5c980df22ed233c00390a439"
     ],
     "github/codeql-action": [
       "cdf488f595d80d6e07e03d4674febd5ab45fa938"
@@ -369,68 +388,424 @@
     "dependencies": {
       "AngelScript": {
         "declared": "zlib",
-        "spdx": "Zlib"
+        "spdx": "Zlib",
+        "upstream_version": "2.38.0",
+        "upstream_version_source": "ANGELSCRIPT_VERSION_STRING in sdk/angelscript/include/angelscript.h at the pinned commit; the codecat mirror publishes no release tags.",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no AngelScript product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "Dear ImGui": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "1.92.9b+35",
+        "upstream_tag_commit": "b48d1afbe8ee8b238e2961dc363a949dd7304e23",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no Dear ImGui product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "EnTT": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "4.0.0",
+        "upstream_tag_commit": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no EnTT product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "Jolt Physics": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "5.5.1",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no Jolt Physics product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "RecastNavigation": {
         "declared": "zlib",
-        "spdx": "Zlib"
+        "spdx": "Zlib",
+        "upstream_version": "1.6.0+367",
+        "upstream_tag_commit": "6dc1667f580357e8a2154c28b7867bea7e8ad3a7",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no RecastNavigation product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "SDL2": {
         "declared": "zlib",
-        "spdx": "Zlib"
+        "spdx": "Zlib",
+        "upstream_version": "2.32.0+231",
+        "upstream_tag_commit": "7a44b1ab002cee6efa56d3b4c0e146b7fbaed80b",
+        "cpe": "cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"
       },
       "VulkanMemoryAllocator": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "cpe_unavailable_reason": "ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "cgltf": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "1.15",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no cgltf product (keyword search on 2026-09-27), so no CPE can be matched."
       },
       "glad": {
         "declared": "MIT and Apache-2.0",
-        "spdx": "MIT AND Apache-2.0"
+        "spdx": "MIT AND Apache-2.0",
+        "upstream_version": "0.1.36",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no glad product (keyword search on 2026-09-27), so no CPE can be matched."
+      },
+      "libsodium": {
+        "declared": "ISC",
+        "spdx": "ISC",
+        "upstream_version": "1.0.22",
+        "upstream_tag_commit": "77e1ce5d6dee871c49ef211222ba18ef0c486bda",
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no libsodium product (CPE match-string and keyword searches on 2026-09-27; CVE-2025-69277 carries no CPE configuration), so no CPE can be matched."
       },
       "miniaudio": {
         "declared": "Public Domain / MIT-0",
-        "spdx": "Unlicense OR MIT-0"
+        "spdx": "Unlicense OR MIT-0",
+        "cpe_unavailable_reason": "ThirdParty/Audio/miniaudio/miniaudio.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "miniz": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "3.1.2",
+        "upstream_tag_commit": "77d0dce8627735138c51770d1799a1ef48f2117d",
+        "cpe": "cpe:2.3:a:miniz_project:miniz:3.1.2:*:*:*:*:*:*:*"
       },
       "nlohmann/json": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "cpe_unavailable_reason": "ThirdParty/Utils/json/nlohmann_json.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "stb_image": {
         "declared": "Public Domain / MIT",
-        "spdx": "MIT OR Unlicense"
+        "spdx": "MIT OR Unlicense",
+        "cpe_unavailable_reason": "ThirdParty/Utils/stb/stb_image.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       },
       "tinyexr": {
         "declared": "BSD-3-Clause",
-        "spdx": "BSD-3-Clause"
+        "spdx": "BSD-3-Clause",
+        "upstream_version": "1.0.13",
+        "cpe": "cpe:2.3:a:tinyexr_project:tinyexr:1.0.13:*:*:*:*:*:*:*"
       },
       "tinyobjloader": {
         "declared": "MIT",
-        "spdx": "MIT"
+        "spdx": "MIT",
+        "upstream_version": "2.0.0",
+        "cpe": "cpe:2.3:a:tinyobjloader_project:tinyobjloader:2.0.0:*:*:*:*:*:*:*"
       },
       "zstd": {
         "declared": "BSD-3-Clause (library, upstream tools are dual-licensed)",
-        "spdx": "BSD-3-Clause"
+        "spdx": "BSD-3-Clause",
+        "cpe_unavailable_reason": "ThirdParty/Utils/zstd/zstd.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
       }
     }
-  }
+  },
+  "external_dependencies": [
+    {
+      "name": "SDL2 (host)",
+      "class": "system_libraries",
+      "license_spdx": "Zlib",
+      "owner": "Krilliac",
+      "justification": "Host SDL2 found by CMake or pkg-config where a build links the system library instead of the ThirdParty/SDL2 submodule (editor, ImGui backend, installed SparkEngineConfig).",
+      "identifiers": [
+        "cmake:SDL2",
+        "pkg-config:sdl2"
+      ]
+    },
+    {
+      "name": "OpenGL",
+      "class": "system_libraries",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Platform OpenGL library (Mesa/libglvnd on Linux, the OS driver elsewhere) for the OpenGL RHI backend and the editor.",
+      "identifiers": [
+        "cmake:OpenGL"
+      ]
+    },
+    {
+      "name": "EGL",
+      "class": "system_libraries",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Platform EGL library for headless OpenGL contexts on Linux.",
+      "identifiers": [
+        "pkg-config:egl"
+      ]
+    },
+    {
+      "name": "X11",
+      "class": "system_libraries",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Xlib for native windowing on Linux (engine and shader compiler).",
+      "identifiers": [
+        "cmake:X11"
+      ]
+    },
+    {
+      "name": "Vulkan loader",
+      "class": "system_libraries",
+      "license_spdx": "Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "Khronos Vulkan loader and glslc for the Vulkan RHI backend and shader compilation, including the vendored Jolt build's optional Vulkan renderer.",
+      "identifiers": [
+        "cmake:Vulkan"
+      ]
+    },
+    {
+      "name": "FreeType",
+      "class": "system_libraries",
+      "license_spdx": "FTL OR GPL-2.0-only",
+      "owner": "Krilliac",
+      "justification": "Host FreeType for smooth ImGui font rasterisation in the editor when available.",
+      "identifiers": [
+        "cmake:Freetype"
+      ]
+    },
+    {
+      "name": "OpenAL",
+      "class": "system_libraries",
+      "license_spdx": "LGPL-2.0-or-later",
+      "owner": "Krilliac",
+      "justification": "Host OpenAL (OpenAL Soft on Linux, the OpenAL framework on macOS) for the OpenAL audio backend.",
+      "identifiers": [
+        "cmake:OpenAL"
+      ]
+    },
+    {
+      "name": "libcurl",
+      "class": "system_libraries",
+      "license_spdx": "curl",
+      "owner": "Krilliac",
+      "justification": "Host libcurl for HTTP transfers; the installed SparkEngineConfig requires it when the engine was built with it.",
+      "identifiers": [
+        "cmake:CURL"
+      ]
+    },
+    {
+      "name": "Platform thread library",
+      "class": "system_libraries",
+      "license_spdx": "LGPL-2.1-or-later",
+      "owner": "Krilliac",
+      "justification": "The platform's thread library (glibc pthreads on Linux) that every native target links through CMake's Threads package.",
+      "identifiers": [
+        "cmake:Threads"
+      ]
+    },
+    {
+      "name": "CI Linux toolchains",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Ubuntu runner compilers, standard libraries, and build tools for the GCC, Clang, sanitizer, fuzzing, and MinGW cross-compile jobs; build time only, nothing is redistributed.",
+      "identifiers": [
+        "apt:build-essential",
+        "apt:gcc-14",
+        "apt:g++-14",
+        "apt:clang",
+        "apt:clang-18",
+        "apt:libclang-rt-18-dev",
+        "apt:libc++-dev",
+        "apt:libc++abi-dev",
+        "apt:cmake",
+        "apt:ninja-build",
+        "apt:ccache",
+        "apt:mingw-w64"
+      ]
+    },
+    {
+      "name": "CI Linux code-quality tools",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Formatting, static-analysis, coverage, and workflow-parsing tools used by CI jobs; build time only, nothing is redistributed.",
+      "identifiers": [
+        "apt:clang-format",
+        "apt:clang-tidy",
+        "apt:lcov",
+        "apt:python3-yaml"
+      ]
+    },
+    {
+      "name": "CI Windows Python test packages",
+      "class": "ci_packages",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "PyYAML for the Windows and macOS ctest lanes' workflow-parsing and release-wiring tests, installed from the hash-pinned wheels in .github/ci-python-requirements.txt (the Ubuntu lanes use apt:python3-yaml); test time only, nothing is redistributed.",
+      "identifiers": [
+        "pip:PyYAML"
+      ]
+    },
+    {
+      "name": "Intel SDE 10.13.1 Windows CI archive",
+      "class": "downloads",
+      "license_spdx": "LicenseRef-Intel-Simplified-Software-License",
+      "owner": "Krilliac",
+      "justification": "Owner-approved Intel Software Development Emulator runs the required Windows below-floor CPU startup test. CI tool only; no SDE files enter SparkEngine packages.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "Invoke-WebRequest -Uri $url -OutFile $archive",
+      "source_url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz",
+      "url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz",
+      "sha256": "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651",
+      "output": "archive",
+      "verification": "get-file-hash"
+    },
+    {
+      "name": "Intel SDE 10.13.1 Linux CI archive",
+      "class": "downloads",
+      "license_spdx": "LicenseRef-Intel-Simplified-Software-License",
+      "owner": "Krilliac",
+      "justification": "Owner-approved Intel Software Development Emulator runs the required Linux below-floor CPU startup test. CI tool only; no SDE files enter SparkEngine packages.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "curl --fail --location --retry 3 \"$url\" --output \"$archive\"",
+      "source_url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz",
+      "url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz",
+      "sha256": "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50",
+      "output": "archive",
+      "verification": "sha256sum"
+    },
+    {
+      "name": "CI Linux graphics development packages",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Headers, shader tools, Lavapipe, the Mesa EGL/GL drivers (llvmpipe) the golden-linux lane renders the golden baselines with, the Mesa runtime libraries those drivers depend on at the exact same version (golden-linux installs all of them at the reviewed build), and the Khronos validation layer that the Linux build and GPU test jobs compile and run against; build and test time only.",
+      "identifiers": [
+        "apt:libgl-dev",
+        "apt:libegl-dev",
+        "apt:libegl-mesa0",
+        "apt:libgbm-dev",
+        "apt:libgbm1",
+        "apt:libglx-mesa0",
+        "apt:mesa-libgallium",
+        "apt:libgl1-mesa-dri",
+        "apt:libvulkan-dev",
+        "apt:glslang-tools",
+        "apt:libsdl2-dev",
+        "apt:libfreetype-dev",
+        "apt:mesa-vulkan-drivers",
+        "apt:vulkan-validationlayers"
+      ]
+    },
+    {
+      "name": "CI Wine test runtime",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Wine runs the MinGW-built Windows engine, editor and test binaries on the Linux cross-compile job under a virtual X display (xvfb, xauth); curl and ca-certificates fetch the hash-pinned DXVK release that tools/setup-mingw-wine.sh verifies before extracting; test time only.",
+      "identifiers": [
+        "apt:wine",
+        "apt:wine64",
+        "apt:xvfb",
+        "apt:xauth",
+        "apt:curl",
+        "apt:ca-certificates"
+      ]
+    },
+    {
+      "name": "CI macOS Homebrew packages",
+      "class": "ci_packages",
+      "license_spdx": "NOASSERTION",
+      "owner": "Krilliac",
+      "justification": "Build tools and host libraries for the macOS build and release jobs; the macOS release links SDL2 and OpenAL from these packages.",
+      "identifiers": [
+        "brew:cmake",
+        "brew:ccache",
+        "brew:sdl2",
+        "brew:openal-soft",
+        "brew:molten-vk"
+      ]
+    },
+    {
+      "name": "three.js core module",
+      "class": "web_runtime",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "3D renderer for the architecture code-city page (tools/architecture-viz), loaded by the viewer's browser; not part of the engine.",
+      "url": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "sri": "sha384-qOubuRxWZ0I7rXTjcuhcKNHKvPM7q0ztN8/82sJnxnyKS0OXTeB5FsIcysc2T9EY"
+    },
+    {
+      "name": "three.js OrbitControls",
+      "class": "web_runtime",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Camera controls for the architecture code-city page; not part of the engine.",
+      "url": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/OrbitControls.js",
+      "sri": "sha384-aJoe4qqS/DgF2jh9njAuvA6QIveJYoCuYOfYjdFY8P3eawzmc9bEQ40jq2TvOyuP"
+    },
+    {
+      "name": "three.js CSS2DRenderer",
+      "class": "web_runtime",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "Label renderer for the architecture code-city page; not part of the engine.",
+      "url": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/renderers/CSS2DRenderer.js",
+      "sri": "sha384-vp2ywxkL+goEwgyQLfo/AYopp2aaZOSEN+z0uvTTdu1g/jT/XvzI9kegupXyObT0"
+    },
+    {
+      "name": "SparkEditor fonts",
+      "class": "vendored_outside_thirdparty",
+      "license_spdx": "OFL-1.1 AND Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "Editor UI fonts shipped in bin/EditorAssets/Fonts. SparkEditor/Fonts/LICENSES/fonts.json maps each font to its upstream license text, and tools/governance/generate_third_party_notices.py checks it against the font's name table.",
+      "paths": [
+        "SparkEditor/Fonts/"
+      ]
+    },
+    {
+      "name": "LLVM 18.1.3 source archive",
+      "class": "downloads",
+      "license_spdx": "Apache-2.0 AND LicenseRef-LLVM-exception",
+      "owner": "Krilliac",
+      "justification": "The MSan CI lane builds its instrumented libc++ runtime from the reviewed LLVM release source archive.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors --connect-timeout 30 --max-time 900 -o \"$archive\" \"https://github.com/llvm/llvm-project/releases/download/${LLVM_TAG}/${tarball}\"",
+      "source_url": "https://github.com/llvm/llvm-project/releases/download/${LLVM_TAG}/${tarball}",
+      "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.3/llvm-project-18.1.3.src.tar.xz",
+      "sha256": "2929f62d69dec0379e529eb632c40e15191e36f3bd58c2cb2df0413a0dc48651",
+      "output": "archive",
+      "verification": "sha256sum"
+    },
+    {
+      "name": "sccache v0.17.0 Windows archive",
+      "class": "downloads",
+      "license_spdx": "MIT OR Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "The VS2022 and VS2026 CI jobs install the same hash-checked compiler cache archive before building.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "try { Invoke-WebRequest -Uri $url -OutFile $archive; break }",
+      "source_url": "https://github.com/mozilla/sccache/releases/download/$env:SCCACHE_VERSION/$name.tar.gz",
+      "url": "https://github.com/mozilla/sccache/releases/download/v0.17.0/sccache-v0.17.0-x86_64-pc-windows-msvc.tar.gz",
+      "sha256": "caf1932d76a909c909b7a2e41443cdfe3c79a49a380da1a22fa422e1d00d3ca7",
+      "output": "archive",
+      "verification": "get-file-hash"
+    },
+    {
+      "name": "DirectXMath oct2024 source archive",
+      "class": "downloads",
+      "license_spdx": "MIT",
+      "owner": "Krilliac",
+      "justification": "The MinGW toolchain fetches the reviewed DirectXMath release archive and rehashes it before header use.",
+      "path": "cmake/toolchains/SparkVerifiedDirectXMath.cmake",
+      "pin_path": "cmake/toolchains/mingw-w64-x86_64.cmake",
+      "command": "file(DOWNLOAD \"${url}\" \"${_partial}\" TLS_VERIFY ON STATUS _status)",
+      "source_url": "https://github.com/microsoft/DirectXMath/archive/refs/tags/oct2024.zip",
+      "url": "https://github.com/microsoft/DirectXMath/archive/refs/tags/oct2024.zip",
+      "sha256": "b215087ddd085381839c6fc6f51185579f3a1c55804190b2ccc5969e9520b0bd",
+      "output": "_partial",
+      "verification": "cmake-sha256"
+    },
+    {
+      "name": "DXVK 3.1.1 release archive",
+      "class": "downloads",
+      "license_spdx": "Zlib",
+      "owner": "Krilliac",
+      "justification": "The advisory MinGW/Wine lane installs DXVK into a disposable Wine prefix for the D3D11-on-Lavapipe smoke; CI-only, never shipped. sha256sum checks the pin before extraction. Owner-approved download verified 2026-10-01: SHA-256 matched the GitHub release asset digest and size matched 18041512 bytes. DXVK 3.1.1 avoids the 2.5.3 refresh-period division by zero on Xvfb.",
+      "path": "tools/setup-mingw-wine.sh",
+      "pin_path": "tools/setup-mingw-wine.sh",
+      "command": "if ! curl --fail --location --proto '=https' --tlsv1.2 --retry 3 \"$DXVK_URL\" --output \"$tmp_dir/dxvk.tar.gz\"; then",
+      "source_url": "https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz",
+      "url": "https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz",
+      "sha256": "40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608",
+      "output": "$tmp_dir/dxvk.tar.gz",
+      "verification": "sha256sum"
+    }
+  ]
 }

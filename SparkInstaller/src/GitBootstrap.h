@@ -21,8 +21,9 @@ namespace SparkInstaller
     class GitBootstrap
     {
       public:
-        // Returns a usable git executable path. If git is already on PATH, returns "git".
-        // Otherwise attempts to fetch a portable Git for the current OS into the installer
+        // Returns a usable git executable path. If git is already on PATH, returns its absolute
+        // path as resolved by SparkBuild::PathSecurity::ResolveExecutable (absolute PATH entries
+        // only; never the installer's directory or the current directory). Otherwise attempts to fetch a portable Git for the current OS into the installer
         // cache directory and returns the absolute path.
         static GitBootstrapResult Ensure(const LogSink& log);
 

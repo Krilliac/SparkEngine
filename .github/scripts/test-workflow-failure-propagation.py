@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -20,12 +21,17 @@ import yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
+import run_controlled_failure_rehearsal as controlled_failure_driver  # noqa: E402
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recovery.yml"
 LOC_COUNTER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "loc-counter.yml"
 SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml"
 TRUSTED_CI_AGGREGATE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "trusted-ci-aggregate.yml"
+CHECK_FORMAT_SCRIPT = REPO_ROOT / ".github" / "scripts" / "check-format-changed.sh"
+CHECK_FORMAT_COMMAND = "bash .github/scripts/check-format-changed.sh"
+CHECK_FORMAT_TEST_COMMAND = "bash .github/scripts/test-check-format-changed.sh"
 README = REPO_ROOT / "README.md"
 TEST_COUNT_RATCHET = REPO_ROOT / ".github" / "test-count-ratchet.json"
 CMAKE_ROOT = REPO_ROOT / "CMakeLists.txt"
@@ -35,7 +41,7 @@ TEMPLATE_RUNTIME_HEADER = REPO_ROOT / "SparkEngine" / "Source" / "Game" / "Templ
 FPS_TEMPLATE_HEADER = REPO_ROOT / "Templates" / "FPSStarter" / "Source" / "GameModule.h"
 TESTS_CMAKE = REPO_ROOT / "Tests" / "CMakeLists.txt"
 TEST_TELEMETRY_SPOOL = REPO_ROOT / "Tests" / "TestTelemetrySpool.cpp"
-TELEMETRY_EXPECTED_COUNT = 8
+TELEMETRY_EXPECTED_COUNT = 10
 REQUIRED_CI_JOBS = (
     "fuzz-policy",
     "validate-ci-tools",
@@ -43,12 +49,14 @@ REQUIRED_CI_JOBS = (
     "check-format",
     "validate-prompts",
     "validate-ops100",
+    "secret-scan",
     "check-thirdparty-manifest",
     "check-supply-chain",
+    "dependency-policy",
     "license-compliance",
     "build-linux-asan",
     "build-linux-tsan",
-    "telemetry-integration",
+    "security-runtime",
     "build-windows-vs2022",
     "module-profile-lifecycle",
     "build-windows-shipping",
@@ -57,12 +65,57 @@ REQUIRED_CI_JOBS = (
     "build-linux-clang",
     "coverage",
     "clang-tidy",
+    "analysis-regressions",
     "todo-count",
     "build-installer",
     "aggregate-test-stats",
     "module-evidence",
+    "network-security",
+    "docs-health",
+    "site-data-full-determinism",
 )
 REQUIRED_CI_JOBS_JSON = json.dumps(REQUIRED_CI_JOBS, separators=(",", ":"))
+MINGW_WINE_JOB = "build-linux-mingw-wine"
+
+# Every check tools/validate-all.sh runs must make CI red when it fails. Each
+# maps to the required job and the exact run line that invokes it (or its
+# direct equivalent: the .sh wrapper's exec target, or the CMake target that
+# runs the same checker). A check may instead be advisory only with a reason.
+VALIDATE_ALL = REPO_ROOT / "tools" / "validate-all.sh"
+VALIDATE_ALL_REQUIRED_INVOCATIONS = {
+    "check-pragma-once.sh": ("validate-ci-tools", "bash tools/check-pragma-once.sh"),
+    "check-editor-panels.sh": ("validate-ci-tools", "bash tools/check-editor-panels.sh"),
+    "check-test-registration.sh": ("validate-ci-tools", "bash tools/check-test-registration.sh"),
+    "check-deprecated-submodules.sh": ("validate-ci-tools", "bash tools/check-deprecated-submodules.sh"),
+    "check-thirdparty-manifest-sync.sh": (
+        "check-thirdparty-manifest",
+        "./tools/check-thirdparty-manifest-sync.sh --ci",
+    ),
+    # check-supply-chain.sh only execs this checker.
+    "check-supply-chain.sh": ("check-supply-chain", "python3 tools/check-supply-chain.py"),
+    # cmake/SparkFuzzPolicy.cmake runs check_fuzz_policy.py --ci, as the .sh does.
+    "check-fuzz-policy.sh": (
+        "fuzz-policy",
+        "cmake --build build/fuzz-policy --target check-fuzz-policy",
+    ),
+    "check-wiki-nav.sh": ("validate-ci-tools", "bash tools/check-wiki-nav.sh"),
+    "check-wiring.sh": ("validate-ci-tools", "bash tools/check-wiring.sh"),
+    "check-doxygen-coverage.sh": ("validate-ci-tools", "bash tools/check-doxygen-coverage.sh check"),
+    "check-cross-utilization.sh": ("validate-ci-tools", "bash tools/check-cross-utilization.sh"),
+    "check-di-singletons.sh": ("validate-ci-tools", "bash tools/check-di-singletons.sh"),
+    "check-module-asset-refs.py": ("validate-ci-tools", "python3 tools/check-module-asset-refs.py"),
+    # The non-gated .sh runs this declarative validation plus the adversarial
+    # unit tests, which validate-ci-tools also runs as its own step.
+    "check-module-evidence.sh": (
+        "validate-ci-tools",
+        "python3 tools/module-evidence/validate_manifest.py --manifest tools/module-evidence/manifest.json"
+        " --repo-root . --policy-only",
+    ),
+}
+VALIDATE_ALL_ADVISORY_CHECKS = {
+    "check-bloat.sh": "size thresholds are guidance (CLAUDE.md); new-only mode is red on files awaiting review",
+    "check-wiki-quality.sh": "validate-all runs it with --warn-only by design",
+}
 
 CLANG_TIDY_SOURCE_ROOTS = (
     "SparkEngine/Source",
@@ -87,7 +140,6 @@ CLANG_TIDY_SOURCE_ROOTS = (
 # reporting lines belong here. A suppression on a line that produces gate
 # evidence (a scan, test, count, or validator) must be fixed, never listed.
 REVIEWED_REQUIRED_JOB_SUPPRESSIONS = frozenset({
-    ("check-format", "Check formatting", "BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || true)"),
     ("check-format", "Extract check-format error summary", "check-format-output.log || true"),
     ("build-linux-asan", "Configure CMake (ASan + UBSan + LSan)", 'command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"'),
     ("build-linux-asan", "Print ccache stats", 'command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"'),
@@ -115,13 +167,14 @@ FORMAT_ROOTS = (
     "SparkEngine/Source", "GameModules", "SparkEditor/Source", "SparkConsole/src",
     "SparkShaderCompiler/src", "SparkBuild/src", "SparkInstaller/src", "SparkDaemon/src",
     "SparkServer/src", "SparkGateway/src", "SparkCooker/src", "SparkWorker/src",
-    "SparkAutomation/src", "SparkLauncher/src", "Tests",
+    "SparkAutomation/src", "SparkLauncher/src", "Tests", "FuzzerTests",
 )
 CXX_SOURCE_SUFFIXES = frozenset({".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".c", ".cc", ".cpp", ".cxx"})
 
 sys.path.insert(0, str(REPO_ROOT / "Tools"))
 
 from buildmatrix.workflow import WorkflowError, parse_workflow_yaml  # noqa: E402
+from validate_ctest_policy import parse_cmake  # noqa: E402
 
 
 def bash_executable() -> str:
@@ -147,16 +200,27 @@ def bash_executable() -> str:
     raise FileNotFoundError("bash is required for release-workflow fixture execution")
 
 
-def local_release_fixture_script(script: str) -> str:
-    """Bind the Ubuntu-only ``python3`` metadata probe to the test interpreter on Windows."""
+RELEASE_TAG_HELPERS = ("stable_release_tag.py", "nightly_release_tag.py")
 
-    if os.name != "nt":
-        return script
-    command = "python3 - "
-    if script.count(command) != 1:
-        raise AssertionError("release metadata fixture must contain one python3 probe")
+
+def local_release_fixture_script(script: str, root: Path) -> str:
+    """Run the metadata step against ``root`` with the real release tag helpers.
+
+    The helpers are copied into the fixture tree at the path release.yml invokes,
+    and the Ubuntu-only ``python3`` command is bound to the test interpreter.
+    """
+
+    helper_dir = root / ".github" / "scripts"
+    helper_dir.mkdir(parents=True, exist_ok=True)
+    for helper in RELEASE_TAG_HELPERS:
+        shutil.copyfile(REPO_ROOT / ".github" / "scripts" / helper, helper_dir / helper)
+    invocations = re.findall(r"\bpython3 \.github/scripts/(\S+)", script)
+    if sorted(set(invocations)) != sorted(RELEASE_TAG_HELPERS):
+        raise AssertionError(f"release metadata must invoke exactly the tag helpers; found {invocations}")
+    if "python3 -" in script or "<<" in script:
+        raise AssertionError("release metadata must not embed an inline tag contract")
     interpreter = shlex.quote(Path(sys.executable).as_posix())
-    return script.replace(command, f"{interpreter} - ", 1)
+    return script.replace("python3 .github/scripts/", f"{interpreter} .github/scripts/")
 
 
 def step_blocks(workflow: str) -> list[tuple[str, str]]:
@@ -433,14 +497,19 @@ def telemetry_ctest_contract_errors(cmake: str) -> list[str]:
 
 
 def versioned_publication_gate_errors(workflow: str) -> list[str]:
-    """Validate the exact fail-closed gate before versioned publication."""
+    """Validate the exact fail-closed gate before versioned publication.
 
-    errors: list[str] = []
-    step_name = "Verify stable-v1 candidate is qualified for versioned publication"
+    The parsed-YAML contract runs first and unconditionally: the text matcher
+    below reads the file line by line, so a step it cannot find (a flow-mapping
+    step) or a decoy copy it finds instead (text inside a block scalar) must not
+    cut the structural check short.
+    """
+
+    errors = profile_required_gates_job_errors(workflow)
     try:
-        readiness = named_step(workflow, step_name)
+        readiness = named_step(workflow, PROFILE_GATES_READINESS_STEP)
     except AssertionError as error:
-        return [str(error)]
+        return errors + [str(error)]
 
     if not exact_field(
         readiness,
@@ -449,17 +518,7 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         indent=6,
     ):
         errors.append("stable-v1 publication gate must use the exact versioned-release condition")
-    # The v0.9 bootstrap and ordinary v1 qualification are distinct stages.
-    # Pin both exact validators and the version branch so neither path can be
-    # weakened by a waiver, a swapped selector, or a successful no-op.
-    expected_readiness = " ".join((
-        'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
-        "python3 tools/site-data/validate.py --require-predecessor-candidate",
-        "else",
-        "python3 tools/site-data/validate.py --require-candidate-ready",
-        "fi",
-    ))
-    if run_command(readiness, indent=6) != expected_readiness:
+    if run_command(readiness, indent=6) != " ".join(PROFILE_GATES_READINESS_RUN):
         errors.append("stable-v1 publication gate must run the exact stage-specific readiness validators")
     if not exact_field(readiness, "shell", "bash", indent=6):
         errors.append("stable-v1 publication gate must use the exact bash shell contract")
@@ -468,29 +527,253 @@ def versioned_publication_gate_errors(workflow: str) -> list[str]:
         readiness,
     ):
         errors.append("stable-v1 publication gate must not continue on error")
+    return errors
+
+
+class UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys.
+
+    PyYAML silently keeps the last of two equal keys, so a second ``needs:`` or
+    ``if:`` would let a structural check read one value while a reviewer reads
+    the other. A duplicate is refused instead of resolved.
+    """
+
+
+def _construct_unique_mapping(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False) -> dict:
+    loader.flatten_mapping(node)
+    seen: set[object] = set()
+    for key_node, _value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate mapping key {key!r}", key_node.start_mark
+            )
+        seen.add(key)
+    return loader.construct_mapping(node, deep=deep)
+
+
+UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping)
+
+
+def job_needs(job: dict) -> list[object]:
+    """Return a job's ``needs`` as a list, whichever YAML form declares it."""
+
+    needs = job.get("needs", [])
+    return list(needs) if isinstance(needs, list) else [needs]
+
+
+def yaml_strings(value: object) -> list[str]:
+    """Return every string scalar nested anywhere inside a parsed YAML value."""
+
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for item in value.values() for text in yaml_strings(item)]
+    if isinstance(value, list):
+        return [text for item in value for text in yaml_strings(item)]
+    return []
+
+
+def normalized_run_lines(run: object) -> list[str] | None:
+    """Return a ``run:`` script as whitespace-normalized logical lines.
+
+    Line continuations and indentation are presentation; every token that can
+    change the exit status (``|| true``, ``|| :``, ``; exit 0``, ``set +e``)
+    survives normalization, so an exact comparison still fails closed.
+    """
+
+    if not isinstance(run, str):
+        return None
+    return [" ".join(line.split()) for line in run.replace("\\\n", " ").splitlines() if line.strip()]
+
+
+PROFILE_GATES_JOB = "profile-required-gates"
+PROFILE_GATES_CHECKOUT_STEP = "Checkout exact candidate source"
+PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
+PROFILE_GATES_READINESS_STEP = "Verify stable-v1 candidate is qualified for versioned publication"
+PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
+PROFILE_GATES_QUALIFY_STEP = "Qualify candidate and record the release qualification report"
+PROFILE_GATES_REPORT_STEP = "Retain the release qualification report"
+PROFILE_GATES_QUALIFY_RUN = (
+    'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+    "stage=predecessor",
+    "else",
+    "stage=stable-v1",
+    "fi",
+    'python3 tools/release_qualification.py --stage "$stage" --candidate-sha "$CANDIDATE_SHA" '
+    '--exact-ci "$RUNNER_TEMP/profile-required-gates-exact-ci.out" '
+    '--output "$RUNNER_TEMP/release-qualification.json"',
+)
+# The v0.9 bootstrap and ordinary v1 qualification are distinct stages. Pin both
+# exact validators and the version branch so neither path can be weakened by a
+# waiver, a swapped selector, or a successful no-op.
+PROFILE_GATES_READINESS_RUN = (
+    'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+    "python3 tools/site-data/validate.py --require-predecessor-candidate",
+    "else",
+    "python3 tools/site-data/validate.py --require-candidate-ready",
+    "fi",
+)
+# Workflow-level env and defaults reach every step of the gates job just as the
+# job-level keys it may not declare would: env: BASH_ENV sources a candidate file
+# before each bash step, and defaults.run can re-root or re-shell every run.
+# PyYAML (YAML 1.1) loads a bare `on:` key as boolean True, a quoted one as "on".
+PROFILE_GATES_WORKFLOW_KEYS = frozenset({"name", "run-name", "on", True, "permissions", "concurrency", "jobs"})
+# Every other job key -- if, continue-on-error, environment, strategy, uses,
+# secrets, env, concurrency -- could skip, tolerate, re-route, or arm the job,
+# so the gates job is held to an allowlist rather than a list of known bypasses.
+PROFILE_GATES_JOB_KEYS = frozenset({"needs", "runs-on", "timeout-minutes", "permissions", "steps"})
+PROFILE_GATES_READ_ONLY_SCOPES = frozenset({"read", "none"})
+
+
+def profile_required_gates_job_errors(workflow: str) -> list[str]:
+    """REL-190: candidate gating is a named job the release job cannot bypass.
+
+    The exact Required CI Gate check, the stage-specific readiness validator and
+    the SEC-120 fuzz closure run in ``profile-required-gates``. ``release`` (the
+    environment-protected publisher) must need that job and must carry no
+    job-level ``if``: GitHub skips a job whose dependency failed only through the
+    implicit ``success()`` condition, and ``always()`` or ``!cancelled()``
+    replaces it. The gates job itself may not be skipped, tolerated, suppressed
+    or granted publication authority. The workflow is parsed as YAML so quoting,
+    flow mappings, ``permissions: write-all`` and duplicate keys cannot hide a
+    bypass from a line-oriented match.
+    """
 
     try:
-        required_ci = named_step(
-            workflow,
-            "Verify exact source commit passed Required CI Gate",
-        )
-        badge_checkout = named_step(workflow, "Checkout canonical badge branch")
-    except AssertionError as error:
-        errors.append(str(error))
-    else:
-        ordered_step_names = [name for name, _block in step_blocks(workflow)]
-        required_ci_position = ordered_step_names.index(
-            "Verify exact source commit passed Required CI Gate"
-        )
-        profile_gate_position = ordered_step_names.index(step_name)
-        badge_checkout_position = ordered_step_names.index("Checkout canonical badge branch")
-        if profile_gate_position != required_ci_position + 1:
-            errors.append(
-                "stable-v1 publication gate must run immediately after Required CI"
-            )
-        if profile_gate_position >= badge_checkout_position:
-            errors.append("stable-v1 publication gate must precede badge publication")
+        document = yaml.load(workflow, Loader=UniqueKeyLoader)
+    except yaml.YAMLError as error:
+        return [f"release workflow is not valid YAML: {error}"]
+    jobs = document.get("jobs") if isinstance(document, dict) else None
+    if not isinstance(jobs, dict):
+        return ["release workflow has no jobs mapping"]
+    gates = jobs.get(PROFILE_GATES_JOB)
+    release = jobs.get("release")
+    if not isinstance(gates, dict) or not isinstance(release, dict):
+        return ["release workflow must define both profile-required-gates and release jobs"]
 
+    errors: list[str] = []
+    unexpected_workflow_keys = sorted(str(key) for key in document if key not in PROFILE_GATES_WORKFLOW_KEYS)
+    if unexpected_workflow_keys:
+        errors.append(
+            f"release workflow declares workflow-level keys {unexpected_workflow_keys} "
+            "that reach every profile-required-gates step"
+        )
+    for job_id, job in jobs.items():
+        if not isinstance(job, dict):
+            errors.append(f"job {job_id} is not a mapping")
+            continue
+        for needed in job_needs(job):
+            if needed not in jobs:
+                errors.append(f"job {job_id} needs unknown job {needed!r}")
+
+    if PROFILE_GATES_JOB not in job_needs(release):
+        errors.append("release job must need profile-required-gates")
+    if "if" in release:
+        errors.append(
+            "release job must not declare a job-level if: a status function such as always() "
+            "would run it after profile-required-gates failed"
+        )
+
+    unexpected_keys = sorted(str(key) for key in gates if key not in PROFILE_GATES_JOB_KEYS)
+    if unexpected_keys:
+        errors.append(f"profile-required-gates declares disallowed job-level keys {unexpected_keys}")
+    if job_needs(gates) != ["prepare"]:
+        errors.append("profile-required-gates must need exactly [prepare]")
+    permissions = gates.get("permissions")
+    if not isinstance(permissions, dict) or any(
+        scope not in PROFILE_GATES_READ_ONLY_SCOPES for scope in permissions.values()
+    ):
+        errors.append("profile-required-gates permissions must be an explicit read-only mapping")
+    prepare = jobs.get("prepare")
+    prepare_outputs = prepare.get("outputs") if isinstance(prepare, dict) else None
+    for text in yaml_strings(gates):
+        if re.search(r"\bsecrets\s*[.\[]", text):
+            errors.append("profile-required-gates must not reference a secret")
+        for needed, output in re.findall(r"\bneeds\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)", text):
+            if needed != "prepare" or not isinstance(prepare_outputs, dict) or output not in prepare_outputs:
+                errors.append(f"profile-required-gates references undeclared needs.{needed}.outputs.{output}")
+
+    steps = gates.get("steps")
+    if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+        return errors + ["profile-required-gates steps must be a list of mappings"]
+    expected_order = [
+        PROFILE_GATES_CHECKOUT_STEP,
+        PROFILE_GATES_REQUIRED_CI_STEP,
+        PROFILE_GATES_READINESS_STEP,
+        PROFILE_GATES_FUZZ_STEP,
+        PROFILE_GATES_QUALIFY_STEP,
+        PROFILE_GATES_REPORT_STEP,
+    ]
+    if [step.get("name") for step in steps] != expected_order:
+        errors.append(f"profile-required-gates must run exactly the steps {expected_order} in order")
+    by_name = {step.get("name"): step for step in steps}
+
+    checkout = by_name.get(PROFILE_GATES_CHECKOUT_STEP, {})
+    if (
+        set(checkout) != {"name", "uses", "with"}
+        or not str(checkout.get("uses", "")).startswith("actions/checkout@")
+        or checkout.get("with") != {"ref": "${{ github.sha }}", "persist-credentials": False}
+    ):
+        errors.append("profile-required-gates must check out the exact candidate commit without credentials")
+
+    required_ci = by_name.get(PROFILE_GATES_REQUIRED_CI_STEP, {})
+    if (
+        set(required_ci) != {"name", "env", "run"}
+        or required_ci.get("env") != {"GH_TOKEN": "${{ github.token }}", "TARGET_SHA": "${{ github.sha }}"}
+        or normalized_run_lines(required_ci.get("run")) != [
+            "set -euo pipefail",
+            'GITHUB_OUTPUT="$RUNNER_TEMP/profile-required-gates-exact-ci.out" '
+            "python3 .github/scripts/verify-exact-required-gate.py",
+        ]
+    ):
+        errors.append("profile-required-gates Required CI check must be the exact unconditional fail-closed verifier")
+
+    readiness = by_name.get(PROFILE_GATES_READINESS_STEP, {})
+    if (
+        set(readiness) != {"name", "if", "shell", "run"}
+        or readiness.get("if") != "needs.prepare.outputs.is_versioned == 'true'"
+        or readiness.get("shell") != "bash"
+        or normalized_run_lines(readiness.get("run")) != list(PROFILE_GATES_READINESS_RUN)
+    ):
+        errors.append("profile-required-gates readiness gate must be the exact versioned-only bash step")
+
+    fuzz = by_name.get(PROFILE_GATES_FUZZ_STEP, {})
+    if set(fuzz) != {"name", "run"} or normalized_run_lines(fuzz.get("run")) != [
+        "python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure"
+    ]:
+        errors.append("profile-required-gates must run the unconditional SEC-120 closure check")
+
+    qualify = by_name.get(PROFILE_GATES_QUALIFY_STEP, {})
+    if (
+        set(qualify) != {"name", "if", "shell", "env", "run"}
+        or qualify.get("if") != "${{ !cancelled() && needs.prepare.outputs.is_versioned == 'true' }}"
+        or qualify.get("shell") != "bash"
+        or qualify.get("env") != {"CANDIDATE_SHA": "${{ github.sha }}"}
+        or normalized_run_lines(qualify.get("run")) != list(PROFILE_GATES_QUALIFY_RUN)
+    ):
+        errors.append("profile-required-gates must run the exact versioned-only release qualification step")
+
+    report = by_name.get(PROFILE_GATES_REPORT_STEP, {})
+    report_with = report.get("with")
+    if (
+        set(report) != {"name", "if", "uses", "with"}
+        or report.get("if") != "${{ always() && needs.prepare.outputs.is_versioned == 'true' }}"
+        or not str(report.get("uses", "")).startswith("actions/upload-artifact@")
+        or not isinstance(report_with, dict)
+        or report_with.get("path") != "${{ runner.temp }}/release-qualification.json"
+        or not isinstance(report_with.get("retention-days"), int)
+        or report_with["retention-days"] < 90
+    ):
+        errors.append("profile-required-gates must retain the release qualification report for 90 days")
+
+    release_steps = release.get("steps")
+    release_step_names = {
+        step.get("name") for step in release_steps if isinstance(step, dict)
+    } if isinstance(release_steps, list) else set()
+    for moved in (PROFILE_GATES_READINESS_STEP, PROFILE_GATES_FUZZ_STEP):
+        if moved in release_step_names:
+            errors.append(f"{moved!r} belongs to profile-required-gates, not release")
     return errors
 
 
@@ -577,6 +860,68 @@ def release_acceptance_recovery_errors(workflow: str) -> list[str]:
             errors.append(f"{step_name} arms unconditional recovery before acceptance PATCH dispatch")
         if f'trap - ERR\n        rm -f "${marker}"' not in step:
             errors.append(f"{step_name} does not clear its PATCH-attempt marker after recovery is disarmed")
+    return errors
+
+
+CANONICAL_RELEASE_SBOM = "SparkEngine-SBOM.spdx.json"
+SBOM_ARGUMENT_RE = re.compile(r"""--sbom[ =]+("[^"]*"|'[^']*'|\S+)""")
+
+
+def release_sbom_name_errors(workflow: str) -> list[str]:
+    """Every consumer of the release SBOM must read the file sbom-action wrote.
+
+    The stable bundle verifiers, the signing tests and
+    verify_published_stable_release.py consume the published asset
+    CANONICAL_RELEASE_SBOM, so the anchore/sbom-action output-file must be that
+    name, and every ``--sbom`` argument and anchore/scan-action ``sbom`` input
+    in release.yml must name the same file (optionally under
+    $GITHUB_WORKSPACE).
+    """
+
+    try:
+        document = parse_workflow_yaml(workflow)
+    except WorkflowError as error:
+        return [f"release workflow is not safely parseable: {error}"]
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["release workflow must define a jobs mapping"]
+
+    def normalized(value: str) -> str:
+        value = value.strip().strip("\"'")
+        for prefix in ("$GITHUB_WORKSPACE/", "${GITHUB_WORKSPACE}/", "${{ github.workspace }}/"):
+            if value.startswith(prefix):
+                return value[len(prefix):]
+        return value
+
+    errors: list[str] = []
+    outputs: list[str] = []
+    consumers: list[tuple[str, str]] = []
+    for job_id, job in jobs.items():
+        steps = job.get("steps") if isinstance(job, dict) else None
+        for step in steps if isinstance(steps, list) else []:
+            if not isinstance(step, dict):
+                continue
+            label = f"{job_id}: {step.get('name', step.get('uses', '<unnamed step>'))}"
+            uses = str(step.get("uses", ""))
+            inputs = step.get("with") if isinstance(step.get("with"), dict) else {}
+            if uses.startswith("anchore/sbom-action@"):
+                outputs.append(str(inputs.get("output-file", "")))
+            if uses.startswith("anchore/scan-action@") and "sbom" in inputs:
+                consumers.append((label, normalized(str(inputs["sbom"]))))
+            run = step.get("run")
+            if isinstance(run, str):
+                for match in SBOM_ARGUMENT_RE.finditer(run):
+                    consumers.append((label, normalized(match.group(1))))
+
+    if outputs != [CANONICAL_RELEASE_SBOM]:
+        errors.append(
+            f"release.yml must generate exactly one SBOM with output-file {CANONICAL_RELEASE_SBOM}, found {outputs}"
+        )
+    if not consumers:
+        errors.append("release.yml has no SBOM consumer (--sbom argument or scan-action sbom input)")
+    for label, name in consumers:
+        if name != CANONICAL_RELEASE_SBOM:
+            errors.append(f"{label} reads SBOM {name!r}, but sbom-action writes {CANONICAL_RELEASE_SBOM!r}")
     return errors
 
 
@@ -841,6 +1186,78 @@ def standard_test_evidence_errors(workflow: str) -> list[str]:
     return errors
 
 
+def sde_cpu_floor_contract_errors(workflow: str) -> list[str]:
+    """The required Release jobs must run the pinned below-floor process test."""
+
+    errors: list[str] = []
+    try:
+        jobs = parse_workflow_yaml(workflow)["jobs"]
+    except (ValueError, KeyError) as error:
+        return [f"cannot parse CPU-floor workflow: {error}"]
+    for job_name, platform, sha256, hash_command in (
+        (
+            "build-windows-vs2022",
+            "win",
+            "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651",
+            "Get-FileHash -Algorithm SHA256",
+        ),
+        (
+            "build-linux-gcc",
+            "lin",
+            "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50",
+            "sha256sum -c -",
+        ),
+    ):
+        job = jobs.get(job_name)
+        if not isinstance(job, dict) or job.get("continue-on-error"):
+            errors.append(f"{job_name} is missing or advisory")
+            continue
+        steps = [step for step in job.get("steps", []) if isinstance(step, dict)]
+        names = [step.get("name") for step in steps]
+        install_name = "Install Intel SDE 10.13.1 for CPU-floor process test"
+        test_name = "Refuse a below-floor CPU under Intel SDE"
+        if names.count(install_name) != 1 or names.count(test_name) != 1:
+            errors.append(f"{job_name} must install SDE and run exactly one process test")
+            continue
+        install = steps[names.index(install_name)]
+        run = steps[names.index(test_name)]
+        configure_name = "Configure CMake (VS 2022 / v143)" if platform == "win" else "Configure CMake"
+        build_name = "Build" if platform == "win" else "Build all targets"
+        if names.count(configure_name) != 1 or names.count(build_name) != 1:
+            errors.append(f"{job_name} configure/build steps are missing or duplicated")
+            continue
+        configure_index = names.index(configure_name)
+        build_index = names.index(build_name)
+        if not (names.index(install_name) < configure_index < build_index < names.index(test_name)):
+            errors.append(f"{job_name} SDE install/test order changed")
+        if install.get("if") != "matrix.config == 'Release'" or run.get("if") != "matrix.config == 'Release'":
+            errors.append(f"{job_name} SDE gate is not bound to Release")
+        if install.get("continue-on-error") or run.get("continue-on-error"):
+            errors.append(f"{job_name} suppresses an SDE failure")
+        install_script = str(install.get("run", ""))
+        test_script = str(run.get("run", ""))
+        configure_script = str(steps[configure_index].get("run", ""))
+        url = f"https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-{platform}.tar.xz"
+        if url not in install_script or sha256 not in install_script:
+            errors.append(f"{job_name} SDE URL or archive hash changed")
+        extraction = "tar.exe" if platform == "win" else "tar -xf"
+        if (
+            hash_command not in install_script
+            or extraction not in install_script
+            or install_script.index(hash_command) > install_script.index(extraction)
+        ):
+            errors.append(f"{job_name} does not verify SDE before extraction")
+        if "-DSPARK_SDE_EXECUTABLE=" not in configure_script:
+            errors.append(f"{job_name} does not register the SDE CTest")
+        if (
+            "^CpuFloor_BelowFloorStartupRefused$" not in test_script
+            or "--no-tests=error" not in test_script
+            or "--output-on-failure" not in test_script
+        ):
+            errors.append(f"{job_name} SDE CTest selector is not fail-closed")
+    return errors
+
+
 def required_workflow_errors(workflow: str) -> list[str]:
     """Conservatively parse the fail-closed sanitizer/aggregation YAML contract."""
 
@@ -867,6 +1284,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
             errors.append("workflow concurrency group is not bound to the pushed SHA")
 
     errors.extend(standard_test_evidence_errors(workflow))
+    errors.extend(sde_cpu_floor_contract_errors(workflow))
 
     try:
         validation = yaml_section(workflow, "validate-ci-tools", indent=2)
@@ -888,9 +1306,11 @@ def required_workflow_errors(workflow: str) -> list[str]:
         ):
             errors.append("SparkTests wrapper recovery harness command is not exact")
 
-    for sanitizer, run_name, verify_name in (
-        ("asan", "Run Tests under ASan + UBSan + LSan", "Verify published ASan exact-commit evidence"),
-        ("tsan", "Run Tests under TSan", "Verify published TSan exact-commit evidence"),
+    # TSan's budget is larger: on the 4-vCPU hosted runner its full suite needs ~2,400-2,700 s (owner
+    # decision 2026-10-01, run 36811181228 timed out at 1800 s with 6,895 tests done); ASan fits 1800 s.
+    for sanitizer, run_name, verify_name, job_minutes, process_seconds in (
+        ("asan", "Run Tests under ASan + UBSan + LSan", "Verify published ASan exact-commit evidence", "90", "1800"),
+        ("tsan", "Run Tests under TSan", "Verify published TSan exact-commit evidence", "120", "3000"),
     ):
         job_name = f"build-linux-{sanitizer}"
         try:
@@ -898,8 +1318,8 @@ def required_workflow_errors(workflow: str) -> list[str]:
         except AssertionError as exc:
             errors.append(str(exc))
             continue
-        if not exact_field(job, "timeout-minutes", "90"):
-            errors.append(f"{job_name} must have exactly timeout-minutes: 90")
+        if not exact_field(job, "timeout-minutes", job_minutes):
+            errors.append(f"{job_name} must have exactly timeout-minutes: {job_minutes}")
         if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", job):
             errors.append(f"{job_name} has a bypassing job-level directive")
         if re.search(r"(?m)^\s+['\"]?matrix['\"]?:\s*", job):
@@ -917,7 +1337,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 errors.append(f"{run_name} suppresses a runner failure")
             if (
                 len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", runner)) != 1
-                or runner.count("--timeout-seconds 900") != 1
+                or runner.count(f"--timeout-seconds {process_seconds}") != 1
             ):
                 errors.append(f"{run_name} must use one exact process timeout")
             if len(re.findall(r"(?<![A-Za-z0-9_-])--warn-is-error(?![=A-Za-z0-9_-])", runner)) != 1:
@@ -937,7 +1357,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--job "${{ github.job }}"',
                 "--expected-selector all",
                 "--minimum-tests 6900",
-                "--timeout-seconds 900",
+                f"--timeout-seconds {process_seconds}",
             ):
                 if runner.count(fragment) != 1:
                     errors.append(f"{run_name} is missing/duplicating {fragment}")
@@ -958,7 +1378,7 @@ def required_workflow_errors(workflow: str) -> list[str]:
                 '--expected-sha "${{ github.sha }}"',
                 '--run-id "${{ github.run_id }}"',
                 '--run-attempt "${{ github.run_attempt }}"',
-                "--timeout-seconds 900",
+                f"--timeout-seconds {process_seconds}",
                 "--minimum-tests 6900",
             )
             for fragment in expected_fragments:
@@ -967,42 +1387,162 @@ def required_workflow_errors(workflow: str) -> list[str]:
             if len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", published)) != 1:
                 errors.append(f"{verify_name} duplicates or ambiguously overrides its timeout")
 
-    try:
-        telemetry = yaml_section(workflow, "telemetry-integration", indent=2)
-    except AssertionError as exc:
-        errors.append(str(exc))
-        telemetry = ""
-    if telemetry:
-        if not exact_field(telemetry, "runs-on", "ubuntu-24.04"):
-            errors.append("telemetry-integration must run on ubuntu-24.04")
-        if not exact_field(telemetry, "timeout-minutes", "30"):
-            errors.append("telemetry-integration must have exactly timeout-minutes: 30")
-        if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", telemetry):
-            errors.append("telemetry-integration has a bypassing job-level directive")
+    # OPS-100A: TelemetrySpool runs inside security-runtime, reusing that job's
+    # Linux Shipping SparkTests build. It must run exactly once in the whole
+    # workflow, so it can neither vanish nor come back as a second job that
+    # compiles SparkTests cold again; the step itself is pinned below with the
+    # other security-runtime steps.
+    if len(re.findall(r"-R '\^TelemetrySpool\$'", workflow)) != 1:
+        errors.append("the TelemetrySpool selector must run in exactly one workflow step")
+    if re.search(r"(?m)^  telemetry-integration:", workflow):
+        errors.append("telemetry-integration must stay folded into security-runtime, not rebuild SparkTests")
 
-        required_steps = (
+    # SEC-100: the security-runtime and network-integration lanes run in the
+    # Linux Shipping configuration, and every selector or label runs under
+    # --no-tests=error so an empty selection cannot pass.
+    security_lanes = (
+        (
+            "security-runtime",
             (
-                "Configure Linux Shipping telemetry tests",
-                ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
-            ),
-            (
-                "Build telemetry integration target",
-                ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
-            ),
-            (
-                "Run telemetry spool integration test",
                 (
-                    "set -o pipefail",
-                    "ctest --test-dir build/linux-shipping",
-                    "--output-on-failure",
-                    "--no-tests=error",
-                    "-R '^TelemetrySpool$'",
+                    "Configure Linux Shipping security tests",
+                    ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+                ),
+                (
+                    "Build security runtime targets",
+                    (
+                        "set -o pipefail",
+                        "cmake --build --preset linux-shipping",
+                        "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests",
+                        "SparkCrashReporterFakeGh",
+                    ),
+                ),
+                (
+                    "Run RemoteAdmin selectors",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R RemoteAdmin",
+                    ),
+                ),
+                (
+                    "Run security runtime labels",
+                    (
+                        "set -o pipefail",
+                        "for label in remote-admin gateway crash-security; do",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        '-L "^${label}\\$"',
+                    ),
+                ),
+                (
+                    "Run telemetry spool integration test",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R '^TelemetrySpool$'",
+                        "2>&1 | tee telemetry-tests.log",
+                    ),
                 ),
             ),
-        )
-        for step_name, fragments in required_steps:
+        ),
+        (
+            "network-integration",
+            (
+                (
+                    "Configure Linux Shipping network integration",
+                    ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+                ),
+                (
+                    "Build network integration processes",
+                    (
+                        "set -o pipefail",
+                        "cmake --build --preset linux-shipping",
+                        "SparkAutomation SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe",
+                        "SparkDaemon SparkOrchestrator SparkCollabServer",
+                    ),
+                ),
+                (
+                    "Run server/gateway process smoke",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R '^SparkServerGatewayProcessSmoke$'",
+                    ),
+                ),
+                (
+                    "Run orchestration process smoke",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-R '^SparkOrchestrationProcessSmoke$'",
+                    ),
+                ),
+            ),
+        ),
+        # NET-100: the whole network-security label, one invocation, empty fails.
+        (
+            "network-security",
+            (
+                (
+                    "Configure Linux Shipping network security tests",
+                    ("set -o pipefail", "cmake --preset linux-shipping -DBUILD_TESTS=ON"),
+                ),
+                (
+                    "Build network security target",
+                    ("set -o pipefail", "cmake --build --preset linux-shipping --target SparkTests"),
+                ),
+                (
+                    "Run network-security label",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-L '^network-security$'",
+                    ),
+                ),
+            ),
+        ),
+    )
+    for lane, lane_steps in security_lanes:
+        try:
+            section = yaml_section(workflow, lane, indent=2)
+        except AssertionError as exc:
+            errors.append(str(exc))
+            continue
+        if not exact_field(section, "runs-on", "ubuntu-24.04"):
+            errors.append(f"{lane} must run on ubuntu-24.04")
+        if re.search(r"(?m)^    ['\"]?(?:if|continue-on-error|strategy)['\"]?:", section):
+            errors.append(f"{lane} has a bypassing job-level directive")
+        if lane == "security-runtime":
+            # Folding telemetry must reuse the existing build and budget, and
+            # preserve its diagnostics in the shared failure artifact.
+            if not exact_field(section, "timeout-minutes", "60"):
+                errors.append("security-runtime must have exactly timeout-minutes: 60")
+            for command in ("cmake --preset linux-shipping", "cmake --build --preset linux-shipping"):
+                if section.count(command) != 1:
+                    errors.append(f"security-runtime must run {command} exactly once")
             try:
-                step = named_step(telemetry, step_name)
+                error_extract = named_step(section, "Extract security runtime error summary")
+            except AssertionError as exc:
+                errors.append(str(exc))
+            else:
+                for fragment in ("if: failure()", ".github/scripts/extract-errors.sh", "telemetry-tests.log"):
+                    if error_extract.count(fragment) != 1:
+                        errors.append(f"security-runtime error extraction is missing/duplicating {fragment}")
+        for step_name, fragments in lane_steps:
+            try:
+                step = named_step(section, step_name)
             except AssertionError as exc:
                 errors.append(str(exc))
                 continue
@@ -1013,15 +1553,14 @@ def required_workflow_errors(workflow: str) -> list[str]:
             for fragment in fragments:
                 if step.count(fragment) != 1:
                     errors.append(f"{step_name} is missing/duplicating {fragment}")
-
         try:
-            error_upload = named_step(telemetry, "Upload telemetry integration error summary")
+            error_upload = named_step(section, f"Upload {lane.replace('-', ' ')} error summary")
         except AssertionError as exc:
             errors.append(str(exc))
         else:
-            for fragment in ("if: failure()", "name: ci-errors-telemetry-integration"):
+            for fragment in ("if: failure()", f"name: ci-errors-{lane}"):
                 if error_upload.count(fragment) != 1:
-                    errors.append(f"telemetry integration error upload is missing/duplicating {fragment}")
+                    errors.append(f"{lane} error upload is missing/duplicating {fragment}")
 
     try:
         aggregate = yaml_section(workflow, "aggregate-test-stats", indent=2)
@@ -1067,6 +1606,11 @@ def required_workflow_errors(workflow: str) -> list[str]:
                     errors.append(f"{step_name} is missing/duplicating {fragment}")
             if len(re.findall(r"(?<![A-Za-z0-9_-])--timeout-seconds\s+[^\s\\]+", block)) != 1:
                 errors.append(f"{step_name} duplicates or ambiguously overrides its timeout")
+            # The footer records the producing job's per-process budget (OD-29), so
+            # the consumer must verify that exact value, not a stale one.
+            producer_seconds = {"asan": "1800", "tsan": "3000"}[sanitizer]
+            if not re.search(rf"--timeout-seconds {producer_seconds}(?![0-9])", block):
+                errors.append(f"{step_name} must verify the producer's --timeout-seconds {producer_seconds}")
         for dependency in ("build-linux-asan", "build-linux-tsan"):
             if len(re.findall(rf"(?m)^      - {dependency}$", aggregate)) != 1:
                 errors.append(f"aggregate-test-stats must need {dependency} exactly once")
@@ -1077,8 +1621,9 @@ def required_workflow_errors(workflow: str) -> list[str]:
         errors.append(str(exc))
         report = ""
     if report:
-        if len(re.findall(r"(?m)^      - telemetry-integration$", report)) != 1:
-            errors.append("report-ci-errors must need telemetry-integration exactly once")
+        for lane in ("security-runtime", "network-integration", "network-security"):
+            if len(re.findall(rf"(?m)^      - {lane}$", report)) != 1:
+                errors.append(f"report-ci-errors must need {lane} exactly once")
 
     try:
         gate = yaml_section(workflow, "required-ci-gate", indent=2)
@@ -1120,10 +1665,33 @@ def required_workflow_errors(workflow: str) -> list[str]:
             if not exact_field(
                 verifier,
                 "run",
-                "python3 .github/scripts/verify-required-jobs.py",
+                "python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json",
                 indent=8,
             ):
                 errors.append("required-ci-gate verifier must run the exact required-job script")
+        try:
+            upload = named_step(gate, "Upload Required CI Gate record")
+        except AssertionError as exc:
+            errors.append(str(exc))
+        else:
+            # The record must survive a red gate: the upload runs under
+            # always() after the verifier exits non-zero, targets the exact
+            # SHA, and fails loudly if the verifier produced no record.
+            required_upload_fields = (
+                ("if", "always()"),
+                ("name", "required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}"),
+                ("path", "required-ci-gate.json"),
+                ("if-no-files-found", "error"),
+            )
+            for field, value in required_upload_fields:
+                indent = 8 if field == "if" else 10
+                if not exact_field(upload, field, value, indent=indent):
+                    errors.append(f"required-ci-gate record upload must set exact {field}: {value}")
+            if "continue-on-error" in upload:
+                errors.append("required-ci-gate record upload must not suppress its own failure")
+            verifier_position = gate.find("- name: Verify every required job succeeded")
+            if verifier_position < 0 or gate.index("- name: Upload Required CI Gate record") < verifier_position:
+                errors.append("required-ci-gate record upload must run after the verifier")
     return errors
 
 
@@ -1173,14 +1741,709 @@ def required_job_bypass_errors(document: dict) -> list[str]:
     return errors
 
 
-def format_filter_suffixes(workflow: str) -> set[str]:
-    """Return the file suffixes routed to clang-format by the check-format case arm."""
+def shell_is_errexit(shell: object) -> bool:
+    """True when a GitHub Actions ``shell:`` value stops on the first failing command.
 
-    step = named_step(yaml_section(workflow, "check-format", indent=2), "Check formatting")
-    arms = re.findall(r"(?m)^\s+((?:\*\.[A-Za-z0-9]+\|?)+)\)\s*$", step)
+    The built-in ``bash`` and ``sh`` keywords expand to ``-eo pipefail`` / ``-e``;
+    a custom ``{0}`` template must carry an explicit short-option cluster with ``e``.
+    Any other built-in (pwsh, python, cmd) is not a bash errexit shell.
+    """
+
+    if not isinstance(shell, str):
+        return False
+    words = shell.split()
+    if words in (["bash"], ["sh"]):
+        return True
+    if "{0}" not in words or words[0].rsplit("/", 1)[-1] not in ("bash", "sh"):
+        return False
+    return any(re.fullmatch(r"-[a-zA-Z]*e[a-zA-Z]*", word) for word in words[1:])
+
+
+def validate_all_ci_coverage_errors(document: dict, validate_all: str) -> list[str]:
+    """Every validate-all check is invoked fail-closed by a required job, or is listed advisory."""
+
+    errors: list[str] = []
+    scripts = re.findall(r'(?m)^\s*run_check\s+"[^"]*"\s+"([^"]+)"', validate_all)
+    if not scripts:
+        return ["validate-all.sh declares no run_check invocations"]
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    for script in scripts:
+        if script in VALIDATE_ALL_ADVISORY_CHECKS:
+            continue
+        invocation = VALIDATE_ALL_REQUIRED_INVOCATIONS.get(script)
+        if invocation is None:
+            errors.append(f"{script} is neither invoked by a required job nor listed advisory")
+            continue
+        job_id, command = invocation
+        job = jobs.get(job_id)
+        if job_id not in REQUIRED_CI_JOBS or not isinstance(job, dict):
+            errors.append(f"{script} maps to {job_id}, which is not a required job")
+            continue
+        if "continue-on-error" in job:
+            errors.append(f"{script}: required job {job_id} declares continue-on-error")
+        invoking = [
+            step
+            for step in job.get("steps") or []
+            if isinstance(step, dict)
+            and isinstance(step.get("run"), str)
+            and any(line.strip() == command for line in step["run"].splitlines())
+        ]
+        if len(invoking) != 1:
+            errors.append(f"{script}: {job_id} has {len(invoking)} steps running exactly {command!r}")
+            continue
+        step = invoking[0]
+        for field in ("if", "continue-on-error"):
+            if field in step:
+                errors.append(f"{script}: {job_id} step {step.get('name')!r} declares {field}")
+        if re.search(r"(?m)^\s*set\s+\+e\b", step["run"]):
+            errors.append(f"{script}: {job_id} step {step.get('name')!r} disables errexit")
+        # The effective shell must abort on the first failing command, otherwise a
+        # multi-line run can mask the check's exit status behind a later line.
+        shell_sources = (
+            (f"step {step.get('name')!r}", step.get("shell")),
+            ("job defaults.run.shell", ((job.get("defaults") or {}).get("run") or {}).get("shell")),
+            ("workflow defaults.run.shell", ((document.get("defaults") or {}).get("run") or {}).get("shell")),
+        )
+        for origin, shell in shell_sources:
+            if shell is not None and not shell_is_errexit(shell):
+                errors.append(f"{script}: {job_id} {origin} uses shell {shell!r} without errexit")
+    for stale in sorted((set(VALIDATE_ALL_REQUIRED_INVOCATIONS) | set(VALIDATE_ALL_ADVISORY_CHECKS)) - set(scripts)):
+        errors.append(f"{stale} is no longer run by validate-all.sh; remove its CI coverage entry")
+    for overlap in sorted(set(VALIDATE_ALL_REQUIRED_INVOCATIONS) & set(VALIDATE_ALL_ADVISORY_CHECKS)):
+        errors.append(f"{overlap} is listed as both required and advisory")
+    return errors
+
+
+def experimental_mingw_lane_errors(document: dict) -> list[str]:
+    """Keep the MinGW/Wine lane manual, advisory, labeled experimental and out of the gate."""
+
+    errors: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    lane = jobs.get(MINGW_WINE_JOB)
+    if not isinstance(lane, dict):
+        return [f"{MINGW_WINE_JOB} job is missing"]
+    if lane.get("if") != "github.event_name == 'workflow_dispatch'":
+        errors.append(f"{MINGW_WINE_JOB} is not workflow_dispatch-only")
+    if lane.get("continue-on-error") is not True:
+        errors.append(f"{MINGW_WINE_JOB} does not declare job-level continue-on-error: true")
+    if "experimental" not in str(lane.get("name") or ""):
+        errors.append(f"{MINGW_WINE_JOB} display name does not say experimental")
+    steps = lane.get("steps", [])
+    for identity, command in (
+            ("mingw-configure", "cmake --preset linux-mingw-release"),
+            ("mingw-engine", "cmake --build build/linux-mingw-release --target SparkEngine --parallel $(nproc)"),
+            ("mingw-editor", "cmake --build build/linux-mingw-release --target SparkEditor --parallel $(nproc)"),
+            ("mingw-tests-build", "cmake --build build/linux-mingw-release --parallel $(nproc)"),
+            ("mingw-setup", "bash tools/setup-mingw-wine.sh --dxvk-only")):
+        matches = [step for step in steps if step.get("id") == identity]
+        if len(matches) != 1 or command not in matches[0].get("run", "") or matches[0].get("continue-on-error"):
+            errors.append(f"{MINGW_WINE_JOB}: missing fail-closed {identity} producer")
+    for step_id, phase, dependency in (("mingw-engine-smoke", "engine", "mingw-engine"),
+                                       ("mingw-editor-smoke", "editor", "mingw-editor"),
+                                       ("mingw-tests", "tests", "mingw-tests-build")):
+        matches = [step for step in steps if step.get("id") == step_id]
+        guard = ("${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps."
+                 + dependency + ".outcome == 'success' }}")
+        if len(matches) != 1:
+            errors.append(f"{MINGW_WINE_JOB}: missing {phase} execution")
+            continue
+        step = matches[0]
+        expected = f"python3 .github/scripts/mingw-wine-smoke.py {phase}"
+        if phase == "tests":
+            expected = ('set -o pipefail\nexport SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"\n'
+                        + expected + ' 2>&1 | tee wine-test-results.txt')
+        if (step.get("run", "").strip() != expected or step.get("if") != guard
+                or step.get("continue-on-error") or not isinstance(step.get("timeout-minutes"), int)):
+            errors.append(f"{MINGW_WINE_JOB}: {phase} smoke must execute bounded and fail closed")
+    summary = [step for step in steps if step.get("name") == "Summarize experimental MinGW execution"]
+    if (len(summary) != 1 or summary[0].get("if") != "always()"
+            or summary[0].get("run") != "python3 .github/scripts/mingw-wine-smoke.py summary"
+            or summary[0].get("continue-on-error")):
+        errors.append(f"{MINGW_WINE_JOB}: missing unconditional execution summary")
+    elif summary[0].get("env") != {
+            "MINGW_CONFIGURED": "${{ steps.mingw-configure.outcome }}",
+            "MINGW_ENGINE_BUILT": "${{ steps.mingw-engine.outcome }}",
+            "MINGW_EDITOR_BUILT": "${{ steps.mingw-editor.outcome }}",
+            "MINGW_TESTS_BUILT": "${{ steps.mingw-tests-build.outcome }}"}:
+        errors.append(f"{MINGW_WINE_JOB}: summary must consume actual build outcomes")
+    upload = [step for step in steps if step.get("with", {}).get("name") == "mingw-wine-test-results"]
+    if (len(upload) != 1 or upload[0].get("if") != "always()"
+            or "build/mingw-wine-evidence/" not in upload[0].get("with", {}).get("path", "")
+            or upload[0].get("with", {}).get("if-no-files-found") != "error"):
+        errors.append(f"{MINGW_WINE_JOB}: missing fail-closed evidence artifact")
+    gate = jobs.get("required-ci-gate")
+    if not isinstance(gate, dict):
+        errors.append("required-ci-gate job is missing")
+        return errors
+    if MINGW_WINE_JOB in (gate.get("needs") or []):
+        errors.append(f"{MINGW_WINE_JOB} is a required-ci-gate dependency")
+    for step in gate.get("steps") or []:
+        env = step.get("env") if isinstance(step, dict) else None
+        inventory = env.get("EXPECTED_REQUIRED_JOBS_JSON") if isinstance(env, dict) else None
+        if isinstance(inventory, str) and MINGW_WINE_JOB in json.loads(inventory):
+            errors.append(f"{MINGW_WINE_JOB} is in EXPECTED_REQUIRED_JOBS_JSON")
+    return errors
+
+
+REPRODUCIBILITY_JOB = "reproducibility-windows"
+REPRODUCIBILITY_TOOL = "tools/compare_build_outputs.py"
+
+
+def reproducibility_windows_errors(document: dict) -> list[str]:
+    """BLD-100: two clean windows-shipping builds in different trees are compared, fail-closed."""
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    job = jobs.get(REPRODUCIBILITY_JOB)
+    if not isinstance(job, dict):
+        return [f"{REPRODUCIBILITY_JOB} job is missing"]
+    errors: list[str] = []
+    if job.get("runs-on") != "windows-2022":
+        errors.append(f"{REPRODUCIBILITY_JOB} does not run on windows-2022")
+    for field in ("if", "strategy"):
+        if field in job:
+            errors.append(f"{REPRODUCIBILITY_JOB} declares job-level {field}")
+    # Advisory until a hosted run shows equivalent trees: visible as a failed
+    # job, but neither a gate dependency nor build-matrix producer coverage.
+    if job.get("continue-on-error") is not True:
+        errors.append(f"{REPRODUCIBILITY_JOB} does not declare job-level continue-on-error: true")
+    if "advisory" not in str(job.get("name") or ""):
+        errors.append(f"{REPRODUCIBILITY_JOB} display name does not say advisory")
+    gate = jobs.get("required-ci-gate")
+    if isinstance(gate, dict) and REPRODUCIBILITY_JOB in (gate.get("needs") or []):
+        errors.append(f"{REPRODUCIBILITY_JOB} is a required-ci-gate dependency before a hosted pass")
+    if not isinstance(job.get("timeout-minutes"), int) or job["timeout-minutes"] <= 0:
+        errors.append(f"{REPRODUCIBILITY_JOB} has no positive timeout-minutes")
+    if re.search(r"(?i)\bs?ccache\b|COMPILER_LAUNCHER", json.dumps(job)):
+        errors.append(f"{REPRODUCIBILITY_JOB} uses a compiler cache")
+
+    steps = [step for step in job.get("steps") or [] if isinstance(step, dict)]
+    checkouts = [
+        step for step in steps if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    paths = [str((step.get("with") or {}).get("path", "")) for step in checkouts]
+    if len(checkouts) != 2 or len(set(paths)) != 2 or "" in paths:
+        errors.append(f"{REPRODUCIBILITY_JOB} must check out exactly two trees at distinct paths")
+    elif any((step.get("with") or {}).get("submodules") != "recursive" for step in checkouts):
+        errors.append(f"{REPRODUCIBILITY_JOB} checkouts must include submodules recursively")
+
+    stages: list[str] = []
+    for tree in paths:
+        builds = [step for step in steps if step.get("working-directory") == tree]
+        if len(builds) != 1:
+            errors.append(f"{REPRODUCIBILITY_JOB} must build the {tree!r} tree in exactly one step")
+            continue
+        run = str(builds[0].get("run", ""))
+        required = (
+            "set -euo pipefail",
+            "cmake --preset windows-shipping",
+            "cmake --build --preset windows-shipping --config MinSizeRel",
+        )
+        for fragment in required:
+            if run.count(fragment) != 1:
+                errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build is missing {fragment!r}")
+        install = re.search(r"(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix (\S+)$", run)
+        if install is None:
+            errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build does not install the Shipping tree")
+        else:
+            stages.append(os.path.normpath(os.path.join(tree, install.group(1))).replace("\\", "/"))
+    if len(stages) == 2 and len(set(stages)) != 2:
+        errors.append(f"{REPRODUCIBILITY_JOB} stages both trees to the same prefix")
+
+    compares = [step for step in steps if REPRODUCIBILITY_TOOL in str(step.get("run", ""))]
+    if len(compares) != 1:
+        errors.append(f"{REPRODUCIBILITY_JOB} must compare the trees in exactly one step")
+    else:
+        run = str(compares[0].get("run", ""))
+        if "set -euo pipefail" not in run or "working-directory" in compares[0]:
+            errors.append(f"{REPRODUCIBILITY_JOB} compare step is not errexit at the workspace root")
+        manifests = re.findall(rf"{re.escape(REPRODUCIBILITY_TOOL)} manifest (\S+) --output (\S+)", run)
+        if len(stages) == 2 and sorted(root for root, _ in manifests) != sorted(stages):
+            errors.append(f"{REPRODUCIBILITY_JOB} does not write a manifest of each staged tree")
+        compare = re.search(
+            rf"{re.escape(REPRODUCIBILITY_TOOL)} compare\s*\\?\s*(\S+) (\S+)", run
+        )
+        if compare is None or sorted(compare.groups()) != sorted(output for _, output in manifests):
+            errors.append(f"{REPRODUCIBILITY_JOB} does not compare the two manifests")
+        if re.search(r"\|\|\s*(true|:)\b|\bset \+e\b", run):
+            errors.append(f"{REPRODUCIBILITY_JOB} compare step suppresses a failure")
+
+    for step in steps:
+        name = step.get("name", step.get("uses", "?"))
+        if "continue-on-error" in step:
+            errors.append(f"{REPRODUCIBILITY_JOB} step {name!r} declares continue-on-error")
+        is_upload = str(step.get("uses", "")).startswith("actions/upload-artifact@")
+        if "if" in step and not (is_upload and step["if"] == "always()"):
+            errors.append(f"{REPRODUCIBILITY_JOB} step {name!r} is conditional")
+    uploads = [step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+    if len(uploads) != 1 or uploads[0].get("if") != "always()" or (uploads[0].get("with") or {}).get(
+        "if-no-files-found"
+    ) != "error":
+        errors.append(f"{REPRODUCIBILITY_JOB} must upload its evidence once, always, failing on no files")
+    return errors
+
+
+EXPERIMENTAL_MODULE_JOB = "experimental-module-lifecycle"
+EXPERIMENTAL_MODULE_LABEL = "experimental-modules"
+EXPERIMENTAL_MODULE_EXCLUDE = "--label-exclude '^experimental-modules$'"
+EXPERIMENTAL_MODULE_TEST_PREFIX = "ExperimentalModuleLifecycle_"
+STABLE_PROFILE_LABELS = frozenset({"stable-v1", "module-profile"})
+# Prototype lifecycle tests carry only these labels. A generic lane label such
+# as "integration" or "linux" would pull a failing prototype into a label-selected
+# required command (for example CI-110's `ctest -L integration`).
+EXPERIMENTAL_MODULE_ALLOWED_LABELS = frozenset({EXPERIMENTAL_MODULE_LABEL, "prototype"})
+# Lanes whose "Run Tests" step runs the whole configured Linux CTest inventory.
+# Each must exclude the prototype label so a failing experimental module cannot
+# turn them red.
+FULL_CTEST_LINUX_LANES = (
+    (".github/workflows/build.yml", "build-linux-gcc"),
+    (".github/workflows/build.yml", "build-linux-clang"),
+    (".github/workflows/release.yml", "build-linux"),
+)
+
+
+def _job_run_commands(job: dict) -> list[str]:
+    return [step["run"] for step in job.get("steps") or [] if isinstance(step, dict) and isinstance(step.get("run"), str)]
+
+
+def experimental_module_lifecycle_errors(workflows: dict[str, dict], tests_cmake: str) -> list[str]:
+    """RDY-015: prototype lifecycle tests stay advisory, excluded, and never stable-labeled."""
+
+    errors: list[str] = []
+    build = workflows[".github/workflows/build.yml"]
+    jobs = build.get("jobs") if isinstance(build, dict) else None
+    if not isinstance(jobs, dict):
+        return ["build workflow has no jobs mapping"]
+
+    lane = jobs.get(EXPERIMENTAL_MODULE_JOB)
+    if not isinstance(lane, dict):
+        errors.append(f"{EXPERIMENTAL_MODULE_JOB} job is missing")
+    else:
+        if lane.get("continue-on-error") is not True:
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} does not declare job-level continue-on-error: true")
+        if "advisory" not in str(lane.get("name") or ""):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} display name does not say advisory")
+        runs = _job_run_commands(lane)
+        if not any(
+            "ctest" in run and f"-L '^{EXPERIMENTAL_MODULE_LABEL}$'" in run and "--output-junit" in run
+            for run in runs
+        ):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} does not run the {EXPERIMENTAL_MODULE_LABEL} label with JUnit")
+        if any(EXPERIMENTAL_MODULE_EXCLUDE in run or "-LE" in run for run in runs):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} excludes the tests it exists to run")
+        uploads = [
+            step
+            for step in lane.get("steps") or []
+            if isinstance(step, dict) and str(step.get("uses") or "").startswith("actions/upload-artifact@")
+        ]
+        if not any(
+            step.get("if") == "always()" and "experimental-module-lifecycle-junit.xml" in str(step.get("with"))
+            for step in uploads
+        ):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} does not publish its JUnit on failure (if: always())")
+
+    gate = jobs.get("required-ci-gate")
+    if not isinstance(gate, dict):
+        errors.append("required-ci-gate job is missing")
+    else:
+        if EXPERIMENTAL_MODULE_JOB in (gate.get("needs") or []):
+            errors.append(f"{EXPERIMENTAL_MODULE_JOB} is a required-ci-gate dependency")
+        for step in gate.get("steps") or []:
+            env = step.get("env") if isinstance(step, dict) else None
+            inventory = env.get("EXPECTED_REQUIRED_JOBS_JSON") if isinstance(env, dict) else None
+            if isinstance(inventory, str) and EXPERIMENTAL_MODULE_JOB in json.loads(inventory):
+                errors.append(f"{EXPERIMENTAL_MODULE_JOB} is in EXPECTED_REQUIRED_JOBS_JSON")
+    for key, job in jobs.items():
+        if key != EXPERIMENTAL_MODULE_JOB and isinstance(job, dict):
+            needs = job.get("needs") or []
+            if EXPERIMENTAL_MODULE_JOB in ([needs] if isinstance(needs, str) else needs):
+                errors.append(f"{key} depends on the advisory {EXPERIMENTAL_MODULE_JOB} job")
+
+    for workflow_path, job_key in FULL_CTEST_LINUX_LANES:
+        document = workflows.get(workflow_path) or {}
+        job = (document.get("jobs") or {}).get(job_key)
+        if not isinstance(job, dict):
+            errors.append(f"{workflow_path}: full-ctest Linux lane {job_key} is missing")
+            continue
+        full_runs = [
+            step["run"]
+            for step in job.get("steps") or []
+            if isinstance(step, dict)
+            and step.get("name") == "Run Tests"
+            and isinstance(step.get("run"), str)
+            and "ctest" in step["run"]
+        ]
+        if not full_runs:
+            errors.append(f"{workflow_path}: {job_key} no longer runs the full CTest inventory")
+        for run in full_runs:
+            if EXPERIMENTAL_MODULE_EXCLUDE not in run:
+                errors.append(f"{workflow_path}: {job_key} full ctest run does not exclude {EXPERIMENTAL_MODULE_LABEL}")
+
+    names, policies = parse_cmake(tests_cmake)
+    experimental_names = [name for name in names if name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX)]
+    if not experimental_names:
+        errors.append(f"Tests/CMakeLists.txt registers no {EXPERIMENTAL_MODULE_TEST_PREFIX}* test")
+    for name, policy in policies.items():
+        labels = {label for value in policy.labels for label in value.split(";") if label}
+        if EXPERIMENTAL_MODULE_LABEL in labels:
+            if not name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX):
+                errors.append(f"{name} carries the {EXPERIMENTAL_MODULE_LABEL} label reserved for RDY-015")
+            promoted = sorted(labels & STABLE_PROFILE_LABELS)
+            if promoted:
+                errors.append(f"{name} combines {EXPERIMENTAL_MODULE_LABEL} with stable label(s) {promoted}")
+        elif name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX):
+            errors.append(f"{name} does not carry the {EXPERIMENTAL_MODULE_LABEL} label")
+        if name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX):
+            generic = sorted(labels - EXPERIMENTAL_MODULE_ALLOWED_LABELS - STABLE_PROFILE_LABELS)
+            if generic:
+                errors.append(f"{name} carries generic lane label(s) {generic} outside the prototype label set")
+        if name.startswith(EXPERIMENTAL_MODULE_TEST_PREFIX) and labels & STABLE_PROFILE_LABELS:
+            if EXPERIMENTAL_MODULE_LABEL not in labels:
+                errors.append(f"{name} is an experimental module test with a stable profile label")
+    return errors
+
+
+GOLDEN_LINUX_JOB = "golden-linux"
+GOLDEN_LINUX_TESTS = {"SparkOpenGLGoldenTests": "opengl-golden", "VulkanGoldenTests": "vulkan-golden"}
+GOLDEN_LINUX_LABEL_SELECTOR = "-L '^(opengl-golden|vulkan-golden)$'"
+GOLDEN_LINUX_EXCLUDE = "--exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$'"
+GOLDEN_MANIFEST = REPO_ROOT / "Tests" / "GoldenImages" / "manifest.json"
+# golden-linux stays advisory until its first hosted pass (CI-110 lane spec).
+# Promotion is one deliberate change: flip this to True and add the job to the
+# required-ci-gate needs, EXPECTED_REQUIRED_JOBS_JSON and REQUIRED_CI_JOBS.
+GOLDEN_LINUX_REQUIRED = False
+
+
+def golden_linux_errors(document: dict, tests_cmake: str, manifest: dict) -> list[str]:
+    """CI-110: exactly one Mesa-pinned lane compares the Linux golden baselines.
+
+    The lane runs unconditionally on every build.yml trigger. Its gate
+    membership must match GOLDEN_LINUX_REQUIRED, so it cannot become required
+    (or stop being required) by accident.
+    """
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    errors: list[str] = []
+    lane = jobs.get(GOLDEN_LINUX_JOB)
+    if not isinstance(lane, dict):
+        errors.append(f"{GOLDEN_LINUX_JOB} job is missing")
+    else:
+        if lane.get("runs-on") != "ubuntu-24.04":
+            errors.append(f"{GOLDEN_LINUX_JOB} does not run on ubuntu-24.04, the row the baselines were reviewed on")
+        for field in ("if", "continue-on-error", "strategy"):
+            if field in lane:
+                errors.append(f"{GOLDEN_LINUX_JOB} declares job-level {field}")
+        pin = str((lane.get("env") or {}).get("SPARK_GOLDEN_MESA_VERSION") or "")
+        reviewed = {
+            entry.get("reviewer", "")
+            for entry in manifest.get("entries", [])
+            if entry.get("backendRow") == "opengl-llvmpipe"
+        }
+        if not pin or not reviewed or not all(pin in reviewer for reviewer in reviewed):
+            errors.append(
+                f"{GOLDEN_LINUX_JOB} SPARK_GOLDEN_MESA_VERSION {pin!r} is not the Mesa build every "
+                "opengl-llvmpipe manifest entry was reviewed on"
+            )
+        steps = [step for step in lane.get("steps") or [] if isinstance(step, dict)]
+        runs = [str(step.get("run", "")) for step in steps]
+        mesa_checks = [
+            run for run in runs if "dpkg-query -W -f='${Version}'" in run and "$SPARK_GOLDEN_MESA_VERSION" in run
+        ]
+        if len(mesa_checks) != 1 or not all(
+            package in mesa_checks[0] and "exit 1" in mesa_checks[0]
+            for package in ("libgl1-mesa-dri", "mesa-vulkan-drivers")
+        ):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not fail on a Mesa build other than the reviewed one")
+        if not any("grep -Fq 'EGL found' cmake-configure.log" in run for run in runs):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not require the headless EGL path it renders through")
+        compares = [run for run in runs if GOLDEN_LINUX_LABEL_SELECTOR in run and "--output-junit" in run]
+        if len(compares) != 1:
+            errors.append(f"{GOLDEN_LINUX_JOB} must compare the goldens in exactly one ctest step with JUnit")
+        else:
+            for fragment in (GOLDEN_LINUX_LABEL_SELECTOR, "--no-tests=error", "--output-junit", "set -euo pipefail"):
+                if fragment not in compares[0]:
+                    errors.append(f"{GOLDEN_LINUX_JOB} golden comparison is missing {fragment!r}")
+        registration = [run for run in runs if "--show-only=json-v1" in run and GOLDEN_LINUX_LABEL_SELECTOR in run]
+        if len(registration) != 1 or not all(name in registration[0] for name in GOLDEN_LINUX_TESTS):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not assert that every golden CTest entry is registered")
+        mesa_index = next((i for i, run in enumerate(runs) if run in mesa_checks), None)
+        compare_index = next((i for i, run in enumerate(runs) if run in compares), None)
+        if mesa_index is None or compare_index is None or mesa_index > compare_index:
+            errors.append(f"{GOLDEN_LINUX_JOB} must check the Mesa pin before comparing")
+        for step in steps:
+            name = step.get("name", step.get("uses", "?"))
+            if "continue-on-error" in step:
+                errors.append(f"{GOLDEN_LINUX_JOB} step {name!r} declares continue-on-error")
+            is_upload = str(step.get("uses", "")).startswith("actions/upload-artifact@")
+            if "if" in step and not (is_upload and step["if"] == "always()"):
+                errors.append(f"{GOLDEN_LINUX_JOB} step {name!r} is conditional")
+        uploads = [step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")]
+        if not any(
+            step.get("if") == "always()"
+            and "golden-junit.xml" in str((step.get("with") or {}).get("path"))
+            and "Tests/Output/" in str((step.get("with") or {}).get("path"))
+            for step in uploads
+        ):
+            errors.append(f"{GOLDEN_LINUX_JOB} does not publish its JUnit and diffs on failure (if: always())")
+
+    gate = jobs.get("required-ci-gate")
+    if not isinstance(gate, dict):
+        errors.append("required-ci-gate job is missing")
+    else:
+        in_needs = GOLDEN_LINUX_JOB in (gate.get("needs") or [])
+        inventories = [
+            step["env"]["EXPECTED_REQUIRED_JOBS_JSON"]
+            for step in gate.get("steps") or []
+            if isinstance(step, dict)
+            and isinstance(step.get("env"), dict)
+            and isinstance(step["env"].get("EXPECTED_REQUIRED_JOBS_JSON"), str)
+        ]
+        in_inventory = any(GOLDEN_LINUX_JOB in json.loads(inventory) for inventory in inventories)
+        if GOLDEN_LINUX_REQUIRED:
+            if not in_needs:
+                errors.append(f"{GOLDEN_LINUX_JOB} is not a required-ci-gate dependency")
+            if not in_inventory:
+                errors.append(f"{GOLDEN_LINUX_JOB} is not in EXPECTED_REQUIRED_JOBS_JSON")
+        else:
+            if in_needs:
+                errors.append(
+                    f"{GOLDEN_LINUX_JOB} is a required-ci-gate dependency before its first hosted pass"
+                )
+            if in_inventory:
+                errors.append(f"{GOLDEN_LINUX_JOB} is in EXPECTED_REQUIRED_JOBS_JSON before its first hosted pass")
+    if not GOLDEN_LINUX_REQUIRED:
+        for key, job in jobs.items():
+            if key != GOLDEN_LINUX_JOB and isinstance(job, dict):
+                needs = job.get("needs") or []
+                if GOLDEN_LINUX_JOB in ([needs] if isinstance(needs, str) else needs):
+                    errors.append(f"{key} depends on the advisory {GOLDEN_LINUX_JOB} job")
+
+    for job_key in ("build-linux-gcc", "build-linux-clang"):
+        job = jobs.get(job_key)
+        full_runs = [
+            step["run"]
+            for step in (job or {}).get("steps") or []
+            if isinstance(step, dict) and step.get("name") == "Run Tests" and "ctest" in str(step.get("run"))
+        ]
+        if not full_runs:
+            errors.append(f"{job_key} has no full ctest run")
+        elif GOLDEN_LINUX_REQUIRED and any(GOLDEN_LINUX_EXCLUDE not in run for run in full_runs):
+            errors.append(f"{job_key} full ctest run does not exclude the golden CTest entries")
+        elif not GOLDEN_LINUX_REQUIRED and any(GOLDEN_LINUX_EXCLUDE in run for run in full_runs):
+            # Until golden-linux is required, the required lanes keep the only required comparison.
+            errors.append(
+                f"{job_key} full ctest run excludes the golden CTest entries while {GOLDEN_LINUX_JOB} is advisory"
+            )
+
+    names, policies = parse_cmake(tests_cmake)
+    for name, label in GOLDEN_LINUX_TESTS.items():
+        policy = policies.get(name)
+        labels = {part for value in (policy.labels if policy else []) for part in value.split(";") if part}
+        if name not in names or label not in labels:
+            errors.append(f"Tests/CMakeLists.txt does not register {name} with the {label} label")
+    return errors
+
+
+MACOS_SHIPPING_JOB = "build-macos-shipping"
+
+
+def macos_shipping_leg_errors(document: dict) -> list[str]:
+    """PLT-220: an advisory lane builds the macos-shipping preset and checks the staged engine's minimum OS."""
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    job = jobs.get(MACOS_SHIPPING_JOB)
+    if not isinstance(job, dict):
+        return [f"{MACOS_SHIPPING_JOB} job is missing"]
+    errors: list[str] = []
+    runs = "\n".join(str(step.get("run", "")) for step in job.get("steps") or [] if isinstance(step, dict))
+    for fragment in ("cmake --preset macos-shipping", "cmake --build --preset macos-shipping"):
+        if fragment not in runs:
+            errors.append(f"{MACOS_SHIPPING_JOB} does not run {fragment!r}")
+    if not re.search(r"check_macos_min_version\.py --binary \S*bin/SparkEngine\b", runs):
+        errors.append(f"{MACOS_SHIPPING_JOB} does not check the staged engine's minimum macOS version")
+    if job.get("continue-on-error") is not True:
+        errors.append(f"{MACOS_SHIPPING_JOB} does not declare job-level continue-on-error: true")
+    gate = jobs.get("required-ci-gate")
+    if isinstance(gate, dict) and MACOS_SHIPPING_JOB in (gate.get("needs") or []):
+        errors.append(f"{MACOS_SHIPPING_JOB} is a required-ci-gate dependency before a hosted pass")
+    return errors
+
+
+RELEASE_LINUX_JOB = "build-linux"
+RELEASE_LINUX_GOLDEN_PREFIXES = ("OpenGLGolden_", "VulkanGolden_RHI230_")
+
+
+def release_linux_golden_errors(document: dict) -> list[str]:
+    """release.yml build-linux leaves the golden comparisons to build.yml's lanes.
+
+    Its runner resolves an unpinned Mesa, so both the golden CTest entries and the
+    raw SparkTests golden families must be excluded there. The Vulkan validation
+    tests it still runs require the validation layer, so it must be installed.
+    """
+
+    job = (document.get("jobs") or {}).get(RELEASE_LINUX_JOB)
+    if not isinstance(job, dict):
+        return [f"release.yml {RELEASE_LINUX_JOB} job is missing"]
+    errors: list[str] = []
+    steps = [step for step in job.get("steps") or [] if isinstance(step, dict)]
+    installs = [str(step.get("run")) for step in steps if step.get("name") == "Install dependencies"]
+    if not any(re.search(r"\bvulkan-validationlayers\b", run) for run in installs):
+        errors.append(f"release.yml {RELEASE_LINUX_JOB} does not install vulkan-validationlayers")
+    runs = [str(step.get("run")) for step in steps if step.get("name") == "Run Tests"]
+    ctest_lines = [line for run in runs for line in run.splitlines() if re.match(r"\s*ctest\b", line)]
+    if not ctest_lines or any(GOLDEN_LINUX_EXCLUDE not in line for line in ctest_lines):
+        errors.append(f"release.yml {RELEASE_LINUX_JOB} ctest run does not exclude the golden CTest entries")
+    for line in (line for run in runs for line in run.splitlines() if "./bin/SparkTests" in line):
+        match = re.search(r"SPARK_TEST_EXCLUDE=(\S+)\s+\./bin/SparkTests", line)
+        excluded = set(match.group(1).split(",")) if match else set()
+        if not excluded.issuperset(RELEASE_LINUX_GOLDEN_PREFIXES):
+            errors.append(f"release.yml {RELEASE_LINUX_JOB} raw SparkTests run does not exclude the golden families")
+    return errors
+
+
+def format_filter_suffixes(script: str) -> set[str]:
+    """Return the file suffixes routed to clang-format by check-format-changed.sh's case arm."""
+
+    arms = re.findall(r"(?m)^\s+((?:\*\.[A-Za-z0-9]+\|?)+)\)\s*$", script)
     if len(arms) != 1:
         raise AssertionError(f"check-format must have exactly one source-suffix case arm, found {arms}")
     return {"." + part.split(".", 1)[1] for part in arms[0].split("|") if part}
+
+
+DOCS_HEALTH_JOB = "docs-health"
+SITE_DATA_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data.yml"
+# DOC-410: each command whose failure must make docs-health (and so the Required
+# CI Gate) red, mapped to the step that runs it.
+DOCS_HEALTH_COMMANDS = (
+    ("Generate and validate exact-commit API documentation", "bash docs/generate-api-docs.sh generate"),
+    ("Generate and validate exact-commit API documentation", "python3 tools/docs_contract.py validate"),
+    ("Generate and validate exact-commit API documentation", "python3 tools/site-data/validate_docs_links.py"),
+    ("Run hostile documentation contract tests", "python3 Tests/Tools/test_docs_health.py"),
+    ("Run hostile documentation contract tests", "python3 tools/site-data/validate.py --docs"),
+    ("Prove isolated deterministic currentness and clean checkout", "bash docs/update-all-docs.sh check"),
+    ("Prove isolated deterministic currentness and clean checkout", 'test "$before" = "$after"'),
+)
+
+
+def docs_health_gate_errors(build: dict, site_data: dict) -> list[str]:
+    """Require docs-health to be one fail-closed Required CI Gate dependency in build.yml.
+
+    A stale generator, a missing result or a broken link must block a merge, so the
+    job lives in the workflow whose push concurrency never cancels a SHA, is listed
+    in the gate's needs and expected inventory, and every checking command runs
+    under errexit with no bypass. A second copy in site-data.yml would let the two
+    drift, so it is rejected.
+    """
+
+    errors: list[str] = []
+    jobs = build.get("jobs") if isinstance(build.get("jobs"), dict) else {}
+    site_jobs = site_data.get("jobs") if isinstance(site_data.get("jobs"), dict) else {}
+    if DOCS_HEALTH_JOB in site_jobs:
+        errors.append(f"{DOCS_HEALTH_JOB} must not be duplicated in site-data.yml")
+    job = jobs.get(DOCS_HEALTH_JOB)
+    if not isinstance(job, dict):
+        return errors + [f"{DOCS_HEALTH_JOB} is missing from build.yml"]
+    for key in ("continue-on-error", "if"):
+        if key in job:
+            errors.append(f"{DOCS_HEALTH_JOB} declares job-level {key}")
+    gate = jobs.get("required-ci-gate") if isinstance(jobs.get("required-ci-gate"), dict) else {}
+    if DOCS_HEALTH_JOB not in job_needs(gate):
+        errors.append(f"required-ci-gate does not need {DOCS_HEALTH_JOB}")
+    inventories = [
+        step["env"].get("EXPECTED_REQUIRED_JOBS_JSON")
+        for step in gate.get("steps", []) if isinstance(step, dict) and isinstance(step.get("env"), dict)
+    ]
+    inventories = [value for value in inventories if isinstance(value, str)]
+    if len(inventories) != 1 or DOCS_HEALTH_JOB not in json.loads(inventories[0]):
+        errors.append(f"{DOCS_HEALTH_JOB} is not in EXPECTED_REQUIRED_JOBS_JSON")
+    steps = {step.get("name"): step for step in job.get("steps", []) if isinstance(step, dict)}
+    for step_name, command in DOCS_HEALTH_COMMANDS:
+        step = steps.get(step_name)
+        lines = normalized_run_lines(step.get("run")) if isinstance(step, dict) else None
+        if not lines:
+            errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} is missing")
+            continue
+        if not any(command in line for line in lines):
+            errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} does not run {command}")
+        if lines[0] != "set -euo pipefail":
+            errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} must start with 'set -euo pipefail'")
+        for key in ("continue-on-error", "if", "shell"):
+            if key in step:
+                errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} declares {key}")
+        for line in lines:
+            if FAILURE_SUPPRESSION.search(line) or re.search(r"\bset\s+\+\w*e", line):
+                errors.append(f"{DOCS_HEALTH_JOB} step {step_name!r} suppresses a failure: {line}")
+    return sorted(set(errors))
+
+
+def check_format_gate_errors(document: dict, script: str) -> list[str]:
+    """check-format must run the tested script fail-closed, and validate-ci-tools must test it.
+
+    The script is the only place the format gate's logic lives, so the job step
+    must invoke exactly that script with no step condition, no continue-on-error,
+    and an errexit shell, and the script itself must start under errexit.
+    """
+
+    errors: list[str] = []
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    for job_id, step_name, command in (
+        ("check-format", "Check formatting", CHECK_FORMAT_COMMAND),
+        ("validate-ci-tools", "Test check-format controlled failures", CHECK_FORMAT_TEST_COMMAND),
+    ):
+        job = jobs.get(job_id)
+        if not isinstance(job, dict):
+            errors.append(f"{job_id} job is missing")
+            continue
+        for field in ("if", "continue-on-error"):
+            if field in job:
+                errors.append(f"{job_id} declares job-level {field}")
+        steps = [step for step in job.get("steps") or [] if isinstance(step, dict) and step.get("name") == step_name]
+        if len(steps) != 1:
+            errors.append(f"{job_id} has {len(steps)} {step_name!r} steps")
+            continue
+        step = steps[0]
+        if step.get("run") != command:
+            errors.append(f"{job_id}/{step_name} must run exactly {command!r}, found {str(step.get('run'))[:80]!r}")
+        for field in ("if", "continue-on-error"):
+            if field in step:
+                errors.append(f"{job_id}/{step_name} declares {field}")
+        shell_sources = (
+            ("step", step.get("shell")),
+            ("job defaults.run.shell", ((job.get("defaults") or {}).get("run") or {}).get("shell")),
+            ("workflow defaults.run.shell", ((document.get("defaults") or {}).get("run") or {}).get("shell")),
+        )
+        for origin, shell in shell_sources:
+            if shell is not None and not shell_is_errexit(shell):
+                errors.append(f"{job_id}/{step_name} {origin} uses shell {shell!r} without errexit")
+    format_step = next(
+        (
+            step
+            for step in (jobs.get("check-format") or {}).get("steps") or []
+            if isinstance(step, dict) and step.get("name") == "Check formatting"
+        ),
+        {},
+    )
+    if "FORMAT_BASE_SHA" not in (format_step.get("env") or {}):
+        errors.append("check-format/Check formatting no longer passes FORMAT_BASE_SHA to the script")
+    code = [line.strip() for line in script.splitlines() if line.strip() and not line.strip().startswith("#")]
+    if not code or code[0] != "set -euo pipefail":
+        errors.append("check-format-changed.sh must start with 'set -euo pipefail'")
+    if len(re.findall(r"(?m)^\s*exit\s+0\b", script)) != 1:
+        errors.append("check-format-changed.sh may exit 0 only for an empty source selection")
+    if re.search(r"\|\|\s*(?:exit\s+0|:)", script):
+        errors.append("check-format-changed.sh suppresses a failure")
+    return errors
 
 
 class WorkflowFailurePropagationTests(unittest.TestCase):
@@ -1201,6 +2464,28 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_required_workflow_semantics_are_fail_closed(self) -> None:
         self.assertEqual(required_workflow_errors(self.build), [])
+
+    def test_both_required_sde_process_gates_propagate_failures(self) -> None:
+        self.assertEqual(sde_cpu_floor_contract_errors(self.build), [])
+        self.assertIn('NAME CpuFloor_BelowFloorStartupRefused', self.tests_cmake)
+        self.assertIn('LABELS "bld100;cpu-floor;process"', self.tests_cmake)
+        for job_name, archive_hash in (
+            ("build-windows-vs2022", "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651"),
+            ("build-linux-gcc", "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50"),
+        ):
+            job = yaml_section(self.build, job_name, indent=2)
+            test_step = named_step(job, "Refuse a below-floor CPU under Intel SDE")
+            install_step = named_step(job, "Install Intel SDE 10.13.1 for CPU-floor process test")
+            mutations = {
+                "missing test": job.replace(test_step, "", 1),
+                "empty selection accepted": job.replace(test_step, test_step.replace("--no-tests=error", "--no-tests=ignore"), 1),
+                "hash drift": job.replace(install_step, install_step.replace(archive_hash, "0" * 64), 1),
+                "disabled test": job.replace(test_step, test_step.replace("matrix.config == 'Release'", "false"), 1),
+            }
+            for label, changed_job in mutations.items():
+                with self.subTest(job=job_name, mutation=label):
+                    self.assertNotEqual(changed_job, job)
+                    self.assertTrue(sde_cpu_floor_contract_errors(self.build.replace(job, changed_job, 1)), label)
 
     def test_todo_count_threshold_failure_is_fail_closed(self) -> None:
         job = yaml_section(self.build, "todo-count", indent=2)
@@ -1327,13 +2612,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
 
     def test_check_format_routes_every_tracked_cxx_suffix(self) -> None:
-        step = named_step(yaml_section(self.build, "check-format", indent=2), "Check formatting")
-        roots_match = re.search(r"(?m)^\s+FORMAT_ROOTS=\((?P<roots>[^)]*)\)\s*$", step)
+        script = CHECK_FORMAT_SCRIPT.read_text(encoding="utf-8")
+        roots_match = re.search(r"(?m)^FORMAT_ROOTS=\((?P<roots>[^)]*)\)\s*$", script)
         self.assertIsNotNone(roots_match)
         assert roots_match is not None
         self.assertEqual(tuple(roots_match.group("roots").split()), FORMAT_ROOTS)
 
-        routed = format_filter_suffixes(self.build)
+        routed = format_filter_suffixes(script)
         present: dict[str, str] = {}
         for root in FORMAT_ROOTS:
             for directory, _dirs, files in os.walk(REPO_ROOT / root):
@@ -1346,6 +2631,101 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn(".cpp", present)
         missing = {suffix: example for suffix, example in present.items() if suffix not in routed}
         self.assertEqual(missing, {}, "check-format silently skips tracked C/C++ sources")
+
+    def test_check_format_runs_the_tested_script_fail_closed(self) -> None:
+        script = CHECK_FORMAT_SCRIPT.read_text(encoding="utf-8")
+        self.assertEqual(check_format_gate_errors(parse_workflow_yaml(self.build), script), [])
+
+    def test_check_format_gate_contract_rejects_each_bypass(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        script = CHECK_FORMAT_SCRIPT.read_text(encoding="utf-8")
+
+        def step(jobs: dict, job_id: str, name: str) -> dict:
+            return next(item for item in jobs[job_id]["steps"] if item.get("name") == name)
+
+        def mutate(change, mutated_script: str = script) -> list[str]:
+            document = copy.deepcopy(baseline)
+            change(document["jobs"])
+            return check_format_gate_errors(document, mutated_script)
+
+        format_step = lambda jobs: step(jobs, "check-format", "Check formatting")  # noqa: E731
+        test_step = lambda jobs: step(jobs, "validate-ci-tools", "Test check-format controlled failures")  # noqa: E731
+        cases = (
+            (lambda jobs: format_step(jobs).update({"continue-on-error": True}), "declares continue-on-error"),
+            (lambda jobs: format_step(jobs).update({"if": "success()"}), "declares if"),
+            (lambda jobs: format_step(jobs).update({"shell": "bash {0}"}), "without errexit"),
+            (lambda jobs: format_step(jobs).update({"run": CHECK_FORMAT_COMMAND + " || true"}), "must run exactly"),
+            (lambda jobs: format_step(jobs).update({"run": "echo skipped"}), "must run exactly"),
+            (lambda jobs: format_step(jobs).pop("env"), "FORMAT_BASE_SHA"),
+            (lambda jobs: jobs["check-format"].update({"continue-on-error": True}), "job-level continue-on-error"),
+            (lambda jobs: test_step(jobs).update({"continue-on-error": True}), "declares continue-on-error"),
+            (lambda jobs: jobs["validate-ci-tools"]["steps"].remove(test_step(jobs)), "has 0"),
+        )
+        for change, expected in cases:
+            with self.subTest(expected=expected):
+                errors = mutate(change)
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+        no_errexit = script.replace("set -euo pipefail\n", "set -uo pipefail\n", 1)
+        self.assertIn("must start with 'set -euo pipefail'", " ".join(mutate(lambda jobs: None, no_errexit)))
+        swallowed = script.replace('exit "$FORMAT_STATUS"', 'exit "$FORMAT_STATUS" || :')
+        self.assertIn("suppresses a failure", " ".join(mutate(lambda jobs: None, swallowed)))
+        early_pass = script.replace("set -euo pipefail\n", "set -euo pipefail\nexit 0\n", 1)
+        self.assertIn("exit 0 only", " ".join(mutate(lambda jobs: None, early_pass)))
+
+    def test_docs_health_is_a_fail_closed_required_gate_dependency(self) -> None:
+        site_data = parse_workflow_yaml(SITE_DATA_WORKFLOW.read_text(encoding="utf-8"))
+        self.assertEqual(docs_health_gate_errors(parse_workflow_yaml(self.build), site_data), [])
+
+    def test_docs_health_gate_contract_rejects_each_bypass(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        site_data = parse_workflow_yaml(SITE_DATA_WORKFLOW.read_text(encoding="utf-8"))
+        links_step = "Generate and validate exact-commit API documentation"
+        check_step = "Prove isolated deterministic currentness and clean checkout"
+
+        def step(jobs: dict, name: str) -> dict:
+            return next(item for item in jobs[DOCS_HEALTH_JOB]["steps"] if item.get("name") == name)
+
+        def gate_env(jobs: dict) -> dict:
+            return next(item["env"] for item in jobs["required-ci-gate"]["steps"] if "env" in item)
+
+        def drop_links(jobs: dict) -> None:
+            target = step(jobs, links_step)
+            target["run"] = "\n".join(line for line in target["run"].splitlines()
+                                      if "validate_docs_links.py" not in line and "--generated-root" not in line)
+
+        def replace_run(jobs: dict, name: str, old: str, new: str) -> None:
+            target = step(jobs, name)
+            self.assertIn(old, target["run"])
+            target["run"] = target["run"].replace(old, new)
+
+        def drop_from_inventory(jobs: dict) -> None:
+            env = gate_env(jobs)
+            env["EXPECTED_REQUIRED_JOBS_JSON"] = env["EXPECTED_REQUIRED_JOBS_JSON"].replace(',"docs-health"', "")
+
+        check_command = "bash docs/update-all-docs.sh check"
+        cases = (
+            (lambda jobs: jobs["required-ci-gate"]["needs"].remove(DOCS_HEALTH_JOB), "does not need docs-health"),
+            (drop_from_inventory, "not in EXPECTED_REQUIRED_JOBS_JSON"),
+            (lambda jobs: jobs[DOCS_HEALTH_JOB].update({"continue-on-error": True}), "job-level continue-on-error"),
+            (lambda jobs: step(jobs, check_step).update({"continue-on-error": True}), "declares continue-on-error"),
+            (drop_links, "does not run python3 tools/site-data/validate_docs_links.py"),
+            (lambda jobs: replace_run(jobs, check_step, check_command, check_command + " || true"),
+             "suppresses a failure"),
+            (lambda jobs: replace_run(jobs, links_step, "set -euo pipefail", "set -euo pipefail\nset +e"),
+             "suppresses a failure"),
+            (lambda jobs: jobs.pop(DOCS_HEALTH_JOB), "docs-health is missing from build.yml"),
+        )
+        for change, expected in cases:
+            with self.subTest(expected=expected):
+                document = copy.deepcopy(baseline)
+                change(document["jobs"])
+                errors = docs_health_gate_errors(document, site_data)
+                self.assertTrue(any(expected in error for error in errors), errors)
+        duplicated = copy.deepcopy(site_data)
+        duplicated["jobs"][DOCS_HEALTH_JOB] = copy.deepcopy(baseline["jobs"][DOCS_HEALTH_JOB])
+        self.assertIn("docs-health must not be duplicated in site-data.yml",
+                      docs_health_gate_errors(baseline, duplicated))
 
     def test_clang_tidy_inventory_covers_all_shipped_source_roots(self) -> None:
         block = self.build[self.build.index("\n  clang-tidy:\n"):]
@@ -1368,6 +2748,55 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         )
         enforced_jobs = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
         self.assertEqual(enforced_jobs, declared_jobs)
+
+    def test_ci100_controlled_failure_classes_map_to_gated_required_jobs(self) -> None:
+        """The driver's actual class plan must target a required job and its real check."""
+
+        patch_targets = {
+            "test": "Tests/TestMathUtils.cpp",
+            "sanitizer": "Tests/TestObjectPool.cpp",
+            "format": "Tests/TestMathUtils.cpp",
+            "threshold": "scripts/coverage-report.sh",
+            "registration": "Tests/TestCI100RegistrationProbe.cpp",
+            "validation": "docs/readiness/work-items/40-installer-governance-docs.json",
+        }
+        check_commands = {
+            "test": "ctest",
+            "sanitizer": "run-sanitizer-tests.sh",
+            "format": "check-format-changed.sh",
+            "threshold": "scripts/coverage-report.sh",
+            "registration": "tools/check-test-registration.sh",
+            "validation": "tools/site-data/validate.py --docs",
+        }
+        self.assertEqual(set(controlled_failure_driver.CLASS_PLAN), set(patch_targets))
+        document = parse_workflow_yaml(self.build)
+        gate = document["jobs"]["required-ci-gate"]
+        needs = gate["needs"]
+        verifier = next(
+            step
+            for step in gate["steps"]
+            if step.get("name") == "Verify every required job succeeded"
+        )
+        inventory = json.loads(verifier["env"]["EXPECTED_REQUIRED_JOBS_JSON"])
+        for failure_class, (patch_name, job, display_name, step_name) in controlled_failure_driver.CLASS_PLAN.items():
+            with self.subTest(failure_class=failure_class):
+                self.assertIn(job, REQUIRED_CI_JOBS, f"{failure_class}: {job} is not a required job")
+                self.assertIn(job, needs, f"{failure_class}: {job} is not in required-ci-gate needs")
+                self.assertIn(job, inventory, f"{failure_class}: {job} is not in EXPECTED_REQUIRED_JOBS_JSON")
+                self.assertIsInstance(
+                    document["jobs"].get(job), dict, f"{failure_class}: {job} is missing from build.yml"
+                )
+                job_spec = document["jobs"][job]
+                self.assertEqual(job_spec.get("name", job), display_name)
+                steps = [step for step in job_spec["steps"] if isinstance(step, dict)
+                         and step.get("name") == step_name]
+                self.assertEqual(len(steps), 1, f"{failure_class}: expected check step missing")
+                self.assertIn(check_commands[failure_class], steps[0].get("run", ""))
+                patch = controlled_failure_driver.PATCH_DIR / patch_name
+                self.assertTrue(patch.is_file())
+                targets = re.findall(r"^diff --git a/\S+ b/(\S+)$",
+                                     patch.read_text(encoding="utf-8"), re.MULTILINE)
+                self.assertEqual(targets, [patch_targets[failure_class]])
 
     def test_license_compliance_job_is_required_and_fail_closed(self) -> None:
         document = parse_workflow_yaml(self.build)
@@ -1571,6 +3000,38 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
         self.assertTrue(required_workflow_errors(mutated))
 
+    def test_telemetry_fold_preserves_build_budget_and_diagnostics(self) -> None:
+        security = yaml_section(self.build, "security-runtime", indent=2)
+        configure = named_step(security, "Configure Linux Shipping security tests")
+        build = named_step(security, "Build security runtime targets")
+        telemetry = named_step(security, "Run telemetry spool integration test")
+        extract = named_step(security, "Extract security runtime error summary")
+        mutations = {
+            "budget raised": security.replace("timeout-minutes: 60", "timeout-minutes: 61", 1),
+            "budget removed": security.replace("    timeout-minutes: 60\n", "", 1),
+            "duplicate configure": security.replace(
+                configure, configure + configure.replace("name: Configure", "name: Reconfigure", 1), 1
+            ),
+            "duplicate build": security.replace(
+                build, build + build.replace("name: Build", "name: Rebuild", 1), 1
+            ),
+            "telemetry log lost": security.replace(
+                telemetry, telemetry.replace("tee telemetry-tests.log", "tee discarded.log", 1), 1
+            ),
+            "telemetry diagnostic input lost": security.replace(
+                extract, extract.replace("telemetry-tests.log", "unrelated-tests.log", 1), 1
+            ),
+            "telemetry diagnostic extraction lost": security.replace(extract, "", 1),
+            "telemetry diagnostic extraction only on success": security.replace(
+                extract, extract.replace("if: failure()", "if: success()", 1), 1
+            ),
+        }
+        self.assertEqual(required_workflow_errors(self.build), [])
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, security, "mutation fixture did not alter YAML")
+                self.assertTrue(required_workflow_errors(self.build.replace(security, mutated, 1)), label)
+
     def test_telemetry_ctest_selector_is_fail_closed(self) -> None:
         self.assertEqual(telemetry_ctest_contract_errors(self.tests_cmake), [])
         selected_tests = re.findall(
@@ -1583,15 +3044,22 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_telemetry_ctest_selector_rejects_hostile_mutations(self) -> None:
         mutations = {
             "missing source": self.tests_cmake.replace("    TestTelemetrySpool.cpp\n", "", 1),
-            "warning downgrade": self.tests_cmake.replace(" --warn-is-error)", ")", 1),
+            # Anchored on TelemetrySpool: other tests precede it with the same
+            # flag and count, and mutating one of those leaves this contract
+            # untouched.
+            "warning downgrade": self.tests_cmake.replace(
+                "add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)",
+                "add_test(NAME TelemetrySpool COMMAND $<TARGET_FILE:SparkTests>)",
+                1,
+            ),
             "selector widened": self.tests_cmake.replace(
                 "SPARK_TEST_NAME=Telemetry_SpoolRecovery",
                 "SPARK_TEST_NAME=Telemetry_",
                 1,
             ),
             "selected count reduced": self.tests_cmake.replace(
-                f"SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT}",
-                f"SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT - 1}",
+                f"SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT}",
+                f"SPARK_TEST_NAME=Telemetry_SpoolRecovery;SPARK_TEST_EXPECT_COUNT={TELEMETRY_EXPECTED_COUNT - 1}",
                 1,
             ),
         }
@@ -1632,14 +3100,26 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "build-linux-asan:\n    strategy:\n      matrix:\n        enabled: [false]\n    runs-on: ubuntu-24.04",
             1,
         )
-        mutations["missing telemetry job"] = self.build.replace(
-            "  telemetry-integration:",
-            "  telemetry-integration-disabled:",
+        mutations["missing telemetry step"] = self.build.replace(
+            "    - name: Run telemetry spool integration test",
+            "    - name: Run telemetry spool smoke",
             1,
         )
-        mutations["optional telemetry job"] = self.build.replace(
-            "  telemetry-integration:\n    name: \"Telemetry Integration\"",
-            "  telemetry-integration:\n    name: \"Telemetry Integration\"\n    continue-on-error: true",
+        mutations["optional telemetry step"] = self.build.replace(
+            "    - name: Run telemetry spool integration test",
+            "    - name: Run telemetry spool integration test\n      continue-on-error: true",
+            1,
+        )
+        mutations["telemetry rebuilt in a separate job"] = self.build.replace(
+            "  security-runtime:\n    name: \"Security Runtime\"",
+            "  telemetry-integration:\n    name: \"Telemetry Integration\"\n    runs-on: ubuntu-24.04\n"
+            "    steps:\n    - name: Build\n      run: cmake --build --preset linux-shipping --target SparkTests\n\n"
+            "  security-runtime:\n    name: \"Security Runtime\"",
+            1,
+        )
+        mutations["optional security runtime job"] = self.build.replace(
+            "  security-runtime:\n    name: \"Security Runtime\"",
+            "  security-runtime:\n    name: \"Security Runtime\"\n    continue-on-error: true",
             1,
         )
         mutations["telemetry zero-test bypass"] = self.build.replace(
@@ -1654,14 +3134,72 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "-R 'Telemetry'",
             1,
         )
-        mutations["telemetry report dependency removed"] = self.build.replace(
-            "      - build-linux-tsan\n      - telemetry-integration\n      - build-linux-msan",
-            "      - build-linux-tsan\n      - build-linux-msan",
+        mutations["security runtime report dependency removed"] = self.build.replace(
+            "      - network-security\n      - security-runtime\n      - network-integration",
+            "      - network-security\n      - network-integration",
             1,
         )
-        mutations["telemetry gate dependency removed"] = self.build.replace(
-            "      - build-linux-tsan\n      - telemetry-integration\n      - build-windows-vs2022",
+        mutations["security runtime gate dependency removed"] = self.build.replace(
+            "      - build-linux-tsan\n      - security-runtime\n      - build-windows-vs2022",
             "      - build-linux-tsan\n      - build-windows-vs2022",
+            1,
+        )
+        mutations["network security empty label allowed"] = self.build.replace(
+            "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \\\n"
+            "          -L '^network-security$'",
+            "ctest --test-dir build/linux-shipping --output-on-failure \\\n"
+            "          -L '^network-security$'",
+            1,
+        )
+        mutations["network security label drift"] = self.build.replace(
+            "-L '^network-security$'",
+            "-L 'network'",
+            1,
+        )
+        mutations["network security gate dependency removed"] = self.build.replace(
+            "      - module-evidence\n      - network-security\n",
+            "      - module-evidence\n",
+            1,
+        )
+        mutations["optional network security job"] = self.build.replace(
+            "  network-security:\n    name: \"Network Security\"",
+            "  network-security:\n    name: \"Network Security\"\n    continue-on-error: true",
+            1,
+        )
+        mutations["security runtime empty selection allowed"] = self.build.replace(
+            "ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \\\n          -R RemoteAdmin",
+            "ctest --test-dir build/linux-shipping --output-on-failure \\\n          -R RemoteAdmin",
+            1,
+        )
+        mutations["security runtime label dropped"] = self.build.replace(
+            "for label in remote-admin gateway crash-security; do",
+            "for label in remote-admin gateway; do",
+            1,
+        )
+        mutations["security runtime crash-security executables unbuilt"] = self.build.replace(
+            "SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \\\n"
+            "          SparkCrashReporterFakeGh 2>&1 | tee security-build.log",
+            "SparkTests 2>&1 | tee security-build.log",
+            1,
+        )
+        mutations["security runtime off shipping"] = self.build.replace(
+            "cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
+            "cmake --preset linux-gcc-release -DBUILD_TESTS=ON 2>&1 | tee security-configure.log",
+            1,
+        )
+        mutations["network integration smoke selector drift"] = self.build.replace(
+            "-R '^SparkServerGatewayProcessSmoke$'",
+            "-R 'ProcessSmoke'",
+            1,
+        )
+        mutations["network integration made advisory"] = self.build.replace(
+            "  network-integration:\n    name: \"Network Integration\"\n",
+            "  network-integration:\n    name: \"Network Integration\"\n    continue-on-error: true\n",
+            1,
+        )
+        mutations["network integration report dependency removed"] = self.build.replace(
+            "      - security-runtime\n      - network-integration\n    runs-on:",
+            "      - security-runtime\n    runs-on:",
             1,
         )
         mutations["required gate verifier removed"] = self.build.replace(
@@ -1670,7 +3208,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             1,
         )
         mutations["required gate verifier bypassed"] = self.build.replace(
-            "        run: python3 .github/scripts/verify-required-jobs.py",
+            "        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json",
             "        run: 'true'",
             1,
         )
@@ -1697,14 +3235,64 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             1,
         )
         mutations["suppressed published verifier"] = self.build.replace(
-            "          --timeout-seconds 900\n\n    - name: Extract error summary",
-            "          --timeout-seconds 900 || true\n\n    - name: Extract error summary",
+            "          --timeout-seconds 1800\n\n    - name: Extract error summary",
+            "          --timeout-seconds 1800 || true\n\n    - name: Extract error summary",
             1,
         )
         for label, mutated in mutations.items():
             with self.subTest(mutation=label):
                 self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
                 self.assertTrue(required_workflow_errors(mutated), label)
+
+    def test_required_gate_record_upload_survives_gate_failure(self) -> None:
+        self.assertEqual(required_workflow_errors(self.build), [])
+        gate = yaml_section(self.build, "required-ci-gate", indent=2)
+        upload = named_step(gate, "Upload Required CI Gate record")
+        self.assertIn("actions/upload-artifact@", upload)
+        record_marker = "\n      - name: Upload Required CI Gate record\n        if: always()\n"
+        name_marker = "name: required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}"
+        cases = {
+            "upload skipped on red gate": (
+                record_marker,
+                record_marker.replace("if: always()", "if: success()"),
+                "exact if: always()",
+            ),
+            "upload silently optional": (
+                "          path: required-ci-gate.json\n"
+                "          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}\n"
+                "          if-no-files-found: error\n",
+                "          path: required-ci-gate.json\n"
+                "          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}\n"
+                "          if-no-files-found: warn\n",
+                "exact if-no-files-found: error",
+            ),
+            "upload not bound to exact sha": (
+                name_marker,
+                "name: required-ci-gate-latest",
+                "exact name:",
+            ),
+            "upload suppresses failure": (
+                record_marker,
+                record_marker + "        continue-on-error: true\n",
+                "must not suppress its own failure",
+            ),
+            "verifier writes no record": (
+                "        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json\n",
+                "        run: python3 .github/scripts/verify-required-jobs.py\n",
+                "must run the exact required-job script",
+            ),
+            "upload removed": (
+                "      - name: Upload Required CI Gate record\n",
+                "      - name: Upload gate notes\n",
+                "Upload Required CI Gate record",
+            ),
+        }
+        for label, (old, new, message) in cases.items():
+            with self.subTest(mutation=label):
+                self.assertEqual(self.build.count(old), 1, label)
+                mutated = self.build.replace(old, new, 1)
+                errors = required_workflow_errors(mutated)
+                self.assertTrue(any(message in error for error in errors), errors)
 
     def test_detector_rejects_failed_producer_hidden_by_tee(self) -> None:
         fixture = """jobs:
@@ -1925,6 +3513,217 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")
                 self.assertTrue(versioned_publication_gate_errors(mutated), label)
 
+    def test_profile_required_gates_rejects_each_bypass_shape(self) -> None:
+        # REL-190: the gates job must stay a named, unskippable, read-only,
+        # fail-closed prerequisite of the environment-protected release job.
+        # Each mutant names the error it must raise, so a mutant that merely
+        # breaks parsing or trips an unrelated check cannot pass for detection.
+        release_header = "  release:\n    needs: [prepare, profile-required-gates, build-windows,"
+        gates_header = "  profile-required-gates:\n    needs: [prepare]\n"
+        gates_permissions = "    permissions:\n      actions: read\n      contents: read\n      statuses: read\n"
+        readiness = named_step(self.release, PROFILE_GATES_READINESS_STEP)
+        checkout = named_step(self.release, PROFILE_GATES_CHECKOUT_STEP)
+        required_ci = named_step(self.release, PROFILE_GATES_REQUIRED_CI_STEP)
+        fuzz = named_step(self.release, PROFILE_GATES_FUZZ_STEP)
+        qualify = named_step(self.release, PROFILE_GATES_QUALIFY_STEP)
+        report = named_step(self.release, PROFILE_GATES_REPORT_STEP)
+        tag_binding = named_step(self.release, "Bind stable release tag to workflow commit")
+        for fixture in (release_header, gates_header, gates_permissions):
+            self.assertEqual(self.release.count(fixture), 1, fixture)
+
+        def release_if(condition: str) -> str:
+            return self.release.replace(release_header, release_header.replace(
+                "  release:\n", f"  release:\n    {condition}\n", 1
+            ), 1)
+
+        def gates_key(line: str) -> str:
+            return self.release.replace(gates_header, f"{gates_header}    {line}\n", 1)
+
+        def gates_permissions_as(line: str) -> str:
+            return self.release.replace(gates_permissions, f"    {line}\n", 1)
+
+        def replace_in(step: str, old: str, new: str) -> str:
+            self.assertEqual(step.count(old), 1, old)
+            return self.release.replace(step, step.replace(old, new, 1), 1)
+
+        def move_into_release(step: str) -> str:
+            return self.release.replace(step, "", 1).replace(tag_binding, f"{tag_binding}\n{step}", 1)
+
+        def workflow_key(block: str) -> str:
+            self.assertEqual(self.release.count("\njobs:\n"), 1)
+            return self.release.replace("\njobs:\n", f"\n{block}\njobs:\n", 1)
+
+        # A flow-mapping step is invisible to the line-oriented step matcher, and
+        # a decoy copy of the real step inside a block scalar satisfies it, so
+        # only the parsed-YAML contract can see that the readiness run is a no-op.
+        readiness_no_op = self.release.replace(
+            readiness,
+            f'    - {{name: "{PROFILE_GATES_READINESS_STEP}", '
+            "if: \"needs.prepare.outputs.is_versioned == 'true'\", shell: bash, run: \"true\"}\n",
+            1,
+        )
+        readiness_decoy = readiness_no_op.replace(
+            "\njobs:\n", f"\nenv:\n  DECOY: |\n{readiness}\njobs:\n", 1
+        )
+
+        mutations = {
+            "release no longer needs gates": (
+                self.release.replace(release_header, release_header.replace(" profile-required-gates,", "", 1), 1),
+                "release job must need profile-required-gates",
+            ),
+            "release needs a misspelled gates job": (
+                self.release.replace(release_header, release_header.replace(
+                    "profile-required-gates,", "profile-required-gate,", 1
+                ), 1),
+                "needs unknown job 'profile-required-gate'",
+            ),
+            "release runs always": (release_if("if: ${{ always() }}"), "release job must not declare a job-level if"),
+            "release runs unless cancelled": (
+                release_if("\"if\": \"!cancelled()\""),
+                "release job must not declare a job-level if",
+            ),
+            "release needs redeclared without gates": (
+                release_if("needs: [prepare, build-windows, build-linux, build-macos, build-installer]"),
+                "duplicate mapping key 'needs'",
+            ),
+            "gates job skipped": (gates_key("if: false"), "disallowed job-level keys ['if']"),
+            "gates job skipped by quoted key": (gates_key("'if': false"), "disallowed job-level keys ['if']"),
+            "gates job tolerated": (
+                gates_key("continue-on-error: true"),
+                "disallowed job-level keys ['continue-on-error']",
+            ),
+            "gates job granted environment": (
+                gates_key("environment: stable-release"),
+                "disallowed job-level keys ['environment']",
+            ),
+            "gates job handed a secret": (
+                gates_key("env:\n      TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}"),
+                "profile-required-gates must not reference a secret",
+            ),
+            "gates job granted write": (
+                gates_permissions_as("permissions:\n      contents: write"),
+                "permissions must be an explicit read-only mapping",
+            ),
+            "gates job granted write-all": (
+                gates_permissions_as("permissions: write-all"),
+                "permissions must be an explicit read-only mapping",
+            ),
+            "gates job granted write by flow mapping": (
+                gates_permissions_as("permissions: {contents: write}"),
+                "permissions must be an explicit read-only mapping",
+            ),
+            "gates checkout retargeted": (
+                replace_in(checkout, "ref: ${{ github.sha }}", "ref: Working"),
+                "must check out the exact candidate commit",
+            ),
+            "gates Required CI dropped": (self.release.replace(required_ci, "", 1), "must run exactly the steps"),
+            "gates Required CI suppressed by || true": (
+                self.release.replace(
+                    required_ci, suppress_run_command(required_ci).replace(" || echo ignored", " || true"), 1
+                ),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI suppressed by || :": (
+                self.release.replace(
+                    required_ci, suppress_run_command(required_ci).replace(" || echo ignored", " || :"), 1
+                ),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI suppressed by echo": (
+                self.release.replace(required_ci, suppress_run_command(required_ci), 1),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI without errexit": (
+                replace_in(required_ci, "set -euo pipefail", "set +e"),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI tolerated": (
+                self.release.replace(required_ci, inject_before_run(required_ci, "      continue-on-error: true"), 1),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI made conditional": (
+                self.release.replace(required_ci, inject_before_run(required_ci, "      if: false"), 1),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "gates Required CI checks another commit": (
+                replace_in(required_ci, "TARGET_SHA: ${{ github.sha }}", "TARGET_SHA: ${{ github.event.before }}"),
+                "Required CI check must be the exact unconditional fail-closed verifier",
+            ),
+            "readiness gate reads an undeclared output": (
+                replace_in(readiness, "needs.prepare.outputs.version", "needs.prepare.outputs.release_version"),
+                "references undeclared needs.prepare.outputs.release_version",
+            ),
+            "readiness gate tolerated": (
+                self.release.replace(readiness, inject_before_run(readiness, "      continue-on-error: true"), 1),
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "readiness run replaced by a flow-mapping no-op": (
+                readiness_no_op,
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "readiness run replaced behind a block-scalar decoy": (
+                readiness_decoy,
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "readiness run exits 0 before validating": (
+                replace_in(readiness, "        if [[", "        exit 0\n        if [["),
+                "readiness gate must be the exact versioned-only bash step",
+            ),
+            "workflow-level BASH_ENV sourced by every gates step": (
+                workflow_key("env:\n  BASH_ENV: .github/exit0.sh\n"),
+                "workflow-level keys ['env']",
+            ),
+            "workflow-level defaults re-root every gates step": (
+                workflow_key("defaults:\n  run:\n    working-directory: decoy\n"),
+                "workflow-level keys ['defaults']",
+            ),
+            "fuzz closure dropped": (self.release.replace(fuzz, "", 1), "must run exactly the steps"),
+            "fuzz closure suppressed": (
+                self.release.replace(fuzz, suppress_run_command(fuzz).replace(" || echo ignored", " || true"), 1),
+                "must run the unconditional SEC-120 closure check",
+            ),
+            "fuzz closure made conditional": (
+                self.release.replace(
+                    fuzz, inject_before_run(fuzz, "      if: needs.prepare.outputs.is_versioned == 'true'"), 1
+                ),
+                "must run the unconditional SEC-120 closure check",
+            ),
+            "readiness gate moved back into release": (
+                move_into_release(readiness),
+                f"{PROFILE_GATES_READINESS_STEP!r} belongs to profile-required-gates, not release",
+            ),
+            "qualification dropped": (self.release.replace(qualify, "", 1), "must run exactly the steps"),
+            "qualification suppressed": (
+                self.release.replace(qualify, suppress_run_command(qualify).replace(" || echo ignored", " || true"), 1),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification tolerated": (
+                self.release.replace(qualify, inject_before_run(qualify, "      continue-on-error: true"), 1),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification checks another commit": (
+                replace_in(qualify, "CANDIDATE_SHA: ${{ github.sha }}", "CANDIDATE_SHA: ${{ github.event.before }}"),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification stage swapped": (
+                replace_in(qualify, "stage=predecessor", "stage=stable-v1"),
+                "exact versioned-only release qualification step",
+            ),
+            "qualification report not retained": (
+                replace_in(report, "retention-days: 90", "retention-days: 1"),
+                "retain the release qualification report for 90 days",
+            ),
+            "fuzz closure moved back into release": (
+                move_into_release(fuzz),
+                f"{PROFILE_GATES_FUZZ_STEP!r} belongs to profile-required-gates, not release",
+            ),
+        }
+        for label, (mutated, expected) in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release, "mutation fixture did not alter YAML")
+                errors = versioned_publication_gate_errors(mutated)
+                self.assertTrue(any(expected in error for error in errors), f"{label}: {errors}")
+
     def test_installer_pipeline_mutations_are_detected_at_nested_indent(self) -> None:
         for path, workflow in ((BUILD_WORKFLOW, self.build), (RELEASE_WORKFLOW, self.release)):
             with self.subTest(workflow=path.name):
@@ -1933,12 +3732,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertEqual(unprotected_tee_steps(unsafe), ["Launch staged executable"])
 
     def test_installer_builds_every_registered_contract_test(self) -> None:
-        build_step = named_step(self.build, "Build SparkInstaller and registered contract tests")
-        self.assertIn("SparkInstallerGitTests", build_step)
-        self.assertIn("SparkInstallerInstallStateTests", build_step)
-        self.assertIn("SparkInstallerTransactionTests", build_step)
-        self.assertIn("SparkBuildProcessRunnerTests", build_step)
-        self.assertIn("SparkBuildDownloaderTests", build_step)
+        # Both workflows run every registered installer test with --no-tests=error,
+        # so an executable left out of either build step fails that job.
+        for workflow in (self.build, self.release):
+            build_step = named_step(workflow, "Build SparkInstaller and registered contract tests")
+            for target in (
+                "SparkInstallerGitTests",
+                "SparkInstallerInstallStateTests",
+                "SparkInstallerTransactionTests",
+                "SparkBuildProcessRunnerTests",
+                "SparkBuildDownloaderTests",
+            ):
+                with self.subTest(target=target):
+                    self.assertIn(target, build_step)
 
     def test_generated_documentation_requires_the_captured_status_to_exit(self) -> None:
         generated_docs = named_step(
@@ -1962,12 +3768,504 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1", self.build)
         self.assertIn("ASAN_OPTIONS: detect_leaks=1:halt_on_error=1", self.build)
 
+    def test_asan_lane_has_no_recoverable_or_suppressed_ubsan_check(self) -> None:
+        # OD-23's alignment recovery and libstdc++ basic_string suppressions were
+        # removed on 2026-09-28 once the AngelScript patch aligned value objects on
+        # the script stack. Every UBSan check in the lane is fatal again; a returning
+        # -fsanitize-recover=, UBSan suppressions file or UBSAN_OPTIONS suffix fails here.
+        asan_start = self.build.index("build-linux-asan:")
+        asan_section = self.build[asan_start : self.build.index("\n  build-", asan_start + 1)]
+        self.assertEqual(re.findall(r"-fsanitize-recover=[^\s\"]+", asan_section), [])
+        ubsan_options = re.findall(r"(?m)^\s*UBSAN_OPTIONS:\s*(\S+)\s*$", asan_section)
+        self.assertEqual(ubsan_options, ["print_stacktrace=1:halt_on_error=1"])
+        self.assertFalse((REPO_ROOT / "Tests" / "ubsan_suppressions.txt").exists())
+
     def test_sanitizer_runner_owns_private_runtime_log_prefix(self) -> None:
         self.assertEqual(self.build.count('--evidence-root "${{ runner.temp }}"'), 3)
         self.assertIn("--runtime-env ASAN_OPTIONS", self.build)
         self.assertIn("--runtime-env TSAN_OPTIONS", self.build)
         self.assertNotIn("--runtime-log-prefix", self.build)
         self.assertNotRegex(self.build, r"(?:ASAN|TSAN|MSAN)_OPTIONS:.*log_path=")
+
+    def test_every_validate_all_check_is_fail_closed_in_a_required_job(self) -> None:
+        validate_all = VALIDATE_ALL.read_text(encoding="utf-8")
+        self.assertEqual(validate_all_ci_coverage_errors(parse_workflow_yaml(self.build), validate_all), [])
+
+    def test_validate_all_ci_coverage_rejects_removed_or_suppressed_checks(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        validate_all = VALIDATE_ALL.read_text(encoding="utf-8")
+        command = VALIDATE_ALL_REQUIRED_INVOCATIONS["check-wiring.sh"][1]
+
+        def wiring_step(document):
+            return next(
+                step
+                for step in document["jobs"]["validate-ci-tools"]["steps"]
+                if isinstance(step.get("run"), str) and command in step["run"]
+            )
+
+        def mutate(change):
+            document = copy.deepcopy(baseline)
+            change(document)
+            return validate_all_ci_coverage_errors(document, validate_all)
+
+        cases = (
+            (
+                lambda document: document["jobs"]["validate-ci-tools"]["steps"].remove(wiring_step(document)),
+                "has 0 steps running exactly",
+            ),
+            (
+                lambda document: wiring_step(document).update({"run": command + " || true"}),
+                "has 0 steps running exactly",
+            ),
+            (lambda document: wiring_step(document).update({"continue-on-error": True}), "declares continue-on-error"),
+            (lambda document: wiring_step(document).update({"if": "false"}), "declares if"),
+            (
+                lambda document: wiring_step(document).update({"run": "set +e\n" + command}),
+                "disables errexit",
+            ),
+            (
+                lambda document: document["jobs"]["validate-ci-tools"].update({"continue-on-error": True}),
+                "declares continue-on-error",
+            ),
+            (
+                lambda document: wiring_step(document).update({"shell": "bash {0}", "run": command + "\ntrue"}),
+                "without errexit",
+            ),
+            (lambda document: wiring_step(document).update({"shell": "pwsh"}), "without errexit"),
+            (
+                lambda document: document["jobs"]["validate-ci-tools"].update(
+                    {"defaults": {"run": {"shell": "bash --noprofile --norc {0}"}}}
+                ),
+                "job defaults.run.shell uses shell",
+            ),
+            (
+                lambda document: document.update({"defaults": {"run": {"shell": "sh {0}"}}}),
+                "workflow defaults.run.shell uses shell",
+            ),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                errors = mutate(change)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+        unlisted = validate_all.replace(
+            'run_check "System Wiring"',
+            'run_check "Unlisted Probe"               "check-unlisted-probe.sh"\nrun_check "System Wiring"',
+        )
+        self.assertIn(
+            "check-unlisted-probe.sh is neither invoked by a required job nor listed advisory",
+            validate_all_ci_coverage_errors(baseline, unlisted),
+        )
+        dropped = validate_all.replace('run_check "System Wiring"                "check-wiring.sh"\n', "")
+        self.assertNotEqual(dropped, validate_all)
+        self.assertIn(
+            "check-wiring.sh is no longer run by validate-all.sh; remove its CI coverage entry",
+            validate_all_ci_coverage_errors(baseline, dropped),
+        )
+
+    def test_errexit_shell_classification(self) -> None:
+        for shell in ("bash", "sh", "bash -eo pipefail {0}", "bash --noprofile --norc -e {0}", "/bin/sh -ex {0}"):
+            with self.subTest(shell=shell):
+                self.assertTrue(shell_is_errexit(shell))
+        for shell in ("bash {0}", "bash --noprofile --norc -o pipefail {0}", "pwsh", "python", "cmd", "", None):
+            with self.subTest(shell=shell):
+                self.assertFalse(shell_is_errexit(shell))
+
+    def test_reproducibility_windows_compares_two_clean_shipping_trees(self) -> None:
+        self.assertEqual(reproducibility_windows_errors(parse_workflow_yaml(self.build)), [])
+
+    def test_reproducibility_windows_contract_rejects_each_regression(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+
+        def job(jobs: dict) -> dict:
+            return jobs[REPRODUCIBILITY_JOB]
+
+        def step(jobs: dict, prefix: str) -> dict:
+            matches = [s for s in job(jobs)["steps"] if str(s.get("name", "")).startswith(prefix)]
+            assert len(matches) == 1, prefix
+            return matches[0]
+
+        def edit_run(prefix: str, old: str, new: str):
+            def change(jobs: dict) -> None:
+                target = step(jobs, prefix)
+                assert old in target["run"], (prefix, old)
+                target["run"] = target["run"].replace(old, new)
+
+            return change
+
+        cases = (
+            (lambda jobs: jobs.pop(REPRODUCIBILITY_JOB), "job is missing"),
+            (lambda jobs: job(jobs).pop("continue-on-error"), "continue-on-error: true"),
+            (lambda jobs: job(jobs).update({"name": "reproducibility"}), "does not say advisory"),
+            (
+                lambda jobs: jobs["required-ci-gate"]["needs"].append(REPRODUCIBILITY_JOB),
+                "required-ci-gate dependency",
+            ),
+            (lambda jobs: job(jobs).update({"if": "github.event_name == 'push'"}), "job-level if"),
+            (lambda jobs: job(jobs).update({"runs-on": "ubuntu-24.04"}), "windows-2022"),
+            (lambda jobs: job(jobs).pop("timeout-minutes"), "timeout-minutes"),
+            (
+                lambda jobs: step(jobs, "Checkout the second tree")["with"].update({"path": "tree-a"}),
+                "two trees at distinct paths",
+            ),
+            (
+                lambda jobs: job(jobs)["steps"].remove(step(jobs, "Checkout the second tree")),
+                "two trees at distinct paths",
+            ),
+            (
+                lambda jobs: step(jobs, "Checkout the first tree")["with"].pop("submodules"),
+                "submodules recursively",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree", "--preset windows-shipping 2>&1",
+                         "--preset windows-release 2>&1"),
+                "'cmake --preset windows-shipping'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "set -euo pipefail", "set -uo pipefail"),
+                "'set -euo pipefail'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree", "reproducibility-stage-b",
+                         "reproducibility-stage-a"),
+                "same prefix",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "cmake --install", "echo cmake --install"),
+                "does not install",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "set -euo pipefail\n",
+                         "set -euo pipefail\nexport CMAKE_CXX_COMPILER_LAUNCHER=sccache\n"),
+                "compiler cache",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "manifest reproducibility-stage-b",
+                         "manifest reproducibility-stage-a"),
+                "manifest of each staged tree",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "reproducibility/manifest-a.json reproducibility/manifest-b",
+                         "reproducibility/manifest-a.json reproducibility/manifest-a"),
+                "does not compare the two manifests",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "--report reproducibility/report.json",
+                         "--report reproducibility/report.json || true"),
+                "suppresses a failure",
+            ),
+            (
+                lambda jobs: step(jobs, "Compare the two Shipping builds").update({"continue-on-error": True}),
+                "declares continue-on-error",
+            ),
+            (
+                lambda jobs: step(jobs, "Compare the two Shipping builds").update({"if": "success()"}),
+                "is conditional",
+            ),
+            (lambda jobs: step(jobs, "Upload reproducibility evidence").pop("if"), "upload its evidence"),
+            (
+                lambda jobs: step(jobs, "Upload reproducibility evidence")["with"].update(
+                    {"if-no-files-found": "ignore"}
+                ),
+                "upload its evidence",
+            ),
+        )
+        for index, (change, expected) in enumerate(cases):
+            document = copy.deepcopy(baseline)
+            change(document["jobs"])
+            errors = reproducibility_windows_errors(document)
+            with self.subTest(case=index, expected=expected):
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_mingw_wine_lane_is_manual_advisory_and_labeled_experimental(self) -> None:
+        self.assertEqual(experimental_mingw_lane_errors(parse_workflow_yaml(self.build)), [])
+
+    def test_mingw_wine_lane_contract_rejects_each_property_regression(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        self.assertNotIn(MINGW_WINE_JOB, REQUIRED_CI_JOBS)
+
+        def mutate(change):
+            document = copy.deepcopy(baseline)
+            change(document["jobs"])
+            return experimental_mingw_lane_errors(document)
+
+        cases = (
+            (lambda jobs: jobs[MINGW_WINE_JOB].pop("if", None), "is not workflow_dispatch-only"),
+            (lambda jobs: jobs[MINGW_WINE_JOB].update({"if": "always()"}), "is not workflow_dispatch-only"),
+            (lambda jobs: jobs[MINGW_WINE_JOB].pop("continue-on-error", None), "continue-on-error: true"),
+            (
+                lambda jobs: jobs[MINGW_WINE_JOB].update({"continue-on-error": False}),
+                "continue-on-error: true",
+            ),
+            (lambda jobs: jobs[MINGW_WINE_JOB].pop("name", None), "does not say experimental"),
+            (
+                lambda jobs: jobs[MINGW_WINE_JOB].update({"name": "build-linux-mingw-wine"}),
+                "does not say experimental",
+            ),
+            (
+                lambda jobs: jobs["required-ci-gate"]["needs"].append(MINGW_WINE_JOB),
+                "is a required-ci-gate dependency",
+            ),
+            (
+                lambda jobs: [
+                    step["env"].update(
+                        {
+                            "EXPECTED_REQUIRED_JOBS_JSON": json.dumps(
+                                [*REQUIRED_CI_JOBS, MINGW_WINE_JOB], separators=(",", ":")
+                            )
+                        }
+                    )
+                    for step in jobs["required-ci-gate"]["steps"]
+                    if isinstance(step.get("env"), dict) and "EXPECTED_REQUIRED_JOBS_JSON" in step["env"]
+                ],
+                "is in EXPECTED_REQUIRED_JOBS_JSON",
+            ),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                errors = mutate(change)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+    def _experimental_workflows(self) -> dict[str, dict]:
+        return {
+            ".github/workflows/build.yml": parse_workflow_yaml(self.build),
+            ".github/workflows/release.yml": parse_workflow_yaml(self.release),
+        }
+
+    def test_experimental_module_lifecycle_is_advisory_excluded_and_never_stable(self) -> None:
+        self.assertNotIn(EXPERIMENTAL_MODULE_JOB, REQUIRED_CI_JOBS)
+        self.assertEqual(experimental_module_lifecycle_errors(self._experimental_workflows(), self.tests_cmake), [])
+
+    def test_experimental_module_lifecycle_contract_rejects_each_regression(self) -> None:
+        baseline = self._experimental_workflows()
+        build_key = ".github/workflows/build.yml"
+        release_key = ".github/workflows/release.yml"
+
+        def lane_steps(jobs):
+            return jobs[EXPERIMENTAL_MODULE_JOB]["steps"]
+
+        def strip_exclusion(document, job_key):
+            for step in document["jobs"][job_key]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(EXPERIMENTAL_MODULE_EXCLUDE, "")
+
+        def set_gate_inventory(jobs):
+            for step in jobs["required-ci-gate"]["steps"]:
+                if isinstance(step.get("env"), dict) and "EXPECTED_REQUIRED_JOBS_JSON" in step["env"]:
+                    step["env"]["EXPECTED_REQUIRED_JOBS_JSON"] = json.dumps(
+                        [*REQUIRED_CI_JOBS, EXPERIMENTAL_MODULE_JOB], separators=(",", ":")
+                    )
+
+        workflow_cases = (
+            (lambda docs: docs[build_key]["jobs"].pop(EXPERIMENTAL_MODULE_JOB), "job is missing"),
+            (
+                lambda docs: docs[build_key]["jobs"][EXPERIMENTAL_MODULE_JOB].pop("continue-on-error"),
+                "continue-on-error: true",
+            ),
+            (
+                lambda docs: docs[build_key]["jobs"][EXPERIMENTAL_MODULE_JOB].update({"name": "Experimental"}),
+                "does not say advisory",
+            ),
+            (
+                lambda docs: docs[build_key]["jobs"]["required-ci-gate"]["needs"].append(EXPERIMENTAL_MODULE_JOB),
+                "is a required-ci-gate dependency",
+            ),
+            (lambda docs: set_gate_inventory(docs[build_key]["jobs"]), "is in EXPECTED_REQUIRED_JOBS_JSON"),
+            (
+                lambda docs: docs[build_key]["jobs"]["module-evidence"]["needs"].append(EXPERIMENTAL_MODULE_JOB),
+                "depends on the advisory",
+            ),
+            (
+                lambda docs: [
+                    step.update({"run": step["run"].replace("--output-junit", "--output-log")})
+                    for step in lane_steps(docs[build_key]["jobs"])
+                    if isinstance(step.get("run"), str)
+                ],
+                "label with JUnit",
+            ),
+            (
+                lambda docs: [
+                    step.pop("if", None)
+                    for step in lane_steps(docs[build_key]["jobs"])
+                    if str(step.get("uses") or "").startswith("actions/upload-artifact@")
+                ],
+                "publish its JUnit on failure",
+            ),
+            (lambda docs: strip_exclusion(docs[build_key], "build-linux-gcc"), "build-linux-gcc full ctest"),
+            (lambda docs: strip_exclusion(docs[build_key], "build-linux-clang"), "build-linux-clang full ctest"),
+            (lambda docs: strip_exclusion(docs[release_key], "build-linux"), "build-linux full ctest"),
+        )
+        for change, message in workflow_cases:
+            with self.subTest(message=message):
+                documents = copy.deepcopy(baseline)
+                change(documents)
+                errors = experimental_module_lifecycle_errors(documents, self.tests_cmake)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+        label_line = 'LABELS "experimental-modules;prototype"'
+        self.assertIn(label_line, self.tests_cmake)
+        cmake_cases = (
+            (self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;stable-v1;linux"'), "stable label"),
+            (self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;module-profile"'), "stable label"),
+            (self.tests_cmake.replace(label_line, 'LABELS "prototype;integration;linux"'), "does not carry"),
+            (
+                self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;prototype;integration"'),
+                "generic lane label",
+            ),
+            (self.tests_cmake.replace(label_line, 'LABELS "experimental-modules;prototype;linux"'), "generic lane label"),
+            (
+                self.tests_cmake.replace(
+                    'LABELS "nullrhi-headless;stable-v1;unit"', 'LABELS "nullrhi-headless;experimental-modules;unit"', 1
+                ),
+                "reserved for RDY-015",
+            ),
+            (self.tests_cmake.replace(EXPERIMENTAL_MODULE_TEST_PREFIX, "PrototypeLifecycle_"), "registers no"),
+        )
+        for mutated, message in cmake_cases:
+            with self.subTest(message=message):
+                self.assertNotEqual(mutated, self.tests_cmake)
+                errors = experimental_module_lifecycle_errors(baseline, mutated)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+    def _golden_inputs(self) -> tuple[dict, dict]:
+        return parse_workflow_yaml(self.build), json.loads(GOLDEN_MANIFEST.read_text(encoding="utf-8"))
+
+    def test_golden_linux_is_the_single_mesa_pinned_comparison(self) -> None:
+        # Advisory until its first hosted pass; promotion flips GOLDEN_LINUX_REQUIRED.
+        self.assertFalse(GOLDEN_LINUX_REQUIRED)
+        self.assertNotIn(GOLDEN_LINUX_JOB, REQUIRED_CI_JOBS)
+        document, manifest = self._golden_inputs()
+        self.assertEqual(golden_linux_errors(document, self.tests_cmake, manifest), [])
+
+    def test_golden_linux_contract_rejects_each_regression(self) -> None:
+        baseline, manifest = self._golden_inputs()
+
+        def lane_steps(document):
+            return document["jobs"][GOLDEN_LINUX_JOB]["steps"]
+
+        def edit_runs(document, old, new):
+            for step in lane_steps(document):
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(old, new)
+
+        def add_exclusion(document, job_key):
+            for step in document["jobs"][job_key]["steps"]:
+                if step.get("name") == "Run Tests" and isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(
+                        "--output-on-failure", GOLDEN_LINUX_EXCLUDE + " --output-on-failure"
+                    )
+
+        cases = (
+            (lambda d: d["jobs"].pop(GOLDEN_LINUX_JOB), "job is missing"),
+            (lambda d: d["jobs"][GOLDEN_LINUX_JOB].update({"runs-on": "ubuntu-latest"}), "ubuntu-24.04"),
+            (lambda d: d["jobs"][GOLDEN_LINUX_JOB].update({"continue-on-error": True}), "job-level continue-on-error"),
+            (
+                lambda d: d["jobs"][GOLDEN_LINUX_JOB]["env"].update({"SPARK_GOLDEN_MESA_VERSION": "25.3.0-1"}),
+                "reviewed on",
+            ),
+            (lambda d: edit_runs(d, "exit 1", "true"), "Mesa build other than the reviewed one"),
+            (lambda d: edit_runs(d, " mesa-vulkan-drivers; do", "; do"), "Mesa build other than the reviewed one"),
+            (lambda d: edit_runs(d, "grep -Fq 'EGL found' cmake-configure.log", ""), "headless EGL path"),
+            (lambda d: edit_runs(d, "--output-junit golden-junit.xml", ""), "exactly one ctest step with JUnit"),
+            (lambda d: edit_runs(d, "--output-on-failure --no-tests=error", "--output-on-failure"), "--no-tests=error"),
+            (lambda d: edit_runs(d, '"VulkanGoldenTests"]', "]"), "every golden CTest entry is registered"),
+            (lambda d: lane_steps(d).reverse(), "Mesa pin before comparing"),
+            (
+                lambda d: [
+                    s.update({"continue-on-error": True}) for s in lane_steps(d) if "golden-junit.xml" in str(s.get("run"))
+                ],
+                "declares continue-on-error",
+            ),
+            (
+                lambda d: [s.pop("if", None) for s in lane_steps(d) if str(s.get("uses", "")).startswith("actions/upload")],
+                "on failure (if: always())",
+            ),
+            (lambda d: d["jobs"][GOLDEN_LINUX_JOB].update({"if": "github.event_name == 'push'"}), "job-level if"),
+            (
+                lambda d: d["jobs"]["required-ci-gate"]["needs"].append(GOLDEN_LINUX_JOB),
+                "required-ci-gate dependency before its first hosted pass",
+            ),
+            (
+                lambda d: [
+                    step["env"].update(
+                        {
+                            "EXPECTED_REQUIRED_JOBS_JSON": json.dumps(
+                                [*REQUIRED_CI_JOBS, GOLDEN_LINUX_JOB], separators=(",", ":")
+                            )
+                        }
+                    )
+                    for step in d["jobs"]["required-ci-gate"]["steps"]
+                    if "EXPECTED_REQUIRED_JOBS_JSON" in (step.get("env") or {})
+                ],
+                "EXPECTED_REQUIRED_JOBS_JSON before its first hosted pass",
+            ),
+            (lambda d: d["jobs"]["module-evidence"].update({"needs": [GOLDEN_LINUX_JOB]}), "depends on the advisory"),
+            (lambda d: add_exclusion(d, "build-linux-gcc"), "build-linux-gcc full ctest run excludes"),
+            (lambda d: add_exclusion(d, "build-linux-clang"), "build-linux-clang full ctest run excludes"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(baseline)
+                change(document)
+                errors = golden_linux_errors(document, self.tests_cmake, manifest)
+                self.assertTrue(any(message in error for error in errors), errors)
+
+        label_line = 'LABELS "vulkan;vulkan-lavapipe;vulkan-golden;rendering"'
+        self.assertIn(label_line, self.tests_cmake)
+        mutated = self.tests_cmake.replace(label_line, 'LABELS "vulkan;vulkan-lavapipe;rendering"')
+        errors = golden_linux_errors(baseline, mutated, manifest)
+        self.assertTrue(any("VulkanGoldenTests with the vulkan-golden label" in error for error in errors), errors)
+
+    def test_release_linux_lane_leaves_goldens_to_the_pinned_lane(self) -> None:
+        baseline = parse_workflow_yaml(self.release)
+        self.assertEqual(release_linux_golden_errors(baseline), [])
+
+        def edit_runs(document, old, new):
+            for step in document["jobs"][RELEASE_LINUX_JOB]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(old, new)
+
+        cases = (
+            (lambda d: edit_runs(d, " " + GOLDEN_LINUX_EXCLUDE, ""), "ctest run does not exclude"),
+            (
+                lambda d: edit_runs(d, "SPARK_TEST_EXCLUDE=OpenGLGolden_,VulkanGolden_RHI230_ ", ""),
+                "raw SparkTests run does not exclude",
+            ),
+            (lambda d: edit_runs(d, " vulkan-validationlayers", ""), "does not install vulkan-validationlayers"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(baseline)
+                change(document)
+                self.assertNotEqual(document, baseline, "mutation fixture did not alter the workflow")
+                errors = release_linux_golden_errors(document)
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
+
+    def test_macos_shipping_leg_is_advisory_and_uses_the_preset(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        self.assertEqual(macos_shipping_leg_errors(baseline), [])
+
+        def edit_runs(document, old, new):
+            for step in document["jobs"][MACOS_SHIPPING_JOB]["steps"]:
+                if isinstance(step.get("run"), str):
+                    step["run"] = step["run"].replace(old, new)
+
+        cases = (
+            (lambda d: d["jobs"].pop(MACOS_SHIPPING_JOB), "job is missing"),
+            (lambda d: edit_runs(d, "cmake --preset macos-shipping", "cmake -B build/macos-shipping"), "--preset"),
+            (lambda d: d["jobs"][MACOS_SHIPPING_JOB].pop("continue-on-error"), "continue-on-error"),
+            (lambda d: d["jobs"]["required-ci-gate"]["needs"].append(MACOS_SHIPPING_JOB), "required-ci-gate"),
+            (lambda d: edit_runs(d, "--binary stage/bin/SparkEngine", ""), "minimum macOS version"),
+        )
+        for change, message in cases:
+            with self.subTest(message=message):
+                document = copy.deepcopy(baseline)
+                change(document)
+                self.assertNotEqual(document, baseline, "mutation fixture did not alter the workflow")
+                errors = macos_shipping_leg_errors(document)
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(message, errors[0])
 
     def test_msan_is_verified_but_remains_optional(self) -> None:
         msan_block = named_step(self.build, "Run Tests under MSan")
@@ -2013,12 +4311,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", asan_section)
 
     def test_sanitizer_jobs_and_test_processes_have_policy_specific_timeouts(self) -> None:
-        for sanitizer in ("asan", "tsan"):
+        for sanitizer, minutes, seconds in (("asan", 90, 1800), ("tsan", 120, 3000)):
             start = self.build.index(f"build-linux-{sanitizer}:")
             next_job = self.build.index("\n  build-", start + 1)
             section = self.build[start:next_job]
-            self.assertIn("timeout-minutes: 90", section)
-            self.assertIn("--timeout-seconds 900", section)
+            self.assertIn(f"timeout-minutes: {minutes}", section)
+            self.assertIn(f"--timeout-seconds {seconds}", section)
 
         msan_start = self.build.index("build-linux-msan:")
         msan_next_job = self.build.index("\n  build-", msan_start + 1)
@@ -2395,14 +4693,22 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertNotEqual(mutated, aggregate, "mutation fixture did not alter YAML")
                 self.assertTrue(aggregate_failure_terminalization_errors(mutated), label)
 
-    def test_site_data_accepts_only_exact_staged_build_and_writes_a_tag(self) -> None:
+    def test_site_data_publishes_exact_success_or_api_bound_failure_to_configured_ref(self) -> None:
         self.assertEqual(self.site_data_publish.count("--staged-build-only"), 1)
         self.assertEqual(
             self.site_data_publish.count("verify-exact-required-gate.py"), 4
         )
         self.assertIn("Wait for trusted exact-commit CI evidence", self.site_data_publish)
         self.assertIn("SOURCE_RUN_ATTEMPT", self.site_data_publish)
-        self.assertIn("STATE_REF: refs/tags/site-data", self.site_data_publish)
+        self.assertEqual(
+            self.site_data_publish.count("STATE_REF: ${{ vars.SITE_DATA_PUBLIC_REF || 'refs/tags/site-data' }}"),
+            2,
+        )
+        self.assertIn("refs/tags/site-data|refs/heads/site-data", self.site_data_publish)
+        self.assertIn("publication_status.py write", self.site_data_publish)
+        self.assertIn("--run-file \"$RUNNER_TEMP/build-evidence-run.json\"", self.site_data_publish)
+        self.assertIn("Refuse a superseded Build run on the same commit", self.site_data_publish)
+        self.assertIn("steps.latest-run.outputs.latest", self.site_data_publish)
         self.assertIn('"HEAD:${STATE_REF}"', self.site_data_publish)
         self.assertIn(
             '--force-with-lease="${STATE_REF}:${EXPECTED_SITE_OBJECT}"',
@@ -2438,6 +4744,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertLess(final_gate, exact_compare)
         self.assertLess(exact_compare, state_compare)
         self.assertLess(state_compare, tag_push)
+        self.assertIn('if test "$EVIDENCE_CONCLUSION" = success; then', publish_step)
+        self.assertIn('if test "$EVIDENCE_CONCLUSION" != success; then', publish_step)
+        self.assertIn('diff --recursive --brief --exclude=.git --exclude=status.json', publish_step)
+        self.assertIn('test -f "$PAYLOAD_DIR/status.json"', publish_step)
+        self.assertIn('run["conclusion"] == conclusion', publish_step)
+        self.assertIn('newest["id"] == run["id"]', publish_step)
         self.assertNotIn("continue-on-error", publish_step)
         self.assertNotIn("|| true", publish_step)
 
@@ -2460,6 +4772,30 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn('LOCAL_SHA" != "$WORKFLOW_SHA', controller)
         self.assertIn('LOCAL_SHA" != "$REMOTE_SHA', controller)
 
+    def test_release_sbom_output_matches_every_consumer(self) -> None:
+        self.assertEqual(release_sbom_name_errors(self.release), [])
+        consumer = (REPO_ROOT / ".github" / "scripts" / "verify_published_stable_release.py").read_text(encoding="utf-8")
+        self.assertIn(f'"{CANONICAL_RELEASE_SBOM}"', consumer)
+
+    def test_release_sbom_name_contract_rejects_drift(self) -> None:
+        output_line = f"        output-file: {CANONICAL_RELEASE_SBOM}\n"
+        bundle_argument = f'--sbom "$GITHUB_WORKSPACE/{CANONICAL_RELEASE_SBOM}"'
+        self.assertIn(output_line, self.release)
+        self.assertIn(bundle_argument, self.release)
+        mutations = {
+            "action writes another name": self.release.replace(
+                output_line, "        output-file: SparkEngine.spdx.json\n", 1),
+            "bundle verifier reads another name": self.release.replace(
+                bundle_argument, '--sbom "$GITHUB_WORKSPACE/SparkEngine.spdx.json"', 1),
+        }
+        if f"        sbom: {CANONICAL_RELEASE_SBOM}\n" in self.release:
+            mutations["scanner reads another name"] = self.release.replace(
+                f"        sbom: {CANONICAL_RELEASE_SBOM}\n", "        sbom: SparkEngine.spdx.json\n", 1)
+        for label, mutated in mutations.items():
+            with self.subTest(mutation=label):
+                self.assertNotEqual(mutated, self.release, label)
+                self.assertTrue(release_sbom_name_errors(mutated), label)
+
     def test_release_prepare_runs_supply_chain_policy_before_metadata(self) -> None:
         policy = named_step(self.release, "Supply-chain policy check")
         metadata = named_step(self.release, "Compute release metadata")
@@ -2470,9 +4806,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_release_metadata_requires_one_source_version_and_changelog_entry(self) -> None:
         block = named_step(self.release, "Compute release metadata")
-        script = local_release_fixture_script(
-            textwrap.dedent(block.split("run: |\n", 1)[1])
-        )
+        step_script = textwrap.dedent(block.split("run: |\n", 1)[1])
         declaration = 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n'
         heading = "## [1.2.3] - 2026-09-07\n\n### Fixed\n- Fixture release note.\n"
         cases = (
@@ -2495,6 +4829,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for label, tag, cmake, changelog, status in cases:
             with self.subTest(label=label), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
+                script = local_release_fixture_script(step_script, root)
                 (root / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
                 if changelog is not None:
                     (root / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
@@ -2514,10 +4849,11 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
 
     def test_nightly_metadata_does_not_require_versioned_changelog(self) -> None:
         block = named_step(self.release, "Compute release metadata")
-        script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        step_script = textwrap.dedent(block.split("run: |\n", 1)[1])
         for event, tag in (("schedule", ""), ("schedule", "v9.8.7"), ("repository_dispatch", "")):
             with self.subTest(event=event, tag=tag), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
+                script = local_release_fixture_script(step_script, root)
                 (root / "CMakeLists.txt").write_text(
                     'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
                 output = root / "outputs"
@@ -2531,6 +4867,27 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 self.assertEqual(dict(line.split("=", 1) for line in output.read_text().splitlines()),
                                  {"tag": "nightly-123-1-aaaaaaaaaaaa", "version": "nightly", "cmake_version": "1.2.3",
                                   "is_versioned": "false"})
+
+    def test_nightly_metadata_rejects_untrusted_run_identity(self) -> None:
+        block = named_step(self.release, "Compute release metadata")
+        step_script = textwrap.dedent(block.split("run: |\n", 1)[1])
+        for run_id, attempt, sha in (("", "1", "a" * 40), ("0", "1", "a" * 40), ("123", "", "a" * 40),
+                                     ("123", "1", "a" * 39), ("123", "1", "not-a-sha")):
+            with self.subTest(run_id=run_id, attempt=attempt, sha=sha), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                script = local_release_fixture_script(step_script, root)
+                (root / "CMakeLists.txt").write_text(
+                    'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "Engine version")\n', encoding="utf-8")
+                output = root / "outputs"
+                completed = subprocess.run(
+                    [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
+                    env={**os.environ, "EVENT_NAME": "schedule", "INPUT_RELEASE_TAG": "",
+                         "GITHUB_OUTPUT": str(output), "GITHUB_RUN_ID": run_id,
+                         "GITHUB_RUN_ATTEMPT": attempt, "GITHUB_SHA": sha},
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("nightly tag generation failed", completed.stderr)
+                self.assertFalse(output.exists() and output.read_text(), "Rejected nightly must not emit outputs")
 
     def test_release_concurrency_uses_only_supported_github_schema(self) -> None:
         release_job = self.release[self.release.index("  release:\n") :]
@@ -2621,6 +4978,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("--previous-packages $previousPackages", block)
         self.assertIn("--previous-version $previousVersion", block)
         self.assertIn("--previous-package-manifest $previousManifest", block)
+        self.assertIn("--previous-receipt $previousReceipt", block)
         self.assertIn('--runner-temp "${{ runner.temp }}"', block)
         self.assertIn('--source-sha "${{ github.sha }}"', block)
         self.assertTrue(block.rstrip().endswith("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"))
@@ -2771,6 +5129,15 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 for name in ("SparkInstaller-Windows-x64.exe", "SparkEngine-7.8.9-Linux-x86_64-Release.tar.gz",
                              "SparkEngine-7.8.9-Windows-AMD64-Release.zip"):
                     (extras / name).write_bytes(b"not a Shipping package")
+                evidence = {
+                    "supply-chain/SparkEngine-Lock-SBOM.spdx.json",
+                    "supply-chain/reconciliation/reconcile-Windows-MinSizeRel.json",
+                    "build-provenance/build-provenance-Windows-MinSizeRel.json",
+                }
+                for path in evidence:
+                    target = root / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("{}", encoding="utf-8")
                 completed = subprocess.run(
                     [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "IS_VERSIONED": "true", "RELEASE_VERSION": "7.8.9",
@@ -2781,7 +5148,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 else:
                     self.assertEqual(completed.returncode, 0, completed.stderr)
                     assets = (root / "expected-release-assets.txt").read_text().splitlines()
-                    self.assertEqual(set(assets), {*names, "SHA256SUMS"})
+                    self.assertEqual(set(assets), {*names, "SHA256SUMS", *(Path(p).name for p in evidence)})
                     self.assertEqual(assets.count("shipping-package-manifest.json"), 1)
 
     def test_release_binaries_bind_and_verify_the_requested_cmake_version(self) -> None:

@@ -117,7 +117,7 @@ cmake -B build -DENABLE_EDITOR=OFF        # Everything except editor
 | `-game <path>` | Load a specific game module DLL/SO |
 | `-window-size WxH` | Override window resolution (e.g., `1920x1080`) |
 | `-test-frames N` | Run N frames then exit (for benchmarking) |
-| `-scene <path>` | Load a specific scene on startup |
+| `-scene <path>` | Run a reflected scene without a game module (Linux: loaded, not drawn; exits 4 if it cannot load) |
 | `--help` / `-h` | Print the platform host's authoritative option list |
 
 ---
@@ -136,7 +136,7 @@ separate metrics.
 The source tree includes 64 `*Panel.h` classes covering scene editing, asset
 management, physics, gameplay, audio, scripting, profiling, and more. This
 source-file inventory is not `stable-v1` editor certification and does not mean
-all classes are registered or shown by default. The 6 core panels shown by
+all classes are registered or shown by default. The core panels shown by
 default are:
 
 - **Scene View** — 3D viewport with gizmos
@@ -171,7 +171,7 @@ An experimental [Visual Scripting](../subsystems/Visual-Scripting.md) panel comp
 
 ### How does the ECS work?
 
-SparkEngine uses [EnTT](https://github.com/skypjack/entt) for its Entity Component System. Entities are lightweight IDs, components are plain data structs, and systems operate on component groups. A reproducible source inventory currently finds 79 component structs across 17 component headers; no canonical source-backed total is claimed for systems here. See [Entity Component System](../subsystems/Entity-Component-System.md).
+SparkEngine uses [EnTT](https://github.com/skypjack/entt) for its Entity Component System. Entities are lightweight IDs, components are plain data structs, and systems operate on component groups. The generated component inventory is maintained in the ECS reference; no canonical source-backed total is claimed for systems here. See [Entity Component System](../subsystems/Entity-Component-System.md).
 
 ### How do I add multiplayer to my game?
 

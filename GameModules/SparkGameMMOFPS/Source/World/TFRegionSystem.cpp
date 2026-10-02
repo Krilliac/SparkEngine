@@ -182,6 +182,7 @@ namespace Terrafront
         m_state.clear();
         m_persistLoaded = false;
         m_persistBlocked = false;
+        m_saveLease.Unlock(); // after the final checkpoint: a reloaded module takes it again in LoadPersisted
         m_domActive = false;
         m_initialized = false;
         return true;

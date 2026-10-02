@@ -7,6 +7,8 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSAssert.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -17,9 +19,6 @@
 
 #include "Game.h"
 #include "ClassSystem.h"
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
-#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Physics/PhysicsSystem.h"
@@ -35,11 +34,14 @@
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Input/InputManager.h"
+#include "MultiplayerSystem.h"
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <string_view>
+#include <system_error>
 
-#include "Utils/LogMacros.h"
 
 using namespace DirectX;
 
@@ -68,17 +70,17 @@ void Game::ApplyPhysicsSettings(float gravity, float playerSpeed, float jumpHeig
         m_camera->Console_SetMoveSpeed(playerSpeed * friction);
     }
 
-    std::wstring settingsMsg = L"Physics updated - Gravity: " + std::to_wstring(gravity) + L", Speed: " +
-                               std::to_wstring(playerSpeed) + L", Jump: " + std::to_wstring(jumpHeight) +
-                               L", Friction: " + std::to_wstring(friction);
-    LOG_TO_CONSOLE_IMMEDIATE(settingsMsg, L"SUCCESS");
+    std::string settingsMsg = "Physics updated - Gravity: " + std::to_string(gravity) +
+                              ", Speed: " + std::to_string(playerSpeed) + ", Jump: " + std::to_string(jumpHeight) +
+                              ", Friction: " + std::to_string(friction);
+    FPS_CONSOLE(settingsMsg, "SUCCESS");
 }
 
 void Game::ApplyCameraSettings(float fov, float sensitivity, bool invertY)
 {
     if (!m_camera)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Camera settings failed - camera not available", L"ERROR");
+        FPS_CONSOLE("Camera settings failed - camera not available", "ERROR");
         return;
     }
 
@@ -92,9 +94,9 @@ void Game::ApplyCameraSettings(float fov, float sensitivity, bool invertY)
     m_camera->Console_SetMouseSensitivity(sensitivity);
     m_camera->Console_SetInvertY(invertY);
 
-    std::wstring cameraMsg = L"Camera settings applied - FOV: " + std::to_wstring(fov) + L", Sensitivity: " +
-                             std::to_wstring(sensitivity) + L", InvertY: " + (invertY ? L"ON" : L"OFF");
-    LOG_TO_CONSOLE_IMMEDIATE(cameraMsg, L"SUCCESS");
+    std::string cameraMsg = "Camera settings applied - FOV: " + std::to_string(fov) +
+                            ", Sensitivity: " + std::to_string(sensitivity) + ", InvertY: " + (invertY ? "ON" : "OFF");
+    FPS_CONSOLE(cameraMsg, "SUCCESS");
 }
 
 void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
@@ -111,11 +113,10 @@ void Game::ApplyDebugSettings(bool godMode, bool noclip, bool infiniteAmmo)
         m_player->Console_SetInfiniteAmmo(infiniteAmmo);
     }
 
-    std::wstring debugMsg = L"Debug settings applied - God Mode: " +
-                            (godMode ? std::wstring(L"ON") : std::wstring(L"OFF")) + L", Noclip: " +
-                            (noclip ? std::wstring(L"ON") : std::wstring(L"OFF")) + L", Infinite Ammo: " +
-                            (infiniteAmmo ? std::wstring(L"ON") : std::wstring(L"OFF"));
-    LOG_TO_CONSOLE_IMMEDIATE(debugMsg, L"SUCCESS");
+    std::string debugMsg = "Debug settings applied - God Mode: " + (godMode ? std::string("ON") : std::string("OFF")) +
+                           ", Noclip: " + (noclip ? std::string("ON") : std::string("OFF")) +
+                           ", Infinite Ammo: " + (infiniteAmmo ? std::string("ON") : std::string("OFF"));
+    FPS_CONSOLE(debugMsg, "SUCCESS");
 }
 
 void Game::GetPerformanceStats(int& outDrawCalls, int& outTriangles, int& outActiveObjects) const
@@ -178,25 +179,37 @@ void Game::GetPerformanceStats(int& outDrawCalls, int& outTriangles, int& outAct
 
 void Game::TeleportPlayer(float x, float y, float z)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Teleporting player via console integration", L"INFO");
+    FPS_CONSOLE("Teleporting player via console integration", "INFO");
+
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+    {
+        FPS_CONSOLE("Teleport refused - coordinates must be finite", "ERROR");
+        return;
+    }
 
     if (m_camera)
     {
         m_camera->SetPosition({x, y, z});
 
-        std::wstring teleportMsg = L"Player teleported to (" + std::to_wstring(x) + L", " + std::to_wstring(y) + L", " +
-                                   std::to_wstring(z) + L")";
-        LOG_TO_CONSOLE_IMMEDIATE(teleportMsg, L"SUCCESS");
+        std::string teleportMsg =
+            "Player teleported to (" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) + ")";
+        FPS_CONSOLE(teleportMsg, "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Teleport failed - camera not available", L"ERROR");
+        FPS_CONSOLE("Teleport failed - camera not available", "ERROR");
     }
 }
 
 bool Game::SpawnObject(const std::string& type, float x, float y, float z)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Spawning object via console integration", L"INFO");
+    FPS_CONSOLE("Spawning object via console integration", "INFO");
+
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+    {
+        FPS_CONSOLE("Spawn refused - coordinates must be finite", "ERROR");
+        return false;
+    }
 
     std::unique_ptr<GameObject> newObject;
 
@@ -214,8 +227,8 @@ bool Game::SpawnObject(const std::string& type, float x, float y, float z)
     }
     else
     {
-        std::wstring errorMsg = L"Unknown object type: " + std::wstring(type.begin(), type.end());
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+        std::string errorMsg = "Unknown object type: " + std::string(type.begin(), type.end());
+        FPS_CONSOLE(errorMsg, "ERROR");
         return false;
     }
 
@@ -227,15 +240,15 @@ bool Game::SpawnObject(const std::string& type, float x, float y, float z)
             newObject->SetPosition({x, y, z});
             m_gameObjects.push_back(std::move(newObject));
 
-            std::wstring spawnMsg = L"Spawned " + std::wstring(type.begin(), type.end()) + L" at (" +
-                                    std::to_wstring(x) + L", " + std::to_wstring(y) + L", " + std::to_wstring(z) + L")";
-            LOG_TO_CONSOLE_IMMEDIATE(spawnMsg, L"SUCCESS");
+            std::string spawnMsg = "Spawned " + std::string(type.begin(), type.end()) + " at (" + std::to_string(x) +
+                                   ", " + std::to_string(y) + ", " + std::to_string(z) + ")";
+            FPS_CONSOLE(spawnMsg, "SUCCESS");
             return true;
         }
         else
         {
-            std::wstring errorMsg = L"Failed to initialize spawned object, HR=0x" + std::to_wstring(hr);
-            LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+            std::string errorMsg = "Failed to initialize spawned object, HR=0x" + std::to_string(hr);
+            FPS_CONSOLE(errorMsg, "ERROR");
         }
     }
 
@@ -246,8 +259,7 @@ bool Game::DeleteObject(size_t index)
 {
     if (!SPARK_BOUNDS_CHECK(index, m_gameObjects.size()))
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Game", 5, "DeleteObject: index %zu out of bounds (size=%zu)",
-                                index, m_gameObjects.size());
+        FPS_LOG_EVERY_SECONDS(Error, 5, "DeleteObject: index {} out of bounds (size={})", index, m_gameObjects.size());
         return false;
     }
 
@@ -255,9 +267,9 @@ bool Game::DeleteObject(size_t index)
     std::erase_if(m_enemies, [removedObject](const Enemy* enemy) { return enemy == removedObject; });
     m_gameObjects.erase(m_gameObjects.begin() + index);
 
-    std::wstring deleteMsg = L"Deleted object at index " + std::to_wstring(index) + L". Remaining objects: " +
-                             std::to_wstring(m_gameObjects.size());
-    LOG_TO_CONSOLE_IMMEDIATE(deleteMsg, L"SUCCESS");
+    std::string deleteMsg = "Deleted object at index " + std::to_string(index) +
+                            ". Remaining objects: " + std::to_string(m_gameObjects.size());
+    FPS_CONSOLE(deleteMsg, "SUCCESS");
     return true;
 }
 
@@ -275,24 +287,31 @@ void Game::ClearScene(bool keepPlayer)
         m_projectilePool.reset();
     }
 
-    std::wstring clearMsg = L"Cleared " + std::to_wstring(originalCount) + L" objects from scene";
+    std::string clearMsg = "Cleared " + std::to_string(originalCount) + " objects from scene";
     if (keepPlayer)
-        clearMsg += L" (player preserved)";
-    LOG_TO_CONSOLE_IMMEDIATE(clearMsg, L"SUCCESS");
+        clearMsg += " (player preserved)";
+    FPS_CONSOLE(clearMsg, "SUCCESS");
 }
 
 void Game::SetTimeScale(float scale)
 {
+    // NaN fails both range comparisons below and would be stored as-is, making
+    // every later Update() run with dt = NaN. Reject it instead of clamping.
+    if (!std::isfinite(scale))
+    {
+        FPS_CONSOLE("Time scale must be a finite number; unchanged", "WARNING");
+        return;
+    }
     if (scale < 0.1f || scale > 10.0f)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Time scale out of range (0.1-10.0), clamping", L"WARNING");
+        FPS_CONSOLE("Time scale out of range (0.1-10.0), clamping", "WARNING");
         scale = std::max(0.1f, std::min(10.0f, scale));
     }
 
     m_timeScale = scale;
 
-    std::wstring scaleMsg = L"Time scale set to " + std::to_wstring(scale) + L"x";
-    LOG_TO_CONSOLE_IMMEDIATE(scaleMsg, L"SUCCESS");
+    std::string scaleMsg = "Time scale set to " + std::to_string(scale) + "x";
+    FPS_CONSOLE(scaleMsg, "SUCCESS");
 }
 
 // ============================================================================
@@ -301,7 +320,7 @@ void Game::SetTimeScale(float scale)
 
 void Game::ApplyGraphicsSettings(bool wireframe, bool vsync, bool showFPS)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Applying graphics settings via console integration", L"INFO");
+    FPS_CONSOLE("Applying graphics settings via console integration", "INFO");
 
     if (m_graphics)
     {
@@ -311,20 +330,20 @@ void Game::ApplyGraphicsSettings(bool wireframe, bool vsync, bool showFPS)
             m_graphics->Console_SetVSync(vsync);
             m_showFPS = showFPS;
 
-            std::wstring graphicsMsg = L"Graphics settings applied - Wireframe: " +
-                                       (wireframe ? std::wstring(L"ON") : std::wstring(L"OFF")) + L", VSync: " +
-                                       (vsync ? std::wstring(L"ON") : std::wstring(L"OFF")) + L", Show FPS: " +
-                                       (showFPS ? std::wstring(L"ON") : std::wstring(L"OFF"));
-            LOG_TO_CONSOLE_IMMEDIATE(graphicsMsg, L"SUCCESS");
+            std::string graphicsMsg =
+                "Graphics settings applied - Wireframe: " + (wireframe ? std::string("ON") : std::string("OFF")) +
+                ", VSync: " + (vsync ? std::string("ON") : std::string("OFF")) +
+                ", Show FPS: " + (showFPS ? std::string("ON") : std::string("OFF"));
+            FPS_CONSOLE(graphicsMsg, "SUCCESS");
         }
         catch (...)
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to apply graphics settings", L"ERROR");
+            FPS_CONSOLE("Failed to apply graphics settings", "ERROR");
         }
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Graphics settings failed - graphics engine not available", L"ERROR");
+        FPS_CONSOLE("Graphics settings failed - graphics engine not available", "ERROR");
     }
 }
 
@@ -352,7 +371,7 @@ void Game::GetGraphicsPerformance(float& outFrameTime, float& outRenderTime, flo
 
 void Game::RefreshGraphicsSettings()
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Refreshing graphics settings via console integration", L"INFO");
+    FPS_CONSOLE("Refreshing graphics settings via console integration", "INFO");
 
     if (m_graphics)
     {
@@ -360,16 +379,16 @@ void Game::RefreshGraphicsSettings()
         {
             // Trigger a refresh of graphics state
             m_graphics->Console_ResetDevice();
-            LOG_TO_CONSOLE_IMMEDIATE(L"Graphics settings refreshed successfully", L"SUCCESS");
+            FPS_CONSOLE("Graphics settings refreshed successfully", "SUCCESS");
         }
         catch (...)
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Failed to refresh graphics settings", L"ERROR");
+            FPS_CONSOLE("Failed to refresh graphics settings", "ERROR");
         }
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Graphics refresh failed - graphics engine not available", L"ERROR");
+        FPS_CONSOLE("Graphics refresh failed - graphics engine not available", "ERROR");
     }
 }
 
@@ -448,11 +467,11 @@ void Game::RefreshAuthoredSceneRuntimeState()
 
 bool Game::LoadScene(const std::string& scenePath)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Loading scene via console integration", L"INFO");
+    FPS_CONSOLE("Loading scene via console integration", "INFO");
 
     if (!m_sceneManager)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene load failed - scene manager not available", L"ERROR");
+        FPS_CONSOLE("Scene load failed - scene manager not available", "ERROR");
         return false;
     }
 
@@ -462,12 +481,13 @@ bool Game::LoadScene(const std::string& scenePath)
         std::string pathError;
         if (!Spark::FPSAssets::ResolveScenePath(scenePath, trustedScenePath, pathError))
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Scene load rejected: " + std::wstring(pathError.begin(), pathError.end()),
-                                     L"ERROR");
+            FPS_CONSOLE("Scene load rejected: " + pathError, "ERROR");
             return false;
         }
         const std::wstring wScenePath = trustedScenePath.wstring();
         bool success = m_sceneManager->LoadScene(wScenePath);
+        const std::u8string scenePathU8 = trustedScenePath.u8string();
+        const std::string scenePathUtf8(reinterpret_cast<const char*>(scenePathU8.data()), scenePathU8.size());
 
         if (success)
         {
@@ -499,33 +519,33 @@ bool Game::LoadScene(const std::string& scenePath)
             InvalidateSceneBasicMaterials();
             RefreshAuthoredSceneRuntimeState();
 
-            std::wstring loadMsg = L"Scene loaded successfully: " + wScenePath;
-            LOG_TO_CONSOLE_IMMEDIATE(loadMsg, L"SUCCESS");
+            std::string loadMsg = "Scene loaded successfully: " + scenePathUtf8;
+            FPS_CONSOLE(loadMsg, "SUCCESS");
         }
         else
         {
-            std::wstring loadMsg = L"Failed to load scene: " + wScenePath;
-            LOG_TO_CONSOLE_IMMEDIATE(loadMsg, L"ERROR");
+            std::string loadMsg = "Failed to load scene: " + scenePathUtf8;
+            FPS_CONSOLE(loadMsg, "ERROR");
         }
 
         return success;
     }
     catch (...)
     {
-        std::wstring errorMsg =
-            L"Exception occurred while loading scene: " + std::wstring(scenePath.begin(), scenePath.end());
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+        std::string errorMsg =
+            "Exception occurred while loading scene: " + std::string(scenePath.begin(), scenePath.end());
+        FPS_CONSOLE(errorMsg, "ERROR");
         return false;
     }
 }
 
 bool Game::SaveScene(const std::string& scenePath)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Saving scene via console integration", L"INFO");
+    FPS_CONSOLE("Saving scene via console integration", "INFO");
 
     if (!m_sceneManager)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed - scene manager not available", L"ERROR");
+        FPS_CONSOLE("Scene save failed - scene manager not available", "ERROR");
         return false;
     }
 
@@ -536,7 +556,7 @@ bool Game::SaveScene(const std::string& scenePath)
     // swapped mid-save. Only .scene is accepted so scene_load can reload it.
     if (scenePath.empty() || scenePath.size() > 4096 || scenePath.find('\0') != std::string::npos)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save rejected: malformed scene path", L"ERROR");
+        FPS_CONSOLE("Scene save rejected: malformed scene path", "ERROR");
         return false;
     }
     std::string normalized = scenePath;
@@ -551,21 +571,20 @@ bool Game::SaveScene(const std::string& scenePath)
     }
     const std::filesystem::path relative(
         std::u8string(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size()));
-    const std::wstring wScenePath = relative.wstring();
     if (relative.extension() != ".scene")
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save rejected (expected a relative .scene path): " + wScenePath, L"ERROR");
+        FPS_CONSOLE("Scene save rejected (expected a relative .scene path): " + normalized, "ERROR");
         return false;
     }
 
     const bool saved = m_sceneManager->SaveSceneWithinRoot(Spark::FPSAssets::Root() / "Scenes", relative);
     if (saved)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: Scenes/" + wScenePath, L"SUCCESS");
+        FPS_CONSOLE("Scene saved: Scenes/" + normalized, "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Scene save failed or was refused: " + wScenePath, L"ERROR");
+        FPS_CONSOLE("Scene save failed or was refused: " + normalized, "ERROR");
     }
     return saved;
 }
@@ -575,21 +594,37 @@ std::vector<std::string> Game::GetAvailableScenes() const
     std::vector<std::string> scenes;
 
     // Scan common scene directories for .scene / .xml / .json files
+    // Both directories and results are UTF-8 (the SaveScene path above decodes the
+    // same way). The narrow path(std::string)/path::string() conversions use the
+    // Windows ANSI code page instead, and one scene name it cannot spell threw out of
+    // the loop and dropped the rest of that directory's listing.
     const std::string sceneDirs[] = {Spark::FPSAssets::ResolveUtf8("Scenes"), "Scenes"};
     for (const auto& dir : sceneDirs)
     {
         try
         {
-            if (!std::filesystem::exists(dir))
+            const std::filesystem::path directory(
+                std::u8string(reinterpret_cast<const char8_t*>(dir.data()), dir.size()));
+            if (!std::filesystem::exists(directory))
                 continue;
-            for (const auto& entry : std::filesystem::directory_iterator(dir))
+            for (const auto& entry : std::filesystem::directory_iterator(directory))
             {
                 if (!entry.is_regular_file())
                     continue;
-                auto ext = entry.path().extension().string();
+                const auto ext = entry.path().extension();
                 if (ext == ".scene" || ext == ".xml" || ext == ".json")
                 {
-                    scenes.push_back(entry.path().string());
+                    // u8string() throws only for a name that is not well-formed UTF-16;
+                    // skip that one entry, not the rest of the directory.
+                    try
+                    {
+                        const std::u8string scenePath = entry.path().u8string();
+                        scenes.emplace_back(reinterpret_cast<const char*>(scenePath.data()), scenePath.size());
+                    }
+                    catch (const std::system_error& error)
+                    {
+                        FPS_LOG_WARN("Skipping a scene file whose name is not UTF-8: {}", error.what());
+                    }
                 }
             }
         }
@@ -620,8 +655,8 @@ void Game::SetPlayerClass(PlayerClass classType)
             m_hudSystem->SetCurrentClass(classType);
         }
 
-        std::wstring classMsg = L"Class changed to: " + std::wstring(def.name.begin(), def.name.end());
-        LOG_TO_CONSOLE_IMMEDIATE(classMsg, L"SUCCESS");
+        std::string classMsg = "Class changed to: " + std::string(def.name.begin(), def.name.end());
+        FPS_CONSOLE(classMsg, "SUCCESS");
     }
 }
 
@@ -659,6 +694,14 @@ namespace
             return "Assets/Materials/Arena_CenterBuilding.json";
 
         const std::wstring path(modelPath ? modelPath : L"");
+        // Training-kit props (Assets/Models/FPS/Kit) carry palette colours in their MTL files, but the D3D11
+        // Model ignores MTL data, so give each one the procedural material of its dominant surface.
+        if (path.find(L"FPS/Kit/") != std::wstring::npos)
+        {
+            const bool concrete =
+                path.find(L"cover_barrier") != std::wstring::npos || path.find(L"spawn_pad") != std::wstring::npos;
+            return concrete ? "Assets/Materials/Concrete.json" : "Assets/Materials/Metal.json";
+        }
         if (path.find(L"crate.obj") != std::wstring::npos)
             return "Assets/Materials/Wood.json";
         if (path.find(L"target.obj") != std::wstring::npos || path.find(L"rifle.obj") != std::wstring::npos ||
@@ -674,7 +717,7 @@ namespace
     /// Helper: create a ModelObject, initialize it, set position/name, and add to the list
     void PlaceModel(const wchar_t* modelPath, const std::string& name, XMFLOAT3 pos, ID3D11Device* device,
                     ID3D11DeviceContext* context, std::vector<std::unique_ptr<GameObject>>& objects,
-                    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f})
+                    XMFLOAT3 scale = {1.0f, 1.0f, 1.0f}, float yaw = 0.0f)
     {
         auto obj = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(modelPath));
         HRESULT hr = obj->Initialize(device, context);
@@ -685,6 +728,8 @@ namespace
         obj->SetMaterialPath(ProceduralMaterialFor(modelPath, name));
         if (scale.x != 1.0f || scale.y != 1.0f || scale.z != 1.0f)
             obj->SetScale(scale);
+        if (yaw != 0.0f)
+            obj->SetRotation({0.0f, yaw, 0.0f});
         objects.push_back(std::move(obj));
     }
 
@@ -705,7 +750,7 @@ namespace
 
 void Game::CreateCombatArena()
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Creating enhanced combat arena level...", L"INFO");
+    FPS_CONSOLE("Creating enhanced combat arena level...", "INFO");
 
     auto* device = m_graphics->GetDevice();
     auto* context = m_graphics->GetContext();
@@ -713,7 +758,7 @@ void Game::CreateCombatArena()
     // === LARGE GROUND PLANE (200x200 arena) ===
     {
         auto ground = std::make_unique<PlaneObject>(100.0f, 100.0f);
-        ASSERT(ground);
+        FPS_ASSERT(ground);
         if (SUCCEEDED(ground->Initialize(device, context)))
         {
             ground->SetPosition({0.0f, -1.0f, 0.0f});
@@ -826,13 +871,55 @@ void Game::CreateCombatArena()
         }
     }
 
-    std::wstring totalMsg = L"Combat arena created. Total objects: " + std::to_wstring(m_gameObjects.size());
-    LOG_TO_CONSOLE_IMMEDIATE(totalMsg, L"SUCCESS");
+    // === TRAINING KIT (tools/blender/author_fps_kit.py -> Art/Blender/SparkGameFPS) ===
+    // Kit props face +Z; the yaw turns each one toward the play space. Spawn pads mark the default spawns
+    // of Scenes/level1.scene (the east/west pads sit 1.6 m toward +Z of theirs, clear of Field_Barrier_5/6 at
+    // x = +/-20), racks and ammo stand at the back of each base (behind Alpha's weapon displays), and the
+    // dummies stagger behind the practice targets facing the shooting lane (+X).
+    {
+        struct KitPlacement
+        {
+            const wchar_t* model;
+            const char* name;
+            XMFLOAT3 position;
+            float yaw;
+        };
+        const KitPlacement kitPlacements[] = {
+            {L"Models/FPS/Kit/spawn_pad.obj", "North_SpawnPad", {0.0f, 0.0f, -20.0f}, 0.0f},
+            {L"Models/FPS/Kit/spawn_pad.obj", "South_SpawnPad", {0.0f, 0.0f, 20.0f}, XM_PI},
+            {L"Models/FPS/Kit/spawn_pad.obj", "East_SpawnPad", {20.0f, 0.0f, 1.6f}, -XM_PIDIV2},
+            {L"Models/FPS/Kit/spawn_pad.obj", "West_SpawnPad", {-20.0f, 0.0f, 1.6f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/cover_barrier.obj", "North_SpawnCover_1", {-4.0f, 0.0f, -16.0f}, 0.0f},
+            {L"Models/FPS/Kit/cover_barrier.obj", "North_SpawnCover_2", {4.0f, 0.0f, -16.0f}, 0.0f},
+            {L"Models/FPS/Kit/cover_barrier.obj", "South_SpawnCover_1", {-4.0f, 0.0f, 16.0f}, XM_PI},
+            {L"Models/FPS/Kit/cover_barrier.obj", "South_SpawnCover_2", {4.0f, 0.0f, 16.0f}, XM_PI},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Alpha_WeaponRack_1", {-0.8f, 0.0f, -73.5f}, 0.0f},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Alpha_WeaponRack_2", {0.8f, 0.0f, -73.5f}, 0.0f},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Alpha_AmmoCrate_1", {-2.4f, 0.0f, -73.6f}, 0.0f},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Alpha_AmmoCrate_2", {2.4f, 0.0f, -73.6f}, 0.0f},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Bravo_WeaponRack_1", {-0.8f, 0.0f, 73.5f}, XM_PI},
+            {L"Models/FPS/Kit/weapon_rack.obj", "Bravo_WeaponRack_2", {0.8f, 0.0f, 73.5f}, XM_PI},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Bravo_AmmoCrate_1", {-2.4f, 0.0f, 73.6f}, XM_PI},
+            {L"Models/FPS/Kit/ammo_crate.obj", "Bravo_AmmoCrate_2", {2.4f, 0.0f, 73.6f}, XM_PI},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_1", {-58.0f, 0.0f, -7.5f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_2", {-58.0f, 0.0f, -2.5f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_3", {-58.0f, 0.0f, 2.5f}, XM_PIDIV2},
+            {L"Models/FPS/Kit/target_dummy.obj", "Target_Dummy_4", {-58.0f, 0.0f, 7.5f}, XM_PIDIV2},
+        };
+        for (const auto& placement : kitPlacements)
+        {
+            PlaceModel(placement.model, placement.name, placement.position, device, context, m_gameObjects,
+                       {1.0f, 1.0f, 1.0f}, placement.yaw);
+        }
+    }
+
+    std::string totalMsg = "Combat arena created. Total objects: " + std::to_string(m_gameObjects.size());
+    FPS_CONSOLE(totalMsg, "SUCCESS");
 }
 
 void Game::CreateTestScene(const std::string& sceneType)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Creating test scene via console integration", L"INFO");
+    FPS_CONSOLE("Creating test scene via console integration", "INFO");
 
     // Clear existing objects
     m_enemies.clear();
@@ -846,7 +933,7 @@ void Game::CreateTestScene(const std::string& sceneType)
     else if (sceneType == "performance")
     {
         // Create a performance test scene with many objects
-        LOG_TO_CONSOLE_IMMEDIATE(L"Creating performance test scene with many objects", L"INFO");
+        FPS_CONSOLE("Creating performance test scene with many objects", "INFO");
 
         int objectsCreated = 0;
         for (int x = -10; x <= 10; x += 2)
@@ -864,26 +951,26 @@ void Game::CreateTestScene(const std::string& sceneType)
             }
         }
 
-        std::wstring perfMsg = L"Performance test scene created with " + std::to_wstring(objectsCreated) + L" objects";
-        LOG_TO_CONSOLE_IMMEDIATE(perfMsg, L"SUCCESS");
+        std::string perfMsg = "Performance test scene created with " + std::to_string(objectsCreated) + " objects";
+        FPS_CONSOLE(perfMsg, "SUCCESS");
     }
     else if (sceneType == "empty")
     {
         // Create empty scene (just clear objects)
-        LOG_TO_CONSOLE_IMMEDIATE(L"Empty test scene created", L"SUCCESS");
+        FPS_CONSOLE("Empty test scene created", "SUCCESS");
     }
     else
     {
         // Unknown scene type, create basic
-        std::wstring unknownMsg =
-            L"Unknown scene type '" + std::wstring(sceneType.begin(), sceneType.end()) + L"', creating basic scene";
-        LOG_TO_CONSOLE_IMMEDIATE(unknownMsg, L"WARNING");
+        std::string unknownMsg =
+            "Unknown scene type '" + std::string(sceneType.begin(), sceneType.end()) + "', creating basic scene";
+        FPS_CONSOLE(unknownMsg, "WARNING");
         CreateTestObjects();
     }
 
-    std::wstring sceneMsg = L"Test scene created: " + std::wstring(sceneType.begin(), sceneType.end()) +
-                            L" (Total objects: " + std::to_wstring(m_gameObjects.size()) + L")";
-    LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"SUCCESS");
+    std::string sceneMsg = "Test scene created: " + std::string(sceneType.begin(), sceneType.end()) +
+                           " (Total objects: " + std::to_string(m_gameObjects.size()) + ")";
+    FPS_CONSOLE(sceneMsg, "SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -900,10 +987,10 @@ Spark::Vehicle* Game::SpawnVehicle(SparkEditor::VehicleType type, float x, float
         if (m_projectilePool)
             vehicle->SetProjectilePool(m_projectilePool.get());
 
-        std::wstring msg = L"Vehicle spawned: " +
-                           std::wstring(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()) + L" at (" +
-                           std::to_wstring(x) + L"," + std::to_wstring(y) + L"," + std::to_wstring(z) + L")";
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
+        std::string msg =
+            "Vehicle spawned: " + std::string(vehicle->GetVehicleName().begin(), vehicle->GetVehicleName().end()) +
+            " at (" + std::to_string(x) + "," + std::to_string(y) + "," + std::to_string(z) + ")";
+        FPS_CONSOLE(msg, "SUCCESS");
     }
     return vehicle;
 }
@@ -921,7 +1008,7 @@ bool Game::PlayerEnterNearestVehicle()
         return m_player->EnterVehicle(vehicle);
     }
 
-    LOG_TO_CONSOLE(L"No vehicle nearby to enter", L"INFO");
+    FPS_CONSOLE_RATE_LIMITED(3, 3, "No vehicle nearby to enter", "INFO");
     return false;
 }
 
@@ -940,92 +1027,108 @@ bool Game::PlayerExitVehicle()
 
 bool Game::StartServer(uint16_t port, int maxClients)
 {
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    if (!m_networkInitialized)
-    {
-        if (!netMgr.Initialize())
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"NetworkManager::Initialize() failed", L"ERROR");
-            return false;
-        }
-        m_networkInitialized = true;
-    }
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    if (multiplayer.IsActive())
+        multiplayer.Shutdown();
 
-    if (!netMgr.StartServer(port, maxClients))
+    multiplayer.Initialize(true);
+    if (maxClients <= 0 || !multiplayer.StartServer(port, static_cast<uint32_t>(maxClients)))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to start server on port " + std::to_wstring(port), L"ERROR");
+        FPS_CONSOLE("Failed to start server on port " + std::to_string(port), "ERROR");
         return false;
     }
+    m_networkInitialized = true;
+    m_networkInputAccumulator = 0.0f;
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Server started on port " + std::to_wstring(port) + L" (max " +
-                                 std::to_wstring(maxClients) + L" clients)",
-                             L"SUCCESS");
-
-    // Register player entity for replication
-    Spark::Net::ReplicatedEntity playerEntity{};
-    playerEntity.entityType = "Player";
-    playerEntity.ownerID = netMgr.GetLocalClientID();
-    if (m_player)
-    {
-        auto pos = m_player->GetPosition();
-        playerEntity.position = {pos.x, pos.y, pos.z};
-    }
-    netMgr.RegisterReplicatedEntity(playerEntity);
-
+    FPS_CONSOLE("Server started on port " + std::to_string(port) + " (max " + std::to_string(maxClients) + " clients)",
+                "SUCCESS");
     return true;
 }
 
 bool Game::ConnectToServer(const std::string& address, uint16_t port)
 {
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    if (!m_networkInitialized)
-    {
-        if (!netMgr.Initialize())
-        {
-            LOG_TO_CONSOLE_IMMEDIATE(L"NetworkManager::Initialize() failed", L"ERROR");
-            return false;
-        }
-        m_networkInitialized = true;
-    }
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    if (multiplayer.IsActive())
+        multiplayer.Shutdown();
 
-    std::wstring addr(address.begin(), address.end());
-    LOG_TO_CONSOLE_IMMEDIATE(L"Connecting to " + addr + L":" + std::to_wstring(port) + L"...", L"INFO");
-    if (!netMgr.Connect(address, port, "Player"))
+    FPS_CONSOLE("Connecting to " + address + ":" + std::to_string(port) + "...", "INFO");
+    multiplayer.Initialize(false);
+    if (!multiplayer.Connect(address, port))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to connect to " + addr + L":" + std::to_wstring(port), L"ERROR");
+        FPS_CONSOLE("Failed to connect to " + address + ":" + std::to_string(port), "ERROR");
         return false;
     }
+    m_networkInitialized = true;
+    m_networkInputAccumulator = 0.0f;
     return true;
 }
 
 void Game::DisconnectNetwork()
 {
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    if (netMgr.GetRole() == Spark::Net::NetworkRole::Server)
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    if (!multiplayer.IsActive())
+        return;
+
+    const bool wasServer = multiplayer.IsServer();
+    multiplayer.Shutdown();
+    FPS_CONSOLE(wasServer ? "Server stopped" : "Disconnected from server", "INFO");
+}
+
+void Game::UpdateMultiplayer(float dt)
+{
+    auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
+    multiplayer.Update(dt);
+    // Input goes out only once the session is live: a client whose handshake is still
+    // pending has no id for the server to apply it to.
+    if (!multiplayer.IsConnected() || !m_player || !m_input)
     {
-        netMgr.StopServer();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Server stopped", L"INFO");
+        m_networkInputAccumulator = 0.0f;
+        return;
     }
-    else if (netMgr.GetRole() == Spark::Net::NetworkRole::Client)
+
+    // Each FPSMultiplayerSystem input is one 1/60 s step on both the client's prediction and
+    // the server, so inputs go out at that fixed rate whatever the render frame rate. The cap
+    // keeps a long hitch from sending a burst the server's input budget would drop anyway.
+    constexpr float kInputStep = 1.0f / 60.0f;
+    constexpr float kMaxBacklog = 0.1f;
+    m_networkInputAccumulator = (std::min)(m_networkInputAccumulator + dt, kMaxBacklog);
+    if (m_networkInputAccumulator < kInputStep)
+        return;
+
+    // The same bindings Player::HandleInput reads. Movement is suppressed in a vehicle or
+    // while dead, matching what the local player can do.
+    SparkFPS::PlayerInput input;
+    const XMFLOAT3 forward = m_player->GetForwardDirection();
+    input.yaw = std::atan2(forward.z, forward.x);
+    input.pitch = std::asin(std::clamp(forward.y, -1.0f, 1.0f));
+    if (!m_player->IsInVehicle() && m_player->IsAlive())
     {
-        netMgr.Disconnect();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Disconnected from server", L"INFO");
+        input.forward = (m_input->IsKeyDown('W') ? 1.0f : 0.0f) - (m_input->IsKeyDown('S') ? 1.0f : 0.0f);
+        input.strafe = (m_input->IsKeyDown('D') ? 1.0f : 0.0f) - (m_input->IsKeyDown('A') ? 1.0f : 0.0f);
+        input.jump = m_input->IsKeyDown(VK_SPACE);
+        input.fire = m_input->IsMouseButtonDown(0);
+        input.reload = m_input->IsKeyDown('R');
+        input.crouch = m_input->IsKeyDown(VK_LCONTROL);
+    }
+
+    while (m_networkInputAccumulator >= kInputStep && multiplayer.IsConnected())
+    {
+        m_networkInputAccumulator -= kInputStep;
+        multiplayer.SendInput(input);
     }
 }
 
 bool Game::IsNetworkActive() const
 {
-    if (!m_networkInitialized)
-        return false;
-    auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-    return netMgr.GetRole() != Spark::Net::NetworkRole::None;
+    return m_networkInitialized && SparkFPS::FPSMultiplayerSystem::GetInstance().IsActive();
 }
 
 std::string Game::GetNetworkStatus() const
 {
     if (!m_networkInitialized)
         return "Networking not initialized";
-    return Spark::Net::NetworkManager::GetInstance().Console_GetStatus();
+    return SparkFPS::FPSMultiplayerSystem::GetInstance().Console_GetStatus() + "\n" +
+           Spark::Net::NetworkManager::GetInstance().Console_GetStatus();
 }
 
 Spark::Net::NetworkStats Game::GetNetworkStats() const

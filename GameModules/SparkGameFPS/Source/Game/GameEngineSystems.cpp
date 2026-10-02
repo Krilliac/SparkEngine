@@ -9,6 +9,7 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
@@ -20,16 +21,15 @@
 #include "Game.h"
 #include "Player.h"
 #include "FPSAssetPaths.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "FPSQuickLoad.h"
+#include "Console/AdvancedConsoleCommands.h"
+#include <Spark/IConsole.h>
 
 // Engine systems
-#include "Audio/AudioEngine.h"
 #include "Audio/MusicManager.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
-#include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
 
@@ -59,11 +59,11 @@ void Game::InitializeEngineSystems()
         return;
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing engine system connections");
+    FPS_LOG_INFO("Initializing engine system connections");
     if (!m_engineContext)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "EngineContext not available — skipping engine system wiring");
-        LOG_TO_CONSOLE_IMMEDIATE(L"EngineContext not available - skipping engine system wiring", L"WARNING");
+        FPS_LOG_WARN("EngineContext not available — skipping engine system wiring");
+        FPS_CONSOLE("EngineContext not available - skipping engine system wiring", "WARNING");
         return;
     }
 
@@ -96,21 +96,20 @@ void Game::InitializeEngineSystems()
         music->Play("arena_ambient", 1.0f);
 
         m_audioInitialized = true;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Audio: game music tracks registered, ambient playing", L"SUCCESS");
+        FPS_CONSOLE("Audio: game music tracks registered, ambient playing", "SUCCESS");
     }
 
     // ---- Weather ------------------------------------------------------
     if (m_weatherIntegration.Initialize())
     {
         m_weatherActive = true;
-        LOG_TO_CONSOLE_IMMEDIATE(m_weatherActive ? L"Weather: clear skies set for arena"
-                                                 : L"Weather: optional capability unavailable",
-                                 m_weatherActive ? L"SUCCESS" : L"WARNING");
+        FPS_CONSOLE(m_weatherActive ? "Weather: clear skies set for arena" : "Weather: optional capability unavailable",
+                    m_weatherActive ? "SUCCESS" : "WARNING");
     }
     else
     {
         m_weatherActive = false;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Weather: optional capability unavailable", L"WARNING");
+        FPS_CONSOLE("Weather: optional capability unavailable", "WARNING");
     }
 
     // ---- Destruction --------------------------------------------------
@@ -162,7 +161,7 @@ void Game::InitializeEngineSystems()
         barrelPattern.SetParticleEffect("vfx_sparks");
         destruction->RegisterPattern("metal_barrel", barrelPattern);
 
-        LOG_TO_CONSOLE_IMMEDIATE(L"Destruction: 2 fracture patterns registered (crate, barrel)", L"SUCCESS");
+        FPS_CONSOLE("Destruction: 2 fracture patterns registered (crate, barrel)", "SUCCESS");
     }
 
     // ---- Dialogue -----------------------------------------------------
@@ -212,7 +211,7 @@ void Game::InitializeEngineSystems()
         vendorTree->AddNode(ammoReply);
 
         dialogue->RegisterTree("arena_vendor", std::move(vendorTree));
-        LOG_TO_CONSOLE_IMMEDIATE(L"Dialogue: arena vendor dialogue tree registered", L"SUCCESS");
+        FPS_CONSOLE("Dialogue: arena vendor dialogue tree registered", "SUCCESS");
     }
 
     // ---- Save System --------------------------------------------------
@@ -221,16 +220,16 @@ void Game::InitializeEngineSystems()
     m_saveSystemReady = (m_engineContext->GetSaveSystem() != nullptr) && (m_engineContext->GetWorld() != nullptr);
     if (m_saveSystemReady)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Save system: ready for quicksave/quickload", L"SUCCESS");
+        FPS_CONSOLE("Save system: ready for quicksave/quickload", "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Save system: unavailable - quicksave/quickload disabled", L"WARNING");
+        FPS_CONSOLE("Save system: unavailable - quicksave/quickload disabled", "WARNING");
     }
 
     // ---- Coroutine Scheduler ------------------------------------------
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Coroutine scheduler: game coroutines available", L"SUCCESS");
+        FPS_CONSOLE("Coroutine scheduler: game coroutines available", "SUCCESS");
     }
 
     // ---- Cinematic Sequencer ------------------------------------------
@@ -269,7 +268,7 @@ void Game::InitializeEngineSystems()
         auto* eventTrack = intro->AddEventTrack("GameEvents");
         eventTrack->AddCue({5.0f, "enable_player_control", ""});
 
-        LOG_TO_CONSOLE_IMMEDIATE(L"Cinematic: arena_intro sequence registered (5s, 4 tracks)", L"SUCCESS");
+        FPS_CONSOLE("Cinematic: arena_intro sequence registered (5s, 4 tracks)", "SUCCESS");
     }
 
     // ---- Replay System ------------------------------------------------
@@ -277,12 +276,20 @@ void Game::InitializeEngineSystems()
     {
         replay->SetRecordInterval(1.0f / 20.0f); // 20 fps recording
         replay->SetMetadata("combat_arena", "freeplay");
-        LOG_TO_CONSOLE_IMMEDIATE(L"Replay: system configured (20fps, combat_arena)", L"SUCCESS");
+        FPS_CONSOLE("Replay: system configured (20fps, combat_arena)", "SUCCESS");
+    }
+
+    // ---- Advanced console commands ------------------------------------
+    // Registered through the host's public console; a host without one gets no commands.
+    // Game::Shutdown removes them from the same console before the module unloads.
+    if (auto* console = m_engineContext->GetConsole())
+    {
+        SparkConsole::RegisterAdvancedCommands(*console, this, m_graphics);
     }
 
     m_engineSystemsInitialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "All engine systems wired into game");
-    LOG_TO_CONSOLE_IMMEDIATE(L"All engine systems wired into game", L"SUCCESS");
+    FPS_LOG_INFO("All engine systems wired into game");
+    FPS_CONSOLE("All engine systems wired into game", "SUCCESS");
 }
 
 // ============================================================================
@@ -325,8 +332,8 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
     if (m_progression)
     {
         m_progression->RestoreProgress(profile.progressionXP);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression restored from save (level %d, %d XP)",
-                       m_progression->GetLevel(), m_progression->GetCurrentXP());
+        FPS_LOG_INFO("Progression restored from save (level {}, {} XP)", m_progression->GetLevel(),
+                     m_progression->GetCurrentXP());
     }
 
     if (m_player)
@@ -352,10 +359,10 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
     if (m_respawnSystem && profile.health <= 0.0f && !m_respawnSystem->IsWaitingForRespawn())
     {
         m_respawnSystem->ArmRespawn();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Restored profile was captured while dead - respawn countdown re-armed", L"WARNING");
+        FPS_CONSOLE("Restored profile was captured while dead - respawn countdown re-armed", "WARNING");
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Local profile applied from save", L"SUCCESS");
+    FPS_CONSOLE("Local profile applied from save", "SUCCESS");
 }
 
 bool Game::QuickSaveProfile(std::string& outMessage)
@@ -423,18 +430,19 @@ bool Game::QuickLoadProfile(std::string& outMessage)
         return false;
     }
 
-    std::unordered_map<std::string, std::string> customState;
-    if (!saveSystem->Load(kQuickSaveSlot, *world, customState))
-    {
-        outMessage = std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
-        return false;
-    }
-
+    // The profile is validated before the world is replaced, so a rejected profile block
+    // leaves both the world and the current profile as they were.
     Spark::FPSLocalProfile profile;
     std::string profileError;
-    if (!profile.ReadFrom(customState, profileError))
+    switch (Spark::LoadSlotWithProfile(*saveSystem, kQuickSaveSlot, *world, profile, profileError))
     {
-        outMessage = "Quick load restored the world but the local profile was rejected: " + profileError;
+    case Spark::FPSQuickLoadStatus::Loaded:
+        break;
+    case Spark::FPSQuickLoadStatus::ProfileRejected:
+        outMessage = "Quick load rejected the local profile; the world is unchanged: " + profileError;
+        return false;
+    case Spark::FPSQuickLoadStatus::LoadFailed:
+        outMessage = std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
         return false;
     }
 

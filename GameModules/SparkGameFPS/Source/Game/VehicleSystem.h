@@ -14,7 +14,7 @@
 #include "Core/Platform.h"
 
 #include "Game/GameObject.h"
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 #include "Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"

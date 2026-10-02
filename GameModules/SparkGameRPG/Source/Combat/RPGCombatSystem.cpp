@@ -4,8 +4,7 @@
  */
 
 #include "RPGCombatSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -28,8 +27,8 @@ namespace RPG
     bool RPGCombatSystem::Initialize(Spark::IEngineContext* context)
     {
         m_context = context;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG combat system initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Combat system initialized");
+        Spark::ModuleLog::Info(m_context, "RPG combat system initialized");
+        Spark::ModuleLog::Info(m_context, "[RPG] Combat system initialized");
         return true;
     }
 
@@ -65,9 +64,9 @@ namespace RPG
         uint32_t id = encounter.encounterId;
         m_encounters[id] = encounter;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG combat encounter %u started (attacker=%u, defender=%u)", id,
-                       attackerId, defenderId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Combat encounter " + std::to_string(id) + " started");
+        Spark::ModuleLog::Info(m_context, "RPG combat encounter {} started (attacker={}, defender={})", id, attackerId,
+                               defenderId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Combat encounter " + std::to_string(id) + " started");
         return id;
     }
 
@@ -77,9 +76,8 @@ namespace RPG
         if (it != m_encounters.end())
         {
             it->second.isActive = false;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG combat encounter %u ended", encounterId);
-            Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Combat encounter " + std::to_string(encounterId) +
-                                                        " ended");
+            Spark::ModuleLog::Info(m_context, "RPG combat encounter {} ended", encounterId);
+            Spark::ModuleLog::Info(m_context, "{}", "[RPG] Combat encounter " + std::to_string(encounterId) + " ended");
         }
     }
 
@@ -143,8 +141,8 @@ namespace RPG
 
         // Knockback proportional to damage
         result.knockbackForce = CalculateKnockback(result.mitigatedDamage, type);
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG damage calc: raw=%.1f mitigated=%.1f crit=%s", result.rawDamage,
-                        result.mitigatedDamage, result.isCritical ? "yes" : "no");
+        Spark::ModuleLog::Debug(m_context, "RPG damage calc: raw={:.1f} mitigated={:.1f} crit={}", result.rawDamage,
+                                result.mitigatedDamage, result.isCritical ? "yes" : "no");
 
         return result;
     }

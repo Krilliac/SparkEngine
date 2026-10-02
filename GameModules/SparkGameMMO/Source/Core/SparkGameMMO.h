@@ -38,6 +38,7 @@ namespace MMO
     class MMOLoginUI;
     class MMOEngineSystems;
     class MMOGameplaySession;
+    class MMOSessionGate;
 } // namespace MMO
 
 /**
@@ -62,6 +63,11 @@ class SparkGameMMOModule : public Spark::IModule
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
+    /// Transactional reload runs the replacement's OnLoad before this instance's
+    /// OnUnload. This module owns process-wide streaming areas, the shared NetworkManager server and its message handlers keyed by
+    /// ID, not by owner, so the outgoing teardown would remove what the replacement just
+    /// registered. Refuse hot reload; a full restart is required.
+    bool SupportsHotReload() const override { return false; }
     void OnUpdate(float deltaTime) override;
     void OnFixedUpdate(float fixedDeltaTime) override;
     void OnRender() override;
@@ -72,6 +78,9 @@ class SparkGameMMOModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+#ifdef ENABLE_NETWORKING
+    void RegisterSessionConsoleCommands();
+#endif
     void UnregisterConsoleCommands();
     void RegisterStateValidationRules();
     void ShutdownSystems();
@@ -101,6 +110,10 @@ class SparkGameMMOModule : public Spark::IModule
     std::unique_ptr<MMO::MMOCharacterSystem> m_characterSystem;
     std::unique_ptr<MMO::MMOLoginUI> m_loginUI;
     std::unique_ptr<MMO::MMOGameplaySession> m_gameplaySession;
+#ifdef ENABLE_NETWORKING
+    std::unique_ptr<MMO::MMOSessionGate> m_sessionGate;
+    bool m_networkStartPending{false};
+#endif
 
     // Engine subsystem integration
     std::unique_ptr<MMO::MMOEngineSystems> m_engineSystems;

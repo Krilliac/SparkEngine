@@ -1,4 +1,6 @@
 #include "Core/Platform.h"
+#include "Core/FPSAssert.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -12,10 +14,7 @@
 #include "Game.h"
 #include "ClassSystem.h"
 #include "Core/FaultIsolation.h"
-#include "Utils/Assert.h"
 #include "Utils/SparkError.h"
-#include "Utils/Validate.h"
-#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/TextureSystem.h"
@@ -30,11 +29,12 @@
 #include "Game/WallObject.h"
 #include "ModelObject.h"
 #include "FPSAssetPaths.h"
+#include "MultiplayerSystem.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
 #include "SceneManager/SceneManager.h"
-#include "Utils/SparkConsole.h"
 #include "Console/AdvancedConsoleCommands.h"
+#include <Spark/IConsole.h>
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
 #include <cmath>
@@ -43,9 +43,6 @@
 #include <locale>
 #include <sstream>
 #include <unordered_set>
-
-// Centralized logging macros (previously defined locally with inconsistent rate limits)
-#include "Utils/LogMacros.h"
 
 using namespace DirectX;
 
@@ -66,11 +63,11 @@ bool Game::ParseAuthoredFiniteFloat(const std::string& text, float& value)
 --------------------------------------------------------------*/
 Game::Game()
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game constructor called.", L"INFO");
+    FPS_CONSOLE("Game constructor called.", "INFO");
 }
 Game::~Game()
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game destructor called.", L"INFO");
+    FPS_CONSOLE("Game destructor called.", "INFO");
     Shutdown();
 }
 
@@ -79,16 +76,15 @@ Game::~Game()
 --------------------------------------------------------------*/
 HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Game::Initialize called");
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game::Initialize called.", L"INFO");
+    FPS_LOG_INFO("Game::Initialize called");
+    FPS_CONSOLE("Game::Initialize called.", "INFO");
 
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, graphics);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, input);
+    FPS_REQUIRE_NOT_NULL(graphics);
+    FPS_REQUIRE_NOT_NULL(input);
 
     m_graphics = graphics;
     m_input = input;
-    LOG_TO_CONSOLE_IMMEDIATE(L"Graphics and InputManager assigned.", L"INFO");
+    FPS_CONSOLE("Graphics and InputManager assigned.", "INFO");
 
     // A NullRHI / headless host supplies a GraphicsEngine without a D3D11 device.
     // Gameplay state is still built in full; GPU resource creation and rendering
@@ -96,15 +92,16 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_renderingEnabled = (m_graphics->GetDevice() != nullptr) && (m_graphics->GetContext() != nullptr);
     if (!m_renderingEnabled)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"No D3D11 device - running gameplay only (GPU resources and rendering disabled)",
-                                 L"WARNING");
+        FPS_CONSOLE("No D3D11 device - running gameplay only (GPU resources and rendering disabled)", "WARNING");
     }
 
     // SceneManager setup
     m_sceneManager = std::make_unique<SceneManager>(graphics, input);
-    bool sceneLoaded = m_sceneManager->LoadScene(Spark::FPSAssets::Resolve(L"Scenes/level1.scene"));
-    std::wstring sceneMsg = L"SceneManager::LoadScene returned: " + std::wstring(sceneLoaded ? L"SUCCESS" : L"FAILURE");
-    LOG_TO_CONSOLE_IMMEDIATE(sceneMsg, L"INFO");
+    const std::wstring authoredScenePath = Spark::FPSAssets::Resolve(L"Scenes/level1.scene");
+    bool sceneLoaded = m_sceneManager->LoadScene(authoredScenePath);
+    std::string sceneMsg = "SceneManager::LoadScene returned: " + std::string(sceneLoaded ? "SUCCESS" : "FAILURE");
+    FPS_CONSOLE(sceneMsg, "INFO");
+    LogSceneIdentity(sceneLoaded, authoredScenePath);
 
     // Scene material paths are authored data, but the project root is trusted
     // module state. Bind that root immediately after scene construction so
@@ -117,12 +114,12 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     /* Camera ------------------------------------------------*/
     m_camera = std::make_unique<SparkEngineCamera>();
-    ASSERT(m_camera);
+    FPS_ASSERT(m_camera);
 
     UINT winHeight = m_graphics->GetWindowHeight();
     float aspect = (winHeight > 0) ? float(m_graphics->GetWindowWidth()) / float(winHeight)
                                    : 16.0f / 9.0f; // Safe fallback if window is minimized
-    ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
+    FPS_ASSERT_MSG(aspect > 0.0f, "Invalid aspect ratio");
 
     m_camera->Initialize(aspect);
     const SceneNode* authoredCamera = nullptr;
@@ -136,8 +133,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
             const auto projection = node->properties.find("projection");
             if (projection != node->properties.end() && projection->second != "perspective")
             {
-                LOG_TO_CONSOLE_IMMEDIATE(L"Unsupported authored camera projection; keeping perspective fallback",
-                                         L"WARNING");
+                FPS_CONSOLE("Unsupported authored camera projection; keeping perspective fallback", "WARNING");
                 continue;
             }
             if (!authoredCamera)
@@ -171,61 +167,59 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
             }
             else
             {
-                LOG_TO_CONSOLE_IMMEDIATE(L"Invalid authored camera clipping; keeping camera defaults", L"WARNING");
+                FPS_CONSOLE("Invalid authored camera clipping; keeping camera defaults", "WARNING");
             }
         }
 
         const auto cameraState = m_camera->Console_GetState();
-        LOG_TO_CONSOLE_IMMEDIATE(
-            std::format(L"Camera authored state: rotation ({:.1f}, {:.1f}, {:.1f}) near/far ({:.2f}, {:.1f})",
-                        cameraState.rotation.x, cameraState.rotation.y, cameraState.rotation.z, cameraState.nearPlane,
-                        cameraState.farPlane),
-            L"INFO");
+        FPS_CONSOLE(std::format("Camera authored state: rotation ({:.1f}, {:.1f}, {:.1f}) near/far ({:.2f}, {:.1f})",
+                                cameraState.rotation.x, cameraState.rotation.y, cameraState.rotation.z,
+                                cameraState.nearPlane, cameraState.farPlane),
+                    "INFO");
     }
     const XMFLOAT3 cameraPosition = m_camera->GetPosition();
-    const std::wstring cameraSource = authoredCamera ? L"authored scene" : L"fallback";
-    LOG_TO_CONSOLE_IMMEDIATE(L"Camera initialized from " + cameraSource + L" at (" + std::to_wstring(cameraPosition.x) +
-                                 L", " + std::to_wstring(cameraPosition.y) + L", " + std::to_wstring(cameraPosition.z) +
-                                 L")",
-                             L"INFO");
+    const std::string cameraSource = authoredCamera ? "authored scene" : "fallback";
+    FPS_CONSOLE("Camera initialized from " + cameraSource + " at (" + std::to_string(cameraPosition.x) + ", " +
+                    std::to_string(cameraPosition.y) + ", " + std::to_string(cameraPosition.z) + ")",
+                "INFO");
 
     /* Class System -----------------------------------------*/
     m_classSystem = std::make_unique<Spark::ClassSystem>();
-    ASSERT(m_classSystem);
+    FPS_ASSERT(m_classSystem);
     m_classSystem->Initialize();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Class system initialized with 6 classes", L"SUCCESS");
+    FPS_CONSOLE("Class system initialized with 6 classes", "SUCCESS");
 
     /* Projectile pool --------------------------------------*/
     // Player and vehicles share this pool so every fired projectile follows
     // the same update, render, collision, and recycling path.
     m_projectilePool = std::make_unique<ProjectilePool>(100);
-    ASSERT(m_projectilePool);
+    FPS_ASSERT(m_projectilePool);
 
     // Initialize unconditionally: on a device-less host the pool populates itself
     // without GPU meshes, so firing still spawns a real projectile. Skipping this call
     // left the injected pool empty and turned every shot into a silent no-op.
     HRESULT hr = m_projectilePool->Initialize(m_renderingEnabled ? m_graphics->GetDevice() : nullptr,
                                               m_renderingEnabled ? m_graphics->GetContext() : nullptr);
-    ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
+    FPS_ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
     if (FAILED(hr))
     {
-        std::wstring errorMsg = L"ProjectilePool initialization failed with HR=0x" + std::to_wstring(hr);
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+        std::string errorMsg = "ProjectilePool initialization failed with HR=0x" + std::to_string(hr);
+        FPS_CONSOLE(errorMsg, "ERROR");
         return hr;
     }
-    ASSERT_MSG(m_projectilePool->GetAvailableCount() > 0, "ProjectilePool initialized empty - firing would no-op");
+    FPS_ASSERT_MSG(m_projectilePool->GetAvailableCount() > 0, "ProjectilePool initialized empty - firing would no-op");
 
     /* Player -----------------------------------------------*/
     m_player = std::make_unique<Player>();
-    ASSERT(m_player);
+    FPS_ASSERT(m_player);
     m_player->SetProjectilePool(m_projectilePool.get());
 
     hr = m_player->Initialize(m_graphics->GetDevice(), m_graphics->GetContext(), m_camera.get(), m_input);
-    ASSERT_MSG(SUCCEEDED(hr), "Player::Initialize failed");
+    FPS_ASSERT_MSG(SUCCEEDED(hr), "Player::Initialize failed");
     if (FAILED(hr))
     {
-        std::wstring errorMsg = L"Player initialization failed with HR=0x" + std::to_wstring(hr);
-        LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+        std::string errorMsg = "Player initialization failed with HR=0x" + std::to_string(hr);
+        FPS_CONSOLE(errorMsg, "ERROR");
         return hr;
     }
     // Player movement/physics owns the camera position after the first tick.
@@ -238,7 +232,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     // Set default class (Scout)
     m_player->SetClass(PlayerClass::SCOUT, m_classSystem.get());
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player class set to Scout (default)", L"SUCCESS");
+    FPS_CONSOLE("Player class set to Scout (default)", "SUCCESS");
 
     /* Scene objects - Enhanced combat arena ----------------*/
     if (m_renderingEnabled)
@@ -254,14 +248,14 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         BindSceneMaterialRoots();
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game initialization complete - class system & combat arena ready", L"SUCCESS");
+    FPS_CONSOLE("Game initialization complete - class system & combat arena ready", "SUCCESS");
 
     /* Vehicle System -----------------------------------*/
     m_vehicleSystem = std::make_unique<Spark::VehicleSystem>();
     m_vehicleSystem->Initialize();
     if (m_projectilePool)
         m_vehicleSystem->SetProjectilePool(m_projectilePool.get());
-    LOG_TO_CONSOLE_IMMEDIATE(L"Vehicle system initialized (9 vehicle types, weapons armed)", L"SUCCESS");
+    FPS_CONSOLE("Vehicle system initialized (9 vehicle types, weapons armed)", "SUCCESS");
 
     /* Gravity System -----------------------------------*/
     m_gravitySystem = std::make_unique<Spark::GravitySystem>();
@@ -279,7 +273,7 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     // m_gravitySystem->CreateReverseGravityZone("Reverse_Chamber", {-25.0f, 10.0f, 0.0f},
     //                                           {6.0f, 10.0f, 6.0f}, 12.0f);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Gravity zones loaded from scene file", L"SUCCESS");
+    FPS_CONSOLE("Gravity zones loaded from scene file", "SUCCESS");
 
     InitializeInteractionObjects();
     InitializeRespawnAndVehicles();
@@ -289,24 +283,48 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     InitializeEnemies();
     InitializeGameplaySystems();
 
-    /* Register Advanced Console Commands */
-    SparkConsole::RegisterAdvancedCommands(this, m_graphics);
-
-    /* Engine system integration — audio, weather, destruction, dialogue, save */
+    /* Engine system integration — audio, weather, destruction, dialogue, save, advanced console commands */
     if (m_engineContext)
     {
         InitializeEngineSystems();
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Engine services will attach when the SDK-v2 context is available", L"INFO");
+        FPS_CONSOLE("Engine services will attach when the SDK-v2 context is available", "INFO");
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Gameplay systems online - gamemode, HUD, inventory, quests, vehicles, gravity, "
-                             L"interactions, damage zones, and respawn",
-                             L"SUCCESS");
+    FPS_CONSOLE("Gameplay systems online - gamemode, HUD, inventory, quests, vehicles, gravity, "
+                "interactions, damage zones, and respawn",
+                "SUCCESS");
 
     return S_OK;
+}
+
+void Game::LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) const
+{
+    // CreateCombatArena() renders a plausible arena whether or not the authored
+    // scene loaded, so a rendered frame alone cannot tell the two apart. Package
+    // smokes require this exact marker (Tests/PackageSmoke/CheckFPSVisibleFrame.ps1)
+    // as positive evidence that the authored scene, not the fallback, is live.
+    // The audit trail is UTF-8 (wide paths are converted explicitly), and the smoke compares
+    // this path to the package directory. It goes through the SDK ModuleLog (MOD-310).
+    const auto utf8Path = std::filesystem::path(scenePath).u8string();
+    const std::string path(utf8Path.begin(), utf8Path.end());
+    if (!sceneLoaded || !m_sceneManager)
+    {
+        FPS_LOG_WARN("FPS scene identity: procedural fallback arena (authored scene failed to load from {})", path);
+        return;
+    }
+
+    // Keep the scene label on one line with unambiguous quote delimiters.
+    std::string sceneName;
+    for (const char ch : m_sceneManager->GetMetadata().sceneName)
+    {
+        const auto byte = static_cast<unsigned char>(ch);
+        sceneName.push_back((byte >= 0x20 && byte < 0x7F && byte != '"') ? ch : '?');
+    }
+    FPS_LOG_INFO("FPS scene identity: authored scene \"{}\" ({} nodes) from {}", sceneName,
+                 m_sceneManager->GetNodeCount(), path);
 }
 
 void Game::BindSceneMaterialRoots()
@@ -331,9 +349,9 @@ void Game::BindSceneMaterialRoots()
                 ++materialRootsBound;
         }
     }
-    LOG_TO_CONSOLE_IMMEDIATE(L"Scene and procedural material roots bound for " + std::to_wstring(materialRootsBound) +
-                                 L" renderable objects",
-                             L"INFO");
+    FPS_CONSOLE("Scene and procedural material roots bound for " + std::to_string(materialRootsBound) +
+                    " renderable objects",
+                "INFO");
 }
 
 void Game::InvalidateSceneBasicMaterials()
@@ -372,9 +390,13 @@ void Game::Shutdown()
         return;
     m_isShutDown = true;
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game::Shutdown called.", L"INFO");
+    FPS_CONSOLE("Game::Shutdown called.", "INFO");
 
-    SparkConsole::UnregisterAdvancedCommands();
+    // Same host console InitializeEngineSystems registered the advanced commands on.
+    if (Spark::IConsole* console = m_engineContext ? m_engineContext->GetConsole() : nullptr)
+    {
+        SparkConsole::UnregisterAdvancedCommands(*console);
+    }
 
     // Subscription handles capture this Game. Detach them before destroying any
     // systems those callbacks may access.
@@ -404,12 +426,13 @@ void Game::Shutdown()
 #ifdef ENABLE_NETWORKING
     if (m_networkInitialized)
     {
+        SparkFPS::FPSMultiplayerSystem::GetInstance().Shutdown();
         Spark::Net::NetworkManager::GetInstance().Shutdown();
         m_networkInitialized = false;
     }
 #endif
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Game shutdown complete - all systems cleaned up.", L"INFO");
+    FPS_CONSOLE("Game shutdown complete - all systems cleaned up.", "INFO");
 }
 
 /*-------------------------------------------------------------
@@ -529,12 +552,12 @@ void Game::SetEventBus(Spark::EventBus* bus)
                 m_hudSystem->ShowHitMarker(false); // Clear any lingering hit marker
             }
 
-            std::wstring msg = L"Player respawned at (" + std::to_wstring(e.spawnX) + L", " +
-                               std::to_wstring(e.spawnY) + L", " + std::to_wstring(e.spawnZ) + L")";
-            LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+            std::string msg = "Player respawned at (" + std::to_string(e.spawnX) + ", " + std::to_string(e.spawnY) +
+                              ", " + std::to_string(e.spawnZ) + ")";
+            FPS_CONSOLE(msg, "INFO");
         }));
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"EventBus connected - cross-system events wired", L"SUCCESS");
+    FPS_CONSOLE("EventBus connected - cross-system events wired", "SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -550,21 +573,27 @@ void Game::Update(float dt)
     // Validate delta time to prevent physics explosions from bad frames
     if (!std::isfinite(dt) || dt < 0.0f)
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Game", 5, "Invalid deltaTime %.6f -- clamping to 0", dt);
+        FPS_LOG_EVERY_SECONDS(Warn, 5, "Invalid deltaTime {:.6f} -- clamping to 0", dt);
         dt = 0.0f;
     }
     if (dt > 0.25f)
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Warn, "Game", 5,
-                                "Large deltaTime %.4fs (>250ms) -- clamping to 250ms to prevent physics instability",
-                                dt);
+        FPS_LOG_EVERY_SECONDS(
+            Warn, 5, "Large deltaTime {:.4f}s (>250ms) -- clamping to 250ms to prevent physics instability", dt);
         dt = 0.25f;
     }
 
     dt *= m_timeScale;
+    // Re-check after scaling: the frame dt was validated above, but the scale
+    // is not, and one non-finite product would poison every system below.
+    if (!std::isfinite(dt))
+    {
+        dt = 0.0f;
+    }
 
     SPARK_CATCH_ALL("Game", {
         HandleInput(dt);
+        UpdateArenaAutopilot(dt);
         UpdateCamera(dt);
         UpdateGameObjects(dt);
     });
@@ -660,19 +689,7 @@ void Game::Update(float dt)
     // Update networking - process incoming messages, send outgoing state
     SPARK_GUARDED_UPDATE("Game:Networking", "Game", {
         if (m_networkInitialized)
-        {
-            auto& netMgr = Spark::Net::NetworkManager::GetInstance();
-            netMgr.Update(dt);
-
-            // Send the client input heartbeat for prediction/reconciliation.
-            if (m_player && netMgr.GetRole() != Spark::Net::NetworkRole::None)
-            {
-                Spark::Net::ClientInputState inputState{};
-                inputState.deltaTime = dt;
-                inputState.timestamp = netMgr.GetServerTime();
-                netMgr.SendClientInput(inputState);
-            }
-        }
+            UpdateMultiplayer(dt);
     });
 #endif
 
@@ -705,7 +722,7 @@ void Game::Render()
     // **UNIFIED RENDERING SOLUTION: Single render location for all graphics**
     if (!m_graphics)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Graphics engine not available for rendering", L"ERROR");
+        FPS_CONSOLE("Graphics engine not available for rendering", "ERROR");
         return;
     }
     if (!m_renderingEnabled)
@@ -786,11 +803,11 @@ void Game::Render()
     }
     catch (const std::exception& e)
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Render", 5, "Rendering exception: %s", e.what());
+        FPS_LOG_EVERY_SECONDS(Error, 5, "Rendering exception: {}", e.what());
     }
     catch (...)
     {
-        SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, "Render", 5, "Unknown rendering exception caught");
+        FPS_LOG_EVERY_SECONDS(Error, 5, "Unknown rendering exception caught");
     }
 
     // Always call EndFrame exactly once if BeginFrame succeeded
@@ -804,7 +821,7 @@ void Game::Render()
 void Game::UpdateCamera(float dt)
 {
     // No logging for per-frame operations
-    ASSERT(dt >= 0.0f);
+    FPS_ASSERT(dt >= 0.0f);
     if (m_camera)
         m_camera->Update(dt);
 }
@@ -813,7 +830,7 @@ void Game::UpdateCamera(float dt)
 void Game::UpdateGameObjects(float dt)
 {
     // No logging for per-frame operations
-    ASSERT(dt >= 0.0f);
+    FPS_ASSERT(dt >= 0.0f);
     for (auto& obj : m_gameObjects)
         if (obj && obj->IsActive())
             obj->Update(dt);
@@ -829,8 +846,22 @@ void Game::HandleInput(float)
         return;
     }
 
+#ifdef SPARK_PLATFORM_WINDOWS
+    // On Windows mouse-look belongs to the captured cursor: a click in the
+    // window captures it and Escape releases it. Uncaptured, InputManager still
+    // reports WM_MOUSEMOVE deltas whenever the pointer merely crosses the
+    // window -- the user working in another app, or the pointer that
+    // InputManager::Initialize warped to the window center -- and turning the
+    // camera on those made unattended runs (and their screenshots) depend on
+    // whatever the desktop pointer happened to do.
+    const bool mouseLookActive = m_input->IsMouseCaptured();
+#else
+    // The POSIX/SDL path never enters capture on click, so the uncaptured
+    // cursor is the only mouse-look source there.
+    const bool mouseLookActive = true;
+#endif
     auto [dx, dy] = m_input->GetMouseDelta();
-    if (dx != 0 || dy != 0)
+    if (mouseLookActive && (dx != 0 || dy != 0))
     {
         constexpr float mouseSens = 0.005f;
         m_camera->Yaw(dx * mouseSens);
@@ -884,27 +915,27 @@ void Game::CreateTestObjects()
 {
     if (!m_renderingEnabled)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Test objects need a D3D11 device - skipped on a device-less host", L"WARNING");
+        FPS_CONSOLE("Test objects need a D3D11 device - skipped on a device-less host", "WARNING");
         return;
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Creating test objects...", L"INFO");
+    FPS_CONSOLE("Creating test objects...", "INFO");
 
     // Ground plane
     {
         auto ground = std::make_unique<PlaneObject>(20.0f, 20.0f);
-        ASSERT(ground);
+        FPS_ASSERT(ground);
         HRESULT hr = ground->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Ground plane created successfully", L"INFO");
+            FPS_CONSOLE("Ground plane created successfully", "INFO");
             ground->SetPosition({0.0f, -1.0f, 0.0f});
             m_gameObjects.push_back(std::move(ground));
         }
         else
         {
-            std::wstring errorMsg = L"Ground plane creation failed with HR=0x" + std::to_wstring(hr);
-            LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+            std::string errorMsg = "Ground plane creation failed with HR=0x" + std::to_string(hr);
+            FPS_CONSOLE(errorMsg, "ERROR");
         }
     }
 
@@ -913,7 +944,7 @@ void Game::CreateTestObjects()
     for (int i = 0; i < 5; ++i)
     {
         auto cube = std::make_unique<CubeObject>(1.0f);
-        ASSERT(cube);
+        FPS_ASSERT(cube);
         HRESULT hr = cube->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
@@ -923,29 +954,28 @@ void Game::CreateTestObjects()
         }
         else
         {
-            std::wstring errorMsg =
-                L"Cube " + std::to_wstring(i) + L" creation failed with HR=0x" + std::to_wstring(hr);
-            LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+            std::string errorMsg = "Cube " + std::to_string(i) + " creation failed with HR=0x" + std::to_string(hr);
+            FPS_CONSOLE(errorMsg, "ERROR");
         }
     }
-    std::wstring cubeMsg = L"Created " + std::to_wstring(cubesCreated) + L" cubes";
-    LOG_TO_CONSOLE_IMMEDIATE(cubeMsg, L"INFO");
+    std::string cubeMsg = "Created " + std::to_string(cubesCreated) + " cubes";
+    FPS_CONSOLE(cubeMsg, "INFO");
 
     // Single sphere
     {
         auto sphere = std::make_unique<SphereObject>(1.0f, 16, 16);
-        ASSERT(sphere);
+        FPS_ASSERT(sphere);
         HRESULT hr = sphere->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Sphere created successfully", L"INFO");
+            FPS_CONSOLE("Sphere created successfully", "INFO");
             sphere->SetPosition({5.0f, 0.0f, 0.0f});
             m_gameObjects.push_back(std::move(sphere));
         }
         else
         {
-            std::wstring errorMsg = L"Sphere creation failed with HR=0x" + std::to_wstring(hr);
-            LOG_TO_CONSOLE_IMMEDIATE(errorMsg, L"ERROR");
+            std::string errorMsg = "Sphere creation failed with HR=0x" + std::to_string(hr);
+            FPS_CONSOLE(errorMsg, "ERROR");
         }
     }
 
@@ -953,69 +983,69 @@ void Game::CreateTestObjects()
     {
         // Target practice targets
         auto target1 = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/target.obj"));
-        ASSERT(target1);
+        FPS_ASSERT(target1);
         HRESULT hr = target1->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
             target1->SetPosition({-8.0f, 2.0f, 15.0f});
             target1->SetName("Target_1");
             m_gameObjects.push_back(std::move(target1));
-            LOG_TO_CONSOLE_IMMEDIATE(L"Target 1 model created successfully", L"INFO");
+            FPS_CONSOLE("Target 1 model created successfully", "INFO");
         }
         else
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Target 1 model creation failed", L"WARNING");
+            FPS_CONSOLE("Target 1 model creation failed", "WARNING");
         }
 
         auto target2 = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/target.obj"));
-        ASSERT(target2);
+        FPS_ASSERT(target2);
         hr = target2->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
             target2->SetPosition({8.0f, 2.0f, 15.0f});
             target2->SetName("Target_2");
             m_gameObjects.push_back(std::move(target2));
-            LOG_TO_CONSOLE_IMMEDIATE(L"Target 2 model created successfully", L"INFO");
+            FPS_CONSOLE("Target 2 model created successfully", "INFO");
         }
         else
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Target 2 model creation failed", L"WARNING");
+            FPS_CONSOLE("Target 2 model creation failed", "WARNING");
         }
 
         // Character model for testing
         auto character = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/character.obj"));
-        ASSERT(character);
+        FPS_ASSERT(character);
         hr = character->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
             character->SetPosition({0.0f, 0.0f, 8.0f});
             character->SetName("Character_Model");
             m_gameObjects.push_back(std::move(character));
-            LOG_TO_CONSOLE_IMMEDIATE(L"Character model created successfully", L"INFO");
+            FPS_CONSOLE("Character model created successfully", "INFO");
         }
         else
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Character model creation failed", L"WARNING");
+            FPS_CONSOLE("Character model creation failed", "WARNING");
         }
 
         // Weapon display (rifle on a stand)
         auto weaponDisplay = std::make_unique<ModelObject>(Spark::FPSAssets::Resolve(L"Models/rifle.obj"));
-        ASSERT(weaponDisplay);
+        FPS_ASSERT(weaponDisplay);
         hr = weaponDisplay->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
         if (SUCCEEDED(hr))
         {
             weaponDisplay->SetPosition({-3.0f, 1.5f, 5.0f});
             weaponDisplay->SetName("Weapon_Display");
             m_gameObjects.push_back(std::move(weaponDisplay));
-            LOG_TO_CONSOLE_IMMEDIATE(L"Weapon display model created successfully", L"INFO");
+            FPS_CONSOLE("Weapon display model created successfully", "INFO");
         }
         else
         {
-            LOG_TO_CONSOLE_IMMEDIATE(L"Weapon display model creation failed", L"WARNING");
+            FPS_CONSOLE("Weapon display model creation failed", "WARNING");
         }
     }
 
-    std::wstring totalMsg =
-        L"Test objects creation complete. Total: " + std::to_wstring(m_gameObjects.size()) + L" objects";
-    LOG_TO_CONSOLE_IMMEDIATE(totalMsg, L"SUCCESS");
+    std::string totalMsg =
+        "Test objects creation complete. Total: " + std::to_string(m_gameObjects.size()) + " objects";
+    FPS_CONSOLE(totalMsg, "SUCCESS");
 }

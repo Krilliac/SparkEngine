@@ -10,7 +10,11 @@
  *
  * - **Script compilation** from files or in-memory strings
  * - **Entity binding** — attach/detach script classes to ECS entities
- * - **Lifecycle callbacks** — Start(), Update(float), OnCollision(EntityID)
+ * - **Lifecycle callbacks** — Start(), Update(float), OnCollision(EntityID),
+ *   OnTriggerEnter(EntityID), OnTriggerExit(EntityID)
+ * - **Engine-owned contact dispatch** — ConnectEventBus() routes the physics
+ *   CollisionEvent / TriggerEnterEvent / TriggerExitEvent (and authored
+ *   TriggerVolumeComponent overlaps) to both participants' scripts
  * - **Engine API exposure** — math types, components, input, and utility
  *   functions are registered and callable from script code
  * - **Error reporting** — compilation and runtime errors are captured and
@@ -19,18 +23,20 @@
  * ## Typical workflow
  *
  * @code
- *   AngelScriptEngine engine;
- *   engine.Initialize();
+ *   auto& engine = *EngineContext::Get()->GetScriptEngine();
+ *   auto& world = *EngineContext::Get()->GetWorld();
  *
  *   // Compile a script file
  *   engine.CompileScriptFile("Assets/Scripts/EnemyAI.as");
  *
  *   // Attach the script class "EnemyBehavior" to an entity
+ *   auto& script = world.AddComponent<Script>(enemyEntity);
+ *   script.className = "EnemyBehavior";
+ *   script.moduleName = "EnemyAI";
  *   engine.AttachScript(enemyEntity, "EnemyBehavior", "EnemyAI");
  *
- *   // In the game loop:
- *   engine.CallStart(enemyEntity);       // called once
- *   engine.CallUpdate(enemyEntity, dt);  // called every frame
+ *   // The engine-owned ScriptRuntimeSystem dispatches lifecycle callbacks
+ *   // during the Gameplay phase after the component is attached.
  * @endcode
  *
  * ## AngelScript API available to scripts
@@ -44,8 +50,9 @@
  * - **Input:** print, getKeyDown, getKey
  * - **Entity lifecycle:** createEntity, destroyEntity, getEntityByName
  * - **Transform:** getTransform, getPosition/setPosition, getRotation/setRotation
- * - **Gameplay:** getHealth/setHealth, getSpeed, applyForce, playSound, playAnimation
- * - **Events/debug:** fireEvent, debugTrace
+ * - **Gameplay:** getHealth/setHealth, playSound, playAnimation
+ * - **Physics:** getSpeed (live body speed), applyForce (Dynamic Jolt body)
+ * - **Events/debug:** fireEvent (publishes Spark::ScriptEvent on the engine EventBus), debugTrace
  * - **Reflection-driven component access:** getComponentField, setComponentField, hasComponent
  *
  * @see Components.h (for EntityID and Transform), ECSWorld
@@ -75,6 +82,7 @@ struct asSMessageInfo;
 #include <string>
 #include <vector>
 #include "../ECS/Components.h"
+#include "../../Utils/EventBus.h"
 #include "ScriptSandbox.h"
 
 /**
@@ -175,17 +183,32 @@ class AngelScriptEngine
     // ========================================================================
 
     /**
-     * @brief Call the script's Start() method for an entity (called once)
+     * @brief Dispatch the script's Start() method for an entity.
+     *
+     * Called by the engine-owned ScriptRuntimeSystem; game code should not
+     * invoke lifecycle callbacks directly.
      * @param entity The entity whose script Start() should be invoked
      */
     void CallStart(EntityID entity);
 
     /**
-     * @brief Call the script's Update(float) method for an entity (called every frame)
+     * @brief Dispatch the script's Update(float) method for an entity.
+     *
+     * Called by the engine-owned ScriptRuntimeSystem; game code should not
+     * invoke lifecycle callbacks directly.
      * @param entity    The entity whose script Update() should be invoked
      * @param deltaTime Time elapsed since the last frame in seconds
      */
     void CallUpdate(EntityID entity, float deltaTime);
+
+    /**
+     * @brief Remove attached instances whose ECS entities no longer exist.
+     *
+     * The lifecycle script system calls this before iterating the live Script
+     * components.  The operation is game-thread-only because script contexts
+     * and the bound World are not thread-safe.
+     */
+    void PruneInvalidScripts(const World& world);
 
     /**
      * @brief Call the script's OnCollision(EntityID) method for an entity
@@ -193,6 +216,51 @@ class AngelScriptEngine
      * @param other  The entity ID of the other object in the collision
      */
     void CallOnCollision(EntityID entity, EntityID other);
+
+    /**
+     * @brief Call the script's OnTriggerEnter(EntityID) method for an entity
+     * @param entity The entity whose script OnTriggerEnter() should be invoked
+     * @param other  The other participant: the trigger volume for the entering
+     *               entity, or the entering entity for the trigger's own script
+     */
+    void CallOnTriggerEnter(EntityID entity, EntityID other);
+
+    /**
+     * @brief Call the script's OnTriggerExit(EntityID) method for an entity
+     * @param entity The entity whose script OnTriggerExit() should be invoked
+     * @param other  The other participant (see CallOnTriggerEnter())
+     */
+    void CallOnTriggerExit(EntityID entity, EntityID other);
+
+    /**
+     * @brief Dispatch engine contact events on @p bus to attached scripts.
+     *
+     * Subscribes to Spark::CollisionEvent, Spark::TriggerEnterEvent and
+     * Spark::TriggerExitEvent. Each event is delivered to the scripts of both
+     * participants — OnCollision / OnTriggerEnter / OnTriggerExit receives the
+     * other entity — first to CollisionEvent::entityA or the entering entity,
+     * then to the other one; an entity with no script, no matching method, a
+     * faulted script, or (when a World is bound) a destroyed entity id is
+     * skipped. Id 0 is the physics "no entity" sentinel (a body created outside
+     * the ECS, such as terrain): it never receives a callback, and the other
+     * participant's callback receives entt::null for it. Because entity 0 is
+     * also the first entity a World creates, that entity's script never
+     * receives contact callbacks. PhysicsSystem publishes these after each step and the
+     * TriggerVolumeComponent bridge publishes authored overlaps, so scripts need
+     * no game-module glue to receive them.
+     *
+     * Thread affinity: handlers run synchronously on the publishing thread, which
+     * for physics is the game thread that steps the world (the same thread that
+     * must run every other script call). Allocation: three subscriptions per
+     * connection; dispatch itself allocates only what DispatchCallback does.
+     *
+     * Replaces any previous connection; nullptr disconnects. Shutdown() disconnects.
+     * The bus must outlive the connection or be disconnected first (a handle that
+     * outlives its bus is inert).
+     *
+     * @param bus Engine EventBus (EngineContext::GetEventBus()), or nullptr.
+     */
+    void ConnectEventBus(Spark::EventBus* bus);
 
     // ========================================================================
     // Error Handling and Singleton Access
@@ -218,6 +286,15 @@ class AngelScriptEngine
      * @return true if a script is attached and currently faulted
      */
     bool IsScriptFaulted(EntityID entity) const;
+
+    /** @brief Return the current attached-instance generation, or zero when absent. */
+    uint64_t GetScriptGeneration(EntityID entity) const;
+
+    /** @brief Return whether the attached instance has already received Start(). */
+    bool IsScriptStarted(EntityID entity) const;
+
+    /** @brief Number of currently attached script instances. */
+    std::size_t GetAttachedScriptCount() const;
 
     /**
      * @brief Get the script execution sandbox
@@ -252,6 +329,18 @@ class AngelScriptEngine
                                   const std::vector<std::string>& blockedFunctions = {});
 
     /**
+     * @brief Entity whose script is executing on the calling thread.
+     *
+     * Resolved from the active AngelScript context, so it is correct inside a
+     * native called from a script's constructor, Start(), Update() or
+     * OnCollision(), including nested dispatch into another entity's script.
+     * Used by fireEvent() to stamp ScriptEvent::sourceEntity.
+     *
+     * @return The executing script's entity, or entt::null when no script is running.
+     */
+    static EntityID GetExecutingEntity();
+
+    /**
      * @brief Get the global singleton instance
      * @return Pointer to the AngelScriptEngine instance, or nullptr if not created
      */
@@ -265,8 +354,8 @@ class AngelScriptEngine
     /**
      * @brief Bind an ECS World for script API functions (createEntity, getTransform).
      *
-     * Must be called after Initialize() and before any scripts call createEntity()
-     * or getTransform(). Typically called once per scene load.
+     * The engine-owned ScriptRuntimeSystem rebinds the active World before each
+     * gameplay tick, before any scripts call createEntity() or getTransform().
      *
      * @param world Non-owning pointer to the active World. Pass nullptr to unbind.
      */
@@ -290,21 +379,44 @@ class AngelScriptEngine
      */
     struct ScriptInstance
     {
-        asIScriptObject* object = nullptr;              ///< The instantiated script object
-        asITypeInfo* typeInfo = nullptr;                ///< Type metadata for the script class
-        asIScriptContext* context = nullptr;            ///< Execution context for calling methods
-        asIScriptFunction* startMethod = nullptr;       ///< Cached pointer to the Start() method
-        asIScriptFunction* updateMethod = nullptr;      ///< Cached pointer to the Update(float) method
-        asIScriptFunction* onCollisionMethod = nullptr; ///< Cached pointer to the OnCollision(EntityID) method
-        std::string className;                          ///< Name of the script class
-        std::string moduleName;                         ///< Name of the module containing the class
-        bool faulted = false;                           ///< Disabled by a runtime fault until re-attached
+        asIScriptObject* object = nullptr;                 ///< The instantiated script object
+        asITypeInfo* typeInfo = nullptr;                   ///< Type metadata for the script class
+        asIScriptContext* context = nullptr;               ///< Execution context for calling methods
+        asIScriptFunction* startMethod = nullptr;          ///< Cached pointer to the Start() method
+        asIScriptFunction* updateMethod = nullptr;         ///< Cached pointer to the Update(float) method
+        asIScriptFunction* onCollisionMethod = nullptr;    ///< Cached pointer to the OnCollision(EntityID) method
+        asIScriptFunction* onTriggerEnterMethod = nullptr; ///< Cached pointer to OnTriggerEnter(EntityID)
+        asIScriptFunction* onTriggerExitMethod = nullptr;  ///< Cached pointer to OnTriggerExit(EntityID)
+        std::string className;                             ///< Name of the script class
+        std::string moduleName;                            ///< Name of the module containing the class
+        bool faulted = false;                              ///< Disabled by a runtime fault until re-attached
+        bool started = false;                              ///< Whether this instance has received Start()
+        EntityID entity = entt::null;                      ///< Owning entity (context user data for GetExecutingEntity)
+        uint64_t generation = 0;                           ///< Monotonic attachment generation
     };
 
     std::unordered_map<EntityID, ScriptInstance> m_entityScripts; ///< Active script instances by entity ID
+    uint64_t m_nextScriptGeneration = 0;                          ///< Monotonic generation source for attachments
     std::string m_lastError;                                      ///< Last error message from AS engine
     std::string m_firstCompileError; ///< First compiler error of the current build (kept for diagnostics)
-    std::unique_ptr<Spark::ScriptSandbox> m_sandbox; ///< Script execution sandbox
+    std::unique_ptr<Spark::ScriptSandbox> m_sandbox;               ///< Script execution sandbox
+    std::vector<Spark::SubscriptionHandle> m_contactSubscriptions; ///< ConnectEventBus() subscriptions
+
+    /// Which contact callback DispatchContact() delivers.
+    enum class ContactCallback : uint8_t
+    {
+        Collision,
+        TriggerEnter,
+        TriggerExit
+    };
+
+    /**
+     * @brief Deliver one contact event to both participants' scripts.
+     * @param callback Callback to invoke
+     * @param first    Participant dispatched first (collision entityA / entering entity)
+     * @param second   Other participant (collision entityB / trigger volume)
+     */
+    void DispatchContact(ContactCallback callback, EntityID first, EntityID second);
 
     // Sandbox security configuration staged via ConfigureSandboxSecurity()
     // before Initialize() constructs m_sandbox and registers the engine API.
@@ -391,37 +503,124 @@ class AngelScriptEngine
      * @return "<where> <reason> at <section>:<line>:<column> in '<function>'"
      */
     std::string DescribeScriptFault(asIScriptContext* ctx, int execResult, const std::string& where) const;
-#endif
 
-    // ========================================================================
-    // Internal Helpers
-    // ========================================================================
+    /// How a script field's value crosses a hot reload (rules R3/R4, see HotReloadModule()).
+    enum class FieldCarry : uint8_t
+    {
+        Bytes,     ///< Primitive, enum or registered POD value type: copied byte for byte.
+        String,    ///< The registered `string` type: copied by value.
+        NotCarried ///< Handle, script object, array or other reference type: keeps its constructor value.
+    };
+
+    /// One field of a script instance captured before hot reload detaches it.
+    struct FieldSnapshot
+    {
+        std::string name;     ///< Field name.
+        std::string typeDecl; ///< Type declaration; matched by text because type ids change on rebuild.
+        FieldCarry carry = FieldCarry::NotCarried;
+        std::vector<unsigned char> bytes; ///< Value for FieldCarry::Bytes.
+        std::string text;                 ///< Value for FieldCarry::String.
+    };
+
+    /** @brief Snapshot every field of @p object that the hot-reload rules can carry. */
+    std::vector<FieldSnapshot> CaptureFields(asIScriptObject* object) const;
+
+    /**
+     * @brief Copy snapshot values into a freshly constructed instance by name and type.
+     * @param object   New instance (constructor already ran)
+     * @param fields   Snapshot of the instance it replaces
+     * @param location "module::Class" prefix for report notes
+     */
+    void RestoreFields(asIScriptObject* object, const std::vector<FieldSnapshot>& fields, const std::string& location);
+
+    /**
+     * @brief Shared body of HotReloadModule() and HotReloadModuleFromSource(): stage, commit, re-attach.
+     * @param moduleName Module to reload (its entity scripts are snapshotted and re-attached)
+     * @param origin     Source description for the abort diagnostic (file path or "module '<name>' source")
+     * @param addSection Adds the one source section to the staging builder; returns < 0 on failure
+     */
+    bool StageAndCommitReload(const std::string& moduleName, const std::string& origin,
+                              const std::function<int(CScriptBuilder&)>& addSection);
+#endif
 
     // ========================================================================
     // Hot-Reload Support
     // ========================================================================
 
+  public:
+    /// Outcome of the last HotReloadModule() call (field counts are summed over all instances).
+    struct HotReloadReport
+    {
+        size_t instances = 0;           ///< Instances re-attached to the new module.
+        size_t carried = 0;             ///< Fields that kept their value from the old instance.
+        size_t defaulted = 0;           ///< Fields new in this version (constructor value).
+        size_t dropped = 0;             ///< Old values discarded: field removed, retyped, or not carried.
+        size_t failedAttaches = 0;      ///< Instances that could not be re-attached (entity left without a script).
+        std::vector<std::string> notes; ///< One line per distinct dropped field or failed re-attach.
+    };
+
     /**
-     * @brief Recompile a module and re-attach all entity scripts that reference it
+     * @brief Recompile a module from its source file and re-attach its entity scripts, keeping their state.
      *
-     * First validates that the new source compiles into a throwaway staging
-     * module; if compilation fails, nothing is changed and false is returned
-     * (all live scripts stay intact). On success, every entity script of the
-     * module is detached, the module is recompiled under its real name, and
-     * each script is re-attached by running its default constructor again.
+     * Hot-reload state rules (wiki: "Hot-reload state rules"):
+     * - R1 The new source is compiled into a staging module first; if it fails,
+     *      nothing changes and false is returned. The file is read only for
+     *      that staging build, and the staged module is what gets committed,
+     *      so a file rewritten or deleted after staging cannot fail the reload
+     *      once live instances are detached.
+     * - R2 A field whose name and type declaration match in the old and new
+     *      class keeps the old instance's value.
+     * - R3 Carried types: primitives, enums, `string`, and registered POD
+     *      value types such as Vector3.
+     * - R4 Handles, script-class objects, arrays and other reference types are
+     *      not carried; they keep the value the new constructor gave them.
+     * - R5 New fields keep their constructor value; removed and retyped fields
+     *      are dropped and listed in the report.
+     * - R6 The constructor runs, Start() is not called again; Update() and
+     *      contact callbacks continue from the next dispatch.
+     * - R7 A faulted instance comes back un-faulted, with its carried state.
+     * - R8 An instance whose class is missing from the new module (or may not
+     *      attach in the current script context) is left without a script,
+     *      counted in failedAttaches and reported; the call returns false.
      *
-     * @note Per-instance script state is NOT preserved: constructors re-run and
-     *       all fields reset. There are no Serialize()/Deserialize() hooks.
+     * Game thread only, like every script call. Allocates the snapshots and
+     * report; not for per-frame use.
      *
-     * @param moduleName Name of the module to reload
+     * @param moduleName Name of a module compiled with CompileScriptFile()
      * @return true only if recompilation and every re-attach succeeded
      */
     bool HotReloadModule(const std::string& moduleName);
 
     /**
-     * @brief Get the file path associated with a compiled module
+     * @brief Recompile a module from in-memory source and re-attach its entity scripts, keeping their state.
+     *
+     * The HotReloadModule() counterpart for modules built with
+     * CompileScriptFromString(), which have no source file to re-read. Same
+     * rules R1-R8 and the same report; the source section is named after the
+     * module, so diagnostics read "<module>:<line>" as they do for
+     * CompileScriptFromString(). Game thread only; not for per-frame use.
+     *
+     * @param moduleName Name of an already compiled module
+     * @param source     Complete new source of the module
+     * @return true only if recompilation and every re-attach succeeded
+     */
+    bool HotReloadModuleFromSource(const std::string& moduleName, const std::string& source);
+
+    /**
+     * @brief Whether a compiled module declares a script class of the given name.
+     *
+     * Lets a caller validate a new source before committing a hot reload whose
+     * re-attach would otherwise fail (rule R8).
+     */
+    bool HasScriptClass(const std::string& moduleName, const std::string& className) const;
+
+    /** @brief Report of the last HotReloadModule() call (empty before the first). */
+    const HotReloadReport& GetLastHotReloadReport() const { return m_lastHotReloadReport; }
+
+    /**
+     * @brief Get the source file of a module compiled with CompileScriptFile()
      * @param moduleName Module name
-     * @return File path, or empty string if not found
+     * @return Absolute file path (resolved at compile time), or empty string if not found
      */
     std::string GetModuleFilePath(const std::string& moduleName) const;
 
@@ -436,7 +635,6 @@ class AngelScriptEngine
     // Script Execution Context (Client/Server)
     // ========================================================================
 
-  public:
     /**
      * @brief Script execution context for multiplayer separation
      */
@@ -475,6 +673,8 @@ class AngelScriptEngine
     /// Maps module name -> source file path for hot-reload
     std::unordered_map<std::string, std::string> m_moduleFilePaths;
 
+    HotReloadReport m_lastHotReloadReport; ///< Filled by HotReloadModule()
+
     /// Declared execution context per script class, keyed by "module::class".
     /// Populated at compile time from class metadata tags ([server]/[client]);
     /// classes with no recorded entry are treated as Shared.
@@ -502,7 +702,7 @@ class AngelScriptEngine
     ScriptInstance* GetScriptInstance(EntityID entity);
 
     /**
-     * @brief Cache method pointers (Start, Update, OnCollision) for a script instance
+     * @brief Cache lifecycle and contact method pointers for a script instance
      * @param instance The script instance to cache methods for
      */
     void CacheScriptMethods(ScriptInstance& instance);
@@ -545,11 +745,60 @@ void ASPrint(const std::string& message);
 EntityID ASCreateEntity(const std::string& name);
 
 /**
- * @brief Get an entity's Transform component (callable from AngelScript as `getTransform()`)
- * @param entity The entity to query
- * @return Pointer to the entity's Transform, or nullptr if not found
+ * @brief Script-side `Transform@` handle: names an entity, never points into ECS storage.
+ *
+ * A script may keep the handle past the entity's lifetime (in a global, across
+ * frames). It therefore holds only the EntityID and re-resolves the entity's
+ * Transform in the bound World (AngelScriptEngine::GetBoundWorld) on every
+ * property access. When the World is unbound, the entity was destroyed or the
+ * Transform removed, a read returns (0, 0, 0), a write is dropped, and the
+ * executing script context gets a script exception; native memory is never
+ * touched. EnTT entity ids carry a version, so a recycled slot does not match.
+ *
+ * - Thread affinity: game thread (script execution only).
+ * - Ownership: AngelScript reference counting; created by ASGetTransform with
+ *   one reference and destroyed by the last Release().
+ * - Allocation: one small heap object per getTransform() call; per-access
+ *   property reads and writes do not allocate.
  */
-Transform* ASGetTransform(EntityID entity);
+class ScriptTransformRef
+{
+  public:
+    explicit ScriptTransformRef(EntityID entity) noexcept : m_entity(entity) {}
+    ScriptTransformRef(const ScriptTransformRef&) = delete;
+    ScriptTransformRef& operator=(const ScriptTransformRef&) = delete;
+
+    void AddRef() noexcept;
+    void Release() noexcept;
+
+    /// True while the entity is alive in the bound World and has a Transform.
+    bool IsValid() const noexcept;
+    EntityID GetEntity() const noexcept { return m_entity; }
+
+    DirectX::XMFLOAT3 GetPosition() const noexcept;
+    void SetPosition(const DirectX::XMFLOAT3& value) noexcept;
+    DirectX::XMFLOAT3 GetRotation() const noexcept;
+    void SetRotation(const DirectX::XMFLOAT3& value) noexcept;
+    DirectX::XMFLOAT3 GetScale() const noexcept;
+    void SetScale(const DirectX::XMFLOAT3& value) noexcept;
+
+  private:
+    ~ScriptTransformRef() = default;
+
+    /// The live Transform, or nullptr after raising a script exception.
+    Transform* Resolve() const noexcept;
+
+    EntityID m_entity;
+    int m_refCount = 1; ///< Game-thread only, like every script call
+};
+
+/**
+ * @brief Get a handle to an entity's Transform (callable from AngelScript as `getTransform()`)
+ * @param entity The entity to query
+ * @return A new handle (one reference, owned by the caller), or nullptr when the
+ *         entity is not alive in the bound World or has no Transform
+ */
+ScriptTransformRef* ASGetTransform(EntityID entity);
 
 /**
  * @brief Check if a key was pressed this frame (callable from AngelScript as `getKeyDown()`)
@@ -590,22 +839,60 @@ float ASGetHealth(EntityID entity);
 /** @brief Set entity health value (callable as `setHealth()`) */
 void ASSetHealth(EntityID entity, float health);
 
-/** @brief Get entity movement speed (callable as `getSpeed()`) */
+/**
+ * @brief Get entity linear speed in m/s (callable as `getSpeed()`)
+ *
+ * Reads the live Jolt body velocity through the entity's RigidBodyComponent,
+ * falling back to the component's cached velocity before the body exists.
+ * Returns 0 when the entity has no RigidBodyComponent in the bound World.
+ */
 float ASGetSpeed(EntityID entity);
 
-/** @brief Apply a physics force to an entity (callable as `applyForce()`) */
+/**
+ * @brief Apply a world-space force (N) to an entity's physics body (callable as `applyForce()`)
+ *
+ * Accumulated on the entity's Dynamic Jolt body and integrated over the next
+ * physics step (the body is woken). Ignored with a one-time warning when the
+ * force is not finite, the entity has no RigidBodyComponent, is not Dynamic,
+ * or PhysicsUpdateSystem has not yet created its body.
+ */
 void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force);
 
-/** @brief Play a sound effect on an entity (callable as `playSound()`) */
+/**
+ * @brief Queue a one-shot sound on an entity (callable as `playSound()`)
+ *
+ * Appends a cue to the entity's ScriptAudioCues in the bound World (added on
+ * first use); the next AudioUpdateSystem tick starts it, as a 3D sound at the
+ * entity's current position when it has a Transform. Ignored with a one-time
+ * warning when the entity is not alive in the bound World or the name is empty,
+ * longer than 128 characters, or contains control characters. At most
+ * ScriptAudioCues::kMaxPending cues wait per entity; further requests are
+ * counted as dropped.
+ */
 void ASPlaySound(EntityID entity, const std::string& soundName);
 
-/** @brief Play an animation on an entity (callable as `playAnimation()`) */
+/**
+ * @brief Switch an entity's AnimationController to a clip (callable as `playAnimation()`)
+ *
+ * Sets currentAnimation, restarts playback from time 0 and marks it playing;
+ * AnimationUpdateSystem advances it. Requesting the clip that is already
+ * playing is a no-op, so scripts may call it every frame. Ignored with a
+ * one-time warning when the entity has no AnimationController in the bound
+ * World (none is created), the name is invalid (see ASPlaySound), or the
+ * controller lists availableAnimations and the clip is not among them.
+ */
 void ASPlayAnimation(EntityID entity, const std::string& animName);
 
 /** @brief Find an entity by name (callable as `getEntityByName()`) */
 EntityID ASGetEntityByName(const std::string& name);
 
-/** @brief Fire a named event (callable as `fireEvent()`) */
+/**
+ * @brief Fire a named event (callable as `fireEvent()`)
+ *
+ * Publishes Spark::ScriptEvent{eventName, executing entity} synchronously on
+ * the EngineContext EventBus. Dropped with a one-time warning when the name is
+ * empty or no EventBus is registered.
+ */
 void ASFireEvent(const std::string& eventName);
 
 /** @brief Print a debug trace message (callable as `debugTrace()`) */

@@ -205,6 +205,13 @@ void PhysicsSystem::RemoveBody(std::shared_ptr<PhysicsBody> body)
     // Remove from ID map
     m_bodyIDMap.erase(body->GetJoltBodyID());
 
+    // Forget its trigger overlaps. The caller may drop the last reference right after this, and a stale pair
+    // would hand the freed wrapper to the trigger-exit dispatch (or mask a later enter by a body reusing the
+    // address). No exit fires for a removed body.
+    PhysicsBody* removed = body.get();
+    std::erase_if(m_activeTriggerPairs,
+                  [removed](const auto& pair) { return pair.first == removed || pair.second == removed; });
+
     // Remove from named bodies
     const std::string& name = body->GetName();
     if (!name.empty())
@@ -242,6 +249,7 @@ void PhysicsSystem::RemoveAllBodies()
     m_bodies.clear();
     m_namedBodies.clear();
     m_bodyIDMap.clear();
+    m_activeTriggerPairs.clear();
 }
 
 // ============================================================================
@@ -255,7 +263,12 @@ std::unique_ptr<CharacterController> PhysicsSystem::CreateCharacterController(co
 
 std::unique_ptr<VehiclePhysics> PhysicsSystem::CreateVehicle(std::shared_ptr<PhysicsBody> body, const VehicleDesc& desc)
 {
-    return std::make_unique<VehiclePhysics>(this, body, desc);
+    auto vehicle = std::make_unique<VehiclePhysics>(this, body, desc);
+    if (!vehicle->IsValid())
+    {
+        return nullptr; // the constructor logged why
+    }
+    return vehicle;
 }
 
 std::unique_ptr<Ragdoll> PhysicsSystem::CreateRagdoll(const RagdollDesc& desc)

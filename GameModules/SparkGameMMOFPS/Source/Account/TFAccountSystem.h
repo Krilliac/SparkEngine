@@ -1,18 +1,31 @@
 /**
  * @file TFAccountSystem.h
- * @brief TERRAFRONT account register/login core logic (W5 onboarding, Task 2).
+ * @brief TERRAFRONT account register/login core logic (W5 onboarding, Task 2; NET-100 SCRAM verifiers).
  *
  * Core logic only: operates directly on a `TFDatabase*` (no TFGameContext),
  * so it is unit-testable standalone. The client-id -> account-id session map
  * is plain in-memory bookkeeping consumed by the session layer (Task 4).
+ *
+ * Login is SCRAM-SHA-256 (RFC 5802 / RFC 7677): BeginLogin hands out the salt,
+ * iteration count and a single-use server nonce; CompleteLogin checks a proof
+ * bound to both nonces. The account row stores only StoredKey and ServerKey,
+ * so neither the row nor a captured login lets anyone log in again.
+ *
+ * Thread affinity: game thread (one TFAccountSystem per server authority).
+ * Ownership: borrows the TFDatabase; owns the pending-challenge map.
+ * Allocation: per login attempt only; never per frame.
  */
 #pragma once
 
+#include "Account/TFCrypto.h"
 #include "Persistence/TFDatabase.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace Terrafront
 {
@@ -27,7 +40,9 @@ namespace Terrafront
         ServerError,
         NotLoggedIn,
         SessionActive,
-        RemoteOnboardingDisabled
+        RemoteOnboardingDisabled,
+        AccountInUse, // credentials valid, but another connection holds the account (wire value 9)
+        WeakVerifier  ///< RegisterVerifier: salt or iteration count outside the kMin/kMaxScram* policy (wire value 10)
     };
 
     struct TFAuthResult
@@ -37,28 +52,140 @@ namespace Terrafront
         uint64_t accountId = 0;
     };
 
+    /// SCRAM server-first-message fields returned by BeginLogin.
+    struct TFScramChallenge
+    {
+        std::vector<uint8_t> salt;
+        uint32_t iterations = 0;
+        std::string serverNonce; ///< empty when the CSPRNG failed; the login cannot complete
+    };
+
+    struct TFScramLoginResult
+    {
+        TFAuthResult auth;
+        Crypto::Sha256Digest serverSignature{}; ///< HMAC(ServerKey, AuthMessage) when auth.ok; proves the server
+    };
+
     class TFAccountSystem
     {
       public:
         void SetDatabase(TFDatabase* db) { m_db = db; } // core logic uses the db directly (unit-testable)
 
-        TFAuthResult Register(const std::string& username, const std::string& password); // min length 3
-        TFAuthResult Login(const std::string& username, const std::string& password);
+        /**
+         * @name SCRAM verifier policy
+         * Enforced when a verifier is registered and again whenever a stored row is
+         * loaded, because a row's iteration count is paid by every login attempt
+         * for that name and is handed to the client in the challenge. A client
+         * must refuse a challenge outside [kMinScramIterations, kMaxScramIterations]
+         * before running PBKDF2, so a hostile server cannot stall it either.
+         * @{
+         */
+        static constexpr uint32_t kMinScramIterations = 150000; ///< intake floor (stored legacy rows: 100000)
+        static constexpr uint32_t kMaxScramIterations = 600000; ///< 4x the current cost; same bound as legacy rows
+        static constexpr size_t kMinScramSaltBytes = 16;
+        static constexpr size_t kMaxScramSaltBytes = 64;
+        /// @}
 
-        // session layer (Task 4): bind a connection to an account
-        void BindSession(uint32_t clientId, uint64_t accountId);
+        /// Store a SCRAM verifier the client derived itself (the password never reaches the server).
+        /// WeakVerifier when the salt or iteration count is outside the verifier policy above.
+        TFAuthResult RegisterVerifier(const std::string& username, const std::vector<uint8_t>& salt,
+                                      uint32_t iterations, const Crypto::Sha256Digest& storedKey,
+                                      const Crypto::Sha256Digest& serverKey);
+
+        /// Pending SCRAM challenges: at most one per connection, kMaxPendingLogins in total, each
+        /// valid for kLoginChallengeTtlMs after BeginLogin.
+        static constexpr size_t kMaxPendingLogins = 1024;
+        static constexpr int64_t kLoginChallengeTtlMs = 60000;
+        /// Connection id the in-process Login wrapper uses by default (Spark::Net::INVALID_CLIENT,
+        /// which no transport connection ever has).
+        static constexpr uint32_t kLocalLoginClient = 0;
+
+        /**
+         * @brief Start a login on connection @p clientId: salt, iterations and a fresh single-use server nonce.
+         *
+         * The challenge is bound to (clientId, username) and replaces only that
+         * connection's earlier challenge; another peer asking for the same name
+         * cannot replace or consume it. Unknown users get a salt that is stable per
+         * username and shaped like a real one, so the reply does not reveal whether
+         * the account exists. A legacy pbkdf2-sha256 row is rewritten as a
+         * scram-sha256 row here. serverNonce is empty (the login cannot complete)
+         * when the CSPRNG fails or kMaxPendingLogins unexpired challenges are held.
+         */
+        TFScramChallenge BeginLogin(uint32_t clientId, const std::string& username);
+
+        /// Verify a client proof against @p clientId's outstanding challenge, which is consumed
+        /// either way; fails when that challenge was issued for another username or has expired.
+        TFScramLoginResult CompleteLogin(uint32_t clientId, const std::string& username, const std::string& clientNonce,
+                                         const std::string& serverNonce, std::span<const uint8_t> clientProof);
+
+        /// RFC 5802 AuthMessage (no channel binding) shared by both sides of the exchange.
+        static std::string ScramAuthMessage(const std::string& username, const std::string& clientNonce,
+                                            const std::string& serverNonce, const std::vector<uint8_t>& salt,
+                                            uint32_t iterations);
+
+        /// Local wrappers for tests and offline tools: they derive the verifier or proof in-process.
+        TFAuthResult Register(const std::string& username, const std::string& password); // min length 3 / 8
+        TFAuthResult Login(const std::string& username, const std::string& password,
+                           uint32_t clientId = kLocalLoginClient);
+
+        /**
+         * @brief Bind a connection to an account (session layer, Task 4).
+         * @return false when accountId is 0 or the account is already bound to a
+         *         different connection (one live session per account); the
+         *         existing binding is left untouched.
+         */
+        bool BindSession(uint32_t clientId, uint64_t accountId);
         uint64_t AccountForClient(uint32_t clientId) const; // 0 if not logged in
-        void ClearSession(uint32_t clientId);
+        void ClearSession(uint32_t clientId);               // also drops the connection's pending login challenge
 
-        static std::string GenerateSalt(); // >=16 random bytes, hex-encoded
-        static std::string HashPassword(const std::string& password,
-                                        const std::string& salt); // self-describing pbkdf2-sha256$iters$salt$dk string
-        static bool VerifyPassword(const std::string& password,
-                                   const std::string& storedHash); // constant-time; false on legacy/unknown format
+        /// Random-byte source with the Spark::SecureRandom::Fill signature.
+        using RandomFillFn = bool (*)(void* buffer, size_t size) noexcept;
+
+        /**
+         * @brief Override the salt and nonce random source (nullptr restores the OS CSPRNG).
+         *
+         * Exists so tests can exercise the fail-closed paths; production code never calls it.
+         */
+        void SetRandomSource(RandomFillFn fill) { m_randomFill = fill; }
+
+        /// Monotonic millisecond clock for challenge expiry; nullptr restores std::chrono::steady_clock.
+        using ClockFn = int64_t (*)() noexcept;
+        /// Test seam for the challenge TTL; production code never calls it.
+        void SetClock(ClockFn now) { m_clock = now; }
+
+        /**
+         * @brief Generate a 16-byte hex-encoded salt from the OS CSPRNG.
+         * @param fill Random source; nullptr means Spark::SecureRandom::Fill.
+         * @return The hex salt, or an empty string when the random source fails.
+         */
+        static std::string GenerateSalt(RandomFillFn fill = nullptr);
+        /// Self-describing "scram-sha256$iters$saltHex$storedKeyHex$serverKeyHex" row for (password, salt).
+        static std::string HashPassword(const std::string& password, const std::string& salt);
+        /// Constant-time; accepts scram-sha256 and legacy pbkdf2-sha256 rows, false on anything else and,
+        /// before any derivation, on stored parameters outside policy (iterations not a plain decimal in
+        /// [100000, 600000]; a legacy row's salt not 16 bytes or derived key not 32 bytes).
+        static bool VerifyPassword(const std::string& password, const std::string& storedHash);
 
       private:
+        struct PendingLogin
+        {
+            std::string username;
+            std::string serverNonce;
+            int64_t issuedAtMs = 0;
+        };
+
+        std::string RandomHex(size_t bytes) const; // empty on CSPRNG failure
+        int64_t NowMs() const;
+        /// True when @p clientId may hold a pending challenge; prunes expired entries when the map is full.
+        bool ReservePendingSlot(uint32_t clientId, int64_t nowMs);
+
         TFDatabase* m_db = nullptr;
-        std::unordered_map<uint32_t, uint64_t> m_sessions; // clientId -> accountId
+        RandomFillFn m_randomFill = nullptr;                        // nullptr -> Spark::SecureRandom::Fill
+        std::unordered_map<uint32_t, uint64_t> m_sessions;          // clientId -> accountId
+        std::unordered_map<uint64_t, uint32_t> m_accountOwners;     // accountId -> clientId (exclusive)
+        ClockFn m_clock = nullptr;                                  // nullptr -> steady_clock
+        std::unordered_map<uint32_t, PendingLogin> m_pendingLogins; // clientId -> outstanding challenge
+        std::string m_unknownUserKey;                               // per-process key for unknown-user pseudo salts
     };
 
 } // namespace Terrafront

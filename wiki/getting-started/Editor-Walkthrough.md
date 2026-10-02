@@ -19,7 +19,7 @@ The runtime hosts do not currently define an F1 editor-overlay toggle.
 
 ## Default Layout
 
-The current factory metadata marks 6 core panels visible by default:
+The core panels visible by default are:
 
 | Panel | Position | What it does |
 |-------|----------|--------------|
@@ -88,7 +88,7 @@ The **Inspector** panel displays all components attached to the selected entity:
 - **Light** — Point, directional, or spot light
 - **AudioSource** — Sound emitter
 - **Camera** — Camera parameters
-- And 70+ more component types
+- And many more component types
 
 Click **Add Component** at the bottom of the Inspector to attach new components.
 

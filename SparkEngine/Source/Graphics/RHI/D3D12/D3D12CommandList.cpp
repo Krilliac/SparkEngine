@@ -8,6 +8,7 @@
 #ifdef _WIN32
 
 #include "D3D12Device.h"
+#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/Validate.h"
 
 namespace Spark
@@ -132,8 +133,9 @@ namespace Spark
             // ============================================================================
 
             D3D12CommandList::D3D12CommandList(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type,
+                                               std::shared_ptr<D3D12DescriptorTables> tables,
                                                ID3D12PipelineState* initialPSO)
-                : m_type(type)
+                : m_type(type), m_device(device), m_tables(std::move(tables))
             {
                 HRESULT hr = device->CreateCommandAllocator(type, IID_PPV_ARGS(&m_commandAllocator));
                 if (FAILED(hr))
@@ -178,6 +180,12 @@ namespace Spark
             {
                 m_commandAllocator->Reset();
                 m_commandList->Reset(m_commandAllocator.Get(), nullptr);
+                // A reset list has no PSO or root signature bound; forget the previous
+                // recording's so SetPipelineState cannot skip the bind as redundant.
+                m_currentPSO = nullptr;
+                m_currentRootSignature = nullptr;
+                ResetBindings();
+                BindDescriptorHeaps();
             }
 
             void D3D12CommandList::End()
@@ -191,18 +199,41 @@ namespace Spark
                 m_commandAllocator->Reset();
                 m_commandList->Reset(m_commandAllocator.Get(), nullptr);
                 m_pendingBarriers.clear();
+                m_currentPSO = nullptr;
                 m_currentRootSignature = nullptr;
+                ResetBindings();
+                BindDescriptorHeaps();
             }
 
             void D3D12CommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                     IRHITexture* depthStencil)
             {
-                D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};
-                for (uint32_t i = 0; i < count && i < 8; i++)
+                // D3D12 binds at most 8 targets. The old loop stopped filling at 8 but still
+                // passed the caller's count to OMSetRenderTargets, so the runtime read handles
+                // past the end of this stack array. Clamp once and use the same count for both.
+                constexpr uint32_t kMaxTargets = D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT;
+                if (count > kMaxTargets)
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D12CommandList::SetRenderTargets: %u targets requested, D3D12 binds "
+                                            "at most %u - extra targets ignored",
+                                            count, kMaxTargets);
+                    count = kMaxTargets;
+                }
+                if (count > 0 && !renderTargets)
+                    count = 0;
+
+                // Targets move to their write state here (batched; flushed by the next clear or
+                // draw), so a texture sampled by an earlier pass can be rendered to again.
+                D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[kMaxTargets] = {};
+                for (uint32_t i = 0; i < count; i++)
                 {
                     auto* tex = static_cast<D3D12Texture*>(renderTargets[i]);
                     if (tex && tex->GetRTVDescriptor().IsValid())
+                    {
                         rtvHandles[i] = tex->GetRTVDescriptor().cpuHandle;
+                        RequireState(tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                    }
                 }
 
                 D3D12_CPU_DESCRIPTOR_HANDLE* dsvHandle = nullptr;
@@ -214,6 +245,7 @@ namespace Spark
                     {
                         dsvLocal = dsTex->GetDSVDescriptor().cpuHandle;
                         dsvHandle = &dsvLocal;
+                        RequireState(dsTex, D3D12_RESOURCE_STATE_DEPTH_WRITE);
                     }
                 }
 
@@ -223,17 +255,28 @@ namespace Spark
             void D3D12CommandList::ClearRenderTarget(IRHITexture* target, const float color[4])
             {
                 auto* tex = static_cast<D3D12Texture*>(target);
-                if (tex && tex->GetRTVDescriptor().IsValid())
-                    m_commandList->ClearRenderTargetView(tex->GetRTVDescriptor().cpuHandle, color, 0, nullptr);
+                if (!tex || !tex->GetRTVDescriptor().IsValid())
+                    return;
+                RequireState(tex, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                FlushBarriers();
+                m_commandList->ClearRenderTargetView(tex->GetRTVDescriptor().cpuHandle, color, 0, nullptr);
             }
 
             void D3D12CommandList::ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil)
             {
                 auto* tex = static_cast<D3D12Texture*>(target);
-                if (tex && tex->GetDSVDescriptor().IsValid())
-                    m_commandList->ClearDepthStencilView(tex->GetDSVDescriptor().cpuHandle,
-                                                         D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, depth,
-                                                         stencil, 0, nullptr);
+                if (!tex || !tex->GetDSVDescriptor().IsValid())
+                    return;
+                RequireState(tex, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+                FlushBarriers();
+                // A stencil clear on a format without stencil is a debug-layer error; D3D11 ignores it.
+                const PixelFormat format = tex->GetFormat();
+                const bool hasStencil =
+                    format == PixelFormat::D24_UNORM_S8_UINT || format == PixelFormat::D32_FLOAT_S8_UINT;
+                const D3D12_CLEAR_FLAGS flags =
+                    hasStencil ? D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL : D3D12_CLEAR_FLAG_DEPTH;
+                m_commandList->ClearDepthStencilView(tex->GetDSVDescriptor().cpuHandle, flags, depth, stencil, 0,
+                                                     nullptr);
             }
 
             void D3D12CommandList::SetViewport(const RHIViewport& viewport)
@@ -263,6 +306,14 @@ namespace Spark
                 {
                     m_commandList->SetGraphicsRootSignature(pso->GetRootSignature());
                     m_currentRootSignature = pso->GetRootSignature();
+                    // A new root signature clears every root argument: re-apply what is staged.
+                    for (uint32_t slot = 0; slot < DefaultRootLayout::kConstantBufferCount; ++slot)
+                    {
+                        if (m_constantBuffers[slot] != 0)
+                            m_dirtyConstantBuffers |= 1u << slot;
+                    }
+                    m_shaderResourcesDirty = m_boundShaderResources != 0;
+                    m_samplersDirty = m_boundSamplers != 0;
                 }
             }
 
@@ -316,47 +367,33 @@ namespace Spark
                 m_commandList->IASetIndexBuffer(&ibv);
             }
 
-            void D3D12CommandList::SetConstantBuffer(RHIShaderStage /*stage*/, uint32_t slot, IRHIBuffer* buffer)
-            {
-                auto* buf = static_cast<D3D12Buffer*>(buffer);
-                if (buf)
-                    m_commandList->SetGraphicsRootConstantBufferView(slot, buf->GetGPUVirtualAddress());
-            }
-
-            void D3D12CommandList::SetShaderResource(RHIShaderStage /*stage*/, uint32_t /*slot*/,
-                                                     IRHITexture* /*texture*/)
-            {
-                // Descriptor table binding handled via root signature
-            }
-
-            void D3D12CommandList::SetSampler(RHIShaderStage /*stage*/, uint32_t /*slot*/, IRHISampler* /*sampler*/)
-            {
-                // Static samplers in root signature or descriptor table
-            }
-
             void D3D12CommandList::Draw(uint32_t vertexCount, uint32_t startVertex)
             {
-                FlushBarriers();
+                if (!PrepareDraw())
+                    return;
                 m_commandList->DrawInstanced(vertexCount, 1, startVertex, 0);
             }
 
             void D3D12CommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex)
             {
-                FlushBarriers();
+                if (!PrepareDraw())
+                    return;
                 m_commandList->DrawIndexedInstanced(indexCount, 1, startIndex, baseVertex, 0);
             }
 
             void D3D12CommandList::DrawInstanced(uint32_t vertexCount, uint32_t instanceCount, uint32_t startVertex,
                                                  uint32_t startInstance)
             {
-                FlushBarriers();
+                if (!PrepareDraw())
+                    return;
                 m_commandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
             }
 
             void D3D12CommandList::DrawIndexedInstanced(uint32_t indexCount, uint32_t instanceCount,
                                                         uint32_t startIndex, int32_t baseVertex, uint32_t startInstance)
             {
-                FlushBarriers();
+                if (!PrepareDraw())
+                    return;
                 m_commandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
             }
 
@@ -368,9 +405,8 @@ namespace Spark
 
             void D3D12CommandList::DrawInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
-                if (!argsBuffer || !m_drawSignature)
+                if (!argsBuffer || !m_drawSignature || !PrepareDraw())
                     return;
-                FlushBarriers();
                 auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
                 m_commandList->ExecuteIndirect(m_drawSignature.Get(), 1, d3dBuf->GetD3D12Resource(), argsOffset,
                                                nullptr, 0);
@@ -378,9 +414,8 @@ namespace Spark
 
             void D3D12CommandList::DrawIndexedInstancedIndirect(IRHIBuffer* argsBuffer, uint32_t argsOffset)
             {
-                if (!argsBuffer || !m_drawIndexedSignature)
+                if (!argsBuffer || !m_drawIndexedSignature || !PrepareDraw())
                     return;
-                FlushBarriers();
                 auto* d3dBuf = static_cast<D3D12Buffer*>(argsBuffer);
                 m_commandList->ExecuteIndirect(m_drawIndexedSignature.Get(), 1, d3dBuf->GetD3D12Resource(), argsOffset,
                                                nullptr, 0);
@@ -432,6 +467,12 @@ namespace Spark
                 barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
                 m_pendingBarriers.push_back(barrier);
                 resource->SetCurrentState(stateAfter);
+            }
+
+            void D3D12CommandList::RequireState(D3D12Texture* texture, D3D12_RESOURCE_STATES state)
+            {
+                if (texture && (texture->GetCurrentState() & state) != state)
+                    TransitionBarrier(texture, texture->GetCurrentState(), state);
             }
 
             void D3D12CommandList::UAVBarrier(ID3D12Resource* resource)

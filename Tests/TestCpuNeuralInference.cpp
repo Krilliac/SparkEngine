@@ -26,6 +26,11 @@ TEST(CpuNeural_Initialize)
     const char* isa = CpuNeuralInference::GetActiveISAName();
     ASSERT_TRUE(isa != nullptr);
     EXPECT_TRUE(std::string(isa).size() > 0);
+#if !defined(__AVX2__)
+    // BLD-100: floor builds compile no AVX2 kernel, so an AVX2-capable CPU must
+    // not be reported as running one.
+    EXPECT_EQ(std::string(isa), std::string("SSE2"));
+#endif
 }
 
 // ============================================================================

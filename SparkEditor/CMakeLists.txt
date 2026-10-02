@@ -22,8 +22,8 @@ file(GLOB_RECURSE SPARK_EDITOR_SOURCES
 )
 
 # Remove test and variant files
-list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
-list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+spark_exclude_sources_matching(SPARK_EDITOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Tt]est.*")
+spark_exclude_sources_matching(SPARK_EDITOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Ee]xample.*")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*main_debug\\.cpp$")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_Fixed\\.cpp$")
 list(FILTER SPARK_EDITOR_SOURCES EXCLUDE REGEX ".*_Enhanced\\.cpp$")

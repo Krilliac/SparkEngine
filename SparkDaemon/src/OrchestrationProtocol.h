@@ -166,11 +166,13 @@ namespace Spark::Daemon
     {
         Wire::Reader reader(bytes);
         uint32_t argumentCount = 0;
+        // An argument is at least its u32 length prefix; a count the unread bytes
+        // cannot hold is rejected before the argument list is sized.
         if (!Wire::ReadVersion(reader) || !ReadMutationKey(reader, key) ||
             !reader.ReadString(out.id, kMaximumProcessIdLength) ||
             !reader.ReadString(out.executable, kMaximumProcessPathLength) ||
             !reader.ReadString(out.workingDirectory, kMaximumProcessPathLength) || !reader.Read(argumentCount) ||
-            argumentCount > kMaximumProcessArguments)
+            argumentCount > kMaximumProcessArguments || !reader.CanHold(argumentCount, sizeof(uint32_t)))
             return false;
         out.arguments.clear();
         out.arguments.resize(argumentCount);
@@ -215,9 +217,16 @@ namespace Spark::Daemon
     inline bool DecodeProcessStatuses(const std::vector<uint8_t>& bytes, std::vector<ProcessStatus>& out,
                                       size_t maximum)
     {
+        // Smallest wire encoding of one status (empty id): the length prefix plus
+        // every fixed-width field WriteProcessStatus emits. A count the unread
+        // bytes cannot hold is rejected before the list is sized.
+        constexpr size_t kMinimumStatusBytes = sizeof(uint32_t) + sizeof(uint8_t) + sizeof(int64_t) + sizeof(uint32_t) +
+                                               sizeof(int32_t) + sizeof(uint8_t) + sizeof(uint64_t) + sizeof(uint32_t) +
+                                               sizeof(int64_t);
         Wire::Reader reader(bytes);
         uint32_t count = 0;
-        if (!Wire::ReadVersion(reader) || !reader.Read(count) || count > maximum)
+        if (!Wire::ReadVersion(reader) || !reader.Read(count) || count > maximum ||
+            !reader.CanHold(count, kMinimumStatusBytes))
             return false;
         out.clear();
         out.resize(count);

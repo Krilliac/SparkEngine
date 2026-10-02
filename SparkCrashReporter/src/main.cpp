@@ -36,7 +36,7 @@ static void PrintUsage(const char* argv0)
     std::cerr << "  " << argv0 << " --report <manifest-file>\n";
     std::cerr << "      Direct mode: review local artifacts, optionally post safe metadata.\n\n";
     std::cerr << "  " << argv0 << " --enable-auto-issues\n";
-    std::cerr << "      Opt in to public GitHub Issues after crash review; requires authenticated gh.\n";
+    std::cerr << "      Opt in to public GitHub Issues; every crash still asks first (default No).\n";
     std::cerr << "  " << argv0 << " --disable-auto-issues\n";
     std::cerr << "      Revoke future automatic issue attempts.\n";
     std::cerr << "  " << argv0 << " --auto-issues-status\n";

@@ -52,7 +52,7 @@ The system operates on two complementary layers:
 |------|---------------|
 | `Engine/Security/MemoryIntegrity.h` | System class, types, macros |
 | `Engine/Security/MemoryIntegrity.cpp` | Implementation, platform code scanning, console commands |
-| `Tests/TestMemoryIntegrity.cpp` | 16 unit tests |
+| `Tests/TestMemoryIntegrity.cpp` | Unit tests |
 
 ## Key Types
 
@@ -245,7 +245,7 @@ When an attacker modifies a specific function:
 
 ## Testing
 
-16 unit tests in `Tests/TestMemoryIntegrity.cpp`:
+Unit tests in `Tests/TestMemoryIntegrity.cpp`:
 
 | Test | What it verifies |
 |------|-----------------|
@@ -268,8 +268,8 @@ When an attacker modifies a specific function:
 
 Run tests:
 ```bash
-cmake --build build --config Release
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/linux-gcc-release
+ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error
 # Or run directly:
 ./build/linux-gcc-release/bin/SparkTests 2>&1 | grep MemoryIntegrity
 ```

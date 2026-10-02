@@ -13,6 +13,7 @@
 #include "TestFramework.h"
 #include "Core/Reflection.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Game/FPSLocalProfile.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/ReactiveSystem.h"
 #include "Utils/LocalFileCache.h"
@@ -101,7 +102,7 @@ namespace
 
     // Metadata layout: three getline fields, then whitespace-separated
     // timestamp playTime health armor posX posY posZ kills deaths.
-    const std::string kValidMeta = "My Save\nLevel1\nSoldier\n1234 56.5 100 50 1 2 3 4 5\n";
+    const std::string kValidMeta = "My Save\nLevel1\nSoldier\nScreenshots/good.png\n1234 56.5 100 50 1 2 3 4 5\n";
 
     std::string ReadTextFile(const std::filesystem::path& path)
     {
@@ -614,13 +615,16 @@ TEST(SaveSystem_GetSaveMetadata_ParsesHeader)
     SaveSystem& ss = SaveSystem::GetInstance();
     ss.SetSaveDirectory(dir);
 
-    WriteSaveHeader(dir + "/goodslot.spark_save", 1u, kValidMeta);
+    // N-1 (v3) has no CRC trailer, so a bare header plus metadata block is a
+    // complete metadata record for the metadata-only reader.
+    WriteSaveHeader(dir + "/goodslot.spark_save", kOldestSupportedSaveVersion, kValidMeta);
 
     SaveMetadata meta;
     EXPECT_TRUE(ss.GetSaveMetadata("goodslot", meta));
     EXPECT_EQ(meta.saveName, std::string("My Save"));
     EXPECT_EQ(meta.sceneName, std::string("Level1"));
     EXPECT_EQ(meta.playerClass, std::string("Soldier"));
+    EXPECT_EQ(meta.screenshotPath, std::string("Screenshots/good.png"));
     EXPECT_EQ(meta.timestamp, static_cast<uint64_t>(1234));
     EXPECT_EQ(meta.version, kCurrentSaveVersion);
 
@@ -1280,7 +1284,7 @@ TEST(SaveSystem_CustomState_RoundTripsWithWorldAndDoesNotMutateOutputOnFailure)
     std::filesystem::remove_all(dir);
 }
 
-TEST(SaveMigration_CurrentWriterPersistsScreenshotPathAsVersion2)
+TEST(SaveMigration_CurrentWriterPersistsScreenshotPathAtCurrentVersion)
 {
     const std::string dir = MakeTempSaveDir("v2_writer");
     SaveSystem& saveSystem = SaveSystem::GetInstance();
@@ -2363,142 +2367,109 @@ TEST(SaveMigration_ReflectedSetFieldFailureRollsBackWorldAndCustomState)
     std::filesystem::remove_all(dir);
 }
 
-TEST(SaveMigration_V1ToV2InMemoryStepIsExactIdempotentAndTransactional)
+TEST(SaveMigration_PreviousVersionInMemoryStepIsExactIdempotentAndTransactional)
 {
-    SaveData legacy;
-    legacy.metadata.version = kOldestSupportedSaveVersion;
-    legacy.metadata.saveName = "Legacy memory snapshot";
-    legacy.metadata.screenshotPath = "not-representable-in-v1.png";
-    legacy.customState["declared"] = "preserved";
+    // OD-03: N-1 (v3) migrates to N (v4). v4 changes only the disk envelope, so
+    // every declared field and record carries over exactly.
+    SaveData previous;
+    previous.metadata.version = kOldestSupportedSaveVersion;
+    previous.metadata.saveName = "Previous-version snapshot";
+    previous.metadata.screenshotPath = "Screenshots/previous.png";
+    previous.customState["declared"] = "preserved";
+    SerializedEntity entity{};
+    entity.name = "previous-entity";
+    SerializedComponent transform;
+    transform.typeName = "Transform";
+    transform.properties[kTransformParentProperty] = kTransformParentNone;
+    entity.components.push_back(transform);
+    previous.entities.push_back(entity);
 
-    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
-    EXPECT_EQ(legacy.metadata.version, kCurrentSaveVersion);
-    EXPECT_EQ(legacy.metadata.screenshotPath, std::string());
-    EXPECT_EQ(legacy.metadata.saveName, std::string("Legacy memory snapshot"));
-    EXPECT_EQ(legacy.customState.at("declared"), std::string("preserved"));
+    ASSERT_EQ(kOldestSupportedSaveVersion + 1, kCurrentSaveVersion);
+    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(previous));
+    EXPECT_EQ(previous.metadata.version, kCurrentSaveVersion);
+    EXPECT_EQ(previous.metadata.saveName, std::string("Previous-version snapshot"));
+    EXPECT_EQ(previous.metadata.screenshotPath, std::string("Screenshots/previous.png"));
+    EXPECT_EQ(previous.customState.at("declared"), std::string("preserved"));
+    ASSERT_EQ(previous.entities.size(), 1u);
+    ASSERT_EQ(previous.entities[0].components.size(), 1u);
+    EXPECT_EQ(previous.entities[0].components[0].properties.at(kTransformParentProperty),
+              std::string(kTransformParentNone));
 
-    const SaveData onceMigrated = legacy;
-    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
-    EXPECT_EQ(legacy.metadata.version, onceMigrated.metadata.version);
-    EXPECT_EQ(legacy.metadata.screenshotPath, onceMigrated.metadata.screenshotPath);
-    EXPECT_EQ(legacy.metadata.saveName, onceMigrated.metadata.saveName);
-    EXPECT_EQ(legacy.customState.size(), onceMigrated.customState.size());
-    EXPECT_EQ(legacy.customState.at("declared"), onceMigrated.customState.at("declared"));
+    const SaveData onceMigrated = previous;
+    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(previous));
+    EXPECT_EQ(previous.metadata.version, onceMigrated.metadata.version);
+    EXPECT_EQ(previous.metadata.screenshotPath, onceMigrated.metadata.screenshotPath);
+    EXPECT_EQ(previous.customState.size(), onceMigrated.customState.size());
 
-    SaveData unsupported = onceMigrated;
-    unsupported.metadata.version = kCurrentSaveVersion + 1;
-    unsupported.metadata.saveName = "future-sentinel";
-    EXPECT_FALSE(SaveSystem::MigrateToCurrentVersion(unsupported));
-    EXPECT_EQ(unsupported.metadata.version, kCurrentSaveVersion + 1);
-    EXPECT_EQ(unsupported.metadata.saveName, std::string("future-sentinel"));
+    // Older than N-1 and newer than N are outside the window and stay untouched.
+    for (const uint32_t outsideWindow : {kOldestSupportedSaveVersion - 1, kCurrentSaveVersion + 1})
+    {
+        SaveData unsupported = onceMigrated;
+        unsupported.metadata.version = outsideWindow;
+        unsupported.metadata.saveName = "outside-window-sentinel";
+        EXPECT_FALSE(SaveSystem::MigrateToCurrentVersion(unsupported));
+        EXPECT_EQ(unsupported.metadata.version, outsideWindow);
+        EXPECT_EQ(unsupported.metadata.saveName, std::string("outside-window-sentinel"));
+    }
 }
 
-TEST(SaveMigration_ImmutableV1FixtureLoadsWithoutRewritingSourceOrSlot)
+namespace
 {
-    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
-                             "SaveSystem" / "v1-screenshotless.spark_save.hex";
-    const std::string fixtureBefore = ReadTextFile(fixturePath);
-    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
-    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(284));
+    /// Copies an immutable pre-N-1 fixture into a slot and proves that every read
+    /// path refuses it without touching caller state, the slot, or the fixture.
+    void ExpectRetiredFixtureFailsClosed(const char* fixtureName, size_t expectedBytes, uint32_t expectedVersion,
+                                         const char* slotName)
+    {
+        const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
+                                 "SaveSystem" / fixtureName;
+        const std::string fixtureBefore = ReadTextFile(fixturePath);
+        const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
+        ASSERT_EQ(legacyBytes.size(), expectedBytes);
 
-    const std::string dir = MakeTempSaveDir("v1_fixture");
-    const auto slotPath = std::filesystem::path(dir) / "legacy-v1.spark_save";
-    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
+        const std::string dir = MakeTempSaveDir(slotName);
+        const auto slotPath = std::filesystem::path(dir) / (std::string(slotName) + ".spark_save");
+        ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
 
-    SaveSystem& saveSystem = SaveSystem::GetInstance();
-    EXPECT_TRUE(saveSystem.Initialize(dir));
-    EXPECT_EQ(ReadHeaderVersion(slotPath), kOldestSupportedSaveVersion);
+        SaveSystem& saveSystem = SaveSystem::GetInstance();
+        saveSystem.SetFileCache(nullptr);
+        EXPECT_TRUE(saveSystem.Initialize(dir));
+        EXPECT_EQ(ReadHeaderVersion(slotPath), expectedVersion);
+        EXPECT_TRUE(expectedVersion < kOldestSupportedSaveVersion);
 
-    SaveMetadata metadata;
-    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v1", metadata));
-    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
-    EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
-    EXPECT_EQ(metadata.sceneName, std::string("LegacyScene"));
-    EXPECT_EQ(metadata.playerClass, std::string("Ranger"));
-    EXPECT_EQ(metadata.screenshotPath, std::string());
-    EXPECT_EQ(metadata.timestamp, uint64_t{1700000000});
-    EXPECT_NEAR(metadata.playTime, 42.5f, 0.0001f);
-    EXPECT_NEAR(metadata.playerHealth, 75.0f, 0.0001f);
-    EXPECT_NEAR(metadata.playerArmor, 25.0f, 0.0001f);
-    EXPECT_NEAR(metadata.playerPosition.x, 1.0f, 0.0001f);
-    EXPECT_NEAR(metadata.playerPosition.y, 2.0f, 0.0001f);
-    EXPECT_NEAR(metadata.playerPosition.z, 3.0f, 0.0001f);
-    EXPECT_EQ(metadata.playerKills, 4u);
-    EXPECT_EQ(metadata.playerDeaths, 1u);
+        SaveMetadata metadata;
+        metadata.saveName = "metadata-sentinel";
+        metadata.version = 77u;
+        EXPECT_FALSE(saveSystem.GetSaveMetadata(slotName, metadata));
+        EXPECT_EQ(metadata.saveName, std::string("metadata-sentinel"));
+        EXPECT_EQ(metadata.version, 77u);
 
-    World loadedWorld;
-    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
-    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
-    EXPECT_TRUE(saveSystem.Load("legacy-v1", loadedWorld, customState));
-    EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
-    const EntityID legacyPlayer = FindNamedEntity(loadedWorld, "legacy-player");
-    ASSERT_TRUE(legacyPlayer != entt::null);
-    const Transform* transform = loadedWorld.GetComponent<Transform>(legacyPlayer);
-    ASSERT_TRUE(transform != nullptr);
-    EXPECT_NEAR(transform->position.x, 12.5f, 0.0001f);
-    EXPECT_NEAR(transform->position.y, -3.25f, 0.0001f);
-    EXPECT_NEAR(transform->position.z, 99.75f, 0.0001f);
-    EXPECT_NEAR(transform->rotation.x, 0.125f, 0.0001f);
-    EXPECT_NEAR(transform->rotation.y, 1.5f, 0.0001f);
-    EXPECT_NEAR(transform->rotation.z, -2.25f, 0.0001f);
-    EXPECT_NEAR(transform->scale.x, 2.0f, 0.0001f);
-    EXPECT_NEAR(transform->scale.y, 0.5f, 0.0001f);
-    EXPECT_NEAR(transform->scale.z, 3.75f, 0.0001f);
-    EXPECT_EQ(customState.size(), 1u);
-    EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
+        World liveWorld;
+        liveWorld.CreateEntity("live-sentinel");
+        std::unordered_map<std::string, std::string> customState = {{"sentinel", "unchanged-on-failure"}};
+        EXPECT_FALSE(saveSystem.Load(slotName, liveWorld, customState));
+        EXPECT_EQ(liveWorld.GetEntityCount(), 1u);
+        EXPECT_TRUE(WorldContainsNamedEntity(liveWorld, "live-sentinel"));
+        EXPECT_EQ(customState.size(), 1u);
+        EXPECT_EQ(customState.at("sentinel"), std::string("unchanged-on-failure"));
 
-    // Migration is in memory only: neither the checked-in fixture nor the copied
-    // N-1 slot is rewritten as a side effect of reading it.
-    EXPECT_EQ(ReadHeaderVersion(slotPath), kOldestSupportedSaveVersion);
-    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
-    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
+        // Refusing the file never rewrites or quarantines the player's data.
+        EXPECT_EQ(ReadHeaderVersion(slotPath), expectedVersion);
+        EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
+        EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
 
-    std::filesystem::remove_all(dir);
+        std::filesystem::remove_all(dir);
+    }
+} // namespace
+
+TEST(SaveMigration_ImmutableV1FixtureIsOutsideTheWindowAndFailsClosed)
+{
+    // OD-03 reads only N and N-1; v1 (N-3) must be refused, not migrated.
+    ExpectRetiredFixtureFailsClosed("v1-screenshotless.spark_save.hex", 284, 1u, "retired-v1");
 }
 
-TEST(SaveMigration_ImmutableV2FixtureLoadsAndAddsHierarchyRoots)
+TEST(SaveMigration_ImmutableV2FixtureIsOutsideTheWindowAndFailsClosed)
 {
-    const auto fixturePath = std::filesystem::path(SPARK_TEST_SOURCE_DIR) / "Tests" / "Fixtures" / "Compatibility" /
-                             "SaveSystem" / "v2-screenshot-without-hierarchy.spark_save.hex";
-    const std::string fixtureBefore = ReadTextFile(fixturePath);
-    const std::vector<char> legacyBytes = DecodeHexFixture(fixtureBefore);
-    ASSERT_EQ(legacyBytes.size(), static_cast<size_t>(307));
-
-    const std::string dir = MakeTempSaveDir("v2_fixture");
-    const auto slotPath = std::filesystem::path(dir) / "legacy-v2.spark_save";
-    ASSERT_TRUE(WriteBytes(slotPath, legacyBytes));
-
-    SaveSystem& saveSystem = SaveSystem::GetInstance();
-    EXPECT_TRUE(saveSystem.Initialize(dir));
-    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
-
-    SaveMetadata metadata;
-    EXPECT_TRUE(saveSystem.GetSaveMetadata("legacy-v2", metadata));
-    EXPECT_EQ(metadata.version, kCurrentSaveVersion);
-    EXPECT_EQ(metadata.saveName, std::string("Legacy screenshotless save"));
-    EXPECT_EQ(metadata.screenshotPath, std::string("Screenshots/legacy.png"));
-
-    World loadedWorld;
-    loadedWorld.CreateEntity("must-be-replaced-only-on-success");
-    std::unordered_map<std::string, std::string> customState = {{"sentinel", "replace-on-success"}};
-    EXPECT_TRUE(saveSystem.Load("legacy-v2", loadedWorld, customState));
-    EXPECT_EQ(loadedWorld.GetEntityCount(), 1u);
-
-    const EntityID legacyPlayer = FindNamedEntity(loadedWorld, "legacy-player");
-    ASSERT_TRUE(legacyPlayer != entt::null);
-    const Transform* transform = loadedWorld.GetComponent<Transform>(legacyPlayer);
-    ASSERT_TRUE(transform != nullptr);
-    EXPECT_TRUE(transform->parent == entt::null);
-    EXPECT_EQ(customState.size(), 1u);
-    EXPECT_EQ(customState.at("legacy.key"), std::string("legacy-value"));
-
-    // Migration is in memory only: neither the checked-in fixture nor the copied
-    // N-1 slot is rewritten as a side effect of reading it.
-    EXPECT_EQ(ReadHeaderVersion(slotPath), 2u);
-    EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);
-    EXPECT_EQ(ReadTextFile(fixturePath), fixtureBefore);
-
-    std::filesystem::remove_all(dir);
+    ExpectRetiredFixtureFailsClosed("v2-screenshot-without-hierarchy.spark_save.hex", 307, 2u, "retired-v2");
 }
 
 TEST(SaveMigration_ImmutableV3FixtureLoadsWithoutRewritingSourceOrSlot)
@@ -2532,6 +2503,16 @@ TEST(SaveMigration_ImmutableV3FixtureLoadsWithoutRewritingSourceOrSlot)
     EXPECT_EQ(customState.at("fps.profile.xp"), std::string("37"));
     EXPECT_EQ(customState.at("fps.profile.level"), std::string("1"));
     EXPECT_EQ(customState.at("fps.profile.weapon"), std::string("7"));
+
+    // The FPS module's own persisted schema inside the N-1 engine save is also in
+    // its window, so the production profile reader restores the declared state.
+    Spark::FPSLocalProfile profile;
+    std::string profileError;
+    EXPECT_TRUE(profile.ReadFrom(customState, profileError));
+    EXPECT_EQ(profileError, std::string());
+    EXPECT_EQ(profile.version, Spark::FPSLocalProfile::kVersion);
+    EXPECT_EQ(profile.progressionXP, 37);
+    EXPECT_EQ(profile.weapon, 7);
 
     EXPECT_EQ(ReadHeaderVersion(slotPath), 3u);
     EXPECT_TRUE(ReadBytes(slotPath) == legacyBytes);

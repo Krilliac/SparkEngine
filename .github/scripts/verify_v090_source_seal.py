@@ -28,14 +28,35 @@ def _unique_object(pairs):
     return result
 
 
-def validate_seal(source_sha: str, baseline_commit: str, parents: list[str], changed_paths: list[str], reviewed_sha: str) -> dict:
-    """Validate the immutable metadata-only seal without mutating repository state."""
+def validate_baseline_parent(source_sha: str, baseline_commit: str, parents: list[str]) -> None:
+    """Require the source SHA to be a direct single-parent child of the reviewed baselineCommit.
+
+    This is the one parent rule shared by the publication seal check and the
+    bootstrap MSI qualification, so both bind evidence to the same baseline.
+    """
     if not SHA_RE.fullmatch(source_sha or ""):
         raise ValueError("source SHA must be 40 lowercase hexadecimal characters")
     if not SHA_RE.fullmatch(baseline_commit or ""):
         raise ValueError("baseline commit must be 40 lowercase hexadecimal characters")
     if parents != [baseline_commit]:
         raise ValueError("v0.9.0 source seal must have exactly one parent equal to baselineCommit")
+
+
+def resolve_parents(source_sha: str, *, git_runner=subprocess.run) -> list[str]:
+    """Return the parent SHAs git records for exactly ``source_sha``."""
+    parent_result = git_runner(["git", "rev-list", "--parents", "-n", "1", source_sha],
+                               capture_output=True, text=True, timeout=30, check=False)
+    if parent_result.returncode:
+        raise ValueError("cannot resolve source-seal commit parents")
+    fields = parent_result.stdout.strip().split()
+    if not fields or fields[0] != source_sha:
+        raise ValueError("source-seal parent evidence is not bound to the requested source SHA")
+    return fields[1:]
+
+
+def validate_seal(source_sha: str, baseline_commit: str, parents: list[str], changed_paths: list[str], reviewed_sha: str) -> dict:
+    """Validate the immutable metadata-only seal without mutating repository state."""
+    validate_baseline_parent(source_sha, baseline_commit, parents)
     if reviewed_sha != source_sha:
         raise ValueError("protected reviewed SHA does not equal the release source SHA")
     invalid = [path for path in changed_paths
@@ -77,14 +98,7 @@ def _api_variable(repository: str, token: str, *, runner=subprocess.run) -> str:
 def verify(repository: str, source_sha: str, baseline_commit: str, *, token: str | None = None,
            runner=subprocess.run, git_runner=subprocess.run) -> dict:
     token = token if token is not None else os.environ.get("RELEASE_POLICY_READ_TOKEN", "")
-    parent_result = git_runner(["git", "rev-list", "--parents", "-n", "1", source_sha],
-                               capture_output=True, text=True, timeout=30, check=False)
-    if parent_result.returncode:
-        raise ValueError("cannot resolve source-seal commit parents")
-    fields = parent_result.stdout.strip().split()
-    if not fields or fields[0] != source_sha:
-        raise ValueError("source-seal parent evidence is not bound to the requested source SHA")
-    parents = fields[1:]
+    parents = resolve_parents(source_sha, git_runner=git_runner)
     diff_result = git_runner(["git", "diff", "--name-only", "--diff-filter=ACDMRTUXB", f"{baseline_commit}^{{commit}}", source_sha],
                              capture_output=True, text=True, timeout=30, check=False)
     if diff_result.returncode:

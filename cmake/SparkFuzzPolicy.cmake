@@ -7,7 +7,18 @@ option(SPARK_ENABLE_FUZZ_POLICY_CHECKS
     "Register the blocking SEC-120 fuzz-policy target and CTest checks (requires Python3)"
     ${BUILD_TESTS})
 
+# ALLOW_SHALLOW (the engine tree): every job running the full CTest suite checks out shallow,
+# so the CTests skip only the fixed_commit history check there, saying so; the dedicated
+# fuzz-policy job builds tools/fuzz-policy without it and must fetch full history.
 function(spark_enable_fuzz_policy source_root)
+    cmake_parse_arguments(PARSE_ARGV 1 _spark_fuzz_policy "ALLOW_SHALLOW" "" "")
+    set(_spark_fuzz_policy_shallow_args "")
+    set(_spark_fuzz_policy_shallow_env "")
+    if(_spark_fuzz_policy_ALLOW_SHALLOW)
+        set(_spark_fuzz_policy_shallow_args --allow-shallow)
+        set(_spark_fuzz_policy_shallow_env ";SPARK_FUZZ_POLICY_ALLOW_SHALLOW=1")
+    endif()
+
     if(NOT SPARK_ENABLE_FUZZ_POLICY_CHECKS)
         message(STATUS "[SEC-120] Fuzz-policy checks disabled (SPARK_ENABLE_FUZZ_POLICY_CHECKS=OFF)")
         return()
@@ -33,7 +44,8 @@ function(spark_enable_fuzz_policy source_root)
         COMMAND "${Python3_EXECUTABLE}"
             "${source_root}/tools/fuzz-policy/check_fuzz_policy.py"
             --source-root "${source_root}"
-            --ci)
+            --ci
+            ${_spark_fuzz_policy_shallow_args})
     set_tests_properties(FuzzPolicy PROPERTIES
         LABELS "security;fuzz-policy"
         WORKING_DIRECTORY "${source_root}"
@@ -43,14 +55,14 @@ function(spark_enable_fuzz_policy source_root)
     # so a test file dropped into a subdirectory would never run and the suite
     # would still report success. Refuse to configure in that shape.
     file(GLOB_RECURSE _spark_fuzz_policy_tests LIST_DIRECTORIES false
-        "${source_root}/Tests/fuzz-policy/test_*.py")
+        "${source_root}/FuzzerTests/policy/test_*.py")
     list(LENGTH _spark_fuzz_policy_tests _spark_fuzz_policy_test_count)
     if(_spark_fuzz_policy_test_count EQUAL 0)
-        message(FATAL_ERROR "[SEC-120] No adversarial policy tests found under Tests/fuzz-policy")
+        message(FATAL_ERROR "[SEC-120] No adversarial policy tests found under FuzzerTests/policy")
     endif()
     foreach(_spark_fuzz_policy_test IN LISTS _spark_fuzz_policy_tests)
         get_filename_component(_spark_fuzz_policy_test_dir "${_spark_fuzz_policy_test}" DIRECTORY)
-        if(NOT _spark_fuzz_policy_test_dir STREQUAL "${source_root}/Tests/fuzz-policy")
+        if(NOT _spark_fuzz_policy_test_dir STREQUAL "${source_root}/FuzzerTests/policy")
             message(FATAL_ERROR
                 "[SEC-120] ${_spark_fuzz_policy_test} sits in a subdirectory that "
                 "'unittest discover' will not recurse into; move it up or add __init__.py")
@@ -60,7 +72,7 @@ function(spark_enable_fuzz_policy source_root)
     add_test(
         NAME FuzzPolicyAdversarial
         COMMAND "${Python3_EXECUTABLE}" -B -m unittest discover
-            -s "${source_root}/Tests/fuzz-policy"
+            -s "${source_root}/FuzzerTests/policy"
             -p "test_*.py"
             -v)
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/fuzz-policy-tmp")
@@ -68,7 +80,7 @@ function(spark_enable_fuzz_policy source_root)
     # output too so "0 tests ran" can never be read as "nothing failed".
     set_tests_properties(FuzzPolicyAdversarial PROPERTIES
         ENVIRONMENT
-            "TMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TEMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TMPDIR=${CMAKE_BINARY_DIR}/fuzz-policy-tmp"
+            "TMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TEMP=${CMAKE_BINARY_DIR}/fuzz-policy-tmp;TMPDIR=${CMAKE_BINARY_DIR}/fuzz-policy-tmp${_spark_fuzz_policy_shallow_env}"
         FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
         LABELS "security;fuzz-policy;unit"
         WORKING_DIRECTORY "${source_root}"

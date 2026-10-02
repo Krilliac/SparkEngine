@@ -7,6 +7,8 @@
  */
 #include "Net/TFServerSim.h"
 #include "Net/TFOnboardingSessionRules.h"
+#include "Net/TFClientMsgRouting.h"
+#include "Net/TFScramWire.h"
 
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
@@ -22,6 +24,8 @@
 #include "Game/TFGrenadeSystem.h"     // grenades lane (W10): GrenadeThrow routing
 #include "Game/TFPingSystem.h"        // ping-system lane (W11): PingPlace routing
 #include "Game/TFSquadSystem.h"
+#include "Game/TFServerValidation.h" // TF-110: forged loadout audit
+#include "Net/TFLoadoutWire.h"       // TF-110: forged WeaponId rejection
 #include "Utils/LogMacros.h"
 #include "Utils/ScopeGuard.h"
 #include "Utils/SecureMemory.h"
@@ -32,6 +36,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
 #include <string>
 
 namespace Terrafront
@@ -54,6 +59,16 @@ namespace Terrafront
 
     void TFServerSim::RouteClientMessage(PlayerId sender, TFMsg id, const void* data, size_t size)
     {
+        // A reserved source has no gameplay pawn. Keep its authenticated binding fixed until commit/abort;
+        // otherwise a character-selection message could recycle the PlayerId while its checkpoint is in flight.
+        for (const auto& [character, checkpoint] : m_suspendedCharacters)
+        {
+            (void)character;
+            if (checkpoint.player == sender)
+            {
+                return;
+            }
+        }
         // W5 T6 (T4-review #1 security fix): CRITICAL security gate. Before this
         // fix, the enter-world gate only withheld TF_WorldWelcome — the gameplay
         // handlers themselves never verified the sender had actually logged in
@@ -74,42 +89,23 @@ namespace Terrafront
         // Onboarding ids (login/char CRUD/enter-world itself) are never gated
         // here: they are how a session GETS into m_enteredWorld in the first
         // place.
-        switch (id)
+        // The gated id list is shared with RegisterNetHandlers
+        // (Net/TFClientMsgRouting.h) so every gated id is also socket-routed.
+        if (IsEnteredWorldGatedMsg(id) && !m_enteredWorld.contains(sender))
         {
-        case TFMsg::ClientInput:
-        case TFMsg::SpawnRequest:
-        case TFMsg::FireEvent:
-        case TFMsg::FactionSelect:
-        case TFMsg::VehicleEnter:
-        case TFMsg::VehicleExit:
-        case TFMsg::AegisDeploy:
-        case TFMsg::SquadMsg:
-        case TFMsg::ChatMsg:
-        case TFMsg::LoadoutChange:
-        case TFMsg::LoadoutExtChange: // loadout-depth wave: gated like the other gameplay ids
-        case TFMsg::UnlockRequest:
-        case TFMsg::RedeployRequest:     // W7 ui-map-keys: MUST be gated
-        case TFMsg::OutfitRequest:       // Outfits lane: gated like the other gameplay ids
-        case TFMsg::AbilityRequest:      // class-abilities lane (W9): gated
-        case TFMsg::GrenadeThrow:        // grenades lane (W10): gated
-        case TFMsg::PingPlace:           // ping-system lane (W11): gated
-        case TFMsg::ContinentHopRequest: // multimap server-authoritative hop (W13): gated
-            if (!m_enteredWorld.contains(sender))
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Game,
-                               "[TF] gameplay message 0x%04X from non-entered-world client %u rejected",
-                               static_cast<unsigned>(id), sender);
-                return;
-            }
-            break;
-        default:
-            break;
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] gameplay message 0x%04X from non-entered-world client %u rejected",
+                           static_cast<unsigned>(id), sender);
+            return;
         }
 
         switch (id)
         {
         case TFMsg::LoginRequest:
             HandleLogin(sender, data, size);
+            break;
+        case TFMsg::LoginProof:
+            HandleLoginProof(sender, data, size);
             break;
         case TFMsg::RegisterRequest:
             HandleRegister(sender, data, size);
@@ -188,18 +184,28 @@ namespace Terrafront
                 break;
             TF_LoadoutChange lc{};
             std::memcpy(&lc, data, sizeof(lc));
-            auto keyOf = [&](uint16_t wid) -> std::string
+            // TF-110: an id that resolves to no weapon is forged state, never
+            // the class default (kInvalidWeapon is the only default marker).
+            const std::optional<TFLoadoutWireKeys> keys =
+                DecodeLoadoutChange(lc,
+                                    [this](uint16_t wid) -> const std::string*
+                                    {
+                                        const WeaponDef* def = m_ctx->data->GetWeapon(static_cast<WeaponId>(wid));
+                                        return def ? &def->key : nullptr;
+                                    });
+            if (!keys)
             {
-                if (wid == kInvalidWeapon)
-                    return {};
-                const WeaponDef* def = m_ctx->data->GetWeapon(static_cast<WeaponId>(wid));
-                return def ? def->key : std::string{};
-            };
+                TFServerValidation::Get().RecordForgedStateReject(sender, TFForgedState::LoadoutUnknownWeapon,
+                                                                  ServerTime());
+                break;
+            }
             TFLoadout lo;
-            lo.primary = keyOf(lc.primary);
-            lo.secondary = keyOf(lc.secondary);
-            lo.tool = keyOf(lc.tool);
-            m_ctx->progression->ServerSetLoadout(sender, lo);
+            lo.primary = keys->primary;
+            lo.secondary = keys->secondary;
+            lo.tool = keys->tool;
+            if (!m_ctx->progression->ServerSetLoadout(sender, lo))
+                TFServerValidation::Get().RecordForgedStateReject(sender, TFForgedState::LoadoutIneligible,
+                                                                  ServerTime());
             break;
         }
         // loadout-depth wave: grenade + suit picks (size-validated inside).
@@ -232,9 +238,12 @@ namespace Terrafront
         }
     }
 
+    // NET-100: login is SCRAM. HandleLogin answers a TF_LoginStart with a challenge bound to
+    // this connection; HandleLoginProof checks the proof and returns the server signature.
+    // Neither message (nor registration) carries a password (Net/TFScramWire.h).
     void TFServerSim::HandleLogin(PlayerId sender, const void* data, size_t size)
     {
-        if (size != sizeof(TF_AuthRequest) || sender == Spark::Net::INVALID_CLIENT)
+        if (size != sizeof(TF_LoginStart) || sender == Spark::Net::INVALID_CLIENT)
         {
             ++m_badPackets;
             return;
@@ -256,32 +265,80 @@ namespace Terrafront
             return;
         }
 
-        TF_AuthRequest req;
-        std::memcpy(&req, data, sizeof(req));
-        const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-        const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
-        std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
-        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
+        TF_LoginStart start;
+        std::memcpy(&start, data, sizeof(start));
+        const std::string user = TFWireUsername(start.user);
 
+        TF_LoginChallenge challenge{};
+        if (!m_ctx->account || !EnsureAuthorityDatabaseOpen() ||
+            !MakeLoginChallenge(m_ctx->account->BeginLogin(sender, user), challenge))
+        {
+            // CSPRNG failure, too many pending logins, or no database: the login cannot complete.
+            rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+        SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginChallenge), &challenge, sizeof(challenge), true);
+    }
+
+    void TFServerSim::HandleLoginProof(PlayerId sender, const void* data, size_t size)
+    {
+        if (size != sizeof(TF_LoginProof) || sender == Spark::Net::INVALID_CLIENT)
+        {
+            ++m_badPackets;
+            return;
+        }
+
+        TF_AuthReply rep{};
+        if (!IsCredentialOnboardingOriginAllowed(sender))
+        {
+            rep.err = static_cast<uint8_t>(TFAuthErr::RemoteOnboardingDisabled);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+        const bool authenticated = m_ctx->account && m_ctx->account->AccountForClient(sender) != 0;
+        if (!CanBeginAuthentication(authenticated, m_enteredWorld.contains(sender)))
+        {
+            rep.err = static_cast<uint8_t>(TFAuthErr::SessionActive);
+            SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
+            return;
+        }
+
+        TF_LoginProof proof;
+        std::memcpy(&proof, data, sizeof(proof));
+        const auto clearProof = Spark::MakeScopeExit([&] { Spark::SecureErase(&proof, sizeof(proof)); });
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
         {
             rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
         }
         else
         {
-            const TFAuthResult r = m_ctx->account->Login(user, pass);
-            rep.ok = r.ok ? 1 : 0;
-            rep.err = static_cast<uint8_t>(r.err);
-            rep.accountId = r.accountId;
-            if (r.ok)
-                m_ctx->account->BindSession(sender, r.accountId);
+            // Consumes this connection's challenge: a replayed or cross-connection proof fails.
+            const TFScramLoginResult outcome = CompleteLoginFromProof(*m_ctx->account, sender, proof);
+            rep.ok = outcome.auth.ok ? 1 : 0;
+            rep.err = static_cast<uint8_t>(outcome.auth.err);
+            rep.accountId = outcome.auth.accountId;
+            if (outcome.auth.ok && !m_ctx->account->BindSession(sender, outcome.auth.accountId))
+            {
+                // Valid credentials, but the account already has a live
+                // connection: refuse a second, independent session of it.
+                rep.ok = 0;
+                rep.err = static_cast<uint8_t>(TFAuthErr::AccountInUse);
+                rep.accountId = 0;
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] login from client %u refused: account already bound to another session", sender);
+            }
+            if (rep.ok != 0)
+            {
+                std::memcpy(rep.serverSignature, outcome.serverSignature.data(), sizeof(rep.serverSignature));
+            }
         }
         SendToPlayer(sender, static_cast<uint16_t>(TFMsg::LoginReply), &rep, sizeof(rep), true);
     }
 
     void TFServerSim::HandleRegister(PlayerId sender, const void* data, size_t size)
     {
-        if (size != sizeof(TF_AuthRequest) || sender == Spark::Net::INVALID_CLIENT)
+        if (size != sizeof(TF_RegisterRequest) || sender == Spark::Net::INVALID_CLIENT)
         {
             ++m_badPackets;
             return;
@@ -304,12 +361,9 @@ namespace Terrafront
             return;
         }
 
-        TF_AuthRequest req;
+        TF_RegisterRequest req;
         std::memcpy(&req, data, sizeof(req));
         const auto clearRequest = Spark::MakeScopeExit([&] { Spark::SecureErase(&req, sizeof(req)); });
-        const std::string user(req.user, strnlen(req.user, sizeof(req.user)));
-        std::string pass(req.pass, strnlen(req.pass, sizeof(req.pass)));
-        const auto clearPassword = Spark::MakeScopeExit([&] { Spark::SecureClear(pass); });
 
         if (!m_ctx->account || !EnsureAuthorityDatabaseOpen())
         {
@@ -317,7 +371,8 @@ namespace Terrafront
         }
         else
         {
-            const TFAuthResult r = m_ctx->account->Register(user, pass);
+            // The client derived StoredKey/ServerKey itself; the password never arrives.
+            const TFAuthResult r = RegisterFromRequest(*m_ctx->account, req);
             rep.ok = r.ok ? 1 : 0;
             rep.err = static_cast<uint8_t>(r.err);
             rep.accountId = r.accountId;
@@ -336,9 +391,22 @@ namespace Terrafront
         const std::filesystem::path path = SavePaths::File("terrafront.db");
         if (!path.empty() && m_ctx->db->Open(path))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened account database at %s",
-                           SavePaths::Utf8ForLog(path).c_str());
-            return true;
+            // TF-120: an authority that cannot fence its characters' residency must not let anyone in, or
+            // one character could be in world on two continents. The bind fails while another live
+            // authority serves this continent on the same save root.
+            const bool dataLoaded = m_ctx->data && m_ctx->data->IsLoaded();
+            if (dataLoaded && m_ctx->db->BindAuthority(m_ctx->data->GetContinent().key))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] authority opened account database at %s for '%s'",
+                               SavePaths::Utf8ForLog(path).c_str(), m_ctx->db->BoundContinent().c_str());
+                return true;
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] authority could not bind the account database at %s to continent '%s'; closed",
+                            SavePaths::Utf8ForLog(path).c_str(),
+                            dataLoaded ? m_ctx->data->GetContinent().key.c_str() : "<data tables not loaded>");
+            m_ctx->db->Close();
+            return false;
         }
         SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] authority failed to open account database at %s",
                         path.empty() ? "<invalid save path>" : SavePaths::Utf8ForLog(path).c_str());
@@ -491,9 +559,30 @@ namespace Terrafront
         if (acctId == 0)
             return; // not logged in
 
+        // One resident session per character: a second PlayerId entering the
+        // same character would get its own runtime xp/rank/flux copy, and both
+        // copies persist to the same row (a stale wallet can undo a spend).
+        // Checked before EnterWorld so the rejected request never re-acquires
+        // the character's persistence baseline.
+        if (IsCharacterResidentElsewhere(m_activeCharacter, sender, req.charId))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] player %u EnterWorldReq refused: character %llu is resident in another session",
+                           sender, static_cast<unsigned long long>(req.charId));
+            return;
+        }
+
+        // TF-120: EnterWorld claims the character's residency in the shared database, so a character in world
+        // on another live continent is refused here too. Like every refusal, it gets no reply.
         TFCharacterRecord rec;
         if (!m_ctx->characters->EnterWorld(acctId, req.charId, rec))
-            return; // unknown character or not owned by this account
+        {
+            if (m_ctx->db && m_ctx->db->LastStatus() == TFDatabaseStatus::ResidentElsewhere)
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] player %u EnterWorldReq refused: character %llu is in world on another continent",
+                               sender, static_cast<unsigned long long>(req.charId));
+            return; // unknown character, not owned by this account, or resident elsewhere
+        }
 
         SetPlayerFaction(sender, rec.faction);
         m_enteredWorld.insert(sender);

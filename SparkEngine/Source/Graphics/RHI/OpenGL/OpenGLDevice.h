@@ -55,8 +55,12 @@ typedef GLXContext (*PFNGLXCREATECONTEXTATTRIBSARBPROC)(Display*, GLXFBConfig, G
 #define GLX_CONTEXT_PROFILE_MASK_ARB 0x9126
 #define GLX_CONTEXT_CORE_PROFILE_BIT_ARB 0x00000001
 #endif
+// Guard each token separately: some GLX header sets (e.g. glxtokens.h without
+// glxext.h) define GLX_CONTEXT_FLAGS_ARB but not GLX_CONTEXT_DEBUG_BIT_ARB.
 #ifndef GLX_CONTEXT_FLAGS_ARB
 #define GLX_CONTEXT_FLAGS_ARB 0x2094
+#endif
+#ifndef GLX_CONTEXT_DEBUG_BIT_ARB
 #define GLX_CONTEXT_DEBUG_BIT_ARB 0x00000001
 #endif
 #ifndef GLX_ARB_get_proc_address
@@ -399,6 +403,10 @@ namespace Spark
                 IRHIPipelineState* m_lastBoundPipeline = nullptr; ///< Redundant bind elimination
                 GLuint m_compositeFBO = 0;          ///< FBO composing MRT color targets + depth for SetRenderTargets
                 uint32_t m_compositeColorCount = 0; ///< Color attachments currently set on m_compositeFBO
+                /// Depth target passed with the default framebuffer. A texture cannot attach to
+                /// framebuffer 0, whose own depth buffer serves instead, so clearing this target
+                /// also clears framebuffer 0's depth and stencil.
+                IRHITexture* m_defaultFramebufferDepth = nullptr;
             };
 
             // ============================================================================

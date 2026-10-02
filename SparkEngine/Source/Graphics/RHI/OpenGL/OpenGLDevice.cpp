@@ -23,9 +23,16 @@
 #include <SDL2/SDL.h>
 #endif
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cctype>
 #include <cstring>
 #include <sstream>
+#include <string_view>
+
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#endif
 
 namespace Spark
 {
@@ -36,6 +43,21 @@ namespace Spark
 
             namespace
             {
+                /// @brief The backend uses GL 4.5 core entry points (DSA, KHR_debug, glGetTextureSubImage)
+                ///        unconditionally. A context below 4.5 (e.g. Windows' GDI Generic GL 1.1 on a
+                ///        GPU-less host) leaves those pointers null, so treat it as "no usable GL".
+                bool HasRequiredGLVersion()
+                {
+                    if (GLAD_GL_VERSION_4_5)
+                    {
+                        return true;
+                    }
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "OpenGL 4.5 core is required but the current context provides %d.%d",
+                                    GLVersion.major, GLVersion.minor);
+                    return false;
+                }
+
                 GLenum ConvertCompareOp(RHICompareOp op)
                 {
                     switch (op)
@@ -82,6 +104,19 @@ namespace Spark
                         return GL_DECR_WRAP;
                     }
                     return GL_KEEP;
+                }
+
+                /// The colour buffer framebuffer 0 renders to. A double-buffered window renders to
+                /// GL_BACK. A single-buffered default framebuffer has only GL_FRONT: an EGL pbuffer,
+                /// which is what SDL2's offscreen video driver gives the window when no display
+                /// server is reachable. Mesa accepts GL_BACK there for draws, glClear and
+                /// glReadBuffer, but resolves glClear(Named)Framebuffer* against the absent back
+                /// attachment and silently clears nothing.
+                GLenum DefaultFramebufferColorBuffer()
+                {
+                    GLint doubleBuffered = GL_TRUE;
+                    glGetNamedFramebufferParameteriv(0, GL_DOUBLEBUFFER, &doubleBuffered);
+                    return doubleBuffered != GL_FALSE ? GL_BACK : GL_FRONT;
                 }
 
                 /// D3D clears ignore the bound pipeline's write masks and scissor; GL clears
@@ -598,6 +633,7 @@ namespace Spark
             void GLCommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                  IRHITexture* depthStencil)
             {
+                m_defaultFramebufferDepth = nullptr;
                 if (count == 0 || !renderTargets[0])
                 {
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -608,10 +644,13 @@ namespace Spark
 
                 if (glTex->GetGLFramebuffer() == 0)
                 {
-                    // Default framebuffer: valid draw buffers are GL_BACK (not GL_COLOR_ATTACHMENT0)
+                    // Default framebuffer: its colour buffer is GL_BACK or, single-buffered, GL_FRONT
+                    // (never GL_COLOR_ATTACHMENT0). glDrawBuffers rejects GL_FRONT, so the singular
+                    // form names it. Its own depth buffer stands in for depthStencil (see
+                    // ClearDepthStencil).
                     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                    GLenum backBuf = GL_BACK;
-                    glDrawBuffers(1, &backBuf);
+                    glDrawBuffer(DefaultFramebufferColorBuffer());
+                    m_defaultFramebufferDepth = depthStencil;
                 }
                 else
                 {
@@ -672,7 +711,13 @@ namespace Spark
                 ClearStateScope scope;
                 if (glTex->GetGLFramebuffer() != 0 || glTex->GetGLTexture() == 0)
                 {
-                    // The texture's private FBO (or the default framebuffer) holds exactly this target
+                    // The texture's private FBO (or the default framebuffer) holds exactly this target.
+                    // Draw buffer 0 of framebuffer 0 must name a colour buffer it has, or the clear
+                    // is a silent no-op (see DefaultFramebufferColorBuffer).
+                    if (glTex->GetGLFramebuffer() == 0)
+                    {
+                        glNamedFramebufferDrawBuffer(0, DefaultFramebufferColorBuffer());
+                    }
                     glClearNamedFramebufferfv(glTex->GetGLFramebuffer(), GL_COLOR, 0, color);
                 }
                 else
@@ -687,6 +732,12 @@ namespace Spark
                     return;
                 auto* glTex = static_cast<GLTexture*>(target);
                 ClearStateScope scope;
+                if (target == m_defaultFramebufferDepth)
+                {
+                    // Draws into framebuffer 0 test against its own depth buffer, never this texture,
+                    // so an uncleared framebuffer-0 depth would reject every later frame's geometry.
+                    glClearNamedFramebufferfi(0, GL_DEPTH_STENCIL, 0, depth, stencil);
+                }
                 const GLuint fbo = glTex->GetGLFramebuffer();
                 if (HasStencilComponent(glTex->GetFormat()))
                 {
@@ -1063,6 +1114,10 @@ namespace Spark
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
                         return false;
                     }
+                    if (!HasRequiredGLVersion())
+                    {
+                        return false; // host owns the context; leave it alone
+                    }
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
                                    reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION)),
@@ -1209,6 +1264,10 @@ namespace Spark
                     {
                         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GLAD loader failed");
                         return false;
+                    }
+                    if (!HasRequiredGLVersion())
+                    {
+                        return false; // host owns the context; leave it alone
                     }
                     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "OpenGL %s (GLSL %s) — Renderer: %s",
                                    reinterpret_cast<const char*>(glGetString(GL_VERSION)),
@@ -1428,10 +1487,31 @@ namespace Spark
                 m_wglWindow = bootstrapWindow;
                 m_wglDC = bootstrapDC;
                 m_wglContext = bootstrapContext;
+#elif defined(__APPLE__)
+                // There is no headless CGL bootstrap on macOS. Without a current context Apple's GL
+                // dispatch dereferences null inside glGetString (so gladLoadGL crashes instead of
+                // failing); require the host (SDL2) to have made a context current first. CGL is
+                // resolved at runtime from the framework GLAD dlopens, so no extra link dependency.
+                bool hasCurrentCglContext = false;
+                if (void* openGLFramework =
+                        dlopen("/System/Library/Frameworks/OpenGL.framework/OpenGL", RTLD_LAZY | RTLD_LOCAL))
+                {
+                    using CGLGetCurrentContextFn = void* (*)();
+                    auto cglGetCurrentContext =
+                        reinterpret_cast<CGLGetCurrentContextFn>(dlsym(openGLFramework, "CGLGetCurrentContext"));
+                    hasCurrentCglContext = cglGetCurrentContext && cglGetCurrentContext() != nullptr;
+                    dlclose(openGLFramework);
+                }
+                if (!hasCurrentCglContext)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "GLDevice: no current CGL context (macOS has no headless GL bootstrap)");
+                    return false;
+                }
 #endif
 
                 // GLAD can now load OpenGL function pointers from the current context
-                if (!gladLoadGL())
+                if (!gladLoadGL() || !HasRequiredGLVersion())
                 {
                     SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "gladLoadGL failed — no valid GL context");
 #if defined(__linux__) && defined(SPARK_EGL_SUPPORT)
@@ -1635,11 +1715,23 @@ namespace Spark
                 m_capabilities.multiDrawIndirectSupport = true; // GL 4.3+ core (GL_ARB_multi_draw_indirect)
                 m_capabilities.maxConstantBuffers = 14;
 
-                // llvmpipe/softpipe renderer strings identify software rasterizers.
-                const std::string rendererLower = m_capabilities.deviceName;
-                const bool isLlvmPipe = rendererLower.find("llvmpipe") != std::string::npos;
-                const bool isSoftPipe = rendererLower.find("softpipe") != std::string::npos;
-                m_capabilities.isSoftwareDevice = isLlvmPipe || isSoftPipe;
+                // GL_RENDERER substrings of the known CPU rasterizers: Mesa llvmpipe/softpipe/swrast
+                // ("Software Rasterizer"), the Windows 1.1 fallback ("GDI Generic"), WARP-backed GL
+                // ("Microsoft Basic Render Driver") and Apple's fallback ("Apple Software Renderer").
+                // Paravirtual GPUs (virgl, SVGA3D) forward to a host GPU and stay hardware rows.
+                std::string rendererLower = m_capabilities.deviceName;
+                std::transform(rendererLower.begin(), rendererLower.end(), rendererLower.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                static constexpr std::array<std::string_view, 7> kSoftwareRenderers = {"llvmpipe",
+                                                                                       "softpipe",
+                                                                                       "swrast",
+                                                                                       "software rasterizer",
+                                                                                       "gdi generic",
+                                                                                       "microsoft basic render driver",
+                                                                                       "apple software renderer"};
+                m_capabilities.isSoftwareDevice =
+                    std::any_of(kSoftwareRenderers.begin(), kSoftwareRenderers.end(),
+                                [&](std::string_view name) { return rendererLower.find(name) != std::string::npos; });
 
                 // OpenGL has no hardware RT pipeline; compute path can still drive SDFGI.
                 m_capabilities.rayTracing.bestBackend = m_capabilities.computeShaderSupport
@@ -2136,7 +2228,14 @@ namespace Spark
             void GLDevice::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* glBuf = static_cast<GLBuffer*>(buffer);
-                glNamedBufferSubData(glBuf->GetGLBuffer(), offset, size, data);
+                // Same contract as the other backends: drop an out-of-range or null upload
+                // rather than hand the driver a pointer it would read past.
+                if (!glBuf || !data || !IsBufferRangeValid(glBuf->GetSize(), offset, size))
+                {
+                    return;
+                }
+                glNamedBufferSubData(glBuf->GetGLBuffer(), static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size),
+                                     data);
             }
 
             void GLDevice::UpdateTexture(IRHITexture* texture, const void* data, uint32_t mipLevel, uint32_t arraySlice)
@@ -2167,18 +2266,24 @@ namespace Spark
                         glCompressedTextureSubImage3D(glTex->GetGLTexture(), mipLevel, 0, 0, layer, w, h, 1,
                                                       internalFormat, imageSize, data);
                     else
+                    {
                         glCompressedTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, internalFormat,
                                                       imageSize, data);
+                    }
                 }
                 else
                 {
                     const GLenum format = ConvertFormat(pixelFormat);
                     const GLenum formatType = ConvertFormatType(pixelFormat);
                     if (layered)
+                    {
                         glTextureSubImage3D(glTex->GetGLTexture(), mipLevel, 0, 0, layer, w, h, 1, format, formatType,
                                             data);
+                    }
                     else
+                    {
                         glTextureSubImage2D(glTex->GetGLTexture(), mipLevel, 0, 0, w, h, format, formatType, data);
+                    }
                 }
                 glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
             }

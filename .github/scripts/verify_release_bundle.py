@@ -172,8 +172,11 @@ def _verify_provenance(path: Path, source_commit: str, expected: set[str], root:
     return _digest(path)
 
 
+SIGNATURE_MANIFEST_KEYS = frozenset({"schemaVersion", "algorithm", "sourceCommit", "signerFingerprint", "artifacts"})
+
+
 def _verify_signatures(path: Path, root: Path, signature_root: Path, expected: set[str], public_key: Path,
-                       fingerprint: str, openssl: str) -> None:
+                       fingerprint: str, source_commit: str, openssl: str) -> None:
     _require(public_key.is_file() and not public_key.is_symlink(),
              "trusted public key is not provisioned; stable signing precondition is unsatisfied")
     _require(FINGERPRINT.fullmatch(fingerprint) is not None,
@@ -189,8 +192,18 @@ def _verify_signatures(path: Path, root: Path, signature_root: Path, expected: s
              "trusted public-key fingerprint does not match provisioned key")
     data = _load_json(path, "detached signature manifest")
     _require(isinstance(data, dict), "detached signature manifest must be an object")
+    # Closed schema: the producer (sign_release_bundle.ps1) writes exactly these
+    # keys, and a "verified" bundle must not carry unchecked identity metadata.
+    missing_keys = sorted(SIGNATURE_MANIFEST_KEYS - data.keys())
+    unknown_keys = sorted(data.keys() - SIGNATURE_MANIFEST_KEYS)
+    _require(not missing_keys, f"detached signature manifest is missing keys: {', '.join(missing_keys)}")
+    _require(not unknown_keys, f"detached signature manifest has unknown keys: {', '.join(unknown_keys)}")
     _require(data.get("schemaVersion") == 1, "detached signature manifest schema must be version 1")
     _require(data.get("algorithm") == "detached-sha256", "detached signature algorithm is not approved")
+    _require(data.get("sourceCommit") == source_commit,
+             "detached signature manifest source commit does not match the requested source commit")
+    _require(data.get("signerFingerprint") == fingerprint,
+             "detached signature manifest signer fingerprint is not the trusted key fingerprint")
     entries = data.get("artifacts")
     _require(isinstance(entries, list) and bool(entries), "detached signature manifest artifacts are missing")
     seen: set[str] = set()
@@ -261,7 +274,8 @@ def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path,
         for child in root.iterdir()
         if child.is_file() and not child.is_symlink()
         and (child.name.endswith((".zip", ".tar.gz", ".exe", ".msi", ".spdx.json"))
-             or child.name in {"shipping-package-manifest.json", "SparkEngine-Exact-CI-Evidence.json"})
+             or child.name in {"shipping-package-manifest.json", "SparkEngine-Exact-CI-Evidence.json"}
+             or (child.name.startswith(("build-provenance-", "reconcile-")) and child.name.endswith(".json")))
     }
     _require(
         promotable_candidates <= expected | known_control_files,
@@ -288,7 +302,7 @@ def verify_release_bundle(*, bundle_directory: Path, expected_assets_file: Path,
     # signature entry and by the exact local bytes consumed here.
     _require(provenance_digest == _digest(provenance_manifest), "provenance digest changed during verification")
     _verify_signatures(signature_manifest, root, signature_root, expected, trusted_public_key,
-                       trusted_key_fingerprint, openssl)
+                       trusted_key_fingerprint, source_commit, openssl)
 
 
 def main(argv: list[str] | None = None) -> int:

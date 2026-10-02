@@ -1,6 +1,8 @@
 # Material System
 
-SparkEngine uses a physically-based rendering (PBR) material system built on the metallic/roughness workflow. Materials are GPU-compiled objects that encapsulate surface properties, texture bindings, blend/cull state, and shader permutations. The system supports 18 texture slots, advanced shading models (subsurface scattering, clearcoat, anisotropy, transmission, sheen, iridescence), material variants for shader permutations, hot-reload, and thread-safe caching.
+SparkEngine uses a physically-based rendering (PBR) material system built on the metallic/roughness workflow. Materials are GPU-compiled objects that encapsulate surface properties, texture bindings, blend/cull state, and shader permutations. The system supports 18 texture slots, advanced shading models (subsurface scattering, clearcoat, anisotropy, transmission, sheen, iridescence), and material variants for shader permutations.
+
+Materials are created and edited in memory. The material system has no file import, export, reload or hot-reload path of its own and never opens a texture file: the caller creates the shader resource view (for example through `AssetPipeline` or `TextureSystem`) and hands it to `Material::SetTexture()`. An earlier `LoadMaterial` / `Material::LoadFromFile` / `Material::LoadTexture` surface had no caller and no asset-root containment, so it was deleted rather than wired in; `Tests/TestUnwiredSystemRemoval.cpp` (CTest `UnwiredSystemRemoval`) keeps it from coming back.
 
 **Source:** `SparkEngine/Source/Graphics/MaterialSystem.h`
 
@@ -8,8 +10,7 @@ SparkEngine uses a physically-based rendering (PBR) material system built on the
 
 ```
 MaterialSystem (singleton manager)
-    ├── Material cache           (thread-safe, keyed by name)
-    ├── Texture cache            (shared SRVs, deduplicated by path)
+    ├── Material cache           (keyed by name)
     ├── Sampler cache            (hashed TextureSampling → ID3D11SamplerState)
     ├── Default material         (white dielectric, roughness 0.5)
     └── Error material           (magenta fallback for missing materials)
@@ -225,12 +226,11 @@ adv.anisotropyFactor = 0.8f;
 adv.anisotropyDirection = {1.0f, 0.0f};
 mat->SetAdvancedProperties(adv);
 
-// Load textures
-mat->LoadTexture(MaterialTextureType::Albedo, "textures/steel_albedo.dds", device);
-mat->LoadTexture(MaterialTextureType::Normal, "textures/steel_normal.dds", device);
-mat->LoadTexture(MaterialTextureType::Metallic, "textures/steel_metallic.dds", device);
-mat->LoadTexture(MaterialTextureType::Roughness, "textures/steel_roughness.dds", device);
-mat->LoadTexture(MaterialTextureType::Anisotropy, "textures/steel_aniso_dir.dds", device);
+// Assign textures: the SRV comes from the asset pipeline, never from a path given to the material
+MaterialTexture albedo;
+albedo.texture = albedoSrv; // ComPtr<ID3D11ShaderResourceView> created by the caller
+albedo.enabled = true;
+mat->SetTexture(MaterialTextureType::Albedo, albedo);
 
 // Configure render state
 MaterialRenderState state;
@@ -243,11 +243,6 @@ mat->CompileMaterial(device);
 
 // Bind for rendering
 matSystem.BindMaterial("BrushedSteel");
-
-// Hot-reload: watch for texture changes on disk
-matSystem.EnableHotReload(true);
-// Call each frame to pick up file changes:
-matSystem.UpdateHotReload();
 ```
 
 ## Console Commands
@@ -256,27 +251,21 @@ The `MaterialSystem` exposes console integration methods for runtime inspection 
 
 | Method | Description |
 |--------|-------------|
-| `Console_GetMetrics()` | Material count, texture memory, bind stats, load times |
+| `Console_GetMetrics()` | Material count, bind stats, variant count |
 | `Console_ListMaterials()` | List all loaded material names |
 | `Console_GetMaterialInfo(name)` | Detailed info for a specific material |
-| `Console_ReloadMaterial(name)` | Reload a single material from disk |
-| `Console_ReloadAllMaterials()` | Reload every loaded material |
 | `Console_CreateVariant(name, variant, defines)` | Create a shader variant |
 | `Console_ListMaterialVariants(name)` | List variants for a material |
 | `Console_SetMaterialProperty(name, prop, value)` | Set a float property at runtime |
 | `Console_SetMaterialColor(name, prop, r, g, b)` | Set a color property at runtime |
-| `Console_SetHotReload(enabled)` | Enable/disable hot-reload |
 | `Console_SetTextureQuality(quality)` | Set texture quality level |
-| `Console_GetTextureMemoryInfo()` | Texture memory usage breakdown |
-| `Console_LoadTextureToSlot(name, type, path)` | Load a texture into a material slot |
+| `Console_GetTextureMemoryInfo()` | Sampler cache size (and, on Linux, material texture references) |
 | `Console_UnloadTextureFromSlot(name, type)` | Unload a texture from a slot |
 | `Console_ListTextureTypes()` | List all available texture slot types |
-| `Console_ClearCache()` | Clear texture and sampler caches |
+| `Console_ClearCache()` | Clear the sampler cache |
 | `Console_GarbageCollect()` | Remove unused materials |
 | `Console_ValidateMaterials()` | Validate all loaded materials |
 | `Console_DumpMaterialDetails(name)` | Dump full material details |
-| `Console_ExportMaterial(name, path)` | Export material to file |
-| `Console_ImportMaterial(path)` | Import material from file |
 
 ## Editor Integration
 
@@ -293,13 +282,12 @@ The **MaterialEditorPanel** (`SparkEditor/Source/Panels/MaterialEditorPanel.h`) 
 | File | Description |
 |------|-------------|
 | `SparkEngine/Source/Graphics/MaterialSystem.h` | Material, MaterialSystem, all data structures |
-| `SparkEngine/Source/Graphics/MaterialSystem.cpp` | MaterialSystem lifecycle, CRUD, texture loading |
+| `SparkEngine/Source/Graphics/MaterialSystem.cpp` | MaterialSystem lifecycle, CRUD, metrics |
 | `SparkEngine/Source/Graphics/PBRMaterial.cpp` | Material class implementation |
 | `SparkEngine/Source/Graphics/PBRMaterialBinding.cpp` | Material binding to the GPU pipeline |
-| `SparkEngine/Source/Graphics/PBRMaterialLighting.cpp` | PBR lighting calculations |
+| `SparkEngine/Source/Graphics/PBRMaterialLighting.cpp` | PBR struct reflection, shader permutation defines |
 | `SparkEngine/Source/Graphics/MaterialConsoleOps.cpp` | Console inspection, listing, validation |
-| `SparkEngine/Source/Graphics/MaterialConsoleEdit.cpp` | Console editing, texture, hot-reload |
-| `SparkEngine/Source/Graphics/MaterialTextureLoading.cpp` | Texture loading from disk |
+| `SparkEngine/Source/Graphics/MaterialConsoleEdit.cpp` | Console property editing, texture slots |
 | `SparkEngine/Source/Graphics/MaterialLoader.h` | Material file loading interface |
 | `SparkEngine/Source/Graphics/MaterialLoader.cpp` | Material file loading implementation |
 | `SparkEngine/Source/Graphics/MaterialDefinition.h` | Material definition data structures |

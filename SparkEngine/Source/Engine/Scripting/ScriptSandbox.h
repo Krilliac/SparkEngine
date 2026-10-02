@@ -84,8 +84,18 @@ namespace Spark
         // Configuration
         // ====================================================================
 
-        /// Set the security level (adjusts defaults accordingly)
-        void SetSecurityLevel(ScriptSecurityLevel level);
+        /**
+         * @brief Set the security level (adjusts the resource-limit defaults accordingly)
+         *
+         * The level also selects the function policy (blacklist or whitelist)
+         * that AngelScriptEngine consults once, when it registers the engine
+         * API. After LockFunctionPolicy() a different level is refused: the
+         * registered API cannot change, so reporting the new level would claim
+         * a restriction that is not in force.
+         * @return false (level unchanged) when the function policy is locked and
+         *         @p level differs from the current level
+         */
+        bool SetSecurityLevel(ScriptSecurityLevel level);
 
         /// Get the current security level
         [[nodiscard]] ScriptSecurityLevel GetSecurityLevel() const { return m_securityLevel; }
@@ -100,17 +110,26 @@ namespace Spark
         // API Access Control
         // ====================================================================
 
-        /// Add a function name to the allowed list (strict mode whitelist)
-        void AddAllowedFunction(const std::string& name);
+        /// Add a function name to the allowed list (strict mode whitelist); false once the policy is locked
+        bool AddAllowedFunction(const std::string& name);
+        /// Add a function name to the blocked list (standard mode blacklist); false once the policy is locked
+        bool AddBlockedFunction(const std::string& name);
+        /// Remove a function from the allowed list; false once the policy is locked
+        bool RemoveAllowedFunction(const std::string& name);
+        /// Remove a function from the blocked list; false once the policy is locked
+        bool RemoveBlockedFunction(const std::string& name);
 
-        /// Add a function name to the blocked list (standard mode blacklist)
-        void AddBlockedFunction(const std::string& name);
-
-        /// Remove a function from the allowed list
-        void RemoveAllowedFunction(const std::string& name);
-
-        /// Remove a function from the blocked list
-        void RemoveBlockedFunction(const std::string& name);
+        /**
+         * @brief Freeze the level and the allow/block lists
+         *
+         * Called by AngelScriptEngine::Initialize() right after the engine API
+         * is registered through IsFunctionAllowed(): AngelScript cannot
+         * unregister a function, so from then on the policy in force is the one
+         * the API was registered under. Resource limits stay adjustable.
+         */
+        void LockFunctionPolicy() { m_functionPolicyLocked = true; }
+        /// True once LockFunctionPolicy() ran
+        [[nodiscard]] bool IsFunctionPolicyLocked() const { return m_functionPolicyLocked; }
 
         /// Check if a function name is allowed under current security settings
         [[nodiscard]] bool IsFunctionAllowed(const std::string& name) const;
@@ -197,6 +216,8 @@ namespace Spark
         // True once RegisterConsoleCommands has added its commands, so the
         // destructor knows to remove them.
         bool m_consoleCommandsRegistered = false;
+        // True once the engine API was registered under the current policy.
+        bool m_functionPolicyLocked = false;
 
         // API access control
         std::unordered_set<std::string> m_allowedFunctions; ///< Whitelist (strict mode)

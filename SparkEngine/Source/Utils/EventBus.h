@@ -53,6 +53,13 @@
 #include <unordered_map>
 #include <vector>
 
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#define SPARK_EVENTBUS_MSAN 1
+#endif
+#endif
+
 namespace Spark
 {
 
@@ -209,6 +216,16 @@ namespace Spark
             // event type, the nested Publish is silently dropped.  Uses a thread_local
             // flag so independent threads can publish concurrently.
             thread_local bool publishing = false;
+#ifdef SPARK_EVENTBUS_MSAN
+            // MSan false positive, not an uninitialised read: `publishing` is
+            // constant-initialised and only ever assigned true/false.  In a
+            // dlopen'd module it lives in dynamic TLS that ld.so mallocs and
+            // zero-fills with uninstrumented code; MSan's __tls_get_addr hook
+            // unpoisons only the first block it sees per TLS module id, so after
+            // dlclose + re-dlopen (same id reused) the fresh block stays poisoned
+            // (compiler-rt sanitizer_tls_get_addr.cpp: `if (!dtv || dtv->beg)`).
+            __msan_unpoison(&publishing, sizeof(publishing));
+#endif
             if (publishing)
                 return;
 

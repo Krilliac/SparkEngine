@@ -11,10 +11,10 @@
 
 #pragma once
 
-#include "Core/framework.h"          // XMFLOAT3, XMMATRIX, HRESULT
+#include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
+#include "Core/FPSAssert.h"
 #include "Physics/CollisionSystem.h" // BoundingSphere
 #include "Game/GameObject.h"
-#include "Utils/Assert.h"
 
 class PhysicsSystem;
 
@@ -165,7 +165,7 @@ class Projectile : public GameObject
      */
     void SetDamage(float damage)
     {
-        ASSERT_MSG(damage >= 0, "Damage must be non-negative");
+        FPS_ASSERT_MSG(damage >= 0, "Damage must be non-negative");
         m_damage = damage;
     }
 
@@ -175,7 +175,7 @@ class Projectile : public GameObject
      */
     void SetLifeTime(float lifeTime)
     {
-        ASSERT_MSG(lifeTime > 0, "LifeTime must be positive");
+        FPS_ASSERT_MSG(lifeTime > 0, "LifeTime must be positive");
         m_maxLifeTime = lifeTime;
     }
 

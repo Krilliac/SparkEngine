@@ -161,7 +161,13 @@ class RepositoryInventoryTests(unittest.TestCase):
 
     def test_live_configures_are_expanded_per_matrix_leg_with_owners(self) -> None:
         configs = self.data["workflowCmakeConfigs"]
-        self.assertEqual(len(configs), 26)
+        # reproducibility-windows (BLD-100) configures windows-shipping twice.
+        # golden-linux (CI-110), service-contract (NET-110) and build-macos-shipping
+        # (PLT-220) each own one leg. TelemetrySpool (OPS-100A) reuses the
+        # security-runtime configure instead of owning a second linux-shipping leg.
+        # terrafront-multiclient (TF CI) owns one leg; visual-script-package
+        # (ENG-200) configures the engine and its packager project.
+        self.assertEqual(len(configs), 37)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -173,14 +179,35 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "build-linux-msan",
                 "build-linux-tsan",
                 "build-macos",
+                "build-macos-shipping",
                 "build-windows-shipping",
                 "build-windows-vs2022",
                 "build-windows-vs2026",
                 "clang-tidy",
                 "coverage",
+                "experimental-module-lifecycle",
                 "fuzz-policy",
-                "telemetry-integration",
+                "golden-linux",
+                "network-integration",
+                "network-security",
+                "reproducibility-windows",
+                "security-runtime",
+                "service-contract",
+                "terrafront-multiclient",
+                "visual-script-package",
             ],
+        )
+        single_leg_presets = {
+            job: [entry["preset"] for entry in configs if entry["job"] == job]
+            for job in ("golden-linux", "service-contract", "network-security")
+        }
+        self.assertEqual(
+            single_leg_presets,
+            {
+                "golden-linux": ["linux-gcc-release"],
+                "service-contract": ["linux-shipping"],
+                "network-security": ["linux-shipping"],
+            },
         )
         # A matrix lane contributes one record per combination, so narrowing
         # `config: [Debug, Release]` to `[Debug]` removes a record outright.
@@ -223,7 +250,7 @@ class RepositoryInventoryTests(unittest.TestCase):
         gating = {job["id"]: job["gating"] for job in workflow["jobs"]}
         self.assertEqual(gating["build-windows-vs2022"], "blocking")
         self.assertEqual(gating["build-linux-msan"], "advisory")
-        self.assertEqual(gating["build-linux-mingw-wine"], "conditional")
+        self.assertEqual(gating["build-linux-mingw-wine"], "advisory")
 
     def test_current_debt_is_blocking_not_baseline_masked(self) -> None:
         report = check_parity.build_report(copy.deepcopy(self.data))
@@ -473,6 +500,32 @@ class WorkflowParserTests(unittest.TestCase):
 
 
 class PresetAndCodemodelTests(unittest.TestCase):
+    def test_inventory_codemodel_accepts_release_preset_alias(self) -> None:
+        parsed = inventory._parse_codemodel_args(
+            [
+                "windows-shipping=build/windows-shipping",
+                "windows-release=build/windows-release",
+                "installed-sdk-consumer=build/installed-sdk-consumer",
+            ]
+        )
+        self.assertEqual(
+            parsed,
+            {
+                "windows-shipping": Path("build/windows-shipping"),
+                "windows-validation": Path("build/windows-release"),
+                "installed-sdk-consumer": Path("build/installed-sdk-consumer"),
+            },
+        )
+
+    def test_inventory_codemodel_rejects_alias_collision(self) -> None:
+        with self.assertRaisesRegex(inventory.InventoryError, "same profile"):
+            inventory._parse_codemodel_args(
+                [
+                    "windows-release=build/windows-release",
+                    "windows-validation=build/windows-validation",
+                ]
+            )
+
     def test_preset_capture_configure_is_fresh(self) -> None:
         executable = Path("C:/cmake.exe")
 
@@ -1475,7 +1528,9 @@ class WorkflowEnforcementTests(unittest.TestCase):
             ):
                 cached_jobs.append((job_id, steps))
 
-        self.assertGreaterEqual(len(cached_jobs), 8)
+        # build-linux-mingw-wine stopped restoring a build tree (ccache covers it), so it no longer
+        # carries a restored CMakeCache that would need the version reasserted.
+        self.assertGreaterEqual(len(cached_jobs), 7)
         for job_id, steps in cached_jobs:
             with self.subTest(job=job_id):
                 configure_runs = [
@@ -1815,6 +1870,8 @@ class WorkflowWeakeningTests(unittest.TestCase):
             for entry in record["buildInvocations"]
             if entry.get("job") == "build-windows-shipping"
             and entry.get("preset") == "windows-shipping"
+            # The BLD-100 ISA step is a separate, deliberate single-target build.
+            and entry.get("targets") != ["CpuFloor_IsaBaseline"]
         ]
         self.assertEqual(len(shipping_builds), 1)
         self.assertEqual(shipping_builds[0]["targets"], ["SparkEngine"])
@@ -4051,6 +4108,78 @@ class OptionActivationTests(unittest.TestCase):
             with self.subTest(expression=expression):
                 with self.assertRaises(inventory.InventoryError):
                     inventory._evaluate_condition(expression)
+
+
+class UnreadOptionTests(unittest.TestCase):
+    """CI-120: a declared option that nothing consumes is an unused option and fails."""
+
+    def unread(self, cmake_text: str, template_text: str = "") -> list[check_parity.Finding]:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as directory:
+            cmake_file = Path(directory) / "CMakeLists.txt"
+            cmake_file.write_text(textwrap.dedent(cmake_text), encoding="utf-8")
+            template = Path(directory) / "Config.h.in"
+            template.write_text(template_text, encoding="utf-8")
+            declarations = inventory.extract_cmake_options_text(
+                cmake_file.read_text(encoding="utf-8"), "synthetic/CMakeLists.txt"
+            )
+            reads = inventory.extract_cmake_option_reads(declarations, [cmake_file], [template])
+        return check_parity.check_unread_options(declarations, reads)
+
+    def test_declaration_nobody_reads_is_blocking(self) -> None:
+        findings = self.unread(
+            """\
+            option(ENABLE_USED "Used" ON)
+            option(ENABLE_NOBODY_READS "Declared but never consumed" ON)
+            if(ENABLE_USED)
+              set(ENABLE_NOBODY_READS OFF)
+            endif()
+            """
+        )
+        self.assertEqual([finding.category for finding in findings], ["declared-option-unread"])
+        self.assertEqual(findings[0].severity, "error")
+        self.assertIn("ENABLE_NOBODY_READS", findings[0].message)
+        self.assertIn("synthetic/CMakeLists.txt:2", findings[0].detail)
+
+    def test_every_consumer_form_counts_as_a_read(self) -> None:
+        findings = self.unread(
+            """\
+            option(ENABLE_IF "if" ON)
+            option(SPARK_DEREF "deref" ON)
+            option(BUILD_GENEX "genex" ON)
+            option(ENABLE_FORWARDED "forwarded" ON)
+            option(ENABLE_DEPENDENCY "dependency" ON)
+            option(SPARK_TEMPLATE "template" ON)
+            if(ENABLE_IF)
+            endif()
+            message(STATUS "${SPARK_DEREF}")
+            target_compile_definitions(x PRIVATE $<$<BOOL:${BUILD_GENEX}>:GENEX>)
+            add_test(NAME t COMMAND cmake -DENABLE_FORWARDED=OFF)
+            cmake_dependent_option(ENABLE_DEPENDENT "d" ON "ENABLE_DEPENDENCY" OFF)
+            if(ENABLE_DEPENDENT)
+            endif()
+            """,
+            "#cmakedefine SPARK_TEMPLATE\n",
+        )
+        self.assertEqual(findings, [])
+
+    def test_names_outside_the_guarded_namespaces_are_not_checked(self) -> None:
+        self.assertEqual(self.unread('option(MY_UNREAD_TOGGLE "Unread" ON)\n'), [])
+
+    def test_repository_reads_are_recorded_and_no_declared_option_is_unread(self) -> None:
+        data = inventory.build_inventory()
+        self.assertIn("ENABLE_LTO", data["cmakeOptionReads"])
+        findings = check_parity.check_unread_options(
+            data["allCmakeOptionDeclarations"], data["cmakeOptionReads"]
+        )
+        # The inert ENABLE_GRAPHICS was deleted; CI's pending-authority validator
+        # accepts no blocking finding besides the external codemodel authority.
+        self.assertEqual([finding.message for finding in findings], [])
+
+    def test_inventory_without_read_record_is_rejected(self) -> None:
+        data = copy.deepcopy(inventory.build_inventory())
+        data.pop("cmakeOptionReads")
+        with self.assertRaisesRegex(inventory.InventoryError, "required fields"):
+            check_parity.run_all_checks(data)
 
 
 class TargetInventoryTests(unittest.TestCase):

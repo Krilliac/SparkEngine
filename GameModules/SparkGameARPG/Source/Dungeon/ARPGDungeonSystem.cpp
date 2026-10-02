@@ -4,8 +4,8 @@
  */
 
 #include "ARPGDungeonSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Engine/ECS/Components.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -13,6 +13,7 @@
 
 #include <random>
 #include <sstream>
+#include <string_view>
 
 namespace ARPG
 {
@@ -27,18 +28,126 @@ namespace ARPG
     {
         m_context = context;
         RegisterTierConfigs();
+        PlaceCryptKit();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG dungeon system initialized with %zu tiers",
-                       m_tierConfigs.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Dungeon system initialized (" +
-                                                    std::to_string(m_tierConfigs.size()) + " tiers)");
+        Spark::ModuleLog::Info(m_context, "ARPG dungeon system initialized with {} tiers", m_tierConfigs.size());
+        Spark::ModuleLog::Info(
+            m_context, "{}", "[ARPG] Dungeon system initialized (" + std::to_string(m_tierConfigs.size()) + " tiers)");
         return true;
     }
 
     void ARPGDungeonSystem::Shutdown()
     {
+        RemoveCryptKit();
         m_floors.clear();
         m_currentFloorIndex = -1;
+    }
+
+    // =========================================================================
+    // Crypt kit — Blender-authored props (tools/blender/author_arpg_kit.py)
+    // =========================================================================
+
+    void ARPGDungeonSystem::PlaceCryptKit()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!world)
+            return;
+
+        // Meters, pivot at the ground-contact centre, front facing +Z (source Art/Blender/SparkGameARPG/arpg_kit.blend).
+        // The hero starts at the origin looking down -Z: urns (the art for the "arpg_urn" fracture pattern registered
+        // by ARPGEngineSystems) flank the approach, a spike trap guards the aisle, the boss hoard waits beside the far
+        // wall and the portal gate that descends to the next floor closes the room, facing back toward the hero. They
+        // are set dressing only: no collider, trigger or destructible component is attached. The OBJ/MTL base colours
+        // render without a material.
+        // The ModuleKits ARPG landmarks (Tools/model_pipeline/generate_starter_models.py, same conventions) frame the
+        // boss arena: necrotic pillars flank it, ritual braziers light the portal gate and the arcane chest sits
+        // beside the hoard. ARPGActorPresentation stands the boss between the pillars at z = -10.5.
+        struct KitProp
+        {
+            const char* name;
+            const char* meshPath;
+            DirectX::XMFLOAT3 position;
+            float yawDegrees;
+        };
+        static constexpr KitProp kit[] = {
+            {"Crypt_Urn_West", "Assets/Models/ARPG/Kit/destructible_urn.obj", {-4.0f, 0.0f, -3.0f}, 20.0f},
+            {"Crypt_Urn_East", "Assets/Models/ARPG/Kit/destructible_urn.obj", {4.0f, 0.0f, -3.5f}, -35.0f},
+            {"Crypt_Urn_Alcove", "Assets/Models/ARPG/Kit/destructible_urn.obj", {-4.6f, 0.0f, -10.0f}, 75.0f},
+            {"Crypt_SpikeTrap", "Assets/Models/ARPG/Kit/spike_trap.obj", {0.0f, 0.0f, -7.0f}, 0.0f},
+            {"Crypt_LootPile", "Assets/Models/ARPG/Kit/loot_pile.obj", {3.5f, 0.0f, -11.0f}, -30.0f},
+            {"Crypt_PortalGate", "Assets/Models/ARPG/Kit/portal_gate.obj", {0.0f, 0.0f, -14.0f}, 0.0f},
+            {"Crypt_Pillar_West",
+             "Assets/Models/ModuleKits/ARPG/necrotic_combat_pillar.obj",
+             {-2.5f, 0.0f, -9.0f},
+             0.0f},
+            {"Crypt_Pillar_East",
+             "Assets/Models/ModuleKits/ARPG/necrotic_combat_pillar.obj",
+             {2.5f, 0.0f, -9.0f},
+             0.0f},
+            {"Crypt_Brazier_West",
+             "Assets/Models/ModuleKits/ARPG/summoner_ritual_brazier.obj",
+             {-3.2f, 0.0f, -13.0f},
+             0.0f},
+            {"Crypt_Brazier_East",
+             "Assets/Models/ModuleKits/ARPG/summoner_ritual_brazier.obj",
+             {3.2f, 0.0f, -13.0f},
+             0.0f},
+            {"Crypt_ArcaneChest", "Assets/Models/ModuleKits/ARPG/arcane_loot_chest.obj", {5.0f, 0.0f, -12.6f}, -60.0f},
+        };
+        for (const KitProp& prop : kit)
+        {
+            EntityID entity = world->CreateEntity(prop.name);
+            world->AddComponent<Transform>(entity, Transform{prop.position, {0.0f, prop.yawDegrees, 0.0f}, {1, 1, 1}});
+            MeshRenderer& renderer = world->AddComponent<MeshRenderer>(entity);
+            renderer.meshPath = prop.meshPath;
+            m_kitEntities.push_back(static_cast<uint32_t>(entity));
+        }
+        Spark::ModuleLog::Info(m_context, "ARPG crypt: placed {} kit props (ARPG Kit and ModuleKits/ARPG)",
+                               m_kitEntities.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Crypt: placed " + std::to_string(m_kitEntities.size()) +
+                                   " kit props (ARPG Kit and ModuleKits/ARPG)");
+    }
+
+    void ARPGDungeonSystem::RemoveCryptKit()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world)
+        {
+            for (uint32_t entityId : m_kitEntities)
+            {
+                auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                    world->DestroyEntity(entity);
+            }
+        }
+        m_kitEntities.clear();
+    }
+
+    void ARPGDungeonSystem::RebuildCryptKitAfterWorldLoad()
+    {
+        // SaveSystem gave the restored entities fresh identifiers, so the cached ones may name unrelated entities:
+        // drop them unused, remove every restored kit prop (it may come from an older kit layout) and place anew.
+        m_kitEntities.clear();
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!world)
+        {
+            return;
+        }
+
+        std::vector<EntityID> restoredProps;
+        for (const EntityID entity : world->GetEntitiesWith<NameComponent>())
+        {
+            if (std::string_view(world->GetComponent<NameComponent>(entity)->name).starts_with(CRYPT_PROP_PREFIX))
+            {
+                restoredProps.push_back(entity);
+            }
+        }
+        for (const EntityID entity : restoredProps)
+        {
+            world->DestroyEntity(entity);
+        }
+        PlaceCryptKit();
     }
 
     // Intentional: deltaTime reserved for future dungeon event timers
@@ -166,8 +275,8 @@ namespace ARPG
 
         const auto* config = GetTierConfig(tier);
         std::string tierName = config ? config->name : "Unknown";
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG dungeon tier set to: %s", tierName.c_str());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Dungeon tier set to: " + tierName);
+        Spark::ModuleLog::Info(m_context, "ARPG dungeon tier set to: {}", tierName.c_str());
+        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Dungeon tier set to: " + tierName);
     }
 
     void ARPGDungeonSystem::DescendToNextFloor()
@@ -185,9 +294,9 @@ namespace ARPG
         if (level.hasBoss)
             msg += " BOSS";
         msg += ")";
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG descended to floor %d (monster level %d)", nextFloor,
-                       level.monsterLevel);
-        Spark::SimpleConsole::GetInstance().LogInfo(msg);
+        Spark::ModuleLog::Info(m_context, "ARPG descended to floor {} (monster level {})", nextFloor,
+                               level.monsterLevel);
+        Spark::ModuleLog::Info(m_context, "{}", msg);
     }
 
     std::string ARPGDungeonSystem::GetDungeonStatusString() const

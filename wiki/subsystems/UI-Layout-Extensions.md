@@ -14,7 +14,7 @@ The UI Layout Extensions module provides declarative layout containers, interact
 | `UITextInput` | Single-line text input widget with cursor, selection, and placeholder |
 | `UISlider` | Numeric slider with configurable range, step, and orientation |
 | `UIDropdown` | Dropdown selection widget with labeled options |
-| `UIDataBinding<T>` | Templated one-way data binding from a source pointer to formatted display text |
+| `UIDisplayBinding<T>` | Templated one-way data binding from a source pointer to formatted display text (distinct from `UIFactory.h`'s bidirectional `UIDataBinding`) |
 | `UILayoutLoader` | Static utility that parses JSON layout descriptions into a UIPanel hierarchy |
 
 All classes live in the `Spark::UI` namespace and inherit from `UIWidget` (defined in `UISystem.h`).
@@ -207,7 +207,7 @@ resolutionDropdown.Toggle();  // Open/close the dropdown list
 // Bind a health value to formatted display text
 float playerHealth = 85.0f;
 
-UIDataBinding<float> healthBinding;
+UIDisplayBinding<float> healthBinding;
 healthBinding.Bind(&playerHealth);
 healthBinding.SetFormatter([](const float& hp) {
     return std::format("HP: {:.0f}", hp);
@@ -292,7 +292,7 @@ Data bindings connect ECS component values to UI display:
 
 ```cpp
 auto& transform = registry.get<TransformComponent>(entity);
-UIDataBinding<float> xBinding;
+UIDisplayBinding<float> xBinding;
 xBinding.Bind(&transform.position.x);
 xBinding.SetFormatter([](const float& x) {
     return std::format("X: {:.2f}", x);
@@ -394,7 +394,7 @@ slider.OnValueChanged([&eventBus](float value) {
 | `IsOpen() -> bool` | Check if dropdown list is open |
 | `Toggle()` | Toggle open/closed state |
 
-### UIDataBinding\<T\>
+### UIDisplayBinding\<T\>
 
 | Method | Description |
 |--------|-------------|

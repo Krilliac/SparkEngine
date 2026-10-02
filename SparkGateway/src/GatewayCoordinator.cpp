@@ -5,6 +5,8 @@
 
 #include "GatewayCoordinator.h"
 
+#include "GatewayLocalAdapters.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -21,8 +23,24 @@ namespace Spark::Gateway
 
     GatewayCoordinator::GatewayCoordinator(Net::WorldServer& worldServer, IGatewayAuthenticator& authenticator,
                                            IAreaControlPlane& controlPlane)
-        : m_worldServer(&worldServer), m_authenticator(&authenticator), m_controlPlane(&controlPlane)
+        : m_worldServer(&worldServer), m_authenticator(std::make_unique<GuardedGatewayAuthenticator>(authenticator)),
+          m_controlPlane(&controlPlane), m_ownedPlacement(std::make_unique<LocalDeterministicPlacement>()),
+          m_placement(m_ownedPlacement.get())
     {
+    }
+
+    GatewayCoordinator::GatewayCoordinator(Net::WorldServer& worldServer, IGatewayAuthenticator& authenticator,
+                                           IAreaControlPlane& controlPlane, IAreaPlacementPolicy& placement)
+        : m_worldServer(&worldServer), m_authenticator(std::make_unique<GuardedGatewayAuthenticator>(authenticator)),
+          m_controlPlane(&controlPlane), m_placement(&placement)
+    {
+    }
+
+    GatewayCoordinator::~GatewayCoordinator() = default;
+
+    GatewayAuthenticatorHealth GatewayCoordinator::GetAuthenticationHealth() const
+    {
+        return m_authenticator->GetHealth();
     }
 
     bool GatewayCoordinator::RegisterAreas(const std::vector<AreaEndpoint>& endpoints)
@@ -51,7 +69,7 @@ namespace Spark::Gateway
     RouteResult GatewayCoordinator::Admit(const AdmissionRequest& request)
     {
         RouteResult result;
-        if (!IsReady())
+        if (!IsRoutable())
         {
             result.failure = RouteFailure::NotReady;
             result.reason = "Gateway admission or area control plane is not ready";
@@ -90,20 +108,45 @@ namespace Spark::Gateway
             result.reason = "Session identifier is already active";
             return result;
         }
-        if (m_worldServer->GetTotalPlayerCount() >= static_cast<uint32_t>(m_worldServer->GetConfig().maxTotalClients))
+        if (m_sessionByClient.contains(request.clientId))
+        {
+            result.failure = RouteFailure::DuplicateSession;
+            result.reason = "Client identifier is already bound to an active session";
+            return result;
+        }
+        // The gateway's own session table is capped independently of the WorldServer mirror, so
+        // the world limit holds even if the mirror and the gateway ever disagree.
+        const size_t maxTotalClients = static_cast<size_t>(std::max(0, m_worldServer->GetConfig().maxTotalClients));
+        if (m_sessions.size() >= maxTotalClients || m_worldServer->GetTotalPlayerCount() >= maxTotalClients)
         {
             result.failure = RouteFailure::CapacityReached;
             result.reason = "World capacity reached";
             return result;
         }
 
-        const Net::AreaID area =
-            m_worldServer->HandlePlayerConnect(request.clientId, request.playerName, request.spawnPosition);
-        const AreaEndpoint* endpoint = FindEndpoint(area);
-        if (area == Net::INVALID_AREA || endpoint == nullptr)
+        // Placement (boundary B9): the policy chooses; the coordinator only accepts an area that is
+        // registered, online and below capacity, whatever the policy returned.
+        const std::vector<AreaSnapshot> areas = SnapshotAreas();
+        const PlacementRequest placement{authentication.principalId, request.sessionId, request.spawnPosition};
+        Net::AreaID area = Net::INVALID_AREA;
+        try
+        {
+            area = m_placement->Place(placement, areas);
+        }
+        catch (...)
         {
             result.failure = RouteFailure::NoAreaAvailable;
-            result.reason = "No healthy area is available for the requested spawn position";
+            result.reason = "Area placement policy fault";
+            return result;
+        }
+        const auto placed = std::ranges::find(areas, area, &AreaSnapshot::areaId);
+        const AreaEndpoint* endpoint = FindEndpoint(area);
+        if (placed == areas.end() || !placed->online || placed->sessions >= placed->capacity || endpoint == nullptr ||
+            !m_worldServer->HandlePlayerConnectToArea(request.clientId, request.playerName, request.spawnPosition,
+                                                      area))
+        {
+            result.failure = RouteFailure::NoAreaAvailable;
+            result.reason = "No healthy area with free capacity is available";
             return result;
         }
 
@@ -117,6 +160,7 @@ namespace Spark::Gateway
         result.session = record.snapshot;
         result.host = endpoint->host;
         result.port = endpoint->area.port;
+        m_sessionByClient.emplace(request.clientId, request.sessionId);
         m_sessions.emplace(request.sessionId, std::move(record));
         return result;
     }
@@ -244,6 +288,7 @@ namespace Spark::Gateway
         if (found == m_sessions.end() || found->second.snapshot.state != SessionState::Active)
             return false;
         m_worldServer->HandlePlayerDisconnect(found->second.snapshot.clientId);
+        m_sessionByClient.erase(found->second.snapshot.clientId);
         m_sessions.erase(found);
         return true;
     }
@@ -283,15 +328,18 @@ namespace Spark::Gateway
 
     bool GatewayCoordinator::IsReady() const
     {
+        return IsRoutable() && !m_authenticator->IsFailingFast();
+    }
+
+    bool GatewayCoordinator::IsRoutable() const
+    {
         std::vector<Net::AreaID> areas;
         Net::WorldServer* world = nullptr;
-        IGatewayAuthenticator* authenticator = nullptr;
         IAreaControlPlane* control = nullptr;
         bool accepting = false;
         {
             std::lock_guard lock(m_mutex);
             world = m_worldServer;
-            authenticator = m_authenticator;
             control = m_controlPlane;
             accepting = m_accepting;
             areas.reserve(m_endpoints.size());
@@ -301,8 +349,7 @@ namespace Spark::Gateway
                 areas.push_back(id);
             }
         }
-        if (!world || !world->IsRunning() || !authenticator || !authenticator->IsReady() || !control || areas.empty() ||
-            !accepting)
+        if (!world || !world->IsRunning() || !m_authenticator->IsReady() || !control || areas.empty() || !accepting)
             return false;
 
         bool allReady = true;
@@ -313,6 +360,24 @@ namespace Spark::Gateway
             allReady &= ready;
         }
         return allReady;
+    }
+
+    std::vector<AreaSnapshot> GatewayCoordinator::SnapshotAreas() const
+    {
+        std::vector<AreaSnapshot> areas;
+        areas.reserve(m_endpoints.size());
+        for (const auto& [id, endpoint] : m_endpoints)
+        {
+            AreaSnapshot area;
+            area.areaId = id;
+            const std::optional<Net::AreaRegistration> registration = m_worldServer->GetAreaInfoSnapshot(id);
+            area.online = registration.has_value() && registration->isOnline;
+            area.capacity = static_cast<uint32_t>(endpoint.area.maxClients);
+            area.sessions = static_cast<uint32_t>(std::ranges::count_if(
+                m_sessions, [id](const auto& entry) { return entry.second.snapshot.authoritativeArea == id; }));
+            areas.push_back(area);
+        }
+        return areas;
     }
 
     const AreaEndpoint* GatewayCoordinator::FindEndpoint(Net::AreaID areaId) const

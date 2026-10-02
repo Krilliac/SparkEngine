@@ -10,7 +10,7 @@ A cross-platform terminal UI build tool for configuring and compiling [SparkEngi
 
 - **Interactive TUI** — Color-coded menus with categorized build options, input validation, and live process output
 - **Cross-platform** — Native support for Windows, Linux, and macOS with platform-specific defaults
-- **35+ toggleable modules** — Enable or disable engine systems individually (graphics, physics, scripting, rendering effects, gameplay systems, etc.)
+- **Toggleable modules** — Enable or disable engine systems individually (graphics, physics, scripting, rendering effects, gameplay systems, etc.)
 - **Preset system** — Quickly apply predefined configurations: All On, All Off, Defaults, Minimal, Linux-Friendly, Shipping, or Development
 - **CMakePresets.json support** — Auto-detects and lists available presets from the engine directory
 - **Environment management** — Checks for Git, CMake, and compilers; can clone SparkEngine and download CMake automatically
@@ -31,7 +31,7 @@ A cross-platform terminal UI build tool for configuring and compiling [SparkEngi
 ### Windows
 
 ```bash
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -T v143
 cmake --build build --config Release --parallel
 ```
 
@@ -124,7 +124,7 @@ Customize how SparkEngine is built:
 | Select Generator | Visual Studio 2022, Ninja, Makefiles, Xcode, etc. |
 | Select Build Type | Debug, Release, RelWithDebInfo, MinSizeRel |
 | Set Paths | Engine source path and build output path |
-| Toggle Build Options | Enable/disable 35+ engine modules by category |
+| Toggle Build Options | Enable/disable engine modules by category |
 | Apply Preset | All On, All Off, Defaults, Minimal, Linux-Friendly, Shipping, Development |
 | CMake Presets | Detect and select from `CMakePresets.json` |
 | MSVC Toolset | Override the MSVC toolset version (Windows only) |
@@ -193,7 +193,6 @@ BuildType=Release
 ParallelJobs=8
 
 [Options]
-ENABLE_GRAPHICS=ON
 ENABLE_RECAST=ON
 ENABLE_ANGELSCRIPT=OFF
 ENABLE_NETWORKING=OFF

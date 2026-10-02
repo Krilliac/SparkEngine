@@ -2,18 +2,45 @@
  * @file NetworkEncryption.cpp
  * @brief SecureChannel (keyed ChaCha20-Poly1305 packets), CSPRNG keys/tokens, replay window, rate limiter
  *
- * The AEAD primitive itself lives in NetworkEncryptionAead.cpp.
+ * Every cryptographic primitive here is libsodium's (NET-100, owner decision
+ * OD-06): the IETF ChaCha20-Poly1305 AEAD, HKDF-SHA256, randombytes_buf,
+ * sodium_memcmp and sodium_memzero. This file only composes them.
  */
 
 #include "NetworkEncryption.h"
 #include "../../Utils/LogMacros.h"
-#include "../../Utils/PasswordHash.h"
-#include "../../Utils/SecureRandom.h"
 
 #include <string_view>
 
+#ifndef SPARK_HAS_LIBSODIUM
+#error "NetworkEncryption.cpp requires libsodium (cmake/SparkLibsodium.cmake links spark_sodium)"
+#endif
+#include <sodium.h>
+
 namespace Spark::Net
 {
+
+    static_assert(SESSION_KEY_SIZE == crypto_aead_chacha20poly1305_ietf_KEYBYTES);
+    static_assert(AEAD_NONCE_SIZE == crypto_aead_chacha20poly1305_ietf_NPUBBYTES);
+    static_assert(AEAD_TAG_SIZE == crypto_aead_chacha20poly1305_ietf_ABYTES);
+    static_assert(SESSION_KEY_SIZE == crypto_kdf_hkdf_sha256_KEYBYTES);
+
+    bool EnsureSodium()
+    {
+        // A function-local static is initialized exactly once, even under
+        // concurrent first calls. sodium_init() returns 0 on first success, 1 when
+        // already initialized, and -1 on failure.
+        static const bool initialized = []
+        {
+            const bool ok = sodium_init() >= 0;
+            if (!ok)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Network, "sodium_init() failed: network crypto is unavailable");
+            }
+            return ok;
+        }();
+        return initialized;
+    }
 
     namespace
     {
@@ -31,25 +58,18 @@ namespace Spark::Net
             return v;
         }
 
-        /// Zero secret material in a way the optimizer may not elide.
-        void SecureWipe(void* data, size_t size)
-        {
-            volatile uint8_t* bytes = static_cast<volatile uint8_t*>(data);
-            for (size_t i = 0; i < size; ++i)
-                bytes[i] = 0;
-        }
-
         // ------------------------------------------------------------------------
-        // HKDF-SHA256 (RFC 5869), single-block expand
+        // HKDF-SHA256 (RFC 5869) with a single 32-byte output block
         // ------------------------------------------------------------------------
 
         SessionKey HkdfSha256(std::span<const uint8_t> salt, std::span<const uint8_t> ikm, std::string_view info)
         {
-            auto prk = Spark::PasswordHash::ComputeHmacSha256(salt, ikm);
-            std::vector<uint8_t> expandInput(info.begin(), info.end());
-            expandInput.push_back(0x01);
-            SessionKey okm = Spark::PasswordHash::ComputeHmacSha256(prk, expandInput);
-            SecureWipe(prk.data(), prk.size());
+            SessionKey okm{};
+            uint8_t prk[crypto_kdf_hkdf_sha256_KEYBYTES];
+            // Neither call can fail for these lengths (32-byte output, no oversize input).
+            crypto_kdf_hkdf_sha256_extract(prk, salt.data(), salt.size(), ikm.data(), ikm.size());
+            crypto_kdf_hkdf_sha256_expand(okm.data(), okm.size(), info.data(), info.size(), prk);
+            sodium_memzero(prk, sizeof(prk));
             return okm;
         }
 
@@ -69,6 +89,9 @@ namespace Spark::Net
             return HkdfSha256(current, current, kRekeyInfo);
         }
 
+        /// Nonce scheme: [epoch u8][0 0 0][sequence u64 LE]. Each epoch has its own
+        /// key, and a sender uses each sequence at most once per epoch, so a
+        /// (key, nonce) pair never repeats.
         AeadNonce MakeNonce(uint8_t epoch, uint64_t sequence)
         {
             AeadNonce nonce{};
@@ -78,30 +101,31 @@ namespace Spark::Net
         }
     } // namespace
 
-
     // ============================================================================
     // Key / token generation and comparison
     // ============================================================================
 
     bool GenerateSessionKey(SessionKey& outKey)
     {
-        if (!Spark::SecureRandom::Fill(outKey.data(), outKey.size()))
+        if (!EnsureSodium())
         {
-            SecureWipe(outKey.data(), outKey.size());
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "CSPRNG failure: refusing to create a session key");
+            sodium_memzero(outKey.data(), outKey.size());
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "CSPRNG unavailable: refusing to create a session key");
             return false;
         }
+        randombytes_buf(outKey.data(), outKey.size());
         return true;
     }
 
     bool GenerateConnectionToken(ConnectionToken& outToken)
     {
-        if (!Spark::SecureRandom::Fill(outToken.data(), outToken.size()))
+        if (!EnsureSodium())
         {
-            SecureWipe(outToken.data(), outToken.size());
-            SPARK_LOG_ERROR(Spark::LogCategory::Network, "CSPRNG failure: refusing to create a connection token");
+            sodium_memzero(outToken.data(), outToken.size());
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "CSPRNG unavailable: refusing to create a connection token");
             return false;
         }
+        randombytes_buf(outToken.data(), outToken.size());
         return true;
     }
 
@@ -110,23 +134,79 @@ namespace Spark::Net
         return ConstantTimeEqual(expected, received);
     }
 
+    bool ConstantTimeEqual(std::span<const uint8_t> a, std::span<const uint8_t> b)
+    {
+        if (a.size() != b.size())
+        {
+            return false;
+        }
+        if (a.empty())
+        {
+            return true;
+        }
+        return sodium_memcmp(a.data(), b.data(), a.size()) == 0;
+    }
+
+    // ============================================================================
+    // RFC 8439 AEAD (libsodium IETF ChaCha20-Poly1305)
+    // ============================================================================
+
+    std::vector<uint8_t> ChaCha20Poly1305Seal(const SessionKey& key, const AeadNonce& nonce,
+                                              std::span<const uint8_t> aad, std::span<const uint8_t> plaintext)
+    {
+        if (!EnsureSodium())
+        {
+            return {}; // shorter than a tag: callers treat it as a failed seal
+        }
+        std::vector<uint8_t> out(plaintext.size() + AEAD_TAG_SIZE);
+        unsigned long long outLen = 0;
+        crypto_aead_chacha20poly1305_ietf_encrypt(out.data(), &outLen, plaintext.data(), plaintext.size(), aad.data(),
+                                                  aad.size(), nullptr, nonce.data(), key.data());
+        return out;
+    }
+
+    bool ChaCha20Poly1305Open(const SessionKey& key, const AeadNonce& nonce, std::span<const uint8_t> aad,
+                              std::span<const uint8_t> ciphertextAndTag, std::vector<uint8_t>& outPlaintext)
+    {
+        outPlaintext.clear();
+        if (ciphertextAndTag.size() < AEAD_TAG_SIZE || !EnsureSodium())
+        {
+            return false;
+        }
+
+        // libsodium verifies the tag in constant time before it decrypts, so
+        // unauthenticated plaintext is never written.
+        outPlaintext.resize(ciphertextAndTag.size() - AEAD_TAG_SIZE);
+        unsigned long long plaintextLen = 0;
+        if (crypto_aead_chacha20poly1305_ietf_decrypt(outPlaintext.data(), &plaintextLen, nullptr,
+                                                      ciphertextAndTag.data(), ciphertextAndTag.size(), aad.data(),
+                                                      aad.size(), nonce.data(), key.data()) != 0)
+        {
+            outPlaintext.clear();
+            return false;
+        }
+        return true;
+    }
+
     // ============================================================================
     // SecureChannel
     // ============================================================================
 
     SecureChannel::SecureChannel(const SessionKey& sharedSecret, ChannelRole role)
     {
-        const SessionKey clientToServer = HkdfSha256(AsBytes(kHkdfSalt), sharedSecret, kClientToServerInfo);
-        const SessionKey serverToClient = HkdfSha256(AsBytes(kHkdfSalt), sharedSecret, kServerToClientInfo);
+        SessionKey clientToServer = HkdfSha256(AsBytes(kHkdfSalt), sharedSecret, kClientToServerInfo);
+        SessionKey serverToClient = HkdfSha256(AsBytes(kHkdfSalt), sharedSecret, kServerToClientInfo);
         const bool isClient = role == ChannelRole::Client;
         m_sendKey = isClient ? clientToServer : serverToClient;
         m_recvKey = isClient ? serverToClient : clientToServer;
+        sodium_memzero(clientToServer.data(), clientToServer.size());
+        sodium_memzero(serverToClient.data(), serverToClient.size());
     }
 
     SecureChannel::~SecureChannel()
     {
-        SecureWipe(m_sendKey.data(), m_sendKey.size());
-        SecureWipe(m_recvKey.data(), m_recvKey.size());
+        sodium_memzero(m_sendKey.data(), m_sendKey.size());
+        sodium_memzero(m_recvKey.data(), m_recvKey.size());
     }
 
     bool SecureChannel::Seal(std::span<const uint8_t> payload, std::vector<uint8_t>& outPacket,
@@ -153,6 +233,10 @@ namespace Spark::Net
         fullAad.insert(fullAad.end(), aad.begin(), aad.end());
 
         const auto sealed = ChaCha20Poly1305Seal(m_sendKey, MakeNonce(m_sendEpoch, sequence), fullAad, payload);
+        if (sealed.size() != payload.size() + AEAD_TAG_SIZE)
+        {
+            return false; // libsodium unavailable; the consumed sequence is never reused
+        }
         outPacket.reserve(SECURE_HEADER_SIZE + sealed.size());
         outPacket.assign(header, header + SECURE_HEADER_SIZE);
         outPacket.insert(outPacket.end(), sealed.begin(), sealed.end());
@@ -191,19 +275,19 @@ namespace Spark::Net
                                                     packet.subspan(SECURE_HEADER_SIZE), outPayload);
         if (!authentic)
         {
-            SecureWipe(candidateKey.data(), candidateKey.size());
+            sodium_memzero(candidateKey.data(), candidateKey.size());
             return OpenResult::AuthenticationFailed;
         }
 
         if (isNextEpoch)
         {
             // The peer proved possession of the next key: ratchet forward and drop the old one.
-            SecureWipe(m_recvKey.data(), m_recvKey.size());
+            sodium_memzero(m_recvKey.data(), m_recvKey.size());
             m_recvKey = candidateKey;
             m_recvEpoch = epoch;
             m_replay.Reset();
         }
-        SecureWipe(candidateKey.data(), candidateKey.size());
+        sodium_memzero(candidateKey.data(), candidateKey.size());
 
         m_replay.Accept(sequence);
         return OpenResult::Ok;
@@ -213,9 +297,9 @@ namespace Spark::Net
     {
         if (m_sendEpoch == UINT8_MAX)
             return false;
-        const SessionKey next = NextEpochKey(m_sendKey);
-        SecureWipe(m_sendKey.data(), m_sendKey.size());
+        SessionKey next = NextEpochKey(m_sendKey);
         m_sendKey = next;
+        sodium_memzero(next.data(), next.size());
         ++m_sendEpoch;
         m_nextSendSequence = 1;
         return true;

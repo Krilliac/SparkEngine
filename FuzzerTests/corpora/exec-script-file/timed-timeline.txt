@@ -1,0 +1,4 @@
+t240 rpg_autoplay
+t1.5 rpg_quests
+t240 rpg_status
+t0 echo start

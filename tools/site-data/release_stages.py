@@ -5,12 +5,27 @@ module does not change the contract or turn a successful publication into ready.
 """
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
 from typing import Any
 import re
+
+from common import ACCEPTANCE_CI_REFERENCE, criterion_digest
 
 PUBLICATION_PHASE = "publication-finalization"
 PUBLICATION_ENVIRONMENT = "stable-release"
 _COMMIT_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+# OD-18: the stable-v1 items that need a previously published, signed
+# predecessor (N-1 upgrade, rollback and migration). The predecessor stage
+# substitutes them away, so their results can never qualify the predecessor.
+N_MINUS_ONE_ITEM_IDS = ("REL-192", "INST-131")
+# The only step that fetches the N-1 predecessor MSI; the predecessor path has
+# no older release to provision.
+N_MINUS_ONE_PROVISIONER = ".github/scripts/provision-previous-windows-msi.py"
+# The qualifier mode that proves bootstrap recovery for the first predecessor.
+BOOTSTRAP_QUALIFIER_MODE = "--bootstrap-repair"
+# N-1 work needs a real immutable predecessor, so it cannot finish before one exists.
+PUBLISHED_PREDECESSOR_STATES = frozenset({"published", "ready"})
+_EVIDENCE_TOKEN = re.compile(r"[A-Za-z0-9_*./-]+")
 
 
 def _dependencies(items: dict, roots: set[str], excluded: set[str] | None = None) -> set[str]:
@@ -118,6 +133,9 @@ def candidate_readiness_errors(contract: dict[str, Any]) -> list[str]:
                 errors.append(f"{label}: unfinished qualification item or transitive dependency {item_id}")
             if item.get("plannedCiJobs") or item.get("plannedTestSelectors"):
                 errors.append(f"{label}: qualification item {item_id} still has planned verification")
+    # The v1 stage never applies qualificationSubstitutions: REL-191 cannot
+    # stand in for REL-192 here, and predecessor results cannot be reused.
+    errors.extend(predecessor_evidence_reuse_errors(contract))
     return errors
 
 
@@ -328,4 +346,180 @@ def predecessor_candidate_readiness_errors(contract: dict[str, Any]) -> list[str
             errors.append(f"predecessorRelease: unfinished common qualification item {item_id}")
         if item.get("plannedCiJobs") or item.get("plannedTestSelectors"):
             errors.append(f"predecessorRelease: common qualification item {item_id} still has planned verification")
+    errors.extend(nminus1_evidence_errors(contract))
+    return errors
+
+
+def _text_values(value: Any) -> list[str]:
+    """Every string inside a JSON value, so nested evidence cannot hide a reference."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for entry in value.values() for text in _text_values(entry)]
+    if isinstance(value, list):
+        return [text for entry in value for text in _text_values(entry)]
+    return []
+
+
+def _item_selectors(item: dict[str, Any]) -> set[str]:
+    selectors: set[str] = set()
+    for key in ("testSelectors", "plannedTestSelectors"):
+        values = item.get(key, [])
+        if isinstance(values, list):
+            selectors.update(value for value in values if isinstance(value, str) and value)
+    return selectors
+
+
+def _item_digests(item: dict[str, Any]) -> set[str]:
+    """The item's criterion digests, from its criteria and its recorded acceptanceStatus."""
+    digests = {criterion_digest(text) for text in item.get("acceptanceCriteria", []) if isinstance(text, str)}
+    for entry in item.get("acceptanceStatus", []):
+        if isinstance(entry, dict) and isinstance(entry.get("criterionDigest"), str):
+            digests.add(entry["criterionDigest"])
+    return digests
+
+
+def _acceptance_texts(item: dict[str, Any]) -> list[str]:
+    """The evidence and note strings an item presents for its criteria."""
+    texts: list[str] = []
+    for entry in item.get("acceptanceStatus", []):
+        if isinstance(entry, dict):
+            texts.extend(_text_values(entry.get("evidence", [])))
+            texts.extend(_text_values(entry.get("note", "")))
+    return texts
+
+
+def _foreign_reference(text: str, selectors: set[str], literals: set[str]) -> str | None:
+    """Name the first selector (glob-matched) or literal (path, digest, flag) that ``text`` cites."""
+    normalized = text.replace("\\", "/")
+    for literal in sorted(literals):
+        if literal in normalized:
+            return literal
+    for token in _EVIDENCE_TOKEN.findall(normalized):
+        token = token.rstrip(".")
+        for selector in sorted(selectors):
+            if token == selector or fnmatchcase(token, selector):
+                return selector
+    return None
+
+
+def _ci_references(value: Any) -> set[tuple[str, str, str]]:
+    """Extract well-formed CI references as (workflow, run, commit) tuples."""
+    references: set[tuple[str, str, str]] = set()
+    for text in _text_values(value):
+        if ACCEPTANCE_CI_REFERENCE.fullmatch(text):
+            workflow_run, commit = text[3:].split("@", 1)
+            workflow, run = workflow_run.split("/", 1)
+            references.add((workflow, run, commit))
+    return references
+
+
+def _evidence_boundary(contract: dict[str, Any]) -> tuple[dict, dict, dict, dict] | None:
+    """(stage, items, substitution sources, predecessor-only items), or None when malformed.
+
+    Malformed ledgers are reported by the schema and stage checks; this
+    boundary only polices well-formed evidence.
+    """
+    readiness = contract.get("readiness")
+    stage = readiness.get("predecessorRelease") if isinstance(readiness, dict) else None
+    work_items = contract.get("workItems")
+    if not isinstance(stage, dict) or not isinstance(work_items, list):
+        return None
+    items = {item["id"]: item for item in work_items if isinstance(item, dict) and isinstance(item.get("id"), str)}
+    substitutions = stage.get("qualificationSubstitutions")
+    if not isinstance(substitutions, dict):
+        return None
+    sources = {key: items[key] for key in substitutions if key in items}
+    predecessor_only = {key: item for key, item in items.items() if item.get("predecessorOnly") is True}
+    return stage, items, sources, predecessor_only
+
+
+def nminus1_evidence_errors(contract: dict[str, Any]) -> list[str]:
+    """Refuse N-1 upgrade or rollback results presented as predecessor evidence (REL-191).
+
+    The vocabulary comes from the ledger: every selector the N-1 items declare
+    (minus selectors a predecessor-only item also owns, such as the shared
+    interruption drill), every N-1 criterion digest, and the N-1 provisioner.
+    The predecessor sign-off and every predecessor-only item's acceptance
+    evidence and notes must name none of them, and no predecessor-only item may
+    depend on an N-1 item.
+    """
+    boundary = _evidence_boundary(contract)
+    if boundary is None:
+        return []
+    stage, items, _, predecessor_only = boundary
+    errors: list[str] = []
+    n_minus_one = {item_id: items[item_id] for item_id in N_MINUS_ONE_ITEM_IDS if item_id in items}
+    shared = set().union(*(_item_selectors(item) for item in predecessor_only.values()))
+    selectors = set().union(*(_item_selectors(item) for item in n_minus_one.values())) - shared
+    literals = set().union(*(_item_digests(item) for item in n_minus_one.values())) | {N_MINUS_ONE_PROVISIONER}
+
+    for text in _text_values(stage.get("signOffEvidence", [])):
+        cited = _foreign_reference(text, selectors, literals)
+        if cited:
+            errors.append(f"predecessorRelease.signOffEvidence: cites N-1 evidence {cited}")
+    for item_id, item in sorted(predecessor_only.items()):
+        for text in _acceptance_texts(item):
+            cited = _foreign_reference(text, selectors, literals)
+            if cited:
+                errors.append(f"{item_id}.acceptanceStatus: predecessor evidence cites N-1 evidence {cited}")
+        for dependency in sorted(_dependencies(items, {item_id}) & set(n_minus_one)):
+            errors.append(f"{item_id}: predecessor-only work cannot depend on N-1 item {dependency}")
+    return errors
+
+
+def predecessor_evidence_reuse_errors(contract: dict[str, Any]) -> list[str]:
+    """Refuse predecessor results presented as evidence for the work they replace (REL-192).
+
+    The mirror of ``nminus1_evidence_errors``. Every item the predecessor stage
+    substitutes away (REL-190, REL-192, INST-131), and every N-1 item even if
+    a ledger edit stops substituting it, must not cite a CI run at the
+    predecessor baseline commit, a predecessor-only selector or criterion digest
+    (minus selectors it shares), or the bootstrap qualifier mode. An N-1 item
+    also cannot be evidenced or done until a real predecessor is published.
+    """
+    boundary = _evidence_boundary(contract)
+    if boundary is None:
+        return []
+    stage, items, sources, predecessor_only = boundary
+    sources = {**sources, **{key: items[key] for key in N_MINUS_ONE_ITEM_IDS if key in items}}
+    shared = set().union(*(_item_selectors(item) for item in sources.values()))
+    selectors = set().union(*(_item_selectors(item) for item in predecessor_only.values())) - shared
+    literals = set().union(*(_item_digests(item) for item in predecessor_only.values())) | {BOOTSTRAP_QUALIFIER_MODE}
+    source = stage.get("sourceCommitEvidence")
+    baseline = source.get("baselineCommit") if isinstance(source, dict) else None
+    baseline = baseline.lower() if isinstance(baseline, str) and _COMMIT_RE.fullmatch(baseline) else None
+    source_is_reviewed = (
+        isinstance(source, dict)
+        and bool(baseline)
+        and isinstance(stage.get("signOffEvidence"), list)
+        and bool(stage.get("signOffEvidence"))
+    )
+    published = stage.get("state") in PUBLISHED_PREDECESSOR_STATES and source_is_reviewed
+
+    errors: list[str] = []
+    if stage.get("state") in PUBLISHED_PREDECESSOR_STATES and not source_is_reviewed:
+        errors.append("predecessorRelease: published state requires a reviewed baselineCommit and signOffEvidence")
+    predecessor_refs = _ci_references(stage.get("signOffEvidence", []))
+    for predecessor_item in predecessor_only.values():
+        predecessor_refs.update(_ci_references(_acceptance_texts(predecessor_item)))
+    predecessor_runs = {(workflow, run) for workflow, run, _ in predecessor_refs}
+    predecessor_commits = {commit for _, _, commit in predecessor_refs}
+    for item_id, item in sorted(sources.items()):
+        for text in _acceptance_texts(item):
+            if baseline and ACCEPTANCE_CI_REFERENCE.match(text) and text.rsplit("@", 1)[1] == baseline:
+                errors.append(f"{item_id}.acceptanceStatus: cites a CI run at the predecessor baseline commit")
+            cited = _foreign_reference(text, selectors, literals)
+            if cited:
+                errors.append(f"{item_id}.acceptanceStatus: substituted v1 work cites predecessor evidence {cited}")
+        for workflow, run, commit in _ci_references(_acceptance_texts(item)):
+            if (workflow, run) in predecessor_runs or commit in predecessor_commits:
+                errors.append(
+                    f"{item_id}.acceptanceStatus: reuses predecessor sign-off CI evidence "
+                    f"ci:{workflow}/{run}@{commit}"
+                )
+        if item_id in N_MINUS_ONE_ITEM_IDS and not published:
+            states = [entry.get("state") for entry in item.get("acceptanceStatus", []) if isinstance(entry, dict)]
+            if item.get("status") == "done" or "evidenced" in states:
+                errors.append(f"{item_id}: N-1 work cannot be evidenced or done before a real predecessor is published")
     return errors

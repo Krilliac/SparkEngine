@@ -55,6 +55,28 @@ DEFERRAL_OWNER = "sec-120-parser-triage"
 MAX_EXCLUSION_HIDDEN_CANDIDATES = 128
 MAX_WAIVER_DAYS = 365
 MAX_DEFERRED_CANDIDATES = 4_096
+MAX_EXEMPT_CANDIDATES = 4_096
+MIN_EXEMPT_JUSTIFICATION = 40
+
+# OD-21 trust boundaries an inventoried parser may declare. Every value is a
+# boundary that needs a fuzz target; there is deliberately no "trusted" value.
+TRUST_BOUNDARY_PATTERN = re.compile(r"untrusted-file|untrusted-network|untrusted-ipc")
+
+# OD-21 rules (2) and (3), plus the two ways a detector hit can be something
+# other than a parser. None of these may hide a boundary: rule (1) code is an
+# inventoried parser, and "when in doubt" is a boundary too.
+EXEMPT_CLASSIFICATIONS: dict[str, str] = {
+    # OD-21 rule (2): only decodes bytes this same process produced.
+    "same-process-data": "parses only data the engine generated earlier in the same process",
+    # OD-21 rule (2): build-time or developer tooling that never ships to players.
+    "developer-tooling": "build-time/developer tooling or test harness code that no shipped runtime path reaches",
+    # OD-21 rule (3): generic read/tokenize helper; its callers are classified on their own.
+    "helper": "generic read/tokenize/hash helper with no format grammar of its own",
+    # The file only forwards to (or declares) an entry point of an inventoried parser.
+    "delegating-call-site": "forwards to or declares the entry point of an inventoried parser that does the decoding",
+    # The detector matched something that decodes no externally supplied bytes.
+    "not-a-parser": "decodes no bytes a user, mod, package, peer, or other process can supply",
+}
 
 SOURCE_NAME_PATTERN = re.compile(
     r"(?:parser|serializer|deserializer|importer|loader|manifest|archive|reader|codec)",
@@ -95,6 +117,11 @@ CONTENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # is a parser even when nothing in its name says so.
     ("binary-stream-read", re.compile(r"\.read\s*\(\s*reinterpret_cast\s*<")),
     ("stdio-binary-read", re.compile(r"\bfread\s*\(")),
+    # A decoder built on the engine's bounded Spark::BinaryReader, or on a
+    # hand-rolled ReadU32-style field reader, names no parse call either: the
+    # daemon IPC codecs and the terrain reader were invisible without these.
+    ("binary-reader", re.compile(r"\bBinaryReader\s+[A-Za-z_]\w*\s*[({]")),
+    ("bounded-field-read", re.compile(r"\bRead(?:U8|U16|U32|U64|I32|F32)\s*\(")),
     (
         "binary-magic-compare",
         re.compile(
@@ -109,6 +136,13 @@ CONTENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             r"\b(?:Freeze|Thaw|Unpack|Decode)(?:String|Bytes|Blob|Buffer|Raw|Tag|Header|Frame)\s*\("
             r"|\bm_readPos\b"
         ),
+    ),
+    # A received NetworkMessage payload copied into a NetBuffer read cursor: the
+    # hand-rolled network decoder idiom (fixed-size or not). Nothing in the
+    # file's name or calls says "parse", so without this the decoder is invisible.
+    (
+        "network-payload-decode",
+        re.compile(r"\bWriteBytes\s*\(\s*(?:[A-Za-z_]\w*\s*(?:\.|->)\s*)*payload\s*\.\s*data\s*\(\s*\)"),
     ),
     ("scanf-parse", re.compile(r"\b(?:sscanf|sscanf_s|fscanf|swscanf|swscanf_s)\s*\(")),
     ("stream-slurp", re.compile(r"std::istreambuf_iterator\s*<\s*char\s*>")),
@@ -165,6 +199,15 @@ class Deferral:
 
 
 @dataclass(frozen=True)
+class Exemption:
+    source_file: str
+    classification: str
+    justification: str
+    detected_by: tuple[str, ...]
+    delegates_to: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ParserRecord:
     parser_id: str
     description: str
@@ -183,6 +226,7 @@ class Inventory:
     scope: Scope
     parsers: tuple[ParserRecord, ...]
     deferred_candidates: tuple[Deferral, ...]
+    exempt_candidates: tuple[Exemption, ...]
 
 
 @dataclass(frozen=True)
@@ -426,7 +470,7 @@ def _parse_parser(root: Path, value: Any, index: int) -> ParserRecord:
     )
     parser_id = require_token(value["id"], f"{field}.id", ID_PATTERN)
     description = require_string(value["description"], f"{field}.description", maximum=512)
-    trust = require_token(value["trust_boundary"], f"{field}.trust_boundary", re.compile(r"untrusted-file"), maximum=64)
+    trust = require_token(value["trust_boundary"], f"{field}.trust_boundary", TRUST_BOUNDARY_PATTERN, maximum=64)
     source_files = _path_array(value["source_files"], f"{field}.source_files", maximum=64)
     for source_index, source_file in enumerate(source_files):
         confined_path(root, source_file, f"{field}.source_files[{source_index}]", expect="file")
@@ -481,12 +525,70 @@ def _parse_deferrals(root: Path, value: Any, *, as_of: date) -> tuple[Deferral, 
     return tuple(deferrals)
 
 
+DETECTOR_NAMES = frozenset(name for name, _ in CONTENT_PATTERNS) | {"parser-like-filename"}
+
+
+def _parse_exemptions(root: Path, value: Any, delegation_targets: frozenset[str]) -> tuple[Exemption, ...]:
+    """OD-21 per-file exemptions: a fixed classification and a written reason.
+
+    ``detected_by`` records the detector hits the reviewer read; the scan later
+    requires an exact match, so a new kind of parsing added to an exempt file
+    reopens the review instead of inheriting the old verdict.
+    """
+    entries = require_list(value, "inventory.exempt_candidates", maximum=MAX_EXEMPT_CANDIDATES)
+    exemptions: list[Exemption] = []
+    for index, entry in enumerate(entries):
+        field = f"inventory.exempt_candidates[{index}]"
+        entry = require_exact_keys(
+            entry, field, {"source_file", "classification", "justification", "detected_by"}, {"delegates_to"}
+        )
+        source_file = normalized_relative_path(entry["source_file"], f"{field}.source_file")
+        confined_path(root, source_file, f"{field}.source_file", expect="file")
+        classification = require_string(entry["classification"], f"{field}.classification", maximum=64)
+        if classification not in EXEMPT_CLASSIFICATIONS:
+            raise PolicyError(
+                f"{field}.classification {classification!r} is not an OD-21 classification "
+                f"({', '.join(sorted(EXEMPT_CLASSIFICATIONS))})"
+            )
+        justification = require_string(entry["justification"], f"{field}.justification", maximum=1024)
+        if len(justification.strip()) < MIN_EXEMPT_JUSTIFICATION:
+            raise PolicyError(f"{field}.justification must explain the classification in at least "
+                              f"{MIN_EXEMPT_JUSTIFICATION} characters")
+        detected_by = _string_array(entry["detected_by"], f"{field}.detected_by", maximum=len(DETECTOR_NAMES))
+        unknown = sorted(set(detected_by) - DETECTOR_NAMES)
+        if unknown:
+            raise PolicyError(f"{field}.detected_by names unknown detectors: {', '.join(unknown)}")
+        if list(detected_by) != sorted(detected_by):
+            raise PolicyError(f"{field}.detected_by must be sorted")
+
+        delegates_to: tuple[str, ...] = ()
+        if classification == "delegating-call-site":
+            if "delegates_to" not in entry:
+                raise PolicyError(f"{field}.delegates_to is required for a delegating-call-site")
+            delegates_to = _string_array(entry["delegates_to"], f"{field}.delegates_to", maximum=16)
+            missing = sorted(set(delegates_to) - delegation_targets)
+            if missing:
+                raise PolicyError(
+                    f"{field}.delegates_to must name inventoried parsers or excluded subtrees; unknown: "
+                    f"{', '.join(missing)}"
+                )
+        elif "delegates_to" in entry:
+            raise PolicyError(f"{field}.delegates_to is only allowed for a delegating-call-site")
+        exemptions.append(Exemption(source_file, classification, justification, detected_by, delegates_to))
+
+    paths = [exemption.source_file for exemption in exemptions]
+    if len(set(paths)) != len(paths):
+        raise PolicyError("inventory.exempt_candidates contains duplicate source files")
+    casefold_duplicates(paths, "inventory.exempt_candidates")
+    return tuple(exemptions)
+
+
 def load_inventory(root: Path, manifest_path: str = DEFAULT_INVENTORY, *, as_of: date | None = None) -> Inventory:
     root = canonical_root(root)
     as_of = as_of or datetime.now(timezone.utc).date()
     document = load_json_document(root, manifest_path, "parser_inventory")
     document = require_exact_keys(
-        document, "inventory", {"schema_version", "scope", "parsers", "deferred_candidates"}
+        document, "inventory", {"schema_version", "scope", "parsers", "deferred_candidates", "exempt_candidates"}
     )
     schema_version = require_exact_int(document["schema_version"], "inventory.schema_version", minimum=1, maximum=1)
     scope = _parse_scope(root, document["scope"], as_of=as_of)
@@ -515,7 +617,22 @@ def load_inventory(root: Path, manifest_path: str = DEFAULT_INVENTORY, *, as_of:
     overlap = set(owned_sources) & {deferral.source_file for deferral in deferred}
     if overlap:
         raise PolicyError(f"inventory sources cannot also be deferred: {sorted(overlap)}")
-    return Inventory(schema_version, scope, parsers, deferred)
+
+    delegation_targets = frozenset(ids) | {exclusion.path for exclusion in scope.excluded_subtrees}
+    exempt = _parse_exemptions(root, document["exempt_candidates"], delegation_targets)
+    exempt_paths = {exemption.source_file for exemption in exempt}
+    for label, others in (
+        ("inventoried as a parser", set(owned_sources)),
+        ("deferred", {deferral.source_file for deferral in deferred}),
+    ):
+        overlap = exempt_paths & others
+        if overlap:
+            raise PolicyError(f"exempt sources cannot also be {label}: {sorted(overlap)}")
+    casefold_duplicates(
+        [*owned_sources, *(deferral.source_file for deferral in deferred), *exempt_paths],
+        "inventory classified sources",
+    )
+    return Inventory(schema_version, scope, parsers, deferred, exempt)
 
 
 def _candidate_reasons(relative: str, text: str) -> list[str]:
@@ -532,12 +649,19 @@ def _covering_subtree(relative: str, exclusions: tuple[SubtreeExclusion, ...]) -
     return None
 
 
-def scan_source_tree(root: Path, scope: Scope, *, deadline: Deadline | None = None) -> ScanResult:
+def scan_source_tree(
+    root: Path,
+    scope: Scope,
+    *,
+    deadline: Deadline | None = None,
+    inventoried: frozenset[str] = frozenset(),
+) -> ScanResult:
     """Walk every declared root without following aliases or skipping read errors.
 
     Excluded subtrees are still walked: an exclusion waives *classification*, it
     does not blind the scanner, so the number of candidates each waiver hides is
-    measured rather than assumed.
+    measured rather than assumed. A file in ``inventoried`` (a parser record's
+    source) is classified by that record, so a subtree waiver never hides it.
     """
     root = canonical_root(root)
     deadline = deadline or Deadline(scope.limits.timeout_seconds, "source scan")
@@ -601,7 +725,7 @@ def scan_source_tree(root: Path, scope: Scope, *, deadline: Deadline | None = No
                 reasons = _candidate_reasons(relative, text)
                 if not reasons:
                     continue
-                covering = _covering_subtree(relative, scope.excluded_subtrees)
+                covering = None if relative in inventoried else _covering_subtree(relative, scope.excluded_subtrees)
                 if covering is not None:
                     hidden_by_subtree[covering] += 1
                     if hidden_by_subtree[covering] > MAX_EXCLUSION_HIDDEN_CANDIDATES:
@@ -635,17 +759,29 @@ def build_inventory_report(
     deadline: Deadline | None = None,
 ) -> dict[str, Any]:
     inventory = load_inventory(root, manifest_path, as_of=as_of)
-    scan = scan_source_tree(root, inventory.scope, deadline=deadline)
-    candidate_files = {item["source_file"] for item in scan.candidates}
     owned_files = {source for parser in inventory.parsers for source in parser.source_files}
+    scan = scan_source_tree(root, inventory.scope, deadline=deadline, inventoried=frozenset(owned_files))
+    candidate_files = {item["source_file"] for item in scan.candidates}
     deferred_files = {deferral.source_file for deferral in inventory.deferred_candidates}
+    exempt_files = {exemption.source_file for exemption in inventory.exempt_candidates}
 
-    unexpected = sorted(candidate_files - owned_files - deferred_files)
+    unexpected = sorted(candidate_files - owned_files - deferred_files - exempt_files)
     if unexpected:
         raise PolicyError(f"unclassified parser candidates: {', '.join(unexpected[:30])}")
     stale_deferred = sorted(deferred_files - candidate_files)
     if stale_deferred:
         raise PolicyError(f"stale deferred parser candidates: {', '.join(stale_deferred[:30])}")
+    stale_exempt = sorted(exempt_files - candidate_files)
+    if stale_exempt:
+        raise PolicyError(f"stale exempt parser candidates: {', '.join(stale_exempt[:30])}")
+    reasons_by_file = {item["source_file"]: tuple(item["reasons"]) for item in scan.candidates}
+    for exemption in inventory.exempt_candidates:
+        observed = reasons_by_file[exemption.source_file]
+        if observed != exemption.detected_by:
+            raise PolicyError(
+                f"exemption for {exemption.source_file} was reviewed against detectors "
+                f"{list(exemption.detected_by)} but the scanner now reports {list(observed)}; re-review it"
+            )
     # Human review is more authoritative than the regexes, so an inventoried
     # source the scanner cannot see is not an error - it is a measured blind spot
     # in the detector, and reporting it as a real number keeps the coverage claim
@@ -697,6 +833,13 @@ def build_inventory_report(
         "blocked_count": sum(parser.status == "blocked" for parser in inventory.parsers),
         "candidate_count": len(scan.candidates),
         "deferred_candidate_count": len(inventory.deferred_candidates),
+        "exempt_candidate_count": len(inventory.exempt_candidates),
+        "exempt_by_classification": {
+            classification: sum(
+                exemption.classification == classification for exemption in inventory.exempt_candidates
+            )
+            for classification in sorted(EXEMPT_CLASSIFICATIONS)
+        },
         "unclassified_candidate_count": len(unexpected),
         "detector_blind_spot_count": len(detector_blind_spots),
         "detector_blind_spots": detector_blind_spots,
@@ -742,7 +885,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "parser inventory: PASS "
             f"({report['parser_count']} parsers, {report['candidate_count']} candidates, "
-            f"{report['deferred_candidate_count']} deferred)"
+            f"{report['deferred_candidate_count']} deferred, {report['exempt_candidate_count']} exempt)"
         )
     return 0
 

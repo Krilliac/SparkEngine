@@ -20,7 +20,9 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <iosfwd>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -155,6 +157,43 @@ namespace Spark::Gameplay
     };
 
     // ========================================================================
+    // Rule files and action parameters (EventResponseRules.cpp)
+    // ========================================================================
+
+    /**
+     * @brief Parse a rules document (the JSON SaveToJson writes) into rules.
+     *
+     * This is the reader LoadFromJson runs on every rules file, kept in EventResponseRules.cpp
+     * so it links without the rule engine. Non-object rules and actions are skipped, an unknown
+     * trigger reads as OnStart and an unknown action as ShowMessage, and a parameter that is
+     * not null, a string, a boolean or a finite number is stored as null. A rule whose
+     * sourceEntityId is not an exact integer in uint32 range is skipped.
+     *
+     * Thread affinity: none (pure function over caller-owned objects).
+     * Allocation: the parsed JSON document and the rules.
+     *
+     * @param json       Rules file text (untrusted).
+     * @param rules      Replaced by the parsed rules on success; untouched on failure.
+     * @param sourceName Names the file in log messages.
+     * @return false when the text is not a JSON object with a "rules" array.
+     */
+    bool ParseEventResponseRules(std::string_view json, std::vector<EventResponseRule>& rules,
+                                 std::string_view sourceName);
+
+    /// Write @p rules in the format ParseEventResponseRules reads (the body of SaveToJson's file).
+    void WriteEventResponseRules(std::ostream& out, const std::vector<EventResponseRule>& rules);
+
+    /// Integer value of an action parameter: int64 and uint32 as they are, a double truncated
+    /// when it fits int64, anything else (a string, null, or a double out of range) 0.
+    [[nodiscard]] int64_t ActionParamToInt64(const ActionParam& param);
+
+    /// Numeric value of an action parameter, or 0.0 for a string or null.
+    [[nodiscard]] double ActionParamToDouble(const ActionParam& param);
+
+    /// String value of an action parameter, or "" for any other kind.
+    [[nodiscard]] std::string ActionParamToString(const ActionParam& param);
+
+    // ========================================================================
     // Event Response System
     // ========================================================================
 
@@ -179,6 +218,11 @@ namespace Spark::Gameplay
     class EventResponseSystem
     {
       public:
+        /// How deep custom events fired by rule actions may nest. A rule file can close a loop
+        /// (an OnCustom "x" rule whose action fires "x"); a deeper event is dropped instead of
+        /// recursing until the stack overflows.
+        static constexpr uint32_t kMaxCustomEventDepth = 16;
+
         static EventResponseSystem& GetInstance();
 
         /**
@@ -272,6 +316,7 @@ namespace Spark::Gameplay
         std::unordered_map<std::string, TimerState> m_timers; ///< Keyed by rule name
 
         uint32_t m_totalFired = 0;
+        uint32_t m_customEventDepth = 0; ///< FireCustomEvent calls currently on the stack
         bool m_initialized = false;
     };
 

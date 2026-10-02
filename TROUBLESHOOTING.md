@@ -2,10 +2,14 @@
 
 ## Quick Verification
 
+The paths below assume the `windows-release` preset (`cmake --preset windows-release`), which puts
+binaries in `build\windows-release\bin\Release\`; the `windows-debug` preset uses
+`build\windows-debug\bin\Debug\`.
+
 ### 1. Test SparkConsole standalone
 
 ```batch
-cd build\bin
+cd build\windows-release\bin\Release
 SparkConsole.exe
 ```
 
@@ -14,7 +18,7 @@ Expected: "Spark Engine Console v1.0.0" banner. Try `diag`, `help`, `status`. Ty
 ### 2. Test SparkEngine
 
 ```batch
-cd build\bin
+cd build\windows-release\bin\Release
 SparkEngine.exe
 ```
 
@@ -45,7 +49,7 @@ When working correctly you should see:
 **Cause:** SparkEngine failed to launch or crashed during startup.
 
 - Check Visual Studio Output window for errors
-- Verify both executables are in `build\bin\`
+- Verify both executables are in the preset's `bin\<Config>\` directory (for example `build\windows-release\bin\Release\`)
 - Run from Visual Studio with debugger attached
 
 ### SparkEngine crashes immediately
@@ -62,11 +66,12 @@ When working correctly you should see:
 **Cause:** Missing build output or incomplete build.
 
 ```batch
-cmake --build build --config Debug
-dir build\bin\*.exe
+cmake --preset windows-debug
+cmake --build build\windows-debug --config Debug
+dir build\windows-debug\bin\Debug\*.exe
 ```
 
-Both `SparkEngine.exe` and `SparkConsole.exe` must exist in `build\bin\`.
+Both `SparkEngine.exe` and `SparkConsole.exe` must exist in `build\windows-debug\bin\Debug\`.
 
 ### Console connects but commands fail
 
@@ -88,9 +93,9 @@ git submodule update --recursive
 SparkEngine uses `/MD` (dynamic CRT). If third-party libraries were built with `/MT` (static CRT), you'll get linker errors. Clean rebuild:
 
 ```batch
-rmdir /s /q build
-cmake -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+rmdir /s /q build\windows-release
+cmake --preset windows-release
+cmake --build build\windows-release --config Release
 ```
 
 ---
@@ -132,7 +137,7 @@ If SparkEngine shows under 20 MB, it likely crashed during initialization.
 
 ## Required Files
 
-Ensure these exist in `build\bin\` after a successful build:
+Ensure these exist in the preset's `bin\<Config>\` directory (for example `build\windows-release\bin\Release\`) after a successful build:
 
 - `SparkEngine.exe` — Main engine executable
 - `SparkConsole.exe` — Debug console executable
@@ -171,7 +176,7 @@ Ensure you have clang-format 18+ installed to match CI.
 
 - Check for Windows-only headers (`<windows.h>`, `<d3d11.h>`) leaking into cross-platform code
 - Ensure `#ifdef _WIN32` guards around platform-specific code
-- Run with AddressSanitizer locally: `cmake --preset ci-linux-asan && cmake --build build`
+- Run with AddressSanitizer locally: `cmake --preset ci-linux-asan && cmake --build build/ci-linux-asan`
 
 ---
 
@@ -189,7 +194,7 @@ git submodule update --init --recursive
 
 ### Linker errors on Linux
 
-Graphics features require stub implementations on Linux. If you see unresolved DirectX symbols, ensure `ENABLE_GRAPHICS=OFF` or that Platform.h stubs are in place.
+Graphics features require stub implementations on Linux. If you see unresolved DirectX symbols, ensure the Platform.h stubs are in place.
 
 ---
 
@@ -197,9 +202,9 @@ Graphics features require stub implementations on Linux. If you see unresolved D
 
 1. **Clean rebuild:**
    ```batch
-   rmdir /s /q build
-   cmake -B build -G "Visual Studio 17 2022" -A x64
-   cmake --build build --config Debug
+   rmdir /s /q build\windows-debug
+   cmake --preset windows-debug
+   cmake --build build\windows-debug --config Debug
    ```
 
 2. **Re-clone submodules:**

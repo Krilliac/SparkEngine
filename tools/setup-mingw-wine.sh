@@ -16,7 +16,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DXVK_VERSION="2.5.3"
+DXVK_VERSION="3.1.1"
+DXVK_URL="https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz"
+# GitHub release asset digest: doitsujin/dxvk v3.1.1 (verified 2026-10-01).
+DXVK_SHA256="40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608"
 DXVK_DIR="$PROJECT_ROOT/ThirdParty/dxvk"
 
 RED='\033[0;31m'
@@ -61,13 +64,9 @@ check_installation() {
         all_ok=false
     fi
 
-    # DirectXMath
-    if [ -f /usr/x86_64-w64-mingw32/include/DirectXMath.h ]; then
-        ok "DirectXMath headers present"
-    else
-        fail "DirectXMath.h not found — run: sudo tools/setup-mingw-wine.sh"
-        all_ok=false
-    fi
+    # The toolchain downloads and verifies the pinned DirectXMath archive.
+    # Do not install mutable main-branch headers into the system include path.
+    ok "DirectXMath: managed by the hash-verifying CMake toolchain"
 
     # Wine
     if command -v wine64 &>/dev/null || [ -f /usr/lib/wine/wine64 ]; then
@@ -141,68 +140,38 @@ check_installation() {
 # Install DXVK from GitHub (no sudo required)
 # ============================================================================
 
-install_dxvk() {
-    if [ -f "$DXVK_DIR/x64/d3d11.dll" ]; then
-        info "DXVK $DXVK_VERSION already installed at $DXVK_DIR"
-        return 0
-    fi
-
+install_dxvk() (
+    # Always verify the archive and replace the DLLs, even on repeat setup.
+    # An existing DLL or version marker is not integrity evidence.
     info "Downloading DXVK $DXVK_VERSION from GitHub..."
-    local tmp_dir
     tmp_dir=$(mktemp -d)
-    local url="https://github.com/doitsujin/dxvk/releases/download/v${DXVK_VERSION}/dxvk-${DXVK_VERSION}.tar.gz"
-
-    if wget -q "$url" -O "$tmp_dir/dxvk.tar.gz" 2>/dev/null; then
-        info "Extracting..."
-        tar xzf "$tmp_dir/dxvk.tar.gz" -C "$tmp_dir"
-        mkdir -p "$DXVK_DIR"
-        cp -r "$tmp_dir/dxvk-${DXVK_VERSION}/"* "$DXVK_DIR/"
-        rm -rf "$tmp_dir"
-        info "DXVK $DXVK_VERSION installed to $DXVK_DIR"
-        info "  D3D11 rendering will be ~20x faster than WineD3D"
-    else
-        warn "DXVK download failed — WineD3D fallback will be used"
-        warn "  Download manually: $url"
-        rm -rf "$tmp_dir"
+    trap 'rm -rf -- "$tmp_dir"' EXIT
+    if ! curl --fail --location --proto '=https' --tlsv1.2 --retry 3 \
+        "$DXVK_URL" --output "$tmp_dir/dxvk.tar.gz"; then
+        fail "DXVK download failed"
         return 1
     fi
-}
-
-# ============================================================================
-# Install DirectXMath headers (requires sudo)
-# ============================================================================
-
-install_directxmath() {
-    if [ -f /usr/x86_64-w64-mingw32/include/DirectXMath.h ]; then
-        info "DirectXMath headers already installed"
-        return 0
+    if ! printf '%s  %s\n' "$DXVK_SHA256" "$tmp_dir/dxvk.tar.gz" | sha256sum --check --strict -; then
+        fail "DXVK SHA-256 mismatch; nothing extracted or installed"
+        return 1
     fi
-
-    info "Downloading DirectXMath headers from Microsoft GitHub..."
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-    local base_url="https://raw.githubusercontent.com/microsoft/DirectXMath/main/Inc"
-    local all_ok=true
-
-    for f in DirectXMath.h DirectXMathConvert.inl DirectXMathMatrix.inl \
-             DirectXMathMisc.inl DirectXMathVector.inl DirectXCollision.h \
-             DirectXCollision.inl DirectXColors.h DirectXPackedVector.h \
-             DirectXPackedVector.inl; do
-        if ! wget -q "$base_url/$f" -O "$tmp_dir/$f" 2>/dev/null; then
-            fail "Failed to download $f"
-            all_ok=false
+    tar xzf "$tmp_dir/dxvk.tar.gz" -C "$tmp_dir"
+    test -s "$tmp_dir/dxvk-${DXVK_VERSION}/x64/d3d11.dll"
+    test -s "$tmp_dir/dxvk-${DXVK_VERSION}/x64/dxgi.dll"
+    mkdir -p "$DXVK_DIR"
+    cp -r "$tmp_dir/dxvk-${DXVK_VERSION}/." "$DXVK_DIR/"
+    info "Verified DXVK $DXVK_VERSION installed to $DXVK_DIR"
+    # Optional prefix installation is explicit: never mutate the user's default prefix.
+    if [ -n "${WINEPREFIX:-}" ]; then
+        local sys32="$WINEPREFIX/drive_c/windows/system32"
+        if [ ! -d "$sys32" ]; then
+            fail "Initialize WINEPREFIX with tools/wine-run.sh --setup-only first"
+            return 1
         fi
-    done
-
-    if [ "$all_ok" = true ]; then
-        cp "$tmp_dir"/DirectX*.h "$tmp_dir"/DirectX*.inl /usr/x86_64-w64-mingw32/include/
-        info "DirectXMath headers installed to /usr/x86_64-w64-mingw32/include/"
-    else
-        fail "Some DirectXMath headers failed to download"
+        cp "$DXVK_DIR/x64/d3d11.dll" "$DXVK_DIR/x64/dxgi.dll" "$sys32/"
+        info "DXVK copied into $WINEPREFIX; run with SPARK_WINE_BACKEND=dxvk"
     fi
-
-    rm -rf "$tmp_dir"
-}
+)
 
 # ============================================================================
 # Install system packages (requires sudo)
@@ -211,13 +180,18 @@ install_directxmath() {
 install_packages() {
     info "Installing system packages (mingw-w64, wine64, mesa-vulkan-drivers)..."
 
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>/dev/null || true
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        mingw-w64 wine64 mesa-vulkan-drivers cmake 2>/dev/null || {
-        warn "apt-get install failed — trying direct package download..."
-        install_packages_direct
-        return
-    }
+    # Packages come only through APT, which checks every .deb against the signed repository index. There is
+    # deliberately no direct-download fallback: re-fetching APT's URIs with wget drops that check, and an
+    # on-path attacker can force such a fallback simply by corrupting APT's own download. Fail closed instead.
+    if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq; then
+        fail "apt-get update failed; fix the package sources and re-run"
+        exit 1
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        mingw-w64 wine64 wine mesa-vulkan-drivers cmake curl ca-certificates xvfb xauth; then
+        fail "apt-get install failed; nothing was installed outside APT's verification"
+        exit 1
+    fi
 
     # Create wine64 symlink if needed
     if ! command -v wine64 &>/dev/null && [ -f /usr/lib/wine/wine64 ]; then
@@ -231,33 +205,6 @@ install_packages() {
         chmod +x /usr/bin/wineboot
         info "Created wineboot wrapper"
     fi
-}
-
-install_packages_direct() {
-    # Fallback: download .deb packages directly via wget
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-
-    local urls
-    urls=$(apt-get download --print-uris mingw-w64-x86-64-dev g++-mingw-w64-x86-64-posix \
-           gcc-mingw-w64-x86-64-posix gcc-mingw-w64-x86-64-posix-runtime \
-           gcc-mingw-w64-base binutils-mingw-w64-x86-64 mingw-w64-common \
-           libz-mingw-w64 wine64 libwine fonts-wine mesa-vulkan-drivers 2>&1 | \
-           grep "^'" | sed "s/' .*//" | sed "s/^'//") || true
-
-    local count=0
-    for url in $urls; do
-        wget -q "$url" -P "$tmp_dir/" 2>/dev/null && ((count++)) || warn "Failed: $url"
-    done
-
-    if [ "$count" -gt 0 ]; then
-        dpkg -i --force-depends "$tmp_dir"/*.deb 2>/dev/null || true
-        info "Installed $count packages via direct download"
-    else
-        fail "No packages could be downloaded"
-    fi
-
-    rm -rf "$tmp_dir"
 }
 
 # ============================================================================
@@ -298,7 +245,6 @@ echo "=== Installing MinGW + Wine Cross-Compilation Prerequisites ==="
 echo ""
 
 install_packages
-install_directxmath
 
 # DXVK installation (try as non-root user if possible)
 if [ -n "${SUDO_USER:-}" ]; then

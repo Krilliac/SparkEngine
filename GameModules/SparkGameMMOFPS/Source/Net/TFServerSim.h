@@ -33,11 +33,13 @@
 #include "Core/TFEvents.h"
 #include "Net/TFNetProtocol.h"
 #include "Net/TFRepProtocol.h"
+#include "Net/TFHandoffParticipant.h"
 
 #include "Engine/Networking/IAreaSimulation.h"
 #include "Engine/Networking/LagCompensation.h"
 
 #include <deque>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -46,6 +48,10 @@ namespace Terrafront
 {
 
     class TFServerSim final : public Spark::Net::IAreaSimulation
+#ifdef ENABLE_NETWORKING
+        ,
+                              public TFHandoffParticipant::IAuthority
+#endif
     {
       public:
         TFServerSim();
@@ -127,6 +133,14 @@ namespace Terrafront
         /// NetworkManager disconnect. Lets tf_selftest_onboarding prove a
         /// disconnect -> re-login -> re-enter round-trip preserves xp/rank/flux.
         void DebugSimulateDisconnect(PlayerId player);
+
+        /// @brief Game-thread handoff callbacks; the host dispatcher serializes control requests with simulation.
+        bool ResolveContinent(Spark::Net::AreaID area, std::string& key) const override;
+        bool Capture(uint64_t character, TFHandoffState& state) override;
+        bool CanInstall(uint64_t character, const TFHandoffState& state) const override;
+        bool Suspend(uint64_t character) override;
+        bool Install(const TFCharacterRecord& character, const TFHandoffState& state) override;
+        void Retire(uint64_t character) override;
 #endif
 
         // --- engine area-simulation hook ----------------------------------------
@@ -196,8 +210,9 @@ namespace Terrafront
         // Task 6's boot wiring constructs and publishes the real systems — until
         // then the messages are accepted (no "unknown message" warning) but
         // answered with TFAuthErr::ServerError / TFCharErr::ServerError.
-        void HandleLogin(PlayerId sender, const void* data, size_t size);
-        void HandleRegister(PlayerId sender, const void* data, size_t size);
+        void HandleLogin(PlayerId sender, const void* data, size_t size);      // TF_LoginStart -> LoginChallenge
+        void HandleLoginProof(PlayerId sender, const void* data, size_t size); // TF_LoginProof -> LoginReply
+        void HandleRegister(PlayerId sender, const void* data, size_t size);   // TF_RegisterRequest (verifier)
         bool EnsureAuthorityDatabaseOpen();
         void HandleCharList(PlayerId sender, const void* data, size_t size);
         void HandleCharCreate(PlayerId sender, const void* data, size_t size);
@@ -250,6 +265,11 @@ namespace Terrafront
         uint32_t m_badPackets{0};
         double m_lastViolationLog{0.0};
         bool m_showDebug{false};
+#ifdef ENABLE_NETWORKING
+        std::unique_ptr<TFHandoffParticipant> m_handoff;
+        std::unordered_map<uint64_t, TFHandoffState> m_suspendedCharacters;
+        float m_dbOpenRetrySeconds{0.0f}; ///< Update(): countdown to the next authority-database open attempt
+#endif
     };
 
 } // namespace Terrafront

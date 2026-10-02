@@ -52,12 +52,21 @@ input.Initialize(hwnd);  // Pass the window handle
 
 ### Frame Update
 
-Call `Update()` once per frame before querying input states:
+Call `Update()` once per frame, after the frame's input messages have been delivered and before anything queries
+input states:
 
 ```cpp
-// In game loop:
-input.Update();  // Copies current states to previous, calculates deltas
+// In game loop: pump messages (HandleMessage) first, then:
+input.Update();  // Latches key/button states for edge queries, calculates deltas
 ```
+
+Edge queries (`WasKeyPressed`, `WasKeyReleased`, `WasMouseButtonPressed`, `WasMouseButtonReleased`) compare the
+state latched by this frame's `Update()` with the state latched by the previous one. Every change delivered since the
+previous `Update()` -- by the message pump, the SDL event loop, or a console `SimulateKeyPress` -- therefore reads as
+an edge for exactly one frame. `IsKeyDown` / `IsMouseButtonDown` stay live. `Update()` does not need a window for
+this; only mouse capture does. (Before the fix, `Update()` copied the *live* state into "previous" after the hosts
+had already delivered the frame's messages, so every edge query made by modules and AngelScript `getKeyDown`
+returned false. Regression: `Tests/TestInputFrameEdgesReal.cpp`.)
 
 ### Keyboard Input
 

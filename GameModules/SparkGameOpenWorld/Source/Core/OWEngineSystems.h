@@ -45,7 +45,9 @@ namespace OpenWorld
         void RenderDebugUI();
 
         // Console command helpers
+        /// @brief Save the ECS world and the gameplay snapshot to @p slotName in one atomic SaveSystem write.
         std::string SaveGame(const std::string& slotName);
+        /// @brief Validate the slot's gameplay snapshot, then restore the world and gameplay state from it.
         std::string LoadGame(const std::string& slotName);
         std::string SetWeather(const std::string& weatherName);
         std::string SetTime(float hour);
@@ -67,7 +69,10 @@ namespace OpenWorld
         bool ValidateSnapshot(const OWGameSaveData& data, std::string& error) const;
         bool RestoreSnapshot(const OWGameSaveData& data, std::string& error);
         static bool IsValidSlotName(const std::string& slotName);
-        static std::filesystem::path GetModuleSavePath(const std::string& slotName);
+        /// @brief Legacy `.ow_save` sidecar path for @p slotName under the engine SaveSystem directory.
+        /// Current saves embed the snapshot in the engine slot's customState; the sidecar is only read to
+        /// migrate a slot that has no embedded state, and is removed by the next successful SaveGame.
+        static std::filesystem::path GetModuleSavePath(const std::string& saveDirectory, const std::string& slotName);
 
         Spark::IEngineContext* m_context = nullptr;
         bool m_initialized = false;

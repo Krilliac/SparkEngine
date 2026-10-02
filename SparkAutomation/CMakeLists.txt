@@ -27,5 +27,7 @@ if(BUILD_TESTS)
     add_test(NAME SparkAutomationContract
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_automation.py"
                 "$<TARGET_FILE:SparkAutomation>")
-    set_tests_properties(SparkAutomationContract PROPERTIES TIMEOUT 30)
+    set_tests_properties(SparkAutomationContract PROPERTIES
+        TIMEOUT 30
+        LABELS "automation;cli;integration;process")
 endif()

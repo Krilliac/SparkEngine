@@ -8,11 +8,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <system_error>
 #include <unordered_set>
+#include <utility>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -20,6 +23,8 @@
 #else
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -27,11 +32,28 @@ namespace SparkLauncher
 {
     namespace
     {
-        std::string PathToUtf8(const std::filesystem::path& path)
+#ifdef _WIN32
+        // Strict UTF-8 -> UTF-16 without exceptions: std::filesystem::u8path throws
+        // std::system_error on invalid input, and nothing on the launcher's UI path
+        // catches it, so every conversion of untrusted text goes through here.
+        std::optional<std::wstring> WideFromUtf8(std::string_view text)
         {
-            const std::u8string utf8 = path.generic_u8string();
-            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+            if (text.empty())
+                return std::wstring{};
+            if (text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+                return std::nullopt;
+            const int sourceLength = static_cast<int>(text.size());
+            const int wideLength =
+                MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), sourceLength, nullptr, 0);
+            if (wideLength <= 0)
+                return std::nullopt;
+            std::wstring wide(static_cast<size_t>(wideLength), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), sourceLength, wide.data(),
+                                    wideLength) != wideLength)
+                return std::nullopt;
+            return wide;
         }
+#endif
 
         std::filesystem::path ExecutablePath(const std::filesystem::path& directory, const char* name)
         {
@@ -115,12 +137,15 @@ namespace SparkLauncher
             return stem;
         }
 
-        std::filesystem::path ManifestPath(std::string path)
+        // std::filesystem::u8path threw on invalid UTF-8 on Windows (nothing catches it on the
+        // launch path) and kept an embedded NUL everywhere, which the OS then reads as the end
+        // of the name: "Game\u0000.so" resolved to a file named "Game".
+        std::expected<std::filesystem::path, std::string> ManifestPath(std::string path)
         {
 #ifndef _WIN32
             std::replace(path.begin(), path.end(), '\\', '/');
 #endif
-            return std::filesystem::u8path(path);
+            return PathFromUtf8(path);
         }
 
         void AppendUniqueDirectory(std::vector<std::filesystem::path>& directories,
@@ -130,8 +155,8 @@ namespace SparkLauncher
                 directories.push_back(CanonicalPath(directory));
         }
 
-        std::vector<std::filesystem::path> DevelopmentModuleDirectories(
-            const std::filesystem::path& binaryDirectory, const std::filesystem::path& projectRoot)
+        std::vector<std::filesystem::path> DevelopmentModuleDirectories(const std::filesystem::path& binaryDirectory,
+                                                                        const std::filesystem::path& projectRoot)
         {
             std::vector<std::filesystem::path> directories;
             std::unordered_set<std::string> seen;
@@ -197,7 +222,13 @@ namespace SparkLauncher
             const std::filesystem::path& manifestDirectory, const std::string& declaredPath,
             const std::vector<std::filesystem::path>& searchDirectories)
         {
-            const auto declared = ManifestPath(declaredPath);
+            const auto declaredOrError = ManifestPath(declaredPath);
+            if (!declaredOrError)
+            {
+                return std::unexpected("Project module path is unusable (" + declaredOrError.error() +
+                                       "): " + declaredPath);
+            }
+            const std::filesystem::path& declared = *declaredOrError;
             const std::string extension = Lowercase(PathToUtf8(declared.extension()));
             if (!IsSharedLibraryExtension(extension))
                 return std::unexpected("Manifest uses an unsupported shared-library extension: " + declaredPath);
@@ -237,13 +268,20 @@ namespace SparkLauncher
         std::expected<Spark::Json::Value, std::string> ReadAndResolveManifest(
             const std::filesystem::path& manifest, const std::vector<std::filesystem::path>& searchDirectories)
         {
-            std::ifstream input(manifest, std::ios::binary);
-            if (!input)
-                return std::unexpected("Could not open project module manifest: " + PathToUtf8(manifest));
-            const std::string content((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+            // The manifest comes from whatever project the user opens. The caller's
+            // is_regular_file check named a path; the read decides on the opened handle, so a
+            // FIFO swapped in afterwards cannot block the launcher and the size cap holds.
+            const auto content = ReadBoundedRegularFile(manifest, kMaxModuleManifestBytes);
+            if (!content)
+            {
+                return std::unexpected("Project module manifest " + content.error() + ": " + PathToUtf8(manifest));
+            }
+
+            Spark::Json::JsonLimits limits;
+            limits.maxBytes = kMaxModuleManifestBytes;
             Spark::Json::Value root;
             std::string parseError;
-            if (!Spark::Json::ParseStrict(content, &root, &parseError) || !root.IsObject())
+            if (!Spark::Json::ParseBounded(*content, limits, &root, &parseError) || !root.IsObject())
                 return std::unexpected("Project module manifest is not valid JSON: " + PathToUtf8(manifest) +
                                        (parseError.empty() ? std::string{} : " (" + parseError + ")"));
 
@@ -282,8 +320,8 @@ namespace SparkLauncher
             if (!std::filesystem::is_regular_file(sourceManifest, error) || error)
                 return std::unexpected("Project module manifest not found: " + PathToUtf8(sourceManifest));
 
-            const auto packageContext = [&](const std::filesystem::path& packageRoot)
-                -> std::expected<GameLaunchContext, std::string>
+            const auto packageContext =
+                [&](const std::filesystem::path& packageRoot) -> std::expected<GameLaunchContext, std::string>
             {
                 const auto canonicalPackageRoot = CanonicalPath(packageRoot);
                 const auto packageManifest = canonicalPackageRoot / "spark.modules.json";
@@ -298,8 +336,7 @@ namespace SparkLauncher
                 if (!std::filesystem::is_regular_file(packagedProject, error) || error)
                     packagedProject = projectFile;
                 return GameLaunchContext{CanonicalPath(packageExecutable), canonicalPackageRoot,
-                                         CanonicalPath(packagedProject),
-                                         CanonicalPath(packageManifest)};
+                                         CanonicalPath(packagedProject), CanonicalPath(packageManifest)};
             };
 
             if (std::filesystem::is_regular_file(projectRoot / "manifest.json", error) && !error)
@@ -311,8 +348,8 @@ namespace SparkLauncher
                 return std::unexpected("Project build directory escapes the project through a symlink: " +
                                        PathToUtf8(buildRoot));
 
-            auto resolved = ReadAndResolveManifest(sourceManifest,
-                                                   DevelopmentModuleDirectories(binaryDirectory, projectRoot));
+            auto resolved =
+                ReadAndResolveManifest(sourceManifest, DevelopmentModuleDirectories(binaryDirectory, projectRoot));
             if (!resolved && resolved.error().starts_with("No native built module"))
             {
                 const auto packageRoot = projectRoot / "Build" / "Output";
@@ -324,9 +361,8 @@ namespace SparkLauncher
                 return std::unexpected(resolved.error());
 
             const auto generatedDirectory = buildRoot / ".spark-launcher";
-            if (IsSymlink(generatedDirectory) ||
-                (std::filesystem::exists(generatedDirectory, error) && !error &&
-                 !IsPathWithin(generatedDirectory, projectRoot)))
+            if (IsSymlink(generatedDirectory) || (std::filesystem::exists(generatedDirectory, error) && !error &&
+                                                  !IsPathWithin(generatedDirectory, projectRoot)))
                 return std::unexpected("Launcher manifest output path escapes the project through a symlink: " +
                                        PathToUtf8(generatedDirectory));
             error.clear();
@@ -335,9 +371,8 @@ namespace SparkLauncher
                 return std::unexpected("Could not create a project-contained launcher manifest directory: " +
                                        PathToUtf8(generatedDirectory));
             const auto generatedManifest = generatedDirectory / "spark.modules.json";
-            if (IsSymlink(generatedManifest) ||
-                (std::filesystem::exists(generatedManifest, error) && !error &&
-                 !IsPathWithin(generatedManifest, generatedDirectory)))
+            if (IsSymlink(generatedManifest) || (std::filesystem::exists(generatedManifest, error) && !error &&
+                                                 !IsPathWithin(generatedManifest, generatedDirectory)))
                 return std::unexpected("Resolved launcher manifest is a symlink outside its output directory: " +
                                        PathToUtf8(generatedManifest));
             std::ofstream output(generatedManifest, std::ios::binary | std::ios::trunc);
@@ -380,15 +415,164 @@ namespace SparkLauncher
 #endif
     } // namespace
 
+    std::string PathToUtf8(const std::filesystem::path& path)
+    {
+        const std::u8string utf8 = path.generic_u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    std::expected<std::filesystem::path, std::string> PathFromUtf8(std::string_view text)
+    {
+        if (text.find('\0') != std::string_view::npos)
+        {
+            return std::unexpected("Path contains an embedded NUL character");
+        }
+#ifdef _WIN32
+        auto wide = WideFromUtf8(text);
+        if (!wide)
+            return std::unexpected("Path is not valid UTF-8");
+        return std::filesystem::path(std::move(*wide));
+#else
+        return std::filesystem::path(std::string(text));
+#endif
+    }
+
+    std::expected<std::string, std::string> ReadBoundedRegularFile(const std::filesystem::path& path,
+                                                                   std::size_t maxBytes, bool* opened, bool* missing)
+    {
+        if (opened != nullptr)
+        {
+            *opened = false;
+        }
+        if (missing != nullptr)
+        {
+            *missing = false;
+        }
+        const std::string tooLarge = "exceeds the " + std::to_string(maxBytes) + "-byte limit";
+#ifdef _WIN32
+        const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
+                                        OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            if (missing != nullptr)
+            {
+                const DWORD error = GetLastError();
+                *missing = error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+            }
+            return std::unexpected("could not be opened");
+        }
+        if (opened != nullptr)
+        {
+            *opened = true;
+        }
+        struct HandleCloser
+        {
+            HANDLE handle;
+            ~HandleCloser() { CloseHandle(handle); }
+        } closer{file};
+
+        // A pipe, console or other device is not FILE_TYPE_DISK; a directory needs
+        // FILE_FLAG_BACKUP_SEMANTICS to open at all, and is refused here if it did.
+        BY_HANDLE_FILE_INFORMATION info{};
+        if (GetFileType(file) != FILE_TYPE_DISK || !GetFileInformationByHandle(file, &info) ||
+            (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            return std::unexpected("is not a regular file");
+        }
+        const std::uint64_t size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32U) | info.nFileSizeLow;
+        if (size > maxBytes)
+        {
+            return std::unexpected(tooLarge);
+        }
+
+        std::string bytes(static_cast<std::size_t>(size), '\0');
+        std::size_t total = 0;
+        while (total < bytes.size())
+        {
+            DWORD got = 0;
+            const DWORD request = static_cast<DWORD>(std::min<std::size_t>(bytes.size() - total, 1U << 30));
+            if (!ReadFile(file, bytes.data() + total, request, &got, nullptr) || got == 0)
+            {
+                break;
+            }
+            total += got;
+        }
+        char extra = 0;
+        DWORD extraRead = 0;
+        const bool atEnd = ReadFile(file, &extra, 1, &extraRead, nullptr) && extraRead == 0;
+#else
+        // O_NONBLOCK keeps a FIFO from blocking the open; fstat then refuses it, a directory, a
+        // device and every other non-regular file.
+        const int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+        if (fd < 0)
+        {
+            if (missing != nullptr)
+            {
+                *missing = errno == ENOENT || errno == ENOTDIR;
+            }
+            return std::unexpected("could not be opened");
+        }
+        if (opened != nullptr)
+        {
+            *opened = true;
+        }
+        struct FdCloser
+        {
+            int fd;
+            ~FdCloser() { ::close(fd); }
+        } closer{fd};
+
+        struct stat info = {};
+        if (::fstat(fd, &info) != 0 || !S_ISREG(info.st_mode))
+        {
+            return std::unexpected("is not a regular file");
+        }
+        if (info.st_size < 0 || static_cast<std::uint64_t>(info.st_size) > maxBytes)
+        {
+            return std::unexpected(tooLarge);
+        }
+
+        std::string bytes(static_cast<std::size_t>(info.st_size), '\0');
+        std::size_t total = 0;
+        while (total < bytes.size())
+        {
+            const ssize_t got = ::read(fd, bytes.data() + total, bytes.size() - total);
+            if (got < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            if (got <= 0)
+            {
+                break;
+            }
+            total += static_cast<std::size_t>(got);
+        }
+        char extra = 0;
+        ssize_t extraRead = 0;
+        do
+        {
+            extraRead = ::read(fd, &extra, 1);
+        } while (extraRead < 0 && errno == EINTR);
+        const bool atEnd = extraRead == 0;
+#endif
+        // Exactly the size the handle reported, and then end of file: a file that shrank or
+        // grew while it was read is not the file that was measured.
+        if (total != bytes.size() || !atEnd)
+        {
+            return std::unexpected("changed size while it was read");
+        }
+        return bytes;
+    }
+
     std::expected<LaunchRequest, std::string> BuildLaunchRequest(const std::filesystem::path& binaryDirectory,
                                                                  const std::filesystem::path& projectFile,
                                                                  LaunchTarget target)
     {
         std::error_code error;
         if (!std::filesystem::is_regular_file(projectFile, error))
-            return std::unexpected("Project file not found: " + projectFile.string());
+            return std::unexpected("Project file not found: " + PathToUtf8(projectFile));
         if (projectFile.extension() != ".sparkproject")
-            return std::unexpected("Expected a .sparkproject file: " + projectFile.string());
+            return std::unexpected("Expected a .sparkproject file: " + PathToUtf8(projectFile));
 
         LaunchRequest request;
         request.workingDirectory = projectFile.parent_path();
@@ -396,7 +580,10 @@ namespace SparkLauncher
         {
         case LaunchTarget::Editor:
             request.executable = ExecutablePath(binaryDirectory, "SparkEditor");
-            request.arguments = {"--project", projectFile.string()};
+            // Every argument is UTF-8 (LaunchDetached decodes it as such). A narrow
+            // path::string() is the active code page on Windows, which LaunchDetached
+            // cannot decode for any non-ASCII project folder.
+            request.arguments = {"--project", PathToUtf8(projectFile)};
             break;
         case LaunchTarget::Game:
         {
@@ -413,32 +600,45 @@ namespace SparkLauncher
         {
             const std::filesystem::path config = request.workingDirectory / "Config" / "server.ini";
             if (!std::filesystem::is_regular_file(config, error))
-                return std::unexpected("Dedicated server config not found: " + config.string());
+                return std::unexpected("Dedicated server config not found: " + PathToUtf8(config));
             request.executable = ExecutablePath(binaryDirectory, "SparkServer");
-            request.arguments = {"--config", config.string()};
+            request.arguments = {"--config", PathToUtf8(config)};
             break;
         }
         case LaunchTarget::ServiceTopology:
             request.executable = ExecutablePath(binaryDirectory, "SparkEditor");
-            request.arguments = {"--project", projectFile.string(), "--open-panel", "ServiceTopology"};
+            request.arguments = {"--project", PathToUtf8(projectFile), "--open-panel", "ServiceTopology"};
             break;
         }
 
         if (!std::filesystem::is_regular_file(request.executable, error))
             return std::unexpected(std::string(LaunchTargetName(target)) +
-                                   " executable not found: " + request.executable.string());
+                                   " executable not found: " + PathToUtf8(request.executable));
         return request;
     }
 
     std::expected<void, std::string> LaunchDetached(const LaunchRequest& request)
     {
+        // Arguments are validated before anything is started: an embedded NUL would
+        // silently truncate the child's command line, and invalid UTF-8 is refused
+        // as an error instead of escaping as an exception.
+        for (const auto& argument : request.arguments)
+        {
+            if (argument.find('\0') != std::string::npos)
+            {
+                return std::unexpected("Launch argument contains an embedded NUL character");
+            }
+        }
 #ifdef _WIN32
         std::wstring commandLine;
         AppendQuotedArgument(commandLine, request.executable.wstring());
         for (const auto& argument : request.arguments)
         {
+            const auto wideArgument = WideFromUtf8(argument);
+            if (!wideArgument)
+                return std::unexpected("Launch argument is not valid UTF-8");
             commandLine.push_back(L' ');
-            AppendQuotedArgument(commandLine, std::filesystem::u8path(argument).wstring());
+            AppendQuotedArgument(commandLine, *wideArgument);
         }
 
         STARTUPINFOW startup{};

@@ -113,6 +113,11 @@ namespace Spark::Data
     class DataTable
     {
       public:
+        /// @brief Maximum untrusted table document size accepted by the in-memory loader.
+        static constexpr size_t kMaxDocumentBytes = size_t{8} * 1024 * 1024;
+        /// @brief Maximum rows and columns accepted from one table document.
+        static constexpr size_t kMaxRows = 100000u;
+        static constexpr size_t kMaxColumns = 256u;
         /// @brief Construct an empty table with an optional ID column name.
         explicit DataTable(const std::string& idColumn = "") : m_idColumn(idColumn) {}
 
@@ -178,20 +183,32 @@ namespace Spark::Data
         /// @brief Parse CSV content (header + data). Returns true if rows were parsed.
         bool LoadFromCSV(const std::string& csv)
         {
+            if (csv.size() > kMaxDocumentBytes)
+            {
+                return false;
+            }
             m_columns.clear();
             m_rows.clear();
             m_index.clear();
             auto lines = SplitCSVLines(csv);
             if (lines.empty())
+            {
                 return false;
+            }
             auto hdrs = SplitCSVFields(lines[0]);
-            if (hdrs.empty())
+            if (hdrs.empty() || hdrs.size() > kMaxColumns)
+            {
                 return false;
+            }
             if (m_idColumn.empty())
                 m_idColumn = hdrs[0];
             std::vector<std::vector<std::string>> raw;
             for (size_t i = 1; i < lines.size(); ++i)
             {
+                if (raw.size() >= kMaxRows)
+                {
+                    return false;
+                }
                 auto f = SplitCSVFields(lines[i]);
                 if (!f.empty())
                     raw.push_back(std::move(f));
@@ -223,13 +240,15 @@ namespace Spark::Data
             o << '\n';
             for (const auto& row : m_rows)
             {
+                std::string line;
                 for (size_t i = 0; i < m_columns.size(); ++i)
                 {
                     if (i)
-                        o << ',';
-                    o << QuoteCSV(row.GetString(m_columns[i].name));
+                        line += ',';
+                    line += QuoteCSV(row.GetString(m_columns[i].name));
                 }
-                o << '\n';
+                // LoadFromCSV skips blank lines, so a lone empty cell is written quoted to keep its row.
+                o << (line.empty() ? std::string("\"\"") : line) << '\n';
             }
             return o.str();
         }
@@ -237,12 +256,18 @@ namespace Spark::Data
         /// @brief Parse a JSON array of objects. Returns true if rows were parsed.
         bool LoadFromJSON(const std::string& json)
         {
+            if (json.size() > kMaxDocumentBytes)
+            {
+                return false;
+            }
             m_columns.clear();
             m_rows.clear();
             m_index.clear();
             size_t p = WS(json, 0);
             if (p >= json.size() || json[p] != '[')
+            {
                 return false;
+            }
             ++p;
             std::vector<std::unordered_map<std::string, std::string>> objs;
             std::vector<std::string> colOrd;
@@ -250,21 +275,31 @@ namespace Spark::Data
             {
                 p = WS(json, p);
                 if (p >= json.size() || json[p] == ']')
+                {
                     break;
+                }
                 if (json[p] == ',')
                 {
                     ++p;
                     continue;
                 }
                 if (json[p] != '{')
+                {
                     return false;
+                }
+                if (objs.size() >= kMaxRows)
+                {
+                    return false;
+                }
                 ++p;
                 std::unordered_map<std::string, std::string> obj;
                 while (p < json.size())
                 {
                     p = WS(json, p);
                     if (p >= json.size())
+                    {
                         return false;
+                    }
                     if (json[p] == '}')
                     {
                         ++p;
@@ -276,9 +311,19 @@ namespace Spark::Data
                         continue;
                     }
                     auto [k, ke] = JStr(json, p);
+                    if (k.empty() && ke == p)
+                    {
+                        return false;
+                    }
+                    if (colOrd.size() >= kMaxColumns && std::find(colOrd.begin(), colOrd.end(), k) == colOrd.end())
+                    {
+                        return false;
+                    }
                     p = WS(json, ke);
                     if (p >= json.size() || json[p] != ':')
+                    {
                         return false;
+                    }
                     p = WS(json, p + 1);
                     auto [v, ve] = JVal(json, p);
                     p = ve;
@@ -288,8 +333,16 @@ namespace Spark::Data
                 }
                 objs.push_back(std::move(obj));
             }
-            if (objs.empty())
+            p = WS(json, p);
+            if (objs.empty() || p >= json.size() || json[p] != ']')
+            {
                 return false;
+            }
+            ++p;
+            if (WS(json, p) != json.size())
+            {
+                return false;
+            }
             if (m_idColumn.empty() && !colOrd.empty())
                 m_idColumn = colOrd[0];
             for (const auto& cn : colOrd)
@@ -320,8 +373,13 @@ namespace Spark::Data
                     const auto& col = m_columns[c];
                     const std::string v = m_rows[r].GetString(col.name);
                     o << '"' << JEsc(col.name) << "\": ";
-                    if (col.type == ColumnType::Int || col.type == ColumnType::Float)
+                    // An empty numeric cell keeps its historical "0"; any other value that is not a
+                    // canonical JSON number (e.g. "001") is written as a string so the output stays JSON.
+                    if ((col.type == ColumnType::Int || col.type == ColumnType::Float) &&
+                        (v.empty() || IsCanonicalJsonNumber(v)))
+                    {
                         o << (v.empty() ? "0" : v);
+                    }
                     else if (col.type == ColumnType::Bool)
                     {
                         auto lv = LCase(v);
@@ -458,7 +516,7 @@ namespace Spark::Data
         {
             bool need = false;
             for (char c : f)
-                if (c == ',' || c == '"' || c == '\n')
+                if (c == ',' || c == '"' || c == '\n' || c == '\r')
                 {
                     need = true;
                     break;
@@ -655,6 +713,73 @@ namespace Spark::Data
             return aB ? ColumnType::Bool : aI ? ColumnType::Int : aF ? ColumnType::Float : ColumnType::String;
         }
 
+        static bool IsCanonicalJsonNumber(const std::string& value)
+        {
+            if (value.empty())
+            {
+                return false;
+            }
+            size_t p = 0;
+            if (value[p] == '-')
+            {
+                ++p;
+            }
+            if (p >= value.size())
+            {
+                return false;
+            }
+            if (value[p] == '0')
+            {
+                ++p;
+                if (p < value.size() && std::isdigit(static_cast<unsigned char>(value[p])))
+                {
+                    return false;
+                }
+            }
+            else if (value[p] >= '1' && value[p] <= '9')
+            {
+                while (p < value.size() && std::isdigit(static_cast<unsigned char>(value[p])))
+                {
+                    ++p;
+                }
+            }
+            else
+            {
+                return false;
+            }
+            if (p < value.size() && value[p] == '.')
+            {
+                ++p;
+                const size_t fractionStart = p;
+                while (p < value.size() && std::isdigit(static_cast<unsigned char>(value[p])))
+                {
+                    ++p;
+                }
+                if (p == fractionStart)
+                {
+                    return false;
+                }
+            }
+            if (p < value.size() && (value[p] == 'e' || value[p] == 'E'))
+            {
+                ++p;
+                if (p < value.size() && (value[p] == '+' || value[p] == '-'))
+                {
+                    ++p;
+                }
+                const size_t exponentStart = p;
+                while (p < value.size() && std::isdigit(static_cast<unsigned char>(value[p])))
+                {
+                    ++p;
+                }
+                if (p == exponentStart)
+                {
+                    return false;
+                }
+            }
+            return p == value.size();
+        }
+
         void RebuildIndex()
         {
             m_index.clear();
@@ -725,13 +850,36 @@ namespace Spark::Data
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading data table '%s' from '%s'", name.c_str(),
                            filePath.c_str());
-            std::ifstream file(filePath);
+            std::ifstream file(filePath, std::ios::binary);
             if (!file.is_open())
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Core, "Data table file not found: '%s'", filePath.c_str());
                 return false;
             }
-            std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.seekg(0, std::ios::end);
+            const std::streamoff fileSize = file.tellg();
+            if (fileSize < 0 || fileSize > static_cast<std::streamoff>(DataTable::kMaxDocumentBytes))
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Data table file '%s' exceeds the %zu byte limit",
+                                filePath.c_str(), DataTable::kMaxDocumentBytes);
+                return false;
+            }
+            file.seekg(0, std::ios::beg);
+            std::string content(static_cast<size_t>(fileSize), '\0');
+            if (fileSize != 0)
+            {
+                file.read(content.data(), fileSize);
+                if (!file)
+                {
+                    return false;
+                }
+            }
+            file.clear();
+            file.seekg(0, std::ios::end);
+            if (file.tellg() != fileSize)
+            {
+                return false;
+            }
             DataTable table;
             table.SetSourcePath(filePath);
             bool ok = EndsWith(filePath, ".json") ? table.LoadFromJSON(content) : table.LoadFromCSV(content);

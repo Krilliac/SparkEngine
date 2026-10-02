@@ -1,13 +1,12 @@
 # Hot Reload Overview
 
-SparkEngine contains hot-reload code for several subsystems: shaders, scripts, game modules, materials, and assets. This page provides a unified overview of those capabilities, how they work, and which ones are actually driven by the shipped engine. **Shader hot reload is not active in production**: the `ShaderHotReload` watcher is never initialized or enabled by the engine (only registered during compilation), so its per-frame `Update()` is a no-op.
+SparkEngine contains hot-reload code for several subsystems: shaders, scripts, game modules, and assets. This page provides a unified overview of those capabilities, how they work, and which ones are actually driven by the shipped engine. **Shader hot reload is not active in production**: the `ShaderHotReload` watcher is never initialized or enabled by the engine (only registered during compilation), so its per-frame `Update()` is a no-op.
 
 **Relevant sources:**
 - `SparkEngine/Source/Graphics/ShaderHotReload.h` (dedicated shader hot-reload with file watcher)
 - `SparkEngine/Source/Graphics/Shader.h` (shader management and compilation)
 - `SparkEngine/Source/Engine/Scripting/ScriptHotReload.h` (script hot-reload)
 - `SparkEngine/Source/Core/ModuleHotReload.h` (module hot-reload: `Spark::ModuleHotReloadManager`, polled by the platform frame loops; the older `Engine/HotReload/ModuleHotReload` singleton is no longer in the lifecycle)
-- `SparkEngine/Source/Graphics/MaterialSystem.h` (material hot-reload)
 - `SparkEngine/Source/Graphics/AssetPipeline.h` (asset hot-reload)
 
 ---
@@ -18,7 +17,6 @@ SparkEngine contains hot-reload code for several subsystems: shaders, scripts, g
 - [Shader Hot Reload](#shader-hot-reload)
 - [Script Hot Reload](#script-hot-reload)
 - [Module Hot Reload](#module-hot-reload)
-- [Material Hot Reload](#material-hot-reload)
 - [Asset Hot Reload](#asset-hot-reload)
 - [Comparison](#comparison)
 - [Console Commands](#console-commands)
@@ -46,14 +44,14 @@ Hot-reloading allows developers to modify assets, code, and data while the engin
 │  │ HLSL → swap  │  │ AS → swap     │  │ DLL → reinit      │   │
 │  └─────────────┘  └──────────────┘  └───────────────────┘   │
 │                                                              │
-│  ┌─────────────┐  ┌──────────────┐                           │
-│  │ Material     │  │ Asset         │                          │
-│  │ Hot Reload   │  │ Hot Reload    │                          │
-│  │              │  │               │                          │
-│  │ Material     │  │ File change   │                          │
-│  │ file watch   │  │ detection     │                          │
-│  │ → reparse    │  │ → reimport    │                          │
-│  └─────────────┘  └──────────────┘                           │
+│  ┌──────────────┐                                            │
+│  │ Asset         │                                           │
+│  │ Hot Reload    │                                           │
+│  │               │                                           │
+│  │ File change   │                                           │
+│  │ detection     │                                           │
+│  │ → reimport    │                                           │
+│  └──────────────┘                                            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -155,18 +153,12 @@ moduleReload.PollChanges();
 
 ---
 
-## Material Hot Reload
+## Material Hot Reload (removed)
 
-The `MaterialSystem` monitors material definition files for changes.
-
-**How it works:**
-1. Material files are tracked by timestamp
-2. On change, the material definition is re-parsed
-3. Shader permutations are recompiled if the material's shader references changed
-4. Texture bindings are updated
-5. Objects using the material see the new appearance immediately
-
-**Trigger:** Automatic when shader hot-reload detects material-related changes, or via console command.
+`MaterialSystem` no longer has a hot-reload path. Its timestamp watcher, `Material::LoadFromFile` and
+`Material::LoadTexture` were never driven by the engine (no caller enabled the watcher or loaded a material
+file) and accepted any path without asset-root containment, so they were deleted. Materials are created in
+memory; see [Material System](../graphics/Material-System.md).
 
 ---
 
@@ -191,7 +183,6 @@ The `AssetPipeline` detects changes to source asset files and re-imports them.
 | Shader | FILETIME polling (watcher not enabled in production) | No | n/a -- no device-shader swap implemented | n/a |
 | Script | File watcher | Yes (~200ms) | Partial (globals lost) | ~200ms + compile |
 | Module | DLL timestamp | No | None (re-initialize) | ~1s (DLL load) |
-| Material | File timestamp | No | Full (seamless) | ~1 frame + compile |
 | Asset | File cache | No | Full (resource swap) | Varies (reimport) |
 
 ---
@@ -202,7 +193,6 @@ The `AssetPipeline` detects changes to source asset files and re-imports them.
 |---------|-------------|
 | `shader_reload` | Force reload all modified shaders |
 | `shader_reload_all` | Recompile all shaders regardless of timestamp |
-| `material_reload <name>` | Reload a specific material |
 | `asset_reimport <path>` | Force reimport a specific asset |
 
 ---

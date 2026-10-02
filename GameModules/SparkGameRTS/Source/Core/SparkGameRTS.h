@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace RTS
@@ -30,6 +32,7 @@ namespace RTS
     class RTSEngineSystems;
     class RTSDemoPresentation;
     class RTSSkirmishSimulation;
+    class RTSScriptedCommander;
 } // namespace RTS
 
 /**
@@ -65,6 +68,7 @@ class SparkGameRTSModule : public Spark::IModule
     void RegisterConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
+    std::vector<std::string> m_consoleCommands; ///< Registered through m_context->GetConsole(); removed in OnUnload
     bool m_initialized{false};
     bool m_paused{false};
 
@@ -77,6 +81,7 @@ class SparkGameRTSModule : public Spark::IModule
     std::unique_ptr<RTS::RTSMatchSystem> m_matchSystem;
     std::unique_ptr<RTS::RTSEngineSystems> m_engineSystems;
     std::unique_ptr<RTS::RTSSkirmishSimulation> m_simulation;
+    std::unique_ptr<RTS::RTSScriptedCommander> m_scriptedCommander; ///< Bound into m_simulation by rts_autoplay on
     std::unique_ptr<RTS::RTSDemoPresentation> m_demoPresentation;
 };
 

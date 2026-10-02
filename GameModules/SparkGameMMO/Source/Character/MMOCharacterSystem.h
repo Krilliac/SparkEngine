@@ -149,6 +149,12 @@ namespace MMO
         void Shutdown();
         void RenderDebugUI();
 
+        /// Durable store for character IDs and records (non-owning; null keeps
+        /// IDs in memory). With a store, IDs come from its persisted counter, so
+        /// a restarted server never hands out an ID an earlier run used, and a
+        /// deleted character's stored records are deleted with it.
+        void SetPersistence(MMOPersistenceSystem* persistence) { m_persistence = persistence; }
+
         // === Race/Class Registry ===
         const RaceDef* GetRace(RaceId id) const;
         const ClassDef* GetClass(ClassId id) const;
@@ -161,6 +167,8 @@ namespace MMO
         bool DeleteCharacter(uint32_t accountId, uint32_t characterId);
         std::vector<CharacterSummary> GetCharacters(uint32_t accountId) const;
         const CharacterSummary* GetCharacter(uint32_t characterId) const;
+        /// @brief Check the server-owned account-to-character index without allocating a character list.
+        bool OwnsCharacter(uint32_t accountId, uint32_t characterId) const;
         bool IsNameAvailable(const std::string& name) const;
 
         // === Character Data ===
@@ -176,11 +184,12 @@ namespace MMO
         bool ValidateName(const std::string& name, std::string& errorOut) const;
 
         Spark::IEngineContext* m_context{nullptr};
+        MMOPersistenceSystem* m_persistence{nullptr};
         std::vector<RaceDef> m_races;
         std::vector<ClassDef> m_classes;
         std::unordered_map<uint32_t, CharacterSummary> m_characters;
         std::unordered_map<uint32_t, std::vector<uint32_t>> m_accountCharacters; ///< accountId → charIds
-        uint32_t m_nextCharId = 1;
+        uint32_t m_nextCharId = 1; ///< in-memory IDs, used only without a persistence store
 
         static constexpr int MIN_NAME_LENGTH = 2;
         static constexpr int MAX_NAME_LENGTH = 16;

@@ -2,6 +2,7 @@
 #include "GitRunner.h"
 
 #include "Downloader.h"
+#include "PathSecurity.h"
 #include "Platform.h"
 #include "ProcessRunner.h"
 
@@ -212,12 +213,15 @@ namespace SparkInstaller
     GitBootstrapResult GitBootstrap::Ensure(const LogSink& log)
     {
         GitBootstrapResult result;
-        if (IsGitAvailableOnPath())
+        // Pin the absolute PATH match (never the installer's own or current
+        // directory) so every later git command runs the binary probed here.
+        const std::string pathGit = SparkBuild::PathSecurity::ResolveExecutable("git");
+        if (!pathGit.empty() && IsGitAvailableOnPath())
         {
             result.ok = true;
-            result.gitExe = "git";
+            result.gitExe = pathGit;
             if (log)
-                log("Git found on PATH.");
+                log("Git found on PATH: " + pathGit);
             return result;
         }
 

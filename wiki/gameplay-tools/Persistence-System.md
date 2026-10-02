@@ -1,5 +1,22 @@
 # Persistence System
 
+## TF-120 handoff reservations and DATA-120 concurrency
+
+TERRAFRONT's file-backed `TFDatabase` writes schema v5. Ordinary v4 character rows migrate on the next
+commit. Each character can carry a bounded migration checkpoint, source/destination keys, an operation ID,
+an epoch and a terminal outcome. Reserve retains source ownership; destination commit changes it in one
+locked durable transaction. Aborted and committed epochs cannot be reused. Reserved rows reject ordinary
+progress/meta writes, release and competing claims, so the checkpoint cannot become stale during transfer.
+Terminal payloads remain available for retries after the database commit but before gameplay installation.
+This is the actual TERRAFRONT JSON backend; these checks are not SQLite concurrency measurements.
+
+`TF120_HandoffReservation_*` and `TF120_Migration_*` exercise real files and production persistence code.
+`Persistence_Concurrency_*` additionally starts independent economy writers on real threads and checks that
+conflict retries retain every acknowledged delta, and races territory authorities on real threads for one
+continent's file: each round exactly one holds the lease, every other contender's write is refused, and the
+next owner starts from the previous owner's committed snapshot. This does not promise merging arbitrary stale
+territory snapshots or durable economy operation IDs. Local runs are not exact-commit CI evidence.
+
 SparkEngine provides two independent persistence layers for different use cases:
 
 1. **[Save System](Save-System.md)** -- ECS-aware game state serialization to compressed JSON files. Designed for single-player save slots, quicksave/quickload, and autosave rotation.
@@ -341,6 +358,52 @@ Neither system depends on or communicates with the other. A game can use both si
 | Worker thread exception | Not caught internally; undefined behavior. Ensure connection backends do not throw. |
 | `GetInt()`/`GetDouble()`/`GetString()` type mismatch | Throws `std::bad_variant_access` |
 | Column index out of range | `GetInt()`/`GetDouble()`/`GetString()` throw `std::out_of_range`; `IsNull()` returns true |
+
+## Durable Commit (TERRAFRONT stores)
+
+Every TERRAFRONT JSON store -- `TFDatabase` (accounts/characters), `TFOutfitStore`, `TFSocialSystem`, and the `WorldSave::WriteJson` world/progression files -- commits through one primitive, `Terrafront::SavePaths::WriteDurableReplace(destination, bytes, ec)` in `GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h`. A crash or power loss leaves either the complete previous file or the complete new one, never an empty or truncated committed file.
+
+| Step | POSIX | Windows |
+|------|-------|---------|
+| Stage | Unlink a stale `<store>.tmp` file (a directory there fails the write), create `<store>.tmp` with `O_CREAT\|O_EXCL\|O_NOFOLLOW\|O_CLOEXEC`, mode `0600` | `DeleteFileW` a stale staging file, `CreateFileW(CREATE_NEW)` |
+| Write | Loop `write()` until every byte lands (retries `EINTR`) | Loop `WriteFile()` |
+| Flush staging | `fsync()` then `close()`, both checked | `FlushFileBuffers()` then `CloseHandle()`, both checked |
+| Swap | `rename()` over the destination | `MoveFileExW(MOVEFILE_REPLACE_EXISTING \| MOVEFILE_WRITE_THROUGH)` |
+| Flush rename | `fsync()` the parent directory (`EINVAL`, "cannot sync a directory", is tolerated) | Covered by `MOVEFILE_WRITE_THROUGH` |
+
+`false` means nothing was committed: any failure before the swap removes the staging file and leaves the destination untouched. `true` means the destination holds the new bytes and the caller must adopt them (TFDatabase keeps the new revision in memory). Once the swap has succeeded the commit is never reported as failed, because rolling the in-memory state back while the disk holds the new revision would make a purchase, account creation or transfer that the caller was told failed reappear on the next reload. If the POSIX parent-directory sync fails after the swap, the function still returns `true`, leaves the error in `ec` as a durability warning, and logs a `[TF] ... committed, but syncing its directory failed` warning; the next successful write restores durability. Callers must create the parent directory and hold the store's `ExclusiveFileLock` so there is one writer per destination.
+
+Permissions: the owner-only (`0600`) committed file applies on POSIX only. On Windows the committed file inherits the parent directory's ACL, so the save root's ACL is the operator's responsibility.
+
+Enforced by `Persistence_Durable_*` in `Tests/TestDATA120PersistenceReal.cpp` (byte-exact commit, stale staging discarded, failed staging leaves the committed file untouched, a stale symlink left at the staging path is unlinked rather than followed, committed files are owner-only on POSIX, and a directory-sync failure after the swap still reports the commit so TFDatabase keeps the new revision). The `O_EXCL|O_NOFOLLOW` create flags guard only an entry planted between that unlink and `open()`, which no test schedules; the source contract below pins that the flags stay present and by `Tests/Tools/test_async_database_durability.py` (CTest `AsyncDatabaseDurabilityContract`), which fails if the flush-before-swap and directory-sync ordering changes or any TERRAFRONT source writes or renames a file without the primitive.
+
+## Schema Versions and Character Residency (TERRAFRONT)
+
+Every TERRAFRONT store reads schema N and N-1, writes N, and refuses a newer file without rewriting it: `TFDatabase` (v5; v5 adds the TF-120 handoff reservation), the territory files (`WorldSave::DecodeTerritory`, v1), `TFOutfitStore` and the `TFSocialSystem` store (`schemaVersion` 1; a file without the key is v0). Fixtures: `Persistence_Migration_*`. TFDatabase v4 adds each character's `resident` continent: an authority binds the database to its continent (`BindAuthority`), enter world claims the character (`ClaimCharacter`, refused while another live continent holds it, taken over from a dead one), and leave world releases it once its final progress and meta are durable. Tests: `TF120_Residency_*`. Details in `docs/specs/persistence.md`.
+
+**Concurrent writers.** The character database is multi-writer: every call is one transaction under `<db>.lock`, contested creates of one name commit once, and a stale absolute write (for example two authorities spending the same flux) is refused with `Conflict`. The per-continent world files are single-writer: `WorldSave::WriteJson(writerLease, path, root, detail)` refuses unless the caller holds a `SavePaths::ExclusiveFileLock` on exactly that file (`LockedTarget()`), and `TFRegionSystem` / `TFProgressionSystem` take that lease before loading, so a second authority for the continent latches its writes off. Tests: `Persistence_Concurrency_*`.
+
+**Retries and idempotency.** Re-sending the current absolute character snapshot preserves its values but still advances the revision; this is not durable request-id deduplication. Callers must retain their latest state and recompute updates after re-acquiring a conflicted row. Lock/write failures keep meta dirty for the next sweep. TF-120 handoffs do carry operation IDs and epochs: matching duplicate phases acknowledge the durable row without a second write, failed staging writes remain retryable, and restart recovery preserves terminal records and rejects stale phases. Ordinary character/economy writes have no operation ledger. Known gap: `SaveNow` commits progress and meta separately, so a process death between them can split an unlock purchase. Tests: `Persistence_Idempotency_*` (`Tests/TestDATA120Idempotency.cpp`). See [the retry contract and coverage limits](../../docs/specs/persistence.md#retries-and-idempotency).
+
+## Backup, Restore and Recovery Drill (TFDatabase)
+
+`TFDatabase::CreateBackup(dbPath, backupPath, info)` copies one committed revision under the authority lock (safe while authorities run) into a durable backup plus a `sha256sum`-format `<backup>.sha256` sidecar, then re-reads and verifies both; it never overwrites an existing backup. `TFDatabase::RestoreFromBackup(backupPath, dbPath, info)` refuses a backup whose digest, load validation or schema gate fails (newer schema refused, N-1 migrated), keeps the replaced primary as `<db>.pre-restore-<ms>.bak`, and stamps a revision above the backup's and, when it can be read, the displaced primary's (`info.supersedesPrimaryRevision`), so a still-running authority gets `Conflict` instead of overwriting restored rows. Restore is also how a quarantined `.corrupt-*.bak` primary is recovered; with no primary or a torn one the displaced revision is unknown, later revisions can repeat lost ones, and the restore logs a warning. Stop every authority before restoring and restart them after.
+
+The recovery point (the last commit whose rename completed; a crash loses at most the one unacknowledged commit in flight) and the per-crash-point table are specified in `docs/specs/persistence.md`. Rehearse with `ctest -L recovery-drill`: `Persistence_BackupRestore_*` (7) and `Persistence_RecoveryDrill_*` (9, on Windows and POSIX), which spawn a fresh `SparkTests` process that `_exit()`s at a `SavePaths::DurableCommitStage` (via the test-only `DurableCommitObserver()` seam), dies mid-restore, or is killed (SIGKILL / `TerminateProcess`) while committing. Four drills target `TFDatabase`; the other five crash `TFOutfitStore`, the `TFSocialSystem` store and a `WorldSave` territory write. Only `TFDatabase` has backup/restore; power loss is not drilled.
+
+## Secrets and Encryption at Rest (OD-22)
+
+Owner decision OD-22 (`docs/readiness/OWNER-DECISIONS.md`, work item DATA-120) sets the stable-v1 rules for anything these stores write:
+
+| Rule | How the tree meets it | Enforced by |
+|------|-----------------------|-------------|
+| Passwords are stored only as salted SCRAM-SHA-256 verifiers | TERRAFRONT `TFAccountSystem::Register`/`RegisterVerifier` write `scram-sha256$<iterations>$<saltHex>$<storedKeyHex>$<serverKeyHex>` (PBKDF2 SaltedPassword with 150k iterations and a 128-bit per-account salt; only StoredKey and ServerKey are kept, NET-100) through `TFDatabase::CreateAccount`, and `BeginLogin` rewrites a legacy `pbkdf2-sha256` row, whose derived key is password-equivalent, the first time it is used; the MMO account system uses `Spark::PasswordHash::Create` and keeps accounts in memory | `Persistence_Secrets_TFAccountStoreHoldsOnlySaltedPbkdf2Hashes` (row-column allowlist, no plaintext or hex-encoded password in the file, distinct salts for equal passwords, restart re-login from the hash alone) and `TFScramAuth` (`TFScram_*`: RFC 7677 vector, replay, legacy-row migration) |
+| Session tokens are never persisted | TERRAFRONT sessions are an in-memory client-id -> account-id map; MMO bearer tokens live only in `MMOAccountSystem`'s session table. Neither the TERRAFRONT JSON store nor the MMO key-value store (`MMOPersistenceSystem` over `AsyncDatabasePool`) has a session column | `Persistence_Secrets_TFLoginAndSessionBindingPersistOnlyLoginTime`, `Persistence_Secrets_MMOKeyValueStoreNeverReceivesPasswordOrSessionToken` (structural guard: `MMOAccountSystem` has no persistence path; the test confirms the written store holds no password, hash, or token and that a restarted account system rejects the old token) |
+| No database secret in committed or shipped config | The only backend is the file-based `SQLiteConnection`; its "connection string" is a file path, and the TERRAFRONT store path comes from the `TF_SAVE_ROOT` environment variable (`TFSavePaths.h`). No persistence code reads a credential from a config file | `Persistence_Secrets_ShippedConfigCarriesNoDatabaseCredential` scans every config-like file under the trees the install rules ship config from (`SparkEngine/Resources/Config`, the runtime `Assets/` directories, and the `SparkServer/config` / `SparkGateway/config` operator examples installed to `share/SparkEngine/examples`); `Persistence_Secrets_CredentialScannerDetectsPlantedSecrets` proves the matcher catches planted keys and `user:password@` URLs |
+
+**Operator responsibility -- encryption at rest.** stable-v1 does not encrypt database files itself (no SQLCipher or in-database encryption). Account stores hold usernames, salts, and PBKDF2 hashes; character stores hold gameplay state. Operators running a server must put the save directory (`TF_SAVE_ROOT`, default `<working-directory>/Saves`, and `mmo_data.db`, and their `.tmp`, `.bak`, and `.corrupt-*` siblings) on a volume protected by host full-disk encryption (BitLocker, LUKS/dm-crypt, FileVault, or the cloud provider's encrypted block storage), restrict the directory to the server account, and treat backups of it as sensitive.
+
+**Adding a networked backend.** A future MySQL/PostgreSQL `IDatabaseConnection` must take its credential from the environment or the OS credential store at runtime, never from a shipped config file or source, and must not log the connection string (`AsyncDatabasePool` and `MMOPersistenceSystem` currently log the path they open, which is safe only because it is a file path).
 
 ## Implementing a New Backend
 

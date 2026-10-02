@@ -25,7 +25,10 @@ Platform certification (PLT-200, gate G08) proves that a specific commit builds,
 | `tools/platform-cert/evidence_schema.json` | JSON Schema for evidence records |
 | `docs/certification/support-matrix.json` | Seed support matrix (stable-v1) |
 | `docs/certification/evidence/*.json` | Per-row evidence records (one file per row) |
-| `Tests/Tools/test_platform_certification.py` | 136 adversarial tests |
+| `docs/certification/plans/<rowId>.json` | Collector probe plan for each declared row |
+| `Tools/platform-cert/collect_evidence.py` | Runs a plan's probes and writes the measured record |
+| `Tools/platform-cert/pe_imports.py` | Bounded PE32+ import/delay-import reader; measures a staged package's dependency closure |
+| `Tests/Tools/test_platform_certification.py` | Adversarial validation tests |
 
 ## Support Matrix
 
@@ -88,6 +91,10 @@ The validator rejects a row under any of these conditions:
 | GPU vendor/device/driver/featureLevel mismatch | **FAIL** |
 | Compiler version/toolset mismatch | **FAIL** |
 | Missing dependency closure when required | **FAIL** |
+| `dependency_closure` probe without exactly one PE import graph (`*.imports.json`) | **FAIL** |
+| Measured non-API-set import missing from the closure, or a closure entry nothing imports | **FAIL** |
+| Import resolving neither to the package root nor to an authority `platformRuntime` entry | **FAIL** |
+| Import graph whose API-set/platform classification disagrees with the authority | **FAIL** |
 | Collector identity blank or missing | **FAIL** |
 | Resource limits exceeded (rows, deps, strings, etc.) | **FAIL** |
 
@@ -121,6 +128,121 @@ Evidence is not fabricated — it must come from actual test runs on matching ha
 4. Place the file in `docs/certification/evidence/` named `{rowId}.json`.
 5. Run the validator to confirm the evidence passes.
 
+### Row probe plans
+
+Each declared row has a collector plan in `docs/certification/plans/`. Every probe runs a
+command that already exists; categories with no implementation are listed under
+`uncoveredCategories` with the reason, never mapped to a stand-in that could pass.
+
+| Row | Probed | Command |
+|-----|--------|---------|
+| `win11-x64-msvc143-nullrhi` | `build` | `cmake --build --preset windows-shipping --config MinSizeRel` |
+| | `launch` | `ctest --test-dir build/windows-shipping -C MinSizeRel -R ^NullRHI_Windows_FPSLifecycle$ --no-tests=error` |
+| `win11-x64-msvc143-d3d11` | `build` | same Shipping build |
+| | `content`, `save` | `ctest ... -R ^FPSPackage_InstalledRuntime$ --no-tests=error` |
+| both | `dependency_closure` | `collect_evidence.py --package-root <staged bin/>` against the plan's declared closure |
+
+Uncovered today: `install`/`uninstall`/`upgrade`/`rollback` (the MSI qualifier needs per-run
+arguments and predecessor packages; INST-130, REL-100 and REL-110) and `crash` (OPS-100). The NullRHI row
+also leaves out `save`, because the only save/reload proof runs D3D11 WARP. The D3D11 row also
+leaves out `launch` and `renderer`, because every D3D11 test forces WARP, plus `input` and
+`audio`. The validator refuses to certify a row with any category missing, so both rows stay
+uncertified until these gaps close.
+
+### Measured dependency closure
+
+`collect_evidence.py --package-root <staged package>` records `dependency_closure` by running
+`pe_imports.py` as the probe subprocess. It reads the import and delay-import directories of every
+PE32+ (AMD64) image in the package and resolves each DLL name. An `api-ms-win-*`/`ext-ms-*` name is
+an OS API set. A KnownDLL (`KNOWN_DLLS` in `pe_imports.py`, such as `kernel32.dll`) always loads from
+the system directory, so a same-named file in the package never satisfies it. Any other DLL in the
+package root (the application directory) is package-local and hashed. Anything else must be a
+`platformRuntime` entry of `docs/certification/dependency-authority.json`, or it is unresolved. The canonical import graph becomes a content-addressed `*.imports.json`
+artifact, and each declared dependency gets its own evidence file under `dependency_closure/deps/`.
+
+The plan declares only `dependencyClosure` entries (`name`, `version`, `source`) and the product's own
+`firstPartyImages`. Paths, hashes and sizes are always measured, and a plan that declares a closure
+without `--package-root` is refused. The validator re-reads the attested graph and fails the row if
+any of these holds:
+
+- an import is unresolved
+- a measured non-API-set, non-first-party import is missing from the closure
+- a closure entry is imported by nothing
+- an API set is declared
+- the graph's name-only classifications disagree with the authority
+- a package-local DLL, or a `firstPartyImages` entry, has a name the OS owns (an API set, a
+  KnownDLL or a `system`-source `platformRuntime` library)
+- a `firstPartyImages` entry names a `platformRuntime` library or a third-party image
+- a package-local DLL is neither first-party, an app-local `platformRuntime` library (declared under
+  its own name and source, e.g. `msvcp140.dll` from `vcredist`), nor a reviewed third-party image
+
+A package-local third-party DLL is declared under its authority identity, not its file name. The
+graph records file names (`sdl2.dll`) while the authority's `thirdParty` entries are manifest projects
+(`SDL2`), so the link is the entry's reviewed `imageNames` list. That list comes from
+`THIRD_PARTY_PACKAGE_IMAGES` in `dependency_authority.py`. It is empty today because every vendored
+library is linked statically into the Windows binaries (SDL2 is only built off Windows). A Windows
+package that ships a third-party DLL is therefore refused until that DLL is reviewed into the table
+and the authority is regenerated.
+
+Not every classification is re-derived at validation time. Whether a DLL sits in the package root
+depends on the package, which the bundle does not carry. The validator trusts that fact from the
+attested collector run and pins it only to a package-root image of the same name. The plan's
+`firstPartyImages` list is also a declaration. It is checked against OS-owned, runtime and
+third-party names, but not against the build's real targets.
+
+#### The declared Windows closure
+
+Both Windows row plans retain the historical `firstPartyImages` and `dependencyClosure`
+declaration from the 256603c1c Shipping install on 2026-09-29. This is a regression baseline,
+not current-tree evidence. **Remeasurement of the current Shipping install remains pending.**
+The prior lane's image counts are not used as proof. No readiness status is promoted here.
+
+CTest `WindowsCertification_PackageDependencyClosure` installs the component set from
+`cmake/SparkCPackOptions.cmake` into a unique prefix. It requires MinSizeRel and is registered
+for the `windows-shipping` product set. The required `build-windows-shipping` CI job calls the
+same driver directly, including when `BUILD_TESTS=OFF`.
+
+The driver applies both existing checks:
+
+- `tools/pe_import_closure.py` requires imported CRT DLLs beside the importing image and checks
+  OS imports against System32 on Windows. A VC runtime installed on the developer host cannot
+  satisfy a missing packaged DLL.
+- `Tools/platform-cert/pe_imports.py` records the import and delay-import graph, verifies the
+  first-party images and declared dependencies, and applies the row's dependency authority
+  rules for names, sources, versions and duplicates. Shipped OS-owned images are refused even
+  when nothing imports them.
+
+Each run retains JSON import graphs (including image SHA-256 and size), install logs and checker
+logs beneath `build/windows-shipping/package-closure/MinSizeRel/run-*` when run through CTest.
+The install subtree is removed only after both checks pass; failed stages remain for diagnosis.
+CI uses `build/shipping-closure/run-*` and uploads the reports as `shipping-closure-<commit>`.
+These reports describe the measured bytes; physical-host certification still needs the attested
+collector workflow below.
+
+From an MSVC developer shell, after the Shipping build has completed:
+
+```powershell
+ctest --test-dir build/windows-shipping -C MinSizeRel `
+  -R '^WindowsCertification_PackageDependencyClosure$' --no-tests=error --output-on-failure
+```
+
+A new import or missing DLL must be investigated before updating the declaration. Never copy a
+prior graph as evidence for a new tree. `pe_imports.py` does not read DLL file versions: refresh
+those declaration values from the newly staged CRT and the measurement host's System32 files.
+
+The reader is bounded: 512 MiB per image, 96 sections, 16 data directories, 4096 descriptors per
+directory, and 255-byte names. Truncated headers, an RVA outside every section, PE32 or non-AMD64
+images, and names containing path characters all fail closed.
+
+Plans carry no `provenance` block. Collection therefore has to run under CI with
+`--from-github-env` on the physical host, after
+`cmake --preset windows-shipping -DBUILD_TESTS=ON` at the commit under test. Probes run in
+category order, so `build` rebuilds the product before any ctest probe uses it.
+`TestRowProbePlans` in `Tests/Tools/test_platform_certification.py` checks four things: every
+probed or uncovered category is in the row's `evidenceRequired`, every `ctest -R ^Name$`
+selector names an `add_test` in `Tests/CMakeLists.txt`, every ctest probe passes
+`--no-tests=error`, and every named preset exists in `CMakePresets.json`.
+
 ### Remaining blockers for PLT-200 completion
 
 The certification infrastructure is in place. What remains is **physical-host evidence collection** — an operator must:
@@ -138,7 +260,7 @@ This cannot be automated away — it requires real hardware running real builds.
 python -m pytest Tests/Tools/test_platform_certification.py -v
 ```
 
-136 tests covering schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
+Tests cover schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
 
 ## Windows installer predecessor evidence
 
@@ -164,6 +286,17 @@ the downloaded MSI or the current release's signer. An absent, malformed, or
 mismatched value blocks qualification. Hosted signed-artifact and supported-host
 execution remain required evidence.
 
+The v0.9.0 bootstrap path (`--bootstrap-repair`) has no predecessor, so it binds
+its evidence to the owner-reviewed baseline instead. It requires
+`--reviewed-baseline-commit`, which `release.yml` reads from
+`predecessorRelease.sourceCommitEvidence.baselineCommit` in
+`docs/site/readiness.json`. Before any Windows Installer command, the source SHA
+must have exactly one parent equal to that baseline. This is the same rule the
+publication job's `verify_v090_source_seal.py` enforces, and the qualifier
+imports it from that script instead of keeping a copy. Both SHAs are
+written to `bootstrap-baseline.json`. While the baseline is unrecorded (empty),
+the v0.9.0 qualification step fails closed.
+
 ## Related Pages
 
 - [System Requirements](System-Requirements.md)
@@ -175,3 +308,4 @@ execution remain required evidence.
 - **Created:** 2026-08-28 for PLT-200
 - **Commit:** `360c05e883d4d5d1c0d050455a5cbb226cce3ffc`
 - **Status:** Infrastructure complete; evidence collection pending
+- **Updated:** 2026-09-30: fresh-stage closure enforcement and retained reports; current-tree measurement pending

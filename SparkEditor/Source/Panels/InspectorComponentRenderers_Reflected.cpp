@@ -22,6 +22,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 namespace SparkEditor
 {
@@ -192,7 +193,8 @@ namespace SparkEditor
         return true; // Controlling field not found — show by default
     }
 
-    bool InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields)
+    bool InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields,
+                                               const std::function<void(const Spark::FieldInfo&)>& afterField)
     {
         if (!data)
         {
@@ -257,6 +259,10 @@ namespace SparkEditor
                     if (field.readOnly)
                         ImGui::EndDisabled();
 
+                    if (afterField)
+                    {
+                        afterField(field);
+                    }
                     if (!field.tooltip.empty() && ImGui::IsItemHovered())
                         ImGui::SetTooltip("%s", field.tooltip.c_str());
 
@@ -282,6 +288,10 @@ namespace SparkEditor
                 if (field.readOnly)
                     ImGui::EndDisabled();
 
+                if (afterField)
+                {
+                    afterField(field);
+                }
                 if (!field.tooltip.empty() && ImGui::IsItemHovered())
                     ImGui::SetTooltip("%s", field.tooltip.c_str());
 

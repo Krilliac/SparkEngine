@@ -1,5 +1,10 @@
 # SaveSystem compatibility fixtures
 
+Owner decision OD-03 limits readers to the current save version (N = v4) and
+the previous one (N-1 = v3). `v3-fps-profile.spark_save.hex` is the N-1 fixture
+that must migrate; the v1 and v2 fixtures are kept as real pre-window files that
+every read path must refuse without mutating caller state or the file.
+
 `v1-screenshotless.spark_save.hex` is an immutable byte-for-byte encoding of a
 save emitted through the exact `SaveSystem::WriteToFile` v1 write path from
 commit `e1ba1c12`. The generator was compiled with MSVC and populated a real
@@ -8,7 +13,7 @@ scale values. The fixture intentionally has no v2 `screenshotPath` line.
 
 `v2-screenshot-without-hierarchy.spark_save.hex` is the corresponding immutable
 v2 disk fixture. It carries a screenshot path but intentionally omits the v3
-`Transform.parent` property, so loading it exercises the v2-to-v3 root migration.
+`Transform.parent` property. It is N-2 under OD-03 and must fail closed.
 
 `v3-fps-profile.spark_save.hex` is an immutable 355-byte save emitted by the
 production v3 writer in the installed MinSizeRel SparkGameFPS qualification at

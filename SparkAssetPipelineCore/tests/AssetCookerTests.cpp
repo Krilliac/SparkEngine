@@ -211,6 +211,71 @@ int main(int argc, char** argv)
         controlManifest.find(static_cast<char>(31)) == std::string::npos;
 #endif
 
+    // SEC-120 asset-cooker-input: the walk checks each source entry by path, and the copy used
+    // to open that name again, so whatever replaced the entry in between was cooked. The swaps
+    // happen in onProgress, after the walk and before the next file is copied.
+    bool swapRefused = true;
+    bool parentSwapRefused = true;
+    bool nonUtf8Refused = true;
+    std::string swapError;
+    std::string parentSwapError;
+    std::string nonUtf8Error;
+#if !defined(_WIN32)
+    const auto secret = root / "secret.txt";
+    std::ofstream(secret, std::ios::binary) << "SECRET OUTSIDE THE SOURCE TREE";
+
+    const auto swapSource = root / "swap-source";
+    const auto swapOutput = root / "swap-output";
+    std::filesystem::create_directories(swapSource);
+    std::ofstream(swapSource / "a.txt", std::ios::binary) << "first";
+    std::ofstream(swapSource / "b.txt", std::ios::binary) << "second";
+    Spark::AssetPipeline::CookRequest swapRequest{swapSource, swapOutput, {}, false};
+    swapRequest.onProgress = [&](const Spark::AssetPipeline::CookRecord& record, std::size_t, std::size_t)
+    {
+        if (record.path == "a.txt")
+        {
+            std::error_code swapEc;
+            std::filesystem::remove(swapSource / "b.txt", swapEc);
+            std::filesystem::create_symlink(secret, swapSource / "b.txt", swapEc);
+        }
+    };
+    const auto swapped = Spark::AssetPipeline::CookAssets(swapRequest);
+    swapError = swapped.error;
+    swapRefused = !swapped.Succeeded() && ReadFile(swapOutput / "b.txt").empty();
+
+    const auto parentSource = root / "parent-swap-source";
+    const auto parentOutput = root / "parent-swap-output";
+    const auto outsideDirectory = root / "outside-directory";
+    std::filesystem::create_directories(parentSource / "sub");
+    std::filesystem::create_directories(outsideDirectory);
+    std::ofstream(parentSource / "a.txt", std::ios::binary) << "first";
+    std::ofstream(parentSource / "sub" / "c.txt", std::ios::binary) << "inside";
+    std::ofstream(outsideDirectory / "c.txt", std::ios::binary) << "SECRET OUTSIDE THE SOURCE TREE";
+    Spark::AssetPipeline::CookRequest parentRequest{parentSource, parentOutput, {}, false};
+    parentRequest.onProgress = [&](const Spark::AssetPipeline::CookRecord& record, std::size_t, std::size_t)
+    {
+        if (record.path == "a.txt")
+        {
+            std::error_code swapEc;
+            std::filesystem::remove_all(parentSource / "sub", swapEc);
+            std::filesystem::create_directory_symlink(outsideDirectory, parentSource / "sub", swapEc);
+        }
+    };
+    const auto parentSwapped = Spark::AssetPipeline::CookAssets(parentRequest);
+    parentSwapError = parentSwapped.error;
+    parentSwapRefused = !parentSwapped.Succeeded() && ReadFile(parentOutput / "sub" / "c.txt").empty();
+
+    // A POSIX name is bytes; one that is not UTF-8 was written raw into the JSON manifest.
+    const auto badNameSource = root / "bad-name-source";
+    const auto badNameOutput = root / "bad-name-output";
+    std::filesystem::create_directories(badNameSource);
+    std::ofstream(badNameSource / std::string("bad-\xFF\xFE.bin"), std::ios::binary) << "bytes";
+    const auto badName = Spark::AssetPipeline::CookAssets({badNameSource, badNameOutput, {}, false});
+    nonUtf8Error = badName.error;
+    nonUtf8Refused = !badName.Succeeded() && badName.error.find("UTF-8") != std::string::npos &&
+                     !std::filesystem::exists(badNameOutput);
+#endif
+
     const auto concurrentSourceA = root / "concurrent-source-a";
     const auto concurrentSourceB = root / "concurrent-source-b";
     const auto concurrentOutput = root / "concurrent-output";
@@ -305,10 +370,14 @@ int main(int argc, char** argv)
          (!throughHardLinkedManifest.Succeeded() && internalManifestBytes == "preserve-internal")) &&
         !wrongDigestAccepted && directBytes == "old bytes" && unicodePassed && controlFilenamePassed &&
         aliasedOutputPassed && concurrentPassed && escapeRejected && insideAccepted && containmentPassed &&
+        swapRefused && parentSwapRefused && nonUtf8Refused &&
         std::filesystem::is_regular_file(output / "nested" / "asset.txt");
     if (!passed)
     {
         std::cerr << "Asset cooker deterministic/incremental contract failed\n"
+                  << "swapRefused=" << swapRefused << " error='" << swapError
+                  << "' parentSwapRefused=" << parentSwapRefused << " error='" << parentSwapError
+                  << "' nonUtf8Refused=" << nonUtf8Refused << " error='" << nonUtf8Error << "'\n"
                   << "first=" << first.Succeeded() << " error='" << first.error << "' updated=" << first.updatedCount
                   << " unchanged=" << first.unchangedCount << "\n"
                   << "second=" << second.Succeeded() << " error='" << second.error

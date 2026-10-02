@@ -38,7 +38,7 @@ namespace MMO
         uint32_t id = 0;
         std::string name;
         std::string description;
-        std::string scenePath;
+        std::string scenePath; ///< Source-root-relative scene; empty = not authored, so not enterable
         int minLevel = 1;
         int recommendedPlayers = 5;
         int maxPlayers = 5;
@@ -47,6 +47,9 @@ namespace MMO
         float heroicHealthMult = 1.5f;
         float mythicHealthMult = 2.5f;
         float legendaryHealthMult = 4.0f;
+
+        /// Instances can only be created for dungeons whose scene has been authored.
+        bool IsEnterable() const { return !scenePath.empty(); }
     };
 
     /// @brief Instance state

@@ -6,8 +6,7 @@
 #include "RTSBuildingSystem.h"
 #include "Resource/RTSResourceSystem.h"
 #include "Unit/RTSUnitSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -31,10 +30,7 @@ namespace RTS
         RegisterFactionTemplates(RTSFaction::Sentinel);
         RegisterFactionTemplates(RTSFaction::Swarm);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS building system initialized with %zu templates",
-                       m_templates.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building system initialized (" +
-                                                    std::to_string(m_templates.size()) + " templates)");
+        Spark::ModuleLog::Info(m_context, "[RTS] Building system initialized ({} templates)", m_templates.size());
         return true;
     }
 
@@ -94,7 +90,7 @@ namespace RTS
 
         uint32_t id = building.buildingId;
         m_buildings[id] = std::move(building);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS building placed: id=%u at (%.0f, %.0f)", id, x, y);
+        Spark::ModuleLog::Info(m_context, "[RTS] Building placed: id={} at ({:.0f}, {:.0f})", id, x, y);
         return id;
     }
 
@@ -252,7 +248,12 @@ namespace RTS
         return result;
     }
 
-    bool RTSBuildingSystem::RestoreState(const std::vector<BuildingData>& buildings)
+    uint32_t RTSBuildingSystem::GetNextBuildingId() const
+    {
+        return m_nextBuildingId;
+    }
+
+    bool RTSBuildingSystem::RestoreState(const std::vector<BuildingData>& buildings, uint32_t nextBuildingId)
     {
         std::map<uint32_t, BuildingData> restored;
         uint32_t nextId = 1;
@@ -282,6 +283,12 @@ namespace RTS
             if (!restored.emplace(building.buildingId, building).second)
                 return false;
             nextId = std::max(nextId, building.buildingId + 1);
+        }
+        if (nextBuildingId != 0)
+        {
+            if (nextBuildingId < nextId)
+                return false;
+            nextId = nextBuildingId;
         }
 
         m_buildings = std::move(restored);
@@ -368,7 +375,6 @@ namespace RTS
                 bld.constructionProgress = 1.0f;
                 bld.constructionComplete = true;
                 bld.health = bld.maxHealth;
-                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS building %u construction complete", id);
             }
             else
             {
@@ -401,8 +407,7 @@ namespace RTS
                 if (unitId == 0)
                     break;
 
-                Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Building " + std::to_string(id) + " produced unit " +
-                                                            std::to_string(unitId));
+                Spark::ModuleLog::Info(m_context, "[RTS] Building {} produced unit {}", id, unitId);
                 bld.productionQueue.erase(bld.productionQueue.begin());
                 remainingTime = overflowTime;
                 if (remainingTime <= 0.0f)

@@ -123,6 +123,23 @@ namespace Terrafront
         }
         if (!root.IsObject())
             return LoadResult::Corrupt;
+        // Read N and N-1 (no key), fail closed on anything newer before looking at any other field: a newer
+        // schema may have changed them, and a load-then-save here would drop what this build does not know.
+        if (root.HasKey("schemaVersion"))
+        {
+            uint32_t schemaVersion = 0;
+            if (!ReadUnsigned(root["schemaVersion"], schemaVersion) || schemaVersion == 0)
+            {
+                return LoadResult::Corrupt;
+            }
+            if (schemaVersion > kSchemaVersion)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] outfit store %s uses schema version %u, newer than supported %u; left untouched",
+                                SavePaths::Utf8ForLog(m_path).c_str(), schemaVersion, kSchemaVersion);
+                return LoadResult::UnsupportedVersion;
+            }
+        }
         if (!root["outfits"].IsArray())
             return LoadResult::Corrupt;
 
@@ -212,6 +229,7 @@ namespace Terrafront
         namespace fs = std::filesystem;
 
         Spark::Json::Value root = Spark::Json::Value::MakeObject();
+        root["schemaVersion"] = Spark::Json::Value(static_cast<double>(kSchemaVersion));
         root["nextOutfitId"] = Spark::Json::Value(static_cast<double>(m_nextOutfitId));
 
         Spark::Json::Value outfits = Spark::Json::Value::MakeArray();
@@ -251,18 +269,7 @@ namespace Terrafront
                 return false;
         }
 
-        std::filesystem::path tmpFile = m_path;
-        tmpFile += ".tmp";
-        {
-            std::ofstream out(tmpFile, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-                return false;
-            out << Spark::Json::StringifyPretty(root);
-            if (!out.good())
-                return false;
-        }
-
-        return SavePaths::AtomicReplace(tmpFile, m_path, ec);
+        return SavePaths::WriteDurableReplace(m_path, Spark::Json::StringifyPretty(root), ec);
     }
 
 } // namespace Terrafront

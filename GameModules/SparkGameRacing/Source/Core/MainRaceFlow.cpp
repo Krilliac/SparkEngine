@@ -17,15 +17,21 @@
 #include "Camera/RacingCameraSystem.h"
 #include "HUD/RacingHUDSystem.h"
 #include "Input/InputManager.h"
+#include <Spark/ModuleLog.h>
 #include <algorithm>
 #include <vector>
 
-void SparkGameRacingModule::SetupDefaultRaceRoster()
+bool SparkGameRacingModule::SetupDefaultRaceRoster()
 {
     if (!m_vehicleSystem || !m_trackSystem || !m_raceManager || !m_aiDriver)
-        return;
+        return false;
 
-    Racing::SetupRaceRoster({*m_vehicleSystem, *m_trackSystem, *m_raceManager, *m_aiDriver}, m_context);
+    if (!Racing::SetupRaceRoster({*m_vehicleSystem, *m_trackSystem, *m_raceManager, *m_aiDriver}, m_context))
+    {
+        Spark::ModuleLog::Error(m_context, "[Racing] Could not build the race grid's Jolt vehicles");
+        return false;
+    }
+    return true;
 }
 
 void SparkGameRacingModule::StepRace(float deltaTime)
@@ -43,7 +49,20 @@ void SparkGameRacingModule::StepRace(float deltaTime)
             SetupDefaultRaceRoster();
         if (edges.cameraCycleRequested && m_cameraSystem)
             m_cameraSystem->CycleMode();
+    }
 
+    // race_autopilot drives the player car from the racing line whether or not an input device exists.
+    bool havePlayerInput = input != nullptr;
+    if (m_autopilot)
+    {
+        if (const Racing::VehicleInstance* player = m_vehicleSystem->GetPlayerVehicle())
+        {
+            playerInput = Racing::ComputePlayerAutopilotInput(*player, *m_trackSystem);
+            havePlayerInput = true;
+        }
+    }
+    else if (input)
+    {
         playerInput.throttle = input->IsKeyDown('W') ? 1.0f : 0.0f;
         playerInput.brake = input->IsKeyDown('S') ? 1.0f : 0.0f;
         if (input->IsKeyDown('A'))
@@ -55,7 +74,7 @@ void SparkGameRacingModule::StepRace(float deltaTime)
     }
 
     Racing::StepRaceFrame({*m_vehicleSystem, *m_trackSystem, *m_raceManager, *m_aiDriver},
-                          input ? &playerInput : nullptr, deltaTime);
+                          havePlayerInput ? &playerInput : nullptr, deltaTime);
 }
 
 void SparkGameRacingModule::UpdatePresentationState()

@@ -45,3 +45,35 @@ from this report.
 
 This is an ongoing quality pass. The baseline audit does not mean every asset has
 been improved or approved for release.
+
+## Per-module kits
+
+Each game module's props are authored by one script built on the shared library
+`tools/blender/spark_kit.py`:
+
+| Item | Location |
+|------|----------|
+| Authoring script | `tools/blender/author_<module>_kit.py` |
+| Editable source | `Art/Blender/<Module>/<module>_kit.blend` |
+| Exports | `Assets/Models/<ModuleShort>/Kit/<asset>.obj` + `.mtl`, `<asset>_lod1.obj`/`.mtl`, `<asset>_collision.obj`/`.mtl` |
+| Provenance | `Art/Blender/<Module>/provenance.json` |
+| License | Spark Open License 1.0 (repository `LICENSE`) |
+
+Exports use the `Assets/Models/ModuleKits` convention: meters, ground-level pivot,
+triangulated OBJ with UVs and normals, Y-up with `forward_axis='Z'` (props face
+Blender -Y, which becomes OBJ -Z). Colors live in the MTL files. `<asset>_lod1` is
+a Decimate (collapse) reduction at the ratio recorded in provenance, and
+`<asset>_collision` is a convex hull (or box) under a recorded triangle cap.
+
+```sh
+PYTHONHOME=/usr blender -b --factory-startup --python-exit-code 1 \
+  --python tools/blender/author_<module>_kit.py -- --repo .
+python3 tools/blender/validate_kit.py Art/Blender/<Module>/provenance.json
+```
+
+Reruns are byte-identical. Blender 4.0 writes memory addresses into `.blend` files,
+so an unchanged scene (same `blend.scene_sha256` content digest) keeps its existing
+`.blend` rather than being re-saved. The validator checks recorded hashes, OBJ
+attributes, bounds, triangle budgets, LOD reduction, collision caps, and material
+resolution. It does not judge art quality or engine rendering. Engine import and
+in-game review are still separate steps.

@@ -7,6 +7,8 @@
 
 #include "EditorRecoveryJson.h"
 
+#include "../Utils/EditorFileRead.h"
+
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -46,34 +48,35 @@ namespace SparkEditor::RecoveryDetail
         const std::string key = EncodeProjectIdentityForPath(projectIdentity);
         fs::path directory = root / "recovery-v1";
         for (size_t offset = 0; offset < key.size(); offset += kKeySegmentLength)
+        {
             directory /= key.substr(offset, kKeySegmentLength);
+        }
         return {directory / "recovery-v1.json", directory / "recovery-v1.backup.json"};
     }
 
+    /// Reads a recovery file through one opened handle. The size used to be checked by path
+    /// and the file then read by name without a bound, so a file swapped or grown between the
+    /// two (or a link to a pseudo-file whose reported size is 0) was read whole.
     inline bool ReadFile(const fs::path& path, std::string& bytes, std::string& error)
     {
-        std::error_code filesystemError;
-        const uintmax_t size = fs::file_size(path, filesystemError);
-        if (filesystemError || size > kEditorRecoveryMaxBytes)
+        switch (ReadRegularFileBounded(path, kEditorRecoveryMaxBytes, bytes))
         {
-            error = filesystemError ? "cannot read recovery file: " + filesystemError.message()
-                                    : "recovery file exceeds the size limit";
+        case BoundedReadStatus::Ok:
+            return true;
+        case BoundedReadStatus::TooLarge:
+            error = "recovery file exceeds the size limit";
             return false;
-        }
-
-        std::ifstream input(path, std::ios::binary);
-        if (!input)
-        {
+        case BoundedReadStatus::Missing:
             error = "cannot open recovery file";
             return false;
-        }
-        bytes.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
-        if (!input.good() && !input.eof())
-        {
-            error = "cannot read recovery file";
+        case BoundedReadStatus::NotRegularFile:
+            error = "recovery file is not a regular file";
             return false;
+        case BoundedReadStatus::Failed:
+            break;
         }
-        return true;
+        error = "cannot read recovery file";
+        return false;
     }
 
     inline fs::path TemporarySibling(const fs::path& destination)
@@ -88,7 +91,9 @@ namespace SparkEditor::RecoveryDetail
     {
 #ifdef _WIN32
         if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
             return true;
+        }
         error = "cannot atomically replace recovery file: " +
                 std::error_code(static_cast<int>(::GetLastError()), std::system_category()).message();
         return false;
@@ -96,7 +101,9 @@ namespace SparkEditor::RecoveryDetail
         std::error_code filesystemError;
         fs::rename(temporary, destination, filesystemError);
         if (!filesystemError)
+        {
             return true;
+        }
         error = "cannot atomically replace recovery file: " + filesystemError.message();
         return false;
 #endif
@@ -122,7 +129,9 @@ namespace SparkEditor::RecoveryDetail
         if (!ReadFile(path, reread, error) || reread != document)
         {
             if (error.empty())
+            {
                 error = "temporary recovery file did not round-trip";
+            }
             return false;
         }
 
@@ -142,23 +151,38 @@ namespace SparkEditor::RecoveryDetail
     inline ParsedRecoveryFile ReadRecoveryFile(const fs::path& path)
     {
         ParsedRecoveryFile result;
-        std::error_code filesystemError;
-        result.exists = fs::exists(path, filesystemError);
-        if (filesystemError)
+        const BoundedReadStatus readStatus = ReadRegularFileBounded(path, kEditorRecoveryMaxBytes, result.document);
+        if (readStatus == BoundedReadStatus::Missing)
         {
-            result.error = "cannot inspect recovery file: " + filesystemError.message();
             return result;
         }
-        if (!result.exists)
+        result.exists = true;
+        if (readStatus != BoundedReadStatus::Ok)
+        {
+            switch (readStatus)
+            {
+            case BoundedReadStatus::TooLarge:
+                result.error = "recovery file exceeds the size limit";
+                break;
+            case BoundedReadStatus::NotRegularFile:
+                result.error = "recovery file is not a regular file";
+                break;
+            case BoundedReadStatus::Failed:
+                result.error = "cannot read recovery file";
+                break;
+            case BoundedReadStatus::Ok:
+            case BoundedReadStatus::Missing:
+                break;
+            }
             return result;
-
-        if (!ReadFile(path, result.document, result.error))
-            return result;
+        }
         result.readable = true;
 
         Spark::Json::Value root;
         if (!ParseRecoveryJson(result.document, root, result.error))
+        {
             return result;
+        }
 
         result.snapshot = SnapshotFromJson(root, result.error);
         return result;
@@ -182,7 +206,9 @@ namespace SparkEditor::RecoveryDetail
             return false;
         }
         if (!existing.snapshot)
+        {
             return true;
+        }
 
         const fs::path temporary = TemporarySibling(backup);
         if (!WriteAndVerify(temporary, existing.document, error))

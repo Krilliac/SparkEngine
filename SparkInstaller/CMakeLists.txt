@@ -26,6 +26,8 @@ set(INSTALLER_SOURCES
     src/Installer.h
     src/Installer.cpp
     src/InstallerContext.h
+    src/InstallerPreflight.h
+    src/InstallerPreflight.cpp
     src/GitRunner.h
     src/GitRunner.cpp
     src/GitBootstrap.h
@@ -165,6 +167,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
     add_executable(SparkInstallerTransactionTests
         tests/InstallerTransactionTests.cpp
         src/Installer.cpp
+        src/InstallerPreflight.cpp
         src/InstallState.cpp
         src/GitRunner.cpp
         src/GitBootstrap.cpp
@@ -175,7 +178,11 @@ if(SPARKINSTALLER_BUILD_TESTS)
     target_link_libraries(SparkInstallerTransactionTests PRIVATE SparkBuildCore)
     target_compile_definitions(SparkInstallerTransactionTests PRIVATE
         SPARK_INSTALLER_VERSION="${PROJECT_VERSION}"
+        SPARK_INSTALLER_TEST_EXE="$<TARGET_FILE:SparkInstaller>"
     )
+    # The interruption case kills the real installer, whose output directory
+    # differs from the contract test in a standalone multi-config build.
+    add_dependencies(SparkInstallerTransactionTests SparkInstaller)
     if(MSVC)
         target_compile_definitions(SparkInstallerTransactionTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
     endif()
@@ -183,7 +190,41 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerTransactionTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerTransactionTests COMMAND SparkInstallerTransactionTests)
-    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 15 LABELS installer)
+    # Each case drives the installer through the fake git/cmake executable;
+    # the fresh-install, resume and rollback cases spawn about 150 processes.
+    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 60 LABELS installer)
+
+    # INST-130/131/132 readiness selectors. These run local fake-tool and mocked
+    # msiexec fixtures on every host; they are contract tests, not native signed
+    # Windows install evidence.
+    add_test(NAME Installer_AtomicUpdate COMMAND SparkInstallerTransactionTests --spark-case=atomic-update)
+    add_test(NAME Installer_Interrupted COMMAND SparkInstallerTransactionTests --spark-case=interrupted)
+    # Tampered, interrupted or wrong-archive MinGit cache populations (PortableGitCacheTests.cpp).
+    add_test(NAME Installer_Tamper COMMAND SparkInstallerGitTests)
+    set_tests_properties(Installer_AtomicUpdate Installer_Interrupted Installer_Tamper PROPERTIES
+        TIMEOUT 60 LABELS installer)
+    # Hostile archives: format mismatch, escaping member names and links, no-replace commit.
+    if(TARGET SparkBuildDownloaderTests)
+        add_test(NAME Installer_Tamper_Downloader COMMAND SparkBuildDownloaderTests)
+        set_tests_properties(Installer_Tamper_Downloader PROPERTIES TIMEOUT 10 LABELS installer)
+    endif()
+    # MSI lifecycle drills from the Windows qualification script, run against mocked
+    # msiexec. A filter that matches no test is a failure, not a pass.
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_FOUND)
+        set(_sparkinstaller_msi_tests "${CMAKE_CURRENT_SOURCE_DIR}/../.github/scripts/test_qualify_windows_msi.py")
+        add_test(NAME Installer_Uninstall COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k uninstall)
+        add_test(NAME Installer_Upgrade COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k upgrade)
+        add_test(NAME Installer_Rollback COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k roll)
+        add_test(NAME Installer_Interrupted_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k interrupt)
+        add_test(NAME Installer_Repair_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k repair)
+        add_test(NAME Installer_Repeatability_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k repeatability)
+        set_tests_properties(Installer_Uninstall Installer_Upgrade Installer_Rollback
+            Installer_Interrupted_Msi Installer_Repair_Msi Installer_Repeatability_Msi PROPERTIES
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 120 LABELS "installer;python")
+        unset(_sparkinstaller_msi_tests)
+    endif()
 
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
@@ -228,4 +269,23 @@ endif()
     set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15 LABELS installer)
     unset(_sparkinstaller_version_test_script)
     unset(_sparkinstaller_platform)
+
+    # CI-110: the shipped binary's behavioural lane -- a headless install, resume
+    # and refusal against a local fixture repository, with no network. Without
+    # git the lane is not registered, and Tools/validate_ctest_policy.py then
+    # reports SparkInstaller as a shipped binary with only a --version test.
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        add_test(NAME SparkInstallerHeadlessSmoke
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSPARK_INSTALLER=$<TARGET_FILE:SparkInstaller>"
+                "-DSPARK_GIT=${GIT_EXECUTABLE}"
+                "-DSPARK_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/installer-headless-smoke/$<CONFIG>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/InstallerHeadlessSmoke.cmake")
+        set_tests_properties(SparkInstallerHeadlessSmoke PROPERTIES
+            TIMEOUT 60
+            LABELS "installer;integration;process")
+    else()
+        message(WARNING "git was not found: SparkInstallerHeadlessSmoke is not registered")
+    endif()
 endif()

@@ -1,0 +1,6 @@
+Sphere 0 0 0 1 1 1
+Sphere 0 0 0 -1 16 16
+Cube 0 0 0 0
+Plane 0 0 0 -5 5
+Ramp 0 0 0 inf 1
+Wall 0 0 0 1

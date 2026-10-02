@@ -1,5 +1,5 @@
 #include "GravitySystem.h"
-#include "Utils/Validate.h"
+#include "Core/FPSLog.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -86,8 +86,7 @@ namespace Spark
 
     bool GravitySystem::Initialize(const XMFLOAT3& worldGravity)
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing GravitySystem");
+        FPS_LOG_INFO("Initializing GravitySystem");
         m_worldGravity = worldGravity;
         m_zones.clear();
         return true;

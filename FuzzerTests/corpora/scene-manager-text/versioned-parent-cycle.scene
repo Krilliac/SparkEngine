@@ -1,0 +1,5 @@
+# SparkEngine Scene v1.0
+Cube A 0 0 0 0 0 0 1 1 1 1
+Cube B 0 0 0 0 0 0 1 1 1 2
+Cube C 0 0 0 0 0 0 1 1 1 0
+Cube D 0 0 0 0 0 0 1 1 1 -1

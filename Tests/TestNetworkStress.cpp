@@ -127,13 +127,20 @@ static std::vector<uint8_t> BuildPacket(MessageType type, ChannelType channel, u
     return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
 }
 
-/// Build a connect request packet with a player name
-static std::vector<uint8_t> BuildConnectPacket(const std::string& playerName)
+/// Build a framed v2 connect request (NET-100): a fresh ClientHello in a plaintext handshake frame.
+/// The name is not on the wire any more; it would follow in a sealed ClientFinished, which these
+/// stress peers never send, so every slot they open stays Securing until the connection timeout.
+/// These tests therefore count slots (GetClientSlots); GetClients lists admitted players only.
+static std::vector<uint8_t> BuildConnectPacket(const std::string& /*playerName*/)
 {
-    NetBuffer nameBuf;
-    nameBuf.WriteString(playerName);
-    return BuildPacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
-                       std::vector<uint8_t>(nameBuf.GetData().begin(), nameBuf.GetData().end()));
+    ClientHandshake handshake;
+    const auto hello = handshake.Begin(NETWORK_PROTOCOL_VERSION);
+    if (!hello)
+        return {};
+    auto wire = BuildPacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
+                            std::vector<uint8_t>(hello->begin(), hello->end()));
+    wire.insert(wire.begin(), NETWORK_FRAME_HANDSHAKE);
+    return wire;
 }
 
 static constexpr uint16_t TEST_PORT_BASE = 29000;
@@ -194,7 +201,7 @@ TEST(NetworkStress_ConnectionFlood)
                    }
 
                    // Server should cap at maxClients (4) and not crash
-                   auto clientCount = static_cast<int>(nm.GetClients().size());
+                   auto clientCount = static_cast<int>(nm.GetClientSlots().size());
                    EXPECT_LE(clientCount, 4);
                    EXPECT_GT(sentCount, 0);
 
@@ -278,7 +285,7 @@ TEST(NetworkStress_InvalidMagic)
                        nm.Update(0.016f);
 
                    // No clients should have been accepted
-                   EXPECT_EQ(static_cast<int>(nm.GetClients().size()), 0);
+                   EXPECT_EQ(static_cast<int>(nm.GetClientSlots().size()), 0);
                    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
                });
 }
@@ -314,7 +321,7 @@ TEST(NetworkStress_TruncatedPackets)
                        nm.Update(0.016f);
 
                    // None should result in a connected client
-                   EXPECT_EQ(static_cast<int>(nm.GetClients().size()), 0);
+                   EXPECT_EQ(static_cast<int>(nm.GetClientSlots().size()), 0);
                    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
                });
 }
@@ -361,7 +368,7 @@ TEST(NetworkStress_PayloadLengthOverflow)
                    for (int frame = 0; frame < 5; ++frame)
                        nm.Update(0.016f);
 
-                   EXPECT_EQ(static_cast<int>(nm.GetClients().size()), 0);
+                   EXPECT_EQ(static_cast<int>(nm.GetClientSlots().size()), 0);
                    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
                });
 }
@@ -758,13 +765,13 @@ TEST(NetworkStress_ReplayAttack)
                    auto connectPkt = BuildConnectPacket("ReplayVictim");
                    sender.SendTo(connectPkt.data(), connectPkt.size(), port);
 
-                   for (int f = 0; f < 100 && nm.GetClients().empty(); ++f)
+                   for (int f = 0; f < 100 && nm.GetClientSlots().empty(); ++f)
                    {
                        nm.Update(0.016f);
                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
                    }
 
-                   auto clientsBefore = nm.GetClients().size();
+                   auto clientsBefore = nm.GetClientSlots().size();
                    EXPECT_EQ(static_cast<int>(clientsBefore), 1);
 
                    // Replay the exact same packet many times
@@ -781,7 +788,7 @@ TEST(NetworkStress_ReplayAttack)
 
                    // Replayed connects from the same address are now detected
                    // and ignored — only one client should exist
-                   auto clientsAfter = nm.GetClients().size();
+                   auto clientsAfter = nm.GetClientSlots().size();
                    EXPECT_EQ(static_cast<int>(clientsAfter), static_cast<int>(clientsBefore));
                    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
                });
@@ -826,15 +833,15 @@ TEST(NetworkStress_InterleavedTraffic)
                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
                    }
 
-                   for (int frame = 0; frame < 100 && nm.GetClients().empty(); ++frame)
+                   for (int frame = 0; frame < 100 && nm.GetClientSlots().empty(); ++frame)
                    {
                        nm.Update(0.016f);
                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
                    }
 
                    // Valid clients should have connected; garbage should be rejected
-                   EXPECT_GT(static_cast<int>(nm.GetClients().size()), 0);
-                   EXPECT_LE(static_cast<int>(nm.GetClients().size()), 32);
+                   EXPECT_GT(static_cast<int>(nm.GetClientSlots().size()), 0);
+                   EXPECT_LE(static_cast<int>(nm.GetClientSlots().size()), 32);
                    EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
                });
 }
@@ -1007,12 +1014,12 @@ TEST(NetworkStress_BandwidthTracking)
                    // polls have drained the socket.
                    constexpr auto kArrivalTimeout = std::chrono::seconds(1);
                    const auto connectDeadline = std::chrono::steady_clock::now() + kArrivalTimeout;
-                   while (nm.GetClients().empty() && std::chrono::steady_clock::now() < connectDeadline)
+                   while (nm.GetClientSlots().empty() && std::chrono::steady_clock::now() < connectDeadline)
                    {
                        nm.Update(0.016f);
                        std::this_thread::yield();
                    }
-                   ASSERT_FALSE(nm.GetClients().empty());
+                   ASSERT_FALSE(nm.GetClientSlots().empty());
 
                    auto statsBefore = nm.GetStats();
 

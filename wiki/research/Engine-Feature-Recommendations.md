@@ -10,8 +10,8 @@
 
 A feature study focused on **game-development workflow** — the day-to-day tools content
 creators use — rather than low-level engine architecture (job systems, render graphs,
-RHI). Of 15 feature recommendations, 8 already existed and 7 genuinely new systems were
-implemented.
+RHI). The recommendations included existing capabilities and several genuinely new systems,
+which were implemented.
 
 This complements the earlier rounds of architecture-focused recommendations by shifting
 the lens to what a developer actually touches while building content.
@@ -66,12 +66,11 @@ All seven are present in the current tree (verified 2026-06-08).
 
 Updates / status changes since the original:
 
-- **All 7 new systems still present** at the stated paths — Implemented and stable.
-- **All 8 pre-existing systems still present** — Implemented.
-- Test totals referenced in the original ("3388+ tests") are superseded — the suite has
-  since grown to ~6,000 tests; the per-system test files for these features remain in
+- **All newly added systems still present** at the stated paths — Implemented and stable.
+- **All pre-existing systems still present** — Implemented.
+- Test totals referenced in the original are superseded; use generated metrics for current totals; the per-system test files for these features remain in
   place.
-- No regressions or removals detected for any of the 15 systems.
+- No regressions or removals detected for any of the reviewed systems.
 
 ## Related Pages
 

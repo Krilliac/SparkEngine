@@ -9,10 +9,13 @@
 #include "AssetPipeline.h"
 #include "FBXImporter.h"
 #include "GLTFStaticMeshLoader.h"
+#include "OBJStaticMeshLoader.h"
 #include "../Utils/LogMacros.h"
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
 #include <filesystem>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <tiny_obj_loader.h>
@@ -178,6 +181,17 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
         return E_FAIL;
     }
 
+    // tinyobjloader accepts out-of-range positive face indices with only a
+    // warning; the loop below indexes the attribute arrays directly.
+    {
+        std::string indexError;
+        if (!Spark::Graphics::Detail::ValidateOBJIndices(attrib, shapes, indexError))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OBJ rejected: %s (%s)", path.c_str(), indexError.c_str());
+            return E_FAIL;
+        }
+    }
+
     meshData.vertices.clear();
     meshData.indices.clear();
     meshData.submeshes.clear();
@@ -195,31 +209,29 @@ HRESULT AssetPipeline::LoadOBJ(const std::string& path, MeshAssetData& meshData)
         {
             MeshAssetData::Vertex vertex{};
 
-            if (index.vertex_index >= 0)
-            {
-                vertex.position = {attrib.vertices[3 * index.vertex_index + 0],
-                                   attrib.vertices[3 * index.vertex_index + 1],
-                                   attrib.vertices[3 * index.vertex_index + 2]};
+            // Indices were bounds-checked by ValidateOBJIndices above.
+            const size_t position = static_cast<size_t>(index.vertex_index) * 3;
+            vertex.position = {attrib.vertices[position + 0], attrib.vertices[position + 1],
+                               attrib.vertices[position + 2]};
 
-                // Update bounding box
-                bboxMin.x = std::min(bboxMin.x, vertex.position.x);
-                bboxMin.y = std::min(bboxMin.y, vertex.position.y);
-                bboxMin.z = std::min(bboxMin.z, vertex.position.z);
-                bboxMax.x = std::max(bboxMax.x, vertex.position.x);
-                bboxMax.y = std::max(bboxMax.y, vertex.position.y);
-                bboxMax.z = std::max(bboxMax.z, vertex.position.z);
+            // Update bounding box
+            bboxMin.x = std::min(bboxMin.x, vertex.position.x);
+            bboxMin.y = std::min(bboxMin.y, vertex.position.y);
+            bboxMin.z = std::min(bboxMin.z, vertex.position.z);
+            bboxMax.x = std::max(bboxMax.x, vertex.position.x);
+            bboxMax.y = std::max(bboxMax.y, vertex.position.y);
+            bboxMax.z = std::max(bboxMax.z, vertex.position.z);
+
+            if (index.normal_index >= 0)
+            {
+                const size_t normal = static_cast<size_t>(index.normal_index) * 3;
+                vertex.normal = {attrib.normals[normal + 0], attrib.normals[normal + 1], attrib.normals[normal + 2]};
             }
 
-            if (index.normal_index >= 0 && !attrib.normals.empty())
+            if (index.texcoord_index >= 0)
             {
-                vertex.normal = {attrib.normals[3 * index.normal_index + 0], attrib.normals[3 * index.normal_index + 1],
-                                 attrib.normals[3 * index.normal_index + 2]};
-            }
-
-            if (index.texcoord_index >= 0 && !attrib.texcoords.empty())
-            {
-                vertex.texCoord0 = {attrib.texcoords[2 * index.texcoord_index + 0],
-                                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
+                const size_t texCoord = static_cast<size_t>(index.texcoord_index) * 2;
+                vertex.texCoord0 = {attrib.texcoords[texCoord + 0], 1.0f - attrib.texcoords[texCoord + 1]};
             }
 
             vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};

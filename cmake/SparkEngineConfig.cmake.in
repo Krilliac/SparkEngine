@@ -44,7 +44,15 @@ if(@SPARK_PACKAGE_HAS_CURL@)
 endif()
 
 if(@SPARK_PACKAGE_HAS_SDL2@)
-    find_dependency(SDL2 REQUIRED)
+    if(EXISTS "${PACKAGE_PREFIX_DIR}/lib/cmake/SDL2/SDL2Config.cmake")
+        # The engine was built against the vendored SDL2 this package installs
+        # beside itself. Resolve exactly that one: without a hint a consumer
+        # either fails (no host SDL2 package) or silently links a different
+        # host SDL2 than the one the installed engine ships with.
+        find_dependency(SDL2 REQUIRED CONFIG PATHS "${PACKAGE_PREFIX_DIR}/lib/cmake/SDL2" NO_DEFAULT_PATH)
+    else()
+        find_dependency(SDL2 REQUIRED)
+    endif()
 endif()
 
 if(@SPARK_PACKAGE_HAS_OPENAL@)

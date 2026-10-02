@@ -537,13 +537,15 @@ class CIRegistrationTests(unittest.TestCase):
     def test_all_test_files_exist(self) -> None:
         tests = ROOT / "Tests" / "Tools"
         for name in ("test_ops100_redaction.py", "test_ops100_crash_security.py",
-                      "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py"):
+                      "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py",
+                      "test_ops100_symbolication.py"):
             with self.subTest(name=name):
                 self.assertTrue((tests / name).exists(), f"missing {name}")
 
     def test_all_ops_modules_importable(self) -> None:
         for module_name in ("secret_policy", "redact_secrets", "ops_strict_json",
-                            "fs_security", "validate_crash_package", "validate_telemetry_spool"):
+                            "fs_security", "validate_crash_package", "validate_telemetry_spool",
+                            "symbolicate_crash"):
             with self.subTest(module=module_name):
                 mod = importlib.import_module(module_name)
                 self.assertIsNotNone(mod)
@@ -560,7 +562,8 @@ class CIRegistrationTests(unittest.TestCase):
         build_yml = ROOT / ".github" / "workflows" / "build.yml"
         content = build_yml.read_text(encoding="utf-8")
         for test_file in ("test_ops100_redaction.py", "test_ops100_crash_security.py",
-                          "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py"):
+                          "test_ops100_telemetry_spool.py", "test_ops100_adversarial.py",
+                          "test_ops100_symbolication.py"):
             self.assertIn(test_file, content, f"CI gate must run {test_file}")
 
     def test_ci_gate_covers_tools_ops_path(self) -> None:
@@ -595,12 +598,15 @@ class DocsEvidenceTests(unittest.TestCase):
         scope = evidence["scope"]
         self.assertIn("not runtime", scope.lower().replace("-", " "))
 
-    def test_work_item_status_is_open(self) -> None:
+    def test_work_item_is_unfinished_and_blocking(self) -> None:
+        # Committed OPS-100 work makes the item in-progress; it may not be done until every
+        # acceptance criterion is evidenced by an exact-commit CI run.
         data = json.loads((ROOT / "docs" / "readiness" / "work-items" /
                            "10-security-network-operations.json").read_text(encoding="utf-8"))
         ops = next(item for item in data["workItems"] if item["id"] == "OPS-100")
-        self.assertEqual(ops["status"], "open")
+        self.assertIn(ops["status"], ("open", "in-progress", "blocked"))
         self.assertTrue(ops["blocking"])
+        self.assertTrue(any(entry["state"] != "evidenced" for entry in ops["acceptanceStatus"]))
 
     def test_remaining_blockers_list_is_nonempty(self) -> None:
         data = json.loads((ROOT / "docs" / "readiness" / "work-items" /
@@ -852,6 +858,77 @@ class TelemetrySpoolAdversarialTests(unittest.TestCase):
             "property-value" in checks or "batch-json" in checks,
             f"oversized property must be rejected, got: {checks}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Structured-scan budget exhaustion must fail closed
+# ---------------------------------------------------------------------------
+
+# A GitHub token spelled entirely as JSON backslash-u escapes: the raw-byte pass cannot see it, so only the
+# structured pass can. Index 0 of the root array is popped last by the LIFO walk, after all the padding.
+_ESCAPED_TOKEN = "ghp_" + "A" * 36
+_ESCAPED_TOKEN_JSON = '"' + "".join(f"\\u{ord(ch):04x}" for ch in _ESCAPED_TOKEN) + '"'
+
+
+def _budget_exhausting_json(padding_arrays: int) -> str:
+    padding = "[" + ",".join(["null"] * 4096) + "]"
+    return "[" + _ESCAPED_TOKEN_JSON + "".join("," + padding for _ in range(padding_arrays)) + "]"
+
+
+class StructuredScanBudgetTests(unittest.TestCase):
+    """More nodes than MAX_JSON_REDACT_ENTRIES must never yield a clean verdict (finding 45)."""
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def test_poc_shape_exceeds_budget_but_passes_strict_shape(self) -> None:
+        # Guards the fixture itself: if the budget grows past the padding, the tests below stop testing.
+        text = _budget_exhausting_json(13)
+        self.assertGreater(13 * 4096, policy.MAX_JSON_REDACT_ENTRIES)
+        self.assertNotIn(_ESCAPED_TOKEN, text)
+        strict.loads_strict(
+            text.encode("utf-8"),
+            source="fixture",
+            max_bytes=redactor.MAX_SCAN_FILE_BYTES,
+            max_depth=redactor.MAX_JSON_DEPTH,
+            max_collection_entries=redactor.MAX_JSON_ENTRIES,
+            max_string_bytes=redactor.MAX_JSON_STRING_BYTES,
+        )
+
+    def test_scan_json_values_raises_instead_of_truncating(self) -> None:
+        with self.assertRaises(policy.JsonScanLimitError):
+            policy.scan_json_values(json.loads(_budget_exhausting_json(13)), location="root")
+
+    def test_scan_json_values_raises_on_excess_depth(self) -> None:
+        value: object = _ESCAPED_TOKEN
+        for _ in range(policy.MAX_JSON_REDACT_DEPTH + 2):
+            value = [value]
+        with self.assertRaises(policy.JsonScanLimitError):
+            policy.scan_json_values(value, location="root")
+
+    def test_control_within_budget_still_finds_escaped_token(self) -> None:
+        findings = policy.scan_json_values(json.loads(_budget_exhausting_json(2)), location="root")
+        self.assertIn("github-token", {finding.rule for finding in findings})
+
+    def test_cli_reports_unclean_for_budget_exhausting_artifact(self) -> None:
+        source = self.root / "art.json"
+        source.write_text(_budget_exhausting_json(13), encoding="utf-8")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(io.StringIO()):
+            status = redactor.main(["--json", str(source)])
+        report = json.loads(output.getvalue())
+        self.assertNotEqual(status, 0, "an incomplete inspection must not exit clean")
+        self.assertFalse(report["clean"])
+        self.assertTrue(report["errors"], "budget exhaustion must surface as an error")
+
+    def test_redact_text_finds_escaped_token_past_budget(self) -> None:
+        redacted, findings = policy.redact_text(_budget_exhausting_json(13))
+        self.assertIn("github-token", {finding.rule for finding in findings})
+        self.assertNotIn(_ESCAPED_TOKEN, redacted)
 
 
 # ---------------------------------------------------------------------------

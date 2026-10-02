@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameVisualScript",
+  "author_script": {
+    "path": "tools/blender/author_visualscript_kit.py",
+    "sha256": "4b335cb99f4682f8099464d51a0a911c160a20684b3934092fe1bcf2ea6c759a"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameVisualScript/visualscript_kit.blend",
+    "sha256": "93f3b0add76b6749954c6fe7e4eeba9dc71dc6cb306cf18f7c79f4a050f642df",
+    "scene_sha256": "4956f307a7e2048fc72d8717d4420b3d48b52e4c60374700279e846ee8510489"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "lever",
+      "obj_path": "Assets/Models/VisualScript/Kit/lever.obj",
+      "mtl_path": "Assets/Models/VisualScript/Kit/lever.mtl",
+      "bounds": {
+        "min": [
+          -0.31,
+          0.0,
+          -0.23
+        ],
+        "max": [
+          0.31,
+          1.2,
+          0.318312
+        ]
+      },
+      "triangle_count": 556,
+      "obj_sha256": "beedb0eb92525fcec83e3f624c8bd0507d34453e8f9bac91adfcc40f1cc02a76",
+      "mtl_sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+      "triangle_budget": 600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/VisualScript/Kit/lever_lod1.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/lever_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.313158,
+              0.0,
+              -0.233158
+            ],
+            "max": [
+              0.313158,
+              1.199615,
+              0.319703
+            ]
+          },
+          "triangle_count": 200,
+          "obj_sha256": "6a0905f6da0afef9d27113beaf38c5b167214cc93fa9082704d9cea68d94ee8b",
+          "mtl_sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/VisualScript/Kit/lever_collision.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/lever_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.31,
+              0.0,
+              -0.23
+            ],
+            "max": [
+              0.31,
+              1.2,
+              0.318312
+            ]
+          },
+          "triangle_count": 90,
+          "obj_sha256": "51575aec4e0c560dee9682792f46a579be5c65bbcd1d692b082029f07ecced77",
+          "mtl_sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "sliding_door",
+      "obj_path": "Assets/Models/VisualScript/Kit/sliding_door.obj",
+      "mtl_path": "Assets/Models/VisualScript/Kit/sliding_door.mtl",
+      "bounds": {
+        "min": [
+          -1.0,
+          0.0,
+          -0.15
+        ],
+        "max": [
+          1.0,
+          3.0,
+          0.315
+        ]
+      },
+      "triangle_count": 724,
+      "obj_sha256": "b78f2823e56885ceeaabe7febcb2e8438ab78869711575880e5949580497905e",
+      "mtl_sha256": "22d4ca3352986620018cba3967f1b440684be68be0202321d0d6ada5218fd068",
+      "triangle_budget": 900,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/VisualScript/Kit/sliding_door_lod1.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/sliding_door_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.0,
+              0.0,
+              -0.141962
+            ],
+            "max": [
+              1.0,
+              3.0,
+              0.306667
+            ]
+          },
+          "triangle_count": 260,
+          "obj_sha256": "2b3d9bf9c1651f78025d458c9ca4dae458a7631a371ffe8dbbb217d7777b62f3",
+          "mtl_sha256": "22d4ca3352986620018cba3967f1b440684be68be0202321d0d6ada5218fd068",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/VisualScript/Kit/sliding_door_collision.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/sliding_door_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.0,
+              0.0,
+              -0.15
+            ],
+            "max": [
+              1.0,
+              3.0,
+              0.315
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "974bba2038520d4864cb5c816b2182c5e03320e10e6908a8827698adf05b0768",
+          "mtl_sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "pressure_plate",
+      "obj_path": "Assets/Models/VisualScript/Kit/pressure_plate.obj",
+      "mtl_path": "Assets/Models/VisualScript/Kit/pressure_plate.mtl",
+      "bounds": {
+        "min": [
+          -0.6,
+          0.0,
+          -0.6
+        ],
+        "max": [
+          0.6,
+          0.17,
+          0.6
+        ]
+      },
+      "triangle_count": 328,
+      "obj_sha256": "394b1ff98a7153b3981510cb1071add496b1514fc385d02fca92f31d6f5d57dd",
+      "mtl_sha256": "0ac9cd1e9c1ec5e7166ad6f8a9ba322cc7d426ba14b5b0c47e961bd170f3eed3",
+      "triangle_budget": 400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/VisualScript/Kit/pressure_plate_lod1.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/pressure_plate_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.603158,
+              0.0,
+              -0.603158
+            ],
+            "max": [
+              0.603158,
+              0.17,
+              0.603158
+            ]
+          },
+          "triangle_count": 116,
+          "obj_sha256": "62c6752df3366ce76c6ea89284865c36d552f6d27861ee3511055715933f4319",
+          "mtl_sha256": "0ac9cd1e9c1ec5e7166ad6f8a9ba322cc7d426ba14b5b0c47e961bd170f3eed3",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/VisualScript/Kit/pressure_plate_collision.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/pressure_plate_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.6,
+              0.0,
+              -0.6
+            ],
+            "max": [
+              0.6,
+              0.17,
+              0.6
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "54ea472807680bfa600ecffe81d01b2b6ab4736c3df08dd131c042b3e90cb7de",
+          "mtl_sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "signal_lamp",
+      "obj_path": "Assets/Models/VisualScript/Kit/signal_lamp.obj",
+      "mtl_path": "Assets/Models/VisualScript/Kit/signal_lamp.mtl",
+      "bounds": {
+        "min": [
+          -0.25,
+          0.0,
+          -0.25
+        ],
+        "max": [
+          0.25,
+          2.4,
+          0.25
+        ]
+      },
+      "triangle_count": 504,
+      "obj_sha256": "3bc17ba90c27efc5869a1dca1a02b89e5d7303d8d91298f610d3e3e4310827c6",
+      "mtl_sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+      "triangle_budget": 700,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/VisualScript/Kit/signal_lamp_lod1.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/signal_lamp_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.238462,
+              0.0125,
+              -0.241962
+            ],
+            "max": [
+              0.238462,
+              2.390049,
+              0.241962
+            ]
+          },
+          "triangle_count": 178,
+          "obj_sha256": "a80d5762e25ad230f36893fab51585982bd544f4efa2efe12c04891c722c036f",
+          "mtl_sha256": "cfe4ae697f594a0d35f47e1b8caa5fed4cee7bd693d3fe64ddd0adb940d1fcd1",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/VisualScript/Kit/signal_lamp_collision.obj",
+          "mtl_path": "Assets/Models/VisualScript/Kit/signal_lamp_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.25,
+              0.0,
+              -0.25
+            ],
+            "max": [
+              0.25,
+              2.4,
+              0.25
+            ]
+          },
+          "triangle_count": 72,
+          "obj_sha256": "732ec2fa7f01933a721012fb2572501b9d55adadc6bca3b913f0d1435b8a7091",
+          "mtl_sha256": "c18eacf40c08fceaf2785ec5decc4be6592bb7ee5a99505af18d21c20e7208f7",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

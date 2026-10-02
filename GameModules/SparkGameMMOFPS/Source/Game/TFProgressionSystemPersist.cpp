@@ -48,6 +48,18 @@ namespace Terrafront
             return false;
         }
 
+        // The state file is single-writer (SaveNow read-modify-writes it). Take the lease before anything is
+        // read or migrated, so a second authority for this continent can never report a successful save.
+        std::error_code leaseEc;
+        if (m_saveLease.LockedTarget() != saveFile && !m_saveLease.TryLock(saveFile, leaseEc))
+        {
+            m_persistenceBlocked = true;
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] progression save %s is owned by another authority; writes latched off (%s)",
+                            SavePaths::Utf8ForLog(saveFile).c_str(), leaseEc.message().c_str());
+            return false;
+        }
+
         Spark::Json::Value root;
         std::string detail;
         ReadStatus status = WorldSave::ReadJson(saveFile, continent.key, continent.name, false, root, detail);
@@ -210,14 +222,26 @@ namespace Terrafront
         // spawn) is not skipped. Character-bound records only; charId==0 rows
         // (bots, standalone sessions) are session-scoped by design.
         if (m_ctx->db)
+        {
             characterWritesOk = m_meta.PersistAllDirty(*m_ctx->db) && characterWritesOk;
+            // TF-120: a disconnected character whose parked meta is now committed (or was superseded by
+            // another authority) has nothing left here, so it may enter world on another continent.
+            for (const uint64_t charId : m_meta.TakeResolvedParked())
+            {
+                if (m_ctx->characters && !m_ctx->characters->LeaveWorld(charId))
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "[TF] character %llu stays resident here: releasing it after its parked meta "
+                                    "was resolved failed",
+                                    static_cast<unsigned long long>(charId));
+            }
+        }
         if (!characterWritesOk)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] progression save failed: character database flush failed");
             return false;
         }
 
-        if (!WorldSave::WriteJson(saveFile, root, detail))
+        if (!WorldSave::WriteJson(m_saveLease, saveFile, root, detail))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] progression save failed for %s (%s)",
                             SavePaths::Utf8ForLog(saveFile).c_str(), detail.c_str());

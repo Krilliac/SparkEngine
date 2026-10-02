@@ -1,0 +1,469 @@
+/**
+ * @file VisualScriptDemoWorld.cpp
+ * @brief Fail-fast script validation, entity spawn and rollback for the visual-script demo.
+ */
+
+#include "VisualScriptDemoWorld.h"
+
+#include "VisualScriptDemoRuntime.h"
+#include "Engine/ECS/Components.h"
+#include "Engine/ECS/Components/GameplayComponents.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
+#include "Spark/ModuleLog.h"
+
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace Spark::VisualScriptDemo
+{
+    namespace
+    {
+        /**
+         * The clip list a script entity is authored with. The playAnimation() binding switches an
+         * existing AnimationController to a listed clip and never creates one, so an entity whose
+         * script requests a clip must be spawned with its controller.
+         */
+        AnimationController MakeAnimationController(std::vector<std::string> clips)
+        {
+            AnimationController controller;
+            controller.defaultAnimation = clips.front();
+            controller.currentAnimation = clips.front();
+            controller.loop = true;
+            controller.availableAnimations = std::move(clips);
+            return controller;
+        }
+
+        /// 1-based line number of a byte offset inside a script source.
+        size_t LineOfOffset(std::string_view source, size_t offset)
+        {
+            return 1 + static_cast<size_t>(std::count(source.begin(), source.begin() + offset, '\n'));
+        }
+
+        /**
+         * Per-entity modules are compiled from the file source with only the
+         * selfEntity declaration rewritten in place, so module line numbers map
+         * 1:1 onto the file. Rewrite "<module>:<line>" locations to name the file.
+         */
+        std::string LocateInFile(std::string diagnostic, const std::string& moduleName, const std::string& filePath)
+        {
+            const std::string moduleLocation = moduleName + ":";
+            const std::string fileLocation = filePath + ":";
+            for (size_t at = diagnostic.find(moduleLocation); at != std::string::npos;
+                 at = diagnostic.find(moduleLocation, at + fileLocation.size()))
+            {
+                diagnostic.replace(at, moduleLocation.size(), fileLocation);
+            }
+            return diagnostic;
+        }
+    } // namespace
+
+    DemoWorld::DemoWorld(World& world, AngelScriptEngine& scriptEngine, Spark::IEngineContext* context)
+        : m_world(world), m_scriptEngine(scriptEngine), m_context(context)
+    {
+    }
+
+    DemoWorld::~DemoWorld()
+    {
+        DestroyEntities();
+    }
+
+    void DemoWorld::Fail(const std::string& message)
+    {
+        m_lastError = message;
+        Spark::ModuleLog::Error(m_context, "[VisualScript] {}", message);
+    }
+
+    bool DemoWorld::LoadScripts(std::span<const std::filesystem::path> searchPaths)
+    {
+        m_lastError.clear();
+        m_scriptSources.clear();
+        m_scriptRoot.clear();
+
+        const auto root = SelectCompleteScriptRoot(searchPaths,
+                                                   [](const std::filesystem::path& path)
+                                                   {
+                                                       std::error_code error;
+                                                       return std::filesystem::is_regular_file(path, error);
+                                                   });
+        if (!root)
+        {
+            // Name, for every searched root, the manifest files it lacks so the operator can see
+            // where the engine looked and what to restore.
+            std::string missing;
+            for (const auto& candidate : searchPaths)
+            {
+                std::error_code error;
+                if (!std::filesystem::is_directory(candidate, error))
+                {
+                    missing += (missing.empty() ? "" : "; ") + candidate.generic_string() + " (no such directory)";
+                    continue;
+                }
+                for (const auto& asset : ScriptManifest)
+                {
+                    const auto path = candidate / std::filesystem::path(asset.fileName);
+                    if (!std::filesystem::is_regular_file(path, error))
+                        missing += (missing.empty() ? "" : "; ") + path.generic_string();
+                }
+            }
+            Fail("Could not find a complete five-script asset set; missing: " + (missing.empty() ? "?" : missing));
+            return false;
+        }
+
+        std::unordered_map<std::string, std::string> sources;
+        if (!ReadAndValidateScripts(*root, sources))
+        {
+            return false;
+        }
+
+        m_scriptRoot = *root;
+        m_scriptSources = std::move(sources);
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Validated 5 visual scripts from {}", m_scriptRoot.string());
+        return true;
+    }
+
+    bool DemoWorld::ReadAndValidateScripts(const std::filesystem::path& root,
+                                           std::unordered_map<std::string, std::string>& sources)
+    {
+        for (const auto& asset : ScriptManifest)
+        {
+            const auto path = root / std::filesystem::path(asset.fileName);
+            std::ifstream stream(path, std::ios::binary);
+            std::ostringstream source;
+            if (stream)
+                source << stream.rdbuf();
+            if (!stream || source.str().empty())
+            {
+                Fail("Failed to read: " + path.generic_string());
+                return false;
+            }
+
+            // CompileScriptFile names the section after the file path, so the
+            // engine diagnostic already reads "<path>:<line>:<column>". The
+            // script builder normalizes that path to forward slashes, so every
+            // diagnostic here uses generic_string() to name files the same way
+            // on Windows and POSIX. The module (named after the file stem) is a
+            // validation build only: entities run per-entity modules.
+            if (!m_scriptEngine.CompileScriptFile(path.string()))
+            {
+                Fail("Failed to compile: " + path.generic_string() + " — " + m_scriptEngine.GetLastError());
+                return false;
+            }
+            const std::string className(asset.className);
+            if (!m_scriptEngine.HasScriptClass(path.stem().string(), className))
+            {
+                Fail(path.generic_string() + ": does not declare class " + className);
+                return false;
+            }
+
+            const std::string text = source.str();
+            const size_t first = text.find(SelfEntityDeclaration);
+            if (first == std::string::npos)
+            {
+                Fail(path.generic_string() + ": " + className + " must declare '" + std::string(SelfEntityDeclaration) +
+                     "' exactly once (found none)");
+                return false;
+            }
+            const size_t second = text.find(SelfEntityDeclaration, first + SelfEntityDeclaration.size());
+            if (second != std::string::npos)
+            {
+                Fail(path.generic_string() + ":" + std::to_string(LineOfOffset(text, second)) + ": " + className +
+                     " declares '" + std::string(SelfEntityDeclaration) + "' again (first at line " +
+                     std::to_string(LineOfOffset(text, first)) + ")");
+                return false;
+            }
+
+            sources.emplace(className, text);
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Validated: {}", className);
+        }
+        return true;
+    }
+
+    bool DemoWorld::ReloadScripts()
+    {
+        m_lastError.clear();
+        m_reloadSummary.clear();
+        if (m_scriptRoot.empty())
+        {
+            Fail("No scripts to reload; LoadScripts() must succeed first");
+            return false;
+        }
+
+        // All five files are re-read and validated before any live module is
+        // touched: a file saved mid-edit with a compile error, a renamed class or
+        // a lost selfEntity placeholder rejects the reload and changes nothing.
+        std::unordered_map<std::string, std::string> sources;
+        if (!ReadAndValidateScripts(m_scriptRoot, sources))
+        {
+            return false;
+        }
+        m_scriptSources = std::move(sources); // a later Spawn() (vs_restart) binds the new sources too
+
+        struct ClassTotals
+        {
+            size_t instances = 0;
+            size_t carried = 0;
+            size_t defaulted = 0;
+            size_t dropped = 0;
+        };
+        std::unordered_map<std::string, ClassTotals> totals;
+        std::vector<std::string> notes;
+        std::string failures;
+
+        for (EntityID entity : m_entities)
+        {
+            const auto* script = m_world.GetRegistry().valid(entity) ? m_world.GetComponent<Script>(entity) : nullptr;
+            if (!script)
+            {
+                continue;
+            }
+            // Copied: the reload re-attaches the instance and must not read through the component.
+            const std::string className = script->className;
+            const std::string moduleName = script->moduleName;
+            const std::string diagnosticPath = (m_scriptRoot / (className + ".as")).generic_string();
+
+            // Validation guarantees exactly one placeholder; a failed bind means validation and
+            // SelfEntityDeclaration drifted apart, so report it instead of dereferencing an empty optional.
+            const auto bound = BindSelfEntity(m_scriptSources.at(className), static_cast<uint32_t>(entity));
+            if (!bound)
+            {
+                failures += (failures.empty() ? "" : "; ") + className + " on entity " +
+                            std::to_string(static_cast<uint32_t>(entity)) + " lost its selfEntity placeholder";
+                continue;
+            }
+            const bool reloaded = m_scriptEngine.HotReloadModuleFromSource(moduleName, *bound);
+            const auto& report = m_scriptEngine.GetLastHotReloadReport();
+            auto& classTotals = totals[className];
+            classTotals.instances += report.instances;
+            classTotals.carried += report.carried;
+            classTotals.defaulted += report.defaulted;
+            classTotals.dropped += report.dropped;
+            notes.insert(notes.end(), report.notes.begin(), report.notes.end()); // "<module>::<Class>.<field>: ..."
+            if (!reloaded)
+            {
+                // Only a new constructor that faults can get here (engine rule R8): that entity is left without
+                // a script and the others keep reloading.
+                failures += (failures.empty() ? "" : "; ") + className + " on entity " +
+                            std::to_string(static_cast<uint32_t>(entity)) + " — " +
+                            LocateInFile(m_scriptEngine.GetLastError(), moduleName, diagnosticPath);
+            }
+        }
+
+        std::ostringstream summary;
+        summary << "Reloaded visual scripts from " << m_scriptRoot.generic_string();
+        for (const auto& asset : ScriptManifest)
+        {
+            const auto& classTotals = totals[std::string(asset.className)];
+            summary << "\n  " << asset.className << ": " << classTotals.instances << " instance(s), fields carried "
+                    << classTotals.carried << ", defaulted " << classTotals.defaulted << ", dropped "
+                    << classTotals.dropped;
+        }
+        for (const auto& note : notes)
+        {
+            summary << "\n  " << note;
+        }
+        m_reloadSummary = summary.str();
+
+        if (!failures.empty())
+        {
+            Fail("Hot reload left entities without a script: " + failures);
+            return false;
+        }
+        Spark::ModuleLog::Info(m_context, "[VisualScript] {}", m_reloadSummary);
+        return true;
+    }
+
+    bool DemoWorld::Spawn()
+    {
+        DestroyEntities();
+        m_lastError.clear();
+        AngelScriptEngine::BindWorld(&m_world);
+
+        // Returns false after rolling back everything this call created.
+        const auto rollBack = [this]()
+        {
+            DestroyEntities();
+            if (AngelScriptEngine::GetBoundWorld() == &m_world)
+                AngelScriptEngine::BindWorld(nullptr);
+            return false;
+        };
+
+        // --- Player: "PlayerController" handles WASD movement, sprint, jump, health ---
+        {
+            auto player = m_world.CreateEntity("VS_Player");
+            m_world.AddComponent<Transform>(player, Transform{{0.0f, 1.0f, 0.0f}, {0, 0, 0}, {1, 1, 1}});
+            m_world.AddComponent<HealthComponent>(player, HealthComponent{100.0f, 100.0f});
+            m_world.AddComponent<MeshRenderer>(player).meshPath = "Assets/Models/character.obj";
+            if (!AttachScript(player, "PlayerController"))
+                return rollBack();
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned Player with PlayerController script");
+        }
+
+        // --- Collectibles: "Collectible" handles spin, proximity pickup and score increment ---
+        for (int i = 0; i < 5; i++)
+        {
+            const float x = -10.0f + i * 5.0f;
+            const float z = 8.0f + (i % 2) * 4.0f;
+
+            auto coin = m_world.CreateEntity("VS_Coin_" + std::to_string(i));
+            m_world.AddComponent<Transform>(coin, Transform{{x, 0.5f, z}, {0, 0, 0}, {0.5f, 0.5f, 0.5f}});
+            auto& coinMesh = m_world.AddComponent<MeshRenderer>(coin);
+            coinMesh.meshPath = "Assets/Models/Sphere.obj";
+            coinMesh.emissive = 1.0f;
+            m_world.AddComponent<AnimationController>(coin, MakeAnimationController({"idle", "collect_burst"}));
+            if (!AttachScript(coin, "Collectible"))
+                return rollBack();
+        }
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned 5 collectible items with Collectible script");
+
+        // --- Enemies: "EnemyPatrol" handles waypoint patrol, detection, chase, attack ---
+        for (int i = 0; i < 3; i++)
+        {
+            const float x = 15.0f + i * 10.0f;
+
+            auto enemy = m_world.CreateEntity("VS_Enemy_" + std::to_string(i));
+            m_world.AddComponent<Transform>(enemy, Transform{{x, 0.0f, 5.0f}, {0, 0, 0}, {1, 1, 1}});
+            m_world.AddComponent<HealthComponent>(enemy, HealthComponent{50.0f, 50.0f});
+            m_world.AddComponent<MeshRenderer>(enemy).meshPath = "Assets/Models/Pyramid.obj";
+            m_world.AddComponent<AnimationController>(enemy, MakeAnimationController({"idle", "walk", "attack_swing"}));
+            if (!AttachScript(enemy, "EnemyPatrol"))
+                return rollBack();
+        }
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned 3 enemies with EnemyPatrol script");
+
+        // --- Game manager: "GameManager" tracks score (in HealthComponent::health) and win/lose ---
+        {
+            auto manager = m_world.CreateEntity("VS_GameManager");
+            m_world.AddComponent<HealthComponent>(manager, HealthComponent{0.0f, 500.0f});
+            if (!AttachScript(manager, "GameManager"))
+                return rollBack();
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned GameManager with scoring/win-condition script");
+        }
+
+        // --- Healing pickup: "HealthPickup" handles proximity healing and respawn cooldown ---
+        {
+            auto heal = m_world.CreateEntity("VS_HealthPack");
+            m_world.AddComponent<Transform>(heal, Transform{{-5.0f, 0.3f, -5.0f}, {0, 0, 0}, {0.7f, 0.7f, 0.7f}});
+            auto& healthMesh = m_world.AddComponent<MeshRenderer>(heal);
+            healthMesh.meshPath = "Assets/Models/Cube.obj";
+            healthMesh.emissive = 0.5f;
+            if (!AttachScript(heal, "HealthPickup"))
+                return rollBack();
+            Spark::ModuleLog::Info(m_context, "[VisualScript] Spawned HealthPack with HealthPickup script");
+        }
+
+        if (m_entities.size() != ExpectedEntityCount)
+        {
+            Fail("Spawned " + std::to_string(m_entities.size()) + " script entities; the manifest requires " +
+                 std::to_string(ExpectedEntityCount));
+            return rollBack();
+        }
+
+        PlaceKitProps();
+        Spark::ModuleLog::Info(m_context, "[VisualScript] All game entities spawned — 11 entities, 5 script types, "
+                                          "0 lines of C++ game code");
+        return true;
+    }
+
+    void DemoWorld::PlaceKitProps()
+    {
+        // Blueprint-lab dressing from tools/blender/author_visualscript_kit.py. The props carry no script, so they
+        // are named VSKit_* (outside the VS_ script-entity contract) and tracked apart from m_entities. Kit props
+        // face +Z; a 180-degree yaw turns the lever, door and lamps toward the spawn, since the player walks +Z.
+        struct KitPlacement
+        {
+            const char* name;
+            const char* meshPath;
+            DirectX::XMFLOAT3 position;
+            float yawDegrees;
+        };
+        static constexpr KitPlacement placements[] = {
+            {"VSKit_SpawnPlate", "Assets/Models/VisualScript/Kit/pressure_plate.obj", {0.0f, 0.0f, 0.0f}, 0.0f},
+            {"VSKit_SpawnLever", "Assets/Models/VisualScript/Kit/lever.obj", {2.0f, 0.0f, 2.5f}, 180.0f},
+            {"VSKit_ExitDoor", "Assets/Models/VisualScript/Kit/sliding_door.obj", {0.0f, 0.0f, 17.0f}, 180.0f},
+            {"VSKit_ExitLamp_0", "Assets/Models/VisualScript/Kit/signal_lamp.obj", {-1.9f, 0.0f, 17.0f}, 180.0f},
+            {"VSKit_ExitLamp_1", "Assets/Models/VisualScript/Kit/signal_lamp.obj", {1.9f, 0.0f, 17.0f}, 180.0f},
+        };
+
+        for (const auto& placement : placements)
+        {
+            auto prop = m_world.CreateEntity(placement.name);
+            m_kitProps.push_back(prop);
+            m_world.AddComponent<Transform>(
+                prop, Transform{placement.position, {0.0f, placement.yawDegrees, 0.0f}, {1.0f, 1.0f, 1.0f}});
+            m_world.AddComponent<MeshRenderer>(prop).meshPath = placement.meshPath;
+        }
+        Spark::ModuleLog::Info(m_context, "[VisualScript] Placed {} blueprint-lab kit props", m_kitProps.size());
+    }
+
+    bool DemoWorld::AttachScript(EntityID entity, const std::string& className)
+    {
+        // Track the entity before any fallible operation so a failed partial
+        // load is rolled back by DestroyEntities().
+        m_entities.push_back(entity);
+
+        const std::filesystem::path scriptFile = m_scriptRoot / (className + ".as");
+        const std::string filePath = scriptFile.string();
+        const std::string diagnosticPath = scriptFile.generic_string();
+        const auto source = m_scriptSources.find(className);
+        if (source == m_scriptSources.end())
+        {
+            Fail("Missing validated source for " + className + " (" + diagnosticPath +
+                 "); LoadScripts() must succeed before Spawn()");
+            return false;
+        }
+
+        const uint32_t entityValue = static_cast<uint32_t>(entity);
+        const auto boundSource = BindSelfEntity(source->second, entityValue);
+        if (!boundSource)
+        {
+            Fail(diagnosticPath + ": " + className + " must declare '" + std::string(SelfEntityDeclaration) +
+                 "' exactly once");
+            return false;
+        }
+
+        const std::string moduleName = className + "_Entity_" + std::to_string(entityValue);
+        if (!m_scriptEngine.CompileScriptFromString(*boundSource, moduleName))
+        {
+            Fail("Failed to bind " + className + " to entity " + std::to_string(entityValue) + " — " +
+                 LocateInFile(m_scriptEngine.GetLastError(), moduleName, diagnosticPath));
+            return false;
+        }
+
+        Script script;
+        script.scriptPath = filePath;
+        script.className = className;
+        script.moduleName = moduleName;
+        m_world.AddComponent<Script>(entity, script);
+
+        if (!m_scriptEngine.AttachScript(entity, className, moduleName))
+        {
+            Fail("Failed to attach " + className + " to entity " + std::to_string(entityValue) + " — " +
+                 LocateInFile(m_scriptEngine.GetLastError(), moduleName, diagnosticPath));
+            return false;
+        }
+
+        return true;
+    }
+
+    void DemoWorld::DestroyEntities()
+    {
+        for (auto it = m_entities.rbegin(); it != m_entities.rend(); ++it)
+        {
+            m_scriptEngine.DetachScript(*it);
+            if (m_world.GetRegistry().valid(*it))
+                m_world.DestroyEntity(*it);
+        }
+        m_entities.clear();
+
+        for (auto it = m_kitProps.rbegin(); it != m_kitProps.rend(); ++it)
+        {
+            if (m_world.GetRegistry().valid(*it))
+                m_world.DestroyEntity(*it);
+        }
+        m_kitProps.clear();
+    }
+} // namespace Spark::VisualScriptDemo

@@ -25,8 +25,8 @@
  *
  * Save files use a custom, uncompressed binary layout (extension `.spark_save`):
  * - A 4-byte `"SPRK"` magic followed by a `uint32` format version.
- * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields;
- *   v2 adds `screenshotPath` after `playerClass`).
+ * - A length-prefixed newline-delimited **metadata** text block (SaveMetadata fields,
+ *   with `screenshotPath` after `playerClass`).
  * - A `uint32` entity count, then each **entity** as a length-prefixed name plus its
  *   components (each a length-prefixed type name and a set of length-prefixed
  *   key/value property strings).
@@ -43,8 +43,15 @@
  *
  * A serialized `Transform` carries a `parent` property holding the parent's index in
  * the saved entity list, or `-1` for a root. Loading rebuilds the parent/children
- * edges through `World::SetParent`. Saves written before v3 had no way to express an
- * edge, so migration marks every one of their transforms as a root.
+ * edges through `World::SetParent`.
+ *
+ * ## Compatibility window (OD-03)
+ *
+ * Readers accept exactly the current version (N = kCurrentSaveVersion) and the previous
+ * one (N-1 = kOldestSupportedSaveVersion) and migrate N-1 in memory; writers emit N only.
+ * Anything older or newer fails closed with a diagnostic naming the file's version and
+ * the supported window. Game modules version their own custom-state blocks with
+ * ModulePersistedSchema (public SDK header Spark/PersistedSchema.h), which applies the same N/N-1 rule.
  *
  * ## Component registration
  *
@@ -190,6 +197,7 @@ namespace Spark
         {
             SerializeFunc serialize;
             DeserializeFunc deserialize;
+            std::string ownerId; ///< Registering module image; empty for the engine
         };
 
         using RegistrationMap = std::unordered_map<std::string, Registration>;
@@ -217,6 +225,31 @@ namespace Spark
         };
 
         /**
+         * @brief Attribute registrations and name-based removals to one module image.
+         *
+         * While a scope is active, Register() records its owner and Unregister()
+         * removes only that owner's entry. A hot-reload replacement registers
+         * the same type names before the outgoing image tears down, so the
+         * outgoing entry is kept underneath the replacement rather than being
+         * overwritten, and the outgoing teardown can never remove the
+         * replacement's callbacks.
+         * @note Game-thread only.
+         */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(ComponentSerializerRegistry& registry, std::string ownerId);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            ComponentSerializerRegistry& m_registry;
+            std::string m_previousOwner;
+        };
+
+        /**
      * @brief Access the singleton instance of the registry.
      *
      * Constructed on first call (Meyer's singleton). Safe to call from any thread
@@ -229,7 +262,10 @@ namespace Spark
         /**
      * @brief Register a (de)serializer pair for a component type.
      *
-     * Overwrites any existing registration for `typeName`. Call this once per
+     * Outside a ScopedRegistrationOwner this overwrites any existing registration
+     * for `typeName`. Inside one, an existing entry of a different owner (another
+     * module image or the engine's built-in) is shadowed instead and becomes
+     * active again when the scope owner's entry is removed. Call this once per
      * component type during engine/game initialization, before any Save or Load
      * operations.
      *
@@ -248,6 +284,9 @@ namespace Spark
          * otherwise point into an unmapped module image during later use or
          * process-static destruction.
          *
+         * Inside a ScopedRegistrationOwner only the scope owner's entry is
+         * removed; a shadowed entry of another owner becomes active again.
+         *
          * @param typeName  Component type name to remove.
          * @return          @c true when an entry was removed; @c false when no
          *                  entry with that name existed.
@@ -255,6 +294,21 @@ namespace Spark
          * @note [game thread] Call during single-threaded module teardown.
          */
         bool Unregister(const std::string& typeName);
+
+        /**
+         * @brief Remove every active or shadowed registration owned by @p ownerId.
+         *
+         * Called while the owning module image is still mapped, so each removed
+         * callback is destroyed before its code can be unloaded. An empty token
+         * (the engine's own) removes nothing.
+         *
+         * @return Number of type names from which an owned entry was removed.
+         * @note [game thread]
+         */
+        size_t UnregisterByOwner(const std::string& ownerId);
+
+        /** @brief Owner of the active registration; empty for engine entries and unknown names. */
+        std::string GetSerializerOwner(const std::string& typeName) const;
 
         /** @note Game-thread only. Remove and return one exact registration. */
         RegistrationHandle TakeRegistration(const std::string& typeName);
@@ -334,6 +388,12 @@ namespace Spark
      * Keyed by the same `typeName` string used in SerializedComponent::typeName.
      */
         RegistrationMap m_serializers;
+
+        /// Owned registrations hidden by a later owner's Register(), newest last.
+        std::unordered_map<std::string, std::vector<Registration>> m_shadowedSerializers;
+        std::string m_registrationOwner;
+
+        bool RemoveOwnedRegistration(const std::string& typeName, const std::string& ownerId);
     };
 
     // ============================================================================
@@ -445,7 +505,10 @@ namespace Spark
      * and writes the binary result to `<saveDirectory>/<slotName>.spark_save`.
      * The save directory is created if it does not exist. If a file already exists
      * for this slot and validates successfully, it is retained as
-     * `<slotName>.spark_save.bak` and then replaced atomically. An unreadable primary
+     * `<slotName>.spark_save.bak` and then replaced atomically. Both the retained copy and
+     * the slot are staged in a `.tmp` file and renamed into place, so a process killed at
+     * any point leaves each file at its previous or its new complete contents (rehearsed
+     * by the AtomicWrite_ SIGKILL tests). An unreadable primary
      * never overwrites an existing last-good copy. A primary written by a newer build
      * (SPRK header declaring a format newer than kCurrentSaveVersion) is never
      * overwritten: the save fails with an actionable error and both files stay intact.
@@ -562,11 +625,15 @@ namespace Spark
      *
      * Removes `<saveDirectory>/<slotName>.spark_save` and its retained last-good copy
      * from the file system, so a deleted slot cannot be recovered by a later Load().
-     * A no-op if the file does not exist (returns `true`). Returns `false` only if the
-     * file exists but could not be deleted (e.g. permission denied).
+     * The `.tmp` staging copies an interrupted save can leave behind are removed too
+     * (best effort). A no-op if the file does not exist (returns `true`). Returns `false` if the
+     * primary or the retained copy exists but could not be deleted (e.g. permission denied, a
+     * sharing lock). When only the retained copy survives, the slot is still recoverable by
+     * Load() and listed by SaveExists()/GetSaveSlots(), so that partial delete is a failure
+     * the caller can retry, never a success.
      *
      * @param slotName  Slot to delete.
-     * @return          `true` if the file was deleted (or didn't exist); `false` on error.
+     * @return          `true` if neither file remains; `false` on error.
      */
         bool DeleteSave(const std::string& slotName);
 
@@ -663,12 +730,12 @@ namespace Spark
         /**
          * @brief Migrate an in-memory save snapshot to kCurrentSaveVersion.
          *
-         * The supported compatibility window is exactly
-         * kOldestSupportedSaveVersion..kCurrentSaveVersion. The v1-to-v2 step adds
-         * the previously unpersisted screenshot field with its defined empty value; the
-         * v2-to-v3 step marks every serialized Transform as a hierarchy root, which is
-         * the only edge a pre-v3 save could represent. Calling this function again after
-         * success is a no-op. Unsupported versions return false without changing @p data.
+         * The supported compatibility window is exactly N-1..N
+         * (kOldestSupportedSaveVersion..kCurrentSaveVersion, owner decision OD-03). The
+         * v3-to-v4 step changes only the on-disk CRC-32 envelope, so the semantic payload
+         * carries over unchanged. Calling this function again after success is a no-op.
+         * Unsupported versions (older than N-1 or newer than N) return false without
+         * changing @p data.
          *
          * @param data Parsed or manually constructed save data to migrate in place.
          * @return true when data is current after the call; false when its source

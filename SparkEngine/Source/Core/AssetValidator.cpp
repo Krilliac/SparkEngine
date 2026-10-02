@@ -1,13 +1,16 @@
 #include "AssetValidator.h"
 
+#include "Utils/FileUtils.h"
 #include "Utils/SparkConsole.h"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
 #include <format>
 #include <iomanip>
 #include <sstream>
+#include <string_view>
 
 namespace Spark
 {
@@ -18,6 +21,21 @@ namespace Spark
             std::ostringstream oss;
             oss << std::fixed << std::setprecision(1) << value;
             return oss.str();
+        }
+
+        /// Report text is UTF-8. path::string() would go through the Windows ANSI code
+        /// page and throw std::system_error for a name it cannot spell, which used to
+        /// abort a whole ValidateDirectory() scan on the first such asset.
+        std::string DisplayPath(const std::filesystem::path& path)
+        {
+            return FileUtils::TryPathToUtf8(path).value_or("<unrepresentable path>");
+        }
+
+        /// Characters, not bytes: a UTF-8 lead byte starts each code point.
+        size_t CountCodePoints(std::string_view utf8)
+        {
+            return static_cast<size_t>(std::count_if(utf8.begin(), utf8.end(), [](char c)
+                                                     { return (static_cast<unsigned char>(c) & 0xC0u) != 0x80u; }));
         }
     } // namespace
 
@@ -30,7 +48,7 @@ namespace Spark
         std::error_code ec;
         if (!fs::exists(path, ec))
         {
-            report.results.push_back({ValidationSeverity::Error, path.string(), "Material file does not exist",
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(path), "Material file does not exist",
                                       "Verify the asset path", 1001});
             return;
         }
@@ -38,7 +56,7 @@ namespace Spark
         auto fileSize = fs::file_size(path, ec);
         if (fileSize == 0)
         {
-            report.results.push_back({ValidationSeverity::Warning, path.string(), "Material file is empty",
+            report.results.push_back({ValidationSeverity::Warning, DisplayPath(path), "Material file is empty",
                                       "Add material properties or remove file", 1002});
             return;
         }
@@ -46,12 +64,14 @@ namespace Spark
         fs::path parentDir = path.parent_path();
         for (const auto& ext : {".png", ".jpg", ".dds", ".tga", ".bmp"})
         {
-            fs::path texturePath = parentDir / (path.stem().string() + "_diffuse" + ext);
+            fs::path texturePath = parentDir / path.stem();
+            texturePath += "_diffuse";
+            texturePath += ext;
             if (fs::exists(texturePath, ec))
                 return;
         }
 
-        report.results.push_back({ValidationSeverity::Info, path.string(),
+        report.results.push_back({ValidationSeverity::Info, DisplayPath(path),
                                   "No matching diffuse texture found for material",
                                   "Ensure textures follow naming convention: <material>_diffuse.<ext>", 1003});
     }
@@ -70,7 +90,7 @@ namespace Spark
         std::error_code ec;
         if (!fs::exists(path, ec))
         {
-            report.results.push_back({ValidationSeverity::Error, path.string(), "Scene file does not exist",
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(path), "Scene file does not exist",
                                       "Remove stale reference or restore file", 2001});
             return;
         }
@@ -78,13 +98,13 @@ namespace Spark
         auto fileSize = fs::file_size(path, ec);
         if (fileSize == 0)
         {
-            report.results.push_back({ValidationSeverity::Error, path.string(), "Scene file is empty (0 bytes)",
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(path), "Scene file is empty (0 bytes)",
                                       "Re-save scene from editor", 2002});
         }
         else if (fileSize > uintmax_t{100} * 1024 * 1024)
         {
             report.results.push_back(
-                {ValidationSeverity::Warning, path.string(),
+                {ValidationSeverity::Warning, DisplayPath(path),
                  "Scene file is very large (" + FormatOneDecimal(fileSize / (1024.0 * 1024.0)) + " MB)",
                  "Consider splitting into streaming sub-scenes", 2003});
         }
@@ -102,7 +122,7 @@ namespace Spark
         bool isShader = false;
         for (auto ext : kShaderExts)
         {
-            if (path.extension().string() == ext)
+            if (path.extension() == std::filesystem::path(ext))
             {
                 isShader = true;
                 break;
@@ -115,7 +135,7 @@ namespace Spark
         std::error_code ec;
         if (!fs::exists(path, ec))
         {
-            report.results.push_back({ValidationSeverity::Error, path.string(), "Shader source file does not exist",
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(path), "Shader source file does not exist",
                                       "Restore file or update references", 3001});
             return;
         }
@@ -123,12 +143,12 @@ namespace Spark
         auto fileSize = fs::file_size(path, ec);
         if (fileSize == 0)
         {
-            report.results.push_back({ValidationSeverity::Error, path.string(), "Shader source file is empty",
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(path), "Shader source file is empty",
                                       "Add shader code or remove file", 3002});
         }
         else if (fileSize < 10)
         {
-            report.results.push_back({ValidationSeverity::Warning, path.string(),
+            report.results.push_back({ValidationSeverity::Warning, DisplayPath(path),
                                       "Shader source file is suspiciously small",
                                       "Verify shader contains valid entry points", 3003});
         }
@@ -146,26 +166,26 @@ namespace Spark
 
         if (!fs::exists(path, ec))
         {
-            report.results.push_back({ValidationSeverity::Error, path.string(), "Asset file does not exist",
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(path), "Asset file does not exist",
                                       "Remove stale reference", 4001});
             return;
         }
 
-        std::string filename = path.filename().string();
-        if (filename.size() > 200)
+        const size_t filenameLength = CountCodePoints(DisplayPath(path.filename()));
+        if (filenameLength > 200)
         {
             report.results.push_back(
-                {ValidationSeverity::Warning, path.string(),
-                 "Filename is " + std::to_string(filename.size()) + " characters (max recommended: 200)",
+                {ValidationSeverity::Warning, DisplayPath(path),
+                 "Filename is " + std::to_string(filenameLength) + " characters (max recommended: 200)",
                  "Shorten the filename for cross-platform compatibility", 4002});
         }
 
-        std::string fullPath = path.string();
+        const std::string fullPath = DisplayPath(path);
         for (char c : fullPath)
         {
             if (c == '#' || c == '%' || c == '&' || c == '{' || c == '}')
             {
-                report.results.push_back({ValidationSeverity::Warning, path.string(),
+                report.results.push_back({ValidationSeverity::Warning, DisplayPath(path),
                                           std::string("Path contains problematic character '") + c + "'",
                                           "Rename to use only alphanumeric, dash, underscore, and dot", 4003});
                 break;
@@ -175,7 +195,7 @@ namespace Spark
         auto fileSize = fs::file_size(path, ec);
         if (!ec && fileSize == 0)
         {
-            report.results.push_back({ValidationSeverity::Warning, path.string(), "File is empty (0 bytes)",
+            report.results.push_back({ValidationSeverity::Warning, DisplayPath(path), "File is empty (0 bytes)",
                                       "Populate or remove empty asset", 4004});
         }
     }
@@ -273,7 +293,7 @@ namespace Spark
         std::error_code ec;
         if (!fs::exists(dir, ec) || !fs::is_directory(dir, ec))
         {
-            report.results.push_back({ValidationSeverity::Error, dir.string(),
+            report.results.push_back({ValidationSeverity::Error, DisplayPath(dir),
                                       "Directory does not exist or is not a directory", "Verify the path and try again",
                                       9001});
             report.failCount = 1;

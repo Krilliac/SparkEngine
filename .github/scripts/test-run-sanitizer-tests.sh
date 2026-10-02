@@ -237,6 +237,11 @@ XML
     plain-sanitizer-prose)
         write_clean "ThreadSanitizer instrumentation enabled"
         ;;
+    prose-aborted)
+        # Lower-case "aborted:" matches the verifier's case-insensitive \bAborted\b;
+        # the runner witness must agree rather than turn prose into a verification failure.
+        write_clean "Hot-reload aborted: recompilation failed"
+        ;;
     report-signature)
         write_clean
         printf 'ERROR: AddressSanitizer: report-only heap-buffer-overflow\n' >> "$report"
@@ -892,6 +897,11 @@ expect_contains "$CASE_DIR/metadata.json" '"classification": "incomplete-run"' \
     "a suite that died mid-run is not reported as a completed sanitizer finding"
 run_case plain-sanitizer-prose
 expect_status 0 "$CASE_STATUS" "plain sanitizer prose is not a finding"
+run_case prose-aborted
+[[ "$CASE_STATUS" -ne 70 ]] && pass "prose-aborted is not a verification failure" \
+    || fail "prose-aborted is not a verification failure (runner and verifier crash scanners disagree)"
+expect_contains "$CASE_DIR/metadata.json" '"crash": true' "prose-aborted crash text is recorded"
+expect_contains "$CASE_DIR/metadata.json" '"crash": 0' "prose-aborted crash scanner agrees with the verifier"
 run_case runtime
 expect_status 1 "$CASE_STATUS" "parseable private ASan runtime log overrides exit zero"
 expect_contains "$CASE_DIR/metadata.json" '"runtimeEvidence": true' "runtime evidence recorded"
@@ -1317,14 +1327,16 @@ done
 [[ "$(grep -Fc 'bash .github/scripts/run-sanitizer-tests.sh' "$WORKFLOW")" -eq 3 ]] && \
     pass "exactly three sanitizer runner invocations" || fail "sanitizer runner invocation count"
 grep -Fq -- '--warn-is-error --shuffle 123' "$WORKFLOW" && pass "workflow hardens flaky warnings and shuffle seed" || fail "workflow warn/shuffle contract"
-for sanitizer in asan tsan; do
+# TSan needs ~2,400-2,700 s on the 4-vCPU hosted runner (owner decision 2026-10-01).
+for bounds in asan:90:1800 tsan:120:3000; do
+    IFS=: read -r sanitizer minutes seconds <<< "$bounds"
     section="$(awk -v job="build-linux-${sanitizer}" '
         $0 == "  " job ":" { found = 1 }
         found && $0 ~ /^  [A-Za-z0-9_-]+:$/ && $0 != "  " job ":" { exit }
         found { print }
     ' "$WORKFLOW")"
-    [[ "$section" == *"timeout-minutes: 90"* && "$section" == *"--timeout-seconds 900"* ]] && \
-        pass "${sanitizer} uses the required 90-minute/900-second bounds" || \
+    [[ "$section" == *"timeout-minutes: ${minutes}"* && "$section" == *"--timeout-seconds ${seconds}"* ]] && \
+        pass "${sanitizer} uses the required ${minutes}-minute/${seconds}-second bounds" || \
         fail "${sanitizer} timeout policy"
 done
 msan_section="$(awk '

@@ -302,7 +302,7 @@ Systems are processed by `SystemManager::UpdateAll()` in registration order. The
 3. AIUpdateSystem         — Perception, behavior trees, pathfinding, movement
 4. AudioUpdateSystem      — Update 3D audio source positions from transforms
 5. ParticleUpdateSystem   — Spawn, simulate, and cull particles
-6. LifecycleSystem        — Process death events, active/inactive toggling
+6. LifecycleSystem        — Latch new deaths (HealthComponent::deathProcessed)
 7. DecalSystem            — Manage decal lifetimes and fade-out
 8. ProjectileSystem       — Advance projectile positions, check expiration
 9. RenderSystem           — Submit draw calls to the GPU
@@ -317,7 +317,7 @@ Systems are processed by `SystemManager::UpdateAll()` in registration order. The
 | `AnimationUpdateSystem` | `AnimationUpdateSystem()` | Evaluates animation state machines, blends layers, solves IK |
 | `AIUpdateSystem` | `AIUpdateSystem()` | Ticks behavior trees, updates perception and pathfinding |
 | `AudioUpdateSystem` | `AudioUpdateSystem(AudioEngine*)` | Syncs 3D audio positions from transforms |
-| `LifecycleSystem` | `LifecycleSystem()` | Monitors health/death, entity activation state |
+| `LifecycleSystem` | `LifecycleSystem()` | Latches each new death once (`HealthComponent::deathProcessed`) |
 | `ParticleUpdateSystem` | `ParticleUpdateSystem()` | Advances particle simulation |
 | `DecalSystem` | `DecalSystem()` | Manages decal lifetimes and fade-out |
 | `ProjectileSystem` | `ProjectileSystem()` | Advances projectile movement and expiration |
@@ -337,19 +337,25 @@ It operates in two phases:
 1. **Pre-simulate** -- Write kinematic body positions from ECS Transform to Jolt
 2. **Post-simulate** -- Read dynamic body positions from Jolt back to ECS Transform
 
-### LifecycleSystem Callbacks
+### LifecycleSystem Death Latch
+
+`LifecycleSystem` has no death callback. Each frame it sets `HealthComponent::deathProcessed` on every entity whose
+`isDead` flag is set and whose death it has not seen yet. Invariant checks (`InvalidStateDetector`, the MMO module's
+authority check) use the latch to tell a fresh death from one already observed.
+
+Death *handling* (loot, score, despawn) belongs to the gameplay system that applied the lethal damage, and that system
+publishes `Spark::EntityKilledEvent` on the EventBus (`AbilitySystem` does so for ability kills). Subscribe to the
+event instead of the ECS system:
 
 ```cpp
-auto* lifecycle = mgr.AddSystem<LifecycleSystem>();
-lifecycle->SetDeathCallback([&](EntityID id) {
-    // Drop loot, play death sound, award score
-    SpawnLoot(id);
-    audio.PlaySound("death");
-    world.DestroyEntity(id);
+eventBus->Subscribe<Spark::EntityKilledEvent>([&](const Spark::EntityKilledEvent& e) {
+    SpawnLoot(e.entityId);
 });
 ```
 
-The callback fires once per entity when `HealthComponent::isDead == true`. The entity is NOT automatically destroyed; the callback is responsible for that.
+Code that brings an entity back must clear both flags, via `HealthComponent::Revive()` or, for an authoritative
+health write such as a network snapshot or respawn, `HealthComponent::SetHealth()`. Otherwise the next death is never
+latched and `deathProcessed=true, isDead=false` trips `InvalidStateDetector`.
 
 ### DecalSystem and ProjectileSystem Callbacks
 
@@ -484,6 +490,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `Config` | `SparkEngine/Source/Engine/ECS/Components/AIComponents.h` |
 | `ConstantForceComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
 | `CoverPointComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
+| `Cue` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `DecalComponent` | `SparkEngine/Source/Engine/ECS/Components/FPSComponents.h` |
 | `DestructibleComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
 | `DialogueTriggerComponent` | `SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h` |
@@ -517,6 +524,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `ReflectionProbeComponent` | `SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h` |
 | `RigidBody2D` | `SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h` |
 | `RigidBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/PhysicsComponents.h` |
+| `ScriptAudioCues` | `SparkEngine/Source/Engine/ECS/Components/AudioComponents.h` |
 | `Script` | `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` |
 | `SkyboxComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
 | `SoftBodyComponent` | `SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h` |
@@ -608,6 +616,7 @@ The EnTT registry is **not thread-safe**. All World operations must be performed
 | `RenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ReplaySystem` | `SparkEngine/Source/Engine/Replay/ReplaySystem.h` |
 | `SaveSystem` | `SparkEngine/Source/Engine/SaveSystem/SaveSystem.h` |
+| `ScriptRuntimeSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `ShaderVariantSystem` | `SparkEngine/Source/Graphics/ShaderVariantSystem.h` |
 | `SplineFollowerSystem` | `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` |
 | `Sprite2DRenderSystem` | `SparkEngine/Source/Engine/ECS/Systems/Systems2D.h` |

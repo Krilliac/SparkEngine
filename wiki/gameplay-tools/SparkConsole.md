@@ -132,10 +132,9 @@ private:
     // Command handling
     void ExecuteCommand(const std::string& cmdLine);
     void RegisterDefaultCommands();
-    bool ShouldForwardToEngine(const std::string& command);
 
-    // History management
-    void AddToHistory(const std::string& cmd);
+    // History management (stores ConsoleHistoryPolicy::EntryFor(typed, trusted))
+    void AddToHistory(const std::string& typedLine, const std::string& resolvedLine);
     std::string GetPreviousCommand();    // Up arrow
     std::string GetNextCommand();        // Down arrow
 
@@ -340,9 +339,16 @@ CommandParser::ParseCommandLine()
         Display result in console
 ```
 
-### ShouldForwardToEngine()
+### Engine forwarding
 
-Commands are forwarded to the engine when they are not registered in the local `CommandRegistry`. Built-in local commands include: `help`, `clear`, `history`, `alias`, `exit`.
+In engine-pipe mode every typed line except `exit`/`quit` is forwarded to the engine, where
+`ConsoleProcessManager::DispatchConsoleCommand` runs it through `SimpleConsole` (the registry every
+subsystem and game module uses; the manager itself keeps only `quit`, `assert_mode`, `assert_test` and
+`crash_test`). In standalone and `--batch` mode there is no engine on stdout, so only console-local
+commands run. The former hard-coded 20-name forwarding allowlist was removed (SEC2).
+
+When the engine closes its end of the pipe (shutdown or crash), the reader thread stops the console, so a
+pipe child never outlives its engine.
 
 ---
 
@@ -369,6 +375,9 @@ std::string m_tabPrefix;
 - **Up Arrow**: Navigate to previous commands
 - **Down Arrow**: Navigate to next commands
 - History is stored in `m_commandHistory` (vector of strings)
+- Arguments are kept only for console-local commands other than `alias`. Any other line keeps just the
+  typed command name plus `<arguments-redacted>`: the engine's sensitive-command metadata (for example
+  `tf_login`, `mmo_login`) never reaches SparkConsole, so it fails closed (`ConsoleHistoryPolicy.h`)
 - Protected by `m_historyMutex` for thread safety
 - Maximum history depth is unlimited within a session
 

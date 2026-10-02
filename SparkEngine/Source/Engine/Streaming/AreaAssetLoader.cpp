@@ -94,6 +94,12 @@ namespace Spark::Streaming
         return m_manifests.contains(areaId);
     }
 
+    const SceneManifest* AreaAssetLoader::GetManifest(AreaID areaId) const
+    {
+        const auto it = m_manifests.find(areaId);
+        return it == m_manifests.end() ? nullptr : &it->second;
+    }
+
     // ========================================================================
     // Loading Operations
     // ========================================================================

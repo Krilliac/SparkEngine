@@ -1,0 +1,25 @@
+{
+  "layout": {
+    "name": "Words",
+    "description": "",
+    "version": 1,
+    "panels": [
+      {
+        "name": "Hierarchy",
+        "displayName": "Hierarchy",
+        "dock": ,
+        "sizeX": "wide",
+        "sizeY": 200,
+        "posX": 0,
+        "posY": 0,
+        "visible": true,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": x,
+        "parentDock": ""
+      }
+    ]
+  }
+}

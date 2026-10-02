@@ -1,0 +1,12 @@
+diff --git a/Tests/TestMathUtils.cpp b/Tests/TestMathUtils.cpp
+index 0a09734b8..5fe71c124 100644
+--- a/Tests/TestMathUtils.cpp
++++ b/Tests/TestMathUtils.cpp
+@@ -85,6 +85,6 @@ TEST(InverseLerp_Basic)
+ 
+ TEST(InverseLerp_AtBounds)
+ {
+-    EXPECT_NEAR(TestMath::InverseLerp(0.0f, 10.0f, 0.0f), 0.0f, 0.001f);
++    EXPECT_NEAR(TestMath::InverseLerp(0.0f, 10.0f, 0.0f),   0.0f,   0.001f);
+     EXPECT_NEAR(TestMath::InverseLerp(0.0f, 10.0f, 10.0f), 1.0f, 0.001f);
+ }

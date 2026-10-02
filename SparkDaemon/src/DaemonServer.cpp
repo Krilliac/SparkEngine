@@ -106,7 +106,9 @@ namespace Spark::Daemon
 
         void UnlinkOwnedEndpoint(const std::string& endpoint, dev_t device, ino_t inode)
         {
-            struct stat current{};
+            struct stat current
+            {
+            };
             if (::lstat(endpoint.c_str(), &current) == 0 && S_ISSOCK(current.st_mode) && current.st_dev == device &&
                 current.st_ino == inode)
                 (void)::unlink(endpoint.c_str());
@@ -118,8 +120,8 @@ namespace Spark::Daemon
             OwnerOnlySecurity()
             {
                 constexpr wchar_t kDescriptor[] = L"D:P(A;;GA;;;OW)(A;;GA;;;SY)(A;;GA;;;BA)";
-                if (::ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                        kDescriptor, SDDL_REVISION_1, &m_descriptor, nullptr))
+                if (::ConvertStringSecurityDescriptorToSecurityDescriptorW(kDescriptor, SDDL_REVISION_1, &m_descriptor,
+                                                                           nullptr))
                 {
                     m_attributes.nLength = sizeof(m_attributes);
                     m_attributes.lpSecurityDescriptor = m_descriptor;
@@ -144,51 +146,23 @@ namespace Spark::Daemon
             SECURITY_ATTRIBUTES m_attributes{};
         };
 
-        bool QueryTokenUser(HANDLE token, std::vector<uint8_t>& storage, TOKEN_USER*& user) noexcept
-        {
-            DWORD required = 0;
-            (void)::GetTokenInformation(token, TokenUser, nullptr, 0, &required);
-            if (required == 0 || ::GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-                return false;
-            storage.resize(required);
-            if (!::GetTokenInformation(token, TokenUser, storage.data(), required, &required))
-                return false;
-            user = reinterpret_cast<TOKEN_USER*>(storage.data());
-            return true;
-        }
-
         bool IsSameUserPeer(HANDLE pipe) noexcept
         {
             ULONG clientProcessId = 0;
-            if (!::GetNamedPipeClientProcessId(pipe, &clientProcessId) || clientProcessId == 0)
-                return false;
+            return ::GetNamedPipeClientProcessId(pipe, &clientProcessId) != FALSE &&
+                   ProcessRunsAsCurrentUser(clientProcessId);
+        }
 
-            HANDLE clientProcess = ::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, clientProcessId);
-            if (!clientProcess)
-                return false;
-            HANDLE clientToken = nullptr;
-            HANDLE serverToken = nullptr;
-            const bool openedClient = ::OpenProcessToken(clientProcess, TOKEN_QUERY, &clientToken) != FALSE;
-            const bool openedServer = ::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &serverToken) != FALSE;
-            ::CloseHandle(clientProcess);
-            if (!openedClient || !openedServer)
-            {
-                if (clientToken)
-                    ::CloseHandle(clientToken);
-                if (serverToken)
-                    ::CloseHandle(serverToken);
-                return false;
-            }
-
-            std::vector<uint8_t> clientStorage;
-            std::vector<uint8_t> serverStorage;
-            TOKEN_USER* clientUser = nullptr;
-            TOKEN_USER* serverUser = nullptr;
-            const bool queried = QueryTokenUser(clientToken, clientStorage, clientUser) &&
-                                 QueryTokenUser(serverToken, serverStorage, serverUser);
-            ::CloseHandle(clientToken);
-            ::CloseHandle(serverToken);
-            return queried && ::EqualSid(clientUser->User.Sid, serverUser->User.Sid) != FALSE;
+        HANDLE CreateListeningInstance(const std::wstring& pipeName, bool firstInstance,
+                                       SECURITY_ATTRIBUTES* security) noexcept
+        {
+            // FILE_FLAG_FIRST_PIPE_INSTANCE fails the create when any process,
+            // in any session, already holds an instance of this name, so the
+            // daemon never silently joins a pipe another account squatted.
+            const DWORD openMode = PIPE_ACCESS_DUPLEX | (firstInstance ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0u);
+            return ::CreateNamedPipeW(pipeName.c_str(), openMode,
+                                      PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                                      PIPE_UNLIMITED_INSTANCES, 64u * 1024u, 64u * 1024u, 0, security);
         }
 
         std::wstring EndpointMutexName(std::wstring_view endpoint)
@@ -259,14 +233,13 @@ namespace Spark::Daemon
             return Unexpected<std::string>("DaemonServer: pipe endpoint is empty");
         const std::wstring pipeName = NormalizePipeName(socketPath);
         if (pipeName.empty())
-            return Unexpected<std::string>("DaemonServer: pipe endpoint is not valid UTF-8");
+            return Unexpected<std::string>("DaemonServer: pipe endpoint is not valid UTF-8 or cannot be resolved");
 
         OwnerOnlySecurity endpointSecurity;
         if (!endpointSecurity.IsValid())
             return Unexpected<std::string>("DaemonServer: could not create owner-only endpoint security descriptor");
 
-        HANDLE endpointMutex =
-            ::CreateMutexW(endpointSecurity.Attributes(), TRUE, EndpointMutexName(pipeName).c_str());
+        HANDLE endpointMutex = ::CreateMutexW(endpointSecurity.Attributes(), TRUE, EndpointMutexName(pipeName).c_str());
         if (!endpointMutex)
             return Unexpected<std::string>("DaemonServer: could not create endpoint ownership mutex");
         bool ownsEndpoint = ::GetLastError() != ERROR_ALREADY_EXISTS;
@@ -285,24 +258,35 @@ namespace Spark::Daemon
         m_runStartedAt = std::chrono::steady_clock::now();
         std::string fatalError;
 
-        while (!m_shouldStop.load(std::memory_order_acquire))
+        // The server holds at least one instance of the name for its whole run:
+        // the first is created with FILE_FLAG_FIRST_PIPE_INSTANCE, the next
+        // listener is created before a connected instance is handed to a worker,
+        // and rejected peers are disconnected from the same instance instead of
+        // closing it. The name is therefore never released for another account
+        // to re-create while the daemon runs.
+        HANDLE listening = INVALID_HANDLE_VALUE;
+        if (!m_shouldStop.load(std::memory_order_acquire))
         {
-            HANDLE pipe =
-                ::CreateNamedPipeW(pipeName.c_str(), PIPE_ACCESS_DUPLEX,
-                                   PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                                   PIPE_UNLIMITED_INSTANCES, 64u * 1024u, 64u * 1024u, 0,
-                                   endpointSecurity.Attributes());
-            if (pipe == INVALID_HANDLE_VALUE)
+            listening = CreateListeningInstance(pipeName, /*firstInstance*/ true, endpointSecurity.Attributes());
+            if (listening == INVALID_HANDLE_VALUE)
             {
-                fatalError = "DaemonServer: CreateNamedPipeW failed (error " + std::to_string(::GetLastError()) + ")";
-                break;
+                const DWORD error = ::GetLastError();
+                fatalError = error == ERROR_ACCESS_DENIED
+                                 ? "DaemonServer: pipe name is already in use by another process (error 5)"
+                                 : "DaemonServer: CreateNamedPipeW failed (error " + std::to_string(error) + ")";
             }
-            m_listenFd = FromNative(pipe);
+            else
+            {
+                m_listenFd = FromNative(listening);
+            }
+        }
 
+        while (listening != INVALID_HANDLE_VALUE && !m_shouldStop.load(std::memory_order_acquire))
+        {
             bool connected = false;
             while (!m_shouldStop.load(std::memory_order_acquire))
             {
-                if (::ConnectNamedPipe(pipe, nullptr))
+                if (::ConnectNamedPipe(listening, nullptr))
                 {
                     connected = true;
                     break;
@@ -313,7 +297,13 @@ namespace Spark::Daemon
                     connected = true;
                     break;
                 }
-                if (error != ERROR_PIPE_LISTENING && error != ERROR_NO_DATA)
+                if (error == ERROR_NO_DATA)
+                {
+                    // A client connected and already closed; reset the instance
+                    // so it can listen again.
+                    ::DisconnectNamedPipe(listening);
+                }
+                else if (error != ERROR_PIPE_LISTENING)
                 {
                     fatalError = "DaemonServer: ConnectNamedPipe failed (error " + std::to_string(error) + ")";
                     break;
@@ -322,18 +312,12 @@ namespace Spark::Daemon
                 ReapFinishedWorkers();
             }
 
-            m_listenFd = FromNative(kInvalidSocket);
+            // Stop or a fatal error; teardown closes the listener via m_listenFd.
             if (!connected)
+                break;
+            if (!IsSameUserPeer(listening))
             {
-                ::CloseHandle(pipe);
-                if (!fatalError.empty())
-                    break;
-                continue;
-            }
-            if (!IsSameUserPeer(pipe))
-            {
-                ::DisconnectNamedPipe(pipe);
-                ::CloseHandle(pipe);
+                ::DisconnectNamedPipe(listening);
                 continue;
             }
 
@@ -341,13 +325,24 @@ namespace Spark::Daemon
             std::lock_guard lock(m_threadsMutex);
             if (m_clientWorkers.size() >= m_maximumClientWorkers)
             {
-                ::DisconnectNamedPipe(pipe);
-                ::CloseHandle(pipe);
+                ::DisconnectNamedPipe(listening);
                 continue;
             }
+
+            HANDLE next = CreateListeningInstance(pipeName, /*firstInstance*/ false, endpointSecurity.Attributes());
+            if (next == INVALID_HANDLE_VALUE)
+            {
+                fatalError = "DaemonServer: CreateNamedPipeW failed (error " + std::to_string(::GetLastError()) + ")";
+                break;
+            }
+            HANDLE accepted = listening;
+            listening = next;
+            m_listenFd = FromNative(listening);
+
             auto& worker = m_clientWorkers.emplace_back();
             std::atomic<bool>& doneFlag = worker.done;
-            worker.thread = std::thread([this, pipe, &doneFlag] { HandleConnection(FromNative(pipe), doneFlag); });
+            worker.thread =
+                std::thread([this, accepted, &doneFlag] { HandleConnection(FromNative(accepted), doneFlag); });
         }
 
         std::list<ClientWorker> toJoin;
@@ -383,7 +378,9 @@ namespace Spark::Daemon
         if (socketPath.size() >= sizeof(sockaddr_un{}.sun_path))
             return Unexpected<std::string>("DaemonServer: socket path exceeds sockaddr_un capacity");
 
-        struct stat existing{};
+        struct stat existing
+        {
+        };
         if (::lstat(socketPath.c_str(), &existing) == 0)
         {
             if (!S_ISSOCK(existing.st_mode) || existing.st_uid != ::geteuid())
@@ -413,7 +410,9 @@ namespace Spark::Daemon
             return Unexpected<std::string>("DaemonServer: bind(" + socketPath + ") failed: " + err);
         }
 
-        struct stat boundEndpoint{};
+        struct stat boundEndpoint
+        {
+        };
         if (::lstat(socketPath.c_str(), &boundEndpoint) != 0 || !S_ISSOCK(boundEndpoint.st_mode) ||
             boundEndpoint.st_uid != ::geteuid())
         {

@@ -11,7 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No post-candidate changes are listed yet.
+### Changed
+- Saves and SceneFile (dialect B) scenes follow owner decision OD-03: read the current and previous schema version, write only the current one. `.spark_save` readers accept v3 and v4 (v1/v2 files now fail closed with a versioned diagnostic); SceneFile JSON reads v2 and migrates v1 in memory from real v1 fixtures, while v1 raw object-image component payloads and any other version fail closed with a versioned error. Reflected-World scenes (editor File > Open/Save and `-scene`, `Spark::LoadWorld`) still read only version 1 and the legacy editor `sceneVersion: 1` dialect, but every rejection now reports an actionable reason: the version field, the file's value and the supported read/write window, or the offending entity, id, parent, component or field. `LoadWorld` reports both the primary and `.bak` reasons, and the editor and `-scene` launch paths print them.
+- `STRIP_DEBUG_SYMBOLS` (both Shipping presets) now keeps private symbols out of the runtime package instead of never producing them (BLD-100). MSVC images always link with `/DEBUG`, with `/PDBALTPATH:%_PDB%` outside Debug, so each carries its PDB GUID and age. ELF images link with a SHA-1 GNU build-id; with the option on everything compiles with `-g`, and the shipped image targets are split at link time (`cmake/SparkSplitDebugLink.cmake`) into a stripped image with a `.gnu_debuglink` and `<image>.debug`; SparkTests and other unshipped images link with `-g0` and `--strip-all` instead. The PDBs and `.debug` files install only into the new `symbols` component, which no CPack package includes. `tools/shipping_symbol_manifest.py` maps every staged image to exactly one symbol file by build ID and fails on missing, duplicate, mismatched or leaked symbols; `build-windows-shipping` runs it and uploads the symbols as a separate artifact.
+
+### Added
+- `IEngineContext::GetStateValidation()` and `Spark/IStateValidation.h` (public SDK v9, MOD-295): the host implements `Spark::IStateValidation` (`EngineSdkStateValidation`, forwarding to the host `InvalidStateDetector`), and all nine prototype modules that register invalid-state rules now add and remove them through it instead of the private `Utils/InvalidStateDetector.h`. `StateViolationSeverity`, `StateViolation` and `StateCheckFn` moved into the SDK unchanged. The SparkGame showcase and SparkGameVisualScript also register console commands through `IConsole` and log through `Spark::ModuleLog` instead of `Utils/SparkConsole.h`/`Utils/LogMacros.h`; the module-content inventory drops 15 engine-private header entries.
+- `IEngineContext::GetLogger()` and `Spark/ModuleLog.h` (public SDK, MOD-295): the host implements `Spark::ILogger` (`EngineSdkLogger`, routed to the engine Logger under `LogCategory::Game`), and modules log with `Spark::ModuleLog::Info/Warn/Error/Debug(context, "{}", ...)` instead of the private `Utils/SparkConsole.h` and `Utils/LogMacros.h`. The appended virtual makes `SPARK_SDK_VERSION` 6 and `EngineContextVirtualCount` 89; game modules must be rebuilt against the v6 SDK. SparkGameRTS and SparkGamePlatformer log through it.
+- `Spark/PersistedSchema.h` (public SDK): `ModulePersistedSchema` lets each game module declare the schema version of its save custom state, with the same read-N-and-N-1 rule; SparkGameFPS declares and uses it for its local profile.
+- `tools/release_notes.py` (REL-190) renders the stable release body from the `stable-v1` profile in `docs/site/readiness.json`, this file's single `## [X.Y.Z]` section (a `### Migration` subsection becomes the notes' Migrations section), the frozen `SHA256SUMS`, and fixed checksum, signature, SBOM and provenance verification instructions. It fails closed on a missing or duplicated version section, an empty or inconsistent `SHA256SUMS`, or a missing SBOM or signature control asset; nightly releases keep their short body. No stable release has been published with it.
+
+### Removed
+- `EngineContext::InitializeAll`/`ShutdownAll` and the R1.2 dependency registry that only they used (`RegisterSubsystem`, `DependsOn`, `SubsystemEntry`, `GetInitOrder`, `GetSubsystemCount`, `HasLifecycleFailure`, `EngineSetup::RegisterCoreSubsystems`), per owner decision OD-01: `EngineRuntime` is the single owner of subsystem lifecycle and `LifecycleCompositionRoot` orders it. The two `IEngineContext` virtuals went with them, so `SPARK_SDK_VERSION` is 5 and `EngineContextVirtualCount` is 88; game modules must be rebuilt against the v5 SDK (v4 modules are refused by the exact-match ABI check). The `engine_subsystems` console command no longer prints a registered-entry count, and the `LifecyclePartialInit` CTest (which drove only the removed registry) is gone; `LifecycleCompositionRootFailure` covers partial-init rollback.
 
 ## [0.9.0] - 2026-09-23
 
@@ -182,7 +193,7 @@ signing, and independent acceptance evidence are complete.
 - AI system (behavior trees, NavMesh, perception, formations, steering)
 - Animation system (skeletal, blend spaces, IK, retargeting)
 - UDP networking with entity replication, prediction, lag compensation
-- EnTT-based ECS with 75 component types and 25 systems
+- EnTT-based ECS component and system framework
 - Dear ImGui editor with 59 panels and collaborative editing
 - Audio system (XAudio2, OpenAL, null backend)
 - AngelScript + Lua scripting with hot-reload

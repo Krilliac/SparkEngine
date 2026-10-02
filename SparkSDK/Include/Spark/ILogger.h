@@ -1,41 +1,27 @@
 /**
  * @file ILogger.h
- * @brief Logging interface for game modules
+ * @brief Logging interface game modules reach through IEngineContext::GetLogger()
  *
- * Provides a lightweight logging API that game modules can use without
- * depending on the engine's internal Logger or SimpleConsole classes.
- * The engine's Logger.h defines the concrete LogLevel and LogCategory
- * enums; this SDK header provides an abstract ILogger interface that
- * modules use to emit log messages.
+ * The host implements ILogger (EngineSdkLogger) and routes every message to its
+ * log sinks: the engine log file, stderr, and the console. A module logs through
+ * the context it received in OnLoad instead of including the engine-private
+ * Utils/Logger.h, Utils/LogMacros.h or Utils/SparkConsole.h. Those are DLL-local
+ * copies inside a module, so the host never sees what they record.
  *
  * ## Usage
  * @code
- *   // Include the engine's Logger.h for LogLevel/LogCategory enums
- *   #include "Utils/Logger.h"
+ *   #include <Spark/ModuleLog.h>
  *
- *   // Or use SimpleConsole for simpler logging:
- *   #include "Utils/SparkConsole.h"
- *   auto& console = Spark::SimpleConsole::GetInstance();
- *   console.LogInfo("Player spawned");
- *   console.LogWarning("Low ammo");
- *   console.LogError("Asset not found");
+ *   void MyModule::OnLoad(Spark::IEngineContext* context)
+ *   {
+ *       Spark::ModuleLog::Info(context, "Player spawned at wave {}", wave);
+ *       Spark::ModuleLog::Warn(context, "Low ammo: {}", ammo);
+ *       Spark::ModuleLog::Error(context, "Asset not found: {}", path);
+ *   }
  * @endcode
  *
- * ## Log levels (defined in Utils/Logger.h)
- * Trace, Debug, Info, Warn, Error, Fatal
- *
- * ## Log categories (defined in Utils/Logger.h)
- * Core, Graphics, Physics, Audio, AI, Animation, ECS, Network,
- * Input, Scripting, Scene, Save, Cinematic, Procedural, Editor, Game
- *
- * ## Structured logging with SPARK_LOG macros
- * @code
- *   #include "Utils/Logger.h"
- *   SPARK_LOG_INFO(Spark::LogCategory::Game, "Player {} scored {} points", name, points);
- *   SPARK_LOG_WARN(Spark::LogCategory::Game, "Low health: {}", health);
- * @endcode
- *
- * The engine routes messages to all active sinks (console, file, editor).
+ * The helpers format with std::format and do nothing when the context or its
+ * logger is null. Call ILogger directly only for preformatted text.
  */
 
 #pragma once
@@ -46,9 +32,9 @@ namespace Spark
     /**
      * @brief Abstract logging interface for game modules
      *
-     * Provides a minimal logging surface that can be implemented by
-     * the engine's concrete Logger. Game modules that want richer
-     * logging should include Utils/Logger.h directly.
+     * Implemented by the host; obtained from IEngineContext::GetLogger(). Every
+     * method takes a null-terminated message the implementation copies before
+     * returning, and must be safe to call from any thread.
      */
     class ILogger
     {

@@ -97,8 +97,9 @@ class EnemyBehavior
 - Every script class must be declared at the top level of the `.as` file.
 - Method names are case-sensitive and must match the lifecycle signatures exactly.
 - Member variables are instance-scoped and persist between ordinary `Update()`
-  calls. Hot reload does not preserve per-instance script state; constructors
-  run again for recreated instances.
+  calls. Hot reload recreates each instance with its constructor and then
+  carries over fields whose name and type are unchanged; see
+  [Hot-reload state rules](#hot-reload-state-rules).
 - Scripts can define additional methods beyond the lifecycle callbacks; they are callable from other scripts or from C++ via the AngelScript context API.
 
 ## Lifecycle Callbacks
@@ -107,17 +108,76 @@ class EnemyBehavior
 |----------|-----------|------------|-------|
 | `Start` | `void Start()` | Once, when the script is first attached | Initialization logic goes here |
 | `Update` | `void Update(float dt)` | Every frame, with delta time in seconds | Main game loop tick |
-| `OnCollision` | `void OnCollision(uint entityId)` | When the entity collides with another | Requires a collider component |
+| `OnCollision` | `void OnCollision(EntityID other)` | When the entity's physics body starts touching another solid body | Requires a `RigidBodyComponent`; `other` is the other entity |
+| `OnTriggerEnter` | `void OnTriggerEnter(EntityID other)` | When an overlap with a sensor body (`RigidBodyComponent::isTrigger`) or an authored `TriggerVolumeComponent` begins | Delivered to both sides: the entering entity gets the trigger, the trigger's own script gets the entering entity |
+| `OnTriggerExit` | `void OnTriggerExit(EntityID other)` | When that overlap ends | Same participants as `OnTriggerEnter`; a body removed from the world gets no exit, and a body asleep inside the sensor has not exited |
 
 ### Execution Order
 
-Lifecycle callbacks are dispatched during the **Scripting** phase of the ECS update loop. The overall engine execution order is:
+The engine-owned ScriptRuntimeSystem dispatches enabled ECS Script components in the **Gameplay (Lifecycle)** phase. GameplayLifecycleShared creates the canonical phase manager and ticks it once per frame. The overall engine execution order is:
 
 ```
-Physics -> Animation -> AI -> Scripting -> Audio -> Lifecycle -> Render
+Physics -> Animation -> AI -> Audio -> Lifecycle -> Render
 ```
 
-Within the Scripting phase, `Start()` is called before `Update()` for any newly attached scripts. `OnCollision()` is dispatched after the Physics phase delivers collision events.
+Within the Gameplay (Lifecycle) phase, the engine-owned `ScriptRuntimeSystem`
+calls `Start()` before `Update()` for newly attached scripts. Game modules only
+attach or detach scripts; they do not call lifecycle callbacks themselves.
+
+### Contact dispatch (engine-owned)
+
+Contact callbacks do not need game-module glue. The script engine is a core service:
+every host's core init (`InitLinuxCoreSubsystems`, and `InitEngineContext` /
+`InitHeadlessEngineContext` on Windows) calls
+`Spark::Core::Lifecycle::InitializeScriptingServiceImpl()` before any game module's
+`OnLoad`, including under `-minimal-init`, so a module can compile and attach scripts
+from `OnLoad`. The gameplay stage (`InitScriptingAndPlatformSystems`) calls it again as
+an idempotent no-op, and `ShutdownEngineAfterPreflight` releases the engine after every
+module `OnUnload`. Initialization calls `AngelScriptEngine::ConnectEventBus(ctx->GetEventBus())`,
+which subscribes the script runtime to the events `PhysicsSystem` publishes after every step:
+
+| EventBus event | Published by | Script callback (both participants) |
+|----------------|--------------|-------------------------------------|
+| `Spark::CollisionEvent{entityA, entityB}` | `PhysicsSystem` on each new solid contact | `OnCollision(other)`: `entityA` first, then `entityB` |
+| `Spark::TriggerEnterEvent{entityId, triggerId}` | `PhysicsSystem` once per sensor-overlap start; the `TriggerVolumeComponent` bridge for authored volumes | `OnTriggerEnter(other)`: entering entity first, then the trigger |
+| `Spark::TriggerExitEvent{entityId, triggerId}` | Same sources, once when the overlap ends | `OnTriggerExit(other)` |
+
+Rules:
+
+- `PhysicsSystem` publishes trigger events whether or not a `SetTriggerCallback()` is installed, and
+  `triggerId` is always the sensor body's entity (not Jolt's pair order).
+- The callbacks run synchronously on the thread that steps physics. By the module stepping contract
+  that is the game thread, the same thread every other script call must use.
+- An entity with no script, no matching method, or a faulted script is skipped. When a World is
+  bound, an entity id that the World no longer holds is also skipped, because destroying an entity
+  does not remove its physics body. A faulting contact callback disables the script like any other
+  callback.
+- Entity id `0` is the physics "no entity" value, reported by bodies created outside the ECS
+  (terrain, props, ragdoll parts). It never receives a callback, and the other participant's callback
+  gets `other` equal to the null entity (the value `getEntityByName()` returns when nothing
+  matches). Because the first entity a World creates also has id `0`, that entity's script never
+  receives contact callbacks; give it a non-scripted role, such as a level root.
+- A body that falls asleep inside a sensor stays inside: no `OnTriggerExit` fires until it wakes
+  and leaves, and waking inside the sensor does not fire a second `OnTriggerEnter`.
+- `ConnectEventBus(nullptr)` and `Shutdown()` disconnect.
+
+Covered by `Tests/TestENG200ScriptBindingsReal.cpp` (`ScriptLifecycle_ENG200_Contact*`, CTest
+`ScriptContactDispatchReal`, label `scripting-integration`), which drives a real Jolt world with no
+trigger callback installed.
+
+## Physics and Event Bindings (AngelScriptEngine)
+
+`AngelScriptEngine::RegisterGlobalFunctions()` binds these to production subsystems (ENG-200, covered by `Tests/TestENG200ScriptBindingsReal.cpp`, CTest `ScriptBindingsReal`, label `scripting-integration`):
+
+| Script signature | Behaviour |
+|------------------|-----------|
+| `void applyForce(EntityID, const Vector3 &in)` | Adds a world-space force (N) to the entity's Dynamic Jolt body through its `RigidBodyComponent`; integrated over the next physics step and wakes the body. Static/Kinematic bodies, entities without a body yet, and non-finite forces are ignored with a one-time warning. |
+| `float getSpeed(EntityID)` | Live linear speed (m/s) of the entity's Jolt body; falls back to the component's cached velocity before the body exists, and 0 without a `RigidBodyComponent`. |
+| `void fireEvent(const string &in)` | Publishes `Spark::ScriptEvent{eventName, sourceEntity}` synchronously on `EngineContext::GetEventBus()`. `sourceEntity` is the entity whose script is executing (`AngelScriptEngine::GetExecutingEntity()`), including from the constructor. Dropped with a one-time warning when no bus is registered. |
+| `void playSound(EntityID, const string &in)` | Queues a one-shot cue in the entity's `ScriptAudioCues` (bound World). The next `AudioUpdateSystem` tick (Audio phase) starts it through `AudioEngine::PlaySound3D` at the position the entity had when the script asked (or `PlaySound` for an entity without a `Transform`), using the entity's `AudioSourceComponent` volume/pitch/rolloff when present. At most 16 cues wait per entity; extra requests and cues the AudioEngine refuses (sound not loaded, no device, no free voice) are counted in `ScriptAudioCues::dropped`. |
+| `void playAnimation(EntityID, const string &in)` | Switches the entity's existing `AnimationController` to the clip, restarting it from time 0; `AnimationUpdateSystem` advances it. Re-requesting the clip that is already playing is a no-op, so scripts can call it every frame. No controller is created for an entity without one, and a clip missing from a non-empty `availableAnimations` is ignored. |
+
+All five run on the game thread that dispatches the script callbacks and never fault the calling script. Invalid input (dead entity, empty or over-128-character names, control characters) is ignored with a one-time warning. `playSound()`/`playAnimation()` are covered by `Tests/TestENG200ScriptAudioAnimationReal.cpp` (CTest `ScriptMediaBindingsReal`).
 
 ## Engine API (Available in Scripts)
 
@@ -161,7 +221,7 @@ The `ScriptAPIRegistry` in `ScriptHotReload.h` documents every function register
 
 | Signature | Description |
 |-----------|-------------|
-| `void PlaySound(const string &in)` | Play a sound effect by name |
+| `void playSound(EntityID, const string &in)` | Play a one-shot sound at the entity (see [Physics and Event Bindings](#physics-and-event-bindings-angelscriptengine)) |
 | `void PlaySoundAt(const string &in, Vector3)` | Play 3D sound at position |
 | `void StopSound(const string &in)` | Stop a playing sound |
 | `void SetVolume(float)` | Set master volume [0, 1] |
@@ -202,7 +262,7 @@ The `ScriptAPIRegistry` in `ScriptHotReload.h` documents every function register
 
 | Signature | Description |
 |-----------|-------------|
-| `void PlayAnimation(uint, const string &in)` | Play animation clip on entity |
+| `void playAnimation(EntityID, const string &in)` | Switch the entity's AnimationController to a clip (see [Physics and Event Bindings](#physics-and-event-bindings-angelscriptengine)) |
 | `void SetAnimationSpeed(uint, float)` | Set animation playback speed |
 
 ### Debug Functions
@@ -243,10 +303,17 @@ public:
     bool AttachScript(EntityID entity, const std::string& className, const std::string& moduleName);
     void DetachScript(EntityID entity);
 
-    // Lifecycle dispatch
-    void CallStart(EntityID entity);
-    void CallUpdate(EntityID entity, float deltaTime);
+    // Lifecycle callbacks are dispatched by the engine-owned ScriptRuntimeSystem.
     void CallOnCollision(EntityID entity, EntityID other);
+    void CallOnTriggerEnter(EntityID entity, EntityID other);
+    void CallOnTriggerExit(EntityID entity, EntityID other);
+    void ConnectEventBus(Spark::EventBus* bus); // engine-owned contact dispatch
+
+    // Hot reload (see "Hot-reload state rules")
+    bool HotReloadModule(const std::string& moduleName);
+    bool HotReloadModuleFromSource(const std::string& moduleName, const std::string& source);
+    bool HasScriptClass(const std::string& moduleName, const std::string& className) const;
+    const HotReloadReport& GetLastHotReloadReport() const;
 
     // Error handling
     std::string GetLastError() const;
@@ -266,11 +333,12 @@ scriptEngine.Initialize();
 scriptEngine.CompileScriptFile("Assets/Scripts/EnemyAI.as");
 
 // Attach a script class to an entity
+auto& script = world.AddComponent<Script>(enemyEntity);
+script.className = "EnemyBehavior";
+script.moduleName = "EnemyAI";
 scriptEngine.AttachScript(enemyEntity, "EnemyBehavior", "EnemyAI");
 
-// Call lifecycle methods
-scriptEngine.CallStart(enemyEntity);         // Called once
-scriptEngine.CallUpdate(enemyEntity, dt);    // Called every frame
+// ScriptRuntimeSystem dispatches Start() and Update() during the Gameplay phase.
 ```
 
 ### Compile from String
@@ -401,7 +469,28 @@ graph->DeserializeFromJSON(json);
 
 ## Hot Reload
 
-The `ScriptHotReloadManager` watches script directories for file changes and automatically recompiles modified scripts without restarting the engine.
+### Hot-reload state rules
+
+`AngelScriptEngine::HotReloadModule(moduleName)` recompiles a module compiled with `CompileScriptFile()` from its source file and re-attaches every entity script of that module. It applies these rules, which `Tests/TestENG200ScriptHotReloadReal.cpp` (CTest `ScriptHotReloadReal`, `ScriptHotReload_ENG200_*`) checks one by one:
+
+| Rule | Behaviour |
+|------|-----------|
+| R1 | The new source is first compiled into a throwaway staging module. If that fails, nothing changes: the old instances keep running with their state, and the call returns false with the compiler diagnostic. |
+| R2 | A field whose name **and** type declaration are the same in the old and new class keeps the old instance's value. Types are matched by declaration text (`int`, `Vector3`, `MyEnum`), not by type id, because ids change when a module is rebuilt. |
+| R3 | Carried types are primitives, enums, `string`, and registered POD value types such as `Vector3`. |
+| R4 | Handles (`Foo@`), script-class objects, arrays and other reference types are **not** carried. A handle would point into the old module's objects, so these fields keep the value the new constructor gave them. |
+| R5 | A new field keeps its constructor value. A removed field, or one whose type changed, is dropped. |
+| R6 | The constructor runs for the new instance; `Start()` is **not** called again. `Update()` and the contact callbacks continue with the next dispatch. |
+| R7 | An instance disabled by a runtime fault comes back enabled, with its carried state. |
+| R8 | If the class no longer exists in the new module, or may not attach in the current client/server context, that entity is left without a script. The failure is reported and the call returns false. |
+
+`GetLastHotReloadReport()` returns the counts for the last call: `instances`, `carried`, `defaulted`, `dropped` and `failedAttaches`. It also returns one note per distinct dropped field or failed re-attach, such as `Mod::Keeper.speed: retyped from float to int, constructor value kept`. The engine logs the counts as one info line and each note as a warning.
+
+Modules compiled with `CompileScriptFromString()` have no source file, so `HotReloadModule()` refuses them. `HotReloadModuleFromSource(moduleName, source)` reloads such a module from new in-memory source under the same rules and fills the same report; its section is named after the module, so diagnostics read `<module>:<line>` (`ScriptHotReload_ENG200_FromSourceReloadsInMemoryModule`). `HasScriptClass(moduleName, className)` lets a caller check a compiled source for its class before committing a reload that R8 would otherwise fail. The visual-script demo's `vs_reload` uses both ([Visual Scripting](Visual-Scripting.md)).
+
+### File watcher
+
+The `ScriptHotReloadManager` watches script directories for file changes and calls a recompile callback for each changed file. The engine does not create one by default (`script_hotreload_status` reports it unavailable); a game or tool that wants reload-on-save creates it and calls `HotReloadModule()` from the callback, so attached scripts follow the state rules above.
 
 ### Configuration
 
@@ -413,7 +502,8 @@ hotReload.SetDebounceMs(300);  // 300ms debounce to avoid rapid re-triggers
 
 hotReload.SetRecompileCallback([&](const std::string& file) -> RecompileResult {
     RecompileResult result;
-    result.success = scriptEngine.CompileScriptFile(file);
+    // The module name is the file stem (CompileScriptFile's convention).
+    result.success = scriptEngine.HotReloadModule(std::filesystem::path(file).stem().string());
     result.filePath = file;
     if (!result.success)
         result.errorMessage = scriptEngine.GetLastError();
@@ -531,7 +621,7 @@ Script contexts are **not thread-safe**. All script calls must happen on the mai
 
 - `CompileScriptFile()` / `CompileScriptFromString()`
 - `AttachScript()` / `DetachScript()`
-- `CallStart()` / `CallUpdate()` / `CallOnCollision()`
+- Engine-owned `ScriptRuntimeSystem` lifecycle dispatch and `CallOnCollision()`
 - `ScriptHotReloadManager::PollChanges()`
 
 The `ScriptHotReloadManager` file scanning runs on the main thread during `PollChanges()`. It does not use background threads.
@@ -552,7 +642,8 @@ The `ScriptHotReloadManager` file scanning runs on the main thread during `PollC
 
 1. Verify the script file compiles without errors (check `GetLastError()`).
 2. Ensure `AttachScript()` was called with the correct class name and module name.
-3. Confirm `CallStart()` and `CallUpdate()` are being called each frame.
+3. Confirm the engine-owned `ScriptRuntimeSystem` is registered and ticking in
+   the Gameplay phase.
 4. Check the ECS `Script` component fields match the compiled module.
 
 ### Hot-reload not triggering

@@ -13,11 +13,14 @@
 
 #include "Game/FPSAssetPaths.h"
 #include "Game/FPSLocalProfile.h"
+#include "Game/FPSQuickLoad.h"
 #include "Game/FPSStateRules.h"
 #include "Game/GameMechanics.h"
 #include "Game/ProgressionSystem.h"
 
+#include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
+#include "Engine/SaveSystem/SaveSystem.h"
 #include "Game/GameObject.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
@@ -108,7 +111,7 @@ TEST(FPSLocalProfile_RejectsCustomStateWithoutProfileBlock)
     std::string error;
 
     EXPECT_FALSE(loaded.ReadFrom(customState, error));
-    EXPECT_STR_CONTAINS(error, "missing key");
+    EXPECT_STR_CONTAINS(error, "missing version key 'fps.profile.version'");
     // A rejected read must not partially overwrite the caller's profile.
     EXPECT_EQ(loaded.progressionXP, 99);
 }
@@ -124,7 +127,48 @@ TEST(FPSLocalProfile_RejectsProfileFromNewerModule)
     FPSLocalProfile loaded;
     std::string error;
     EXPECT_FALSE(loaded.ReadFrom(customState, error));
-    EXPECT_STR_CONTAINS(error, "newer module");
+    EXPECT_STR_CONTAINS(error, "SparkGameFPS persisted schema: data is version 2");
+    EXPECT_STR_CONTAINS(error, "load it with the newer build");
+}
+
+TEST(FPSLocalProfile_DeclaresPersistedSchemaAndStampsIt)
+{
+    // OD-03: the module declares its own persisted-schema version and writes N.
+    EXPECT_EQ(std::string(FPSLocalProfile::kSchema.moduleName), std::string("SparkGameFPS"));
+    EXPECT_EQ(std::string(FPSLocalProfile::kSchema.versionKey), std::string(FPSLocalProfile::kKeyPrefix) + "version");
+    EXPECT_EQ(static_cast<int>(FPSLocalProfile::kSchema.currentVersion), FPSLocalProfile::kVersion);
+
+    std::unordered_map<std::string, std::string> customState;
+    FPSLocalProfile{}.WriteTo(customState);
+    EXPECT_EQ(customState.at(std::string(FPSLocalProfile::kSchema.versionKey)),
+              std::to_string(FPSLocalProfile::kSchema.currentVersion));
+}
+
+TEST(FPSLocalProfile_RejectsSchemaOlderThanWindowAndMalformedVersions)
+{
+    FPSLocalProfile saved;
+    std::unordered_map<std::string, std::string> baseline;
+    saved.WriteTo(baseline);
+    const std::string versionKey(FPSLocalProfile::kSchema.versionKey);
+
+    FPSLocalProfile loaded;
+    loaded.progressionXP = 55;
+    std::string error;
+
+    auto older = baseline;
+    older[versionKey] = std::to_string(FPSLocalProfile::kSchema.OldestReadableVersion() - 1);
+    EXPECT_FALSE(loaded.ReadFrom(older, error));
+    EXPECT_STR_CONTAINS(error, "convert it with an older build");
+    EXPECT_EQ(loaded.progressionXP, 55);
+
+    for (const char* malformed : {"-1", "1x", "", " 1"})
+    {
+        auto bad = baseline;
+        bad[versionKey] = malformed;
+        EXPECT_FALSE(loaded.ReadFrom(bad, error));
+        EXPECT_STR_CONTAINS(error, "is not a version number");
+        EXPECT_EQ(loaded.progressionXP, 55);
+    }
 }
 
 TEST(FPSLocalProfile_RejectsUnparseableField)
@@ -150,6 +194,60 @@ TEST(FPSLocalProfile_LeavesUnrelatedCustomStateAlone)
 
     EXPECT_EQ(customState["template.encounter"], std::string("boss_02"));
     EXPECT_TRUE(customState.count(std::string(FPSLocalProfile::kKeyPrefix) + "xp") == 1u);
+}
+
+TEST(FPSLocalProfile_EveryDeclaredFieldSurvivesSaveSystemFile)
+{
+    // MOD-310: the quicksave path end to end through the save file, not the in-memory map.
+    // Every field is non-default and distinct, so a field dropped or swapped anywhere between
+    // WriteTo, the on-disk slot and LoadSlotWithProfile fails one comparison below.
+    FPSLocalProfile saved;
+    saved.progressionLevel = 6;
+    saved.progressionXP = 4321;
+    saved.playerClass = 3;
+    saved.weapon = 2;
+    saved.kills = 19;
+    saved.deaths = 4;
+    saved.score = 950;
+    saved.playTimeSeconds = 123.5f;
+    saved.health = 37.5f;
+    saved.armor = 12.25f;
+
+    const std::filesystem::path temp = MakeTempDir("profile_savefile");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    saveSystem.SetFileCache(nullptr);
+    ASSERT_TRUE(saveSystem.Initialize(temp.string()));
+
+    World savedWorld;
+    savedWorld.CreateEntity("profile-world");
+    std::unordered_map<std::string, std::string> customState;
+    saved.WriteTo(customState);
+    ASSERT_TRUE(saveSystem.Save("fps_quicksave", savedWorld, SaveMetadata{}, customState));
+
+    // With no file cache set, SaveSystem keeps no copy of the slot: the load below reads this file.
+    ASSERT_TRUE(std::filesystem::is_regular_file(temp / "fps_quicksave.spark_save"));
+    World liveWorld;
+    FPSLocalProfile loaded;
+    loaded.version = 0;
+    loaded.progressionLevel = 0;
+    std::string profileError;
+    const FPSQuickLoadStatus status = LoadSlotWithProfile(saveSystem, "fps_quicksave", liveWorld, loaded, profileError);
+
+    EXPECT_TRUE(status == FPSQuickLoadStatus::Loaded);
+    EXPECT_TRUE(profileError.empty());
+    EXPECT_EQ(loaded.version, FPSLocalProfile::kVersion);
+    EXPECT_EQ(loaded.progressionLevel, 6);
+    EXPECT_EQ(loaded.progressionXP, 4321);
+    EXPECT_EQ(loaded.playerClass, 3);
+    EXPECT_EQ(loaded.weapon, 2);
+    EXPECT_EQ(loaded.kills, 19);
+    EXPECT_EQ(loaded.deaths, 4);
+    EXPECT_EQ(loaded.score, 950);
+    EXPECT_EQ(loaded.playTimeSeconds, 123.5f);
+    EXPECT_EQ(loaded.health, 37.5f);
+    EXPECT_EQ(loaded.armor, 12.25f);
+
+    RemoveTree(temp);
 }
 
 // ============================================================================

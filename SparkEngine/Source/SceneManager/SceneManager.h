@@ -104,7 +104,6 @@ namespace Spark
  * ### Responsibilities
  * - **Serialization**: JSON and legacy binary round-trip via `LoadJSON`/`SaveJSON`/`LoadCustom`.
  * - **Hierarchy management**: Add, remove, reparent nodes; maintain index invariants.
- * - **Prefab system**: Save/load subtrees as reusable prefab assets.
  * - **Async loading**: Background scene transitions via `LoadSceneAsync`.
  * - **Console integration**: Runtime inspection and manipulation from the debug console.
  *
@@ -135,10 +134,13 @@ class SceneManager
      * @brief Construct the SceneManager with required engine subsystems.
      *
      * Does not load any scene; call `NewScene()` or `LoadScene()` to populate the
-     * hierarchy. Both pointers must remain valid for the lifetime of this object.
+     * hierarchy. Non-null pointers must remain valid for the lifetime of this object.
+     * Passing `nullptr` for both selects data-only use (headless servers): authored
+     * INI and versioned scenes load their nodes with one null object slot each, and
+     * the legacy space-delimited format, which needs a device, is rejected.
      *
-     * @param graphics  Pointer to the active GraphicsEngine (used for mesh instantiation).
-     * @param input     Pointer to the InputManager (forwarded to spawned GameObjects).
+     * @param graphics  Active GraphicsEngine used for mesh instantiation, or `nullptr`.
+     * @param input     InputManager stored for callers, or `nullptr`.
      */
     SceneManager(GraphicsEngine* graphics, InputManager* input);
 
@@ -318,41 +320,6 @@ class SceneManager
     int GetNodeCount() const { return static_cast<int>(m_sceneNodes.size()); }
 
     // =========================================================================
-    // Prefab System
-    // =========================================================================
-
-    /**
-     * @brief Serialize a node and its entire subtree to a standalone prefab file.
-     *
-     * The prefab file uses the same JSON format as a scene but contains only the
-     * specified subtree. Saved prefabs can later be loaded with `LoadPrefab()`.
-     *
-     * @param nodeIndex  Root node of the subtree to export as a prefab. Must be valid.
-     * @param filepath   Destination path for the prefab file (e.g. `"Assets/Prefabs/Tree.prefab"`).
-     * @return           `true` on success; `false` on I/O error or invalid `nodeIndex`.
-     */
-    bool SavePrefab(int nodeIndex, const std::wstring& filepath) const;
-
-    /**
-     * @brief Instantiate a saved prefab into the current scene at the given position.
-     *
-     * Reads the prefab file, offsets all node positions by `position` relative to
-     * the prefab's internal origin, and appends the subtree to `m_sceneNodes`. The
-     * dirty flag is set. The returned index is the root of the instantiated subtree.
-     *
-     * @param filepath  Path to a prefab file previously saved with `SavePrefab()`.
-     * @param position  World-space offset applied to all nodes in the prefab.
-     * @return          Index of the root node of the instantiated prefab, or -1 on failure.
-     *
-     * @code
-     *   int treeIdx = mgr.LoadPrefab(L"Assets/Prefabs/Tree.prefab", {10.f, 0.f, 5.f});
-     *   if (treeIdx < 0)
-     *       LOG_ERROR("Failed to load tree prefab");
-     * @endcode
-     */
-    int LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position = {0, 0, 0});
-
-    // =========================================================================
     // Scene State
     // =========================================================================
 
@@ -444,7 +411,7 @@ class SceneManager
      * and returns their paths as narrow strings suitable for display in a file picker.
      *
      * @param directory  Directory to scan. Defaults to `L"Assets/Scenes"`.
-     * @return           Vector of file path strings, one per found scene file.
+     * @return           UTF-8 file names, one per found scene file, sorted.
      */
     std::vector<std::string> GetAvailableScenes(const std::wstring& directory = L"Assets/Scenes") const;
 

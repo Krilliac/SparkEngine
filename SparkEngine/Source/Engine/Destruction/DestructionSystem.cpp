@@ -72,6 +72,19 @@ namespace Spark
                        m_patterns.size());
     }
 
+    void DestructionSystem::Shutdown()
+    {
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "DestructionSystem shutting down (%zu patterns, %zu callbacks)",
+                       m_patterns.size(), m_destructionCallbacks.GetHandlerCount());
+        m_destructionCallbacks.Clear();
+        m_patterns.clear();
+        m_debris.clear();
+        m_activeDebrisCount = 0;
+        m_totalDestructions = 0;
+        m_world = nullptr;
+        m_initialized = false;
+    }
+
     void DestructionSystem::Update(float deltaTime)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Physics);

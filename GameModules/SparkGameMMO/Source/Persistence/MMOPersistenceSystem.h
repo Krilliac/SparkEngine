@@ -13,9 +13,11 @@
  * - Dungeon lockouts
  * - World boss kill history
  *
- * Uses the engine's AsyncDatabasePool with prepared statements for
- * non-blocking persistence. All writes are async; reads can be
- * sync (login) or async (background refresh).
+ * Uses the engine's AsyncDatabasePool with prepared statements. The key
+ * names and value formats in RegisterPreparedStatements are the persisted
+ * contract. Every character save rewrites that character's whole record set
+ * and deletes the records it no longer has, so a removed faction,
+ * achievement, stat, skill, recipe or lockout stays removed after a restart.
  */
 
 #pragma once
@@ -33,8 +35,12 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
+#include <optional>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace MMO
@@ -78,20 +84,15 @@ namespace MMO
         uint64_t lastSave = 0;
     };
 
-    /// @brief World-level persistent state (guild data, auction house, etc.)
+    /// @brief World-level persistent state
     struct WorldSaveData
     {
+        /// Every guild. A save replaces the stored set, so a guild or member
+        /// missing here is deleted. Guild logs, rank permissions (always the
+        /// defaults) and per-member level, note, contribution and online state
+        /// are not persisted.
         std::vector<Guild> guilds;
         uint32_t nextGuildId = 1;
-
-        // Boss kill history for lockout tracking
-        struct BossKillRecord
-        {
-            uint32_t bossDefId = 0;
-            uint64_t killTime = 0;
-            int participantCount = 0;
-        };
-        std::vector<BossKillRecord> bossKillHistory;
     };
 
     /// @brief Callback for async load completion
@@ -118,18 +119,25 @@ namespace MMO
         LoadCharacter = 1102,
         DeleteCharacter = 1103,
         ListCharacters = 1104,
+        LoadNextCharacterId = 1105,
+        SaveNextCharacterId = 1106,
 
-        // Inventory
-        SaveInventorySlot = 1200,
-        LoadInventory = 1201,
-        ClearInventory = 1202,
+        // Inventory. The whole inventory is one "inventory_<id>" record; the
+        // per-slot "inv_<id>_<slot>" keys of earlier builds are never loaded and
+        // are deleted by the character's next save or its deletion.
+        ListLegacyInventorySlots = 1201,
+        DeleteLegacyInventorySlot = 1202,
         SaveCurrency = 1203,
         LoadCurrency = 1204,
+        SaveInventory = 1205,
+        LoadInventory = 1206,
+        DeleteInventory = 1207,
+        DeleteCurrency = 1208,
 
         // Reputation
         SaveReputation = 1300,
         LoadReputation = 1301,
-        ClearReputation = 1302,
+        DeleteReputation = 1302,
         LoadReputationValue = 1303,
 
         // Achievements
@@ -138,12 +146,17 @@ namespace MMO
         SaveAchievementStat = 1402,
         LoadAchievementStats = 1403,
         LoadAchievementStatValue = 1404,
+        DeleteAchievement = 1405,
+        DeleteAchievementStat = 1406,
 
         // Crafting
         SaveCraftingSkill = 1500,
         LoadCraftingSkills = 1501,
         SaveKnownRecipe = 1502,
         LoadKnownRecipes = 1503,
+        LoadCraftingSkillValue = 1504,
+        DeleteCraftingSkill = 1505,
+        DeleteKnownRecipe = 1506,
 
         // Guilds
         SaveGuild = 1600,
@@ -151,15 +164,17 @@ namespace MMO
         SaveGuildMember = 1602,
         LoadGuildMembers = 1603,
         DeleteGuildMember = 1604,
+        DeleteGuild = 1605,
+        LoadGuildValue = 1606,
+        LoadGuildMemberValue = 1607,
+        LoadNextGuildId = 1608,
+        SaveNextGuildId = 1609,
 
         // Lockouts
         SaveLockout = 1700,
         LoadLockouts = 1701,
-        ClearExpiredLockouts = 1702,
-
-        // Boss kills
-        SaveBossKill = 1800,
-        LoadBossKills = 1801,
+        LoadLockoutValue = 1703,
+        DeleteLockout = 1704,
     };
 
     /**
@@ -185,7 +200,13 @@ namespace MMO
 
         // === Character Persistence ===
 
-        /// Create a new character record, returns character ID (sync)
+        /// Reserve a character ID that no earlier run handed out. The advanced
+        /// counter is durable before the ID is returned, so a restart never
+        /// reissues it. Returns 0 when not initialized, the counter cannot be
+        /// persisted, or the 32-bit ID space is exhausted.
+        uint32_t AllocateCharacterId();
+
+        /// Create a new character record with an allocated ID, returns the ID or 0 (sync)
         uint32_t CreateCharacter(const std::string& name, uint32_t accountId);
 
         /// Load character data synchronously (call at login)
@@ -194,21 +215,31 @@ namespace MMO
         /// Save character data asynchronously (call periodically)
         void SaveCharacterAsync(const CharacterSaveData& data);
 
-        /// Save character data synchronously (call at logout/shutdown)
+        /// Save character data synchronously (call at logout/shutdown). The
+        /// character row and every subsystem record commit as one transaction.
         bool SaveCharacterSync(const CharacterSaveData& data);
 
         /// Delete a character and all associated data
         bool DeleteCharacter(uint32_t characterId);
 
-        /// List all characters for an account
+        /// (characterId, name) of every stored character owned by accountId.
+        /// Records without a stored owner (pre-accountId builds) are never listed.
         std::vector<std::pair<uint32_t, std::string>> ListCharacters(uint32_t accountId);
 
         // === World Persistence ===
 
-        /// Save world-level data (guilds, boss history) async
+        /// Save guilds, the guild ID counter and new boss kills as one
+        /// transaction queued behind earlier saves (the auto-save path).
+        /// The saved guild set replaces the stored one, so call it only after
+        /// LoadWorld's guilds were restored.
         void SaveWorldAsync(const WorldSaveData& data);
 
-        /// Load world-level data sync (at startup)
+        /// SaveWorldAsync, waiting for the commit (the unload path).
+        bool SaveWorldSync(const WorldSaveData& data);
+
+        /// Load every stored guild, member and boss kill (at startup). Returns
+        /// false, leaving @p outData empty, on a store error or any malformed
+        /// record, so the caller can refuse to save over a store it cannot read.
         bool LoadWorld(WorldSaveData& outData);
 
         // === Configuration ===
@@ -228,24 +259,52 @@ namespace MMO
         std::string GetStatusString() const;
 
       private:
+        using Transaction = Spark::Persistence::Transaction;
+        using Params = std::vector<Spark::Persistence::PreparedStatementParam>;
+        /// A stored record: its key family's table index and the key text after
+        /// the family prefix and owner ID.
+        using StoredKey = std::pair<size_t, std::string>;
+        using KeySet = std::set<StoredKey>;
+
         void RegisterPreparedStatements();
         void CreateSchema();
+        void SeedCharacterIdCounter();
+        /// nullopt (nothing is written) when the character row could not be loaded back:
+        /// an unstorable name or a non-finite location or stat.
+        std::optional<Transaction> BuildCharacterSave(const CharacterSaveData& data);
+        /// Text after @p keyPrefix of every key @p listStmt lists; nullopt on a store error.
+        std::optional<std::vector<std::string>> ListKeySuffixes(MMOStmtId listStmt, Params params,
+                                                                const std::string& keyPrefix);
+        /// The stored value @p getStmt returns, or nullopt when the key is absent.
+        std::optional<std::string> GetValue(MMOStmtId getStmt, Params params);
+        KeySet ScanCharacterKeys(uint32_t charId);
+        Transaction BuildWorldSave(const WorldSaveData& data);
+        KeySet ScanGuildKeys();
+        bool LoadGuilds(WorldSaveData& outData);
 
-        // Subsystem save/load helpers
-        void SaveInventory(uint32_t charId, const InventoryData& inv);
-        void LoadInventory(uint32_t charId, InventoryData& inv);
-        void SaveReputationState(uint32_t charId, const ReputationState& state);
+        // Subsystem save/load helpers. Saves append to the character's save
+        // transaction and add every record they write to @p written.
+        void SaveInventory(Transaction& tx, uint32_t charId, const InventoryData& inv) const;
+        bool LoadInventory(uint32_t charId, InventoryData& inv);
+        void SaveReputationState(Transaction& tx, uint32_t charId, const ReputationState& state, KeySet& written) const;
         void LoadReputationState(uint32_t charId, ReputationState& state);
-        void SaveAchievementState(uint32_t charId, const AchievementState& state);
+        void SaveAchievementState(Transaction& tx, uint32_t charId, const AchievementState& state,
+                                  KeySet& written) const;
         void LoadAchievementState(uint32_t charId, AchievementState& state);
-        void SaveCraftingState(uint32_t charId, const CraftingState& state);
+        void SaveCraftingState(Transaction& tx, uint32_t charId, const CraftingState& state, KeySet& written) const;
         void LoadCraftingState(uint32_t charId, CraftingState& state);
-        void SaveLockouts(uint32_t charId, const DungeonPlayerState& state);
+        void SaveLockouts(Transaction& tx, uint32_t charId, const DungeonPlayerState& state, KeySet& written) const;
         void LoadLockouts(uint32_t charId, DungeonPlayerState& state);
 
         Spark::IEngineContext* m_context{nullptr};
         std::unique_ptr<Spark::Persistence::AsyncDatabasePool> m_db;
         bool m_initialized{false};
+        uint64_t m_nextCharacterId = 1; ///< next ID AllocateCharacterId hands out; > UINT32_MAX when exhausted
+        /// Per character saved this run: every record it may have in the store
+        /// (the keys found on its first save plus every key a save wrote since).
+        std::map<uint32_t, KeySet> m_characterKeys;
+        /// The same for guild and guild-member records, once a world save ran.
+        std::optional<KeySet> m_guildKeys;
 
         float m_autoSaveInterval = 300.0f; // 5 minutes
         float m_autoSaveTimer = 0.0f;

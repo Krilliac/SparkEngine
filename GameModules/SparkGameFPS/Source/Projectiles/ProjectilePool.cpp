@@ -1,4 +1,5 @@
 #include "ProjectilePool.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // ProjectilePool.cpp
 #include "Bullet.h"
@@ -6,63 +7,29 @@
 #include "Grenade.h"
 #include "Game/Enemy.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/ConsoleProcessManager.h"
+#include "Core/FPSAssert.h"
 #include <algorithm>
 #include <iostream>
 #include <memory>
 
 using namespace DirectX;
 
-// **FIXED: Rate-limited logging for ProjectilePool to prevent console spam**
-#undef LOG_TO_CONSOLE_RATE_LIMITED
-#undef LOG_TO_CONSOLE
-#undef LOG_TO_CONSOLE_IMMEDIATE
-#define LOG_TO_CONSOLE_RATE_LIMITED(msg, type)                                                                         \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        static auto lastLogTime = std::chrono::steady_clock::now();                                                    \
-        static int logCounter = 0;                                                                                     \
-        auto now = std::chrono::steady_clock::now();                                                                   \
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastLogTime).count();                    \
-        if (elapsed >= 10 || logCounter < 1)                                                                           \
-        {                                                                                                              \
-            Spark::ConsoleProcessManager::GetInstance().Log(msg, type);                                                \
-            if (elapsed >= 10)                                                                                         \
-            {                                                                                                          \
-                lastLogTime = now;                                                                                     \
-                logCounter = 0;                                                                                        \
-            }                                                                                                          \
-            else                                                                                                       \
-            {                                                                                                          \
-                logCounter++;                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
-    } while (0)
-
-// Use rate-limited logging for most messages, immediate for critical ones
-#define LOG_TO_CONSOLE(msg, type) LOG_TO_CONSOLE_RATE_LIMITED(msg, type)
-#define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
-
 ProjectilePool::ProjectilePool(size_t poolSize) : m_poolSize(poolSize)
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool constructed with size " + std::to_wstring(poolSize), L"INFO");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, poolSize > 0, "ProjectilePool size must be positive");
+    FPS_CONSOLE("ProjectilePool constructed with size " + std::to_string(poolSize), "INFO");
+    FPS_REQUIRE_MSG(poolSize > 0, "ProjectilePool size must be positive");
     m_projectiles.reserve(poolSize);
 }
 
 ProjectilePool::~ProjectilePool()
 {
-    LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool destructor called.", L"INFO");
+    FPS_CONSOLE("ProjectilePool destructor called.", "INFO");
     Shutdown();
 }
 
 HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool::Initialize called.", L"OPERATION");
+    FPS_CONSOLE("ProjectilePool::Initialize called.", "OPERATION");
 
     m_device = device;
     m_context = context;
@@ -74,8 +41,7 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     m_hasRenderResources = (device != nullptr) && (context != nullptr);
     if (!m_hasRenderResources)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool: no D3D11 device - projectiles are simulated but not rendered.",
-                                 L"WARNING");
+        FPS_CONSOLE("ProjectilePool: no D3D11 device - projectiles are simulated but not rendered.", "WARNING");
     }
 
     // Create projectiles based on pool size distribution
@@ -89,7 +55,7 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
         for (size_t i = 0; i < count; ++i)
         {
             auto p = TypeFactory();
-            SPARK_REQUIRE_MSG(Spark::LogCategory::Game, p != nullptr, "Failed to create projectile");
+            FPS_REQUIRE_MSG(p != nullptr, "Failed to create projectile");
             if (!p)
                 continue;
             if (m_hasRenderResources && FAILED(p->Initialize(m_device, m_context)))
@@ -103,19 +69,16 @@ HRESULT ProjectilePool::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     makeAndStore([] { return std::make_unique<Rocket>(); }, rocketsCount);
     makeAndStore([] { return std::make_unique<Grenade>(); }, grenadesCount);
 
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_projectiles.size() == m_poolSize,
-                      "Some projectiles failed to initialize");
+    FPS_REQUIRE_MSG(m_projectiles.size() == m_poolSize, "Some projectiles failed to initialize");
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool created " + std::to_wstring(m_projectiles.size()) + L" projectiles.",
-                             L"INFO");
+    FPS_CONSOLE("ProjectilePool created " + std::to_string(m_projectiles.size()) + " projectiles.", "INFO");
     return S_OK;
 }
 
 void ProjectilePool::Update(float deltaTime)
 {
     // **FIXED: Remove per-frame logging completely**
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0.0f && std::isfinite(deltaTime),
-                      "Invalid deltaTime in ProjectilePool::Update");
+    FPS_REQUIRE_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime), "Invalid deltaTime in ProjectilePool::Update");
 
     for (auto& up : m_projectiles)
     {
@@ -144,9 +107,8 @@ void ProjectilePool::Render(const DirectX::XMMATRIX& view, const DirectX::XMMATR
 
 void ProjectilePool::Shutdown()
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "ProjectilePool shutting down");
-    LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool::Shutdown called.", L"OPERATION");
+    FPS_LOG_INFO("ProjectilePool shutting down");
+    FPS_CONSOLE("ProjectilePool::Shutdown called.", "OPERATION");
 
     m_projectiles.clear();
     std::queue<Projectile*> empty;
@@ -155,16 +117,16 @@ void ProjectilePool::Shutdown()
     m_device = nullptr;
     m_context = nullptr;
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"ProjectilePool shutdown complete.", L"INFO");
+    FPS_CONSOLE("ProjectilePool shutdown complete.", "INFO");
 }
 
 Projectile* ProjectilePool::GetProjectile()
 {
     // **FIXED: Rate-limited logging for projectile acquisition**
-    LOG_TO_CONSOLE(L"ProjectilePool::GetProjectile called.", L"OPERATION");
+    FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::GetProjectile called.", "OPERATION");
     if (m_availableProjectiles.empty())
     {
-        LOG_TO_CONSOLE(L"ProjectilePool: No available projectiles!", L"WARNING");
+        FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool: No available projectiles!", "WARNING");
         return nullptr;
     }
     Projectile* p = m_availableProjectiles.front();
@@ -189,15 +151,15 @@ Projectile* ProjectilePool::GetProjectile(ProjectileType type)
         m_availableProjectiles.push(projectile);
     }
 
-    LOG_TO_CONSOLE(L"ProjectilePool: No projectile available for requested weapon type", L"WARNING");
+    FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool: No projectile available for requested weapon type", "WARNING");
     return nullptr;
 }
 
 void ProjectilePool::ReturnProjectile(Projectile* p)
 {
     // **FIXED: Rate-limited logging for projectile return**
-    LOG_TO_CONSOLE(L"ProjectilePool::ReturnProjectile called.", L"OPERATION");
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, p);
+    FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::ReturnProjectile called.", "OPERATION");
+    FPS_REQUIRE_NOT_NULL(p);
     if (p)
     {
         p->Deactivate();
@@ -207,8 +169,8 @@ void ProjectilePool::ReturnProjectile(Projectile* p)
 
 void ProjectilePool::FireBullet(const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
 {
-    LOG_TO_CONSOLE(L"ProjectilePool::FireBullet called. speed=" + std::to_wstring(speed), L"OPERATION");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireBullet");
+    FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::FireBullet called. speed=" + std::to_string(speed), "OPERATION");
+    FPS_REQUIRE_MSG(speed >= 0.0f, "Speed must be non-negative in FireBullet");
     if (auto p = GetProjectile(ProjectileType::BULLET))
     {
         p->SetDamage(15.0f);
@@ -218,8 +180,8 @@ void ProjectilePool::FireBullet(const XMFLOAT3& pos, const XMFLOAT3& dir, float 
 
 void ProjectilePool::FireRocket(const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
 {
-    LOG_TO_CONSOLE(L"ProjectilePool::FireRocket called. speed=" + std::to_wstring(speed), L"OPERATION");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireRocket");
+    FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::FireRocket called. speed=" + std::to_string(speed), "OPERATION");
+    FPS_REQUIRE_MSG(speed >= 0.0f, "Speed must be non-negative in FireRocket");
     if (auto p = GetProjectile(ProjectileType::ROCKET))
     {
         p->SetDamage(75.0f);
@@ -229,8 +191,8 @@ void ProjectilePool::FireRocket(const XMFLOAT3& pos, const XMFLOAT3& dir, float 
 
 void ProjectilePool::FireGrenade(const XMFLOAT3& pos, const XMFLOAT3& dir, float speed)
 {
-    LOG_TO_CONSOLE(L"ProjectilePool::FireGrenade called. speed=" + std::to_wstring(speed), L"OPERATION");
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, speed >= 0.0f, "Speed must be non-negative in FireGrenade");
+    FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool::FireGrenade called. speed=" + std::to_string(speed), "OPERATION");
+    FPS_REQUIRE_MSG(speed >= 0.0f, "Speed must be non-negative in FireGrenade");
     if (auto p = GetProjectile(ProjectileType::GRENADE))
     {
         p->SetDamage(100.0f);
@@ -265,9 +227,9 @@ void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, co
         projectile->SetGravity(true, 1.0f);
         break;
     default:
-        LOG_TO_CONSOLE_IMMEDIATE(L"Unknown ProjectileType in FireProjectile", L"ERROR");
+        FPS_CONSOLE("Unknown ProjectileType in FireProjectile", "ERROR");
         ReturnProjectile(projectile);
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Game, false, "Unknown ProjectileType in FireProjectile");
+        FPS_REQUIRE_MSG(false, "Unknown ProjectileType in FireProjectile");
         return;
     }
 
@@ -277,7 +239,7 @@ void ProjectilePool::FireProjectile(ProjectileType type, const XMFLOAT3& pos, co
     // Only log firing every 3 seconds to avoid spam
     if (elapsed >= 3)
     {
-        LOG_TO_CONSOLE(L"ProjectilePool: Projectile fired.", L"INFO");
+        FPS_CONSOLE_RATE_LIMITED(1, 10, "ProjectilePool: Projectile fired.", "INFO");
         lastFireLog = now;
     }
 }

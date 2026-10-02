@@ -1,5 +1,6 @@
 // TestEditorRecovery.cpp - Durable editor recovery persistence contracts.
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 
 #include "Core/EditorRecovery.h"
@@ -539,13 +540,11 @@ TEST(EditorRecovery_ProjectPathResolutionRejectsEscapes)
     const fs::path outside = scratch.Path() / "Outside";
     fs::create_directories(outside);
     EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, outside / "outside.sparkscene", resolved, error));
-    std::error_code symlinkError;
-    fs::create_directory_symlink(outside, projectRoot / "Scenes" / "linked", symlinkError);
-    if (!symlinkError)
-    {
-        EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("Scenes/linked/escaped.sparkscene"),
-                                                           resolved, error));
-    }
+    // A directory link out of the project (an NTFS junction on Windows) is resolved, not trusted.
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(outside, projectRoot / "Scenes" / "linked"));
+    EXPECT_FALSE(SparkEditor::ResolvePathInsideProject(projectRoot, fs::path("Scenes/linked/escaped.sparkscene"),
+                                                       resolved, error));
+    SparkTestLinks::RemoveDirectoryLink(projectRoot / "Scenes" / "linked");
 }
 
 TEST(EditorRecovery_EmbeddedNulInRelativePathIsRejected)

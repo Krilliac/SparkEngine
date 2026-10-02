@@ -25,14 +25,13 @@
 #include "FixedTimestepAccumulator.h"
 #include "GameImGuiLayer.h"
 #include "GameplaySystemLifecycle.h"
+#include "HostScenePreview.h"
 #include "Graphics/GraphicsEngine.h"
-#include "Graphics/ProjectAssetPath.h"
 #include "Graphics/WeatherSystem.h"
 #include "Graphics/WorldBasicRenderer.h" // -scene: Spark::RenderWorldBasic
 #include "Input/InputManager.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
-#include "SceneManager/ReflectedSceneSerializer.h" // -scene: Spark::LoadWorld
 #include "Utils/Assert.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Utils/DeltaSmoother.h"
@@ -74,9 +73,19 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     // A module whose OnLoad failed keeps its entry (its DLL stays mapped) but
     // renders nothing, so the usable-module question is the initialized one.
     bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules();
-    if (!g_scenePath.empty() && !haveModules)
+    if (!g_scenePath.empty())
     {
-        if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
+        // A scene that cannot run must fail the launch rather than leave an
+        // empty engine exiting 0. WM_QUIT with the failure status keeps the
+        // ordinary shutdown preflight and teardown below authoritative.
+        Spark::HostSceneLoadReport sceneReport;
+        if (haveModules)
+        {
+            console.LogError(std::format("[-scene] A game module is active; '{}' cannot run", g_scenePath));
+            g_scenePath.clear();
+            PostQuitMessage(Spark::kHostSceneLoadFailedExitCode);
+        }
+        else if (Spark::LoadHostScene(g_sceneWorld, g_scenePath, sceneReport))
         {
             // Explicit scene preview renders this dedicated world rather than
             // the ordinary runtime world. Publish that same instance through
@@ -84,18 +93,18 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
             // the user can actually see.
             if (EngineContext* context = EngineContext::Get())
                 context->SetWorld(&g_sceneWorld);
-            if (const auto root = Spark::DeriveProjectRootFromScenePath(g_scenePath))
-                sceneProjectRoot = *root;
-            else
+            sceneProjectRoot = sceneReport.projectRoot;
+            if (sceneProjectRoot.empty())
                 console.LogWarning("[-scene] Could not derive a project root from a canonical Scenes/... path; "
                                    "relative assets are disabled");
-            console.LogSuccess(std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath,
-                                           g_sceneWorld.GetRegistry().storage<entt::entity>().size()));
+            console.LogSuccess(std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath, sceneReport.entities));
+            Spark::PrintHostSceneRecords(sceneReport);
         }
         else
         {
-            console.LogError(std::format("[-scene] Failed to load '{}'", g_scenePath));
+            console.LogError(std::format("[-scene] Failed to load '{}': {}", g_scenePath, sceneReport.error));
             g_scenePath.clear();
+            PostQuitMessage(Spark::kHostSceneLoadFailedExitCode);
         }
     }
 
@@ -114,14 +123,13 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         // the quit is actually consumed. The old `continue` skipped PeekMessage,
         // spinning forever without SPARK_HEARTBEAT until the FreezeDetector
         // killed the process (exit code 1) on every -test-frames run.
-        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
-             (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit)) &&
+        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached()) &&
             !quitPosted)
         {
             if (CanShutdownEngine())
             {
                 console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
-                                            ExecElapsedSeconds()));
+                                            g_execScript.ElapsedSeconds()));
                 PostQuitMessage(0);
                 quitPosted = true;
             }
@@ -276,7 +284,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
             // the ImGui frame, where module load + init is safe.
             ConsumeProjectSelectorChoice();
 
-            RunDueScriptedCommands(frameCount);
+            g_execScript.RunDue(frameCount, console);
             ++frameCount;
         }
     }
@@ -297,9 +305,10 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         GetEngineRuntime().graphics->SetPrePresentHook(nullptr, nullptr);
     Spark::GameImGui::Shutdown();
 
-    ShutdownEngineAfterPreflight();
+    const bool teardownClean = ShutdownEngineAfterPreflight();
 
-    return static_cast<int>(msg.wParam);
+    const int exitCode = static_cast<int>(msg.wParam);
+    return (!teardownClean && exitCode == 0) ? 1 : exitCode;
 }
 
 // ===================================================================================

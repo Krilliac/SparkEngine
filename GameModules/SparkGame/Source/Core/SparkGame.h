@@ -14,7 +14,10 @@
 #pragma once
 
 #include "Spark/SparkSDK.h"
+
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declaration
 class GameplayShowcase;
@@ -46,12 +49,14 @@ class SparkGameDefaultModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+    void UnregisterConsoleCommands();
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
     bool m_paused{false};
 
     std::unique_ptr<GameplayShowcase> m_showcase;
+    std::vector<std::string> m_consoleCommands; ///< Registered through m_context->GetConsole(); removed in OnUnload
 };
 
 // Module exports

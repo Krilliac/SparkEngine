@@ -9,22 +9,15 @@
 
 #include "Core/ProjectManager.h"
 #include "LauncherProcess.h"
+#include "LauncherTemplates.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace SparkLauncher
 {
-    struct TemplateEntry
-    {
-        std::string directoryName;
-        std::string displayName;
-        std::string description;
-        std::string genre;
-        std::string gameModule;
-    };
-
     class LauncherApp
     {
       public:
@@ -46,7 +39,8 @@ namespace SparkLauncher
         void DrawNewProjectTab();
         void LoadTemplates();
         void DefaultNewProjectLocation();
-        bool SpawnTarget(const std::string& projectFilePath, LaunchTarget target);
+        /** Build and start @p target for @p projectFile. Reports every failure in the status line; never throws. */
+        bool SpawnTarget(const std::filesystem::path& projectFile, LaunchTarget target);
 
         std::unique_ptr<SparkEditor::ProjectManager> m_projectManager;
         std::vector<TemplateEntry> m_templates;

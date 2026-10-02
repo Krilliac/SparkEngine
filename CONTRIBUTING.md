@@ -45,7 +45,7 @@ See `.clang-format` for the full style configuration.
    git diff --name-only --diff-filter=ACMR origin/Working -- \
        SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
        SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-       SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+       SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
      | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
      | xargs -r clang-format --dry-run --Werror
 
@@ -86,8 +86,8 @@ See `.clang-format` for the full style configuration.
 ## Adding New Systems
 
 1. Create the header in the appropriate directory under `SparkEngine/Source/`
-2. Register with `EngineContext` using `RegisterSystem<T>()` or `RegisterSubsystem<T>()`
-3. Wire into `SparkEngine.cpp` initialization and update loops
+2. Own it in `EngineRuntime` (`Core/EngineRuntime.h`), create and tear it down in the `LifecycleCompositionRoot` stage for its phase (`Core/Lifecycle/`), and publish it with `EngineContext::RegisterSystem<T>()` or the named setter
+3. Wire its per-frame update into the main loop
 4. Add tests in `Tests/`
 5. Add Doxygen comments (`@file`, `@brief`, `@param`, `@return`)
 6. Update the wiki with a new page if adding a subsystem

@@ -1,0 +1,538 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameRTS",
+  "author_script": {
+    "path": "tools/blender/author_rts_kit.py",
+    "sha256": "9a98fbb6250bcd93b3977a019eb6d48d15353bea7448c3ebf64685e3d00809b2"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameRTS/rts_kit.blend",
+    "sha256": "f09d27b2f31997dc0778b40fef3e4f1ae10943b910e3d2e2f8933d3b919e5a5a",
+    "scene_sha256": "9874283d2b72c3c23cf6f47b8390de52426c50558916332cb6093a288aafe404"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "command_center",
+      "obj_path": "Assets/Models/RTS/Kit/command_center.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/command_center.mtl",
+      "bounds": {
+        "min": [
+          -5.0,
+          0.0,
+          -5.0
+        ],
+        "max": [
+          5.0,
+          8.36,
+          5.0
+        ]
+      },
+      "triangle_count": 1280,
+      "obj_sha256": "a351e4b8a0003eb6e9f0784743aca4bdfb991d3b5a66e11080d4e55dbe288c92",
+      "mtl_sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+      "triangle_budget": 3000,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/command_center_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/command_center_lod1.mtl",
+          "bounds": {
+            "min": [
+              -4.988461,
+              0.0125,
+              -4.9875
+            ],
+            "max": [
+              4.988461,
+              8.362315,
+              4.9875
+            ]
+          },
+          "triangle_count": 458,
+          "obj_sha256": "acaa0707bdd54099b7eccd74792cf811b6119268bdb4a769b7bb7510e7b8212e",
+          "mtl_sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/command_center_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/command_center_collision.mtl",
+          "bounds": {
+            "min": [
+              -5.0,
+              0.0,
+              -5.0
+            ],
+            "max": [
+              5.0,
+              8.36,
+              5.0
+            ]
+          },
+          "triangle_count": 100,
+          "obj_sha256": "0a21811a78f0ee48838d59c39d4991c2c05618dcecea49cb012c33e9a03abe1a",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "barracks",
+      "obj_path": "Assets/Models/RTS/Kit/barracks.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/barracks.mtl",
+      "bounds": {
+        "min": [
+          -4.0,
+          0.0,
+          -3.0
+        ],
+        "max": [
+          4.0,
+          5.75,
+          3.0
+        ]
+      },
+      "triangle_count": 888,
+      "obj_sha256": "334564540dfd18d21c7dba1f52f3adaa936bfde44409a1f42d78ea4a3d0d5ed4",
+      "mtl_sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+      "triangle_budget": 2400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/barracks_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/barracks_lod1.mtl",
+          "bounds": {
+            "min": [
+              -3.988462,
+              0.0125,
+              -2.9875
+            ],
+            "max": [
+              3.988462,
+              5.75,
+              2.9875
+            ]
+          },
+          "triangle_count": 318,
+          "obj_sha256": "f4a0db3390ec452ae68cb7a52211e791acd839c65c410c6d0f9f798d9952b4ff",
+          "mtl_sha256": "f81e8ee09d7de6d530cd7cb03a434068235b76c3e9f6f4a5f4a9dcd4fdc1ffa5",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/barracks_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/barracks_collision.mtl",
+          "bounds": {
+            "min": [
+              -4.0,
+              0.0,
+              -3.0
+            ],
+            "max": [
+              4.0,
+              5.75,
+              3.0
+            ]
+          },
+          "triangle_count": 80,
+          "obj_sha256": "cfb0fe1ff966726772db56041ca4b3a108def7398960c9855fa7a8604a681209",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "rally_flag",
+      "obj_path": "Assets/Models/RTS/Kit/rally_flag.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/rally_flag.mtl",
+      "bounds": {
+        "min": [
+          -1.043668,
+          0.0,
+          -0.35
+        ],
+        "max": [
+          0.35,
+          3.0,
+          0.35
+        ]
+      },
+      "triangle_count": 196,
+      "obj_sha256": "e9a25ca2756a5bfb6a90feb903e219e40540d7ad6a2155fcf68c2a285f803843",
+      "mtl_sha256": "764ad7ecd0cf574f43d0a4a57253dfb50722e7b9fa54708e53f6943cb6d96218",
+      "triangle_budget": 400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/rally_flag_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/rally_flag_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.043225,
+              0.0125,
+              -0.3375
+            ],
+            "max": [
+              0.338462,
+              3.001143,
+              0.3375
+            ]
+          },
+          "triangle_count": 70,
+          "obj_sha256": "57d8679f49e3ff5d922c4fefccda33818292452459212ed695fa0fbcda25c510",
+          "mtl_sha256": "764ad7ecd0cf574f43d0a4a57253dfb50722e7b9fa54708e53f6943cb6d96218",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/rally_flag_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/rally_flag_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.043668,
+              0.0,
+              -0.35
+            ],
+            "max": [
+              0.35,
+              3.0,
+              0.35
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "19b5603c8ae0d3ea8ac0fb4a1f3bc463dca8f1576dbeb058347dfc5f747d02b7",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "command_center_crimson",
+      "obj_path": "Assets/Models/RTS/Kit/command_center_crimson.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/command_center_crimson.mtl",
+      "bounds": {
+        "min": [
+          -5.0,
+          0.0,
+          -5.0
+        ],
+        "max": [
+          5.0,
+          8.36,
+          5.0
+        ]
+      },
+      "triangle_count": 1280,
+      "obj_sha256": "728da7ed6840c996f5e1ec085eb5490080280c3a3df107ed901c3ef3f8219896",
+      "mtl_sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+      "triangle_budget": 3000,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/command_center_crimson_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/command_center_crimson_lod1.mtl",
+          "bounds": {
+            "min": [
+              -4.988461,
+              0.0125,
+              -4.9875
+            ],
+            "max": [
+              4.988461,
+              8.362315,
+              4.9875
+            ]
+          },
+          "triangle_count": 458,
+          "obj_sha256": "ae718cd03ab87b89792ca6de2c95944a441dd2eb7448c290544f0fac6bb0b479",
+          "mtl_sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/command_center_crimson_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/command_center_crimson_collision.mtl",
+          "bounds": {
+            "min": [
+              -5.0,
+              0.0,
+              -5.0
+            ],
+            "max": [
+              5.0,
+              8.36,
+              5.0
+            ]
+          },
+          "triangle_count": 100,
+          "obj_sha256": "bcfbbdaa53fe9b9e4753904122eabec2394b1e1ebeac99abd621f53a1a2448cd",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "barracks_crimson",
+      "obj_path": "Assets/Models/RTS/Kit/barracks_crimson.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/barracks_crimson.mtl",
+      "bounds": {
+        "min": [
+          -4.0,
+          0.0,
+          -3.0
+        ],
+        "max": [
+          4.0,
+          5.75,
+          3.0
+        ]
+      },
+      "triangle_count": 888,
+      "obj_sha256": "aae6cc732e8ce6926f30e044262c062842387d54d452f79e5f9dcdabb3d6fc5c",
+      "mtl_sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+      "triangle_budget": 2400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/barracks_crimson_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/barracks_crimson_lod1.mtl",
+          "bounds": {
+            "min": [
+              -3.988462,
+              0.0125,
+              -2.9875
+            ],
+            "max": [
+              3.988462,
+              5.75,
+              2.9875
+            ]
+          },
+          "triangle_count": 318,
+          "obj_sha256": "1033c343966eee419af95476e6d44d720988062ffe3ff91bafa56242352ab69d",
+          "mtl_sha256": "6f155843b8f7989645568f4ccd4a2d16847aaede3aad74d6bc48eb667de51a96",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/barracks_crimson_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/barracks_crimson_collision.mtl",
+          "bounds": {
+            "min": [
+              -4.0,
+              0.0,
+              -3.0
+            ],
+            "max": [
+              4.0,
+              5.75,
+              3.0
+            ]
+          },
+          "triangle_count": 80,
+          "obj_sha256": "6447b48e6321945206761b7aab020fa0b8af492121747cfb1d11de92f3c36ff2",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "rally_flag_crimson",
+      "obj_path": "Assets/Models/RTS/Kit/rally_flag_crimson.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/rally_flag_crimson.mtl",
+      "bounds": {
+        "min": [
+          -1.043668,
+          0.0,
+          -0.35
+        ],
+        "max": [
+          0.35,
+          3.0,
+          0.35
+        ]
+      },
+      "triangle_count": 196,
+      "obj_sha256": "6efea6371c9a4526e32bb2f1ad4f9b868882875f8d2d82594d0694092b618553",
+      "mtl_sha256": "db67ba9ce00670f9affbc4ae304d1de23d85a53460c22fd3c1d9a46b3b5a6940",
+      "triangle_budget": 400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/rally_flag_crimson_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/rally_flag_crimson_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.043225,
+              0.0125,
+              -0.3375
+            ],
+            "max": [
+              0.338462,
+              3.001143,
+              0.3375
+            ]
+          },
+          "triangle_count": 70,
+          "obj_sha256": "6ff1cea403459d91063b7e465b3b370d5c780f4b24dc3eeb3b3375573e332e00",
+          "mtl_sha256": "db67ba9ce00670f9affbc4ae304d1de23d85a53460c22fd3c1d9a46b3b5a6940",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/rally_flag_crimson_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/rally_flag_crimson_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.043668,
+              0.0,
+              -0.35
+            ],
+            "max": [
+              0.35,
+              3.0,
+              0.35
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "74871b7bed03e05e54b0a37b3c61288f67c65a505325a0b3924231e665010711",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "resource_node",
+      "obj_path": "Assets/Models/RTS/Kit/resource_node.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/resource_node.mtl",
+      "bounds": {
+        "min": [
+          -1.446629,
+          0.0,
+          -1.357339
+        ],
+        "max": [
+          1.44172,
+          3.0,
+          1.324887
+        ]
+      },
+      "triangle_count": 494,
+      "obj_sha256": "9f1a3e047d4029bb5d767da818a3a44afa8d5a52a6c29bb8ea1e5437682c70af",
+      "mtl_sha256": "e8a72f6685657da14a6e0285c6bda73823ddd9a4f53f8e8775497d959497c16e",
+      "triangle_budget": 1600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/resource_node_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/resource_node_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.442032,
+              -0.015625,
+              -1.352638
+            ],
+            "max": [
+              1.434479,
+              3.0,
+              1.314147
+            ]
+          },
+          "triangle_count": 176,
+          "obj_sha256": "2847b0b5d482752c973cf589668dc827d8339aacefa0f3422af497aad371ee85",
+          "mtl_sha256": "e8a72f6685657da14a6e0285c6bda73823ddd9a4f53f8e8775497d959497c16e",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/resource_node_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/resource_node_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.446629,
+              0.0,
+              -1.357339
+            ],
+            "max": [
+              1.44172,
+              3.0,
+              1.324887
+            ]
+          },
+          "triangle_count": 92,
+          "obj_sha256": "d2f1c4e59bb5e857b6b8cd6b67745fbb91b90cfdab5aab0fb012cf0f9235a1dd",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "unit_marker",
+      "obj_path": "Assets/Models/RTS/Kit/unit_marker.obj",
+      "mtl_path": "Assets/Models/RTS/Kit/unit_marker.mtl",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.05,
+          0.5
+        ]
+      },
+      "triangle_count": 240,
+      "obj_sha256": "d7f0906691cdd8cadd9a777266420aa07b6adf3b3adad674dd3b73f71aa5e7e6",
+      "mtl_sha256": "fd48f3a5a451301e4db0c1ecd675383b0530c9ca26256a4fde60cf66bfc81477",
+      "triangle_budget": 300,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RTS/Kit/unit_marker_lod1.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/unit_marker_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.5,
+              0.0,
+              -0.5
+            ],
+            "max": [
+              0.483006,
+              0.05,
+              0.5
+            ]
+          },
+          "triangle_count": 86,
+          "obj_sha256": "6d8a2f570a294fd22f225508bc7aa3352b50613e4f8f99f20af40e2acf1e4269",
+          "mtl_sha256": "fd48f3a5a451301e4db0c1ecd675383b0530c9ca26256a4fde60cf66bfc81477",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RTS/Kit/unit_marker_collision.obj",
+          "mtl_path": "Assets/Models/RTS/Kit/unit_marker_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.5,
+              0.0,
+              -0.5
+            ],
+            "max": [
+              0.5,
+              0.05,
+              0.5
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "b1235d03979360ebfa55b52728866e8b67abc8ee14031a7c19fdd129dbf77663",
+          "mtl_sha256": "eaacddf4ec8d2856dc566606670351fcd7cbb953469257d1af75129b7171c093",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

@@ -502,44 +502,6 @@ namespace SparkEditor
     {
         /// Drag-and-drop payload type for World-backed hierarchy rows (raw uint32 entity id).
         constexpr const char* kWorldEntityPayload = "SPARK_WORLD_ENTITY";
-
-        /// Relink an entity under a new parent (or entt::null to unparent),
-        /// maintaining both Transform.parent and the parents' children vectors.
-        /// Adds a Transform to child/new parent if missing. No-ops on invalid
-        /// entities so stale undo/redo lambdas are safe after deletions.
-        void SetWorldEntityParent(::World* world, ::EntityID child, ::EntityID newParent)
-        {
-            if (!world)
-                return;
-            entt::registry& registry = world->GetRegistry();
-            if (!registry.valid(child))
-                return;
-
-            ::Transform* childT = world->GetComponent<::Transform>(child);
-            if (!childT)
-                childT = &world->AddComponent<::Transform>(child);
-
-            // Detach from the current parent's children list.
-            if (childT->parent != entt::null && registry.valid(childT->parent))
-            {
-                if (::Transform* oldPT = world->GetComponent<::Transform>(childT->parent))
-                {
-                    auto& kids = oldPT->children;
-                    kids.erase(std::remove(kids.begin(), kids.end(), child), kids.end());
-                }
-            }
-            childT->parent = entt::null;
-
-            // Attach to the new parent (if any).
-            if (newParent != entt::null && registry.valid(newParent))
-            {
-                ::Transform* newPT = world->GetComponent<::Transform>(newParent);
-                if (!newPT)
-                    newPT = &world->AddComponent<::Transform>(newParent);
-                childT->parent = newParent;
-                newPT->children.push_back(child);
-            }
-        }
     } // namespace
 
     void HierarchyPanel::RenderWorldHierarchy()
@@ -783,39 +745,9 @@ namespace SparkEditor
 
     void HierarchyPanel::ReparentWorldEntity(::EntityID child, ::EntityID newParent)
     {
-        if (!m_world)
+        // Same undo surface as rename/duplicate; refuses cycles and no-ops.
+        if (!m_world || !SceneEditTools::CommitEntityReparent(*m_world, child, newParent))
             return;
-        entt::registry& registry = m_world->GetRegistry();
-        if (!registry.valid(child) || child == newParent)
-            return;
-
-        // Refuse cycles: newParent must not be child itself (above) or any
-        // descendant of child — walk up from newParent looking for child.
-        for (::EntityID walk = newParent; walk != entt::null && registry.valid(walk);)
-        {
-            if (walk == child)
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor,
-                               "Reparent refused: entity %u is an ancestor of target parent %u",
-                               static_cast<uint32_t>(child), static_cast<uint32_t>(newParent));
-                return;
-            }
-            const ::Transform* wt = m_world->GetComponent<::Transform>(walk);
-            walk = wt ? wt->parent : entt::null;
-        }
-
-        const ::Transform* childT = m_world->GetComponent<::Transform>(child);
-        const ::EntityID oldParent =
-            (childT && childT->parent != entt::null && registry.valid(childT->parent)) ? childT->parent : entt::null;
-        if (oldParent == newParent)
-            return; // No-op.
-
-        ::World* capturedWorld = m_world;
-        auto& history = Spark::Editor::CommandHistory::GetInstance();
-        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [capturedWorld, child, newParent]() { SetWorldEntityParent(capturedWorld, child, newParent); },
-            [capturedWorld, child, oldParent]() { SetWorldEntityParent(capturedWorld, child, oldParent); },
-            "Reparent Entity"));
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Reparented ECS entity %u under %s", static_cast<uint32_t>(child),
                        newParent == entt::null ? "<root>" : std::to_string(static_cast<uint32_t>(newParent)).c_str());

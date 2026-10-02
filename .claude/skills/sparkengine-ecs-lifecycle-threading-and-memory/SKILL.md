@@ -180,16 +180,18 @@ thin wrapper over one `entt::registry`. `EntityID = entt::entity`
   first, so the callback may safely enqueue new items (processed next flush)
   and exceptions in the callback are caught and logged, not propagated.
   `DeferredQueue` is **not thread-safe** — synchronize externally.
-- Production examples: `LifecycleSystem` (death), `DecalSystem` (expiry),
-  `ProjectileSystem` (expiry) each keep a persistent member queue to avoid
-  per-frame heap allocation.
+- Production examples: `DecalSystem` (expiry) and `ProjectileSystem` (expiry)
+  each keep a persistent member queue to avoid per-frame heap allocation.
 
-**Lifecycle events:** `LifecycleSystem` fires its `DeathCallback` once per
-entity per `HealthComponent::isDead == true` detection; the callback (single
-slot, last-set wins) is responsible for destroying the entity or clearing the
-flag, otherwise it fires again next frame. Registration:
-`lifecycleSys->SetDeathCallback(...)` via
-`GetPhaseSystemManagerImpl().GetSystem("LifecycleSystem")`.
+**Lifecycle events:** `LifecycleSystem` has no death callback (one existed but
+production never registered it, so it was removed). It only latches
+`HealthComponent::deathProcessed` the first frame it sees `isDead == true`.
+The death response and `Spark::EntityKilledEvent` belong to the gameplay system
+that dealt the lethal damage (`AbilitySystem` publishes it for ability kills);
+subscribe on the EventBus. Anything that revives an entity must clear both
+flags: `HealthComponent::Revive()`, or `HealthComponent::SetHealth()` for an
+authoritative write (snapshot, respawn); otherwise the next death is never
+latched and `InvalidStateDetector` reports `deathProcessed=true but isDead=false`.
 
 **Hierarchy:** `Transform.parent` (`entt::null` = root) + `children` vector.
 Origin rebasing (§5) shifts **root transforms only**; children inherit.

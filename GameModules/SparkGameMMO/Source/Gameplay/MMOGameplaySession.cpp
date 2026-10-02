@@ -262,6 +262,8 @@ namespace MMO
         const auto* dungeon = m_dungeonSystem ? m_dungeonSystem->GetDungeon(dungeonId) : nullptr;
         if (!dungeon)
             return "Unknown dungeon ID " + std::to_string(dungeonId);
+        if (!dungeon->IsEnterable())
+            return dungeon->name + " is not enterable: its scene has not been authored";
 
         const uint32_t instanceId =
             m_dungeonSystem->CreateInstance(dungeonId, DungeonDifficulty::Normal, {m_characterId});

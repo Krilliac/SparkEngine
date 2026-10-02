@@ -20,7 +20,49 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 SOURCE_SHA = "0123456789abcdef0123456789abcdef01234567"
+PREVIOUS_SOURCE_SHA = "fedcba9876543210fedcba9876543210fedcba98"
 PREVIOUS_SIGNER_THUMBPRINT = "A" * 40
+REVIEWED_BASELINE_SHA = "b" * 40
+
+
+def write_runtime_fixture(argv):
+    """Generated child-process evidence for the MSI orchestration fixtures."""
+    if "--record-file" not in argv:
+        return False
+    path = Path(argv[argv.index("--record-file") + 1])
+    path.write_text(json.dumps({
+        "schemaVersion": 1, "result": "PASS", "module": "SparkGameFPS",
+        "commitSha": argv[argv.index("--commit-sha") + 1],
+        "msiSha256": argv[argv.index("--msi-sha256") + 1],
+        "assetIntegrity": {"result": "PASS", "entries": 12},
+        "authoredSceneVisual": {"result": "PASS", "contract": "VerifyFPSAuthoredScene.cmake"},
+        "saveReload": {"result": "PASS", "contract": "RunSparkHeadlessFPSSaveReload.cmake"},
+        "repositoryIsolation": {"result": "PASS", "contract": "windows_appcontainer_run.py"},
+        "headlessNoDisplay": "unproven",
+    }), encoding="utf-8")
+    return True
+
+
+def setUpModule():
+    """Build fixtures under the canonical temp root, not through an OS-owned alias.
+
+    The qualifier rejects an MSI path with any symlink component. macOS's default
+    temp root lives under ``/var``, a symlink to ``/private/var``, so fixtures made
+    there would trip that guard before the drill under test ever runs. Resolving
+    the root once keeps the guard's no-traversal property intact for the fixtures.
+    """
+    tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
+
+
+def fake_git(parents, *, returncode=0, calls=None):
+    """Answer only ``git rev-list --parents -n 1 <sha>`` with the given parents."""
+    def git_runner(argv, **kwargs):
+        if calls is not None:
+            calls.append(list(argv))
+        if argv[:5] != ["git", "rev-list", "--parents", "-n", "1"] or len(argv) != 6:
+            raise AssertionError(f"unexpected git command {argv!r}")
+        return subprocess.CompletedProcess(argv, returncode, stdout=" ".join([argv[5], *parents]) + "\n", stderr="")
+    return git_runner
 
 
 def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version="1.2.3"):
@@ -33,6 +75,68 @@ def write_shipping_package_manifest(path, msi, *, source_sha=SOURCE_SHA, version
         "msi": msi.name,
         "sha256": hashlib.sha256(msi.read_bytes()).hexdigest(),
     }), encoding="utf-8")
+
+
+def write_previous_receipt(path, old_msi, old_manifest, *, current_version="1.2.3", previous_version="1.2.2",
+                           tag_commit_sha=PREVIOUS_SOURCE_SHA, **overrides):
+    """Mirror the provision-previous-windows-msi.py receipt for the fixture predecessor."""
+    msi_bytes = old_msi.read_bytes()
+    manifest_bytes = old_manifest.read_bytes()
+    receipt = {
+        "schema": "spark-previous-windows-msi-v1",
+        "repository": "fixture-owner/SparkEngine",
+        "current_version": current_version,
+        "previous_version": previous_version,
+        "tag": f"v{previous_version}",
+        "tag_commit_sha": tag_commit_sha,
+        "release_id": 4101,
+        "release_immutable": True,
+        "msi": {
+            "id": 5101, "name": old_msi.name, "size": len(msi_bytes),
+            "digest": hashlib.sha256(msi_bytes).hexdigest(),
+            "downloaded_sha256": hashlib.sha256(msi_bytes).hexdigest(),
+            "path": "packages/" + old_msi.name,
+        },
+        "manifest": {
+            "id": 5102, "name": "shipping-package-manifest.json", "size": len(manifest_bytes),
+            "digest": hashlib.sha256(manifest_bytes).hexdigest(), "path": "shipping-package-manifest.json",
+        },
+    }
+    receipt.update(overrides)
+    path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+class WindowsMSIRuntimeEvidenceTests(unittest.TestCase):
+    def test_runtime_result_rejects_missing_mismatched_and_false_evidence(self):
+        with mock.patch.object(Path, "write_text") as write:
+            write_runtime_fixture(["--record-file", "unused", "--commit-sha", SOURCE_SHA,
+                                   "--msi-sha256", "a" * 64])
+            original = json.loads(write.call_args.args[0])
+        with mock.patch.object(MODULE.strict_json, "read_file_no_follow_bytes",
+                               return_value=json.dumps(original).encode()):
+            self.assertEqual(MODULE._runtime_asset_count(Path("unused"), SOURCE_SHA, "a" * 64), 12)
+        mutations = [{**original, "commitSha": "b" * 40}, {**original, "msiSha256": "b" * 64},
+                     {**original, "saveReload": {"result": "FAIL"}},
+                     {**original, "headlessNoDisplay": "PASS"}, {**original, "schemaVersion": True},
+                     {key: value for key, value in original.items() if key != "repositoryIsolation"}]
+        mutations.extend({**original, "assetIntegrity": {"result": "PASS", "entries": count}}
+                         for count in (0, -1, True, "12"))
+        for result in mutations:
+            with self.subTest(result=result), mock.patch.object(MODULE.strict_json, "read_file_no_follow_bytes",
+                                                                return_value=json.dumps(result).encode()):
+                with self.assertRaises(ValueError):
+                    MODULE._runtime_asset_count(Path("unused"), SOURCE_SHA, "a" * 64)
+
+    def test_canonical_writer_is_accepted_by_the_real_artifact_consumer(self):
+        import artifacts
+        with mock.patch.object(MODULE.package_evidence_io, "publish_bytes_no_replace") as publish:
+            MODULE._write_package_smoke_log(Path("unused"), SOURCE_SHA, "a" * 64, 12)
+            payload = publish.call_args.args[1]
+        self.assertEqual(artifacts.validate_package_smoke_bytes(
+            payload, "package-smoke.log", "SparkGameFPS", expected_sha=SOURCE_SHA), [])
+        for count in (None, True, 0, -1, "12"):
+            with self.subTest(count=count), self.assertRaises(ValueError):
+                MODULE._write_package_smoke_log(Path("unused"), SOURCE_SHA, "a" * 64, count)
 
 
 class WindowsMSILifecycleTests(unittest.TestCase):
@@ -48,8 +152,9 @@ class WindowsMSILifecycleTests(unittest.TestCase):
         new_msi.write_bytes(b"new fixture MSI")
         old_manifest = root / "old-shipping-package-manifest.json"
         new_manifest = root / "new-shipping-package-manifest.json"
-        write_shipping_package_manifest(old_manifest, old_msi, version="1.2.2")
+        write_shipping_package_manifest(old_manifest, old_msi, source_sha=PREVIOUS_SOURCE_SHA, version="1.2.2")
         write_shipping_package_manifest(new_manifest, new_msi, version="1.2.3")
+        write_previous_receipt(root / "old-provisioning-receipt.json", old_msi, old_manifest)
         module_manifest = root / "SparkEngineGameModules.cmake"
         module_manifest.write_text("fixture manifest", encoding="utf-8")
         return old_packages, new_packages, old_manifest, new_manifest, module_manifest
@@ -57,7 +162,9 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _run_transaction_contract(self, *, root, old_packages, new_packages,
                                   old_manifest, new_manifest, module_manifest,
                                   logs, runner, previous_signer_thumbprint=PREVIOUS_SIGNER_THUMBPRINT,
-                                  powershell="powershell.exe", bootstrap=False):
+                                  powershell="powershell.exe", bootstrap=False, plain=False, previous_receipt=None,
+                                  previous_version="1.2.2", reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
+                                  git_runner=None, drills=frozenset()):
         """Exercise the old->new contract with generated native-process fixtures."""
         def copy_private_verified_file(source, private_directory, destination_name):
             destination = private_directory / destination_name
@@ -81,15 +188,20 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 side_effect=publish_bytes_no_replace,
             ):
                 kwargs = {}
-                if not bootstrap:
+                if not bootstrap and not plain:
                     kwargs.update(
                         previous_packages=old_packages,
-                        previous_version="1.2.2",
+                        previous_version=previous_version,
                         previous_package_manifest=old_manifest,
                         previous_signer_thumbprint=previous_signer_thumbprint,
+                        previous_receipt=previous_receipt or root / "old-provisioning-receipt.json",
                     )
-                else:
-                    kwargs["bootstrap_repair"] = True
+                elif bootstrap:
+                    kwargs.update(
+                        bootstrap_repair=True,
+                        reviewed_baseline_commit=reviewed_baseline_commit,
+                        git_runner=git_runner or fake_git([REVIEWED_BASELINE_SHA]),
+                    )
                 return MODULE._qualify_impl(
                     new_packages,
                     "1.2.3",
@@ -102,6 +214,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     cmake="cmake",
                     source_sha=SOURCE_SHA,
                     package_manifest=new_manifest,
+                    drills=drills,
                     **kwargs,
                 )
         except TypeError as exc:
@@ -115,10 +228,33 @@ class WindowsMSILifecycleTests(unittest.TestCase):
     def _identity_runner(self, calls, state, *, fail_new_runtime=False,
                          mismatch_upgrade_code=False, same_product_code=False,
                          fail_upgrade_command=False, foreign_related_product=False,
-                         fail_previous_install_command=False, signature_changes=None):
+                         fail_previous_install_command=False, signature_changes=None,
+                         interrupt_outcome="rollback"):
         """Deterministic native fixture for the frozen transaction semantics."""
         def runner(argv, log, *, timeout, env=None, cwd=None):
             calls.append(list(argv))
+            state.setdefault("logs", []).append(log.name)
+            if "-File" in argv:
+                self.assertEqual(Path(argv[argv.index("-File") + 1]).name, "new-msi-failure-transform.ps1")
+                transform = Path(argv[argv.index("-Out") + 1])
+                self.assertFalse(transform.exists())
+                transform.write_bytes(b"fixture failure transform")
+                return 0
+            transforms = [arg for arg in argv if str(arg).startswith("TRANSFORMS=")]
+            if transforms and interrupt_outcome != "not-fired":
+                # Windows Installer ran the forced failure and its rollback script.
+                self.assertTrue(Path(transforms[0].split("=", 1)[1]).is_file())
+                install_root = Path(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("INSTALL_ROOT=")))
+                version = re.search(r"SparkEngine-([0-9]+\.[0-9]+\.[0-9]+)-Windows-", " ".join(map(str, argv))).group(1)
+                if interrupt_outcome == "leave-registered":
+                    state.update(installed=True, version=version, install_root=str(install_root))
+                    install_root.mkdir(parents=True, exist_ok=True)
+                elif interrupt_outcome == "leave-residue":
+                    state["install_root"] = str(install_root)
+                    install_root.mkdir(parents=True, exist_ok=True)
+                elif interrupt_outcome == "tamper-tree":
+                    (install_root / "bin" / "SparkEngine.exe").write_bytes(b"half-written new binary")
+                return MODULE.MSI_INSTALL_FAILURE_EXIT
             if env and "SPARK_SIGNATURE_PATH" in env:
                 selected = Path(env["SPARK_SIGNATURE_PATH"])
                 self.assertEqual(selected.parent.name, ".private-previous-package")
@@ -136,6 +272,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 log.write_text(json.dumps(evidence), encoding="utf-8")
                 state["signature_verified_before_install"] = not state["installed"]
                 state["signature_call_index"] = len(calls) - 1
+                return 0
+            if write_runtime_fixture(argv):
                 return 0
             if "-EncodedCommand" in argv:
                 selected_name = Path(env["SPARK_MSI_PATH"]).name
@@ -188,7 +326,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                         state["installed"] = False
                         Path(install_root).mkdir(parents=True, exist_ok=True)
                     return 9
-                Path(install_root).mkdir(parents=True, exist_ok=True)
+                (Path(install_root) / "bin").mkdir(parents=True, exist_ok=True)
+                (Path(install_root) / "bin" / "SparkEngine.exe").write_bytes(f"SparkEngine {state['version']}".encode())
                 return 0
             if any(arg.lower().startswith("/f") for arg in argv):
                 state["repaired"] = True
@@ -431,6 +570,17 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(signature_report["passed"])
             self.assertEqual(signature_report["sha256"], hashlib.sha256(b"old fixture MSI").hexdigest())
             self.assertEqual(signature_report["publisher_thumbprint"], PREVIOUS_SIGNER_THUMBPRINT)
+            receipt_bytes = (root / "old-provisioning-receipt.json").read_bytes()
+            release_report = json.loads((logs / "previous-release.json").read_text(encoding="utf-8"))
+            self.assertEqual(release_report, {
+                "scope": "previous-windows-msi-provisioning-receipt", "previous_version": "1.2.2",
+                "msi": "SparkEngine-1.2.2-Windows-AMD64-MinSizeRel-Runtime.msi",
+                "sha256": hashlib.sha256(b"old fixture MSI").hexdigest(),
+                "receipt_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
+                "repository": "fixture-owner/SparkEngine", "tag": "v1.2.2",
+                "tag_commit_sha": PREVIOUS_SOURCE_SHA, "release_id": 4101,
+                "msi_asset_id": 5101, "manifest_asset_id": 5102, "passed": True,
+            })
             first_install = next(index for index, call in enumerate(calls) if call[0] == "msiexec.exe")
             self.assertLess(state["signature_call_index"], first_install)
             self.assertIsNone(state["version"])
@@ -644,6 +794,215 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(any("Uninstall residue remains" in error for error in report["errors"]))
             self.assertTrue(Path(state["install_root"]).exists())
 
+    def _run_interrupt_drill(self, root, *, interrupt_outcome="rollback", bootstrap=False, log_name="interrupt-logs"):
+        old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+        calls = []
+        state = {"installed": False, "version": None, "repaired": False, "install_root": str(root / "install")}
+        logs = root / log_name
+        result = self._run_transaction_contract(
+            root=root, old_packages=old_packages, new_packages=new_packages,
+            old_manifest=old_manifest, new_manifest=new_manifest,
+            module_manifest=module_manifest, logs=logs, bootstrap=bootstrap,
+            runner=self._identity_runner(calls, state, interrupt_outcome=interrupt_outcome),
+            drills=frozenset({"interrupt"}),
+        )
+        return result, calls, state, logs
+
+    def test_interrupted_upgrade_reverifies_previous_install_before_real_upgrade(self):
+        """Installer_Interrupted: a forced mid-upgrade failure leaves the predecessor exactly in place."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw))
+            self.assertEqual(result, 0, (logs / "result.json").read_text(encoding="utf-8") if result else "")
+            order = state["logs"]
+            for expected in ("install-previous.log", "interrupt-transform.log", "upgrade-interrupted.log",
+                             "identity-interrupt-previous-after.log", "identity-interrupt-current-after.log",
+                             "upgrade.log"):
+                self.assertIn(expected, order)
+            self.assertLess(order.index("install-previous.log"), order.index("interrupt-transform.log"))
+            self.assertLess(order.index("interrupt-transform.log"), order.index("upgrade-interrupted.log"))
+            self.assertLess(order.index("upgrade-interrupted.log"), order.index("identity-interrupt-previous-after.log"))
+            self.assertLess(order.index("identity-interrupt-current-after.log"), order.index("upgrade.log"))
+            interrupted = calls[order.index("upgrade-interrupted.log")]
+            self.assertIn("/i", interrupted)
+            self.assertTrue(any(str(arg).startswith("TRANSFORMS=") for arg in interrupted))
+            self.assertIn("SparkEngine-1.2.3-", " ".join(map(str, interrupted)))
+            real_upgrade = calls[order.index("upgrade.log")]
+            self.assertFalse(any(str(arg).startswith("TRANSFORMS=") for arg in real_upgrade))
+            drill = json.loads((logs / "interrupt-drill.json").read_text(encoding="utf-8"))
+            self.assertEqual(drill["mode"], "upgrade")
+            self.assertEqual(drill["exit_code"], 1603)
+            self.assertEqual(drill["previous_version"], "1.2.2")
+            self.assertEqual(drill["protected_files"], 1)
+            self.assertTrue(drill["passed"])
+
+    def test_interrupted_upgrade_that_does_not_fail_is_rejected_and_rolled_back(self):
+        """Installer_Rollback: a transform that never fired is a failed drill, and the upgrade is undone."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw), interrupt_outcome="not-fired")
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("upgrade-interrupted exited 0, expected 1603", " ".join(report["errors"]))
+            self.assertIn("identity-upgrade-failure.log", state["logs"])
+            self.assertIn("rollback-uninstall-new.log", state["logs"])
+            self.assertIn("rollback-install-previous.log", state["logs"])
+            self.assertNotIn("upgrade.log", state["logs"])
+            self.assertFalse((logs / "interrupt-drill.json").exists())
+            self.assertFalse(state["installed"])
+
+    def test_interrupted_upgrade_that_changes_installed_files_fails(self):
+        """Installer_Interrupted: rollback that leaves a different binary behind is not a recovery."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw), interrupt_outcome="tamper-tree")
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("interrupted upgrade changed the previous installed files", " ".join(report["errors"]))
+            self.assertNotIn("upgrade.log", state["logs"])
+            self.assertIn("uninstall.log", state["logs"])
+
+    def test_interrupted_bootstrap_install_leaves_nothing_behind(self):
+        """Installer_Interrupted: an interrupted fresh install registers nothing and leaves no files."""
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(Path(raw), bootstrap=True)
+            self.assertEqual(result, 0, (logs / "result.json").read_text(encoding="utf-8") if result else "")
+            order = state["logs"]
+            self.assertLess(order.index("install-interrupted.log"), order.index("identity-interrupt-after.log"))
+            self.assertLess(order.index("identity-interrupt-after.log"), order.index("install.log"))
+            drill = json.loads((logs / "interrupt-drill.json").read_text(encoding="utf-8"))
+            self.assertEqual(drill["mode"], "install")
+            self.assertTrue(drill["passed"])
+
+    def test_interrupted_install_leaving_registration_or_residue_fails_and_is_cleaned(self):
+        """Installer_Interrupted: partial activation fails closed and still reaches uninstall."""
+        for outcome, message in (("leave-registered", "interrupted install left a registered product"),
+                                 ("leave-residue", "interrupted install left residue")):
+            with self.subTest(outcome=outcome), tempfile.TemporaryDirectory() as raw:
+                result, calls, state, logs = self._run_interrupt_drill(
+                    Path(raw), interrupt_outcome=outcome, bootstrap=True)
+                self.assertNotEqual(result, 0)
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertIn(message, " ".join(report["errors"]))
+                self.assertNotIn("install.log", state["logs"])
+                self.assertIn("uninstall.log", state["logs"])
+                if outcome == "leave-registered":
+                    self.assertFalse(state["installed"])
+
+    def test_unknown_drill_is_rejected(self):
+        with self.assertRaises(MODULE.argparse.ArgumentTypeError):
+            MODULE.parse_drills("interrupt,teleport")
+        self.assertEqual(MODULE.parse_drills("interrupt"), frozenset({"interrupt"}))
+        self.assertEqual(MODULE.parse_drills("interrupt,repair,repeatability"), MODULE.DRILLS)
+        argv = [
+            "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
+            "--manifest", "modules.cmake", "--package-manifest", "package.json",
+            "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
+            "--drills", "interrupt,teleport",
+        ]
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE.main()
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("unknown drill(s) 'teleport'", stderr.getvalue())
+        with tempfile.TemporaryDirectory() as raw, self.assertRaises(ValueError):
+            MODULE._qualify_impl(Path(raw), "1.2.3", Path(raw), Path(raw), Path(raw) / "logs",
+                                 msiexec="msiexec.exe", powershell="powershell.exe", cmake="cmake",
+                                 drills=frozenset({"teleport"}))
+
+    def test_release_qualifications_run_the_interrupt_drill(self):
+        """Both versioned release qualification steps (v1 N-1 and v0.9.0 bootstrap) run the drill."""
+        release = (Path(__file__).resolve().parents[1] / "workflows" / "release.yml").read_text(encoding="utf-8")
+        invocations = release.split("python .github/scripts/qualify-windows-msi.py")[1:]
+        self.assertEqual(len(invocations), 2)
+        for invocation in invocations:
+            command = invocation.split("if ($LASTEXITCODE -ne 0)", 1)[0]
+            self.assertIn("--drills interrupt", command)
+        self.assertTrue(MODULE.FAILURE_TRANSFORM_SCRIPT.is_file())
+
+    def test_required_package_job_runs_interrupt_repair_and_repeatability(self):
+        build = (Path(__file__).resolve().parents[1] / "workflows/build.yml").read_text(encoding="utf-8")
+        job = build.split("\n  module-profile-package-smoke:\n", 1)[1].split("\n  # ====", 1)[0]
+        self.assertIn("--drills interrupt,repair,repeatability", job)
+        for name in ("interrupt", "repair", "repeatability"):
+            self.assertIn(f"msi-qualification/{name}-drill.json", job)
+
+    def _run_plain_drills(self, root, drills, *, mutation=None):
+        old_packages, new_packages, old_manifest, new_manifest, manifest = self._transaction_fixture(root)
+        calls, state = [], {"installed": False, "version": None, "repaired": False}
+        native = self._identity_runner(calls, state)
+
+        def runner(argv, log, **kwargs):
+            code = native(argv, log, **kwargs)
+            if mutation:
+                mutation(log.name, state)
+            return code
+
+        logs = root / "logs"
+        result = self._run_transaction_contract(
+            root=root, old_packages=old_packages, new_packages=new_packages, old_manifest=old_manifest,
+            new_manifest=new_manifest, module_manifest=manifest, logs=logs, runner=runner,
+            plain=True, drills=frozenset(drills),
+        )
+        return result, calls, state, logs
+
+    def test_plain_repair_has_no_baseline_or_predecessor_requirement(self):
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_plain_drills(Path(raw), {"repair"})
+            self.assertEqual(result, 0)
+            self.assertTrue(state["repaired"])
+            self.assertFalse((logs / "bootstrap-baseline.json").exists())
+            self.assertFalse((logs / "previous-release.json").exists())
+            self.assertEqual(json.loads((logs / "repair-drill.json").read_text())["n_minus_one"], False)
+            self.assertFalse(state["installed"])
+
+    def test_repeatability_two_uninstalls_and_identical_payload(self):
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_plain_drills(Path(raw), MODULE.DRILLS)
+            self.assertEqual(result, 0)
+            self.assertEqual(sum("/x" in call for call in calls), 2)
+            self.assertEqual(sum("/i" in call for call in calls), 3)  # interrupted + two successful installs
+            for call in calls:
+                if call[0] == "msiexec.exe":
+                    self.assertIn("ALLUSERS=", call)
+                    self.assertIn("MSIINSTALLPERUSER=1", call)
+            evidence = json.loads((logs / "repeatability-drill.json").read_text())
+            self.assertEqual(evidence["cycles"], 2)
+            self.assertTrue(evidence["identical_reinstall"])
+            self.assertFalse(Path(state["install_root"]).exists())
+
+    def test_repeatability_rejects_payload_registration_residue_and_user_data_mutations(self):
+        for mutation_kind in ("payload", "registration", "residue", "user-data", "undeclared", "final-undeclared"):
+            with self.subTest(mutation_kind=mutation_kind), tempfile.TemporaryDirectory() as raw:
+                def mutate(label, state):
+                    install = Path(state["install_root"]) if "install_root" in state else None
+                    if label == "reinstall.log" and mutation_kind == "payload":
+                        (install / "bin/SparkEngine.exe").write_bytes(b"changed payload")
+                    if label == "uninstall-cycle-1.log":
+                        if mutation_kind == "registration":
+                            state.update(installed=True, version="1.2.3")
+                        elif mutation_kind == "residue":
+                            install.mkdir()
+                        elif mutation_kind == "user-data":
+                            (install.parent / "localappdata/SparkEngine/release-qualification-sentinel.sav").unlink()
+                        elif mutation_kind == "undeclared":
+                            (install.parent / "localappdata/SparkEngine/unowned.txt").write_text("residue")
+                    if label == "uninstall.log" and mutation_kind == "final-undeclared":
+                        (install.parent / "localappdata/SparkEngine/unowned.txt").write_text("residue")
+
+                result, calls, state, logs = self._run_plain_drills(Path(raw), {"repeatability"}, mutation=mutate)
+                self.assertNotEqual(result, 0)
+                self.assertFalse((logs / "package-smoke.log").exists())
+                self.assertFalse((logs / "repeatability-drill.json").exists())
+
+    def test_repair_rejects_user_data_loss(self):
+        with tempfile.TemporaryDirectory() as raw:
+            def mutate(label, state):
+                if label == "repair.log":
+                    (Path(state["install_root"]).parent /
+                     "localappdata/SparkEngine/release-qualification-sentinel.sav").unlink()
+            result, calls, state, logs = self._run_plain_drills(Path(raw), {"repair"}, mutation=mutate)
+            self.assertNotEqual(result, 0)
+            self.assertFalse((logs / "package-smoke.log").exists())
+
     def test_main_requires_all_previous_artifact_arguments_together(self):
         """CLI transaction inputs are an all-or-none contract."""
         argv = [
@@ -673,6 +1032,137 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 MODULE.main()
         self.assertEqual(raised.exception.code, 2)
         qualify.assert_not_called()
+
+    def test_main_requires_previous_receipt_with_predecessor_inputs(self):
+        argv = [
+            "qualify-windows-msi.py", "--packages", "packages", "--version", "1.2.3",
+            "--manifest", "modules.cmake", "--package-manifest", "package.json",
+            "--runner-temp", "runner-temp", "--logs", "logs", "--source-sha", SOURCE_SHA,
+            "--previous-packages", "previous", "--previous-version", "1.2.2",
+            "--previous-package-manifest", "previous.json",
+            "--previous-signer-thumbprint", PREVIOUS_SIGNER_THUMBPRINT,
+        ]
+        with mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(MODULE, "qualify") as qualify, \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE.main()
+        self.assertEqual(raised.exception.code, 2)
+        qualify.assert_not_called()
+
+    def _assert_rejected_before_native_commands(self, root, logs, expected_error, **kwargs):
+        old_packages, new_packages, old_manifest, new_manifest, module_manifest = (
+            kwargs.pop("fixture") if "fixture" in kwargs else self._transaction_fixture(root)
+        )
+        calls = []
+        state = {"installed": False, "version": None, "repaired": False,
+                 "install_root": str(root / "install")}
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = self._run_transaction_contract(
+                root=root, old_packages=old_packages, new_packages=new_packages,
+                old_manifest=old_manifest, new_manifest=new_manifest,
+                module_manifest=module_manifest, logs=logs,
+                runner=self._identity_runner(calls, state), **kwargs,
+            )
+        self.assertNotEqual(result, 0)
+        self.assertEqual(calls, [])
+        self.assertFalse((logs / "package-smoke.log").exists())
+        self.assertFalse((logs / "previous-release.json").exists())
+        report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+        self.assertFalse(report["passed"])
+        self.assertTrue(any(expected_error in error for error in report["errors"]), report["errors"])
+        return report
+
+    def test_predecessor_version_must_be_strictly_lower_than_candidate(self):
+        for previous_version in ("1.2.3", "1.3.0", "2.0.0"):
+            with self.subTest(previous_version=previous_version), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                old_msi = next(old_packages.iterdir())
+                renamed = old_packages / f"SparkEngine-{previous_version}-Windows-AMD64-MinSizeRel-Runtime.msi"
+                old_msi.rename(renamed)
+                write_shipping_package_manifest(old_manifest, renamed, source_sha=PREVIOUS_SOURCE_SHA,
+                                                version=previous_version)
+                write_previous_receipt(root / "old-provisioning-receipt.json", renamed, old_manifest,
+                                       previous_version=previous_version)
+                self._assert_rejected_before_native_commands(
+                    root, root / "logs", "strictly lower than the candidate version",
+                    fixture=(old_packages, new_packages, old_manifest, new_manifest, module_manifest),
+                    previous_version=previous_version,
+                )
+
+    def test_predecessor_with_candidate_commit_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            fixture = self._transaction_fixture(root)
+            old_packages, _, old_manifest, _, _ = fixture
+            old_msi = next(old_packages.iterdir())
+            write_shipping_package_manifest(old_manifest, old_msi, source_sha=SOURCE_SHA, version="1.2.2")
+            write_previous_receipt(root / "old-provisioning-receipt.json", old_msi, old_manifest,
+                                   tag_commit_sha=SOURCE_SHA)
+            self._assert_rejected_before_native_commands(
+                root, root / "logs", "commitSHA equals the candidate source SHA", fixture=fixture,
+            )
+
+    def test_predecessor_with_candidate_msi_digest_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            fixture = self._transaction_fixture(root)
+            old_packages, _, old_manifest, _, _ = fixture
+            old_msi = next(old_packages.iterdir())
+            old_msi.write_bytes(b"new fixture MSI")
+            write_shipping_package_manifest(old_manifest, old_msi, source_sha=PREVIOUS_SOURCE_SHA, version="1.2.2")
+            write_previous_receipt(root / "old-provisioning-receipt.json", old_msi, old_manifest)
+            self._assert_rejected_before_native_commands(
+                root, root / "logs", "previous MSI digest equals the candidate MSI digest", fixture=fixture,
+            )
+
+    def test_receipt_mismatch_is_rejected_before_any_native_command(self):
+        other_digest = "b" * 64
+        cases = {
+            "candidate version": ({"current_version": "1.2.4"}, "different candidate version"),
+            "previous version": ({"previous_version": "1.2.1"}, "version or tag does not match"),
+            "tag": ({"tag": "v1.2.1"}, "version or tag does not match"),
+            "tag commit": ({"tag_commit_sha": "1" * 40}, "tag commit does not match the predecessor manifest"),
+            "candidate commit": ({"tag_commit_sha": SOURCE_SHA}, "tag commit does not match the predecessor manifest"),
+            "mutable release": ({"release_immutable": False}, "does not identify an immutable release"),
+            "release id": ({"release_id": 0}, "does not identify an immutable release"),
+            "schema": ({"schema": "spark-previous-windows-msi-v0"}, "schema or repository is invalid"),
+            "extra key": ({"unexpected": True}, "closed required schema"),
+            "msi digest": ({"msi": "digest"}, "MSI identity does not match"),
+            "msi asset id": ({"msi": "id"}, "asset id or size is invalid"),
+            "manifest digest": ({"manifest": "digest"}, "manifest identity does not match"),
+        }
+        for label, (override, expected_error) in cases.items():
+            with self.subTest(label), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                fixture = self._transaction_fixture(root)
+                old_packages, _, old_manifest, _, _ = fixture
+                old_msi = next(old_packages.iterdir())
+                receipt_path = root / "old-provisioning-receipt.json"
+                receipt_path.unlink()
+                if override in ({"msi": "digest"}, {"manifest": "digest"}, {"msi": "id"}):
+                    (asset_key, field), = override.items()
+                    write_previous_receipt(receipt_path, old_msi, old_manifest)
+                    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                    receipt[asset_key][field] = other_digest if field == "digest" else -1
+                    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+                else:
+                    write_previous_receipt(receipt_path, old_msi, old_manifest, **override)
+                self._assert_rejected_before_native_commands(root, root / "logs", expected_error, fixture=fixture)
+
+    def test_malformed_or_missing_receipt_is_rejected_before_any_native_command(self):
+        for payload in (None, "not JSON", '{"schema":"a","schema":"b"}', "[]"):
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                fixture = self._transaction_fixture(root)
+                receipt_path = root / "old-provisioning-receipt.json"
+                receipt_path.unlink()
+                if payload is not None:
+                    receipt_path.write_text(payload, encoding="utf-8")
+                self._assert_rejected_before_native_commands(
+                    root, root / "logs", "previous-release provisioning receipt", fixture=fixture,
+                )
 
     def test_repair_preserves_user_data_after_upgrade(self):
         """Repair must restore product files without deleting user-owned data."""
@@ -713,6 +1203,85 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             self.assertTrue(state["repaired"])
             self.assertTrue(state.get("user_data_preserved"))
             self.assertTrue(any("/fvomus" in call for call in calls if call))
+            binding = json.loads((logs / "bootstrap-baseline.json").read_text(encoding="utf-8"))
+            self.assertEqual(binding["source_sha"], SOURCE_SHA)
+            self.assertEqual(binding["reviewed_baseline_commit"], REVIEWED_BASELINE_SHA)
+            self.assertTrue(binding["passed"])
+
+    def test_bootstrap_rejects_missing_or_malformed_baseline_before_native_commands(self):
+        """An unreviewed baselineCommit ("" in readiness.json today) must fail closed."""
+        for baseline in (None, "", "B" * 40, "b" * 39, "not-a-sha"):
+            with self.subTest(baseline=baseline), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "bootstrap-baseline-logs"
+                calls = []
+                state = {"installed": False, "version": None, "repaired": False,
+                         "install_root": str(root / "install")}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state), bootstrap=True,
+                    reviewed_baseline_commit=baseline,
+                )
+                self.assertEqual(result, 1)
+                self.assertEqual(calls, [])
+                self.assertFalse((logs / "bootstrap-baseline.json").exists())
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertFalse(report["passed"])
+                self.assertRegex(" ".join(report["errors"]), "baseline commit")
+
+    def test_bootstrap_rejects_source_whose_parent_is_not_the_reviewed_baseline(self):
+        for parents, returncode in (([], 0), (["c" * 40], 0), ([REVIEWED_BASELINE_SHA, "c" * 40], 0),
+                                    ([REVIEWED_BASELINE_SHA], 128)):
+            with self.subTest(parents=parents, returncode=returncode), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                old_packages, new_packages, old_manifest, new_manifest, module_manifest = self._transaction_fixture(root)
+                logs = root / "bootstrap-parent-logs"
+                calls = []
+                git_calls = []
+                state = {"installed": False, "version": None, "repaired": False,
+                         "install_root": str(root / "install")}
+                result = self._run_transaction_contract(
+                    root=root, old_packages=old_packages, new_packages=new_packages,
+                    old_manifest=old_manifest, new_manifest=new_manifest,
+                    module_manifest=module_manifest, logs=logs,
+                    runner=self._identity_runner(calls, state), bootstrap=True,
+                    git_runner=fake_git(parents, returncode=returncode, calls=git_calls),
+                )
+                self.assertEqual(result, 1)
+                self.assertEqual(calls, [])
+                self.assertEqual(git_calls, [["git", "rev-list", "--parents", "-n", "1", SOURCE_SHA]])
+                self.assertFalse((logs / "bootstrap-baseline.json").exists())
+                report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+                self.assertFalse(report["passed"])
+                self.assertNotIn("reviewed_baseline_commit", report)
+
+    def test_reviewed_baseline_requires_bootstrap_mode(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            new_packages = root / "packages"
+            new_packages.mkdir()
+            with self.assertRaisesRegex(ValueError, "only to bootstrap_repair"):
+                MODULE._qualify_impl(
+                    new_packages, "1.2.3", root / "manifest.cmake", root, root / "logs",
+                    runner=lambda *args, **kwargs: self.fail("native command executed"),
+                    msiexec="msiexec.exe", powershell="powershell.exe", cmake="cmake",
+                    source_sha=SOURCE_SHA, reviewed_baseline_commit=REVIEWED_BASELINE_SHA,
+                )
+
+    def test_cli_requires_reviewed_baseline_with_bootstrap_repair(self):
+        base = ["qualify-windows-msi.py", "--packages", "p", "--version", "0.9.0", "--manifest", "m",
+                "--package-manifest", "pm", "--runner-temp", "t", "--logs", "l", "--source-sha", SOURCE_SHA]
+        for extra in (["--bootstrap-repair"], ["--reviewed-baseline-commit", REVIEWED_BASELINE_SHA]):
+            with self.subTest(extra=extra), mock.patch.object(sys, "argv", base + extra), \
+                    contextlib.redirect_stderr(io.StringIO()) as stderr, \
+                    mock.patch.object(MODULE, "qualify", side_effect=AssertionError("qualified")):
+                with self.assertRaises(SystemExit) as raised:
+                    MODULE.main()
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn("--reviewed-baseline-commit must be supplied together", stderr.getvalue())
 
     @unittest.skipUnless(os.name == "nt", "Windows sharing-mode mutation protection")
     def test_repair_keeps_verified_msi_locked_against_write_replace_and_parent_rename(self):
@@ -880,6 +1449,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root
+                if write_runtime_fixture(argv):
+                    return 0
                 if "-EncodedCommand" in argv:
                     Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
@@ -938,6 +1509,12 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 "[package-smoke] profile=stable-v1\n"
                 f"[package-smoke] commit_sha={SOURCE_SHA}\n"
                 f"[package-smoke] msi_sha256={hashlib.sha256(b'fixture MSI').hexdigest()}\n"
+                "[package-smoke] package_runtime=PASS\n"
+                "[package-smoke] asset_integrity=PASS\n"
+                "[package-smoke] asset_entries=12\n"
+                "[package-smoke] authored_scene_visual=PASS\n"
+                "[package-smoke] save_reload=PASS\n"
+                "[package-smoke] repository_isolation=PASS\n"
                 "[package-smoke] backend=nullrhi result=PASS\n"
                 "[package-smoke] backend=d3d11-warp result=PASS\n"
                 "[package-smoke] exit_code=0\n"
@@ -1013,6 +1590,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root, install_target, private_copy_swapped, identity_copy_swapped, identity_attempted
+                if write_runtime_fixture(argv):
+                    return 0
                 if "-EncodedCommand" in argv:
                     if not identity_attempted:
                         identity_attempted = True
@@ -1161,7 +1740,7 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             with mock.patch.object(MODULE.package_evidence_io.os, "link", side_effect=race_link):
                 with self.assertRaises(MODULE.package_evidence_io.PackageEvidenceIOError):
-                    MODULE._write_package_smoke_log(output, SOURCE_SHA, "a" * 64)
+                    MODULE._write_package_smoke_log(output, SOURCE_SHA, "a" * 64, 12)
 
             self.assertEqual(output.read_text(encoding="utf-8"), "attacker")
 
@@ -1184,6 +1763,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
 
             def runner(argv, log, *, timeout, env=None, cwd=None):
                 nonlocal installed, install_root
+                if write_runtime_fixture(argv):
+                    return 0
                 if "-EncodedCommand" in argv:
                     Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text(json.dumps({
                         "ProductName": "SparkEngine",
@@ -1251,6 +1832,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                     nonlocal install_root, installed
                     calls.append(argv)
                     log.write_text("fixture command output")
+                    if write_runtime_fixture(argv):
+                        return 0
                     if "-EncodedCommand" in argv:
                         if case == "invalid_identity":
                             Path(env["SPARK_MSI_IDENTITY_JSON_PATH"]).write_text("[]")

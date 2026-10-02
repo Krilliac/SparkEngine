@@ -47,6 +47,9 @@ namespace MMO
         m_time = 0.0f;
         m_history.clear();
 
+#ifdef ENABLE_NETWORKING
+        m_pendingInbox = std::make_shared<PendingNetworkInbox>();
+#endif
         SetupNetworkHandlers();
 
         // Post a welcome message
@@ -83,46 +86,109 @@ namespace MMO
                                                                           .allowedFromServer = true,
                                                                           .stringFieldOffset = 1});
 
-        netMgr->RegisterHandler(kMMOChatMessageType,
-                                [this, netMgr](const Spark::Net::NetworkMessage& netMsg)
-                                {
-                                    if (netMsg.payload.size() < 2)
-                                        return;
-
-                                    Spark::Net::NetBuffer buf;
-                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    const uint8_t channelValue = buf.ReadUint8();
-                                    std::string senderName = buf.ReadString();
-                                    std::string text = buf.ReadString();
-                                    if (buf.HasError() || channelValue > static_cast<uint8_t>(ChatChannel::Whisper) ||
-                                        senderName.empty() || text.empty())
-                                    {
-                                        return;
-                                    }
-                                    const auto channel = static_cast<ChatChannel>(channelValue);
-
-                                    // Validate before relaying. Routing by party/area is owned by the
-                                    // authoritative game service; this showcase relays accepted messages.
-                                    if (netMgr->GetRole() == Spark::Net::NetworkRole::Server)
-                                        netMgr->SendToAllExcept(netMsg.senderID, netMsg);
-
-                                    ChatMessage msg{};
-                                    msg.channel = channel;
-                                    msg.senderClientId = netMsg.senderID;
-                                    msg.senderName = senderName;
-                                    msg.text = text;
-                                    msg.timestamp = m_time;
-
-                                    m_history.push_back(msg);
-                                    if (m_history.size() > MAX_HISTORY)
-                                        m_history.pop_front();
-
-                                    auto& console = Spark::SimpleConsole::GetInstance();
-                                    console.LogInfo("[" + std::string(ChannelToString(channel)) + "] " + senderName +
-                                                    ": " + text);
-                                });
+        netMgr->RegisterHandler(
+            kMMOChatMessageType,
+            [weakInbox = std::weak_ptr<PendingNetworkInbox>(m_pendingInbox)](const Spark::Net::NetworkMessage& netMsg)
+            {
+                if (auto inbox = weakInbox.lock())
+                {
+                    EnqueueNetworkChat(*inbox, netMsg);
+                }
+            });
 #endif
     }
+
+#ifdef ENABLE_NETWORKING
+    void MMOChatSystem::EnqueueNetworkChat(PendingNetworkInbox& inbox, const Spark::Net::NetworkMessage& netMsg)
+    {
+        // Any thread (the DedicatedServer tick thread pumps NetworkManager): copy only.
+        std::lock_guard lock(inbox.mutex);
+        if (inbox.messages.size() >= MAX_PENDING_NETWORK)
+        {
+            return;
+        }
+        inbox.messages.push_back({netMsg.senderID, netMsg.channel, netMsg.payload});
+    }
+
+    void MMOChatSystem::DrainNetworkChat()
+    {
+        const auto inbox = m_pendingInbox;
+        if (!inbox)
+        {
+            return;
+        }
+        std::deque<PendingNetworkChat> pending;
+        {
+            std::lock_guard lock(inbox->mutex);
+            pending.swap(inbox->messages);
+        }
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (!netMgr)
+        {
+            return;
+        }
+        for (const auto& item : pending)
+        {
+            HandleNetworkChat(*netMgr, item);
+        }
+    }
+
+    void MMOChatSystem::HandleNetworkChat(Spark::Net::NetworkManager& netMgr, const PendingNetworkChat& received)
+    {
+        const uint32_t senderId = received.senderId;
+        std::optional<WirePayload> decoded = DecodeWirePayload(received.payload);
+        if (!decoded)
+        {
+            return;
+        }
+
+        if (netMgr.GetRole() == Spark::Net::NetworkRole::Server)
+        {
+            // Identity comes from the connection, never from the payload. The connection name itself is
+            // client-chosen and unauthenticated, so the relayed name always carries the server-assigned id.
+            std::string connectionName;
+            {
+                const auto clients = netMgr.GetClients();
+                const auto client = clients.find(senderId);
+                if (client == clients.end())
+                {
+                    return;
+                }
+                connectionName = client->second.name;
+            }
+            std::optional<std::vector<uint8_t>> relayPayload =
+                BuildServerRelayPayload(received.payload, connectionName, senderId);
+            if (!relayPayload)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "MMO chat: dropped %s message from client %u (no server-side routing for it)",
+                               ChannelToString(decoded->channel), static_cast<unsigned>(senderId));
+                return;
+            }
+            Spark::Net::NetworkMessage relay;
+            relay.type = kMMOChatMessageType;
+            relay.channel = received.channel;
+            relay.senderID = senderId;
+            relay.payload = std::move(*relayPayload);
+            netMgr.SendToAllExcept(senderId, relay);
+            decoded->senderName = ServerAttributedSenderName(connectionName, senderId);
+        }
+
+        ChatMessage msg{};
+        msg.channel = decoded->channel;
+        msg.senderClientId = senderId;
+        msg.senderName = decoded->senderName;
+        msg.text = decoded->text;
+        msg.timestamp = m_time;
+
+        m_history.push_back(msg);
+        if (m_history.size() > MAX_HISTORY)
+            m_history.pop_front();
+
+        auto& console = Spark::SimpleConsole::GetInstance();
+        console.LogInfo("[" + std::string(ChannelToString(msg.channel)) + "] " + msg.senderName + ": " + msg.text);
+    }
+#endif
 
     void MMOChatSystem::SendMessage(const std::string& channelName, const std::string& text)
     {
@@ -134,6 +200,18 @@ namespace MMO
         if (!m_initialized || text.empty() ||
             static_cast<uint8_t>(channel) > static_cast<uint8_t>(ChatChannel::Whisper))
             return;
+
+#ifdef ENABLE_NETWORKING
+        // Refuse to put a "private" message on the wire when nothing can route it privately.
+        if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+            netMgr && netMgr->GetRole() != Spark::Net::NetworkRole::None && !IsNetworkRoutableChannel(channel))
+        {
+            Spark::SimpleConsole::GetInstance().LogWarning(
+                "[MMO Chat] " + std::string(ChannelToString(channel)) +
+                " chat is not available in networked sessions yet; message not sent");
+            return;
+        }
+#endif
 
         ChatMessage msg{};
         msg.channel = channel;
@@ -154,15 +232,10 @@ namespace MMO
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
         if (netMgr && netMgr->GetRole() != Spark::Net::NetworkRole::None)
         {
-            Spark::Net::NetBuffer buf;
-            buf.WriteUint8(static_cast<uint8_t>(channel));
-            buf.WriteString(msg.senderName);
-            buf.WriteString(text);
-
             Spark::Net::NetworkMessage netMsg;
             netMsg.type = kMMOChatMessageType;
             netMsg.channel = Spark::Net::ChannelType::ReliableOrdered;
-            netMsg.payload = std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
+            netMsg.payload = EncodeWirePayload(channel, msg.senderName, text);
 
             if (channel == ChatChannel::Global)
             {
@@ -186,6 +259,10 @@ namespace MMO
 
         if (deltaTime > 0.0f)
             m_time += deltaTime;
+
+#ifdef ENABLE_NETWORKING
+        DrainNetworkChat();
+#endif
     }
 
     void MMOChatSystem::Shutdown()
@@ -193,10 +270,16 @@ namespace MMO
 #ifdef ENABLE_NETWORKING
         if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr)
         {
-            // NetworkManager currently has one handler slot per message type and
-            // no unregister API. Replace the DLL-owned callback before unload so
-            // hot reload cannot invoke a lambda whose code/data have been freed.
-            netMgr->RegisterHandler(kMMOChatMessageType, [](const Spark::Net::NetworkMessage&) {});
+            // Remove (never replace) the chat observer: an empty replacement lambda is itself
+            // code in this image, and during hot reload it overwrote the replacement module's
+            // handler. Inside the module's teardown scope NetworkManager leaves a slot the
+            // replacement already owns untouched.
+            netMgr->UnregisterHandler(kMMOChatMessageType);
+        }
+        if (auto inbox = std::move(m_pendingInbox))
+        {
+            std::lock_guard lock(inbox->mutex);
+            inbox->messages.clear();
         }
 #endif
         m_history.clear();

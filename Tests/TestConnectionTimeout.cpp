@@ -19,6 +19,9 @@ using namespace Spark::Net;
 
 static void ResetNM()
 {
+    // Handlers deliberately survive Shutdown(), and these tests' handlers capture
+    // their stack locals; clear it so a later test's Update cannot call into a dead frame.
+    NetworkManager::GetInstance().SetTimeoutHandler({});
     NetworkManager::GetInstance().Shutdown();
 }
 

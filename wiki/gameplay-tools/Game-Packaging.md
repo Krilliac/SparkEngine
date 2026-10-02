@@ -13,6 +13,56 @@ debug symbols) and excludes generated `manifest.txt` metadata. A failed legacy
 package reports the payload files copied before failure, while its output path
 remains empty and no manifest is published.
 
+The behaviours this page describes, and every `spark_cli.py` command and option in
+`Tools/spark-cli/README.md`, are mapped to the tests that prove them in
+`Tools/spark-cli/claims.json`; the `CLI_ClaimsMatchBehavior` CTest fails when a
+claim names a missing test or a documented surface has no claim.
+
+## Installed qualification checks
+
+The required Windows MSI consumer now requests interruption, plain repair and
+two install/uninstall cycles. It compares reinstall payload hashes and retains
+declared external user data. Its runtime helper runs installed asset integrity,
+authored scene/material pixel checks, NullRHI save/reload and AppContainer
+repository-denial controls. These paths still need a native exact-commit run;
+they do not establish no-display execution or Windows sanitizer/soak evidence.
+Native MSI commands use a verified non-elevated user token and per-user MSI
+properties; WiX MSI generation requires CMake 3.29+ for `perUser` scope.
+See the [Windows qualification commands and limitations](../../docs/readiness/WINDOWS-PACKAGE-QUALIFICATION.md).
+
+`tools/check-module-asset-refs.py` validates the shared provenance policy schema,
+the referenced rule's license, and its supporting evidence paths as well as
+asset hashes. Missing or relabelled license metadata fails. `NOASSERTION`
+remains truthful outside stable-v1; no license is inferred for excluded assets.
+
+For a complete Linux build, `SPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON` registers
+`PackageAssets_RepositoryUnreachable`. It installs and copies the runtime,
+mounts only that copy and system runtime directories in bubblewrap, verifies
+the source/build directories are absent, and audits strace file accesses.
+Repository lookups, asset lookups outside the installed Assets root, and missing
+successful asset opens fail. It requires bubblewrap, strace and user namespaces;
+missing prerequisites fail rather than skip. This is Linux NullRHI evidence;
+On native Windows FPS builds, `FPSPackage_RepositoryUnreachable` stages three
+copies of the installed runtime. A fresh AppContainer runs the positive copy
+on NullRHI and D3D11/WARP while source/build canaries must be unreadable; a
+scene-less NullRHI copy and an asset-less D3D11 copy are negative controls.
+The D3D11 run must audit a successful load of the package copy's `level1.scene`
+and save a visible frame. The AppContainer writes to its own profile folder,
+then the runner copies selected logs and the frame into the test output before
+deleting that profile. This is a Windows-only local test; it does not establish
+same-commit release evidence until the built package actually passes it.
+
+`SPARK_ENABLE_PACKAGE_REPEATABILITY_TESTS=ON` registers
+`PackageInstall_Repeatability` on either host. It uses the configured CPack tree's
+real install rules, hashes every installed file, checks identical reinstalls,
+then invokes `SparkUninstall.cmake` twice per cycle. Two cycles must leave only
+the declared `UserData/profile.json` fixture with identical bytes and its parent
+directory. This does not invoke or qualify native MSI/NSIS repair/uninstall.
+
+The `D3D11PassGolden_*` tests cover post-processing passes. They do not supply a
+canonical installed FPS scene baseline. Canonical package rendering remains
+open until a reviewed WARP baseline and an installed-package run are available.
+
 ## Overview
 
 > **Current readiness boundary:** the repository asset-integrity check is a
@@ -21,6 +71,47 @@ remains empty and no manifest is published.
 > `Assets/assets.integrity.json` check must not be described as proof of the
 > packaged input. RDY-020 remains open until the in-profile package smoke and
 > verified-input handoff are implemented.
+>
+> The CMake/CPack stable-v1 runtime package installs only the SparkGameFPS
+> runtime asset closure, with no `NOASSERTION` asset (OD-09), and ships a
+> derived stable-v1 manifest; see
+> [Asset Pipeline](Asset-Pipeline.md#stable-v1-package-asset-profile-od-09).
+> `GamePackager` does not apply package profiles.
+>
+> **Binary dependencies (ENG-220).** Every MSVC image links the `/MD` CRT, so
+> it imports `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll`,
+> which a clean Windows machine does not have. The root `CMakeLists.txt`
+> installs them app-local into `bin/` through `InstallRequiredSystemLibraries`,
+> as the separate `redist` install component. It is separate because the
+> BLD-100 symbol map (`tools/shipping_symbol_manifest.py`) stages
+> `runtime`/`tools`/`samples` and requires a first-party PDB for every image,
+> and Microsoft's DLLs have none in this build. CPack still packs `redist`
+> into the ZIP and the MSI/NSIS installers (`cmake/SparkCPackOptions.cmake`).
+> A manual stage must add it:
+> `cmake --install <build> --config Release --component redist --prefix <stage>`.
+>
+> `tools/pe_import_closure.py <stage>` proves the stage's import closure. It
+> parses every `*.exe`/`*.dll` import and delay-import table. Each imported
+> DLL must sit beside its importer, be an API set (`api-ms-win-*`,
+> `ext-ms-*`), or be an allowlisted OS DLL that is present in `System32`. The
+> check never reads PATH, the build tree or the source tree, and a malformed
+> image or an empty stage fails. `FPSPackage_InstalledRuntime` and
+> `FPSHeadlessPackage_NullRHISaveReload` run it on the staged runtime, samples
+> and redist components. `PEImportClosure_Contract` covers the checker with
+> synthetic PE fixtures on every host. Debug stages are not checked, because
+> the Debug CRT is not redistributable.
+>
+> **Open gap: Vulkan-enabled packages.** When the Vulkan SDK is found and
+> `ENABLE_VULKAN` is ON (the `windows-release` default), `SparkEngine.exe` and
+> `SparkServer.exe` hard-import `vulkan-1.dll`. Only a Vulkan GPU driver
+> installs that DLL, so such a package does not start on a clean or GPU-less
+> machine, NullRHI included, and the closure check correctly fails it. The
+> closure is proven only for `ENABLE_VULKAN=OFF` packages, the
+> `windows-shipping` profile. Configure an FPS package tree with
+> `-DENABLE_VULKAN=OFF`, for example
+> `cmake --preset windows-release -DSPARK_GAME_MODULES=SparkGameFPS -DENABLE_VULKAN=OFF -DBUILD_TESTS=ON`.
+> `Tests/CMakeLists.txt` warns at configure time when an FPS tree links
+> Vulkan. Closing the gap needs a delay-loaded, load-checked Vulkan backend.
 
 | Class | Responsibility |
 |-------|---------------|
@@ -247,7 +338,7 @@ If any step produces fatal errors, the pipeline returns early with `success = fa
 
 ```bash
 cmake --preset windows-release
-cmake --build build --config Release
+cmake --build build/windows-release --config Release
 ```
 
 ### Step 2: Package from C++

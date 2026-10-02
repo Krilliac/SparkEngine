@@ -152,7 +152,7 @@ chmod +x generate.sh
 ### Using CMake Directly
 
 ```bash
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143
 ```
 
 ### CMake Presets
@@ -182,7 +182,7 @@ For a release-configured development build with networking and DXR disabled:
 
 ```bash
 cmake --preset minimal
-cmake --build build --config Release
+cmake --build build/minimal --config Release
 ```
 
 This preset effectively disables networking and DXR. Its AI, animation, save,
@@ -317,14 +317,15 @@ of them fail. That resilience path is not a certified Linux compatibility claim.
 |--------|-------------|
 | `-headless` | Select the host headless entry path. Current host wiring initializes no RHI; wiring the separate `NullRHIDevice` path remains `HEAD-220`. |
 | `-game <path>` | Load a specific game module DLL |
-| `-scene <path>` | Load a specific scene on startup |
+| `-scene <path>` | Run a reflected-scene document (`.sparkscene`, as saved by SparkEditor) without a game module. Windows loads it only when no game module initializes and draws it with the basic renderer. Linux loads it into the engine ECS world, skips implicit module discovery, prints `SPARK_SCENE_LOADED entities=N renderables=M`, and exits 4 when the scene cannot be loaded. It refuses `-scene` combined with `-game`/`-manifest`. Linux does not draw the scene (its basic draw path is a no-op). |
 | `-window-size <W>x<H>` | Override the initial window size, for example `-window-size 1920x1080` |
 | `-no-subprocess` | Skip the optional standalone `SparkConsole` subprocess; the in-process console remains available |
 
 Example:
 
 ```bash
-./SparkEngine -game MyGame.dll -scene Assets/Scenes/Level01.scene -window-size 1920x1080
+./SparkEngine -game MyGame.dll -window-size 1920x1080
+./SparkEngine -headless -scene MyProject/Scenes/Main.sparkscene -test-frames 5
 ```
 
 **Working-directory anchoring.** The host re-anchors the working directory to the executable
@@ -435,7 +436,6 @@ cmake -B build -DENABLE_EDITOR=OFF -DENABLE_NETWORKING=ON ...
 |------|---------|-------------|
 | `BUILD_TESTS` | ON | Build the unit test suite |
 | `ENABLE_EDITOR` | ON (Windows) | Include the ImGui editor |
-| `ENABLE_GRAPHICS` | ON | Declared but currently inert; OFF does not remove graphics/RHI (`HEAD-220`) |
 | `ENABLE_NETWORKING` | ON | Controls networking definitions/libraries; server-process targets have a separate option |
 | `ENABLE_PROFILING` | ON | Controls the `PROFILING_ENABLED` compile definition |
 | `ENABLE_VULKAN` | ON | Controls Vulkan discovery and its support definition; source-glob breadth still needs verification |
@@ -507,7 +507,7 @@ sudo dnf install libX11-devel mesa-libGL-devel
 ```bash
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format -i
 ```
@@ -517,7 +517,7 @@ find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkSha
 **Symptom:** The engine executable starts but immediately crashes or shows a black window.
 
 **Fix:** Check the following:
-1. Ensure your GPU supports DirectX 11 (Windows) or OpenGL 4.5 (Linux)
+1. Ensure your GPU supports DirectX 11 (Windows) or OpenGL 4.5 (the experimental Linux build)
 2. Update your GPU drivers to the latest version
 3. Check the `spark.log` file in the working directory for error messages
 4. Try running in Debug mode for better error messages:
@@ -544,8 +544,8 @@ cmake --build build --config Release --target install
 
 ```bash
 cmake --preset ci-linux-asan
-cmake --build build
-cd build && ctest --output-on-failure --no-tests=error
+cmake --build build/ci-linux-asan
+ctest --test-dir build/ci-linux-asan --output-on-failure --no-tests=error
 ```
 
 ## Project Structure Quick Reference

@@ -21,6 +21,7 @@
 
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
+#include "World/TFTerrainModel.h"
 
 #include "Core/Platform.h" // DirectXMath on Windows / vector-math stubs on Linux
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -55,32 +56,6 @@ namespace Terrafront
 
     struct WorldPresentationDef; // Data/TFDataTables.h (full def in the .cpp)
     class TFWorldCollision;      // World/TFWorldCollision.h (static scene bodies + move resolver)
-
-    /// Procedural heightfield parameters for the Cindral Wastes continent.
-    /// Defaults MUST equal the tf* keys authored in cindral_wastes.scene
-    /// [Terrain]; the scene values override these at load so the authored scene
-    /// and the runtime height function can never drift apart.
-    struct TFTerrainParams
-    {
-        float baseHeight = 8.0f;
-        float duneAmp = 4.0f;
-        float dunePeriodX = 0.0040f;
-        float dunePeriodZ = 0.0035f;
-        float ridgeAmp = 2.0f;
-        // canyon separating the SW (AUC) and SE (HLX) quadrants
-        float canyonX = 2048.0f;
-        float canyonHalfW = 260.0f;
-        float canyonZ0 = 250.0f;
-        float canyonZ1 = 1550.0f;
-        float canyonDepth = 16.0f;
-        // flat build plateau blended in around every region center
-        float plateauRadius = 120.0f;
-        float plateauSkirt = 180.0f;
-        float plateauSky = 40.0f;
-        float plateauFort = 30.0f;
-        float plateauFacility = 26.0f;
-        float plateauOutpost = 20.0f;
-    };
 
     class TFWorldSetup
     {
@@ -118,6 +93,10 @@ namespace Terrafront
         /// on server and client (same params, same region table). Safe to call
         /// from the AreaServer tick thread: reads only load-time-immutable state.
         float TerrainHeightAt(float x, float z) const;
+
+        /// True once this process read its own continent scene's terrain parameters. False means
+        /// TerrainHeightAt is answering with defaults, i.e. another continent's ground.
+        bool TerrainLoaded() const { return m_terrainLoaded; }
 
         /// Render the loaded scene + all ECS visuals (pawns, vehicles,
         /// deployables) for this frame. Called from TerrafrontModule::OnRender —
@@ -164,8 +143,6 @@ namespace Terrafront
       private:
         void LoadSceneAndTerrain();
         void LoadSanctuaryScene(); ///< additive sanctuary_haven.scene visuals (continents lane)
-        void ParseTerrainParams(const std::string& scenePath);
-        float PlateauHeight(const std::string& tier) const;
         /// Data-driven presentation constants (skybox/terrain/ambient/viewmodel/
         /// muzzle-FX/pawn mesh). Returns ctx->data->GetPresentation() when loaded,
         /// else a static default-constructed WorldPresentationDef{} whose
@@ -189,6 +166,7 @@ namespace Terrafront
         std::string m_scenePath; // repo-relative, e.g. Assets/Scenes/MMOFPS/cindral_wastes.scene
         bool m_sceneLoaded{false};
         TFTerrainParams m_terrain;
+        bool m_terrainLoaded{false};
 
         // Static Jolt collision for the authored scene (built on BOTH roles right
         // after scene load; terrain itself stays analytic — see TFWorldCollision.h).

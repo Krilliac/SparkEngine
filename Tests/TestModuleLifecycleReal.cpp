@@ -18,9 +18,16 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #ifndef SPARK_TEST_COMPATIBLE_MODULE_PATH
 #error SPARK_TEST_COMPATIBLE_MODULE_PATH must name the compatible module fixture
@@ -118,10 +125,45 @@ namespace
         std::string m_previous;
     };
 
-    /** @brief Fresh, empty scratch directory removed and recreated per test. */
+    /**
+     * @brief Every switch the compatible fixture reads, cleared for one test.
+     *
+     * CompatibleModule.cpp reads seven process-global SPARK_MODULE_ABI_*
+     * variables. Scoping only the ones a test sets let a value inherited from
+     * the parent environment, or leaked by an earlier test (--shuffle reorders
+     * them), change the outcome: CONTRADICT_INFO_SDK fails LoadModule and
+     * DEPENDS_ON fails initialization. A test that holds this owns the whole
+     * fixture configuration, sets what it needs through the members, and gets
+     * the previous values back on exit.
+     */
+    struct CompatibleFixtureEnvironment
+    {
+        ScopedModuleEnvironment kindGame{"SPARK_MODULE_ABI_KIND_GAME", false};
+        ScopedModuleEnvironment failOnLoad{"SPARK_MODULE_ABI_FAIL_ON_LOAD", false};
+        ScopedModuleEnvironment dependsOn{"SPARK_MODULE_ABI_DEPENDS_ON", false};
+        ScopedModuleEnvironment vetoUnload{"SPARK_MODULE_ABI_VETO_UNLOAD", false};
+        ScopedModuleEnvironment vetoHotReload{"SPARK_MODULE_ABI_VETO_HOT_RELOAD", false};
+        ScopedModuleEnvironment contradictInfoSdk{"SPARK_MODULE_ABI_CONTRADICT_INFO_SDK", false};
+        ScopedModuleEnvironment sentinel{"SPARK_MODULE_ABI_SENTINEL", false};
+    };
+
+    /**
+     * @brief Fresh, empty scratch directory removed and recreated per test.
+     *
+     * The directory name carries this process id. A module whose OnLoad fails
+     * stays mapped until its process exits, so a fixed %TEMP% name let any other
+     * live SparkTests process (a concurrent run, or a hung one) hold the copied
+     * image open, and this run's copy then failed.
+     */
     std::filesystem::path MakeScratchDirectory(std::string_view name)
     {
-        const std::filesystem::path directory = std::filesystem::temp_directory_path() / PathFromUtf8(name);
+#ifdef _WIN32
+        const int processId = _getpid();
+#else
+        const int processId = static_cast<int>(::getpid());
+#endif
+        std::filesystem::path directory = std::filesystem::temp_directory_path() / PathFromUtf8(name);
+        directory += "-" + std::to_string(processId);
         std::error_code ec;
         std::filesystem::remove_all(directory, ec);
         std::filesystem::create_directories(directory, ec);
@@ -134,10 +176,12 @@ namespace
         const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
         std::error_code ec;
         std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing, ec);
+        if (!ec)
+            std::filesystem::copy_file(SidecarPath(source), SidecarPath(destination),
+                                       std::filesystem::copy_options::overwrite_existing, ec);
         if (ec)
-            return false;
-        std::filesystem::copy_file(SidecarPath(source), SidecarPath(destination),
-                                   std::filesystem::copy_options::overwrite_existing, ec);
+            std::cerr << "  could not copy the module fixture to " << PathToUtf8(destination) << ": " << ec.message()
+                      << " (another process may hold that path open)\n";
         return !ec;
     }
 
@@ -164,8 +208,9 @@ namespace
 
 TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
 {
-    const ScopedModuleEnvironment kindGame("SPARK_MODULE_ABI_KIND_GAME", true);
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.kindGame.Set(true);
+    fixture.failOnLoad.Set(true);
 
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleLifecycleGhostEntry");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
@@ -185,7 +230,7 @@ TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
     // stays. Before the fix GetGameModuleName() still named it, so the
     // single-game-module policy REFUSED every subsequent Game-kind module for
     // the rest of the process lifetime.
-    failOnLoad.Set(false);
+    fixture.failOnLoad.Set(false);
     EXPECT_TRUE(manager.GetGameModuleName().empty());
     EXPECT_FALSE(manager.HasInitializedModules());
 
@@ -194,7 +239,7 @@ TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
     EXPECT_FALSE(manager.GetInitializedGameModuleName().empty());
     EXPECT_TRUE(manager.HasInitializedModules());
 
-    kindGame.Set(false);
+    fixture.kindGame.Set(false);
     manager.ShutdownAll();
     manager.UnloadAll();
 
@@ -204,6 +249,7 @@ TEST(ModuleLifecycle_FailedGameLoadDoesNotBlockAReplacementGameModule)
 
 TEST(ModuleLifecycle_ManifestResolvesAForeignPlatformModulePath)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleLifecycleManifestRemap");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     const std::filesystem::path hostImage = directory / source.filename();
@@ -243,7 +289,7 @@ TEST(ModuleLifecycle_ManifestStillReportsATrulyMissingModule)
 
 TEST(ModuleLifecycle_RecordsSuccessfulNewStyleModuleCallbacks)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", false);
+    const CompatibleFixtureEnvironment fixture;
 
     NullEngineContext context;
     ModuleManager manager;
@@ -270,7 +316,8 @@ TEST(ModuleLifecycle_RecordsSuccessfulNewStyleModuleCallbacks)
 
 TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.failOnLoad.Set(true);
 
     NullEngineContext context;
     ModuleManager manager;
@@ -290,7 +337,8 @@ TEST(ModuleLifecycle_RecordsFailedNewStyleModuleInitialization)
 
 TEST(ModuleLifecycle_InitializeAllReturnsFailureWhenOnLoadFails)
 {
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    const CompatibleFixtureEnvironment fixture;
+    fixture.failOnLoad.Set(true);
 
     NullEngineContext context;
     ModuleManager manager;
@@ -304,6 +352,7 @@ TEST(ModuleLifecycle_InitializeAllReturnsFailureWhenOnLoadFails)
 
 TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadRetry");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     std::filesystem::path modulePath = directory / "RetryableModule";
@@ -315,7 +364,7 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
     ASSERT_TRUE(manager.LoadModule(PathToUtf8(modulePath)));
     manager.InitializeAll(&context);
     ASSERT_TRUE(manager.HasInitializedModules());
-    const ScopedModuleEnvironment failOnLoad("SPARK_MODULE_ABI_FAIL_ON_LOAD", true);
+    fixture.failOnLoad.Set(true);
 
     auto& console = Spark::SimpleConsole::GetInstance();
     const bool consoleWasInitialized = console.IsInitialized();
@@ -368,6 +417,7 @@ TEST(ModuleHotReload_FailedPollKeepsChangePendingForRetry)
 
 TEST(ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadPollCallbackException");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     std::filesystem::path modulePath = directory / "PollCallbackExceptionModule";
@@ -432,6 +482,7 @@ TEST(ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions)
 
 TEST(ModuleHotReload_ForceReloadContainsStandardCallbackExceptions)
 {
+    const CompatibleFixtureEnvironment fixture;
     const std::filesystem::path directory = MakeScratchDirectory("SparkModuleHotReloadForceCallbackException");
     const std::filesystem::path source = PathFromUtf8(SPARK_TEST_COMPATIBLE_MODULE_PATH);
     std::filesystem::path modulePath = directory / "ForceCallbackExceptionModule";
@@ -518,4 +569,105 @@ TEST(ModuleLegacyAdapter_FailedLoadCleanupCreatesNoLifecycleRecord)
     const auto evidence = manager.GetLifecycleEvidence();
     EXPECT_EQ(evidence.FindModule("Spark Legacy Adapter Fixture"), nullptr);
     EXPECT_TRUE(evidence.modules.empty());
+}
+
+TEST(ModuleLifecycleRecord_CarriesLoadedLibraryPathAndKind)
+{
+    const CompatibleFixtureEnvironment fixture;
+    fixture.kindGame.Set(true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule("Spark Compatible ABI Fixture");
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->libraryPath, std::string(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    EXPECT_TRUE(record->kind == Spark::ModuleKind::Game);
+    EXPECT_EQ(evidence.FindGameModule(), record);
+}
+
+TEST(ModuleLifecycleRecord_AddonIsNotReportedAsTheGameModule)
+{
+    const CompatibleFixtureEnvironment fixture;
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    ASSERT_TRUE(manager.ShutdownAll());
+    manager.UnloadAll();
+
+    const auto evidence = manager.GetLifecycleEvidence();
+    const auto* record = evidence.FindModule("Spark Compatible ABI Fixture");
+    ASSERT_NE(record, nullptr);
+    EXPECT_TRUE(record->kind == Spark::ModuleKind::Addon);
+    EXPECT_EQ(evidence.FindGameModule(), nullptr);
+}
+
+TEST(ModuleLifecycleRecord_LibraryTargetNameDropsPlatformAffixes)
+{
+    EXPECT_EQ(ModuleManager::LibraryTargetName("SparkGameFPS.dll"), std::string("SparkGameFPS"));
+    EXPECT_EQ(ModuleManager::LibraryTargetName("C:/Games/Spark/bin/SparkGameFPS.dll"), std::string("SparkGameFPS"));
+    EXPECT_EQ(ModuleManager::LibraryTargetName(""), std::string(""));
+#ifdef _WIN32
+    // Windows images carry no CMake shared-library prefix to strip.
+    EXPECT_EQ(ModuleManager::LibraryTargetName("libSparkGameRTS.dll"), std::string("libSparkGameRTS"));
+#else
+    EXPECT_EQ(ModuleManager::LibraryTargetName("build/bin/libSparkGameRTS.so"), std::string("SparkGameRTS"));
+    EXPECT_EQ(ModuleManager::LibraryTargetName("/opt/spark/libSparkGameRacing.dylib"), std::string("SparkGameRacing"));
+    // A bare "lib" stem is a name, not a prefix.
+    EXPECT_EQ(ModuleManager::LibraryTargetName("/opt/spark/lib.so"), std::string("lib"));
+#endif
+}
+
+TEST(ModuleLifecycleRecord_FormatsTheHostRecordByteCompatibly)
+{
+    ModuleManager::ModuleLifecycleRecord record;
+    record.module = "Spark Arena - Engine Showcase";
+    record.libraryPath = "package/bin/SparkGameFPS.dll";
+    record.createModule = 1;
+    record.onLoad = 1;
+    record.onUpdate = 5;
+    record.onFixedUpdate = 4;
+    record.onRender = 5;
+    record.onUnload = 1;
+    record.destroyModule = 1;
+    record.faults = 0;
+
+    // The exact line tools/module-evidence/collect_lifecycle.py and
+    // .github/scripts/qualify-windows-msi.py parse from the Windows host.
+    EXPECT_EQ(ModuleManager::FormatLifecycleRecord(record),
+              std::string("SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=1 load=1 update=5 fixed=4 render=5 "
+                          "unload=1 destroy=1 faults=0"));
+}
+
+TEST(ModuleLifecycleRecord_RetainedManagerCanPublishItsEvidence)
+{
+    const CompatibleFixtureEnvironment fixture;
+    fixture.kindGame.Set(true);
+
+    NullEngineContext context;
+    ModuleManager manager;
+    ASSERT_TRUE(manager.LoadModule(SPARK_TEST_COMPATIBLE_MODULE_PATH));
+    manager.InitializeAll(&context);
+    manager.UpdateAll(1.0F / 60.0F);
+    ASSERT_TRUE(manager.ShutdownAll());
+
+    // A host that keeps module images mapped until process exit never runs the
+    // manager destructor; it publishes the snapshot explicitly instead.
+    manager.PublishLifecycleEvidence();
+    const auto published = ModuleManager::GetLastTeardownLifecycleEvidence();
+    const auto* record = published.FindGameModule();
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->onLoad, 1u);
+    EXPECT_GE(record->onUpdate, 1u);
+    EXPECT_EQ(record->onUnload, 1u);
+    EXPECT_EQ(record->destroyModule, 0u);
+
+    manager.UnloadAll();
 }

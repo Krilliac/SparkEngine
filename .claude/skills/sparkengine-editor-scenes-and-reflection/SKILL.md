@@ -43,7 +43,7 @@ loader rejects the other's files cleanly.
 | Code | `SparkEngine/Source/SceneManager/ReflectedSceneSerializer.{h,cpp}` (`Spark::SaveWorld/LoadWorld/SerializeWorld/DeserializeInto`) | `SparkEditor/Source/SceneSystem/SceneSerializer.{h,cpp}` + `JSONSceneSerializer.cpp` + `SceneComponentCodec.{h,cpp}` |
 | Document type | live ECS `World` | `SparkEditor::SceneFile` |
 | Top-level shape | `{"version": 1, "entities": [...]}` | `{"version": 2, "objects": [...], "components": [...], "environment": {...}, ...}` |
-| Version gate | `"version": 1` is **written but not checked** on load; load only requires an `entities` array | `version` must appear **exactly once** and equal `SCENE_FILE_VERSION` (= 2) or the load fails closed |
+| Version gate | `"version": 1` (or legacy `"sceneVersion": 1`, exactly one of them) must equal 1 **exactly**; no N-1 window, and any other value fails with a bare `false` and no versioned diagnostic (OD-03 gap tracked under SAVE-230) | `version` must appear **exactly once** and be 2 (N) or 1 (N-1, migrated in memory) or the load fails closed with a versioned error |
 | Per-component schema | Fields serialized **as strings** via reflection (`TypeRegistry`/`ComponentFactory`); only fields with `serialized == true`; unknown component types are **skipped with a warning** | Non-marker components require `data: {"schema": 1, "fields": {...}}` where 1 = `SCENE_COMPONENT_SCHEMA_VERSION`; unknown types, wrong schema, or malformed payloads **reject the whole file** |
 | Who uses it in the running editor | **File → Open / Save** (`EditorUI::OpenScene` / `EditorUI::SaveCurrentScene` in `SparkEditor/Source/Core/EditorUI.cpp`, "full-fidelity scene round-trip (C4)") | SceneFile-backed panels (legacy Hierarchy/Inspector fallback path, Physics2D/3D, Tilemap, PostProcessing panels, PrefabManager) and `SceneManager` |
 | Tests | `Tests/TestReflectedScene.cpp`, `Tests/TestReflectedSceneEmissiveHierarchy.cpp` | `Tests/TestSceneSerializer.cpp`, `Tests/TestSceneSerializerReal.cpp` |
@@ -78,15 +78,22 @@ schema-design task, not a bug fix — do not delete the guards.
 
 | Constant | Value | Where | Load behavior on mismatch |
 |---|---|---|---|
-| `SCENE_FILE_VERSION` | 2 | `SceneSystem/SceneFileTypes.h` | Exact match required, field must appear exactly once → whole-file rejection: "Scene file version is unsupported; legacy raw-memory scene payloads must be resaved by a trusted build" |
+| `SCENE_FILE_VERSION` / `SCENE_FILE_OLDEST_READABLE_VERSION` | 2 / 1 | `SceneSystem/SceneFileTypes.h` | Field must appear exactly once and be 1 or 2 (v1 migrates in memory; raw v1 payloads fail closed) → otherwise whole-file rejection with a versioned error naming the window |
 | `SCENE_COMPONENT_SCHEMA_VERSION` | 1 | `SceneSystem/SceneComponentCodec.h` | Per-component `data.schema` must equal 1, `data` must contain exactly `schema` + `fields` → whole-file rejection |
-| Reflected-World `"version"` | 1 | `SceneManager/ReflectedSceneSerializer.cpp` (`root["version"] = 1`) | Written on save, **not validated on load** (only `entities` is required) — labeled `open`: a future v2 has no gate yet |
+| Reflected-World `"version"` | 1 | `SceneManager/ReflectedSceneSerializer.cpp` (`root["version"] = 1`) | Written on save; load requires `version` (or legacy `sceneVersion`) == 1 exactly (`ReflectedSceneSerializer.cpp` `LoadWorld`/`ValidateStrictRecoveryDocument`) and rejects anything else with a bare `false` — `open`: no N-1 window or versioned diagnostic yet (SAVE-230) |
 | `TypeInfo::version` (`SPARK_REFLECT_VERSION`) | per-type | `SparkEngine/Source/Core/Reflection.h` | Reflection schema version for save-file migration; migration mechanics belong to sparkengine-persistence-save-and-migrations |
 
-There is **no scene migration path**: `SceneSerializer::HandleVersionCompatibility`
-rejects any `fileVersion != 2` with a warning; it never upgrades. Old files must be
-resaved by a build that wrote them. (Verified: `TestSceneSerializerReal.cpp` feeds
-`{"version":3}` and a header with `SCENE_FILE_VERSION + 1` and expects rejection.)
+**Scene migration window (OD-03): read v2 (N) and v1 (N-1), write v2.**
+`SceneSerializer::HandleVersionCompatibility` accepts
+`SCENE_FILE_OLDEST_READABLE_VERSION..SCENE_FILE_VERSION` (1..2), upgrades a v1 document
+in memory (header, objects, hierarchy, marker components, environment, camera, asset
+references) and adds a "migrated in memory" warning; the file is untouched until saved.
+A v1 component carrying a raw object-image `data` hex string (or any non-marker v1
+component) fails closed: "Scene file version 1 component <Type> carries a raw
+object-image payload that cannot be migrated to version 2". Any other version fails
+with "Scene file version X is unsupported: this build reads scene versions 1-2 and
+writes version 2; ...". Fixtures: `Tests/Fixtures/Compatibility/SceneFile/` (real v1
+writer output); tests: `SceneMigration_*` (CTest `SparkSceneCompatibilityTests`).
 
 ### Dialect B hardening behaviors (all verified in `JSONSceneSerializer.cpp`)
 
@@ -213,7 +220,7 @@ conditional visibility.
 
 | Symptom | Cause / where to look |
 |---|---|
-| "Scene file version is unsupported; legacy raw-memory scene payloads must be resaved…" | Dialect B loader saw `version` ≠ 2, duplicated, or missing. No migration exists — resave from a trusted build. |
+| "Scene file version X is unsupported: this build reads scene versions 1-2…" / "Scene file must declare exactly one \"version\" field" | Dialect B loader saw a version outside 1..2, or a duplicated/missing version. Newer: open with the newer build. Older: convert with an older build first. |
 | "Scene component requires a registered schema-tagged data object" / "data schema is invalid" | Component `data` missing `{"schema":1,"fields":{}}` shape, or type has no codec (`HasSceneComponentPayloadCodec` in `SceneComponentCodec.cpp`). |
 | "Marker-only scene component must not contain data" | `TRANSFORM`/`SPRITE_ANIMATOR` entry carries a `data` object — remove it. |
 | File → Open fails, console: "Failed to open scene (Spark::LoadWorld)" | Wrong dialect (no `entities` array), unparseable JSON, or unreadable path. Current document is untouched by design. |
@@ -232,7 +239,7 @@ conditional visibility.
 | Reflected-World round trip (transform, mesh, enums/masks, hierarchy) | Implemented + tested (`TestReflectedScene.cpp`, `TestReflectedSceneEmissiveHierarchy.cpp`, registered) + CI-enforced |
 | Undo/redo stack, merge, saved-sequence dirty tracking | Implemented + tested (`TestUndoRedoManager.cpp`, `TestCommandHistory.cpp`, registered) + CI-enforced |
 | SwapWorld history-clear ordering (UAF prevention) | Implemented; enforced by code structure + debugging-playbook check; no dedicated automated test found — treat as code-reviewed, not test-proven |
-| Reflected-World load-time version gate | `open` — version written, never checked |
+| Reflected-World load-time version gate | Exact-match gate (== 1) implemented; OD-03 N-1 window and versioned diagnostic `open` (SAVE-230) |
 | World-backed Inspector undo support | `open` — edits bypass CommandHistory |
 | Blocking unsaved-changes exit prompt | `open` — log-only today |
 | `SparkEditor::SceneManager` (`SceneSystem/SceneManager.{h,cpp}`) | `candidate` — compiled but **no instantiation found anywhere** in editor/engine/tests (the `SceneManager` built in game modules is the engine class, a different type). Per the project's wire-in-or-delete rule, wire it or delete it before building on it. |
@@ -284,7 +291,7 @@ ls SparkEditor/Source/Gizmos
 grep -n "SCENE_FILE_VERSION = " SparkEditor/Source/SceneSystem/SceneFileTypes.h
 grep -n "SCENE_COMPONENT_SCHEMA_VERSION = " SparkEditor/Source/SceneSystem/SceneComponentCodec.h
 # Fail-closed gates still in place
-grep -n "version is unsupported" SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp
+grep -n "is unsupported: " SparkEditor/Source/SceneSystem/SceneSerializer.cpp
 grep -n "Refusing unsupported binary scene" SparkEditor/Source/SceneSystem/BinarySceneSerializer.cpp
 # Reflected dialect still writes version 1 and requires "entities"
 grep -n "root\[\"version\"\] = 1\|contains(\"entities\")" SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp

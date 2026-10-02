@@ -80,6 +80,7 @@ namespace Spark::Net
             return false;
 
         m_config = config;
+
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
             m_stats = ServerStats{};
@@ -95,10 +96,13 @@ namespace Spark::Net
             return false;
         }
 
-        if (!m_config.rconPassword.empty() || m_config.rconPort != 0)
+        if (m_config.maxClients < 1 || m_config.maxClients > MAX_SERVER_CLIENTS)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "rconPassword/rconPort are reserved but inactive; no remote RCON transport is enabled");
+            const std::string reason = "maxClients " + std::to_string(m_config.maxClients) + " outside [1, " +
+                                       std::to_string(MAX_SERVER_CLIENTS) + "]";
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing dedicated-server startup: %s", reason.c_str());
+            Log("ERROR: Refusing dedicated-server startup: " + reason);
+            return false;
         }
 
         if (!m_networkRuntime->Initialize())
@@ -251,6 +255,10 @@ namespace Spark::Net
             m_stats.totalBytesIn = netStats.bytesReceived;
             m_stats.totalBytesOut = netStats.bytesSent;
             m_stats.currentPlayers = playerCount;
+            m_stats.netIncomingQueueDepth = netStats.incomingQueueDepth;
+            m_stats.netOutgoingQueueDepth = netStats.outgoingQueueDepth;
+            m_stats.netIncomingQueuePeak = netStats.incomingQueuePeak;
+            m_stats.netOutgoingQueuePeak = netStats.outgoingQueuePeak;
         }
     }
 
@@ -359,8 +367,8 @@ namespace Spark::Net
 
                                               // Chat is never an administration transport. In particular, a
                                               // leading slash must never reach privileged commands. ExecuteRcon is
-                                              // a trusted in-process API until a separate authenticated
-                                              // remote-admin protocol exists.
+                                              // a trusted in-process API only: remote administration is
+                                              // permanently unavailable in stable-v1 (OD-05).
                                               NetworkMessage broadcast;
                                               broadcast.type = MessageType::ChatMessage;
                                               broadcast.channel = ChannelType::Reliable;
@@ -612,6 +620,12 @@ namespace Spark::Net
         m_rconCommands.push_back({name, description, std::move(handler)});
     }
 
+    std::vector<RconCommand> DedicatedServer::GetRconCommands() const
+    {
+        std::lock_guard<std::mutex> lock(m_rconMutex);
+        return m_rconCommands;
+    }
+
     std::string DedicatedServer::ExecuteRcon(const std::string& commandLine)
     {
         std::string cmdName;
@@ -636,9 +650,6 @@ namespace Spark::Net
         // registry mutex.
         if (handler)
         {
-            std::string response = handler(args);
-            if (m_callbacks.onRconCommand)
-                m_callbacks.onRconCommand(commandLine, response);
             // Arguments and response bodies may contain reusable secrets. Only
             // retain a bounded, log-safe identifier for a registered command.
             const std::string auditName =
@@ -647,7 +658,24 @@ namespace Spark::Net
                             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") == std::string::npos
                     ? cmdName
                     : "<redacted>";
+            std::string response;
+            try
+            {
+                response = handler(args);
+            }
+            catch (...)
+            {
+                // The exception text may echo arguments, so it is neither
+                // logged nor returned; the attempt itself is still audited.
+                SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON: command=%s disposition=failed", auditName.c_str());
+                Log("RCON: command=" + auditName + " disposition=failed");
+                return "Command failed: " + auditName;
+            }
+            // Record the audit line before host callbacks run so a throwing
+            // callback cannot erase the record of a dispatched command.
             Log("RCON: command=" + auditName + " disposition=dispatched");
+            if (m_callbacks.onRconCommand)
+                m_callbacks.onRconCommand(commandLine, response);
             return response;
         }
 

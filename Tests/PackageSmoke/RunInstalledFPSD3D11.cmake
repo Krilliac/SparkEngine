@@ -301,6 +301,8 @@ execute_process(
     COMMAND "${_powershell}" -NoProfile -NonInteractive -File
         "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
         -ImagePath "${_visual_image}"
+        -LogPath "${_run_root}/exec_audit.log"
+        -ExpectedSceneDirectory "${_assets}/Scenes"
     RESULT_VARIABLE _visual_result
     OUTPUT_VARIABLE _visual_stdout
     ERROR_VARIABLE _visual_stderr

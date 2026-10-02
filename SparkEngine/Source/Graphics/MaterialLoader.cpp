@@ -9,12 +9,12 @@
 #include "../Utils/SparkConsole.h"
 #include "../Utils/LogMacros.h"
 
-#include "../Utils/StringUtils.h"
+#include "../Utils/FileUtils.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
+#include <optional>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -83,7 +83,18 @@ namespace Spark::Graphics
 
             if (entry.path().extension() == ".sparkmat")
             {
-                if (LoadMaterial(entry.path().string()))
+                // LoadMaterial() reopens the file through a narrow path. path::string()
+                // throws on Windows for a name the ANSI code page cannot spell, which
+                // used to abort the scan (and the engine start that runs it).
+                const std::optional<std::string> narrow = Spark::FileUtils::TryPathToNarrow(entry.path());
+                if (!narrow)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "MaterialLoader: skipping '%s': its name has no spelling in the active code page",
+                                   Spark::FileUtils::TryPathToUtf8(entry.path()).value_or("?").c_str());
+                    continue;
+                }
+                if (LoadMaterial(*narrow))
                 {
                     anyLoaded = true;
                 }
@@ -97,16 +108,6 @@ namespace Spark::Graphics
     // File Parsing
     // =========================================================================
 
-    /// Trim leading and trailing whitespace from a string.
-    static std::string TrimWhitespace(const std::string& str)
-    {
-        auto start = str.find_first_not_of(" \t\r\n");
-        if (start == std::string::npos)
-            return "";
-        auto end = str.find_last_not_of(" \t\r\n");
-        return str.substr(start, end - start + 1);
-    }
-
     bool MaterialLoader::ParseFile(const std::string& filePath, SparkMatDefinition& outDef) const
     {
         std::ifstream file(filePath);
@@ -117,54 +118,7 @@ namespace Spark::Graphics
             return false;
         }
 
-        outDef = {};
-        std::string line;
-        while (std::getline(file, line))
-        {
-            // Skip empty lines and comments
-            std::string trimmed = TrimWhitespace(line);
-            if (trimmed.empty() || trimmed.starts_with("//"))
-                continue;
-
-            // Split on first '='
-            auto eqPos = trimmed.find('=');
-            if (eqPos == std::string::npos)
-                continue;
-
-            std::string key = TrimWhitespace(trimmed.substr(0, eqPos));
-            std::string value = TrimWhitespace(trimmed.substr(eqPos + 1));
-
-            if (key == "name")
-                outDef.name = value;
-            else if (key == "blendMode")
-                outDef.blendMode = value;
-            else if (key == "metallic")
-                outDef.metallic = Spark::StringUtils::ParseFloat(value).value_or(outDef.metallic);
-            else if (key == "roughness")
-                outDef.roughness = Spark::StringUtils::ParseFloat(value).value_or(outDef.roughness);
-            else if (key == "normalScale")
-                outDef.normalScale = Spark::StringUtils::ParseFloat(value).value_or(outDef.normalScale);
-            else if (key == "occlusionStrength")
-                outDef.occlusionStrength = Spark::StringUtils::ParseFloat(value).value_or(outDef.occlusionStrength);
-            else if (key == "emissiveFactor")
-                outDef.emissiveFactor = Spark::StringUtils::ParseFloat(value).value_or(outDef.emissiveFactor);
-            else if (key == "alphaCutoff")
-                outDef.alphaCutoff = Spark::StringUtils::ParseFloat(value).value_or(outDef.alphaCutoff);
-            else if (key == "albedoTexture")
-                outDef.albedoTexture = value;
-            else if (key == "normalTexture")
-                outDef.normalTexture = value;
-            else if (key == "metallicTexture")
-                outDef.metallicTexture = value;
-            else if (key == "roughnessTexture")
-                outDef.roughnessTexture = value;
-            else if (key == "emissiveTexture")
-                outDef.emissiveTexture = value;
-            else if (key == "occlusionTexture")
-                outDef.occlusionTexture = value;
-        }
-
-        return !outDef.name.empty();
+        return ParseSparkMatDefinition(file, outDef);
     }
 
     // =========================================================================

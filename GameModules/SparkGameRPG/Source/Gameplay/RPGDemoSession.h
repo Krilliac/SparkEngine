@@ -49,10 +49,13 @@ namespace RPG
         [[nodiscard]] uint32_t GetPlayerCharacterId() const { return m_playerCharacterId; }
         [[nodiscard]] uint32_t GetCurrentAreaId() const { return m_currentAreaId; }
         [[nodiscard]] bool IsInCombat() const { return m_activeEncounterId != 0; }
+        [[nodiscard]] const RPGInventoryData& GetPlayerInventory() const { return m_playerInventory; }
 
       private:
         void EquipStarterGear(CharacterClass characterClass);
         void FinishEnemy();
+        /// Complete every finished active quest, delivering its item rewards into the player's pack first.
+        void CompleteFinishedQuests();
         [[nodiscard]] const AbilityDef* GetPrimaryAbility() const;
 
         RPGCharacterSystem* m_characters = nullptr;

@@ -25,8 +25,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <sstream>
+#include <vector>
 
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -56,85 +59,6 @@ namespace Spark
     {
         namespace D3D12
         {
-
-            // ============================================================================
-            // DESCRIPTOR HEAP ALLOCATOR
-            // ============================================================================
-
-            bool DescriptorHeapAllocator::Initialize(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type,
-                                                     uint32_t descriptorCount, bool shaderVisible)
-            {
-                D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-                desc.Type = type;
-                desc.NumDescriptors = descriptorCount;
-                desc.Flags =
-                    shaderVisible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-
-                HRESULT hr = device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_heap));
-                if (FAILED(hr))
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create descriptor heap (type=%d)",
-                                    type);
-                    return false;
-                }
-
-                m_cpuStart = m_heap->GetCPUDescriptorHandleForHeapStart();
-                if (shaderVisible)
-                    m_gpuStart = m_heap->GetGPUDescriptorHandleForHeapStart();
-                m_descriptorSize = device->GetDescriptorHandleIncrementSize(type);
-                m_capacity = descriptorCount;
-                m_nextFreeIndex = 0;
-                return true;
-            }
-
-            DescriptorAllocation DescriptorHeapAllocator::Allocate(uint32_t count)
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                DescriptorAllocation alloc = {};
-
-                // Try free list first for single descriptors
-                while (count == 1 && !m_freeList.empty())
-                {
-                    uint32_t index = m_freeList.back();
-                    m_freeList.pop_back();
-                    if (index >= m_capacity)
-                    {
-                        // Corrupt entry (e.g., index from a different heap) — drop and try next
-                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
-                                        "D3D12: Descriptor free list contained out-of-range index %u (capacity %u)",
-                                        index, m_capacity);
-                        continue;
-                    }
-                    alloc.index = index;
-                    alloc.count = 1;
-                    alloc.cpuHandle.ptr = m_cpuStart.ptr + static_cast<SIZE_T>(index) * m_descriptorSize;
-                    alloc.gpuHandle.ptr = m_gpuStart.ptr + static_cast<UINT64>(index) * m_descriptorSize;
-                    return alloc;
-                }
-
-                // Bump allocator
-                if (m_nextFreeIndex + count > m_capacity)
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Descriptor heap exhausted");
-                    return alloc;
-                }
-
-                alloc.index = m_nextFreeIndex;
-                alloc.count = count;
-                alloc.cpuHandle.ptr = m_cpuStart.ptr + static_cast<SIZE_T>(m_nextFreeIndex) * m_descriptorSize;
-                alloc.gpuHandle.ptr = m_gpuStart.ptr + static_cast<UINT64>(m_nextFreeIndex) * m_descriptorSize;
-                m_nextFreeIndex += count;
-                return alloc;
-            }
-
-            void DescriptorHeapAllocator::Free(const DescriptorAllocation& allocation)
-            {
-                if (!allocation.IsValid())
-                    return;
-                std::lock_guard<std::mutex> lock(m_mutex);
-                for (uint32_t i = 0; i < allocation.count; i++)
-                    m_freeList.push_back(allocation.index + i);
-            }
 
             // ============================================================================
             // D3D12 FENCE
@@ -186,6 +110,99 @@ namespace Spark
             }
 
             // ============================================================================
+            // D3D12 DEFERRED RELEASE QUEUE
+            // ============================================================================
+
+            D3D12DeferredReleaseQueue::D3D12DeferredReleaseQueue(const D3D12Fence& fence,
+                                                                 DescriptorHeapAllocator& cbvSrvUavHeap,
+                                                                 DescriptorHeapAllocator& rtvHeap,
+                                                                 DescriptorHeapAllocator& dsvHeap)
+                : m_fence(fence), m_cbvSrvUavHeap(cbvSrvUavHeap), m_rtvHeap(rtvHeap), m_dsvHeap(dsvHeap)
+            {
+            }
+
+            DescriptorHeapAllocator& D3D12DeferredReleaseQueue::HeapFor(Heap heap)
+            {
+                switch (heap)
+                {
+                case Heap::Rtv:
+                    return m_rtvHeap;
+                case Heap::Dsv:
+                    return m_dsvHeap;
+                case Heap::CbvSrvUav:
+                    break;
+                }
+                return m_cbvSrvUavHeap;
+            }
+
+            void D3D12DeferredReleaseQueue::Enqueue(ComPtr<IUnknown> resource, std::span<const Descriptor> descriptors)
+            {
+                Entry entry;
+                entry.resource = std::move(resource);
+                for (const Descriptor& descriptor : descriptors)
+                {
+                    if (!descriptor.allocation.IsValid() || entry.descriptorCount >= kMaxDescriptorsPerResource)
+                        continue;
+                    entry.descriptors[entry.descriptorCount++] = descriptor;
+                }
+                if (!entry.resource && entry.descriptorCount == 0)
+                    return;
+
+                std::lock_guard<std::mutex> lock(m_mutex);
+                // Every submission made before this call is covered by the next Signal(),
+                // so the entry becomes releasable once the fence reaches current + 1.
+                entry.fenceValue = m_fence.GetCurrentValue() + 1;
+                m_entries.push_back(std::move(entry));
+            }
+
+            void D3D12DeferredReleaseQueue::EnqueueAtFence(ComPtr<IUnknown> resource, uint64_t fenceValue)
+            {
+                if (!resource)
+                    return;
+                Entry entry;
+                entry.resource = std::move(resource);
+                std::lock_guard<std::mutex> lock(m_mutex);
+                // Keep the queue ordered: an explicit value never releases before earlier entries.
+                entry.fenceValue = m_entries.empty() ? fenceValue : std::max(fenceValue, m_entries.back().fenceValue);
+                m_entries.push_back(std::move(entry));
+            }
+
+            void D3D12DeferredReleaseQueue::ReleaseEntry(Entry& entry)
+            {
+                // Descriptors go back to their heaps only now, after the GPU is done with them;
+                // recycling them earlier would let a new view overwrite a slot still being read.
+                for (uint32_t i = 0; i < entry.descriptorCount; ++i)
+                    HeapFor(entry.descriptors[i].heap).Free(entry.descriptors[i].allocation);
+                entry.descriptorCount = 0;
+                entry.resource.Reset();
+            }
+
+            void D3D12DeferredReleaseQueue::Process()
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                const uint64_t completed = m_fence.GetCompletedValue();
+                while (!m_entries.empty() && m_entries.front().fenceValue <= completed)
+                {
+                    ReleaseEntry(m_entries.front());
+                    m_entries.pop_front();
+                }
+            }
+
+            void D3D12DeferredReleaseQueue::ReleaseAll()
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                for (Entry& entry : m_entries)
+                    ReleaseEntry(entry);
+                m_entries.clear();
+            }
+
+            size_t D3D12DeferredReleaseQueue::GetPendingCount() const
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                return m_entries.size();
+            }
+
+            // ============================================================================
             // D3D12 RESOURCE CONSTRUCTORS
             // ============================================================================
 
@@ -193,6 +210,25 @@ namespace Spark
                                      ComPtr<ID3D12Resource> uploadResource)
                 : m_desc(desc), m_resource(std::move(resource)), m_uploadResource(std::move(uploadResource))
             {
+            }
+
+            D3D12Buffer::~D3D12Buffer()
+            {
+                auto queue = m_releaseQueue.lock();
+                if (!queue)
+                    return; // No device to defer to: members release immediately.
+                try
+                {
+                    const D3D12DeferredReleaseQueue::Descriptor descriptors[] = {
+                        {D3D12DeferredReleaseQueue::Heap::CbvSrvUav, m_descriptor}};
+                    queue->Enqueue(std::move(m_resource), descriptors);
+                    queue->Enqueue(std::move(m_uploadResource), {});
+                }
+                catch (...)
+                {
+                    // Out of memory while queueing: fall back to releasing now, which is what
+                    // the members' destructors do with whatever was not moved out.
+                }
             }
 
             D3D12Texture::D3D12Texture(const RHITextureDesc& desc, ComPtr<ID3D12Resource> resource,
@@ -203,6 +239,28 @@ namespace Spark
                 : m_desc(desc), m_resource(std::move(resource)), m_srvDescriptor(srvDescriptor),
                   m_rtvDescriptor(rtvDescriptor), m_dsvDescriptor(dsvDescriptor), m_uavDescriptor(uavDescriptor)
             {
+            }
+
+            D3D12Texture::~D3D12Texture()
+            {
+                auto queue = m_releaseQueue.lock();
+                if (!queue)
+                    return; // Swap-chain back buffers and post-shutdown textures release immediately.
+                try
+                {
+                    using Heap = D3D12DeferredReleaseQueue::Heap;
+                    const D3D12DeferredReleaseQueue::Descriptor descriptors[] = {
+                        {Heap::CbvSrvUav, m_srvDescriptor},
+                        {Heap::Rtv, m_rtvDescriptor},
+                        {Heap::Dsv, m_dsvDescriptor},
+                        {Heap::CbvSrvUav, m_uavDescriptor},
+                    };
+                    queue->Enqueue(std::move(m_resource), descriptors);
+                }
+                catch (...)
+                {
+                    // Out of memory while queueing: fall back to releasing now.
+                }
             }
 
             D3D12Shader::D3D12Shader(const RHIShaderDesc& desc, ComPtr<ID3DBlob> bytecodeBlob)
@@ -245,13 +303,24 @@ namespace Spark
                     return false;
                 if (!CreateFrameResources())
                     return false;
+                if (!CreateDescriptorTables())
+                    return false;
+                m_defaultRootSignature = CreateDefaultRootSignature();
+                if (!m_defaultRootSignature)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "D3D12: Failed to create the default root signature");
+                    return false;
+                }
 
-                m_immediateCommandList =
-                    std::make_unique<D3D12CommandList>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+                m_immediateCommandList = std::make_unique<D3D12CommandList>(
+                    m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT, m_descriptorTables);
 
                 DetectCapabilities();
                 DetectDXRSupport();
                 FinalizeDeviceCapabilities(m_capabilities);
+
+                m_releaseQueue =
+                    std::make_shared<D3D12DeferredReleaseQueue>(m_frameFence, m_cbvSrvUavHeap, m_rtvHeap, m_dsvHeap);
 
                 SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12: Device initialized: %s",
                                m_capabilities.deviceName.c_str());
@@ -270,9 +339,37 @@ namespace Spark
                 // Phase Z Theme 3B: release transient allocator before WaitForIdle
                 // so its buffers enter the deferred-release queue cleanly.
                 m_transientBuffers.Shutdown(this);
-                WaitForIdle();
-                ProcessDeferredReleases();
+                if (m_directQueue)
+                    WaitForIdle();
+                if (m_releaseQueue && m_infoQueue)
+                {
+                    // Once per Initialize(): m_releaseQueue is reset below.
+                    const D3D12ValidationCounts counts = GetValidationCounts();
+                    if (counts.corruption > 0 || counts.errors > 0 || counts.discarded > 0)
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D12 validation: %llu corruption, %llu error, %llu warning message(s), "
+                                        "%llu discarded",
+                                        static_cast<unsigned long long>(counts.corruption),
+                                        static_cast<unsigned long long>(counts.errors),
+                                        static_cast<unsigned long long>(counts.warnings),
+                                        static_cast<unsigned long long>(counts.discarded));
+                    }
+                    else
+                    {
+                        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "D3D12 validation: clean (%llu warning(s))",
+                                       static_cast<unsigned long long>(counts.warnings));
+                    }
+                }
+                // The GPU is idle: release everything still queued, then detach so resources
+                // destroyed after shutdown release directly instead of into a dead queue.
+                if (m_releaseQueue)
+                    m_releaseQueue->ReleaseAll();
+                m_releaseQueue.reset();
                 m_immediateCommandList.reset();
+                // Deferred lists that outlive the device keep the table heaps alive through their own reference.
+                m_descriptorTables.reset();
+                m_defaultRootSignature.Reset();
             }
 
             bool D3D12Device::CreateDevice(const RHIDeviceDesc& desc)
@@ -290,6 +387,12 @@ namespace Spark
                             if (SUCCEEDED(debugController.As(&debugController1)))
                                 debugController1->SetEnableGPUBasedValidation(TRUE);
                         }
+                    }
+                    else
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                       "D3D12: debug layer requested but unavailable (install the Windows "
+                                       "'Graphics Tools' optional feature for d3d12SDKLayers.dll)");
                     }
                 }
 
@@ -355,14 +458,26 @@ namespace Spark
                     return false;
                 }
 
-                // Info queue for debug messages
+                // Info queue for debug messages. Store warnings and worse only, so the queue's
+                // message limit is not spent on per-object INFO chatter. Break on errors only
+                // under a debugger: without one the breakpoint exception kills the process and
+                // a validation run could never count or report what it found.
                 if (desc.enableDebugLayer)
                 {
                     m_device.As(&m_infoQueue);
                     if (m_infoQueue)
                     {
-                        m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-                        m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+                        D3D12_MESSAGE_SEVERITY deniedSeverities[] = {D3D12_MESSAGE_SEVERITY_INFO,
+                                                                     D3D12_MESSAGE_SEVERITY_MESSAGE};
+                        D3D12_INFO_QUEUE_FILTER storageFilter = {};
+                        storageFilter.DenyList.NumSeverities = static_cast<UINT>(std::size(deniedSeverities));
+                        storageFilter.DenyList.pSeverityList = deniedSeverities;
+                        m_infoQueue->PushStorageFilter(&storageFilter);
+                        if (IsDebuggerPresent())
+                        {
+                            m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+                            m_infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+                        }
                     }
                 }
 
@@ -399,16 +514,55 @@ namespace Spark
 
             bool D3D12Device::CreateDescriptorHeaps()
             {
+                // CPU-only (copy sources): the shader-visible heaps are the table pages.
                 if (!m_cbvSrvUavHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                                                CBV_SRV_UAV_HEAP_SIZE, true))
+                                                CBV_SRV_UAV_HEAP_SIZE, false))
                     return false;
                 if (!m_rtvHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, RTV_HEAP_SIZE, false))
                     return false;
                 if (!m_dsvHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, DSV_HEAP_SIZE, false))
                     return false;
                 if (!m_samplerHeap.Initialize(m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SAMPLER_HEAP_SIZE,
-                                              true))
+                                              false))
                     return false;
+                return true;
+            }
+
+            bool D3D12Device::CreateDescriptorTables()
+            {
+                auto tables = std::make_shared<D3D12DescriptorTables>();
+                ID3D12Device* device = m_device.Get();
+                if (!tables->shaderResources.Initialize(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                                        SRV_TABLE_PAGE_SIZE, SRV_TABLE_PAGE_COUNT,
+                                                        m_frameFence.GetFence()) ||
+                    !tables->samplers.Initialize(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SAMPLER_TABLE_PAGE_SIZE,
+                                                 SAMPLER_TABLE_PAGE_COUNT, m_frameFence.GetFence()) ||
+                    !tables->nullDescriptors.Initialize(device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1, false) ||
+                    !tables->nullSamplers.Initialize(device, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1, false))
+                    return false;
+
+                // Unbound SRV slots read zero through a null Texture2D view.
+                tables->nullShaderResource = tables->nullDescriptors.Allocate(1).cpuHandle;
+                D3D12_SHADER_RESOURCE_VIEW_DESC nullView = {};
+                nullView.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                nullView.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                nullView.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                nullView.Texture2D.MipLevels = 1;
+                device->CreateShaderResourceView(nullptr, &nullView, tables->nullShaderResource);
+
+                // Samplers have no null descriptor; unbound slots get a valid point/clamp sampler.
+                tables->nullSampler = tables->nullSamplers.Allocate(1).cpuHandle;
+                D3D12_SAMPLER_DESC pointClamp = {};
+                pointClamp.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+                pointClamp.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+                pointClamp.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+                pointClamp.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+                pointClamp.MaxAnisotropy = 1;
+                pointClamp.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+                pointClamp.MaxLOD = D3D12_FLOAT32_MAX;
+                device->CreateSampler(&pointClamp, tables->nullSampler);
+
+                m_descriptorTables = std::move(tables);
                 return true;
             }
 
@@ -551,7 +705,16 @@ namespace Spark
                     }
                 }
                 if (!m_dxrSupported)
+                {
+                    // Same answer whichever query failed (no ID3D12Device5, no OPTIONS5, or no
+                    // tier): no DXR device to misuse, and the compute (SDFGI) path is the backend.
                     m_dxrDevice.Reset();
+                    m_capabilities.rayTracing.supportsHardwareRT = false;
+                    m_capabilities.rayTracing.supportsInlineRT = false;
+                    m_capabilities.rayTracing.raytracingTier = 0;
+                    m_capabilities.rayTracing.maxRecursionDepth = 0;
+                    m_capabilities.rayTracing.bestBackend = RayTracingBackend::Software_SDFGI;
+                }
 
                 // VRS detection (independent of DXR — VRS works for rasterization too)
                 D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
@@ -610,19 +773,33 @@ namespace Spark
                     hr = m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &bufferDesc,
                                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                                            IID_PPV_ARGS(&uploadResource));
-                    if (SUCCEEDED(hr) && uploadResource)
+                    void* mapped = nullptr;
+                    if (FAILED(hr) || !uploadResource || FAILED(uploadResource->Map(0, nullptr, &mapped)) || !mapped)
                     {
-                        void* mapped = nullptr;
-                        hr = uploadResource->Map(0, nullptr, &mapped);
-                        if (SUCCEEDED(hr) && mapped)
-                        {
-                            memcpy(mapped, desc.initialData, desc.size);
-                            uploadResource->Unmap(0, nullptr);
-                        }
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D12: Failed to stage initial data for static buffer '%s'",
+                                        desc.debugName.c_str());
+                        return nullptr;
                     }
+                    memcpy(mapped, desc.initialData, desc.size);
+                    uploadResource->Unmap(0, nullptr);
+
+                    // The data only reaches the DEFAULT-heap buffer through a GPU copy. The buffer
+                    // is in COMMON, which a copy promotes to COPY_DEST and which it decays back
+                    // to once the queue drains. Waits like UpdateTexture: creation-time only.
+                    m_immediateCommandList->Begin();
+                    m_immediateCommandList->GetCommandList()->CopyBufferRegion(resource.Get(), 0, uploadResource.Get(),
+                                                                               0, desc.size);
+                    m_immediateCommandList->End();
+                    ID3D12CommandList* lists[] = {m_immediateCommandList->GetCommandList()};
+                    m_directQueue->ExecuteCommandLists(1, lists);
+                    const uint64_t copyFence = m_frameFence.Signal(m_directQueue.Get());
+                    m_frameFence.WaitForValue(copyFence);
+                    m_immediateCommandList->RetireDescriptorPages(copyFence);
                 }
 
                 auto buffer = std::make_unique<D3D12Buffer>(desc, std::move(resource), std::move(uploadResource));
+                buffer->SetReleaseQueue(m_releaseQueue);
 
                 // Map persistent pointer for dynamic buffers
                 if (isDynamic)
@@ -743,8 +920,10 @@ namespace Spark
                     }
                 }
 
-                return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
-                                                      uavAlloc);
+                auto texture =
+                    std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+                texture->SetReleaseQueue(m_releaseQueue);
+                return texture;
             }
 
             std::unique_ptr<IRHITexture> D3D12Device::WrapNativeTexture(void* nativeHandle, const RHITextureDesc& desc)
@@ -772,8 +951,10 @@ namespace Spark
                     }
                 }
 
-                return std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc,
-                                                      uavAlloc);
+                auto texture =
+                    std::make_unique<D3D12Texture>(desc, std::move(resource), srvAlloc, rtvAlloc, dsvAlloc, uavAlloc);
+                texture->SetReleaseQueue(m_releaseQueue);
+                return texture;
             }
 
             std::unique_ptr<IRHIShader> D3D12Device::CreateShader(const RHIShaderDesc& desc)
@@ -869,7 +1050,7 @@ namespace Spark
                                                                                 IRHIShader* vertexShader,
                                                                                 IRHIShader* pixelShader)
             {
-                auto rootSig = CreateDefaultRootSignature();
+                ComPtr<ID3D12RootSignature> rootSig = m_defaultRootSignature;
                 if (!rootSig)
                     return nullptr;
 
@@ -987,30 +1168,51 @@ namespace Spark
             // ============================================================================
             // D3D12 DEVICE — DEFERRED GPU RESOURCE RELEASE
             // ============================================================================
-            // D3D12 resources may still be referenced by in-flight command lists.
-            // These helpers enqueue the underlying ID3D12Resource into the deferred
-            // release queue so the COM ref is held until the GPU passes the fence.
-            // The wrapper object (D3D12Buffer/D3D12Texture) is owned by the caller's
-            // unique_ptr and destroyed immediately; only the GPU resource is deferred.
+            // D3D12 resources may still be referenced by in-flight command lists. Buffers
+            // and textures created by this device carry a weak reference to m_releaseQueue
+            // and enqueue their ID3D12Resource and descriptor slots from their destructors;
+            // ProcessDeferredReleases() frees them once the frame fence passes.
 
-            void D3D12Device::DeferredReleaseBuffer(D3D12Buffer* buffer)
+            size_t D3D12Device::GetPendingReleaseCount() const
             {
-                if (!buffer)
-                    return;
-                std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                m_deferredReleaseQueue.push({buffer->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
+                return m_releaseQueue ? m_releaseQueue->GetPendingCount() : 0;
             }
 
-            void D3D12Device::DeferredReleaseTexture(D3D12Texture* texture)
+            D3D12ValidationCounts D3D12Device::GetValidationCounts() const
             {
-                if (!texture)
-                    return;
-                m_cbvSrvUavHeap.Free(texture->GetSRVDescriptor());
-                m_rtvHeap.Free(texture->GetRTVDescriptor());
-                m_dsvHeap.Free(texture->GetDSVDescriptor());
-                m_cbvSrvUavHeap.Free(texture->GetUAVDescriptor());
-                std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                m_deferredReleaseQueue.push({texture->GetD3D12Resource(), m_frameFence.GetCurrentValue()});
+                D3D12ValidationCounts counts;
+                if (!m_infoQueue)
+                    return counts;
+                counts.active = true;
+                counts.discarded = m_infoQueue->GetNumMessagesDiscardedByMessageCountLimit();
+
+                std::vector<uint64_t> storage; // 8-byte aligned backing for D3D12_MESSAGE
+                const UINT64 stored = m_infoQueue->GetNumStoredMessages();
+                for (UINT64 i = 0; i < stored; ++i)
+                {
+                    SIZE_T length = 0;
+                    if (FAILED(m_infoQueue->GetMessage(i, nullptr, &length)) || length == 0)
+                        continue;
+                    storage.assign((length + sizeof(uint64_t) - 1) / sizeof(uint64_t), 0);
+                    auto* message = reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+                    if (FAILED(m_infoQueue->GetMessage(i, message, &length)))
+                        continue;
+                    switch (message->Severity)
+                    {
+                    case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+                        ++counts.corruption;
+                        break;
+                    case D3D12_MESSAGE_SEVERITY_ERROR:
+                        ++counts.errors;
+                        break;
+                    case D3D12_MESSAGE_SEVERITY_WARNING:
+                        ++counts.warnings;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                return counts;
             }
 
             // ============================================================================
@@ -1047,6 +1249,17 @@ namespace Spark
                 auto* b = static_cast<D3D12Buffer*>(buffer);
                 if (!b || !data)
                     return;
+                // The mapping is exactly GetSize() bytes; a range outside it would write past it.
+                if (!IsBufferRangeValid(b->GetSize(), offset, size))
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D12Device::UpdateBuffer: range [%llu, +%llu) outside '%s' (%llu bytes) "
+                                            "- update dropped",
+                                            static_cast<unsigned long long>(offset),
+                                            static_cast<unsigned long long>(size), b->GetDebugName().c_str(),
+                                            static_cast<unsigned long long>(b->GetSize()));
+                    return;
+                }
                 void* mapped = MapBuffer(buffer);
                 if (mapped)
                 {
@@ -1138,12 +1351,11 @@ namespace Spark
                 m_directQueue->ExecuteCommandLists(1, lists);
                 uint64_t uploadFenceVal = m_frameFence.Signal(m_directQueue.Get());
                 m_frameFence.WaitForValue(uploadFenceVal);
+                m_immediateCommandList->RetireDescriptorPages(uploadFenceVal);
 
                 // Queue upload buffer for deferred release at this fence value
-                {
-                    std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                    m_deferredReleaseQueue.push({uploadBuffer, uploadFenceVal});
-                }
+                if (m_releaseQueue)
+                    m_releaseQueue->EnqueueAtFence(std::move(uploadBuffer), uploadFenceVal);
             }
 
             // ============================================================================
@@ -1157,7 +1369,8 @@ namespace Spark
 
             std::unique_ptr<IRHICommandList> D3D12Device::CreateDeferredCommandList()
             {
-                return std::make_unique<D3D12CommandList>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+                return std::make_unique<D3D12CommandList>(m_device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                                          m_descriptorTables);
             }
 
             void D3D12Device::ExecuteCommandList(IRHICommandList* commandList)
@@ -1168,6 +1381,9 @@ namespace Spark
                 std::lock_guard<std::mutex> lock(m_submitMutex);
                 ID3D12CommandList* lists[] = {cmdList->GetCommandList()};
                 m_directQueue->ExecuteCommandLists(1, lists);
+                // The next Signal() on this queue follows the submission, so its value marks
+                // when the list's descriptor tables are free again.
+                cmdList->RetireDescriptorPages(m_frameFence.GetCurrentValue() + 1);
                 m_statistics.drawCalls++;
             }
 
@@ -1208,15 +1424,8 @@ namespace Spark
 
             void D3D12Device::ProcessDeferredReleases()
             {
-                std::lock_guard<std::mutex> lock(m_deferredReleaseMutex);
-                uint64_t completed = m_frameFence.GetCompletedValue();
-                while (!m_deferredReleaseQueue.empty())
-                {
-                    auto& front = m_deferredReleaseQueue.front();
-                    if (front.fenceValue > completed)
-                        break;
-                    m_deferredReleaseQueue.pop();
-                }
+                if (m_releaseQueue)
+                    m_releaseQueue->Process();
             }
 
             std::string D3D12Device::GetDeviceInfo() const
@@ -1242,50 +1451,46 @@ namespace Spark
 
             ComPtr<ID3D12RootSignature> D3D12Device::CreateDefaultRootSignature() const
             {
-                D3D12_DESCRIPTOR_RANGE1 cbvRange = {};
-                cbvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                cbvRange.NumDescriptors = 14;
-                cbvRange.BaseShaderRegister = 0;
+                namespace Layout = DefaultRootLayout;
 
+                // Data volatile: a caller may rewrite a texture or constant buffer between draws
+                // of one submission, as D3D11 allows. Descriptors stay static (copied per draw).
                 D3D12_DESCRIPTOR_RANGE1 srvRange = {};
                 srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                srvRange.NumDescriptors = 32;
-                srvRange.BaseShaderRegister = 0;
+                srvRange.NumDescriptors = Layout::kShaderResourceSlots;
+                srvRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
 
                 D3D12_DESCRIPTOR_RANGE1 samplerRange = {};
                 samplerRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-                samplerRange.NumDescriptors = 16;
-                samplerRange.BaseShaderRegister = 0;
+                samplerRange.NumDescriptors = Layout::kSamplerSlots;
 
                 D3D12_DESCRIPTOR_RANGE1 uavRange = {};
                 uavRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-                uavRange.NumDescriptors = 8;
-                uavRange.BaseShaderRegister = 0;
+                uavRange.NumDescriptors = Layout::kUnorderedAccessSlots;
+                uavRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
 
-                D3D12_ROOT_PARAMETER1 params[4] = {};
-                params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                params[0].DescriptorTable.NumDescriptorRanges = 1;
-                params[0].DescriptorTable.pDescriptorRanges = &cbvRange;
-                params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-                params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                params[1].DescriptorTable.NumDescriptorRanges = 1;
-                params[1].DescriptorTable.pDescriptorRanges = &srvRange;
-                params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-                params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                params[2].DescriptorTable.NumDescriptorRanges = 1;
-                params[2].DescriptorTable.pDescriptorRanges = &samplerRange;
-                params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-                params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                params[3].DescriptorTable.NumDescriptorRanges = 1;
-                params[3].DescriptorTable.pDescriptorRanges = &uavRange;
-                params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                D3D12_ROOT_PARAMETER1 params[Layout::kParameterCount] = {};
+                for (uint32_t slot = 0; slot < Layout::kConstantBufferCount; ++slot)
+                {
+                    params[slot].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                    params[slot].Descriptor.ShaderRegister = slot;
+                    params[slot].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE;
+                    params[slot].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                }
+                const auto table = [&params](uint32_t index, const D3D12_DESCRIPTOR_RANGE1* range)
+                {
+                    params[index].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                    params[index].DescriptorTable.NumDescriptorRanges = 1;
+                    params[index].DescriptorTable.pDescriptorRanges = range;
+                    params[index].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                };
+                table(Layout::kShaderResourceTable, &srvRange);
+                table(Layout::kSamplerTable, &samplerRange);
+                table(Layout::kUnorderedAccessTable, &uavRange);
 
                 D3D12_VERSIONED_ROOT_SIGNATURE_DESC desc = {};
                 desc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-                desc.Desc_1_1.NumParameters = 4;
+                desc.Desc_1_1.NumParameters = Layout::kParameterCount;
                 desc.Desc_1_1.pParameters = params;
                 desc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -1320,6 +1525,10 @@ namespace Spark
             {
                 switch (format)
                 {
+                case PixelFormat::Unknown:
+                    // No attachment (a PSO without depth). Falling through to the RGBA8 default
+                    // below turned "no depth buffer" into an invalid DSV format.
+                    return DXGI_FORMAT_UNKNOWN;
                 case PixelFormat::R8_UNORM:
                     return DXGI_FORMAT_R8_UNORM;
                 case PixelFormat::R8_SNORM:

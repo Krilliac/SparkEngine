@@ -250,24 +250,44 @@ namespace Terrafront
     // Persistence (atomic JSON, TFDatabase tmp+rename pattern)
     // ---------------------------------------------------------------------------
 
-    bool TFSocialSystem::ParseStoreDocument(std::string_view text, std::unordered_map<uint64_t, SocialRecord>& loaded,
-                                            std::string& detail)
+    TFSocialSystem::StoreLoadStatus TFSocialSystem::ParseStoreDocument(
+        std::string_view text, std::unordered_map<uint64_t, SocialRecord>& loaded, std::string& detail)
     {
         loaded.clear();
         detail.clear();
 
         Spark::Json::Value root;
         if (!Spark::Json::ParseStrict(text, &root, &detail))
-            return false;
+            return StoreLoadStatus::Corrupt;
+        // Read N and N-1 (no key), refuse anything newer before judging the other fields: a newer schema may
+        // have changed them, and a load-then-save would drop what this build does not know.
+        const bool versioned = root.IsObject() && root.HasKey("schemaVersion");
+        if (versioned)
+        {
+            uint64_t schemaVersion = 0;
+            if (!ReadPositiveId(root["schemaVersion"], schemaVersion))
+            {
+                detail = "schemaVersion must be a positive integer";
+                return StoreLoadStatus::Corrupt;
+            }
+            if (schemaVersion > kStoreSchemaVersion)
+            {
+                detail = "schema version " + std::to_string(schemaVersion) + " is newer than supported " +
+                         std::to_string(kStoreSchemaVersion) + "; file left untouched";
+                return StoreLoadStatus::UnsupportedVersion;
+            }
+        }
         // The JSON DOM stores numbers as doubles. Inspect the original tokens
         // before reading values so a fractional lexeme that rounds to an
         // integer (or negative zero) cannot be silently normalized on save.
         if (!HasCanonicalSchemaLexemes(text, detail))
-            return false;
-        if (!HasExactKeys(root, {"characters"}) || !root["characters"].IsArray())
+            return StoreLoadStatus::Corrupt;
+        const bool exactRoot =
+            versioned ? HasExactKeys(root, {"schemaVersion", "characters"}) : HasExactKeys(root, {"characters"});
+        if (!exactRoot || !root["characters"].IsArray())
         {
-            detail = "root must contain only a characters array";
-            return false;
+            detail = "root must contain only schemaVersion and a characters array";
+            return StoreLoadStatus::Corrupt;
         }
 
         const auto readNameArray = [&detail](const Spark::Json::Value& row, const char* field, size_t cap,
@@ -308,14 +328,14 @@ namespace Terrafront
             if (!HasExactKeys(row, {"charId", "friends", "blocked", "recent"}))
             {
                 detail = "character row " + std::to_string(i) + " has missing or unknown fields";
-                return false;
+                return StoreLoadStatus::Corrupt;
             }
 
             uint64_t charId = 0;
             if (!ReadPositiveId(row["charId"], charId) || !characterIds.insert(charId).second)
             {
                 detail = "character row " + std::to_string(i) + " has an invalid or duplicate charId";
-                return false;
+                return StoreLoadStatus::Corrupt;
             }
 
             SocialRecord record;
@@ -323,7 +343,7 @@ namespace Terrafront
                 !readNameArray(row, "blocked", kTFMaxBlocked, record.blocked))
             {
                 detail = "character row " + std::to_string(i) + ": " + detail;
-                return false;
+                return StoreLoadStatus::Corrupt;
             }
 
             std::unordered_set<std::string> friendNames;
@@ -334,7 +354,7 @@ namespace Terrafront
                 if (friendNames.contains(FoldName(name)))
                 {
                     detail = "character row " + std::to_string(i) + " lists a name as both friend and blocked";
-                    return false;
+                    return StoreLoadStatus::Corrupt;
                 }
             }
 
@@ -342,7 +362,7 @@ namespace Terrafront
             if (!recent.IsArray() || recent.Size() > kTFMaxRecent)
             {
                 detail = "character row " + std::to_string(i) + " has an invalid recent array";
-                return false;
+                return StoreLoadStatus::Corrupt;
             }
             std::unordered_set<std::string> recentNames;
             record.recent.reserve(recent.Size());
@@ -354,7 +374,7 @@ namespace Terrafront
                 {
                     detail = "character row " + std::to_string(i) + " has an invalid recent entry at index " +
                              std::to_string(r);
-                    return false;
+                    return StoreLoadStatus::Corrupt;
                 }
 
                 RecentRec recentRecord;
@@ -363,14 +383,14 @@ namespace Terrafront
                     !ReadTimestamp(recentRow["lastSeenMs"], recentRecord.lastSeenMs))
                 {
                     detail = "character row " + std::to_string(i) + " has a duplicate recent name or invalid timestamp";
-                    return false;
+                    return StoreLoadStatus::Corrupt;
                 }
                 record.recent.push_back(std::move(recentRecord));
             }
 
             loaded.emplace(charId, std::move(record));
         }
-        return true;
+        return StoreLoadStatus::Loaded;
     }
 
     TFSocialSystem::StoreLoadStatus TFSocialSystem::LoadStoreFromPath(
@@ -417,8 +437,15 @@ namespace Terrafront
             return StoreLoadStatus::Unreadable;
         }
 
-        if (ParseStoreDocument(stream.str(), loaded, detail))
+        const StoreLoadStatus parsed = ParseStoreDocument(stream.str(), loaded, detail);
+        if (parsed == StoreLoadStatus::Loaded)
             return StoreLoadStatus::Loaded;
+        if (parsed == StoreLoadStatus::UnsupportedVersion)
+        {
+            // Not corruption: a newer build owns this file. No quarantine copy, and nothing may rewrite it.
+            loaded.clear();
+            return StoreLoadStatus::UnsupportedVersion;
+        }
 
         fs::path backup;
         std::error_code backupEc;
@@ -465,7 +492,7 @@ namespace Terrafront
     {
         std::unordered_map<uint64_t, SocialRecord> loaded;
         std::string validationDetail;
-        const bool valid = ParseStoreDocument(text, loaded, validationDetail);
+        const bool valid = ParseStoreDocument(text, loaded, validationDetail) == StoreLoadStatus::Loaded;
         if (detail)
             *detail = std::move(validationDetail);
         return valid;
@@ -478,23 +505,34 @@ namespace Terrafront
         const StoreLoadStatus status = LoadStoreFromPath(path, loaded, result.detail);
         result.accepted = status == StoreLoadStatus::Missing || status == StoreLoadStatus::Loaded;
         result.missing = status == StoreLoadStatus::Missing;
+        result.unsupportedVersion = status == StoreLoadStatus::UnsupportedVersion;
         result.recordCount = loaded.size();
         return result;
     }
+
+    bool TFSocialSystem::ResaveStoreForTesting(const std::filesystem::path& path)
+    {
+        std::unordered_map<uint64_t, SocialRecord> loaded;
+        std::string detail;
+        const StoreLoadStatus status = LoadStoreFromPath(path, loaded, detail);
+        return (status == StoreLoadStatus::Loaded || status == StoreLoadStatus::Missing) &&
+               SaveStoreToPath(path, loaded);
+    }
 #endif
 
-    bool TFSocialSystem::StoreSaveToDisk() const
+    bool TFSocialSystem::SaveStoreToPath(const std::filesystem::path& path,
+                                         const std::unordered_map<uint64_t, SocialRecord>& store)
     {
         namespace fs = std::filesystem;
 
         Spark::Json::Value root = Spark::Json::Value::MakeObject();
+        root["schemaVersion"] = Spark::Json::Value(static_cast<double>(kStoreSchemaVersion));
         Spark::Json::Value characters = Spark::Json::Value::MakeArray();
-        for (const auto& [charId, rec] : m_store)
+        for (const auto& [charId, rec] : store)
         {
             if (charId == 0 || charId > kMaxExactJsonInteger ||
                 std::any_of(rec.recent.begin(), rec.recent.end(),
-                            [](const RecentRec& recent)
-                            {
+                            [](const RecentRec& recent) {
                                 return recent.lastSeenMs < 0 ||
                                        recent.lastSeenMs > static_cast<int64_t>(kMaxExactJsonInteger);
                             }))
@@ -533,7 +571,7 @@ namespace Terrafront
         root["characters"] = std::move(characters);
 
         std::error_code ec;
-        const auto parentPath = m_storePath.parent_path();
+        const auto parentPath = path.parent_path();
         if (!parentPath.empty())
         {
             fs::create_directories(parentPath, ec);
@@ -545,18 +583,7 @@ namespace Terrafront
             }
         }
 
-        std::filesystem::path tmpFile = m_storePath;
-        tmpFile += ".tmp";
-        {
-            std::ofstream out(tmpFile, std::ios::binary | std::ios::trunc);
-            if (!out.is_open())
-                return false;
-            out << Spark::Json::StringifyPretty(root);
-            if (!out.good())
-                return false;
-        }
-
-        return SavePaths::AtomicReplace(tmpFile, m_storePath, ec);
+        return SavePaths::WriteDurableReplace(path, Spark::Json::StringifyPretty(root), ec);
     }
 
     void TFSocialSystem::StoreFlushIfDue(float dt)

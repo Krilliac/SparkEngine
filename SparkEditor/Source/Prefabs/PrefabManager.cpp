@@ -7,16 +7,58 @@
 
 #include "PrefabManager.h"
 #include "../SceneSystem/SceneComponentCodec.h"
+#include "Utils/SaveFileDurability.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <cinttypes>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <string>
+#include <system_error>
+#include <utility>
 
 namespace SparkEditor
 {
+    namespace
+    {
+        std::filesystem::path PathFromUtf8(const std::string& path)
+        {
+            return std::u8string(reinterpret_cast<const char8_t*>(path.data()), path.size());
+        }
+
+        std::string PathToUtf8(const std::filesystem::path& path)
+        {
+            const std::u8string utf8 = path.u8string();
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+
+        /// One file-name segment: the same rule EditorLayoutManager applies to layout names.
+        bool IsSafePrefabFileName(const std::string& name)
+        {
+            if (name.empty() || name == "." || name == "..")
+            {
+                return false;
+            }
+            return std::none_of(name.begin(), name.end(),
+                                [](unsigned char c) { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
+        }
+
+        /// Bytes PrefabAsset::TryLoad would read from @p path: 0 for a missing file, a symbolic
+        /// link or a file over PrefabAsset::kMaxPrefabFileBytes, which it rejects unread.
+        std::uintmax_t ReadablePrefabBytes(const std::filesystem::path& path)
+        {
+            std::error_code error;
+            if (!std::filesystem::is_regular_file(std::filesystem::symlink_status(path, error)))
+            {
+                return 0;
+            }
+            const std::uintmax_t size = std::filesystem::file_size(path, error);
+            return (error || size > PrefabAsset::kMaxPrefabFileBytes) ? 0 : size;
+        }
+    } // namespace
 
     bool PrefabManager::Initialize()
     {
@@ -185,18 +227,139 @@ namespace SparkEditor
         {
             return false;
         }
+        if (!IsSafePrefabFileName(name))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Prefab '%s' was not saved: its name is not a valid file name (no '/', '\\', ':', "
+                            "control characters, '.' or '..'). Rename the prefab and save again",
+                            name.c_str());
+            return false;
+        }
 
-        std::string dir = directory.empty() ? "." : directory;
-        std::string path = dir + "/" + name + ".sparkprefab";
-        return it->second.Save(path);
+        const std::string fileName = name + ".sparkprefab";
+        if (!directory.empty())
+        {
+            return it->second.Save(directory + "/" + fileName);
+        }
+        if (m_projectPrefabDirectory.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                            "Prefab '%s' was not saved: no project is open. Open a project; prefabs are saved to "
+                            "its Prefabs directory",
+                            name.c_str());
+            return false;
+        }
+        std::error_code directoryError;
+        std::filesystem::create_directories(m_projectPrefabDirectory, directoryError);
+        if (directoryError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Prefab '%s' was not saved: could not create '%s': %s",
+                            name.c_str(), PathToUtf8(m_projectPrefabDirectory).c_str(),
+                            directoryError.message().c_str());
+            return false;
+        }
+        return it->second.Save(PathToUtf8(m_projectPrefabDirectory / PathFromUtf8(fileName)));
     }
 
-    PrefabAsset* PrefabManager::LoadPrefab(const std::string& filePath)
+    void PrefabManager::SetProjectPrefabDirectory(std::filesystem::path directory)
+    {
+        m_projectPrefabDirectory = std::move(directory);
+    }
+
+    size_t PrefabManager::LoadProjectPrefabs(std::vector<std::string>& diagnostics)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        PrefabAsset prefab = PrefabAsset::Load(filePath);
-        if (prefab.GetName().empty())
+        std::error_code error;
+        if (m_projectPrefabDirectory.empty() || !std::filesystem::is_directory(m_projectPrefabDirectory, error))
         {
+            return 0; // no project open, or a project without prefabs
+        }
+
+        // The project is untrusted, so the listing is bounded too: a directory of millions of
+        // prefab files must not become millions of loads (or diagnostics).
+        std::vector<std::filesystem::path> files;
+        bool tooManyFiles = false;
+        for (std::filesystem::directory_iterator entry(m_projectPrefabDirectory, error), end; !error && entry != end;
+             entry.increment(error))
+        {
+            // `.sparkprefab.bak` and `.sparkprefab.tmp` siblings have other extensions. Symbolic
+            // links are kept so TryLoad names them in its rejection instead of dropping them silently.
+            std::error_code typeError;
+            const std::filesystem::file_status status = entry->symlink_status(typeError);
+            if (typeError || entry->path().extension() != ".sparkprefab" ||
+                !(std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status)))
+            {
+                continue;
+            }
+            if (files.size() == kMaxProjectPrefabFiles)
+            {
+                tooManyFiles = true;
+                break;
+            }
+            files.push_back(entry->path());
+        }
+        if (error)
+        {
+            diagnostics.push_back("Could not list every project prefab in '" + PathToUtf8(m_projectPrefabDirectory) +
+                                  "': " + error.message());
+        }
+        if (tooManyFiles)
+        {
+            diagnostics.push_back("'" + PathToUtf8(m_projectPrefabDirectory) + "' holds more than " +
+                                  std::to_string(kMaxProjectPrefabFiles) + " prefab files; only the first " +
+                                  std::to_string(kMaxProjectPrefabFiles) + " listed were considered");
+        }
+        std::sort(files.begin(), files.end());
+
+        // Charge each file with every byte its load may read, the `.bak` included, so a sweep of
+        // small damaged primaries cannot pull in large backups past the budget. budgetUsed never
+        // exceeds kMaxProjectPrefabBytes, so the subtraction below cannot wrap.
+        std::uintmax_t budgetUsed = 0;
+        size_t overBudget = 0;
+        size_t loaded = 0;
+        for (const auto& file : files)
+        {
+            const std::uintmax_t cost =
+                ReadablePrefabBytes(file) + ReadablePrefabBytes(Spark::SaveFileDurability::BackupPathFor(file));
+            if (cost > kMaxProjectPrefabBytes - budgetUsed)
+            {
+                ++overBudget;
+                continue;
+            }
+            budgetUsed += cost;
+
+            std::string loadError;
+            if (LoadPrefab(PathToUtf8(file), &loadError))
+            {
+                ++loaded;
+            }
+            if (!loadError.empty())
+            {
+                diagnostics.push_back(std::move(loadError));
+            }
+        }
+        if (overBudget > 0)
+        {
+            diagnostics.push_back(std::to_string(overBudget) + " prefab file(s) in '" +
+                                  PathToUtf8(m_projectPrefabDirectory) + "' were not loaded: together the project's " +
+                                  "prefabs exceed the " + std::to_string(kMaxProjectPrefabBytes) + "-byte load budget");
+        }
+        return loaded;
+    }
+
+    PrefabAsset* PrefabManager::LoadPrefab(const std::string& filePath, std::string* error)
+    {
+        SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        PrefabAsset prefab;
+        std::string loadError;
+        const bool loaded = PrefabAsset::TryLoad(filePath, prefab, loadError);
+        if (error)
+        {
+            *error = loadError;
+        }
+        if (!loaded)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", loadError.c_str());
             return nullptr;
         }
 

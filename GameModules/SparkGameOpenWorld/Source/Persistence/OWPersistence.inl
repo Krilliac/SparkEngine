@@ -4,6 +4,7 @@
  */
 
 #include <cctype>
+#include <charconv>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -11,6 +12,7 @@
 #include <locale>
 #include <sstream>
 #include <system_error>
+#include <unordered_map>
 
 namespace OpenWorld
 {
@@ -78,6 +80,107 @@ namespace OpenWorld
             }
             return hash;
         }
+
+        // The snapshot travels inside the engine slot's customState. SaveSystem length-prefixes each value
+        // with a uint16, so the text is split into fixed-size chunks under numbered keys plus a count key.
+        constexpr std::string_view kSnapshotChunkCountKey = "SparkGameOpenWorld.snapshot.chunks";
+        constexpr std::string_view kSnapshotChunkKeyPrefix = "SparkGameOpenWorld.snapshot.";
+        constexpr size_t kSnapshotChunkBytes = 60000;
+        constexpr size_t kMaxSnapshotChunks = (kMaxSaveBytes + kSnapshotChunkBytes - 1) / kSnapshotChunkBytes;
+        static_assert(kSnapshotChunkBytes <= Spark::SaveRepresentationLimits::maxStringBytes);
+
+        std::string SnapshotChunkKey(size_t index)
+        {
+            return std::string(kSnapshotChunkKeyPrefix) + std::to_string(index);
+        }
+
+        void SplitSnapshotChunks(std::string_view payload, std::unordered_map<std::string, std::string>& outState)
+        {
+            const size_t chunkCount = (payload.size() + kSnapshotChunkBytes - 1) / kSnapshotChunkBytes;
+            outState[std::string(kSnapshotChunkCountKey)] = std::to_string(chunkCount);
+            for (size_t index = 0; index < chunkCount; ++index)
+                outState[SnapshotChunkKey(index)] =
+                    std::string(payload.substr(index * kSnapshotChunkBytes, kSnapshotChunkBytes));
+        }
+
+        enum class EmbeddedSnapshot
+        {
+            Absent,    ///< Slot predates embedded module state (legacy sidecar save).
+            Present,   ///< Chunks reassembled into the output payload.
+            Malformed, ///< Count key present but the chunk set is incomplete or oversized.
+        };
+
+        EmbeddedSnapshot JoinSnapshotChunks(const std::unordered_map<std::string, std::string>& state,
+                                            std::string& outPayload)
+        {
+            const auto countIt = state.find(std::string(kSnapshotChunkCountKey));
+            if (countIt == state.end())
+                return EmbeddedSnapshot::Absent;
+
+            size_t chunkCount = 0;
+            const std::string& countText = countIt->second;
+            const char* const countEnd = countText.data() + countText.size();
+            const auto parsed = std::from_chars(countText.data(), countEnd, chunkCount);
+            if (parsed.ec != std::errc{} || parsed.ptr != countEnd || chunkCount == 0 ||
+                chunkCount > kMaxSnapshotChunks)
+                return EmbeddedSnapshot::Malformed;
+
+            std::string payload;
+            for (size_t index = 0; index < chunkCount; ++index)
+            {
+                const auto chunk = state.find(SnapshotChunkKey(index));
+                if (chunk == state.end() || chunk->second.empty() || chunk->second.size() > kSnapshotChunkBytes ||
+                    payload.size() + chunk->second.size() > kMaxSaveBytes)
+                    return EmbeddedSnapshot::Malformed;
+                payload += chunk->second;
+            }
+            outPayload = std::move(payload);
+            return EmbeddedSnapshot::Present;
+        }
+
+        /// Read a pre-embedding `.ow_save` sidecar. Only reached for slots whose engine file carries no
+        /// embedded OpenWorld state, i.e. saves written before the snapshot moved into the engine slot.
+        bool ReadLegacySidecar(const std::filesystem::path& path, const std::string& slotName, std::string& outPayload,
+                               std::string& error)
+        {
+            std::error_code filesystemError;
+            const auto byteCount = std::filesystem::file_size(path, filesystemError);
+            if (filesystemError)
+            {
+                error = "OpenWorld gameplay data is missing for slot '" + slotName + "'";
+                return false;
+            }
+            if (byteCount == 0 || byteCount > kMaxSaveBytes)
+            {
+                error = "OpenWorld gameplay data has an invalid size";
+                return false;
+            }
+            std::ifstream file(path, std::ios::binary);
+            std::string payload(static_cast<size_t>(byteCount), '\0');
+            file.read(payload.data(), static_cast<std::streamsize>(payload.size()));
+            if (!file)
+            {
+                error = "Could not read OpenWorld gameplay data";
+                return false;
+            }
+            outPayload = std::move(payload);
+            return true;
+        }
+
+        /// Remove a legacy sidecar (and any staging leftovers) once the slot carries embedded state, so a stale
+        /// sidecar can never be mistaken for this slot's gameplay data again. Failures are harmless: embedded
+        /// state always takes precedence on load.
+        void RemoveLegacySidecar(const std::filesystem::path& path)
+        {
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+            auto temporary = path;
+            temporary += ".tmp";
+            std::filesystem::remove(temporary, ignored);
+            auto backup = path;
+            backup += ".bak";
+            std::filesystem::remove(backup, ignored);
+        }
     } // namespace
 
     // =========================================================================
@@ -92,8 +195,8 @@ namespace OpenWorld
 
         saveSystem->SetMaxAutoSaves(3);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world persistence initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Versioned gameplay persistence ready");
+        Spark::ModuleLog::Info(m_context, "Open world persistence initialized");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Versioned gameplay persistence ready");
     }
 
     std::string OWEngineSystems::SaveGame(const std::string& slotName)
@@ -113,55 +216,11 @@ namespace OpenWorld
         if (payload.empty() || payload.size() > kMaxSaveBytes)
             return "Open world state is too large to save";
 
-        const auto finalPath = GetModuleSavePath(slotName);
-        auto temporaryPath = finalPath;
-        temporaryPath += ".tmp";
-        auto backupPath = finalPath;
-        backupPath += ".bak";
-        std::error_code error;
-        std::filesystem::create_directories(finalPath.parent_path(), error);
-        if (error)
-            return "Could not create OpenWorld save directory: " + error.message();
-
-        std::filesystem::remove(temporaryPath, error);
-        error.clear();
-        std::filesystem::remove(backupPath, error);
-        error.clear();
-        {
-            std::ofstream file(temporaryPath, std::ios::binary | std::ios::trunc);
-            file.write(payload.data(), static_cast<std::streamsize>(payload.size()));
-            file.flush();
-            if (!file)
-            {
-                file.close();
-                std::filesystem::remove(temporaryPath, error);
-                return "Could not write OpenWorld save data";
-            }
-        }
-
-        const bool hadPrevious = std::filesystem::exists(finalPath, error) && !error;
-        if (hadPrevious)
-        {
-            std::filesystem::rename(finalPath, backupPath, error);
-            if (error)
-            {
-                std::filesystem::remove(temporaryPath, error);
-                return "Could not prepare the previous OpenWorld save for replacement";
-            }
-        }
-        std::filesystem::rename(temporaryPath, finalPath, error);
-        if (error)
-        {
-            if (hadPrevious)
-            {
-                std::error_code restoreError;
-                std::filesystem::rename(backupPath, finalPath, restoreError);
-                if (restoreError)
-                    return "Could not commit OpenWorld save data or restore its backup: " + restoreError.message();
-            }
-            std::filesystem::remove(temporaryPath, error);
-            return "Could not commit OpenWorld save data";
-        }
+        // The gameplay snapshot rides inside the engine slot, so the ECS world and the module state commit in
+        // one atomic SaveSystem write and share its last-good backup. A separate sidecar committed before or
+        // after the engine file could be left paired with a different generation of it by a crash in between.
+        std::unordered_map<std::string, std::string> customState;
+        SplitSnapshotChunks(payload, customState);
 
         Spark::SaveMetadata metadata;
         metadata.saveName = "Open World - " + slotName;
@@ -171,25 +230,10 @@ namespace OpenWorld
         const auto& playerWorld = m_player->GetWorldState();
         metadata.playerPosition = {playerWorld.posX, playerWorld.posY, playerWorld.posZ};
 
-        if (!saveSystem->Save(slotName, *world, metadata))
-        {
-            std::error_code rollbackError;
-            std::filesystem::remove(finalPath, rollbackError);
-            if (rollbackError)
-                return "Engine world save failed and the new OpenWorld sidecar could not be removed: " +
-                       rollbackError.message();
-            if (hadPrevious)
-            {
-                std::filesystem::rename(backupPath, finalPath, rollbackError);
-                if (rollbackError)
-                    return "Engine world save failed and the previous OpenWorld save could not be restored: " +
-                           rollbackError.message();
-            }
-            return hadPrevious ? "Engine world save failed; previous OpenWorld save was preserved"
-                               : "Engine world save failed; OpenWorld sidecar was rolled back";
-        }
+        if (!saveSystem->Save(slotName, *world, metadata, customState))
+            return "Engine world save failed; previous OpenWorld save was preserved";
 
-        std::filesystem::remove(backupPath, error);
+        RemoveLegacySidecar(GetModuleSavePath(saveSystem->GetSaveDirectory(), slotName));
         return "Saved OpenWorld game to slot '" + slotName + "'";
     }
 
@@ -208,26 +252,36 @@ namespace OpenWorld
         if (!saveSystem->SaveExists(slotName))
             return "No save found in slot '" + slotName + "'";
 
-        const auto modulePath = GetModuleSavePath(slotName);
-        std::error_code filesystemError;
-        const auto byteCount = std::filesystem::file_size(modulePath, filesystemError);
-        if (filesystemError)
-            return "OpenWorld gameplay data is missing for slot '" + slotName + "'";
-        if (byteCount == 0 || byteCount > kMaxSaveBytes)
-            return "OpenWorld gameplay data has an invalid size";
-
-        std::ifstream file(modulePath, std::ios::binary);
-        std::string payload(static_cast<size_t>(byteCount), '\0');
-        file.read(payload.data(), static_cast<std::streamsize>(payload.size()));
-        if (!file)
-            return "Could not read OpenWorld gameplay data";
-
+        // Validate the gameplay snapshot from the same engine file SaveSystem is about to restore, before the
+        // world is touched. Only a slot with no embedded state falls back to its legacy sidecar.
+        const auto legacyPath = GetModuleSavePath(saveSystem->GetSaveDirectory(), slotName);
         OWGameSaveData data;
         std::string validationError;
-        if (!DeserializeSnapshot(payload, data, validationError) || !ValidateSnapshot(data, validationError))
-            return "OpenWorld save is invalid: " + validationError;
-        if (!saveSystem->Load(slotName, *world))
+        const auto validateModuleState = [&](const std::unordered_map<std::string, std::string>& customState)
+        {
+            std::string payload;
+            switch (JoinSnapshotChunks(customState, payload))
+            {
+            case EmbeddedSnapshot::Malformed:
+                validationError = "embedded OpenWorld state is incomplete";
+                return false;
+            case EmbeddedSnapshot::Absent:
+                if (!ReadLegacySidecar(legacyPath, slotName, payload, validationError))
+                    return false;
+                break;
+            case EmbeddedSnapshot::Present:
+                break;
+            }
+            return DeserializeSnapshot(payload, data, validationError) && ValidateSnapshot(data, validationError);
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!saveSystem->Load(slotName, *world, customState, validateModuleState))
+        {
+            if (!validationError.empty())
+                return "OpenWorld save is invalid: " + validationError;
             return "Engine world load failed; gameplay state was not changed";
+        }
         if (!RestoreSnapshot(data, validationError))
             return "Engine world loaded, but OpenWorld state restore failed: " + validationError;
 
@@ -288,9 +342,13 @@ namespace OpenWorld
             { return std::isalnum(static_cast<unsigned char>(character)) || character == '_' || character == '-'; });
     }
 
-    std::filesystem::path OWEngineSystems::GetModuleSavePath(const std::string& slotName)
+    std::filesystem::path OWEngineSystems::GetModuleSavePath(const std::string& saveDirectory,
+                                                             const std::string& slotName)
     {
-        return std::filesystem::path("Saves") / "OpenWorld" / (slotName + ".ow_save");
+        // The sidecar lives beside the engine slot it pairs with. SaveSystem resolves its
+        // directory from UserPaths at startup, so a CWD-relative path would split one save
+        // across two locations (and fail in read-only install directories).
+        return std::filesystem::path(saveDirectory) / "OpenWorld" / (slotName + ".ow_save");
     }
 
     std::string OWEngineSystems::SerializeSnapshot(const OWGameSaveData& data)

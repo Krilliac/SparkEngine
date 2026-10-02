@@ -262,11 +262,24 @@ customization (non-goal).
 New `TFMsg` ids after `WorldWelcome = 0x5411`: `LoginRequest/LoginReply`,
 `RegisterRequest/RegisterReply`, `CharListRequest/CharListReply`,
 `CharCreateReq/CharCreateReply`, `CharDeleteReq/CharDeleteReply`,
-`EnterWorldReq` (reply is the now-gated `TF_WorldWelcome`). Packed PODs with
+`EnterWorldReq` (reply is the now-gated `TF_WorldWelcome`), plus (NET-100)
+`LoginChallenge = 0x548E` and `LoginProof = 0x548F`. Packed PODs with
 frozen `static_assert` sizes in `Net/TFNetProtocol.h`
-(`TF_AuthRequest/TF_AuthReply/TF_CharBrief/TF_CharListReply/
-TF_CharCreateRequest/TF_CharOpReply/TF_CharDeleteRequest/
-TF_EnterWorldRequest`).
+(`TF_LoginStart/TF_LoginChallenge/TF_LoginProof/TF_AuthReply/
+TF_RegisterRequest/TF_CharBrief/TF_CharListReply/TF_CharCreateRequest/
+TF_CharOpReply/TF_CharDeleteRequest/TF_EnterWorldRequest`).
+
+TF-120: `ContinentIdentity = 0x5490` (S->C, reliable, `TF_ContinentIdentity
+{char key[64]}`) goes out just before `TF_WorldWelcome` and names the
+continent the server hosts. A client that loaded another continent at boot
+refuses it: it logs the refusal and disconnects before it enters the world
+(docs/TERRAFRONT_MULTIMAP.md §4, gap 2).
+
+NET-100: login is SCRAM-SHA-256 and registration sends a client-derived
+verifier (`Net/TFScramWire.h`), so no TERRAFRONT message carries a password;
+`TFClientNet::BeginLogin` / `TFClientNet::Register` are the client entry
+points, and the server answers through `TFServerSim::HandleLogin`,
+`HandleLoginProof` and `HandleRegister`.
 
 `TF_WorldWelcome` no longer fires from `PollClientJoinsLeaves` on connect; it
 is sent ONLY from `TFServerSim::HandleEnterWorld` after
@@ -295,7 +308,13 @@ plain core-logic classes (unit-tested standalone against a bare
 `SetDatabase(...)`; authority roles lazily open
 `SavePaths::File("terrafront.db")` in
 `TFServerSim::EnsureAuthorityDatabaseOpen()` on the first register/login
-request. Pure clients never open or flush the authority database. `OnImGui`
+request, and bind it to their continent (`TFDatabase::BindAuthority`, TF-120);
+if the bind fails (another live server already serves the continent on this
+save root) the database is closed and nobody logs in. On a bound database
+`TFCharacterSystem::EnterWorld` claims the character's residency and is
+refused while the character is in world on another live continent; the
+disconnect cleanup releases it (`LeaveWorld`) only after the final progress
+and meta are durable. Pure clients never open or flush the authority database. `OnImGui`
 renders `TFLoginFlow::RenderUI()` unconditionally (a no-op once
 `InWorld()`), and additionally gates HUD/map/spawn/scoreboard behind
 `InWorld()` (they already gated on `HasLocalPlayer()`). `TFSpawnScreen`'s
@@ -358,3 +377,115 @@ uniqueness + ownership-checked delete + enter-world. All drive
 game-module level (console-driven loopback flow + screenshots), not by
 `SparkTests`, since `TFServerSim.cpp` is a full-module file with engine
 dependencies outside the minimal-dependency unit-test build.
+
+## 8. Multi-process harness: impairment, soak budgets, cold restart (TF-110, TF-120)
+
+> TF-120 integration update: the engine-side fenced participant is wired through SparkServer's authenticated
+> area-control service and game-thread dispatcher. TFDatabase schema v5 reserves ownership and stores a pawn
+> checkpoint across retries. Under OD-16 the reconnect redirect is no longer the production path; it still
+> answers until the fenced path reaches clients, and it cannot take a reserved character. Operator-authored
+> `gatewayAreaId` values must match actual gateway registration IDs, and the destination must already have
+> the matching authenticated account/connection binding. Automatic gateway admission/routing and client
+> scene replacement remain unfinished; the terminal is not a completed cross-continent travel path.
+> See `wiki/subsystems/Area-Server-Architecture.md` for the wiring and evidence limits.
+
+`TF120_Migration_FullCapacityWithLostDeliveriesHasOneOwnerEach` migrates `kMaxPlayers` characters through
+the production database and participants, losing some Commit requests (retried) and some Commit replies
+(redelivered), and checks one durable owner and one install per character. Its authority adapter is a test
+double: it is a state-transfer correctness check, not a budget, measured server tick, bandwidth, RSS,
+multi-process soak or rendered-world result. The provisional soak thresholds below are unchanged, and the
+TF-120 budget criterion remains unmet until real process runs pass them.
+
+`Tools/Terrafront/multiclient.py` drives real `SparkEngine` processes (one
+dedicated server, headless clients) through `-exec` scripts and compares their
+`tf_observe` output. Beyond the convergence scenarios it has three modes. The
+unit tests in `Tests/Tools/test_terrafront_multiclient.py` cover every verdict
+on every host. The process runs are CTest entries behind
+`SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS`.
+
+### Impaired convergence (`--impair`, `--seed`)
+
+Every process runs `net_impair_seed`, `net_lag`, `net_jitter`, `net_loss`,
+`net_dup` and `net_reorder` at frame 0, before it hosts or connects. Process
+*k* uses seed + *k*. Settle times grow by one worst-case round trip, the
+reorder hold and one resend. The position tolerance grows by the distance a
+sprinting pawn covers in one worst-case one-way delay. A checkpoint that the
+wider windows no longer keep quiet moves inside its quiet gap. The run fails
+unless impairment is proven live twice:
+
+- `net_impair` reports the requested values right after setup and again just
+  before the process exits. This is the simulator the engine's `net_*`
+  commands configure.
+- Every checkpoint's `[TF-OBSERVE] net` line reports the same values. This is
+  the `InstabilitySimulator` compiled into the module image. The module links
+  the engine statically, so it has its own copy, and module-side sends
+  (`TFServerSim` -> `NetworkManager::SendToClient` -> `SendImpaired`) go
+  through it.
+
+If only one of the two is configured, the run fails even though every
+checkpoint converged. CTest: `TerrafrontMultiClient_ImpairedConvergence`
+(80 ms, 20 ms, 3 % loss, 2 % duplication, 3 % reordering, seed 20260927) over
+`onboard_spawn_move`, `combat_kill_respawn` and `territory`.
+
+### Soak (`--soak-seconds`)
+
+The server runs `tf_bots <bots>`, and two clients onboard, then walk and fire in
+a loop. Every `sampleIntervalS` the harness samples:
+
+- the server's `tf_perf` report, followed by `tf_perf reset`;
+- the server's bot count;
+- each client's `[TF-OBSERVE] net` counters;
+- every process's RSS, once per second. It reads `/proc` on Linux (reused from
+  `tools/ops/server_soak.py`) and the working set via `K32GetProcessMemoryInfo`
+  on Windows.
+
+`Tools/Terrafront/soak_budgets.json` holds the limits. **They are provisional
+harness guards, not SLOs.** Samples taken before `warmupS` are ignored. The run
+fails on any of the following:
+
+- a child exits non-zero;
+- fewer samples than the window should hold;
+- the p95 of the ~2 s mean tick exceeds 16.7 ms (60 Hz);
+- the sum of per-phase peaks exceeds `maxTickPeakMs`;
+- a client receives fewer packets per second than 20 Hz replication needs;
+- a client's downlink exceeds its cap;
+- a client's dropped fraction exceeds its cap;
+- the least-squares RSS slope exceeds `maxRssSlopeMiBPerHour`.
+
+`TFPerfCounters` keeps average/peak rings, not a per-tick histogram, so the tick
+"p95" is taken across window means. The per-tick p95/p99 is still open. The
+bot count is capped by `kTFMaxBots` (32), so the run has 34 actors, not the 100
+that the W4 perf pass names. CTest `TerrafrontSoak_Short` runs 120 s (label
+`terrafront-soak`). The 30-minute gate is the same command with
+`--soak-seconds 1800`.
+
+### Cold restart (`cold_restart`, `ungraceful_restart`)
+
+Phase 1 builds state that differs from the defaults:
+
+- client1 saves `mra_rifle` as its primary;
+- client1's wallet is raised to 300 flux;
+- client1 kills client2 in the arena;
+- the server flips regions 3 and 7.
+
+After the clients exit, the harness hard-kills the server with
+TerminateProcess/SIGKILL. `cold_restart` kills after a `tf_save` reports
+`territory ok, progression ok`. `ungraceful_restart` never saves explicitly and
+kills once the 2 s progression debounce has passed. That point is the recovery
+point in `docs/specs/persistence.md`, and region flips persist immediately.
+
+Phase 2 starts a new server on the same `TF_SAVE_ROOT`. Its database bind
+clears the residency the killed server left, so the character can enter world
+again. The same account logs back in (no register, no create). The comparison requires all of the following:
+
+- equal region owners;
+- equal faction, loadout, rank, xp, kill tally and unlock set;
+- flux within the continent income slack;
+- exactly the one phase-1 character id in `tf_char_list`.
+
+A phase 1 that ends at the default state fails on its own, so a restart that
+lost everything cannot pass by matching an empty baseline. Unlock purchases have
+no client harness verb yet, so the unlock set compared here is the rank-granted
+one. Vehicles are out of scope; see TF-120/vehicle-restart-semantics. CTest:
+`TerrafrontRestart_ColdRestartRestoresAuthoritativeState` and
+`TerrafrontRestart_UngracefulKillRestoresLastCommit`.

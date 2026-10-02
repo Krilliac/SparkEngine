@@ -256,11 +256,25 @@ timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
         marker_path="${SPARK_WRAPPER_TIMEOUT_MARKER:?}"
         marker_token="${SPARK_WRAPPER_TIMEOUT_TOKEN:?}"
         unset SPARK_WRAPPER_TIMEOUT_MARKER SPARK_WRAPPER_TIMEOUT_TOKEN
+        child_pid=""
         on_wrapper_timeout() {
             umask 077
             set -C
             printf "timeout:%s\n" "$marker_token" > "$marker_path" 2>/dev/null || true
             set +C
+            if [[ -z "$child_pid" ]]; then
+                return
+            fi
+            # timeout signals this shell, not the background command.  Keep
+            # the required wall-clock bound while terminating the whole test
+            # process group so a timed-out suite cannot outlive its evidence
+            # capture and finish successfully after the wrapper has failed.
+            kill -TERM -- "-$child_pid" 2>/dev/null || kill -TERM "$child_pid" 2>/dev/null || true
+            for ((wait_count = 0; wait_count < 100; ++wait_count)); do
+                kill -0 -- "-$child_pid" 2>/dev/null || return
+                sleep 0.1
+            done
+            kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
         }
         trap on_wrapper_timeout TERM
         # Bash reports -f in 1024-byte blocks. Keep the hard limit unchanged so
@@ -274,7 +288,7 @@ timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
         # 34025643171 died here with exit 153 and no completion evidence.
         trap "" XFSZ
         ulimit -S -f 16384
-        "$@" &
+        setsid --wait "$@" &
         child_pid=$!
         wait "$child_pid"
         child_status=$?
@@ -369,7 +383,9 @@ scan() {
         return 0
     }
     set +e
-    grep -qE "$pattern" "${scan_files[@]}" >/dev/null 2>&1
+    # Case-insensitive, like verify-sanitizer-evidence.py's patterns: the verifier
+    # rejects any disagreement, so this witness must classify the same text.
+    grep -qiE "$pattern" "${scan_files[@]}" >/dev/null 2>&1
     local status="$?"
     set -e
     printf '%s' "$status"
@@ -377,8 +393,9 @@ scan() {
 
 signature_scan_status="$(scan 'ERROR:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|WARNING:[[:space:]]*(Thread|Memory)Sanitizer:|SUMMARY:[[:space:]]*(Address|Leak|Thread|Memory)Sanitizer:|AddressSanitizer:DEADLYSIGNAL|runtime error:' 1)"
 warning_scan_status="$(scan '^\[[[:space:]]*WARN[[:space:]]*\]|Known flaky|::warning title=Flaky test:')"
-failure_scan_status="$(scan '^\[[[:space:]]*FAILED[[:space:]]*\]|^Tests:.*[1-9][0-9]* failed|^Assertions:.*[1-9][0-9]* failed')"
-crash_scan_status="$(scan 'Segmentation fault|core dumped|AddressSanitizer:DEADLYSIGNAL|terminate called|uncaught exception|(^|[[:space:]])Aborted([[:space:]]|$)')"
+# (^|[^[:alnum:]_]) ... ([^[:alnum:]_]|$) is the verifier's \b for ASCII text.
+failure_scan_status="$(scan '^\[[[:space:]]*FAILED[[:space:]]*\]|^Tests:(.*[^[:alnum:]_])?[1-9][0-9]* failed([^[:alnum:]_]|$)|^Assertions:(.*[^[:alnum:]_])?[1-9][0-9]* failed([^[:alnum:]_]|$)')"
+crash_scan_status="$(scan 'Segmentation fault|core dumped|AddressSanitizer:DEADLYSIGNAL|terminate called|uncaught exception|(^|[^[:alnum:]_])Aborted([^[:alnum:]_]|$)')"
 infrastructure_scan_status="$(scan 'command not found|No such file or directory|cannot execute|Permission denied|failed to start process')"
 
 set +e

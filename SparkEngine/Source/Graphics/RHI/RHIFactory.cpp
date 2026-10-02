@@ -199,6 +199,11 @@ namespace Spark
             return backends[0];
         }
 
+        GraphicsBackend GetRequestedBackendOverride()
+        {
+            return ParseBackendName(std::getenv("SPARK_RHI_BACKEND"));
+        }
+
         std::unique_ptr<IRHIDevice> CreateDevice(GraphicsBackend backend)
         {
             SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);

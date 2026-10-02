@@ -27,6 +27,7 @@ namespace JPH
 {
     class Body;
     class BodyID;
+    class PhysicsSystem;
     class Constraint;
 } // namespace JPH
 
@@ -161,7 +162,13 @@ class PhysicsBody
     XMFLOAT3 GetInterpolatedPosition(float alpha) const;
     XMMATRIX GetInterpolatedTransform(float alpha) const;
     void StoreCurrentState();
-    void UpdateCurrentState();
+    /// Refresh the current interpolation pose from @p lockedBody, this body's Jolt body read
+    /// under a lock the caller holds (PhysicsSystem locks every body once per step). Null, or a
+    /// body not in the broadphase, leaves the pose unchanged.
+    void UpdateCurrentState(const JPH::Body* lockedBody);
+    /// The Jolt system every PhysicsBody method resolves through the process EngineContext's
+    /// physics system, or null when there is none.
+    static JPH::PhysicsSystem* ContextJoltSystem();
 
   private:
     /// @brief Push m_collisionGroup/m_collisionMask to Jolt's broadphase.

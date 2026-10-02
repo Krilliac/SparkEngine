@@ -27,9 +27,11 @@
 #include "Persistence/TFDatabase.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace Terrafront
@@ -87,6 +89,13 @@ namespace Terrafront
             TFLoadout loadout;
             std::unordered_map<std::string, TFWeaponAggStats> stats; ///< by weapons.json key
             bool dirty = false;
+            /// Set while parked after a failed disconnect flush: the database
+            /// row revision these values were computed from (TF-120); nullopt
+            /// when parked without a database.
+            std::optional<uint64_t> parkedBaseRevision;
+            /// Set while parked: whether the character's final progress (xp/rank/flux) was durable when it
+            /// disconnected. A parked row without durable progress never reports its residency releasable.
+            bool parkedProgressDurable = true;
         };
 
         Meta& Ensure(PlayerId player) { return m_meta[player]; }
@@ -97,18 +106,32 @@ namespace Terrafront
         {
             m_meta.clear();
             m_pendingByCharacter.clear();
+            m_resolvedParked.clear();
         }
+        /// True while `charId` has meta parked by a failed disconnect flush (TF-120: it keeps residency).
+        bool IsParked(uint64_t charId) const { return m_pendingByCharacter.contains(charId); }
+        /// Characters whose parked meta a PersistAllDirty sweep has since committed or discarded, and whose
+        /// final progress was durable, so their residency can be released; the list is cleared by the call. A
+        /// resolved row whose progress was not durable is left out: the character stays resident here until
+        /// the continent's next bind, so no other continent starts without its last progress.
+        std::vector<uint64_t> TakeResolvedParked() { return std::exchange(m_resolvedParked, {}); }
         bool IsDirty(PlayerId player) const;
         bool AnyDirty() const;
         size_t Count() const { return m_meta.size(); }
 
         /// Remove a disconnected PlayerId without losing a failed durable
         /// write or exposing its metadata if that transient id is reused.
-        bool Detach(PlayerId player, TFDatabase* db);
+        /// `progressDurable` says whether the character's final progress
+        /// committed; it rides with a parked row (see TakeResolvedParked).
+        /// TFProgressionSystem::ClearPlayer always passes it explicitly.
+        bool Detach(PlayerId player, TFDatabase* db, bool progressDurable = true);
 
         /// Overwrite (not merge) this player's runtime meta from the durable
         /// character record — same replace semantics and call site as
         /// TFProgressionSystem::ServerLoadCharacter's xp/rank/flux seeding.
+        /// A row parked by a failed disconnect flush is re-adopted instead,
+        /// unless another authority committed the character since the parked
+        /// values' baseline (rec.revision moved); then it is discarded.
         void SeedFromRecord(PlayerId player, const TFCharacterRecord& rec);
 
         /// Persist one player's meta through db.SaveCharacterMeta if it is dirty
@@ -122,7 +145,10 @@ namespace Terrafront
         /// xp/rank/flux rows in ONE TFDatabase commit, so an unlock purchase's
         /// flux debit and unlock key can never land separately. Rows whose
         /// character no longer exists are left dirty and reported as failure
-        /// without blocking the rest of the batch.
+        /// without blocking the rest of the batch. TF-120: a row rejected with
+        /// TFDatabaseStatus::Conflict is dropped and the rest commit; a
+        /// conflicted disconnected (parked) row is discarded, a conflicted
+        /// in-world row stays dirty. Either way the call reports failure.
         bool PersistAllDirty(TFDatabase& db, std::vector<TFCharacterUpdate> progressUpdates);
 
         /// Debug UI iteration only.
@@ -134,6 +160,7 @@ namespace Terrafront
 
         std::unordered_map<PlayerId, Meta> m_meta;
         std::unordered_map<uint64_t, Meta> m_pendingByCharacter;
+        std::vector<uint64_t> m_resolvedParked; ///< see TakeResolvedParked()
     };
 
 } // namespace Terrafront

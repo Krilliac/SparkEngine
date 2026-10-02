@@ -1,149 +1,161 @@
-// TestNetworkSecurity.cpp - Tests for legacy XOR transforms and prototype token lifecycle
+// TestNetworkSecurity.cpp - Connection-token registry and removal of the legacy XOR prototype (NET-100)
 
 #include "TestFramework.h"
+#include "Engine/Networking/NetworkIntegration.h"
 #include "Engine/Networking/NetworkSecurity.h"
+
 #include <algorithm>
+#include <array>
+#include <cstdint>
+#include <vector>
 
 using namespace Spark::Net;
 
 // =============================================================================
-// Key Generation
+// The repeating-key XOR "encryption" prototype must not come back
 // =============================================================================
 
-TEST(NetSecurity_GenerateKeyFillsArray)
+namespace
 {
-    NetworkSecurity::Key key{};
-    NetworkSecurity::GenerateKey(key);
-    // Key should not be all zeros after generation
-    bool allZero = std::all_of(key.begin(), key.end(), [](uint8_t b) { return b == 0; });
-    EXPECT_FALSE(allZero);
-}
+    // Any member named Encrypt/Decrypt counts, whatever its key type: `&T::Encrypt` names a single
+    // (static or non-static) member, and the call forms catch overload sets that `&` cannot name.
+    // The SparkNetworkSecurityCsprngContract regex over the header is the backstop for other shapes.
+    template <typename T>
+    concept HasEncryptMember =
+        requires { &T::Encrypt; } || requires { &T::Decrypt; } ||
+        requires(std::vector<uint8_t>& bytes) { T::Encrypt(bytes); } ||
+        requires(std::vector<uint8_t>& bytes) { T::Encrypt(bytes, std::array<uint8_t, 32>{}); } ||
+        requires(std::vector<uint8_t>& bytes) { T::Encrypt(bytes, std::vector<uint8_t>{}); };
 
-TEST(NetSecurity_GenerateKeyProducesUniqueKeys)
+    template <typename T>
+    concept HasXorKeyAccessor = requires(const T& security) { security.GetEncryptionKey(); };
+
+    template <typename T>
+    concept HasXorToggle = requires(T& security) { security.SetEncryptionEnabled(true); };
+
+    template <typename T>
+    concept HasStackTransform = requires(const T& stack, const std::vector<uint8_t>& bytes) {
+        stack.Encrypt(bytes);
+        stack.Decrypt(bytes);
+    };
+
+    template <typename T>
+    concept HasEncryptionFlag = requires(T& config) { config.enableEncryption; };
+
+    // Shapes of the deleted prototype, declared only, so the detectors are proven non-vacuous.
+    struct LegacyStaticXorShape
+    {
+        static std::vector<uint8_t> Encrypt(const std::vector<uint8_t>& data, const std::vector<uint8_t>& key);
+    };
+    struct LegacyOverloadedXorShape
+    {
+        static void Encrypt(std::vector<uint8_t>& data, const std::array<uint8_t, 32>& key);
+        static void Encrypt(std::vector<uint8_t>& data, const std::vector<uint8_t>& key);
+    };
+    struct LegacyStackShape
+    {
+        std::vector<uint8_t> Encrypt(const std::vector<uint8_t>& data) const;
+        std::vector<uint8_t> Decrypt(const std::vector<uint8_t>& data) const;
+    };
+    static_assert(HasEncryptMember<LegacyStaticXorShape>);
+    static_assert(HasEncryptMember<LegacyOverloadedXorShape>);
+    static_assert(HasStackTransform<LegacyStackShape>);
+} // namespace
+
+static_assert(!HasEncryptMember<NetworkSecurity>, "NetworkSecurity must not expose the XOR transform");
+static_assert(!HasXorKeyAccessor<NetworkSecurity>, "NetworkSecurity must not hold XOR key material");
+static_assert(!HasXorToggle<NetworkSecurity>, "NetworkSecurity must not expose the XOR toggle");
+static_assert(!HasStackTransform<NetworkStack>, "NetworkStack must not expose XOR Encrypt/Decrypt");
+static_assert(!HasEncryptionFlag<NetworkStackConfig>, "NetworkStackConfig must not offer an XOR opt-in flag");
+
+TEST(NetSecurity_LegacyXorApiIsGone)
 {
-    NetworkSecurity::Key key1{}, key2{};
-    NetworkSecurity::GenerateKey(key1);
-    NetworkSecurity::GenerateKey(key2);
-    EXPECT_TRUE(key1 != key2);
-}
-
-// =============================================================================
-// Legacy XOR transformation
-// =============================================================================
-
-TEST(NetSecurity_XorTransformRoundTrip)
-{
-    NetworkSecurity::Key key{};
-    NetworkSecurity::GenerateKey(key);
-
-    std::vector<uint8_t> original = {0x48, 0x65, 0x6C, 0x6C, 0x6F}; // "Hello"
-    auto obfuscated = NetworkSecurity::Encrypt(original, key);
-    EXPECT_FALSE(obfuscated.empty());
-    EXPECT_FALSE(obfuscated == original);
-
-    auto restored = NetworkSecurity::Decrypt(obfuscated, key);
-    EXPECT_TRUE(restored == original);
-}
-
-TEST(NetSecurity_XorTransformInPlace)
-{
-    NetworkSecurity::Key key{};
-    NetworkSecurity::GenerateKey(key);
-
-    std::vector<uint8_t> data = {1, 2, 3, 4, 5, 6, 7, 8};
-    std::vector<uint8_t> original = data;
-
-    NetworkSecurity::PacketEncrypt(data.data(), data.size(), key);
-    EXPECT_FALSE(data == original);
-
-    NetworkSecurity::PacketDecrypt(data.data(), data.size(), key);
-    EXPECT_TRUE(data == original);
-}
-
-TEST(NetSecurity_XorTransformEmptyData)
-{
-    NetworkSecurity::Key key{};
-    NetworkSecurity::GenerateKey(key);
-
-    std::vector<uint8_t> empty;
-    auto obfuscated = NetworkSecurity::Encrypt(empty, key);
-    EXPECT_TRUE(obfuscated.empty());
-}
-
-TEST(NetSecurity_XorTransformLargeData)
-{
-    NetworkSecurity::Key key{};
-    NetworkSecurity::GenerateKey(key);
-
-    std::vector<uint8_t> data(1024);
-    for (size_t i = 0; i < data.size(); ++i)
-        data[i] = static_cast<uint8_t>(i & 0xFF);
-
-    auto obfuscated = NetworkSecurity::Encrypt(data, key);
-    auto restored = NetworkSecurity::Decrypt(obfuscated, key);
-    EXPECT_TRUE(restored == data);
+    // The static_asserts above are the real check; this records them in the test report.
+    EXPECT_FALSE(HasEncryptMember<NetworkSecurity>);
+    EXPECT_FALSE(HasXorKeyAccessor<NetworkSecurity>);
+    EXPECT_FALSE(HasXorToggle<NetworkSecurity>);
+    EXPECT_FALSE(HasStackTransform<NetworkStack>);
+    EXPECT_FALSE(HasEncryptionFlag<NetworkStackConfig>);
 }
 
 // =============================================================================
-// Connection Tokens
+// Connection tokens
+//
+// These cover the success path only. The CSPRNG-failure branch (return false, token
+// zeroed, nothing recorded) is not exercised: SecureRandom has no fault-injection seam.
 // =============================================================================
 
-TEST(NetSecurity_GenerateToken)
+TEST(NetSecurity_GenerateTokenIsRandom)
 {
     NetworkSecurity security;
-    auto token = security.GenerateConnectionToken();
-    bool allZero = std::all_of(token.begin(), token.end(), [](uint8_t b) { return b == 0; });
-    EXPECT_FALSE(allZero);
+    NetworkSecurity::Token first{};
+    NetworkSecurity::Token second{};
+    ASSERT_TRUE(security.GenerateConnectionToken(first));
+    ASSERT_TRUE(security.GenerateConnectionToken(second));
+
+    EXPECT_FALSE(std::all_of(first.begin(), first.end(), [](uint8_t b) { return b == 0; }));
+    EXPECT_TRUE(first != second);
 }
 
-TEST(NetSecurity_ValidateToken)
+TEST(NetSecurity_TokenIsSingleUse)
 {
     NetworkSecurity security;
-    auto token = security.GenerateConnectionToken();
+    NetworkSecurity::Token token{};
+    ASSERT_TRUE(security.GenerateConnectionToken(token));
+
     EXPECT_TRUE(security.ValidateConnectionToken(token));
-}
-
-TEST(NetSecurity_TokenConsumedOnValidation)
-{
-    NetworkSecurity security;
-    auto token = security.GenerateConnectionToken();
-    EXPECT_TRUE(security.ValidateConnectionToken(token));
-    // Second validation should fail (token consumed)
     EXPECT_FALSE(security.ValidateConnectionToken(token));
 }
 
-TEST(NetSecurity_InvalidTokenRejected)
+TEST(NetSecurity_UnknownAndZeroTokensRejected)
 {
     NetworkSecurity security;
-    NetworkSecurity::Token fakeToken{};
-    fakeToken.fill(0xAA);
-    EXPECT_FALSE(security.ValidateConnectionToken(fakeToken));
+    NetworkSecurity::Token issued{};
+    ASSERT_TRUE(security.GenerateConnectionToken(issued));
+
+    NetworkSecurity::Token forged{};
+    forged.fill(0xAA);
+    EXPECT_FALSE(security.ValidateConnectionToken(forged));
+
+    NetworkSecurity::Token zero{};
+    EXPECT_FALSE(security.ValidateConnectionToken(zero));
+
+    // A one-bit change to an issued token is a different token.
+    NetworkSecurity::Token flipped = issued;
+    flipped[TOKEN_SIZE - 1] ^= 0x01;
+    EXPECT_FALSE(security.ValidateConnectionToken(flipped));
+
+    // Rejections must not consume the genuine pending token.
+    EXPECT_TRUE(security.ValidateConnectionToken(issued));
 }
 
-// =============================================================================
-// Legacy prototype toggle
-// =============================================================================
-
-TEST(NetSecurity_LegacyPrototypeToggle)
+TEST(NetSecurity_TokensAreScopedToTheIssuingRegistry)
 {
-    NetworkSecurity security;
+    NetworkSecurity issuer;
+    NetworkSecurity other;
+    NetworkSecurity::Token token{};
+    ASSERT_TRUE(issuer.GenerateConnectionToken(token));
 
-    security.SetEncryptionEnabled(true);
-    EXPECT_TRUE(security.IsEncryptionEnabled());
-
-    security.SetEncryptionEnabled(false);
-    EXPECT_FALSE(security.IsEncryptionEnabled());
+    EXPECT_FALSE(other.ValidateConnectionToken(token));
+    EXPECT_TRUE(issuer.ValidateConnectionToken(token));
 }
 
-// =============================================================================
-// Key Management
-// =============================================================================
-
-TEST(NetSecurity_SetGetEncryptionKey)
+TEST(NetSecurity_ManyPendingTokensEachValidateOnce)
 {
     NetworkSecurity security;
-    NetworkSecurity::Key customKey{};
-    customKey.fill(0x42);
-    security.SetEncryptionKey(customKey);
-    EXPECT_TRUE(security.GetEncryptionKey() == customKey);
+    std::vector<NetworkSecurity::Token> tokens(32);
+    for (auto& token : tokens)
+    {
+        ASSERT_TRUE(security.GenerateConnectionToken(token));
+    }
+
+    // Validate out of issue order.
+    for (size_t i = tokens.size(); i-- > 0;)
+    {
+        EXPECT_TRUE(security.ValidateConnectionToken(tokens[i]));
+    }
+    for (const auto& token : tokens)
+    {
+        EXPECT_FALSE(security.ValidateConnectionToken(token));
+    }
 }

@@ -19,7 +19,6 @@ The SceneManager owns:
 |----------------|-------------|
 | **Serialization** | JSON and legacy binary round-trip via `LoadJSON`/`SaveJSON`/`LoadCustom` |
 | **Hierarchy management** | Add, remove, reparent nodes; maintain index invariants |
-| **Prefab system** | Save/load subtrees as reusable prefab assets |
 | **Async loading** | Background scene transitions via `LoadSceneAsync` |
 | **Console integration** | Runtime inspection and manipulation from the debug console |
 | **Dirty tracking** | Tracks unsaved changes for editor "Save changes?" prompts |
@@ -292,13 +291,6 @@ sceneMgr.SaveScene(L"Assets/Scenes/Modified.scene");
 | `int FindNode(const string& name) const` | Find node index by name (-1 if not found) |
 | `int GetNodeCount() const` | Total number of nodes |
 
-### Prefab System
-
-| Method | Description |
-|--------|-------------|
-| `bool SavePrefab(int nodeIndex, const wstring& filepath) const` | Save subtree as prefab |
-| `int LoadPrefab(const wstring& filepath, const XMFLOAT3& pos)` | Instantiate prefab at position |
-
 ### State and Metadata
 
 | Method | Description |
@@ -393,26 +385,9 @@ for (const auto& path : scenes) {
 }
 ```
 
-## Prefab System
+## Prefabs
 
-Save and load reusable prefab templates:
-
-```cpp
-// Save a node subtree as a prefab
-sceneMgr.SavePrefab(nodeIndex, L"Assets/Prefabs/Enemy.prefab");
-
-// Instantiate a prefab into the scene at a specific position
-int newNodeIndex = sceneMgr.LoadPrefab(
-    L"Assets/Prefabs/Enemy.prefab",
-    {10.0f, 0.0f, 5.0f}  // World-space offset
-);
-
-if (newNodeIndex < 0) {
-    LOG_ERROR("Failed to load prefab");
-}
-```
-
-Prefab files use the same JSON format as scene files but contain only the exported subtree. Node positions are stored relative to the prefab's internal origin and offset by the `position` parameter during instantiation.
+SceneManager has no prefab API: its line-based `SavePrefab`/`LoadPrefab` had no caller and were removed. Editor prefabs are `.sparkprefab` assets owned by `SparkEditor::PrefabManager`.
 
 ## Dirty State Tracking
 

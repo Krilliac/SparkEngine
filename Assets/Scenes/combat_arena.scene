@@ -17,7 +17,7 @@ type=plane
 width=200.0
 depth=200.0
 position=0.0,-1.0,0.0
-material=ground_dirt
+material=Assets/Materials/Terrain_Dirt.json
 
 # ============================================================
 # ALPHA BASE (Team Alpha spawn area - south)
@@ -25,7 +25,7 @@ material=ground_dirt
 
 [Object]
 type=model
-model=building_small.obj
+model=Assets/Models/building_small.obj
 position=-8.0,0.0,-70.0
 rotation=0.0,0.0,0.0
 scale=1.0,1.0,1.0
@@ -33,34 +33,34 @@ name=Alpha_HQ
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-15.0,0.0,-65.0
 rotation=0.0,0.0,0.0
 name=Alpha_Barrier_1
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=0.0,0.0,-65.0
 rotation=0.0,1.57,0.0
 name=Alpha_Barrier_2
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=15.0,0.0,-65.0
 rotation=0.0,0.0,0.0
 name=Alpha_Barrier_3
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-5.0,0.0,-68.0
 name=Alpha_Ammo_Crate_1
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=5.0,0.0,-68.0
 name=Alpha_Ammo_Crate_2
 
@@ -70,41 +70,41 @@ name=Alpha_Ammo_Crate_2
 
 [Object]
 type=model
-model=building_small.obj
+model=Assets/Models/building_small.obj
 position=8.0,0.0,70.0
 rotation=0.0,3.14,0.0
 name=Bravo_HQ
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-15.0,0.0,65.0
 rotation=0.0,0.0,0.0
 name=Bravo_Barrier_1
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=0.0,0.0,65.0
 rotation=0.0,1.57,0.0
 name=Bravo_Barrier_2
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=15.0,0.0,65.0
 rotation=0.0,0.0,0.0
 name=Bravo_Barrier_3
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-5.0,0.0,68.0
 name=Bravo_Ammo_Crate_1
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=5.0,0.0,68.0
 name=Bravo_Ammo_Crate_2
 
@@ -114,7 +114,7 @@ name=Bravo_Ammo_Crate_2
 
 [Object]
 type=model
-model=building_small.obj
+model=Assets/Models/building_small.obj
 position=0.0,0.0,0.0
 rotation=0.0,0.785,0.0
 scale=1.2,1.0,1.2
@@ -122,39 +122,39 @@ name=Center_Building
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-8.0,0.0,-3.0
 rotation=0.0,0.3,0.0
 name=Center_Cover_1
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=8.0,0.0,3.0
 rotation=0.0,-0.3,0.0
 name=Center_Cover_2
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-3.0,0.0,5.0
 name=Center_Crate_1
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=3.0,0.0,-5.0
 name=Center_Crate_2
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-6.0,0.0,-6.0
 name=Center_Crate_3
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=6.0,0.0,6.0
 name=Center_Crate_4
 
@@ -164,34 +164,34 @@ name=Center_Crate_4
 
 [Object]
 type=model
-model=watchtower.obj
+model=Assets/Models/watchtower.obj
 position=-45.0,0.0,0.0
 rotation=0.0,1.57,0.0
 name=West_Tower
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-40.0,0.0,-5.0
 rotation=0.0,0.785,0.0
 name=West_Cover_1
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-40.0,0.0,5.0
 rotation=0.0,-0.785,0.0
 name=West_Cover_2
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-48.0,0.0,-2.0
 name=West_Crate_1
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-48.0,0.0,2.0
 name=West_Crate_2
 
@@ -201,34 +201,34 @@ name=West_Crate_2
 
 [Object]
 type=model
-model=watchtower.obj
+model=Assets/Models/watchtower.obj
 position=45.0,0.0,0.0
 rotation=0.0,-1.57,0.0
 name=East_Tower
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=40.0,0.0,-5.0
 rotation=0.0,-0.785,0.0
 name=East_Cover_1
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=40.0,0.0,5.0
 rotation=0.0,0.785,0.0
 name=East_Cover_2
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=48.0,0.0,-2.0
 name=East_Crate_1
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=48.0,0.0,2.0
 name=East_Crate_2
 
@@ -238,72 +238,72 @@ name=East_Crate_2
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-25.0,0.0,-30.0
 rotation=0.0,0.5,0.0
 name=Field_Barrier_1
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=25.0,0.0,-30.0
 rotation=0.0,-0.5,0.0
 name=Field_Barrier_2
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=-25.0,0.0,30.0
 rotation=0.0,-0.5,0.0
 name=Field_Barrier_3
 
 [Object]
 type=model
-model=barrier.obj
+model=Assets/Models/barrier.obj
 position=25.0,0.0,30.0
 rotation=0.0,0.5,0.0
 name=Field_Barrier_4
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-15.0,0.0,-15.0
 name=Field_Crate_1
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=15.0,0.0,-15.0
 name=Field_Crate_2
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=-15.0,0.0,15.0
 name=Field_Crate_3
 
 [Object]
 type=model
-model=crate.obj
+model=Assets/Models/crate.obj
 position=15.0,0.0,15.0
 name=Field_Crate_4
 
 # Target practice areas (flanks)
 [Object]
 type=model
-model=target.obj
+model=Assets/Models/target.obj
 position=-50.0,0.0,-40.0
 name=Target_Practice_1
 
 [Object]
 type=model
-model=target.obj
+model=Assets/Models/target.obj
 position=-50.0,0.0,-35.0
 name=Target_Practice_2
 
 [Object]
 type=model
-model=target.obj
+model=Assets/Models/target.obj
 position=-50.0,0.0,-30.0
 name=Target_Practice_3
 

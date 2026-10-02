@@ -17,6 +17,7 @@
 #include <windows.h>
 #include <wrl/client.h>
 #include <d3d11_1.h>
+#include <d3d11sdklayers.h>
 #include <dxgi1_3.h>
 #include <dxgidebug.h>
 #include "Core/Platform.h"
@@ -178,6 +179,10 @@ class GraphicsEngine
     // LightingPass, RenderPostProcessing, etc.) when running the render-
     // graph-based pipeline.
     friend class Spark::Graphics::RenderPipeline;
+    // RHI-210 tests inspect intermediate pass resources without widening the
+    // production API; the accessor is defined only in the test translation unit.
+    friend struct RHI210PassAccess;
+    friend struct RHI210GoldenPassAccess; // Test-only access to real deferred pass outputs, before forward replay.
 
   public:
     /**
@@ -297,7 +302,16 @@ class GraphicsEngine
      *
      * Iterates the per-frame draw list, binds meshes and materials through the
      * AssetPipeline, updates per-object constants, and issues draw calls. The
-     * draw list is cleared after processing.
+     * draw list is cleared after processing. RenderScene calls it every frame
+     * (the render-graph pipeline calls it from its geometry pass instead).
+     *
+     * Contract: game thread, inside BeginFrame/EndFrame. On Linux/macOS it is the
+     * forward pass of the RHI bridge: it binds the basic_vs/basic_ps pipeline,
+     * uploads the per-frame constants once and each draw's per-object constants
+     * into a per-draw buffer that is reused across frames, so steady-state frames
+     * allocate nothing. Draws are counted by the RHI backend, not here. Without
+     * the pipeline the frame's draws are rejected (counted and logged), never
+     * recorded unbound.
      *
      * @param viewMatrix  Camera view matrix for the current frame.
      * @param projMatrix  Camera projection matrix for the current frame.
@@ -429,6 +443,37 @@ class GraphicsEngine
 
     /** @brief Get the depth buffer SRV for HiZ construction and post-process reads. */
     ID3D11ShaderResourceView* GetDepthSRV() const { return m_depthStencilSRV.Get(); }
+
+    // ========================================================================
+    // D3D11 DEBUG-LAYER VALIDATION (RHI-210)
+    // ========================================================================
+
+    /// @brief D3D11 debug-layer message totals by severity, accumulated across device recreations.
+    struct ValidationCounts
+    {
+        uint64_t corruption = 0;
+        uint64_t errors = 0;
+        uint64_t warnings = 0;
+    };
+
+    /**
+     * @brief Drain the debug layer's stored messages and return the running totals.
+     *
+     * The layer is on in _DEBUG builds and whenever SPARK_D3D11_DEBUG_LAYER=1.
+     * Game thread only (the thread that calls EndFrame, which drains once per frame).
+     *
+     * @return std::nullopt when the debug layer is off, so a caller cannot read
+     *         "not validated" as "clean".
+     */
+    std::optional<ValidationCounts> GetValidationCounts();
+
+    /**
+     * @brief Classify every message stored in @p queue into @p counts, then clear the queue.
+     *
+     * Errors and corruption are also logged (the first 32 of them). Shared with the
+     * RHI-level debug-layer tests so both count with the same rule. No-op for nullptr.
+     */
+    static void AccumulateValidationMessages(ID3D11InfoQueue* queue, ValidationCounts& counts);
 #endif // SPARK_PLATFORM_WINDOWS
 
     // ========================================================================
@@ -675,6 +720,8 @@ class GraphicsEngine
     void Console_SetDebugMode(bool enabled);
     void Console_SetClearColor(float r, float g, float b, float a);
     void Console_SetRenderScale(float scale);
+    /// gfx_reset_device: on Windows, run the full device-lost recovery (new device, swap chain and
+    /// device-dependent resources) as if Present had returned DXGI_ERROR_DEVICE_RESET.
     void Console_ResetDevice();
     void Console_ForceGarbageCollection();
     void Console_ApplySettings(const GraphicsSettings& settings);
@@ -987,6 +1034,11 @@ class GraphicsEngine
     ComPtr<ID3D11ShaderResourceView> m_backBufferSRV;
     ComPtr<ID3D11DepthStencilView> m_depthStencilView;
 
+#ifdef SPARK_PLATFORM_WINDOWS
+    ComPtr<ID3D11InfoQueue> m_infoQueue; ///< Non-null only while the D3D11 debug layer is on
+    ValidationCounts m_validationCounts; ///< Running totals drained from m_infoQueue
+#endif
+
     /// True when this GraphicsEngine was set up via InitializeFromDevice()
     /// (attached to a caller-owned device, no swapchain/backbuffer). Guards
     /// swapchain-dependent entry points (BeginFrame/EndFrame/Resize) so they
@@ -1037,8 +1089,6 @@ class GraphicsEngine
 
     std::chrono::high_resolution_clock::time_point m_frameStartTime;
     std::chrono::high_resolution_clock::time_point m_renderStartTime;
-    std::chrono::high_resolution_clock::time_point m_geometryStartTime;
-    std::chrono::high_resolution_clock::time_point m_lightingStartTime;
     std::chrono::high_resolution_clock::time_point m_postProcessStartTime;
 
     // Console diagnostics are requested after Present by the game loop. The
@@ -1213,6 +1263,15 @@ class GraphicsEngine
     // ========================================================================
 
     // --- Device recovery ---
+    /**
+     * @brief Respond to a removed/reset device: log the reason, then recover within MAX_DEVICE_RECOVERY.
+     *
+     * EndFrame calls it when Present reports DXGI_ERROR_DEVICE_REMOVED/RESET, and
+     * Console_ResetDevice (gfx_reset_device) injects DXGI_ERROR_DEVICE_RESET so the
+     * console, -exec scripts and tests drive the same teardown and recreation.
+     * @return true when a new device, swap chain and device-dependent resources exist.
+     */
+    bool HandleDeviceLost(HRESULT presentResult);
     bool RecoverFromDeviceLost();                      ///< Attempt to recreate D3D11 device after device-lost event.
     void ReleaseAllDeviceResources();                  ///< Release all COM resources for device recreation.
     uint32_t m_deviceLostRecoveryAttempts = 0;         ///< Number of device-lost recovery attempts
@@ -1262,9 +1321,7 @@ class GraphicsEngine
     void LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix);
     void CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
                      std::vector<GameObject*>& visibleObjects); ///< Frustum cull via BVH, output visible set.
-    void RenderGeometryPass();    ///< Draw opaque geometry into G-buffer (Albedo, Normal, Material, Motion).
-    void RenderLightingPass();    ///< Full-screen quad resolving G-buffer with accumulated lighting.
-    void RenderPostProcessing();  ///< HDR tone mapping, bloom, SSAO, SSR, volumetrics.
+    void RenderPostProcessing();                                ///< HDR tone mapping, bloom, SSAO, SSR, volumetrics.
     void RenderTemporalEffects(); ///< TAA jitter resolve and motion-vector-based ghosting reduction.
 
     // Basic shader system methods (fallback pipeline)

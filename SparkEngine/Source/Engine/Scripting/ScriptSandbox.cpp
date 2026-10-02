@@ -32,22 +32,40 @@ namespace Spark
     // Configuration
     // ========================================================================
 
-    void ScriptSandbox::SetSecurityLevel(ScriptSecurityLevel level)
+    namespace
     {
+        const char* SecurityLevelName(ScriptSecurityLevel level)
+        {
+            return level == ScriptSecurityLevel::Unrestricted ? "Unrestricted"
+                   : level == ScriptSecurityLevel::Standard   ? "Standard"
+                                                              : "Strict";
+        }
+    } // namespace
+
+    bool ScriptSandbox::SetSecurityLevel(ScriptSecurityLevel level)
+    {
+        if (m_functionPolicyLocked && level != m_securityLevel)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Scripting,
+                           "Script sandbox level change to %s refused: the engine API was registered under %s "
+                           "and cannot be re-registered at runtime. Restart with the desired level.",
+                           SecurityLevelName(level), SecurityLevelName(m_securityLevel));
+            return false;
+        }
+
         m_securityLevel = level;
         ApplySecurityDefaults(level);
         SPARK_LOG_INFO(Spark::LogCategory::Scripting, "Script sandbox security level set to %s",
-                       level == ScriptSecurityLevel::Unrestricted ? "Unrestricted"
-                       : level == ScriptSecurityLevel::Standard   ? "Standard"
-                                                                  : "Strict");
+                       SecurityLevelName(level));
 
         if (level == ScriptSecurityLevel::Strict && m_allowedFunctions.empty())
         {
             SPARK_LOG_WARN(Spark::LogCategory::Scripting,
-                           "Strict sandbox enabled with an empty function whitelist -- scripts will have no "
-                           "engine API until AddAllowedFunction()/ConfigureSandboxSecurity() adds one, and this "
-                           "must happen before AngelScriptEngine::Initialize() for it to take effect.");
+                           "Strict sandbox enabled with an empty function whitelist -- if the engine API is "
+                           "registered under this policy (AngelScriptEngine::Initialize), scripts get no engine "
+                           "functions. Add them with AddAllowedFunction()/ConfigureSandboxSecurity() first.");
         }
+        return true;
     }
 
     void ScriptSandbox::SetInstructionLimit(uint32_t maxInstructions)
@@ -92,24 +110,44 @@ namespace Spark
     // API Access Control
     // ========================================================================
 
-    void ScriptSandbox::AddAllowedFunction(const std::string& name)
+    bool ScriptSandbox::AddAllowedFunction(const std::string& name)
     {
+        if (m_functionPolicyLocked)
+        {
+            return false;
+        }
         m_allowedFunctions.insert(name);
+        return true;
     }
 
-    void ScriptSandbox::AddBlockedFunction(const std::string& name)
+    bool ScriptSandbox::AddBlockedFunction(const std::string& name)
     {
+        if (m_functionPolicyLocked)
+        {
+            return false;
+        }
         m_blockedFunctions.insert(name);
+        return true;
     }
 
-    void ScriptSandbox::RemoveAllowedFunction(const std::string& name)
+    bool ScriptSandbox::RemoveAllowedFunction(const std::string& name)
     {
+        if (m_functionPolicyLocked)
+        {
+            return false;
+        }
         m_allowedFunctions.erase(name);
+        return true;
     }
 
-    void ScriptSandbox::RemoveBlockedFunction(const std::string& name)
+    bool ScriptSandbox::RemoveBlockedFunction(const std::string& name)
     {
+        if (m_functionPolicyLocked)
+        {
+            return false;
+        }
         m_blockedFunctions.erase(name);
+        return true;
     }
 
     bool ScriptSandbox::IsFunctionAllowed(const std::string& name) const
@@ -258,17 +296,15 @@ namespace Spark
 
     std::string ScriptSandbox::GetStatusString() const
     {
-        const char* levelStr = m_securityLevel == ScriptSecurityLevel::Unrestricted ? "Unrestricted"
-                               : m_securityLevel == ScriptSecurityLevel::Standard   ? "Standard"
-                                                                                    : "Strict";
+        const char* levelStr = SecurityLevelName(m_securityLevel);
 
         std::string instrLimit = m_maxInstructions > 0 ? std::to_string(m_maxInstructions) : "unlimited";
         std::string timeLimit = m_maxExecutionTimeSec > 0 ? std::format("{:.3f}s", m_maxExecutionTimeSec) : "unlimited";
 
-        return std::format("Script Sandbox: {} | Instructions: {} | Timeout: {}\n"
+        return std::format("Script Sandbox: {}{} | Instructions: {} | Timeout: {}\n"
                            "Allowed functions: {} | Blocked functions: {} | Total violations: {}",
-                           levelStr, instrLimit, timeLimit, m_allowedFunctions.size(), m_blockedFunctions.size(),
-                           m_totalViolations);
+                           levelStr, m_functionPolicyLocked ? " (API registered at startup, fixed)" : "", instrLimit,
+                           timeLimit, m_allowedFunctions.size(), m_blockedFunctions.size(), m_totalViolations);
     }
 
     void ScriptSandbox::RegisterConsoleCommands()
@@ -289,23 +325,31 @@ namespace Spark
                 }
 
                 const auto& level = args[0];
+                ScriptSecurityLevel requested = ScriptSecurityLevel::Standard;
                 if (level == "unrestricted")
                 {
-                    SetSecurityLevel(ScriptSecurityLevel::Unrestricted);
+                    requested = ScriptSecurityLevel::Unrestricted;
                 }
                 else if (level == "standard")
                 {
-                    SetSecurityLevel(ScriptSecurityLevel::Standard);
+                    requested = ScriptSecurityLevel::Standard;
                 }
                 else if (level == "strict")
                 {
-                    SetSecurityLevel(ScriptSecurityLevel::Strict);
+                    requested = ScriptSecurityLevel::Strict;
                 }
                 else
                 {
                     return "Usage: sandbox.level [unrestricted|standard|strict]";
                 }
 
+                if (!SetSecurityLevel(requested))
+                {
+                    return std::string("Refused: the script API was registered under ") +
+                           SecurityLevelName(m_securityLevel) +
+                           " at startup and cannot change at runtime; restart with the desired level.\n" +
+                           GetStatusString();
+                }
                 return GetStatusString();
             },
             "Get/set script sandbox security level");

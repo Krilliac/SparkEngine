@@ -1,31 +1,125 @@
 #include "SceneManager/ReflectedSceneSerializer.h"
+#include "SceneManager/ReflectedSceneValidation.h"
 #include "Engine/ECS/Components.h"
 #include "Core/Reflection.h"
 #include "Utils/LogMacros.h"
 
 #include <nlohmann_json.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <format>
 #include <limits>
+#include <optional>
+#include <ranges>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 using nlohmann::json;
 
 namespace Spark
 {
 
+    using namespace ReflectedSceneDetail;
+
     namespace
     {
-        constexpr int kCurrentSceneVersion = 1;
+        // Serialized ids and parents are the full entity value, version bits
+        // included, so they span the whole unsigned width of entt::entity. A
+        // recycled slot whose version reaches 2048 already has an id >= 2^31.
+        static_assert(std::is_same_v<std::underlying_type_t<entt::entity>, uint32_t>,
+                      "the reflected scene format stores entity ids as unsigned 32-bit integers");
 
-        // Components handled specially at the entity level, not in the generic "components" list.
-        bool IsEntityLevel(const std::string& type)
+        json EntityIdToJson(entt::entity entity)
         {
-            return type == "NameComponent";
+            // Return the integer itself: a braced json{...} would build a one-element array.
+            return static_cast<uint64_t>(static_cast<uint32_t>(entity));
         }
 
-        // Emit one component's fields via reflection.
-        json SerializeComponentFields(const std::string& typeName, const void* comp)
+        // Accept an integer in 0..UINT32_MAX that does not name entt::null.
+        bool ReadSerializedEntityId(const json& value, uint32_t& id)
+        {
+            uint64_t raw = 0;
+            if (value.is_number_unsigned())
+                raw = value.get<uint64_t>();
+            else if (value.is_number_integer() && value.get<int64_t>() >= 0)
+                raw = static_cast<uint64_t>(value.get<int64_t>());
+            else
+                return false;
+            if (raw > std::numeric_limits<uint32_t>::max())
+            {
+                return false;
+            }
+            id = static_cast<uint32_t>(raw);
+            return static_cast<entt::entity>(id) != entt::null;
+        }
+
+        /// True when @p f's stored value is one SetFieldFromString will accept back.
+        /// GetFieldAsString prints NaN and infinity ("nan", "inf"), but the reader
+        /// accepts only finite Float, Double and Vector components.
+        bool FieldValueIsReadable(const void* comp, const FieldInfo& f)
+        {
+            const auto* src = static_cast<const char*>(comp) + f.offset;
+            const auto finiteFloats = [src](size_t count)
+            {
+                for (size_t i = 0; i < count; ++i)
+                {
+                    float value = 0.0f;
+                    std::memcpy(&value, src + i * sizeof(float), sizeof(float));
+                    if (!std::isfinite(value))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            switch (f.type)
+            {
+            case FieldType::Float:
+                return finiteFloats(1);
+            case FieldType::Vector2:
+                return finiteFloats(2);
+            case FieldType::Vector3:
+                return finiteFloats(3);
+            case FieldType::Vector4:
+                return finiteFloats(4);
+            case FieldType::Double:
+            {
+                double value = 0.0;
+                std::memcpy(&value, src, sizeof(double));
+                return std::isfinite(value);
+            }
+            default:
+                return true;
+            }
+        }
+
+        /// The first field the writer emitted that the reader would refuse.
+        struct UnreadableField
+        {
+            uint32_t entity = 0;
+            std::string entityName;
+            std::string type;
+            std::string field;
+            std::string value;
+        };
+
+        /// Where SerializeComponentFields reports an unreadable field, if anywhere.
+        struct FieldReportContext
+        {
+            std::optional<UnreadableField>* unreadable = nullptr;
+            uint32_t entity = 0;
+            const std::string* entityName = nullptr;
+        };
+
+        // Emit one component's fields via reflection, recording in @p report the
+        // first field (if any) whose value the reader would reject.
+        json SerializeComponentFields(const std::string& typeName, const void* comp, const FieldReportContext& report)
         {
             json fields = json::object();
             const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(typeName);
@@ -47,6 +141,11 @@ namespace Spark
                 case FieldType::Vector4:
                 case FieldType::Enum:
                     fields[f.fieldName] = GetFieldAsString(comp, f);
+                    if (report.unreadable && !report.unreadable->has_value() && !FieldValueIsReadable(comp, f))
+                    {
+                        *report.unreadable = UnreadableField{report.entity, *report.entityName, typeName, f.fieldName,
+                                                             fields[f.fieldName].get<std::string>()};
+                    }
                     break;
                 default:
                     SPARK_LOG_WARN(Spark::LogCategory::Core, "[ReflectedScene] skip unsupported field %s.%s (type %d)",
@@ -88,172 +187,105 @@ namespace Spark
             return nullptr;
         }
 
-        bool IsRoundTrippableField(const FieldInfo& field)
+        /// The order entities are written in: roots by ascending id, each
+        /// followed depth-first by its children in Transform::children order;
+        /// entities no root reaches (a broken parent link) follow by ascending id.
+        /// DeserializeInto creates entities and re-links children in document
+        /// order, so this order survives a snapshot restore unchanged: an editor
+        /// undo/redo reproduces the prior document byte for byte, sibling order
+        /// included. ECS storage order would not (a restore reverses it).
+        std::vector<entt::entity> EntitiesInDocumentOrder(const entt::registry& reg)
         {
-            if (!field.serialized)
-                return false;
-            switch (field.type)
+            std::vector<entt::entity> alive;
+            for (auto&& [entity] : reg.storage<entt::entity>()->each())
             {
-            case FieldType::Bool:
-            case FieldType::Int:
-            case FieldType::Float:
-            case FieldType::Double:
-            case FieldType::String:
-            case FieldType::Vector2:
-            case FieldType::Vector3:
-            case FieldType::Vector4:
-            case FieldType::Enum:
-                return true;
-            default:
-                return false;
+                alive.push_back(entity);
             }
-        }
+            std::sort(alive.begin(), alive.end());
 
-        const FieldInfo* FindFieldBySerializedName(const TypeInfo& type, const std::string& name)
-        {
-            for (const FieldInfo& field : type.fields)
+            auto parentOf = [&reg](entt::entity entity) -> entt::entity
             {
-                if (field.fieldName == name)
-                    return &field;
-            }
-            return nullptr;
-        }
-
-        bool ReadStrictEntityId(const json& value, uint32_t& id)
-        {
-            if (value.is_number_unsigned())
-            {
-                const uint64_t raw = value.get<uint64_t>();
-                if (raw > std::numeric_limits<uint32_t>::max())
-                    return false;
-                id = static_cast<uint32_t>(raw);
-                return static_cast<entt::entity>(id) != entt::null;
-            }
-            if (!value.is_number_integer())
-                return false;
-            const int64_t raw = value.get<int64_t>();
-            if (raw < 0 || static_cast<uint64_t>(raw) > std::numeric_limits<uint32_t>::max())
-                return false;
-            id = static_cast<uint32_t>(raw);
-            return static_cast<entt::entity>(id) != entt::null;
-        }
-
-        bool ReadStrictParentId(const json& value, int64_t& parentId)
-        {
-            if (value.is_number_integer())
-            {
-                parentId = value.get<int64_t>();
-                return parentId >= -1;
-            }
-            if (!value.is_number_unsigned())
-                return false;
-            const uint64_t raw = value.get<uint64_t>();
-            if (raw > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
-                return false;
-            parentId = static_cast<int64_t>(raw);
-            return true;
-        }
-
-        bool ValidateStrictRecoveryDocument(const json& root, ComponentFactory& factory)
-        {
-            if (!root.is_object() || root.contains("sceneVersion") || !root.contains("version") ||
-                !root["version"].is_number_integer() || root["version"].get<int64_t>() != kCurrentSceneVersion ||
-                !root.contains("entities") || !root["entities"].is_array())
-            {
-                return false;
-            }
-
-            std::unordered_set<uint32_t> entityIds;
-            std::vector<int64_t> parentIds;
-            for (const json& entity : root["entities"])
-            {
-                if (!entity.is_object() || !entity.contains("id") || !entity.contains("name") ||
-                    !entity.contains("parent") || !entity.contains("components") || !entity["name"].is_string() ||
-                    !entity["components"].is_array())
+                const Transform* transform = reg.try_get<Transform>(entity);
+                if (!transform || transform->parent == entity || !reg.valid(transform->parent))
                 {
-                    return false;
+                    return entt::null;
                 }
+                return transform->parent;
+            };
 
-                uint32_t entityId = 0;
-                int64_t parentId = -1;
-                if (!ReadStrictEntityId(entity["id"], entityId) || !entityIds.insert(entityId).second ||
-                    !ReadStrictParentId(entity["parent"], parentId))
+            std::vector<entt::entity> order;
+            order.reserve(alive.size());
+            std::unordered_set<entt::entity> written;
+            std::vector<entt::entity> pending;
+            for (const entt::entity root : alive)
+            {
+                if (parentOf(root) != entt::null)
                 {
-                    return false;
+                    continue;
                 }
-                parentIds.push_back(parentId);
-
-                std::unordered_set<std::string> componentTypes;
-                for (const json& component : entity["components"])
+                pending.push_back(root);
+                while (!pending.empty())
                 {
-                    if (!component.is_object() || !component.contains("type") || !component["type"].is_string() ||
-                        !component.contains("fields") || !component["fields"].is_object())
+                    const entt::entity entity = pending.back();
+                    pending.pop_back();
+                    if (!written.insert(entity).second)
                     {
-                        return false;
+                        continue;
                     }
-
-                    const std::string type = component["type"].get<std::string>();
-                    if (type.empty() || IsEntityLevel(type) || !factory.IsRegistered(type) ||
-                        !componentTypes.insert(type).second)
+                    order.push_back(entity);
+                    if (const Transform* transform = reg.try_get<Transform>(entity))
                     {
-                        return false;
-                    }
-
-                    const TypeInfo* typeInfo = TypeRegistry::Get().FindTypeByName(type);
-                    if (!typeInfo)
-                        return false;
-
-                    const json& fields = component["fields"];
-                    for (const auto& field : fields.items())
-                    {
-                        const FieldInfo* fieldInfo = FindFieldBySerializedName(*typeInfo, field.key);
-                        if (!fieldInfo || !IsRoundTrippableField(*fieldInfo) || !field.value.is_string())
-                            return false;
-                    }
-                    for (const FieldInfo& field : typeInfo->fields)
-                    {
-                        if (IsRoundTrippableField(field) && !fields.contains(field.fieldName))
-                            return false;
+                        // Push in reverse so the first child is written first.
+                        for (auto child : std::ranges::reverse_view(transform->children))
+                        {
+                            if (reg.valid(child) && parentOf(child) == entity && !written.contains(child))
+                            {
+                                pending.push_back(child);
+                            }
+                        }
                     }
                 }
             }
-
-            for (const int64_t parentId : parentIds)
+            for (const entt::entity entity : alive)
             {
-                if (parentId >= 0 && (static_cast<uint64_t>(parentId) > std::numeric_limits<uint32_t>::max() ||
-                                      !entityIds.contains(static_cast<uint32_t>(parentId))))
-                    return false;
+                if (written.insert(entity).second)
+                {
+                    order.push_back(entity);
+                }
             }
-            return true;
+            return order;
         }
     } // namespace
 
-    std::string SerializeWorld(const World& world)
+    /// Build the scene document. When @p unreadable is non-null it receives the
+    /// first field whose written value the reader would refuse.
+    static json BuildSceneDocument(const World& world, std::optional<UnreadableField>* unreadable)
     {
         json root;
         root["version"] = kCurrentSceneVersion;
         json entities = json::array();
 
         auto& factory = ComponentFactory::Get();
-        const std::vector<std::string> names = factory.GetRegisteredNames();
+        // GetRegisteredNames() follows unordered_map iteration order, which differs
+        // between standard libraries (MSVC vs libstdc++). Sort so the same world
+        // writes its components in the same order on every platform.
+        std::vector<std::string> names = factory.GetRegisteredNames();
+        std::sort(names.begin(), names.end());
         const entt::registry& reg = world.GetRegistry();
         // Non-const World handle for the factory (its ops take void* world, uint32 entity).
         World& mutWorld = const_cast<World&>(world);
 
-        auto entityStorage = reg.storage<entt::entity>();
-        for (auto&& [entity] : entityStorage->each())
+        for (const entt::entity entity : EntitiesInDocumentOrder(reg))
         {
             json ent;
-            ent["id"] = static_cast<int32_t>(static_cast<uint32_t>(entity));
-            if (const NameComponent* nc = world.GetComponent<NameComponent>(entity))
-                ent["name"] = nc->name;
-            else
-                ent["name"] = "";
-            int parentId = -1;
+            ent["id"] = EntityIdToJson(entity);
+            const NameComponent* nameComponent = world.GetComponent<NameComponent>(entity);
+            const std::string entityName = nameComponent ? nameComponent->name : std::string();
+            ent["name"] = entityName;
+            ent["parent"] = -1;
             if (const Transform* t = world.GetComponent<Transform>(entity))
                 if (t->parent != entt::null)
-                    parentId = static_cast<int>(static_cast<uint32_t>(t->parent));
-            ent["parent"] = parentId;
+                    ent["parent"] = EntityIdToJson(t->parent);
 
             json comps = json::array();
             for (const std::string& type : names)
@@ -267,7 +299,8 @@ namespace Spark
                     continue;
                 json c;
                 c["type"] = type;
-                c["fields"] = SerializeComponentFields(type, comp);
+                c["fields"] = SerializeComponentFields(
+                    type, comp, FieldReportContext{unreadable, static_cast<uint32_t>(entity), &entityName});
                 comps.push_back(std::move(c));
             }
             ent["components"] = std::move(comps);
@@ -275,34 +308,87 @@ namespace Spark
         }
 
         root["entities"] = std::move(entities);
-        return root.dump(2);
+        return root;
     }
 
-    bool DeserializeInto(World& world, const std::string& jsonText, SceneDeserializeMode mode)
+    std::string SerializeWorld(const World& world)
     {
+        return BuildSceneDocument(world, nullptr).dump(2);
+    }
+
+    bool TrySerializeWorld(const World& world, std::string& out, std::string* error)
+    {
+        if (error)
+        {
+            error->clear();
+        }
+        try
+        {
+            std::optional<UnreadableField> unreadable;
+            std::string text = BuildSceneDocument(world, &unreadable).dump(2);
+            if (unreadable)
+            {
+                return Reject(error, std::format("entity {} ('{}') field '{}.{}' is {}; scenes store only finite "
+                                                 "numbers, so this world would not load back",
+                                                 unreadable->entity, unreadable->entityName, unreadable->type,
+                                                 unreadable->field, unreadable->value));
+            }
+            if (static_cast<uint64_t>(text.size()) > kMaxSceneDocumentBytes)
+            {
+                return Reject(error, std::format("scene document is {} bytes; the limit is {} bytes", text.size(),
+                                                 kMaxSceneDocumentBytes));
+            }
+            const size_t values = json::count_values_upper_bound(text);
+            if (static_cast<uint64_t>(values) > kMaxSceneDocumentValues)
+            {
+                return Reject(error, std::format("scene document holds {} JSON values; the limit is {}", values,
+                                                 kMaxSceneDocumentValues));
+            }
+            out = std::move(text);
+            return true;
+        }
+        catch (const std::exception& ex)
+        {
+            return Reject(error, std::format("scene could not be serialized: {}", ex.what()));
+        }
+    }
+
+    bool DeserializeInto(World& world, const std::string& jsonText, SceneDeserializeMode mode, std::string* error)
+    {
+        if (error)
+            error->clear();
+        // In-process snapshots are this process's own SerializeWorld output, so
+        // only untrusted text (files, recovery records) is held to the caps.
+        const bool trustedSnapshot = mode == SceneDeserializeMode::TrustedSnapshot;
+        if (!trustedSnapshot && static_cast<uint64_t>(jsonText.size()) > kMaxSceneDocumentBytes)
+        {
+            return Reject(error, std::format("scene document is {} bytes; the limit is {} bytes", jsonText.size(),
+                                             kMaxSceneDocumentBytes));
+        }
         try
         {
             json root;
-            root = json::parse(jsonText);
-            if (!root.is_object() || !root.contains("entities") || !root["entities"].is_array())
-                return false;
+            // Nesting depth is bounded inside json::parse (max_parse_depth), so a
+            // deeply nested document throws here instead of overflowing the stack.
+            // The value budget bounds breadth before any node is allocated.
+            const size_t valueBudget =
+                trustedSnapshot ? std::numeric_limits<size_t>::max() : static_cast<size_t>(kMaxSceneDocumentValues);
+            root = json::parse(jsonText, valueBudget);
+            if (!root.is_object())
+                return Reject(error, std::format("scene root must be a JSON object, found {}", JsonTypeName(root)));
 
             // SparkEditor versions before the reflected serializer shipped
             // `sceneVersion` plus inline component values. Keep those projects
             // loadable and migrate naturally on their next explicit save.
-            const bool hasCurrentVersion = root.contains("version");
-            const bool hasLegacyVersion = root.contains("sceneVersion");
-            if (hasCurrentVersion == hasLegacyVersion)
+            bool legacyScene = false;
+            if (!CheckSceneVersion(root, legacyScene, error))
                 return false;
-
-            const char* versionField = hasCurrentVersion ? "version" : "sceneVersion";
-            if (!root[versionField].is_number_integer() || root[versionField].get<int64_t>() != kCurrentSceneVersion)
-                return false;
-            const bool legacyScene = hasLegacyVersion;
+            if (!root.contains("entities") || !root["entities"].is_array())
+                return Reject(error, "scene has no 'entities' array");
 
             auto& factory = ComponentFactory::Get();
             const bool strictRecovery = mode == SceneDeserializeMode::StrictRecovery;
-            if (strictRecovery && (!hasCurrentVersion || !ValidateStrictRecoveryDocument(root, factory)))
+            if (strictRecovery && !ValidateStrictRecoveryDocument(root, factory, error))
                 return false;
             std::unordered_map<uint32_t, entt::entity> idMap; // serialized id -> live entity
             const auto& entities = root["entities"];
@@ -314,21 +400,42 @@ namespace Spark
             // idMap would then silently overwrite the first mapping and parent
             // links could target the wrong entity.
             std::vector<uint32_t> serializedIds(entities.size());
+            std::vector<std::optional<uint32_t>> serializedParents(entities.size());
             std::unordered_set<uint32_t> reservedIds;
             for (size_t index = 0; index < entities.size(); ++index)
             {
                 const json& ent = entities[index];
+                if (!ent.is_object())
+                {
+                    return Reject(error, std::format("{} must be a JSON object, found {}", DescribeEntity(index, ent),
+                                                     JsonTypeName(ent)));
+                }
+                if (ent.contains("parent"))
+                {
+                    const json& parentValue = ent["parent"];
+                    uint32_t parentId = 0;
+                    if (ReadSerializedEntityId(parentValue, parentId))
+                    {
+                        serializedParents[index] = parentId;
+                    }
+                    else if (!parentValue.is_number_integer() || parentValue.get<int64_t>() != -1)
+                    {
+                        return Reject(error, std::format("{} has parent {}; parent must be an integer entity id or -1",
+                                                         DescribeEntity(index, ent), parentValue.dump()));
+                    }
+                }
                 if (!ent.contains("id"))
                     continue;
-                if (!ent["id"].is_number_integer() && !ent["id"].is_number_unsigned())
-                    return false;
-
-                const int64_t rawId = ent.value<int64_t>("id", -1);
-                if (rawId < 0 || static_cast<uint64_t>(rawId) > std::numeric_limits<uint32_t>::max())
-                    return false;
-                const uint32_t id = static_cast<uint32_t>(rawId);
-                if (static_cast<entt::entity>(id) == entt::null || !reservedIds.insert(id).second)
-                    return false;
+                const json& idValue = ent["id"];
+                uint32_t id = 0;
+                if (!ReadSerializedEntityId(idValue, id))
+                {
+                    return Reject(error,
+                                  std::format("{} has id {}; ids must be integers in 0..{}", DescribeEntity(index, ent),
+                                              idValue.dump(), std::numeric_limits<uint32_t>::max() - 1));
+                }
+                if (!reservedIds.insert(id).second)
+                    return Reject(error, std::format("{} repeats id {}", DescribeEntity(index, ent), id));
                 serializedIds[index] = id;
             }
 
@@ -341,7 +448,7 @@ namespace Spark
                        static_cast<entt::entity>(fallbackSerializedId) == entt::null)
                 {
                     if (fallbackSerializedId == std::numeric_limits<uint32_t>::max())
-                        return false;
+                        return Reject(error, "scene has more entities than the entity id space can hold");
                     ++fallbackSerializedId;
                 }
                 serializedIds[index] = fallbackSerializedId;
@@ -365,7 +472,10 @@ namespace Spark
                 auto& registry = world.GetRegistry();
                 const entt::entity hint = static_cast<entt::entity>(sid);
                 if (registry.valid(hint))
-                    return false;
+                {
+                    return Reject(error, std::format("{} id {} collides with an entity already in the target world",
+                                                     DescribeEntity(entityIndex - 1, ent), sid));
+                }
                 const entt::entity e = registry.create(hint);
                 if (!name.empty())
                     registry.emplace<NameComponent>(e, NameComponent{name});
@@ -386,7 +496,10 @@ namespace Spark
                             SPARK_LOG_WARN(Spark::LogCategory::Core,
                                            "[ReflectedScene] unknown component type '%s' skipped", type.c_str());
                             if (strictRecovery)
-                                return false;
+                            {
+                                return Reject(error, std::format("{} has unregistered component type '{}'",
+                                                                 DescribeEntity(entityIndex - 1, ent), type));
+                            }
                             continue;
                         }
                         if (!factory.HasComponent(type, &world, (uint32_t)e))
@@ -395,14 +508,20 @@ namespace Spark
                         if (!comp)
                         {
                             if (strictRecovery)
-                                return false;
+                            {
+                                return Reject(error, std::format("{} component '{}' could not be created",
+                                                                 DescribeEntity(entityIndex - 1, ent), type));
+                            }
                             continue;
                         }
                         const TypeInfo* ti = TypeRegistry::Get().FindTypeByName(type);
                         if (!ti)
                         {
                             if (strictRecovery)
-                                return false;
+                            {
+                                return Reject(error, std::format("{} component '{}' has no reflection data",
+                                                                 DescribeEntity(entityIndex - 1, ent), type));
+                            }
                             continue;
                         }
                         const json& fields = c.contains("fields") ? c["fields"] : c;
@@ -418,17 +537,40 @@ namespace Spark
                             if (!fieldValue)
                             {
                                 if (strictRecovery && IsRoundTrippableField(f))
-                                    return false;
+                                {
+                                    return Reject(error,
+                                                  std::format("{} is missing field '{}.{}'",
+                                                              DescribeEntity(entityIndex - 1, ent), type, f.fieldName));
+                                }
                                 continue;
                             }
+                            // The writer emits every round-trippable field of a
+                            // current document as a string. A present field of the
+                            // wrong type, or one that does not parse, is damage:
+                            // reject it (in every mode) so LoadWorld recovers the
+                            // .bak image instead of installing a default that the
+                            // next save would make permanent. Only legacy inline
+                            // values keep lenient conversion.
+                            // A trusted snapshot keeps the default for a value it
+                            // cannot apply (a NaN the live world held), as before.
+                            const bool rejectBadField =
+                                strictRecovery || (!legacyScene && !trustedSnapshot && IsRoundTrippableField(f));
                             if (!legacyScene && !fieldValue->is_string())
                             {
-                                if (strictRecovery)
-                                    return false;
+                                if (rejectBadField)
+                                {
+                                    return Reject(error, std::format("{} field '{}.{}' must be a string, found {}",
+                                                                     DescribeEntity(entityIndex - 1, ent), type,
+                                                                     f.fieldName, JsonTypeName(*fieldValue)));
+                                }
                                 continue;
                             }
-                            if (!SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue)) && strictRecovery)
-                                return false;
+                            if (!SetFieldFromString(comp, f, JsonFieldValueToString(*fieldValue)) && rejectBadField)
+                            {
+                                return Reject(error, std::format("{} field '{}.{}' value {} could not be applied",
+                                                                 DescribeEntity(entityIndex - 1, ent), type,
+                                                                 f.fieldName, fieldValue->dump()));
+                            }
                         }
 
                         if (legacyScene && sourceType == "DirectionalLight")
@@ -437,9 +579,10 @@ namespace Spark
                             static_cast<Camera*>(comp)->isMainCamera = true;
                     }
                 }
-                const int parentId = ent.value("parent", -1);
-                if (parentId >= 0)
-                    pending.push_back({e, (uint32_t)parentId});
+                if (const std::optional<uint32_t>& parentId = serializedParents[entityIndex - 1])
+                {
+                    pending.push_back({e, *parentId});
+                }
             }
 
             // Second pass: resolve parents now that all ids exist.
@@ -449,18 +592,18 @@ namespace Spark
                 if (it == idMap.end())
                 {
                     if (strictRecovery)
-                        return false;
+                        return Reject(error, std::format("parent id {} is not in the scene", p.parentId));
                     continue;
                 }
                 if (!world.SetParent(p.child, it->second) && strictRecovery)
-                    return false;
+                    return Reject(error, std::format("parent id {} would create an invalid hierarchy", p.parentId));
             }
             return true;
         }
         catch (const std::exception& ex)
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Core, "[ReflectedScene] deserialization error: %s", ex.what());
-            return false;
+            return Reject(error, std::format("scene could not be read: {}", ex.what()));
         }
     }
 

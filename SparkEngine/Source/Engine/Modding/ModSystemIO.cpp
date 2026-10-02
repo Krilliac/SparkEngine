@@ -4,13 +4,18 @@
  */
 
 #include "ModSystem.h"
+#include "../../Utils/FileUtils.h"
 #include "../../Utils/JsonUtils.h"
 #include "../../Utils/LogMacros.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <optional>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 
 namespace Spark
@@ -19,20 +24,46 @@ namespace Spark
     namespace
     {
         /// A mod manifest / mod config is a hand-written document, never a data
-        /// dump. 64 KB matches DynamicPluginHost's kMaximumMetadataBytes; depth 16
-        /// is far above the two levels these documents actually use.
-        constexpr size_t MAX_MOD_JSON_BYTES = 64u * 1024u;
+        /// dump (see ModSystem::kMaxManifestBytes); depth 16 is far above the two
+        /// levels these documents actually use.
+        constexpr size_t MAX_MOD_JSON_BYTES = ModSystem::kMaxManifestBytes;
         constexpr Json::JsonLimits MOD_JSON_LIMITS{.maxBytes = MAX_MOD_JSON_BYTES, .maxDepth = 16u, .maxNodes = 4096u};
 
-        /// Read a manifest whole, refusing an oversized file from its directory
-        /// entry BEFORE any of its bytes are pulled into memory. A mod directory is
-        /// untrusted input: without this a 4 GB mod.json is read into a std::string
-        /// and then into a Value tree several times larger before any field is
-        /// inspected.
-        bool ReadModManifestFile(const std::string& path, std::string& outContent)
+        /// A mod id is a map key, a log argument, a SaveConfig field and a UI label, so it
+        /// is a short printable token: no separators, control bytes, NUL or spaces.
+        constexpr size_t MAX_MOD_ID_BYTES = 128;
+
+        bool IsValidModId(std::string_view id)
         {
+            if (id.empty() || id.size() > MAX_MOD_ID_BYTES || id == "." || id == "..")
+            {
+                return false;
+            }
+            return std::all_of(id.begin(), id.end(),
+                               [](char c)
+                               {
+                                   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                                          c == '.' || c == '_' || c == '-';
+                               });
+        }
+
+        /// Read the mod config file whole, refusing an oversized file from its
+        /// directory entry BEFORE any of its bytes are pulled into memory. The config
+        /// path is engine configuration, not the untrusted mods tree, so it is opened
+        /// by path; mod manifests are read by ScanForMods through the held mods-root
+        /// handle instead (ModSystem.cpp).
+        bool ReadModConfigFile(const std::string& path, std::string& outContent)
+        {
+            // Engine path strings are UTF-8; the narrow std::filesystem / fstream constructors
+            // would decode them in the Windows ANSI code page and miss a non-ASCII mod folder.
+            const std::filesystem::path nativePath = FileUtils::PathFromUtf8(path);
             std::error_code ec;
-            const auto fileSize = std::filesystem::file_size(path, ec);
+            if (nativePath.empty() || !std::filesystem::is_regular_file(nativePath, ec) || ec)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: '%s' is not a regular file", path.c_str());
+                return false;
+            }
+            const auto fileSize = std::filesystem::file_size(nativePath, ec);
             if (ec)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: cannot stat '%s' (%s)", path.c_str(),
@@ -46,7 +77,7 @@ namespace Spark
                 return false;
             }
 
-            std::ifstream file(path, std::ios::binary);
+            std::ifstream file(nativePath, std::ios::binary);
             if (!file.is_open())
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: cannot open '%s' (errno=%d)", path.c_str(),
@@ -54,8 +85,13 @@ namespace Spark
                 return false;
             }
 
-            outContent.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            // The file may have grown between the stat and the read.
+            // The stat above is only a fast reject: the file can be swapped or keep growing
+            // between it and this read (or report a size that lies, as procfs files do).
+            // The read itself is therefore bounded to one byte past the limit, which is
+            // what actually caps memory; seeing that extra byte means the file is too big.
+            outContent.assign(MAX_MOD_JSON_BYTES + 1, '\0');
+            file.read(outContent.data(), static_cast<std::streamsize>(outContent.size()));
+            outContent.resize(static_cast<size_t>(file.gcount()));
             if (outContent.size() > MAX_MOD_JSON_BYTES)
             {
                 SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem: '%s' grew past the %zu byte limit while reading",
@@ -70,7 +106,7 @@ namespace Spark
     bool ModSystem::SaveConfig(const std::string& filePath) const
     {
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ModSystem::SaveConfig to '%s'", filePath.c_str());
-        std::ofstream file(filePath);
+        std::ofstream file(FileUtils::PathFromUtf8(filePath));
         if (!file.is_open())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "ModSystem::SaveConfig failed to open '%s'", filePath.c_str());
@@ -104,7 +140,7 @@ namespace Spark
         SPARK_LOG_INFO(Spark::LogCategory::Game, "ModSystem::LoadConfig from '%s'", filePath.c_str());
 
         std::string content;
-        if (!ReadModManifestFile(filePath, content))
+        if (!ReadModConfigFile(filePath, content))
         {
             return false;
         }
@@ -138,22 +174,29 @@ namespace Spark
             {
                 modIt->second.enabled =
                     entry.HasKey("enabled") && entry["enabled"].IsBool() ? entry["enabled"].AsBool() : false;
-                modIt->second.loadOrder =
-                    entry.HasKey("loadOrder") && entry["loadOrder"].IsNumber() ? entry["loadOrder"].AsInt() : 0;
+                // A missing, non-integer or out-of-int-range loadOrder falls back
+                // to the default priority instead of an undefined conversion.
+                std::optional<int> loadOrder;
+                if (entry.HasKey("loadOrder"))
+                {
+                    loadOrder = entry["loadOrder"].TryAsInt();
+                    if (!loadOrder)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Game,
+                                       "ModSystem::LoadConfig: mod '%s' loadOrder is not an integer in int range; "
+                                       "using 0",
+                                       modId.c_str());
+                    }
+                }
+                modIt->second.loadOrder = loadOrder.value_or(0);
                 m_modStates[modId] = modIt->second.enabled ? ModState::Available : ModState::Disabled;
             }
         }
         return true;
     }
 
-    bool ModSystem::ParseModJson(const std::string& path, ModInfo& info)
+    bool ModSystem::ParseModJson(const std::string& content, const std::string& path, ModInfo& info)
     {
-        std::string content;
-        if (!ReadModManifestFile(path, content))
-        {
-            return false;
-        }
-
         Json::Value root;
         std::string parseError;
         if (!Json::ParseBounded(content, MOD_JSON_LIMITS, &root, &parseError))
@@ -181,32 +224,64 @@ namespace Spark
         };
 
         info.id = getString("id");
+        if (!IsValidModId(info.id))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "ModSystem: mod manifest '%s' rejected: id must be 1-%zu characters of [A-Za-z0-9._-] "
+                            "and not '.' or '..'",
+                            path.c_str(), MAX_MOD_ID_BYTES);
+            return false;
+        }
         info.name = getString("name");
         info.author = getString("author");
         info.version = getString("version");
         info.description = getString("description");
         info.previewImage = getString("previewImage");
 
-        // Extract dependencies array
+        // Extract dependencies array. A dependency names another mod, so it follows the
+        // same id policy; a repeat is recorded once and a mod may not depend on itself.
         if (root.HasKey("dependencies") && root["dependencies"].IsArray())
         {
             const auto& deps = root["dependencies"];
             for (size_t i = 0; i < deps.Size(); ++i)
             {
-                if (deps[i].IsString())
+                if (!deps[i].IsString())
                 {
-                    info.dependencies.push_back(deps[i].AsString());
+                    continue;
+                }
+                const std::string& dependency = deps[i].AsString();
+                if (!IsValidModId(dependency) || dependency == info.id)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                    "ModSystem: mod manifest '%s' rejected: dependency %zu is not a valid mod id "
+                                    "other than the mod's own",
+                                    path.c_str(), i);
+                    return false;
+                }
+                if (std::find(info.dependencies.begin(), info.dependencies.end(), dependency) ==
+                    info.dependencies.end())
+                {
+                    info.dependencies.push_back(dependency);
                 }
             }
         }
 
-        // Extract load order if present
-        if (root.HasKey("loadOrder") && root["loadOrder"].IsNumber())
+        // Extract load order if present. A manifest that declares one must declare
+        // an exact int: a fraction or out-of-range number rejects the manifest.
+        if (root.HasKey("loadOrder"))
         {
-            info.loadOrder = root["loadOrder"].AsInt();
+            const std::optional<int> loadOrder = root["loadOrder"].TryAsInt();
+            if (!loadOrder)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "ModSystem: mod manifest '%s' rejected: loadOrder must be an integer in %d..%d",
+                                path.c_str(), std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
+                return false;
+            }
+            info.loadOrder = *loadOrder;
         }
 
-        return !info.id.empty();
+        return true;
     }
 
     std::string ModSystem::Console_GetStatus() const

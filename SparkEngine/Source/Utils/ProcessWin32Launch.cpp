@@ -12,6 +12,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 #include "Process.h"
+#include "ProcessWin32HandleList.h"
 #include "ProcessWin32Internal.h"
 #include "ProcessWin32JobPolicy.h"
 
@@ -257,44 +258,46 @@ namespace Spark
         if (!workingDirectory)
             return std::unexpected(workingDirectory.error());
 
-        SECURITY_ATTRIBUTES sa{};
-        sa.nLength = sizeof(sa);
-        sa.bInheritHandle = TRUE;
-        sa.lpSecurityDescriptor = NULL;
-
-        // Create pipes
+        // Every pipe is created NON-inheritable (null SECURITY_ATTRIBUTES). Only
+        // the child-side ends are then marked inheritable and named in the
+        // handle list, so the parent-side ends are never inheritable at any
+        // instant and the child receives nothing but its own standard handles.
+        // ProcessWin32HandleList.h records what a bare bInheritHandles=TRUE leaked.
         AutoHandle stdinReadH, stdinWriteH;
         AutoHandle stdoutReadH, stdoutWriteH;
         AutoHandle stderrReadH, stderrWriteH;
+        ProcessDetail::InheritedHandleList inherited;
 
-        if (m_stdinMode == PipeMode::Capture)
+        struct PipeRequest
         {
-            HANDLE r, w;
-            if (!CreatePipe(&r, &w, &sa, 0))
-                return std::unexpected("CreatePipe failed for stdin (error " + std::to_string(GetLastError()) + ")");
-            stdinReadH = AutoHandle(r);
-            stdinWriteH = AutoHandle(w);
-            SetHandleInformation(stdinWriteH.h, HANDLE_FLAG_INHERIT, 0);
-        }
-
-        if (m_stdoutMode == PipeMode::Capture)
+            bool wanted;
+            AutoHandle* readEnd;
+            AutoHandle* writeEnd;
+            AutoHandle* childEnd;
+            const char* name;
+        };
+        const PipeRequest pipes[] = {
+            {m_stdinMode == PipeMode::Capture, &stdinReadH, &stdinWriteH, &stdinReadH, "stdin"},
+            {m_stdoutMode == PipeMode::Capture, &stdoutReadH, &stdoutWriteH, &stdoutWriteH, "stdout"},
+            {m_stderrMode == PipeMode::Capture && !m_mergeStderrIntoStdout, &stderrReadH, &stderrWriteH, &stderrWriteH,
+             "stderr"},
+        };
+        for (const PipeRequest& pipe : pipes)
         {
-            HANDLE r, w;
-            if (!CreatePipe(&r, &w, &sa, 0))
-                return std::unexpected("CreatePipe failed for stdout (error " + std::to_string(GetLastError()) + ")");
-            stdoutReadH = AutoHandle(r);
-            stdoutWriteH = AutoHandle(w);
-            SetHandleInformation(stdoutReadH.h, HANDLE_FLAG_INHERIT, 0);
-        }
-
-        if (m_stderrMode == PipeMode::Capture && !m_mergeStderrIntoStdout)
-        {
-            HANDLE r, w;
-            if (!CreatePipe(&r, &w, &sa, 0))
-                return std::unexpected("CreatePipe failed for stderr (error " + std::to_string(GetLastError()) + ")");
-            stderrReadH = AutoHandle(r);
-            stderrWriteH = AutoHandle(w);
-            SetHandleInformation(stderrReadH.h, HANDLE_FLAG_INHERIT, 0);
+            if (!pipe.wanted)
+                continue;
+            HANDLE r = NULL;
+            HANDLE w = NULL;
+            if (!CreatePipe(&r, &w, nullptr, 0))
+                return std::unexpected(std::string("CreatePipe failed for ") + pipe.name + " (error " +
+                                       std::to_string(GetLastError()) + ")");
+            *pipe.readEnd = AutoHandle(r);
+            *pipe.writeEnd = AutoHandle(w);
+            // Fail closed: a child that cannot inherit its pipe end would run
+            // with a dead standard stream while the parent waits on the other end.
+            if (!inherited.AddInheritable(pipe.childEnd->h))
+                return std::unexpected(std::string("could not make the child ") + pipe.name +
+                                       " handle inheritable (error " + std::to_string(GetLastError()) + ")");
         }
 
         // Build command line string (Windows-style: executable + space-separated
@@ -308,8 +311,9 @@ namespace Spark
             AppendQuotedArg(cmdLine, argument);
         }
 
-        STARTUPINFOW si{};
-        si.cb = sizeof(si);
+        STARTUPINFOEXW startupEx{};
+        STARTUPINFOW& si = startupEx.StartupInfo;
+        si.cb = sizeof(STARTUPINFOW);
         if (m_stdinMode == PipeMode::Capture || m_stdoutMode == PipeMode::Capture ||
             m_stderrMode == PipeMode::Capture || m_mergeStderrIntoStdout)
         {
@@ -318,6 +322,19 @@ namespace Spark
             si.hStdOutput = stdoutWriteH.h ? stdoutWriteH.h : GetStdHandle(STD_OUTPUT_HANDLE);
             si.hStdError = m_mergeStderrIntoStdout ? si.hStdOutput
                                                    : (stderrWriteH.h ? stderrWriteH.h : GetStdHandle(STD_ERROR_HANDLE));
+            // Uncaptured streams reuse the launcher's own standard handles.
+            inherited.AddIfInheritable(si.hStdInput);
+            inherited.AddIfInheritable(si.hStdOutput);
+            inherited.AddIfInheritable(si.hStdError);
+        }
+        else if (!m_detached)
+        {
+            // Nothing captured: the child shares the launcher's standard handles
+            // exactly as before the list existed. A detached child gets none of
+            // them, matching the POSIX launcher's /dev/null redirection.
+            inherited.AddIfInheritable(GetStdHandle(STD_INPUT_HANDLE));
+            inherited.AddIfInheritable(GetStdHandle(STD_OUTPUT_HANDLE));
+            inherited.AddIfInheritable(GetStdHandle(STD_ERROR_HANDLE));
         }
 
         // CREATE_SUSPENDED so the child is assigned to the kill-on-close job
@@ -329,10 +346,23 @@ namespace Spark
         if (m_detached)
             flags |= CREATE_NO_WINDOW | DETACHED_PROCESS;
 
+        // With nothing to hand over, inherit nothing. Otherwise inherit exactly
+        // the listed handles, never whatever else is inheritable right now.
+        const BOOL inheritHandles = inherited.Empty() ? FALSE : TRUE;
+        if (inheritHandles)
+        {
+            if (const DWORD listError = inherited.Build(); listError != ERROR_SUCCESS)
+                return std::unexpected("could not restrict inherited handles (error " + std::to_string(listError) +
+                                       ")");
+            startupEx.lpAttributeList = inherited.Attributes();
+            si.cb = sizeof(STARTUPINFOEXW);
+            flags |= EXTENDED_STARTUPINFO_PRESENT;
+        }
+
         PROCESS_INFORMATION pi{};
         const wchar_t* workingDirectoryValue = workingDirectory->empty() ? nullptr : workingDirectory->c_str();
-        BOOL ok = CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, flags, nullptr, workingDirectoryValue,
-                                 &si, &pi);
+        BOOL ok = CreateProcessW(nullptr, cmdLine.data(), nullptr, nullptr, inheritHandles, flags, nullptr,
+                                 workingDirectoryValue, &si, &pi);
         if (!ok)
             return std::unexpected("CreateProcessW failed (error " + std::to_string(GetLastError()) + ")");
 

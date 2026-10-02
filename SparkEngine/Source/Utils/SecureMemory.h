@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -16,21 +17,35 @@
 namespace Spark
 {
     /**
-     * Erase a live byte range through volatile-qualified stores.
+     * Erase a live byte range so the zeroing cannot be removed as a dead store.
      *
-     * Unlike memset, these stores are observable side effects and therefore
-     * cannot be removed merely because the object is not read again. The
-     * caller must still own a valid writable range for the duration of the call.
+     * GCC and Clang zero the range with one memset followed by an empty asm
+     * statement that takes the pointer and clobbers memory: the compiler must
+     * assume the asm reads the zeroed bytes, so the memset is never elided even
+     * when the object is not read again (the BoringSSL OPENSSL_cleanse pattern).
+     * One bulk store also keeps the per-round erasure in the PBKDF2 loops cheap
+     * under ASan/TSan, whose interceptors check a memset range once instead of
+     * instrumenting every byte. Other compilers use volatile-qualified stores.
+     * The caller must still own a valid writable range for the duration of the call.
      */
     inline void SecureErase(void* data, size_t size) noexcept
     {
+        if (!data || size == 0)
+        {
+            return;
+        }
+#if defined(__GNUC__) || defined(__clang__)
+        std::memset(data, 0, size);
+        __asm__ __volatile__("" : : "r"(data) : "memory");
+#else
         auto* bytes = static_cast<volatile unsigned char*>(data);
-        while (bytes && size > 0)
+        while (size > 0)
         {
             *bytes++ = 0;
             --size;
         }
         std::atomic_signal_fence(std::memory_order_seq_cst);
+#endif
     }
 
     inline void SecureClear(std::string& value) noexcept

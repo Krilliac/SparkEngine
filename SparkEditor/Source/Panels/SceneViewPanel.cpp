@@ -11,7 +11,6 @@
 #include "../Core/EditorFonts.h"
 #include "../Core/EditorUI.h"
 #include "../Core/ProjectManager.h"
-#include "../CommandHistory.h"
 #include "../Gizmos/SceneEditTools.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
@@ -1121,41 +1120,8 @@ namespace SparkEditor
         {
             // Release — commit the whole drag as one undoable command,
             // capturing the entity id (never a component pointer).
-            const XMFLOAT3 endPos = transform->position;
-            const bool moved = endPos.x != m_dragStartLocalPos.x || endPos.y != m_dragStartLocalPos.y ||
-                               endPos.z != m_dragStartLocalPos.z;
-            if (moved)
-            {
-                ::World* worldPtr = m_world; // safe: SwapWorld clears the history before freeing the World
-                const ::EntityID id = m_gizmoDragEntity;
-                const XMFLOAT3 oldPos = m_dragStartLocalPos;
-                Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                    [worldPtr, id, endPos]()
-                    {
-                        entt::registry& reg = worldPtr->GetRegistry();
-                        if (!reg.valid(id))
-                        {
-                            return;
-                        }
-                        if (::Transform* t = reg.try_get<::Transform>(id))
-                        {
-                            t->position = endPos;
-                        }
-                    },
-                    [worldPtr, id, oldPos]()
-                    {
-                        entt::registry& reg = worldPtr->GetRegistry();
-                        if (!reg.valid(id))
-                        {
-                            return;
-                        }
-                        if (::Transform* t = reg.try_get<::Transform>(id))
-                        {
-                            t->position = oldPos;
-                        }
-                    },
-                    "Move Entity"));
-            }
+            // No-op drags record nothing.
+            SceneEditTools::CommitEntityPosition(*m_world, m_gizmoDragEntity, m_dragStartLocalPos, transform->position);
             m_gizmoDragging = false;
             m_gizmoDragAxis = -1;
             m_gizmoDragEntity = entt::null;

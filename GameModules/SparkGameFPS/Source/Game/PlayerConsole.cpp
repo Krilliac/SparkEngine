@@ -1,8 +1,7 @@
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #include "Engine/Security/MemoryIntegrity.h"
 #include "Player.h"
-#include "Utils/ConsoleProcessManager.h"
-#include "Utils/LogMacros.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
@@ -13,16 +12,13 @@
 
 using namespace DirectX;
 
-#undef LOG_TO_CONSOLE_IMMEDIATE
-#define LOG_TO_CONSOLE_IMMEDIATE(msg, type) Spark::ConsoleProcessManager::GetInstance().Log(msg, type)
-
 // ============================================================================
 // CONSOLE INTEGRATION IMPLEMENTATIONS
 // ============================================================================
 
 void Player::Console_SetHealth(float health)
 {
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Console: setting player health to %.1f", health);
+    FPS_LOG_DEBUG("Console: setting player health to {:.1f}", health);
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_health = std::max(0.0f, std::min(m_maxHealth, health));
     if (m_health <= 0.0f)
@@ -34,7 +30,7 @@ void Player::Console_SetHealth(float health)
         SetActive(true);
     }
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player health set to " + std::to_wstring(m_health) + L" via console", L"SUCCESS");
+    FPS_CONSOLE("Player health set to " + std::to_string(m_health) + " via console", "SUCCESS");
 }
 
 void Player::Console_SetArmor(float armor)
@@ -42,7 +38,7 @@ void Player::Console_SetArmor(float armor)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_armor = std::max(0.0f, std::min(m_maxArmor, armor));
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player armor set to " + std::to_wstring(m_armor) + L" via console", L"SUCCESS");
+    FPS_CONSOLE("Player armor set to " + std::to_string(m_armor) + " via console", "SUCCESS");
 }
 
 void Player::Console_SetMaxHealth(float maxHealth)
@@ -56,12 +52,11 @@ void Player::Console_SetMaxHealth(float maxHealth)
             m_health = m_maxHealth;
         }
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player max health set to " + std::to_wstring(m_maxHealth) + L" via console",
-                                 L"SUCCESS");
+        FPS_CONSOLE("Player max health set to " + std::to_string(m_maxHealth) + " via console", "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Invalid max health value. Must be between 1 and 9999", L"ERROR");
+        FPS_CONSOLE("Invalid max health value. Must be between 1 and 9999", "ERROR");
     }
 }
 
@@ -74,11 +69,11 @@ void Player::Console_SetSpeed(float speed)
     {
         m_speed = speed;
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player speed set to " + std::to_wstring(m_speed) + L" via console", L"SUCCESS");
+        FPS_CONSOLE("Player speed set to " + std::to_string(m_speed) + " via console", "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Invalid speed value. Must be between 0.1 and 100", L"ERROR");
+        FPS_CONSOLE("Invalid speed value. Must be between 0.1 and 100", "ERROR");
     }
     SPARK_BRANCH_GUARD_END("fps_speed_validation")
 }
@@ -92,19 +87,18 @@ void Player::Console_SetJumpHeight(float height)
     {
         m_jumpHeight = height;
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player jump height set to " + std::to_wstring(m_jumpHeight) + L" via console",
-                                 L"SUCCESS");
+        FPS_CONSOLE("Player jump height set to " + std::to_string(m_jumpHeight) + " via console", "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Invalid jump height. Must be between 0.1 and 50", L"ERROR");
+        FPS_CONSOLE("Invalid jump height. Must be between 0.1 and 50", "ERROR");
     }
     SPARK_BRANCH_GUARD_END("fps_jump_validation")
 }
 
 void Player::Console_SetPosition(float x, float y, float z)
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Console: teleporting player to (%.1f, %.1f, %.1f)", x, y, z);
+    FPS_LOG_INFO("Console: teleporting player to ({:.1f}, {:.1f}, {:.1f})", x, y, z);
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     DirectX::XMFLOAT3 newPos = {x, y, z};
     SetPosition(newPos);
@@ -117,19 +111,18 @@ void Player::Console_SetPosition(float x, float y, float z)
     m_velocity = {0.0f, 0.0f, 0.0f};
 
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player teleported to (" + std::to_wstring(x) + L", " + std::to_wstring(y) + L", " +
-                                 std::to_wstring(z) + L") via console",
-                             L"SUCCESS");
+    FPS_CONSOLE("Player teleported to (" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(z) +
+                    ") via console",
+                "SUCCESS");
 }
 
 void Player::Console_SetGodMode(bool enabled)
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Console: god mode %s", enabled ? "enabled" : "disabled");
+    FPS_LOG_INFO("Console: god mode {}", enabled ? "enabled" : "disabled");
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_godModeEnabled = enabled;
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player god mode " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console",
-                             L"SUCCESS");
+    FPS_CONSOLE("Player god mode " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
 }
 
 void Player::Console_SetNoclip(bool enabled)
@@ -137,8 +130,7 @@ void Player::Console_SetNoclip(bool enabled)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_noclipEnabled = enabled;
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player noclip " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console",
-                             L"SUCCESS");
+    FPS_CONSOLE("Player noclip " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
 }
 
 void Player::Console_SetInfiniteAmmo(bool enabled)
@@ -146,8 +138,7 @@ void Player::Console_SetInfiniteAmmo(bool enabled)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_infiniteAmmoEnabled = enabled;
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(
-        L"Player infinite ammo " + std::wstring(enabled ? L"enabled" : L"disabled") + L" via console", L"SUCCESS");
+    FPS_CONSOLE("Player infinite ammo " + std::string(enabled ? "enabled" : "disabled") + " via console", "SUCCESS");
 }
 
 void Player::Console_GiveAmmo(int amount)
@@ -157,13 +148,13 @@ void Player::Console_GiveAmmo(int amount)
     {
         m_currentAmmo = std::min(m_currentWeapon.MagazineSize, m_currentAmmo + amount);
         NotifyStateChange();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Player given " + std::to_wstring(amount) + L" ammo. Current: " +
-                                     std::to_wstring(m_currentAmmo) + L" via console",
-                                 L"SUCCESS");
+        FPS_CONSOLE("Player given " + std::to_string(amount) + " ammo. Current: " + std::to_string(m_currentAmmo) +
+                        " via console",
+                    "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Invalid ammo amount. Must be between 1 and 9999", L"ERROR");
+        FPS_CONSOLE("Invalid ammo amount. Must be between 1 and 9999", "ERROR");
     }
 }
 
@@ -172,7 +163,7 @@ void Player::Console_ChangeWeapon(WeaponType weaponType)
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     ChangeWeapon(weaponType);
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player weapon changed via console", L"SUCCESS");
+    FPS_CONSOLE("Player weapon changed via console", "SUCCESS");
 }
 
 PlayerState Player::Console_GetState() const
@@ -184,7 +175,7 @@ void Player::Console_RegisterStateCallback(std::function<void(const PlayerState&
 {
     std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
     m_stateCallback = callback;
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player state callback registered", L"INFO");
+    FPS_CONSOLE("Player state callback registered", "INFO");
 }
 
 void Player::Console_ApplyPhysicsSettings(float gravity, float friction)
@@ -199,9 +190,9 @@ void Player::Console_ApplyPhysicsSettings(float gravity, float friction)
         m_frictionCoeff = friction;
     }
     NotifyStateChange();
-    LOG_TO_CONSOLE_IMMEDIATE(L"Player physics settings updated - Gravity: " + std::to_wstring(m_gravityForce) +
-                                 L", Friction: " + std::to_wstring(m_frictionCoeff) + L" via console",
-                             L"SUCCESS");
+    FPS_CONSOLE("Player physics settings updated - Gravity: " + std::to_string(m_gravityForce) +
+                    ", Friction: " + std::to_string(m_frictionCoeff) + " via console",
+                "SUCCESS");
 }
 
 void Player::NotifyStateChange()

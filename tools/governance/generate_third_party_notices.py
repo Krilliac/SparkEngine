@@ -14,16 +14,30 @@ never supplies a license from memory: a component whose notice file is absent,
 whose declared license is not a single SPDX identifier, whose tracked payload is
 a repository-authored stub, or whose tree carries undeclared license files is
 listed under "ATTENTION REQUIRED" instead of being guessed at. Tracked font
-files outside ``ThirdParty/`` are listed there too, because fonts carry their
-own licenses and nothing else in the repository inventories them.
+files outside ``ThirdParty/`` carry their own licenses: each needs an entry in
+``<font dir>/LICENSES/fonts.json`` that names its committed upstream license
+text and agrees with the font's own name table, or it is listed there too.
+Fonts that third-party code compiles into binaries (Dear ImGui's default
+fonts) are inventoried by ``ThirdParty/Licenses/embedded-fonts.json`` and
+checked against the embedding source when it is checked out.
+
+The package notice-coverage rule set (font suffixes, third-party install
+paths, and what counts as reproduced license text) lives in
+cmake/PackageNoticeCoverageRules.json. This tool and the staged-package gate
+cmake/ValidateStagedPackageNotices.cmake both read it; ``--check-package``
+applies the same rules to a staged install tree and its THIRD_PARTY_NOTICES.txt.
+With ``--closed-world`` every other installed file must match a justified
+first-party root, so nothing is presumed first-party by default.
 
 Usage:
   python tools/governance/generate_third_party_notices.py            # write
   python tools/governance/generate_third_party_notices.py --check    # exit 1 if stale
   python tools/governance/generate_third_party_notices.py --require-complete
+  python tools/governance/generate_third_party_notices.py --check-package <install root> [--closed-world]
 
-Exit codes: 0 ok, 1 stale output (--check) or incomplete notices
-(--require-complete), 2 malformed or unreadable inputs.
+Exit codes: 0 ok, 1 stale output (--check), incomplete notices
+(--require-complete), or uncovered package files (--check-package), 2 malformed
+or unreadable inputs.
 """
 
 from __future__ import annotations
@@ -31,10 +45,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import struct
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
 
@@ -42,6 +59,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_NAME = "THIRD_PARTY_NOTICES"
 MANIFEST_PATH = "ThirdParty/dependencies.lock"
 SUPPLY_CHAIN_PATH = "ThirdParty/supply-chain.lock"
+PACKAGE_RULES_PATH = REPO_ROOT / "cmake" / "PackageNoticeCoverageRules.json"
+PACKAGE_NOTICE_NAME = "THIRD_PARTY_NOTICES.txt"
+MAX_PACKAGE_NOTICE_BYTES = 8 << 20
+MAX_PACKAGE_RULES_BYTES = 256 << 10
+PACKAGE_INVENTORY_MARKER = "\nDependency inventory\n--------------------\n"
+PACKAGE_TEXTS_MARKER = "\nComplete license and notice texts\n"
 MANIFEST_VARIABLE = "SPARK_THIRDPARTY_AUDIT_ENTRIES"
 MANIFEST_FIELD_COUNT = 10
 MAX_NOTICE_BYTES = 1 << 20
@@ -51,7 +74,6 @@ SUBRULE = "-" * 79
 LICENSE_BASENAME = re.compile(
     r"^(?:licen[cs]e|copying|notice|unlicense|patents)(?:[._-][^/]*)?$", re.IGNORECASE
 )
-FONT_SUFFIXES = frozenset({".ttf", ".otf", ".woff", ".woff2", ".ttc"})
 HEADER_SUFFIXES = frozenset({".h", ".hh", ".hpp"})
 STUB_MARKER = re.compile(r"\bstub\b", re.IGNORECASE)
 STUB_SCAN_LINES = 40
@@ -189,6 +211,459 @@ def parse_supply_chain(text: str) -> dict:
     return data
 
 
+# --------------------------------------------------------------------------- package rule set
+
+
+@dataclass(frozen=True)
+class PayloadRule:
+    pattern: re.Pattern[str]
+    component: str | None  # None for a documented first-party exemption or a system runtime
+    first_party: str | None
+    # A toolchain runtime shipped under its vendor's redistribution terms, which
+    # are not a file in the repository: covered by a named inventory entry with
+    # a "Terms:" line whose "Files:" line names the file.
+    system_runtime: str | None = None
+    # A shipped license text: covered when its name is on the "Notice files:"
+    # line of an inventory entry whose texts are all reproduced.
+    notice_text: str | None = None
+
+
+@dataclass(frozen=True)
+class FirstPartyRoot:
+    pattern: re.Pattern[str]
+    justification: str
+
+
+@dataclass(frozen=True)
+class AssetManifestRule:
+    """Files matching ``pattern`` are licensed by the installed manifest at ``manifest``."""
+
+    pattern: re.Pattern[str]
+    manifest: str
+    justification: str
+
+
+@dataclass(frozen=True)
+class PackageRules:
+    font_suffixes: frozenset[str]
+    minimum_bytes: int
+    copyright: re.Pattern[str]
+    operative_terms: re.Pattern[str]
+    roots: tuple[re.Pattern[str], ...]
+    payload: tuple[PayloadRule, ...]
+    embedded_markers: tuple[str, ...]
+    embedded_scan: re.Pattern[str]
+    embedded_max_bytes: int
+    first_party_roots: tuple[FirstPartyRoot, ...]
+    asset_manifests: tuple[AssetManifestRule, ...]
+
+
+def _rules_member(data: dict, key: str, kind: type, label: str):
+    value = data.get(key)
+    if not isinstance(value, kind) or (kind is list and not value):
+        raise NoticeInputError(f"{label}: '{key}' must be a non-empty {kind.__name__}")
+    return value
+
+
+def _optional_rules_list(data: dict, key: str, label: str) -> list:
+    """A member only closed-world classification reads; absent means empty (which classifies nothing)."""
+    value = data.get(key, [])
+    if not isinstance(value, list):
+        raise NoticeInputError(f"{label}: '{key}' must be a list")
+    return value
+
+
+def _rules_regex(value: object, label: str) -> re.Pattern[str]:
+    if not isinstance(value, str) or not value:
+        raise NoticeInputError(f"{label}: pattern must be a non-empty string")
+    try:
+        return re.compile(value)
+    except re.error as exc:
+        raise NoticeInputError(f"{label}: invalid pattern {value!r}: {exc}") from exc
+
+
+def parse_package_rules(text: str, label: str = "package notice rules") -> PackageRules:
+    """Parse cmake/PackageNoticeCoverageRules.json; malformed rules fail closed."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise NoticeInputError(f"{label}: invalid JSON: {exc}") from exc
+    if not isinstance(data, dict) or data.get("schema") != 1:
+        raise NoticeInputError(f"{label}: expected an object with schema 1")
+    suffixes = _rules_member(data, "fontSuffixes", list, label)
+    if not all(isinstance(s, str) and s.startswith(".") for s in suffixes):
+        raise NoticeInputError(f"{label}: fontSuffixes must be dotted extensions")
+    license_text = _rules_member(data, "licenseText", dict, label)
+    minimum = license_text.get("minimumBytes")
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 0:
+        raise NoticeInputError(f"{label}: licenseText.minimumBytes must be a non-negative integer")
+    payload = []
+    for index, rule in enumerate(_rules_member(data, "payloadRules", list, label)):
+        where = f"{label}: payloadRules[{index}]"
+        if not isinstance(rule, dict):
+            raise NoticeInputError(f"{where} must be an object")
+        targets = {key: rule.get(key) for key in ("component", "firstParty", "systemRuntime", "noticeText")}
+        named = {key: value for key, value in targets.items() if isinstance(value, str) and value}
+        if len(named) != 1 or any(value is not None for key, value in targets.items() if key not in named):
+            raise NoticeInputError(
+                f"{where} must name exactly one of 'component', 'firstParty', 'systemRuntime' or 'noticeText'"
+            )
+        payload.append(
+            PayloadRule(
+                _rules_regex(rule.get("pattern"), where),
+                named.get("component"),
+                named.get("firstParty"),
+                named.get("systemRuntime"),
+                named.get("noticeText"),
+            )
+        )
+    first_party_roots = []
+    for index, root in enumerate(_optional_rules_list(data, "firstPartyRoots", label)):
+        where = f"{label}: firstPartyRoots[{index}]"
+        if not isinstance(root, dict):
+            raise NoticeInputError(f"{where} must be an object")
+        justification = root.get("justification")
+        if not isinstance(justification, str) or not justification.strip():
+            raise NoticeInputError(f"{where} must carry a non-empty 'justification'")
+        first_party_roots.append(FirstPartyRoot(_rules_regex(root.get("pattern"), where), justification))
+    asset_manifests = []
+    for index, rule in enumerate(_optional_rules_list(data, "assetManifests", label)):
+        where = f"{label}: assetManifests[{index}]"
+        if not isinstance(rule, dict):
+            raise NoticeInputError(f"{where} must be an object")
+        manifest, justification = rule.get("manifest"), rule.get("justification")
+        if not isinstance(manifest, str) or not manifest or manifest.startswith("/") or ".." in manifest.split("/"):
+            raise NoticeInputError(f"{where} must name a package-relative 'manifest'")
+        if not isinstance(justification, str) or not justification.strip():
+            raise NoticeInputError(f"{where} must carry a non-empty 'justification'")
+        asset_manifests.append(AssetManifestRule(_rules_regex(rule.get("pattern"), where), manifest, justification))
+    embedded = _rules_member(data, "embeddedFonts", dict, label)
+    markers = embedded.get("markers")
+    if (
+        not isinstance(markers, list)
+        or not markers
+        or not all(isinstance(m, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", m) for m in markers)
+        or len(set(markers)) != len(markers)
+    ):
+        raise NoticeInputError(f"{label}: embeddedFonts.markers must be distinct non-empty font names")
+    maximum_scan = embedded.get("maximumScanBytes")
+    if not isinstance(maximum_scan, int) or isinstance(maximum_scan, bool) or maximum_scan <= 0:
+        raise NoticeInputError(f"{label}: embeddedFonts.maximumScanBytes must be a positive integer")
+    return PackageRules(
+        font_suffixes=frozenset(s.lower() for s in suffixes),
+        minimum_bytes=minimum,
+        copyright=_rules_regex(license_text.get("copyrightPattern"), f"{label}: copyrightPattern"),
+        operative_terms=_rules_regex(license_text.get("operativeTermsPattern"), f"{label}: operativeTermsPattern"),
+        roots=tuple(
+            _rules_regex(p, f"{label}: thirdPartyRoots")
+            for p in _rules_member(data, "thirdPartyRoots", list, label)
+        ),
+        payload=tuple(payload),
+        first_party_roots=tuple(first_party_roots),
+        asset_manifests=tuple(asset_manifests),
+        embedded_markers=tuple(markers),
+        embedded_scan=_rules_regex(embedded.get("scanPattern"), f"{label}: embeddedFonts.scanPattern"),
+        embedded_max_bytes=maximum_scan,
+    )
+
+
+def load_package_rules(path: Path = PACKAGE_RULES_PATH) -> PackageRules:
+    try:
+        if path.stat().st_size > MAX_PACKAGE_RULES_BYTES:
+            raise NoticeInputError(f"{path}: exceeds {MAX_PACKAGE_RULES_BYTES} bytes")
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise NoticeInputError(f"cannot read package notice rules: {exc}") from exc
+    return parse_package_rules(text, str(path))
+
+
+@lru_cache(maxsize=1)
+def _default_font_suffixes() -> frozenset[str]:
+    return load_package_rules().font_suffixes
+
+
+def _is_font(rel: str) -> bool:
+    return PurePosixPath(rel).suffix.lower() in _default_font_suffixes()
+
+
+# --------------------------------------------------------------------------- package coverage
+
+
+@dataclass
+class NoticeEntry:
+    name: str
+    notice_files: list[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
+    terms: str = ""
+    problem: str = ""
+
+
+def _split_csv(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def parse_package_notice(text: str, rules: PackageRules, label: str = PACKAGE_NOTICE_NAME) -> list[NoticeEntry]:
+    """Parse a CMake-generated THIRD_PARTY_NOTICES.txt (cmake/SparkThirdPartyAudit.cmake).
+
+    Each inventory entry records whether every notice file it declares is
+    reproduced with license text; ``problem`` is empty when it is.
+    """
+    text = text.replace("\r\n", "\n")
+    inventory_at = text.find(PACKAGE_INVENTORY_MARKER)
+    texts_at = text.find(PACKAGE_TEXTS_MARKER)
+    if inventory_at < 0 or texts_at < 0 or texts_at < inventory_at:
+        raise NoticeInputError(
+            f"{label} does not have the generated 'Dependency inventory' and "
+            "'Complete license and notice texts' sections (cmake/SparkThirdPartyAudit.cmake)"
+        )
+    inventory = text[inventory_at + len(PACKAGE_INVENTORY_MARKER) : texts_at]
+    texts = text[texts_at + len(PACKAGE_TEXTS_MARKER) :]
+
+    entries: list[NoticeEntry] = []
+    current: NoticeEntry | None = None
+    for line in inventory.split("\n"):
+        if not line:
+            current = None
+            continue
+        if current is None:
+            if line.startswith(" "):
+                raise NoticeInputError(f"{label}: inventory field without an entry name: {line!r}")
+            current = NoticeEntry(line)
+            entries.append(current)
+        elif line.startswith("  Notice files: "):
+            current.notice_files = _split_csv(line[len("  Notice files: ") :])
+        elif line.startswith("  Files: "):
+            current.files = _split_csv(line[len("  Files: ") :])
+        elif line.startswith("  Terms: "):
+            current.terms = line[len("  Terms: ") :].strip()
+    if not entries:
+        raise NoticeInputError(f"{label} has an empty dependency inventory")
+
+    declared = list(dict.fromkeys(rel for entry in entries for rel in entry.notice_files))
+    positions = {rel: texts.find(f"----- {rel} -----\n") for rel in declared}
+    starts = sorted(p for p in positions.values() if p >= 0)
+    problems: dict[str, str] = {}
+    for rel in declared:
+        position = positions[rel]
+        if position < 0:
+            problems[rel] = f"license text for {rel} is not reproduced"
+            continue
+        body_start = position + len(f"----- {rel} -----\n")
+        body_end = min((p for p in starts if p >= body_start), default=len(texts))
+        body = texts[body_start:body_end].strip(" \t\n\r")
+        if len(body.encode("utf-8")) < rules.minimum_bytes:
+            problems[rel] = f"license text for {rel} is shorter than {rules.minimum_bytes} bytes"
+        elif not rules.copyright.search(body):
+            problems[rel] = f"license text for {rel} has no copyright statement"
+        elif not rules.operative_terms.search(body):
+            problems[rel] = f"license text for {rel} has no operative license terms"
+        else:
+            problems[rel] = ""
+    for entry in entries:
+        if not entry.notice_files:
+            entry.problem = "declares no notice file"
+        else:
+            entry.problem = next((problems[rel] for rel in entry.notice_files if problems[rel]), "")
+    return entries
+
+
+@dataclass
+class PackageCoverage:
+    uncovered: list[str]
+    font_count: int
+    payload_count: int
+    embedded_count: int = 0  # (binary, embedded font) pairs found
+    first_party_count: int = 0
+    asset_count: int = 0
+
+
+def _font_notice_reason(name: str, entries: list[NoticeEntry]) -> str:
+    """Why font `name` is not covered by the packaged notice, or "" when it is."""
+    reason = f"not named on any 'Files:' line of {PACKAGE_NOTICE_NAME}"
+    for entry in entries:
+        if not any(PurePosixPath(named).name == name for named in entry.files):
+            continue
+        if not entry.problem:
+            return ""
+        reason = f"named by '{entry.name}' but {entry.problem}"
+    return reason
+
+
+def embedded_font_markers_in(path: Path, markers: tuple[str, ...], max_bytes: int) -> list[str]:
+    """Return the markers (ASCII font names) that occur in the file's bytes, in rule order.
+
+    Mirrors the CMake gate's file(STRINGS ... REGEX): a marker is printable
+    ASCII, so any occurrence lies inside a printable run that CMake extracts.
+    """
+    size = path.stat().st_size
+    if size > max_bytes:
+        raise NoticeInputError(f"{path} is {size} bytes, over the {max_bytes}-byte embedded-font scan limit")
+    wanted = [m.encode("ascii") for m in markers]
+    overlap = max(len(m) for m in wanted) - 1
+    found: set[bytes] = set()
+    tail = b""
+    with path.open("rb") as stream:
+        while True:
+            chunk = stream.read(1 << 20)
+            if not chunk:
+                break
+            window = tail + chunk
+            found.update(m for m in wanted if m in window)
+            tail = window[-overlap:] if overlap else b""
+    return [m.decode("ascii") for m in wanted if m in found]
+
+
+UNCLASSIFIED = "unclassified: no font, payload, system-runtime or first-party rule covers it"
+UNIDENTIFIED_ASSET_LICENSES = frozenset({"", "NONE", "NOASSERTION"})
+
+
+def _asset_manifest_licenses(package_root: Path, manifest: str) -> dict[str, str]:
+    """Map each path an installed RDY-020 asset manifest lists to its license; {} when it is absent."""
+    path = package_root / manifest
+    if not path.is_file() or path.is_symlink():
+        return {}
+    if path.stat().st_size > MAX_PACKAGE_NOTICE_BYTES:
+        raise NoticeInputError(f"{path} exceeds {MAX_PACKAGE_NOTICE_BYTES} bytes")
+    try:
+        data = json.loads(path.read_bytes().decode("utf-8"))
+        entries = data["entries"]
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise NoticeInputError(f"{path}: not an asset integrity manifest: {exc}") from exc
+    if not isinstance(entries, list):
+        raise NoticeInputError(f"{path}: asset manifest entries must be an array")
+    licenses: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or not entry["path"]:
+            raise NoticeInputError(f"{path}: asset manifest entries must name a non-empty string path")
+        rel = entry["path"]
+        if rel in licenses:
+            raise NoticeInputError(f"{path}: duplicate asset manifest path: {rel}")
+        license_id = entry.get("license")
+        licenses[rel] = license_id.strip() if isinstance(license_id, str) else ""
+    return licenses
+
+
+def check_package_coverage(package_root: Path, rules: PackageRules, closed_world: bool = False) -> PackageCoverage:
+    """Apply the notice-coverage rules to a staged install tree.
+
+    Mirrors cmake/ValidateStagedPackageNotices.cmake; the fixture tests run both
+    implementations against the same packages and require identical verdicts.
+    Open world (the default) presumes a file outside every third-party root to be
+    first-party; closed world requires it to match a justified firstPartyRoots
+    pattern and reports it as unclassified otherwise.
+    """
+    notice_path = package_root / PACKAGE_NOTICE_NAME
+    if not notice_path.is_file() or notice_path.is_symlink():
+        raise NoticeInputError(f"{notice_path} is missing or is not a regular non-link file")
+    if notice_path.stat().st_size > MAX_PACKAGE_NOTICE_BYTES:
+        raise NoticeInputError(f"{notice_path} exceeds {MAX_PACKAGE_NOTICE_BYTES} bytes")
+    try:
+        notice_text = notice_path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise NoticeInputError(f"{notice_path}: not UTF-8: {exc}") from exc
+    entries = parse_package_notice(notice_text, rules, str(notice_path))
+    by_name: dict[str, NoticeEntry] = {}
+    for entry in entries:
+        by_name.setdefault(entry.name, entry)
+
+    files: list[str] = []
+    for directory, subdirs, names in os.walk(package_root):
+        base = Path(directory)
+        # Mirror CMake's GLOB_RECURSE: a symlinked directory is reported as an
+        # entry, not descended into.
+        for sub in list(subdirs):
+            if (base / sub).is_symlink():
+                subdirs.remove(sub)
+                names.append(sub)
+        for name in names:
+            files.append((base / name).relative_to(package_root).as_posix())
+
+    uncovered: list[str] = []
+    font_count = payload_count = first_party_count = asset_count = embedded_count = 0
+    asset_licenses: dict[str, dict[str, str]] = {}
+    for rel in sorted(files):
+        name = PurePosixPath(rel).name
+        if PurePosixPath(rel).suffix.lower() in rules.font_suffixes:
+            font_count += 1
+            reason = _font_notice_reason(name, entries)
+            if reason:
+                uncovered.append(f"{rel}: font {reason}")
+            continue
+
+        path = package_root / rel
+        if rules.embedded_scan.search(rel) and path.is_file() and not path.is_symlink():
+            for marker in embedded_font_markers_in(path, rules.embedded_markers, rules.embedded_max_bytes):
+                embedded_count += 1
+                reason = _font_notice_reason(marker, entries)
+                if reason:
+                    uncovered.append(f"{rel}: embeds font {marker} {reason}")
+
+        rule = next((r for r in rules.payload if r.pattern.search(rel)), None)
+        if rule is None:
+            if any(root.search(rel) for root in rules.roots):
+                payload_count += 1
+                uncovered.append(f"{rel}: third-party install path that no payload rule maps to a dependency")
+            elif closed_world:
+                asset_rule = next((a for a in rules.asset_manifests if a.pattern.search(rel)), None)
+                if asset_rule is not None:
+                    if asset_rule.manifest not in asset_licenses:
+                        asset_licenses[asset_rule.manifest] = _asset_manifest_licenses(package_root, asset_rule.manifest)
+                    listed = rel.removeprefix(str(PurePosixPath(asset_rule.manifest).parent) + "/")
+                    license_id = asset_licenses[asset_rule.manifest].get(listed)
+                    if rel == asset_rule.manifest:
+                        asset_count += 1
+                    elif license_id is None:
+                        uncovered.append(f"{rel}: not listed in asset manifest {asset_rule.manifest}")
+                    elif license_id in UNIDENTIFIED_ASSET_LICENSES:
+                        uncovered.append(f"{rel}: asset manifest {asset_rule.manifest} records no identified license")
+                    else:
+                        asset_count += 1
+                elif any(root.pattern.search(rel) for root in rules.first_party_roots):
+                    first_party_count += 1
+                else:
+                    uncovered.append(f"{rel}: {UNCLASSIFIED}")
+            continue
+        payload_count += 1
+        if rule.system_runtime is not None:
+            entry = by_name.get(rule.system_runtime)
+            if entry is None:
+                uncovered.append(
+                    f"{rel}: system runtime '{rule.system_runtime}' has no {PACKAGE_NOTICE_NAME} inventory entry"
+                )
+            elif not entry.terms:
+                uncovered.append(f"{rel}: system runtime '{rule.system_runtime}' has no 'Terms:' line")
+            elif not any(PurePosixPath(named).name == name for named in entry.files):
+                uncovered.append(f"{rel}: not named on the 'Files:' line of system runtime '{rule.system_runtime}'")
+            continue
+        if rule.notice_text is not None:
+            reason = f"not a 'Notice files:' text of any {PACKAGE_NOTICE_NAME} inventory entry"
+            for entry in entries:
+                if not any(PurePosixPath(named).name == name for named in entry.notice_files):
+                    continue
+                if not entry.problem:
+                    reason = ""
+                    break
+                reason = f"named by '{entry.name}' but {entry.problem}"
+            if reason:
+                uncovered.append(f"{rel}: license text {reason}")
+            continue
+        if rule.component is None:
+            continue
+        entry = by_name.get(rule.component)
+        if entry is None:
+            uncovered.append(f"{rel}: component '{rule.component}' has no {PACKAGE_NOTICE_NAME} inventory entry")
+        elif entry.problem:
+            uncovered.append(f"{rel}: component '{rule.component}' {entry.problem}")
+    return PackageCoverage(
+        uncovered,
+        font_count,
+        payload_count,
+        embedded_count=embedded_count,
+        first_party_count=first_party_count,
+        asset_count=asset_count,
+    )
+
+
 # --------------------------------------------------------------------------- repository access
 
 
@@ -283,7 +758,7 @@ def build_components(
             )
 
         for rel in in_tree:
-            if PurePosixPath(rel).suffix.lower() in FONT_SUFFIXES and not _has_sibling_license(rel, tracked):
+            if _is_font(rel) and not _has_sibling_license(rel, tracked):
                 component.findings.append(f"font file has no license file beside it: {rel}")
 
         for required in entry.required_files:
@@ -312,17 +787,338 @@ def _has_sibling_license(rel: str, tracked: Iterable[str]) -> bool:
     return False
 
 
-def uncovered_fonts(supply_chain: dict, tracked: list[str]) -> list[str]:
-    """Tracked font files outside every locked ThirdParty container."""
-    fonts = []
-    for rel in tracked:
-        if PurePosixPath(rel).suffix.lower() not in FONT_SUFFIXES:
-            continue
-        if _under(rel, "ThirdParty"):
-            continue
-        if not _has_sibling_license(rel, tracked):
-            fonts.append(rel)
+# --------------------------------------------------------------------------- fonts outside ThirdParty/
+
+FONT_MANIFEST_NAME = "LICENSES/fonts.json"
+FONT_MANIFEST_FIELDS = ("family", "version", "license", "copyright", "license_file", "license_source")
+NAME_COPYRIGHT, NAME_LICENSE_DESCRIPTION = 0, 13
+# Name-table license descriptions (nameID 13) this tool can classify. A
+# description matching none of them is reported for owner classification.
+LICENSE_DESCRIPTIONS = (
+    (re.compile(r"SIL Open Font License,? Version 1\.1", re.IGNORECASE), "OFL-1.1"),
+    (re.compile(r"Apache License,? Version 2\.0", re.IGNORECASE), "Apache-2.0"),
+)
+
+
+@dataclass(frozen=True)
+class FontNotice:
+    font: str
+    family: str
+    version: str
+    license: str
+    copyright: str
+    license_file: str
+    license_source: str
+
+
+@dataclass(frozen=True)
+class EmbeddedFontNotice:
+    font: str  # the name the embedding code gives the font; also its marker in binaries
+    component: str
+    source_section: str
+    family: str
+    license: str
+    copyright: str
+    license_file: str
+    license_source: str
+
+
+@dataclass
+class FontInventory:
+    notices: list[FontNotice] = field(default_factory=list)
+    texts: dict[str, str] = field(default_factory=dict)  # license file -> normalized text
+    findings: list[str] = field(default_factory=list)
+    # Fonts third-party code compiles into shipped binaries (EMBEDDED_FONT_MANIFEST).
+    embedded: list[EmbeddedFontNotice] = field(default_factory=list)
+    embedded_texts: dict[str, str] = field(default_factory=dict)
+    embedded_findings: list[str] = field(default_factory=list)
+    # Embedding sources that were not on disk (uninitialised submodule), so the
+    # inventory could not be checked against them. Not rendered, so the output
+    # stays checkout-independent; --require-complete refuses to pass over them.
+    unverified: list[str] = field(default_factory=list)
+
+
+def font_name_table(data: bytes) -> dict[int, str]:
+    """Return the English name-table strings of an sfnt font (TrueType/OpenType/TTC).
+
+    Windows Unicode records win over Unicode-platform records, which win over
+    Macintosh Roman ones. Raises ValueError for anything that is not a readable
+    sfnt with a name table (for example a compressed WOFF).
+    """
+    try:
+        base = struct.unpack_from(">I", data, 12)[0] if data[:4] == b"ttcf" else 0
+        table_count = struct.unpack_from(">H", data, base + 4)[0]
+        for index in range(table_count):
+            tag, _checksum, offset, _length = struct.unpack_from(">4sIII", data, base + 12 + 16 * index)
+            if tag != b"name":
+                continue
+            _format, count, string_offset = struct.unpack_from(">HHH", data, offset)
+            ranked: dict[int, tuple[int, str]] = {}
+            for record in range(count):
+                platform, encoding, language, name_id, length, start = struct.unpack_from(
+                    ">6H", data, offset + 6 + 12 * record
+                )
+                raw = data[offset + string_offset + start : offset + string_offset + start + length]
+                if platform == 3 and encoding in (0, 1, 10) and language == 0x409:
+                    rank, text = 0, raw.decode("utf-16-be")
+                elif platform == 0:
+                    rank, text = 1, raw.decode("utf-16-be")
+                elif platform == 1 and encoding == 0 and language == 0:
+                    rank, text = 2, raw.decode("mac_roman")
+                else:
+                    continue
+                if name_id not in ranked or rank < ranked[name_id][0]:
+                    ranked[name_id] = (rank, text)
+            return {name_id: text for name_id, (_rank, text) in ranked.items()}
+    except (struct.error, UnicodeDecodeError) as exc:
+        raise ValueError(f"malformed sfnt: {exc}") from exc
+    raise ValueError("no name table (not an uncompressed TrueType/OpenType font)")
+
+
+def _parse_font_manifest(raw: bytes, label: str) -> dict[str, dict[str, str]]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise NoticeInputError(f"{label}: invalid JSON: {exc}") from exc
+    fonts = data.get("fonts") if isinstance(data, dict) and data.get("schema") == 1 else None
+    if not isinstance(fonts, dict) or not fonts:
+        raise NoticeInputError(f"{label}: expected schema 1 with a non-empty 'fonts' object")
+    for name, entry in fonts.items():
+        if PurePosixPath(name).name != name or not isinstance(entry, dict):
+            raise NoticeInputError(f"{label}: fonts[{name!r}] must be a bare file name mapped to an object")
+        if set(entry) != set(FONT_MANIFEST_FIELDS) or not all(isinstance(v, str) and v for v in entry.values()):
+            raise NoticeInputError(f"{label}: fonts[{name!r}] must have exactly the non-empty string fields "
+                                   + ", ".join(FONT_MANIFEST_FIELDS))
+        if not SINGLE_SPDX_ID.match(entry["license"]):
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license must be a single SPDX identifier")
+        if PurePosixPath(entry["license_file"]).name != entry["license_file"]:
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license_file must be a file name in LICENSES/")
     return fonts
+
+
+def font_inventory(tracked: list[str], read: Callable[[str], bytes | None]) -> FontInventory:
+    """Match every tracked font outside ThirdParty/ to its license inventory.
+
+    A font in directory D is covered only by an entry in D/LICENSES/fonts.json
+    whose license file is tracked, carries a copyright statement and operative
+    license terms, and whose recorded copyright and license agree with the
+    font's own name table. A license file that merely sits in the same
+    directory does not say which font it covers, so it does not count.
+    """
+    rules = load_package_rules()
+    tracked_set = set(tracked)
+    inventory = FontInventory()
+    manifests: dict[str, dict[str, dict[str, str]]] = {}
+    for rel in tracked:
+        if rel.endswith("/" + FONT_MANIFEST_NAME) and not _under(rel, "ThirdParty"):
+            raw = read(rel)
+            if raw is None:
+                raise NoticeInputError(f"{rel} is tracked but cannot be read")
+            manifests[rel[: -len(FONT_MANIFEST_NAME) - 1]] = _parse_font_manifest(raw, rel)
+    for rel in tracked:
+        if not _is_font(rel) or _under(rel, "ThirdParty"):
+            continue
+        directory, name = str(PurePosixPath(rel).parent), PurePosixPath(rel).name
+        manifest_rel = f"{directory}/{FONT_MANIFEST_NAME}"
+        entry = manifests.get(directory, {}).get(name)
+        if entry is None:
+            inventory.findings.append(f"no license file on disk for {rel} (no entry in {manifest_rel})")
+            continue
+
+        problems = []
+        license_rel = f"{directory}/LICENSES/{entry['license_file']}"
+        raw_license = read(license_rel) if license_rel in tracked_set else None
+        if raw_license is None:
+            problems.append(f"license file {license_rel} is not tracked")
+        else:
+            text = normalize_text(raw_license, license_rel)
+            if len(text.encode("utf-8")) < rules.minimum_bytes or not rules.copyright.search(text):
+                problems.append(f"{license_rel} has no copyright statement or is too short to be a license")
+            elif not rules.operative_terms.search(text):
+                problems.append(f"{license_rel} has no operative license terms")
+            else:
+                inventory.texts[license_rel] = text
+        raw_font = read(rel)
+        try:
+            names = font_name_table(raw_font or b"")
+        except ValueError as exc:
+            names = {}
+            problems.append(f"cannot read the font's name table: {exc}")
+        if names:
+            embedded = names.get(NAME_COPYRIGHT, "")
+            if embedded != entry["copyright"]:
+                problems.append(f"recorded copyright {entry['copyright']!r} is not the font's own {embedded!r}")
+            description = names.get(NAME_LICENSE_DESCRIPTION, "")
+            if description:
+                spdx = next((s for pattern, s in LICENSE_DESCRIPTIONS if pattern.search(description)), None)
+                if spdx is None:
+                    problems.append(f"font license description {description[:80]!r} needs owner classification")
+                elif spdx != entry["license"]:
+                    problems.append(f"recorded license {entry['license']} but the font declares {spdx}")
+        if problems:
+            inventory.findings.extend(f"{rel}: {problem}" for problem in problems)
+            continue
+        inventory.notices.append(FontNotice(rel, **{key: entry[key] for key in FONT_MANIFEST_FIELDS}))
+
+    for directory, manifest in sorted(manifests.items()):
+        for name in sorted(manifest):
+            if f"{directory}/{name}" not in tracked_set:
+                inventory.findings.append(f"{directory}/{FONT_MANIFEST_NAME} names untracked font {name}")
+    return inventory
+
+
+# --------------------------------------------------------------------------- fonts embedded in third-party code
+
+EMBEDDED_FONT_MANIFEST = "ThirdParty/Licenses/embedded-fonts.json"
+EMBEDDED_FONT_LICENSE_DIR = "ThirdParty/Licenses"
+EMBEDDED_FONT_FIELDS = (
+    "component",
+    "source_section",
+    "family",
+    "license",
+    "copyright",
+    "license_file",
+    "license_source",
+)
+# Dear ImGui's convention for the font data it embeds: a section heading
+# followed by a rule line, then the font's declaration comment up to the next
+# rule line. The table of contents repeats the heading without a rule after it.
+EMBEDDED_FONT_SECTION = re.compile(r"^// \[SECTION\] Default font data \((?P<name>[^)\n]+)\)[ \t]*$")
+EMBEDDED_FONT_RULE = re.compile(r"^//-{20,}[ \t]*$")
+
+
+def _parse_embedded_font_manifest(raw: bytes, label: str) -> tuple[dict[str, list[str]], dict[str, dict[str, str]]]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise NoticeInputError(f"{label}: invalid JSON: {exc}") from exc
+    if not isinstance(data, dict) or data.get("schema") != 1:
+        raise NoticeInputError(f"{label}: expected an object with schema 1")
+    sources, fonts = data.get("sources"), data.get("fonts")
+    if not isinstance(sources, dict) or not sources:
+        raise NoticeInputError(f"{label}: 'sources' must map components to source files")
+    for component, files in sources.items():
+        if not isinstance(files, list) or not files or not all(
+            isinstance(f, str) and f and ".." not in PurePosixPath(f).parts and not f.startswith("/") for f in files
+        ):
+            raise NoticeInputError(f"{label}: sources[{component!r}] must be a non-empty list of relative paths")
+    if not isinstance(fonts, dict) or not fonts:
+        raise NoticeInputError(f"{label}: 'fonts' must be a non-empty object")
+    for name, entry in fonts.items():
+        if not isinstance(name, str) or not name or PurePosixPath(name).name != name or not isinstance(entry, dict):
+            raise NoticeInputError(f"{label}: fonts[{name!r}] must be a bare font name mapped to an object")
+        if set(entry) != set(EMBEDDED_FONT_FIELDS) or not all(isinstance(v, str) and v for v in entry.values()):
+            raise NoticeInputError(
+                f"{label}: fonts[{name!r}] must have exactly the non-empty string fields "
+                + ", ".join(EMBEDDED_FONT_FIELDS)
+            )
+        if not SINGLE_SPDX_ID.match(entry["license"]):
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license must be a single SPDX identifier")
+        if PurePosixPath(entry["license_file"]).name != entry["license_file"]:
+            raise NoticeInputError(f"{label}: fonts[{name!r}].license_file must be a file name in "
+                                   f"{EMBEDDED_FONT_LICENSE_DIR}/")
+        if entry["component"] not in sources:
+            raise NoticeInputError(f"{label}: fonts[{name!r}].component has no 'sources' entry")
+    return sources, fonts
+
+
+def embedded_font_sections(source: str) -> dict[str, list[str]]:
+    """Return each embedded-font section of a source file mapped to its declaration lines."""
+    lines = source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    sections: dict[str, list[str]] = {}
+    for index, line in enumerate(lines):
+        match = EMBEDDED_FONT_SECTION.match(line)
+        if not match or index + 1 >= len(lines) or not EMBEDDED_FONT_RULE.match(lines[index + 1]):
+            continue
+        declaration: list[str] = []
+        for body in lines[index + 2 :]:
+            if EMBEDDED_FONT_RULE.match(body) or not body.startswith("//"):
+                break
+            declaration.append(body[2:].strip())
+        sections[match.group("name")] = [text for text in declaration if text]
+    return sections
+
+
+def embedded_font_inventory(
+    inventory: FontInventory,
+    tracked: list[str],
+    components: dict[str, str],
+    read: Callable[[str], bytes | None],
+) -> None:
+    """Match every font that third-party code embeds to a license entry.
+
+    ``components`` maps dependencies.lock component names to their local paths.
+    Each embedding source is scanned for its embedded-font sections: every
+    section needs an entry whose declaration is reproduced verbatim in its
+    license file, whose recorded copyright and license appear in the
+    declaration, and whose name is a string literal in the source (so the name
+    the package gate searches binaries for is the one the code compiles in).
+    """
+    if EMBEDDED_FONT_MANIFEST not in set(tracked):
+        return
+    raw = read(EMBEDDED_FONT_MANIFEST)
+    if raw is None:
+        raise NoticeInputError(f"{EMBEDDED_FONT_MANIFEST} is tracked but cannot be read")
+    sources, fonts = _parse_embedded_font_manifest(raw, EMBEDDED_FONT_MANIFEST)
+    rules = load_package_rules()
+    tracked_set = set(tracked)
+    findings = inventory.embedded_findings
+
+    scanned: dict[str, dict[str, list[str]]] = {}  # component -> section -> declaration
+    literals: dict[str, str] = {}  # component -> concatenated source text
+    for component, files in sorted(sources.items()):
+        if component not in components:
+            findings.append(f"{EMBEDDED_FONT_MANIFEST}: sources name {component!r}, which is not in {MANIFEST_PATH}")
+            continue
+        for rel_source in files:
+            rel = f"{components[component]}/{rel_source}"
+            raw_source = read(rel)
+            if raw_source is None:
+                inventory.unverified.append(rel)
+                continue
+            text = raw_source.decode("utf-8", errors="replace")
+            literals[component] = literals.get(component, "") + text
+            for section, declaration in embedded_font_sections(text).items():
+                scanned.setdefault(component, {})[section] = declaration
+                if not any(e["component"] == component and e["source_section"] == section for e in fonts.values()):
+                    findings.append(f"{rel} embeds font data '{section}' with no entry in {EMBEDDED_FONT_MANIFEST}")
+
+    for name, entry in sorted(fonts.items()):
+        problems = []
+        component = entry["component"]
+        license_rel = f"{EMBEDDED_FONT_LICENSE_DIR}/{entry['license_file']}"
+        text = ""
+        raw_license = read(license_rel) if license_rel in tracked_set else None
+        if raw_license is None:
+            problems.append(f"license file {license_rel} is not tracked")
+        else:
+            text = normalize_text(raw_license, license_rel)
+            if len(text.encode("utf-8")) < rules.minimum_bytes or not rules.copyright.search(text):
+                problems.append(f"{license_rel} has no copyright statement or is too short to be a license")
+            elif not rules.operative_terms.search(text):
+                problems.append(f"{license_rel} has no operative license terms")
+            elif entry["copyright"] not in text:
+                problems.append(f"{license_rel} does not reproduce the recorded copyright {entry['copyright']!r}")
+        if component in scanned or component in literals:
+            declaration = scanned.get(component, {}).get(entry["source_section"])
+            if declaration is None:
+                problems.append(f"no '{entry['source_section']}' embedded-font section in the {component} sources")
+            else:
+                joined = "\n".join(declaration)
+                if entry["copyright"] not in joined:
+                    problems.append(f"recorded copyright {entry['copyright']!r} is not in the source declaration")
+                if not re.search(rf"\b{re.escape(entry['license'])}\b", joined, re.IGNORECASE):
+                    problems.append(f"recorded license {entry['license']} is not named by the source declaration")
+                missing = [line for line in declaration if line not in text]
+                if text and missing:
+                    problems.append(f"{license_rel} does not reproduce the source declaration line {missing[0]!r}")
+            if f'"{name}"' not in literals.get(component, ""):
+                problems.append(f'the {component} sources have no "{name}" string literal to mark shipped binaries')
+        if problems:
+            findings.extend(f"{name} (embedded in {component}): {problem}" for problem in problems)
+            continue
+        inventory.embedded.append(EmbeddedFontNotice(name, **{key: entry[key] for key in EMBEDDED_FONT_FIELDS}))
+        inventory.embedded_texts[license_rel] = text
 
 
 # --------------------------------------------------------------------------- rendering
@@ -332,7 +1128,7 @@ def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def render(components: list[Component], supply_chain: dict, fonts: list[str]) -> str:
+def render(components: list[Component], supply_chain: dict, fonts: FontInventory) -> str:
     out: list[str] = []
     add = out.append
     with_notice = sum(1 for c in components if c.has_notice)
@@ -359,7 +1155,10 @@ def render(components: list[Component], supply_chain: dict, fonts: list[str]) ->
     add(f"Locked third-party components: {len(components)}")
     add(f"Components with at least one notice file on disk: {with_notice}")
     add(f"Components with attention items: {len(flagged)}")
-    add(f"Tracked font files outside ThirdParty/ without a license file: {len(fonts)}")
+    add(f"Tracked font files outside ThirdParty/ with license text: {len(fonts.notices)}")
+    add(f"Font license attention items outside ThirdParty/: {len(fonts.findings)}")
+    add(f"Fonts embedded in third-party code with license text: {len(fonts.embedded)}")
+    add(f"Embedded font license attention items: {len(fonts.embedded_findings)}")
     add("")
     for index, component in enumerate(components, start=1):
         license_ = component.entry.license if component.entry else "UNKNOWN"
@@ -370,16 +1169,56 @@ def render(components: list[Component], supply_chain: dict, fonts: list[str]) ->
     add(RULE)
     add("ATTENTION REQUIRED")
     add(RULE)
-    if not flagged and not fonts:
+    if not flagged and not fonts.findings and not fonts.embedded_findings:
         add("None.")
     for component in flagged:
         add(f"* {component.display_name} ({component.path})")
         for finding in component.findings:
             add(f"    - {finding}")
-    if fonts:
-        add("* Font files outside ThirdParty/ (not covered by dependencies.lock)")
-        for rel in fonts:
-            add(f"    - no license file on disk for {rel}")
+    if fonts.findings:
+        add(f"* Font files outside ThirdParty/ (inventoried by <font dir>/{FONT_MANIFEST_NAME})")
+        for finding in fonts.findings:
+            add(f"    - {finding}")
+    if fonts.embedded_findings:
+        add(f"* Fonts embedded in third-party code (inventoried by {EMBEDDED_FONT_MANIFEST})")
+        for finding in fonts.embedded_findings:
+            add(f"    - {finding}")
+    add("")
+
+    add(RULE)
+    add("FONTS OUTSIDE ThirdParty/")
+    add(RULE)
+    if not fonts.notices:
+        add("None.")
+    for font in fonts.notices:
+        add(f"* {font.font}: {font.family} {font.version} - {font.license}")
+        add(f"    Copyright (font name table): {font.copyright}")
+        add(f"    License file: {PurePosixPath(font.font).parent}/LICENSES/{font.license_file}")
+        add(f"    Upstream license text: {font.license_source}")
+    for rel, text in sorted(fonts.texts.items()):
+        add("")
+        add(SUBRULE)
+        add(f"License file: {rel} (sha256 of normalized text {_sha256(text)})")
+        add(SUBRULE)
+        out.append(text.rstrip("\n"))
+    add("")
+
+    add(RULE)
+    add("FONTS EMBEDDED IN THIRD-PARTY CODE (compiled into the binaries that link it)")
+    add(RULE)
+    if not fonts.embedded:
+        add("None.")
+    for embedded in fonts.embedded:
+        add(f"* {embedded.font}: {embedded.family} - {embedded.license} - embedded by {embedded.component}")
+        add(f"    Copyright (source declaration): {embedded.copyright}")
+        add(f"    License file: {EMBEDDED_FONT_LICENSE_DIR}/{embedded.license_file}")
+        add(f"    Source: {embedded.license_source}")
+    for rel, text in sorted(fonts.embedded_texts.items()):
+        add("")
+        add(SUBRULE)
+        add(f"License file: {rel} (sha256 of normalized text {_sha256(text)})")
+        add(SUBRULE)
+        out.append(text.rstrip("\n"))
     add("")
 
     add(RULE)
@@ -426,7 +1265,7 @@ def render(components: list[Component], supply_chain: dict, fonts: list[str]) ->
 # --------------------------------------------------------------------------- entry points
 
 
-def load(root: Path) -> tuple[list[Component], dict, list[str]]:
+def load(root: Path) -> tuple[list[Component], dict, FontInventory]:
     try:
         manifest_text = (root / MANIFEST_PATH).read_text(encoding="utf-8")
         supply_text = (root / SUPPLY_CHAIN_PATH).read_text(encoding="utf-8")
@@ -436,7 +1275,14 @@ def load(root: Path) -> tuple[list[Component], dict, list[str]]:
     manifest = parse_manifest(manifest_text, supply_chain["submodule_gitlinks"])
     tracked = git_tracked_files(root)
     components = build_components(root, manifest, supply_chain, tracked)
-    return components, supply_chain, uncovered_fonts(supply_chain, tracked)
+
+    def read(rel: str) -> bytes | None:
+        path = root / rel
+        return path.read_bytes() if path.is_file() else None
+
+    fonts = font_inventory(tracked, read)
+    embedded_font_inventory(fonts, tracked, {entry.name: entry.local_path for entry in manifest}, read)
+    return components, supply_chain, fonts
 
 
 def generate(root: Path = REPO_ROOT) -> tuple[str, list[Component]]:
@@ -450,20 +1296,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, help=f"output path (default: <root>/{OUTPUT_NAME})")
     parser.add_argument("--check", action="store_true", help="exit 1 if the output file is stale")
     parser.add_argument(
+        "--check-package",
+        type=Path,
+        metavar="INSTALL_ROOT",
+        help="check a staged install tree's font and third-party payload notice coverage and exit",
+    )
+    parser.add_argument(
+        "--closed-world",
+        action="store_true",
+        help="with --check-package: also fail on any file that no first-party root classifies",
+    )
+    parser.add_argument(
         "--require-complete",
         action="store_true",
-        help="exit 1 if any locked component has no notice file on disk",
+        help="exit 1 if any locked component, or any font outside ThirdParty/, has no license text on disk",
     )
     args = parser.parse_args(argv)
+    if args.check_package is not None:
+        return _check_package_main(args.check_package, args.closed_world)
     root = args.root.resolve()
     output = args.output or root / OUTPUT_NAME
 
     try:
-        text, components = generate(root)
+        components, supply_chain, fonts = load(root)
     except NoticeInputError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    text = render(components, supply_chain, fonts)
     status = 0
     if args.check:
         current = output.read_bytes().decode("utf-8").replace("\r\n", "\n") if output.is_file() else None
@@ -481,7 +1341,49 @@ def main(argv: list[str] | None = None) -> int:
         if missing:
             print("components without a notice file on disk: " + ", ".join(missing), file=sys.stderr)
             status = 1
+        for finding in fonts.findings:
+            print(f"font without license text: {finding}", file=sys.stderr)
+            status = 1
+        for finding in fonts.embedded_findings:
+            print(f"embedded font without license text: {finding}", file=sys.stderr)
+            status = 1
+        for rel in fonts.unverified:
+            print(
+                f"embedded fonts unverified: {rel} is not on disk, so the fonts it embeds cannot be "
+                "checked against their notices (initialise the submodule)",
+                file=sys.stderr,
+            )
+            status = 1
     return status
+
+
+def _check_package_main(package_root: Path, closed_world: bool = False) -> int:
+    if not package_root.is_dir():
+        print(f"error: {package_root} is not a directory", file=sys.stderr)
+        return 2
+    try:
+        coverage = check_package_coverage(package_root, load_package_rules(), closed_world)
+    except NoticeInputError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if coverage.uncovered:
+        print(
+            f"{len(coverage.uncovered)} shipped file(s) are not covered by {package_root / PACKAGE_NOTICE_NAME}:",
+            file=sys.stderr,
+        )
+        for line in coverage.uncovered:
+            print(f"  {line}", file=sys.stderr)
+        return 1
+    print(
+        f"notice coverage ok: {coverage.font_count} font file(s), {coverage.embedded_count} embedded font(s) and "
+        f"{coverage.payload_count} third-party payload file(s) in {package_root}"
+    )
+    if closed_world:
+        print(
+            f"closed world: {coverage.first_party_count} first-party file(s), "
+            f"{coverage.asset_count} asset-manifest file(s), 0 unclassified"
+        )
+    return 0
 
 
 if __name__ == "__main__":

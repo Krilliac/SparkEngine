@@ -89,12 +89,14 @@ def _empty_report(errors: list[str], result_data: Any = None) -> ComparisonRepor
     )
 
 
-# Categories whose true value can never be zero: a frame, tick, or startup
-# always takes time, a live process always has resident memory, and a package
-# always has bytes. A zero here means the probe did not measure, and because
-# zero is below every lower_is_better budget it would otherwise read as a pass.
+# Categories whose true value can never be zero: a frame, tick, startup or
+# shutdown always takes time, a live process always has resident memory, and a
+# package always has bytes. A zero here means the probe did not measure, and
+# because zero is below every lower_is_better budget it would otherwise read
+# as a pass.
 POSITIVE_ONLY_CATEGORIES = frozenset({
-    "frame_time", "tick_time", "startup_time", "memory", "package_size",
+    "frame_time", "tick_time", "startup_time", "shutdown_time", "memory",
+    "package_size",
 })
 
 # Smallest sample count for which a percentile is distinct from the extreme

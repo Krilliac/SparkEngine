@@ -17,6 +17,7 @@
  * GetTransform() row/column conventions.
  */
 #include "Game/TFVehiclePhysics.h"
+#include "Net/TFRepProtocol.h" // QuantAim::WrapPi
 
 #include "World/TFWorldSetup.h"
 
@@ -60,13 +61,9 @@ namespace Terrafront
         constexpr float kVtolLeanPitch = 0.35f;   // rad nose-down lean at full throttle
         constexpr float kVtolLeanRoll = 0.45f;    // rad banking lean at full steer
 
-        float WrapPi(float a)
+        float WrapPi(float a) noexcept
         {
-            while (a > 3.14159265f)
-                a -= 6.2831853f;
-            while (a < -3.14159265f)
-                a += 6.2831853f;
-            return a;
+            return QuantAim::WrapPi(a); // constant-time and total (no 2*pi loop)
         }
 
     } // namespace

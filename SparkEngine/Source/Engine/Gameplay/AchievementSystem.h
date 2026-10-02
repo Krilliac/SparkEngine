@@ -47,6 +47,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <sstream>
@@ -391,9 +392,31 @@ namespace Spark::Gameplay
         ///
         /// Only applies records to already-registered achievements; unknown ids are
         /// skipped rather than inserted. A torn/truncated record aborts the load.
+        ///
+        /// The bytes come from a save file, so they are not trusted. A record whose progress
+        /// is NaN or infinite is skipped: SaveToWriter never writes one, and NaN progress
+        /// never compares >= the target, so IncrementProgress could not unlock that
+        /// achievement again. Finite progress is clamped into [0, targetValue], the range
+        /// UpdateProgress keeps it in.
         void LoadFromReader(Spark::BinaryReader& reader)
         {
             uint32_t count = reader.Read<uint32_t>();
+            if (reader.HasError())
+            {
+                return;
+            }
+
+            // A corrupt count must never drive a long loop after the input is exhausted.
+            // Each record is fixed width, so the remaining bytes provide a hard upper bound.
+            constexpr size_t kSerializedRecordBytes =
+                sizeof(uint32_t) + sizeof(float) + sizeof(uint8_t) + sizeof(uint64_t);
+            const size_t maxRecords = reader.Remaining() / kSerializedRecordBytes;
+            if (static_cast<size_t>(count) > maxRecords)
+            {
+                // The comparison stays in size_t; this cast is safe because this branch only
+                // executes when maxRecords is strictly below the uint32 count.
+                count = static_cast<uint32_t>(maxRecords);
+            }
             for (uint32_t i = 0; i < count; ++i)
             {
                 uint32_t id = reader.Read<uint32_t>();
@@ -405,12 +428,18 @@ namespace Spark::Gameplay
                 {
                     break; // Truncated buffer — stop before applying a partial record.
                 }
+                if (!std::isfinite(currentValue))
+                {
+                    continue;
+                }
 
                 // Only apply to achievements that are already registered.
                 auto it = m_progress.find(id);
-                if (it != m_progress.end())
+                auto defIt = m_definitions.find(id);
+                if (it != m_progress.end() && defIt != m_definitions.end())
                 {
-                    it->second.currentValue = currentValue;
+                    // std::max maps a negative or NaN target to an empty [0, 0] range.
+                    it->second.currentValue = std::clamp(currentValue, 0.0f, std::max(0.0f, defIt->second.targetValue));
                     it->second.unlocked = (unlocked != 0);
                     it->second.unlockTimestamp = unlockTimestamp;
                     // Mark notified so loading a save does not re-fire unlock callbacks.

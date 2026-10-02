@@ -14,12 +14,13 @@ import importlib.util
 import io
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "governance" / "generate_third_party_notices.py"
@@ -54,6 +55,101 @@ def _run_main(*args: str) -> tuple[int, str, str]:
     return code, out.getvalue(), err.getvalue()
 
 
+def _repo_read(rel: str) -> bytes | None:
+    path = REPO_ROOT / rel
+    return path.read_bytes() if path.is_file() else None
+
+
+def _sfnt(names: dict[int, str]) -> bytes:
+    """A minimal sfnt holding only a Windows-English name table."""
+    strings = b""
+    records = b""
+    for name_id, text in sorted(names.items()):
+        raw = text.encode("utf-16-be")
+        records += struct.pack(">6H", 3, 1, 0x409, name_id, len(raw), len(strings))
+        strings += raw
+    table = struct.pack(">HHH", 0, len(names), 6 + len(records)) + records + strings
+    header = struct.pack(">IHHHH", 0x00010000, 1, 16, 0, 0)
+    directory = struct.pack(">4sIII", b"name", 0, len(header) + 16, len(table))
+    return header + directory + table
+
+
+FIXTURE_COPYRIGHT = "Copyright 2026 Fixture Foundry"
+OFL_DESCRIPTION = "This Font Software is licensed under the SIL Open Font License, Version 1.1."
+OFL_TEXT = (
+    f"{FIXTURE_COPYRIGHT}\n\n{OFL_DESCRIPTION}\n\n"
+    "Permission is hereby granted, free of charge, to any person obtaining a copy of the Font\n"
+    "Software, to use, study, copy, merge, embed, modify, redistribute, and sell copies.\n"
+)
+
+
+def _font_entry(**overrides: str) -> dict[str, str]:
+    entry = {
+        "family": "Fixture Sans",
+        "version": "1.0",
+        "license": "OFL-1.1",
+        "copyright": FIXTURE_COPYRIGHT,
+        "license_file": "OFL-1.1-Fixture.txt",
+        "license_source": "https://example.invalid/fixture/OFL.txt",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _font_manifest(**overrides: str) -> str:
+    return json.dumps({"schema": 1, "fonts": {"A.ttf": _font_entry(**overrides)}})
+
+
+# A source that embeds font data the way Dear ImGui's imgui_draw.cpp does: a
+# table-of-contents line, then the section heading, its declaration, and the
+# string literal the code names the font by (and compiles into binaries).
+EMBEDDING_SOURCE = (
+    "// Index of this file:\n"
+    "// [SECTION] Default font data (Tiny-min.ttf)\n"
+    "\n"
+    "void AddTiny() { SetName(\"Tiny.ttf\"); }\n"
+    "\n"
+    "//-----------------------------------------------------------------------------\n"
+    "// [SECTION] Default font data (Tiny-min.ttf)\n"
+    "//-----------------------------------------------------------------------------\n"
+    "// MIT License / Copyright (c) 2026 Fixture Pixel Author\n"
+    "// More at example.invalid\n"
+    "//-----------------------------------------------------------------------------\n"
+    "static const unsigned int tiny_size = 1;\n"
+)
+EMBEDDED_LICENSE = (
+    "Tiny.ttf (fixture)\n\n"
+    "MIT License / Copyright (c) 2026 Fixture Pixel Author\nMore at example.invalid\n\n"
+    "Permission is hereby granted, free of charge, to any person obtaining a copy of this\n"
+    "software, to deal in the Software without restriction, subject to the following conditions:\n"
+    "the above copyright notice and this permission notice shall be included in all copies.\n"
+)
+
+
+def _embedded_entry(**overrides: str) -> dict[str, str]:
+    entry = {
+        "component": "Sub",
+        "source_section": "Tiny-min.ttf",
+        "family": "Tiny",
+        "license": "MIT",
+        "copyright": "Copyright (c) 2026 Fixture Pixel Author",
+        "license_file": "Tiny-LICENSE.txt",
+        "license_source": "fixture declaration in draw.cpp",
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _embedded_manifest(sources: dict[str, list[str]] | None = None, **overrides: str) -> str:
+    return json.dumps(
+        {
+            "schema": 1,
+            "sources": sources if sources is not None else {"Sub": ["draw.cpp"]},
+            "fonts": {"Tiny.ttf": _embedded_entry(**overrides)},
+        }
+    )
+
+
 class RepositoryNoticesTests(unittest.TestCase):
     """Checks against the real checkout."""
 
@@ -80,6 +176,47 @@ class RepositoryNoticesTests(unittest.TestCase):
         first, _ = notices.generate(REPO_ROOT)
         second, _ = notices.generate(REPO_ROOT)
         self.assertEqual(first.encode("utf-8"), second.encode("utf-8"))
+
+    def test_every_font_outside_thirdparty_has_license_text(self) -> None:
+        tracked = notices.git_tracked_files(REPO_ROOT)
+        fonts = [rel for rel in tracked if notices._is_font(rel) and not rel.startswith("ThirdParty/")]
+        self.assertTrue(fonts, "no tracked fonts outside ThirdParty/; the check would be vacuous")
+        self.assertEqual(self.fonts.findings, [])
+        self.assertEqual(sorted(f.font for f in self.fonts.notices), sorted(fonts))
+        self.assertNotIn("no license file on disk for SparkEditor/Fonts", self.text)
+        self.assertTrue(self.fonts.texts)
+        for rel, text in self.fonts.texts.items():
+            self.assertIn(text.rstrip("\n"), self.text, f"{rel} text is not reproduced verbatim")
+
+    def test_removing_an_editor_font_license_file_is_reported(self) -> None:
+        tracked = [rel for rel in notices.git_tracked_files(REPO_ROOT) if not rel.endswith("/Apache-2.0-Roboto.txt")]
+        inventory = notices.font_inventory(tracked, _repo_read)
+        self.assertEqual(
+            sorted(f.split(":", 1)[0] for f in inventory.findings),
+            ["SparkEditor/Fonts/Roboto-Bold.ttf", "SparkEditor/Fonts/Roboto-Regular.ttf"],
+        )
+
+    def test_every_font_embedded_by_third_party_code_has_license_text(self) -> None:
+        # Dear ImGui compiles ProggyClean and ProggyForever into every binary that
+        # links it; the inventory must be checked against the real source, so an
+        # uninitialised submodule fails here instead of passing unverified.
+        self.assertEqual(self.fonts.unverified, [], "embedding sources are not on disk; initialise the submodules")
+        self.assertEqual(self.fonts.embedded_findings, [])
+        source = (REPO_ROOT / "ThirdParty/UI/imgui/imgui_draw.cpp").read_text("utf-8", errors="replace")
+        sections = notices.embedded_font_sections(source)
+        self.assertGreaterEqual(len(sections), 2, "no embedded-font sections found; the scan would be vacuous")
+        self.assertEqual(sorted(e.source_section for e in self.fonts.embedded), sorted(sections))
+        rules = notices.load_package_rules(RULES_PATH)
+        self.assertEqual(
+            sorted(e.font for e in self.fonts.embedded),
+            sorted(rules.embedded_markers),
+            "embeddedFonts.markers in the package rules must name exactly the inventoried embedded fonts",
+        )
+        for embedded in self.fonts.embedded:
+            self.assertIn(f'"{embedded.font}"', source)
+        self.assertTrue(self.fonts.embedded_texts)
+        for rel, text in self.fonts.embedded_texts.items():
+            self.assertIn(text.rstrip("\n"), self.text, f"{rel} text is not reproduced verbatim")
 
     def test_committed_file_is_current(self) -> None:
         committed = REPO_ROOT / notices.OUTPUT_NAME
@@ -113,7 +250,7 @@ class FixtureDetectionTests(unittest.TestCase):
         alpha = next(c for c in components if c.path == "ThirdParty/Alpha")
         self.assertFalse(alpha.has_notice)
         self.assertTrue(any("missing on disk: ThirdParty/Alpha/LICENSE" in f for f in alpha.findings))
-        rendered = notices.render(components, FIXTURE_SUPPLY_CHAIN, [])
+        rendered = notices.render(components, FIXTURE_SUPPLY_CHAIN, notices.FontInventory())
         self.assertIn("NO LICENSE TEXT AVAILABLE ON DISK FOR THIS COMPONENT.", rendered)
 
     def test_container_without_manifest_entry_is_reported(self) -> None:
@@ -144,9 +281,196 @@ class FixtureDetectionTests(unittest.TestCase):
         self.assertIn("font file has no license file beside it", joined)
         self.assertEqual([p for p, _ in alpha.extra_notices], ["ThirdParty/Alpha/Assets/LICENSE.txt"])
 
-    def test_fonts_outside_thirdparty_are_reported(self) -> None:
-        tracked = ["Editor/Fonts/A.ttf", "Other/Fonts/B.otf", "Other/Fonts/OFL.txt", "Other/Fonts/LICENSE"]
-        self.assertEqual(notices.uncovered_fonts(FIXTURE_SUPPLY_CHAIN, tracked), ["Editor/Fonts/A.ttf"])
+    @staticmethod
+    def _fonts(overrides: dict[str, bytes | str | None] | None = None, names: dict[int, str] | None = None):
+        """Font inventory of a fixture tree; an override value of None removes that file."""
+        tree: dict[str, bytes | str | None] = {
+            "Editor/Fonts/A.ttf": _sfnt(names if names is not None else {0: FIXTURE_COPYRIGHT, 13: OFL_DESCRIPTION}),
+            "Editor/Fonts/LICENSES/fonts.json": _font_manifest(),
+            "Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt": OFL_TEXT,
+        }
+        tree.update(overrides or {})
+        files = {rel: value for rel, value in tree.items() if value is not None}
+
+        def read(rel: str) -> bytes | None:
+            value = files.get(rel)
+            return value.encode("utf-8") if isinstance(value, str) else value
+
+        return notices.font_inventory(sorted(files), read)
+
+    def test_font_with_matching_license_inventory_is_covered(self) -> None:
+        inventory = self._fonts()
+        self.assertEqual(inventory.findings, [])
+        self.assertEqual([f.font for f in inventory.notices], ["Editor/Fonts/A.ttf"])
+        self.assertEqual(list(inventory.texts), ["Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt"])
+        rendered = notices.render([], FIXTURE_SUPPLY_CHAIN, inventory)
+        self.assertIn(OFL_TEXT.rstrip("\n"), rendered)
+        self.assertIn("Editor/Fonts/A.ttf: Fixture Sans 1.0 - OFL-1.1", rendered)
+
+    def test_font_license_inventory_failures_are_reported(self) -> None:
+        two_fonts = json.dumps({"schema": 1, "fonts": {"A.ttf": _font_entry(), "B.ttf": _font_entry()}})
+        cases = {
+            "a sibling LICENSE does not say which font it covers": (
+                {"Editor/Fonts/LICENSES/fonts.json": None, "Editor/Fonts/LICENSE": OFL_TEXT},
+                "no license file on disk for Editor/Fonts/A.ttf",
+            ),
+            "license file not tracked": (
+                {"Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt": None},
+                "license file Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt is not tracked",
+            ),
+            "license file without operative terms": (
+                {"Editor/Fonts/LICENSES/OFL-1.1-Fixture.txt": FIXTURE_COPYRIGHT + "\n" + "x" * 300},
+                "has no operative license terms",
+            ),
+            "recorded copyright differs from the font": (
+                {"Editor/Fonts/LICENSES/fonts.json": _font_manifest(copyright="Copyright 1999 Someone Else")},
+                f"is not the font's own '{FIXTURE_COPYRIGHT}'",
+            ),
+            "recorded license differs from the font": (
+                {"Editor/Fonts/LICENSES/fonts.json": _font_manifest(license="Apache-2.0")},
+                "recorded license Apache-2.0 but the font declares OFL-1.1",
+            ),
+            "unreadable font": ({"Editor/Fonts/A.ttf": b"wOF2 compressed"}, "cannot read the font's name table"),
+            "manifest names an untracked font": (
+                {"Editor/Fonts/LICENSES/fonts.json": two_fonts},
+                "Editor/Fonts/LICENSES/fonts.json names untracked font B.ttf",
+            ),
+        }
+        for label, (overrides, expected) in cases.items():
+            with self.subTest(label):
+                inventory = self._fonts(overrides)
+                self.assertTrue(any(expected in f for f in inventory.findings), inventory.findings)
+                if label != "manifest names an untracked font":
+                    self.assertEqual(inventory.notices, [])
+
+    def test_unclassified_font_license_description_needs_owner(self) -> None:
+        inventory = self._fonts(names={0: FIXTURE_COPYRIGHT, 13: "Custom EULA, see vendor"})
+        self.assertTrue(any("needs owner classification" in f for f in inventory.findings), inventory.findings)
+        self.assertEqual(inventory.notices, [])
+
+    def test_font_without_license_description_uses_the_recorded_license(self) -> None:
+        self.assertEqual(self._fonts(names={0: FIXTURE_COPYRIGHT}).findings, [])
+
+    def test_malformed_font_manifest_fails_closed(self) -> None:
+        cases = {
+            "not json": "{",
+            "schema": json.dumps({"schema": 2, "fonts": {"A.ttf": _font_entry()}}),
+            "missing field": json.dumps({"schema": 1, "fonts": {"A.ttf": {"license": "OFL-1.1"}}}),
+            "non-SPDX license": _font_manifest(license="OFL or whatever"),
+            "license file outside LICENSES/": _font_manifest(license_file="../OFL.txt"),
+        }
+        for label, manifest in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(notices.NoticeInputError):
+                    self._fonts({"Editor/Fonts/LICENSES/fonts.json": manifest})
+
+    @staticmethod
+    def _embedded(overrides: dict[str, str | None] | None = None) -> notices.FontInventory:
+        """Embedded-font inventory of a fixture tree; an override value of None removes that file."""
+        tree: dict[str, str | None] = {
+            "ThirdParty/Sub/lib/draw.cpp": EMBEDDING_SOURCE,
+            notices.EMBEDDED_FONT_MANIFEST: _embedded_manifest(),
+            "ThirdParty/Licenses/Tiny-LICENSE.txt": EMBEDDED_LICENSE,
+        }
+        tree.update(overrides or {})
+        files = {rel: value for rel, value in tree.items() if value is not None}
+        inventory = notices.FontInventory()
+        tracked = sorted(rel for rel in files if not rel.startswith("ThirdParty/Sub/lib/"))  # submodule content
+        notices.embedded_font_inventory(
+            inventory, tracked, {"Sub": "ThirdParty/Sub/lib"}, lambda rel: files[rel].encode() if rel in files else None
+        )
+        return inventory
+
+    def test_embedded_font_with_matching_inventory_is_covered(self) -> None:
+        inventory = self._embedded()
+        self.assertEqual((inventory.embedded_findings, inventory.unverified), ([], []))
+        self.assertEqual([(e.font, e.source_section) for e in inventory.embedded], [("Tiny.ttf", "Tiny-min.ttf")])
+        rendered = notices.render([], FIXTURE_SUPPLY_CHAIN, inventory)
+        self.assertIn("* Tiny.ttf: Tiny - MIT - embedded by Sub", rendered)
+        self.assertIn(EMBEDDED_LICENSE.rstrip("\n"), rendered)
+
+    def test_embedded_font_sections_skip_the_table_of_contents(self) -> None:
+        self.assertEqual(
+            notices.embedded_font_sections(EMBEDDING_SOURCE),
+            {"Tiny-min.ttf": ["MIT License / Copyright (c) 2026 Fixture Pixel Author", "More at example.invalid"]},
+        )
+
+    def test_embedded_font_inventory_failures_are_reported(self) -> None:
+        second_section = EMBEDDING_SOURCE + (
+            "//-----------------------------------------------------------------------------\n"
+            "// [SECTION] Default font data (Other.ttf)\n"
+            "//-----------------------------------------------------------------------------\n"
+            "// Apache License / Copyright 2026 Someone Else\n"
+            "//-----------------------------------------------------------------------------\n"
+        )
+        cases = {
+            "source embeds a font the inventory lacks": (
+                {"ThirdParty/Sub/lib/draw.cpp": second_section},
+                "ThirdParty/Sub/lib/draw.cpp embeds font data 'Other.ttf' with no entry",
+            ),
+            "license text missing": (
+                {"ThirdParty/Licenses/Tiny-LICENSE.txt": None},
+                "license file ThirdParty/Licenses/Tiny-LICENSE.txt is not tracked",
+            ),
+            "license text does not quote the declaration": (
+                {"ThirdParty/Licenses/Tiny-LICENSE.txt": EMBEDDED_LICENSE.replace("More at example.invalid\n", "")},
+                "does not reproduce the source declaration line 'More at example.invalid'",
+            ),
+            "recorded copyright differs from the source": (
+                {notices.EMBEDDED_FONT_MANIFEST: _embedded_manifest(copyright="Copyright (c) 1999 Someone")},
+                "recorded copyright 'Copyright (c) 1999 Someone' is not in the source declaration",
+            ),
+            "recorded license differs from the source": (
+                {notices.EMBEDDED_FONT_MANIFEST: _embedded_manifest(license="Apache-2.0")},
+                "recorded license Apache-2.0 is not named by the source declaration",
+            ),
+            "section renamed upstream": (
+                {notices.EMBEDDED_FONT_MANIFEST: _embedded_manifest(source_section="Gone.ttf")},
+                "no 'Gone.ttf' embedded-font section in the Sub sources",
+            ),
+            "binaries would carry a different name": (
+                {"ThirdParty/Sub/lib/draw.cpp": EMBEDDING_SOURCE.replace('"Tiny.ttf"', '"Tiny2.ttf"')},
+                'the Sub sources have no "Tiny.ttf" string literal',
+            ),
+        }
+        for label, (overrides, expected) in cases.items():
+            with self.subTest(label):
+                inventory = self._embedded(overrides)
+                self.assertTrue(any(expected in f for f in inventory.embedded_findings), inventory.embedded_findings)
+                if label != "source embeds a font the inventory lacks":
+                    self.assertEqual(inventory.embedded, [])
+
+    def test_embedded_font_source_not_on_disk_is_unverified_not_passed(self) -> None:
+        inventory = self._embedded({"ThirdParty/Sub/lib/draw.cpp": None})
+        self.assertEqual(inventory.unverified, ["ThirdParty/Sub/lib/draw.cpp"])
+        self.assertEqual(inventory.embedded_findings, [])
+        # The rendered notice does not depend on the checkout; --require-complete refuses the gap.
+        self.assertEqual(
+            notices.render([], FIXTURE_SUPPLY_CHAIN, inventory),
+            notices.render([], FIXTURE_SUPPLY_CHAIN, self._embedded()),
+        )
+
+    def test_malformed_embedded_font_manifest_fails_closed(self) -> None:
+        cases = {
+            "not json": "{",
+            "schema": json.dumps({"schema": 2}),
+            "no sources": json.dumps({"schema": 1, "sources": {}, "fonts": {"Tiny.ttf": _embedded_entry()}}),
+            "source escapes the component": _embedded_manifest(sources={"Sub": ["../x.cpp"]}),
+            "missing field": json.dumps({"schema": 1, "sources": {"Sub": ["draw.cpp"]}, "fonts": {"Tiny.ttf": {}}}),
+            "non-SPDX license": _embedded_manifest(license="MIT or whatever"),
+            "component without sources": _embedded_manifest(component="Other"),
+            "license file outside ThirdParty/Licenses": _embedded_manifest(license_file="../x.txt"),
+        }
+        for label, manifest in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(notices.NoticeInputError):
+                    self._embedded({notices.EMBEDDED_FONT_MANIFEST: manifest})
+
+    def test_font_name_table_is_read_from_the_font(self) -> None:
+        names = notices.font_name_table(_sfnt({0: "Copyright X", 13: OFL_DESCRIPTION}))
+        self.assertEqual(names, {0: "Copyright X", 13: OFL_DESCRIPTION})
+        with self.assertRaises(ValueError):
+            notices.font_name_table(b"\x00\x01\x00\x00\x00\x01")
 
     def test_line_endings_do_not_change_output(self) -> None:
         lf = self._components({"ThirdParty/Alpha/LICENSE": MIT_TEXT, "ThirdParty/Licenses/sub-LICENSE.txt": MIT_TEXT})
@@ -157,7 +481,8 @@ class FixtureDetectionTests(unittest.TestCase):
             }
         )
         self.assertEqual(
-            notices.render(lf, FIXTURE_SUPPLY_CHAIN, []), notices.render(crlf, FIXTURE_SUPPLY_CHAIN, [])
+            notices.render(lf, FIXTURE_SUPPLY_CHAIN, notices.FontInventory()),
+            notices.render(crlf, FIXTURE_SUPPLY_CHAIN, notices.FontInventory()),
         )
 
     def test_malformed_manifests_fail_closed(self) -> None:
@@ -173,6 +498,699 @@ class FixtureDetectionTests(unittest.TestCase):
             with self.subTest(label):
                 with self.assertRaises(notices.NoticeInputError):
                     notices.parse_manifest(manifest, gitlinks)
+
+
+RULES_PATH = REPO_ROOT / "cmake" / "PackageNoticeCoverageRules.json"
+PACKAGE_GATE = REPO_ROOT / "cmake" / "ValidateStagedPackageNotices.cmake"
+PACKAGE_VALIDATOR = REPO_ROOT / "cmake" / "ValidateStagedPackageExecutables.cmake"
+AUDIT_MODULE = REPO_ROOT / "cmake" / "SparkThirdPartyAudit.cmake"
+
+FONT_LICENSE = (
+    "Copyright 2026 Fixture Type Foundry\n\n"
+    "This Font Software is licensed under a fixture license used only by the\n"
+    "SparkEngine notice-coverage contract test.\n\n"
+    "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+    "of the Font Software, to use, study, copy, merge, embed, modify, redistribute,\n"
+    "and sell modified and unmodified copies of the Font Software.\n"
+)
+LIBRARY_LICENSE = MIT_TEXT + "Redistribution and use in source and binary forms is permitted.\n" * 3
+
+
+RUNTIME = "Microsoft Visual C++ Runtime"
+RUNTIME_DLLS = {"bin/msvcp140.dll": "pe\n", "bin/vcruntime140.dll": "pe\n"}
+
+
+def _runtime_entry(files: str, terms: bool = True) -> str:
+    """The inventory entry spark_thirdparty_generate_notice() writes for the MSVC runtime."""
+    entry = f"{RUNTIME}\n  Source: fixture\n  Version: MSVC 19.44 (fixture)\n  License: fixture terms\n"
+    if terms:
+        entry += "  Terms: Microsoft Visual C++ Redistributable, Distributable Code (fixture)\n"
+    return entry + f"  Files: {files}\n\n"
+
+
+FONT_LICENSE_TEXT = "bin/EditorAssets/Fonts/LICENSES/FixtureSans-LICENSE.txt"
+
+
+def _package_notice(
+    font_body: str | None,
+    jolt_body: str | None,
+    font_files: str,
+    extra_inventory: str = "",
+    embedded_body: str | None = None,
+) -> str:
+    """A THIRD_PARTY_NOTICES.txt in the format cmake/SparkThirdPartyAudit.cmake writes.
+
+    `extra_inventory` is appended verbatim after the fixture entries. With
+    `embedded_body`, it also has the entry the audit writes for a font compiled
+    into binaries (ProggyClean.ttf, a real embeddedFonts marker).
+    """
+    text = (
+        "SparkEngine Third-Party Notices\n================================\n\n"
+        "SparkEngine includes or can link the dependencies listed below.\n\n"
+        "Dependency inventory\n--------------------\n\n"
+        "Jolt Physics\n  Source: https://example.invalid/jolt\n  Version: v5 (fixture; [pinned])\n"
+        "  License: MIT\n  Notice files: ThirdParty/Physics/JoltPhysics/LICENSE\n"
+        "  Files: Jolt/Jolt.h,Build/CMakeLists.txt\n\n"
+        "Fixture Sans\n  Source: https://example.invalid/sans\n  Version: 1.0\n  License: OFL-1.1\n"
+        "  Notice files: SparkEditor/Fonts/FixtureSans-LICENSE.txt\n"
+        f"  Files: {font_files}\n\n"
+        f"{extra_inventory}"
+    )
+    if embedded_body is not None:
+        text += (
+            "Fixture Pixel (font embedded in Fixture UI)\n  Source: fixture\n  Version: as embedded in Fixture UI 1\n"
+            "  License: MIT\n  Notice files: ThirdParty/Licenses/FixturePixel-LICENSE.txt\n"
+            "  Files: ProggyClean.ttf\n\n"
+        )
+    text += "Complete license and notice texts\n=================================\n\n"
+    if jolt_body is not None:
+        text += f"----- ThirdParty/Physics/JoltPhysics/LICENSE -----\n\n{jolt_body}\n\n"
+    if font_body is not None:
+        text += f"----- SparkEditor/Fonts/FixtureSans-LICENSE.txt -----\n\n{font_body}\n\n"
+    if embedded_body is not None:
+        text += f"----- ThirdParty/Licenses/FixturePixel-LICENSE.txt -----\n\n{embedded_body}\n\n"
+    return text
+
+
+# Binary bytes around the marker a real Dear ImGui build compiles in.
+BINARY_WITH_EMBEDDED_FONT = "\x7fELF\x00\x01\x02code\x00ProggyClean.ttf\x00\x03more code\x00"
+
+
+def _write_package(root: Path, notice: str) -> None:
+    files = {
+        "LICENSE.txt": "fixture first-party license\n",
+        "bin/EditorAssets/Fonts/FixtureSans-Regular.ttf": "fixture font bytes\n",
+        "include/Jolt/Jolt.h": "#pragma once\n",
+        "include/Jolt/Core/Core.h": "#pragma once\n",
+        "include/SparkEngine/Core/Engine.h": "#pragma once\n",
+        "include/SparkEngine/ThirdParty/angelscript.h": "#pragma once\n",
+        "THIRD_PARTY_NOTICES.txt": notice,
+    }
+    for rel, content in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(content, encoding="utf-8")
+
+
+class PackageRuleSetTests(unittest.TestCase):
+    """The shared rule set is well formed and anchored to the dependency manifest."""
+
+    def test_rules_load_and_components_are_locked_dependencies(self) -> None:
+        rules = notices.load_package_rules(RULES_PATH)
+        supply_chain = notices.parse_supply_chain((REPO_ROOT / notices.SUPPLY_CHAIN_PATH).read_text("utf-8"))
+        manifest = notices.parse_manifest(
+            (REPO_ROOT / notices.MANIFEST_PATH).read_text("utf-8"), supply_chain["submodule_gitlinks"]
+        )
+        names = {entry.name for entry in manifest}
+        unknown = sorted({r.component for r in rules.payload if r.component and r.component not in names})
+        self.assertEqual(unknown, [], "payload rules name components absent from ThirdParty/dependencies.lock")
+        for rule in rules.payload:
+            if rule.component is None:
+                self.assertTrue(
+                    rule.first_party or rule.system_runtime or rule.notice_text,
+                    f"{rule.pattern.pattern} exempts payload without a reason",
+                )
+        for root in rules.first_party_roots:
+            self.assertTrue(root.justification.strip(), f"{root.pattern.pattern} has no justification")
+
+    def test_runtime_rule_names_the_entry_the_audit_module_writes(self) -> None:
+        # The systemRuntime rule and spark_thirdparty_generate_notice() must agree
+        # on the entry name, or every Windows package would fail the gate.
+        rules = notices.load_package_rules(RULES_PATH)
+        runtimes = {rule.system_runtime for rule in rules.payload if rule.system_runtime}
+        self.assertEqual(runtimes, {RUNTIME})
+        self.assertIn(f'"{RUNTIME}\\n"', AUDIT_MODULE.read_text("utf-8"))
+        for dll in ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll", "msvcp140_2.dll", "concrt140.dll"):
+            with self.subTest(dll):
+                self.assertTrue(any(rule.pattern.search(f"bin/{dll}") for rule in rules.payload if rule.system_runtime))
+        self.assertFalse(any(rule.system_runtime and rule.pattern.search("bin/vcruntime140d.dll") for rule in rules.payload))
+
+    def test_generator_font_inventory_uses_the_shared_rules(self) -> None:
+        rules = notices.load_package_rules(RULES_PATH)
+        self.assertTrue({".ttf", ".otf", ".woff", ".woff2"} <= rules.font_suffixes)
+        tracked = [f"Editor/Fonts/A{suffix}" for suffix in sorted(rules.font_suffixes)] + ["Editor/Fonts/A.png"]
+        self.assertEqual(
+            notices.font_inventory(tracked, lambda rel: None).findings,
+            [
+                f"no license file on disk for Editor/Fonts/A{suffix} (no entry in Editor/Fonts/LICENSES/fonts.json)"
+                for suffix in sorted(rules.font_suffixes)
+            ],
+        )
+
+    def test_malformed_rules_fail_closed(self) -> None:
+        good = json.loads(RULES_PATH.read_text("utf-8"))
+        cases = {
+            "schema": {**good, "schema": 2},
+            "no payload rules": {**good, "payloadRules": []},
+            "rule without target": {**good, "payloadRules": [{"pattern": "^include/"}]},
+            "rule with both targets": {
+                **good,
+                "payloadRules": [{"pattern": "^include/", "component": "zstd", "firstParty": "why"}],
+            },
+            "runtime rule with a component": {
+                **good,
+                "payloadRules": [{"pattern": "^bin/", "component": "zstd", "systemRuntime": RUNTIME}],
+            },
+            "notice-text rule with a component": {
+                **good,
+                "payloadRules": [{"pattern": "^bin/", "component": "zstd", "noticeText": "why"}],
+            },
+            "first-party root without justification": {**good, "firstPartyRoots": [{"pattern": "^bin/"}]},
+            "first-party root with blank justification": {
+                **good,
+                "firstPartyRoots": [{"pattern": "^bin/", "justification": "  "}],
+            },
+            "first-party roots not a list": {**good, "firstPartyRoots": {"pattern": "^bin/"}},
+            "asset manifest escaping the package": {
+                **good,
+                "assetManifests": [{"pattern": "^bin/", "manifest": "../m.json", "justification": "why"}],
+            },
+            "bad regex": {**good, "thirdPartyRoots": ["^include/("]},
+            "undotted suffix": {**good, "fontSuffixes": ["ttf"]},
+            "no embedded fonts": {k: v for k, v in good.items() if k != "embeddedFonts"},
+            "no embedded markers": {**good, "embeddedFonts": {**good["embeddedFonts"], "markers": []}},
+            "marker with regex syntax": {**good, "embeddedFonts": {**good["embeddedFonts"], "markers": ["A|B"]}},
+            "duplicate marker": {**good, "embeddedFonts": {**good["embeddedFonts"], "markers": ["A.ttf", "A.ttf"]}},
+            "bad scan pattern": {**good, "embeddedFonts": {**good["embeddedFonts"], "scanPattern": "^bin/("}},
+            "no scan limit": {**good, "embeddedFonts": {**good["embeddedFonts"], "maximumScanBytes": 0}},
+        }
+        for label, data in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(notices.NoticeInputError):
+                    notices.parse_package_rules(json.dumps(data))
+
+    def test_package_validator_runs_the_notice_gate_after_required_content(self) -> None:
+        text = PACKAGE_VALIDATOR.read_text("utf-8")
+        required = text.find("missing required runtime content")
+        gate = text.find('include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")')
+        self.assertGreater(required, 0)
+        self.assertGreater(gate, required, "the notice gate must run in the full package validation path")
+        self.assertIn("set(SPARK_PACKAGE_NOTICE_COVERAGE enforce)", text)
+        self.assertNotIn("set(SPARK_PACKAGE_NOTICE_COVERAGE report)", text)
+
+
+class LicenseInventoryPackageTests(unittest.TestCase):
+    """LicenseInventory_*: both implementations of the gate agree on fixture packages."""
+
+    CASES = {
+        "covered_font": (_package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"), {}, []),
+        "uncovered_font": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {"bin/EditorAssets/Fonts/Unlisted-Bold.otf": "font\n"},
+            ["bin/EditorAssets/Fonts/Unlisted-Bold.otf: font not named"],
+        ),
+        "font_named_without_license_text": (
+            _package_notice(None, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {},
+            ["bin/EditorAssets/Fonts/FixtureSans-Regular.ttf: font named by 'Fixture Sans' but license text"],
+        ),
+        "font_named_without_terms": (
+            _package_notice("Copyright 2026 Fixture. " * 12, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {},
+            ["bin/EditorAssets/Fonts/FixtureSans-Regular.ttf: font named by 'Fixture Sans'"],
+        ),
+        "payload_without_license_text": (
+            _package_notice(FONT_LICENSE, None, "FixtureSans-Regular.ttf"),
+            {},
+            ["include/Jolt/Core/Core.h: component 'Jolt Physics'", "include/Jolt/Jolt.h: component 'Jolt Physics'"],
+        ),
+        "unmapped_payload": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {"include/SparkEngine/ThirdParty/newlib/newlib.h": "#pragma once\n"},
+            ["include/SparkEngine/ThirdParty/newlib/newlib.h: third-party install path that no payload rule maps"],
+        ),
+        "binary_embeds_unlisted_font": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {"bin/SparkEditor": BINARY_WITH_EMBEDDED_FONT, "bin/Modules/SparkGame.dll": BINARY_WITH_EMBEDDED_FONT},
+            [
+                "bin/Modules/SparkGame.dll: embeds font ProggyClean.ttf not named on any 'Files:' line",
+                "bin/SparkEditor: embeds font ProggyClean.ttf not named on any 'Files:' line",
+            ],
+        ),
+        "binary_embeds_font_named_without_license_text": (
+            _package_notice(
+                FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf", embedded_body="Copyright 2026. " * 20
+            ),
+            {"bin/SparkEditor.exe": BINARY_WITH_EMBEDDED_FONT},
+            ["bin/SparkEditor.exe: embeds font ProggyClean.ttf named by 'Fixture Pixel (font embedded in Fixture UI)'"],
+        ),
+        "binary_embeds_listed_font": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf", embedded_body=LIBRARY_LICENSE),
+            {"bin/SparkEditor": BINARY_WITH_EMBEDDED_FONT, "share/doc/ProggyClean.txt": "ProggyClean.ttf\n"},
+            [],
+        ),
+        # GOV-400: the MSVC runtime that InstallRequiredSystemLibraries ships in bin/.
+        "runtime_without_entry": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            RUNTIME_DLLS,
+            [
+                f"bin/msvcp140.dll: system runtime '{RUNTIME}' has no THIRD_PARTY_NOTICES.txt inventory entry",
+                f"bin/vcruntime140.dll: system runtime '{RUNTIME}' has no THIRD_PARTY_NOTICES.txt inventory entry",
+            ],
+        ),
+        "runtime_entry_names_one_dll": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf", _runtime_entry("vcruntime140.dll")),
+            RUNTIME_DLLS,
+            [f"bin/msvcp140.dll: not named on the 'Files:' line of system runtime '{RUNTIME}'"],
+        ),
+        "runtime_entry_without_terms": (
+            _package_notice(
+                FONT_LICENSE,
+                LIBRARY_LICENSE,
+                "FixtureSans-Regular.ttf",
+                _runtime_entry("vcruntime140.dll,msvcp140.dll", terms=False),
+            ),
+            RUNTIME_DLLS,
+            [
+                f"bin/msvcp140.dll: system runtime '{RUNTIME}' has no 'Terms:' line",
+                f"bin/vcruntime140.dll: system runtime '{RUNTIME}' has no 'Terms:' line",
+            ],
+        ),
+        "runtime_covered": (
+            _package_notice(
+                FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf", _runtime_entry("vcruntime140.dll,msvcp140.dll")
+            ),
+            RUNTIME_DLLS,
+            [],
+        ),
+        # A shipped license text (noticeText rule) must be a reproduced 'Notice files:' text.
+        "license_text_reproduced": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {FONT_LICENSE_TEXT: "fixture license\n"},
+            [],
+        ),
+        "license_text_not_in_notice": (
+            _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {FONT_LICENSE_TEXT: "fixture license\n", "bin/EditorAssets/Fonts/LICENSES/Other-LICENSE.txt": "x\n"},
+            ["bin/EditorAssets/Fonts/LICENSES/Other-LICENSE.txt: license text not a 'Notice files:' text"],
+        ),
+        "license_text_not_reproduced": (
+            _package_notice(None, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"),
+            {FONT_LICENSE_TEXT: "fixture license\n"},
+            [
+                "bin/EditorAssets/Fonts/FixtureSans-Regular.ttf: font named by 'Fixture Sans' but license text",
+                f"{FONT_LICENSE_TEXT}: license text named by 'Fixture Sans' but license text",
+            ],
+        ),
+    }
+
+    def _run_case(self, notice: str, extra: dict[str, str]) -> tuple[Path, notices.PackageCoverage]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "pkg"
+        _write_package(root, notice)
+        for rel, content in extra.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(content, encoding="utf-8")
+        return root, notices.check_package_coverage(root, notices.load_package_rules(RULES_PATH))
+
+    def test_python_verdicts(self) -> None:
+        for label, (notice, extra, expected) in self.CASES.items():
+            with self.subTest(label):
+                _, coverage = self._run_case(notice, extra)
+                self.assertEqual(len(coverage.uncovered), len(expected), coverage.uncovered)
+                for fragment, line in zip(expected, coverage.uncovered):
+                    self.assertTrue(line.startswith(fragment), f"{line!r} does not start with {fragment!r}")
+                if not expected:
+                    self.assertEqual(coverage.font_count, 1)
+                    self.assertEqual(
+                        coverage.payload_count, 3 + sum(rel.endswith(".dll") or "/LICENSES/" in rel for rel in extra)
+                    )
+                    self.assertEqual(coverage.embedded_count, 1 if "bin/SparkEditor" in extra else 0)
+
+    def test_check_package_cli_exit_codes(self) -> None:
+        notice, extra, _ = self.CASES["uncovered_font"]
+        root, _ = self._run_case(notice, extra)
+        code, _, err = _run_main("--check-package", str(root))
+        self.assertEqual(code, 1)
+        self.assertIn("Unlisted-Bold.otf", err)
+        (root / "bin/EditorAssets/Fonts/Unlisted-Bold.otf").unlink()
+        self.assertEqual(_run_main("--check-package", str(root))[0], 0)
+        (root / "THIRD_PARTY_NOTICES.txt").write_text("not the generated format\n", encoding="utf-8")
+        self.assertEqual(_run_main("--check-package", str(root))[0], 2)
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required for the parity check")
+    def test_cmake_gate_agrees_with_python(self) -> None:
+        for label, (notice, extra, _) in self.CASES.items():
+            with self.subTest(label):
+                root, coverage = self._run_case(notice, extra)
+                self._assert_cmake_agrees(root, coverage, "open")
+
+    def _assert_cmake_agrees(self, root: Path, coverage: notices.PackageCoverage, world: str) -> None:
+        result = subprocess.run(
+            [
+                "cmake",
+                f"-DSPARK_PACKAGE_ROOT={root}",
+                f"-DSPARK_PACKAGE_NOTICE_CLASSIFICATION={world}",
+                "-P",
+                str(PACKAGE_GATE),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        flat = " ".join((result.stdout + result.stderr).split())
+        self.assertEqual(result.returncode == 0, not coverage.uncovered, flat)
+        for line in coverage.uncovered:
+            self.assertIn(" ".join(line.split()), flat, "CMake gate did not report the same file")
+        if coverage.uncovered:
+            self.assertIn(f"{len(coverage.uncovered)} shipped file(s) are not covered", flat)
+        else:
+            self.assertIn(
+                f"Validated notice coverage for {coverage.font_count} font file(s), "
+                f"{coverage.embedded_count} embedded font(s) and "
+                f"{coverage.payload_count} third-party payload file(s)",
+                flat,
+            )
+            if world == "closed":
+                self.assertIn(
+                    f"Closed world: {coverage.first_party_count} first-party file(s), "
+                    f"{coverage.asset_count} asset-manifest file(s), 0 unclassified",
+                    flat,
+                )
+
+    # Closed world: nothing is presumed first-party. The base fixture package
+    # (LICENSE.txt, THIRD_PARTY_NOTICES.txt, a font, Jolt headers, an engine
+    # header and the documented angelscript.h exemption) is fully classified.
+    ASSET_MANIFEST = json.dumps(
+        {
+            "version": 2,
+            "algorithm": "sha256",
+            "root": "Assets",
+            "fileCount": 2,
+            "entries": [
+                {"path": "Audio/a.wav", "sha256": "0" * 64, "size": 4, "license": "CC0-1.0", "provenance": "fixture"},
+                {"path": "Audio/b.wav", "sha256": "1" * 64, "size": 4, "license": "NOASSERTION", "provenance": "x"},
+            ],
+        },
+        indent=2,
+    )
+    CLOSED_CASES = {
+        "closed_classified": (
+            {"bin/SparkEngine.exe": "pe\n", "bin/Shaders/Lit.hlsl": "// shader\n"},
+            [],
+        ),
+        # Game modules and their ABI sidecars under each platform's install naming
+        # (Windows .dll, Linux lib*.so, macOS lib*.dylib); a non-Spark library stays unclassified.
+        "closed_game_module_libraries": (
+            {
+                "bin/SparkGameFPS.dll": "pe\n",
+                "bin/SparkGameFPS.dll.sparkabi": "abi\n",
+                "bin/libSparkGameFPS.so": "elf\n",
+                "bin/libSparkGameFPS.so.sparkabi": "abi\n",
+                "bin/libSparkGameFPS.dylib": "macho\n",
+                "bin/libSparkGameFPS.dylib.sparkabi": "abi\n",
+                "bin/libfoo.dylib": "macho\n",
+            },
+            [f"bin/libfoo.dylib: {notices.UNCLASSIFIED}"],
+        ),
+        "closed_unmapped_dll": (
+            {"bin/SparkEngine.exe": "pe\n", "bin/foo.dll": "pe\n"},
+            [f"bin/foo.dll: {notices.UNCLASSIFIED}"],
+        ),
+        "closed_unmapped_share_file": (
+            {"share/Other/x.bin": "data\n"},
+            [f"share/Other/x.bin: {notices.UNCLASSIFIED}"],
+        ),
+        "closed_asset_listed_with_license": (
+            {"bin/Assets/assets.integrity.json": ASSET_MANIFEST, "bin/Assets/Audio/a.wav": "wav\n"},
+            [],
+        ),
+        "closed_asset_noassertion_and_unlisted": (
+            {
+                "bin/Assets/assets.integrity.json": ASSET_MANIFEST,
+                "bin/Assets/Audio/a.wav": "wav\n",
+                "bin/Assets/Audio/b.wav": "wav\n",
+                "bin/Assets/Audio/c.wav": "wav\n",
+            },
+            [
+                "bin/Assets/Audio/b.wav: asset manifest bin/Assets/assets.integrity.json records no identified license",
+                "bin/Assets/Audio/c.wav: not listed in asset manifest bin/Assets/assets.integrity.json",
+            ],
+        ),
+        "closed_asset_without_manifest": (
+            {"bin/Assets/Audio/a.wav": "wav\n"},
+            ["bin/Assets/Audio/a.wav: not listed in asset manifest bin/Assets/assets.integrity.json"],
+        ),
+    }
+
+    def test_closed_world_verdicts_and_cmake_parity(self) -> None:
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        rules = notices.load_package_rules(RULES_PATH)
+        for label, (extra, expected) in self.CLOSED_CASES.items():
+            with self.subTest(label):
+                root, open_world = self._run_case(notice, extra)
+                # Open world presumes these files first-party: the closed world is what finds them.
+                self.assertEqual(open_world.uncovered, [])
+                coverage = notices.check_package_coverage(root, rules, closed_world=True)
+                self.assertEqual(coverage.uncovered, expected)
+                if label == "closed_classified":
+                    # LICENSE.txt, THIRD_PARTY_NOTICES.txt, Engine.h, SparkEngine.exe, Lit.hlsl
+                    self.assertEqual(coverage.first_party_count, 5)
+                if label == "closed_asset_listed_with_license":
+                    self.assertEqual(coverage.asset_count, 2)
+                if shutil.which("cmake"):
+                    self._assert_cmake_agrees(root, coverage, "closed")
+
+    def test_asset_manifest_json_layout_does_not_change_coverage(self) -> None:
+        """The installed JSON contract does not prescribe whitespace or key order."""
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        data = json.loads(self.ASSET_MANIFEST)
+        for label, manifest in (
+            ("compact", json.dumps(data, separators=(",", ":"))),
+            ("sorted", json.dumps(data, indent=2, sort_keys=True)),
+        ):
+            with self.subTest(label):
+                root, _ = self._run_case(notice, {
+                    "bin/Assets/assets.integrity.json": manifest,
+                    "bin/Assets/Audio/a.wav": "wav\n",
+                })
+                coverage = notices.check_package_coverage(root, notices.load_package_rules(), closed_world=True)
+                self.assertEqual(coverage.uncovered, [])
+                self._assert_cmake_agrees(root, coverage, "closed")
+
+    def test_asset_manifest_unidentified_licenses_fail_closed(self) -> None:
+        """A JSON scalar/container or an SPDX sentinel is not an identified license."""
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        for license_id in (None, False, 7, [], {}, "  ", "NONE", " NOASSERTION "):
+            with self.subTest(license_id=license_id):
+                data = json.loads(self.ASSET_MANIFEST)
+                data["entries"][0]["license"] = license_id
+                root, _ = self._run_case(notice, {
+                    "bin/Assets/assets.integrity.json": json.dumps(data, indent=2),
+                    "bin/Assets/Audio/a.wav": "wav\n",
+                })
+                coverage = notices.check_package_coverage(root, notices.load_package_rules(), closed_world=True)
+                self.assertEqual(coverage.uncovered, [
+                    "bin/Assets/Audio/a.wav: asset manifest bin/Assets/assets.integrity.json "
+                    "records no identified license"
+                ])
+                self._assert_cmake_agrees(root, coverage, "closed")
+
+    def test_malformed_asset_manifest_is_not_textually_licensed(self) -> None:
+        """License-looking text and duplicate paths must not become package evidence."""
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        data = json.loads(self.ASSET_MANIFEST)
+        duplicate = {**data, "entries": [data["entries"][0], data["entries"][0]]}
+        cases = (
+            'not JSON {"path": "Audio/a.wav", "license": "CC0-1.0"}',
+            json.dumps(duplicate, indent=2),
+            json.dumps({"entries": {}}),
+        )
+        for manifest in cases:
+            with self.subTest(manifest=manifest):
+                root, _ = self._run_case(notice, {
+                    "bin/Assets/assets.integrity.json": manifest,
+                    "bin/Assets/Audio/a.wav": "wav\n",
+                })
+                with self.assertRaises(notices.NoticeInputError):
+                    notices.check_package_coverage(root, notices.load_package_rules(), closed_world=True)
+                result = subprocess.run(
+                    ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", "-DSPARK_PACKAGE_NOTICE_CLASSIFICATION=closed",
+                     "-P", str(PACKAGE_GATE)], capture_output=True, text=True, timeout=120,
+                )
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("asset manifest", (result.stdout + result.stderr).lower())
+
+    def test_closed_world_cli(self) -> None:
+        notice = _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf")
+        root, _ = self._run_case(notice, {"bin/foo.dll": "pe\n"})
+        self.assertEqual(_run_main("--check-package", str(root))[0], 0)
+        code, _, err = _run_main("--check-package", str(root), "--closed-world")
+        self.assertEqual(code, 1)
+        self.assertIn("bin/foo.dll: unclassified", err)
+        (root / "bin/foo.dll").unlink()
+        code, out, _ = _run_main("--check-package", str(root), "--closed-world")
+        self.assertEqual(code, 0)
+        self.assertIn("closed world: 3 first-party file(s), 0 asset-manifest file(s), 0 unclassified", out)
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_real_packaged_notice_licenses_every_entry_and_names_files(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "THIRD_PARTY_NOTICES.txt"
+        script = Path(tmp.name) / "render.cmake"
+        script.write_text(
+            f'include("{AUDIT_MODULE.as_posix()}")\n'
+            f'spark_thirdparty_generate_notice("{(REPO_ROOT / notices.MANIFEST_PATH).as_posix()}" '
+            f'"{out.as_posix()}")\n',
+            encoding="utf-8",
+        )
+        subprocess.run(["cmake", "-P", str(script)], check=True, capture_output=True, timeout=120)
+        rules = notices.load_package_rules(RULES_PATH)
+        entries = notices.parse_package_notice(out.read_text("utf-8"), rules)
+        self.assertGreater(len(entries), 0)
+        for entry in entries:
+            self.assertEqual(entry.problem, "", f"{entry.name}: {entry.problem}")
+            self.assertTrue(entry.files, f"{entry.name} has no 'Files:' line")
+        # The real notice covers mapped payload and every editor font the editor
+        # installs (GOV-400 D8): each font is named on a 'Files:' line of an entry
+        # that reproduces its license text.
+        root = Path(tmp.name) / "pkg"
+        (root / "include/Jolt").mkdir(parents=True)
+        (root / "include/Jolt/Jolt.h").write_text("#pragma once\n", encoding="utf-8")
+        (root / "bin/EditorAssets/Fonts").mkdir(parents=True)
+        for font in sorted((REPO_ROOT / "SparkEditor" / "Fonts").glob("*.ttf")):
+            (root / "bin/EditorAssets/Fonts" / font.name).write_bytes(b"font")
+        (root / "THIRD_PARTY_NOTICES.txt").write_bytes(out.read_bytes())
+        coverage = notices.check_package_coverage(root, rules)
+        named = {PurePosixPath(rel).name for entry in entries for rel in entry.files}
+        fonts = sorted(p.name for p in (REPO_ROOT / "SparkEditor" / "Fonts").glob("*.ttf"))
+        self.assertEqual(len(fonts), 7, "SparkEditor/Fonts changed; the check must still cover every font")
+        self.assertEqual(coverage.font_count, len(fonts))
+        self.assertEqual(coverage.uncovered, [])
+        self.assertEqual([font for font in fonts if font not in named], [])
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_real_packaged_notice_covers_fonts_compiled_into_binaries(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "THIRD_PARTY_NOTICES.txt"
+        script = Path(tmp.name) / "render.cmake"
+        script.write_text(
+            f'include("{AUDIT_MODULE.as_posix()}")\n'
+            f'spark_thirdparty_generate_notice("{(REPO_ROOT / notices.MANIFEST_PATH).as_posix()}" '
+            f'"{out.as_posix()}")\n',
+            encoding="utf-8",
+        )
+        subprocess.run(["cmake", "-P", str(script)], check=True, capture_output=True, timeout=120)
+        rules = notices.load_package_rules(RULES_PATH)
+        self.assertGreaterEqual(len(rules.embedded_markers), 2)
+        # An editor binary that carries every font Dear ImGui embeds.
+        binary = b"\x7fELF\x00" + b"\x00".join(m.encode("ascii") for m in rules.embedded_markers) + b"\x00"
+        root = Path(tmp.name) / "pkg"
+        (root / "bin").mkdir(parents=True)
+        (root / "bin/SparkEditor").write_bytes(binary)
+        (root / "THIRD_PARTY_NOTICES.txt").write_bytes(out.read_bytes())
+        coverage = notices.check_package_coverage(root, rules)
+        self.assertEqual(coverage.uncovered, [])
+        self.assertEqual(coverage.embedded_count, len(rules.embedded_markers))
+        for marker in rules.embedded_markers:
+            self.assertIn(f"  Files: {marker}\n", out.read_text("utf-8"))
+        # The same binary against a notice without the embedded-font entries fails.
+        text = out.read_text("utf-8")
+        for marker in rules.embedded_markers:
+            text = text.replace(f"  Files: {marker}\n", "  Files: removed.bin\n")
+        (root / "THIRD_PARTY_NOTICES.txt").write_text(text, encoding="utf-8")
+        stripped = notices.check_package_coverage(root, rules)
+        self.assertEqual(
+            stripped.uncovered,
+            [f"bin/SparkEditor: embeds font {m} not named on any 'Files:' line of THIRD_PARTY_NOTICES.txt"
+             for m in rules.embedded_markers],
+        )
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_packaged_notice_lists_the_system_runtime_it_is_given(self) -> None:
+        # The root CMakeLists.txt passes CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS; a
+        # package with those DLLs in bin/ must then pass both gates.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "THIRD_PARTY_NOTICES.txt"
+        script = Path(tmp.name) / "render.cmake"
+        script.write_text(
+            f'include("{AUDIT_MODULE.as_posix()}")\n'
+            f'spark_thirdparty_generate_notice("{(REPO_ROOT / notices.MANIFEST_PATH).as_posix()}" '
+            f'"{out.as_posix()}" SYSTEM_RUNTIME_LIBS "C:/VC/Redist/MSVC/x64/VCRUNTIME140.dll" '
+            f'"C:/VC/Redist/MSVC/x64/msvcp140.dll" "C:/VC/Redist/MSVC/x64/msvcp140_atomic_wait.dll" '
+            f'SYSTEM_RUNTIME_VERSION 19.44.35211.0)\n',
+            encoding="utf-8",
+        )
+        subprocess.run(["cmake", "-P", str(script)], check=True, capture_output=True, timeout=120)
+        rules = notices.load_package_rules(RULES_PATH)
+        entries = {entry.name: entry for entry in notices.parse_package_notice(out.read_text("utf-8"), rules)}
+        runtime = entries[RUNTIME]
+        self.assertEqual(runtime.files, ["msvcp140.dll", "msvcp140_atomic_wait.dll", "vcruntime140.dll"])
+        self.assertIn("MSVC 19.44.35211.0", runtime.terms)
+        self.assertNotIn("C:/VC", out.read_text("utf-8"), "the notice must not carry build-host paths")
+
+        root = Path(tmp.name) / "pkg"
+        (root / "bin").mkdir(parents=True)
+        for dll in runtime.files:
+            (root / "bin" / dll).write_bytes(b"pe")
+        (root / "THIRD_PARTY_NOTICES.txt").write_bytes(out.read_bytes())
+        coverage = notices.check_package_coverage(root, rules)
+        self.assertEqual(coverage.uncovered, [])
+        self.assertEqual(coverage.payload_count, 3)
+        self._assert_gate_verdict(root, passes=True)
+        (root / "bin" / "concrt140.dll").write_bytes(b"pe")
+        coverage = notices.check_package_coverage(root, rules)
+        self.assertEqual(
+            coverage.uncovered, [f"bin/concrt140.dll: not named on the 'Files:' line of system runtime '{RUNTIME}'"]
+        )
+        self._assert_gate_verdict(root, passes=False)
+
+    def _assert_gate_verdict(self, root: Path, passes: bool) -> None:
+        result = subprocess.run(
+            ["cmake", f"-DSPARK_PACKAGE_ROOT={root}", "-P", str(PACKAGE_GATE)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        self.assertEqual(result.returncode == 0, passes, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required to render the packaged notice file")
+    def test_packaged_notice_fails_closed_on_an_incomplete_font_inventory(self) -> None:
+        lock = (
+            "set(SPARK_THIRDPARTY_AUDIT_ENTRIES\n"
+            '    "Alpha|https://example.invalid/alpha|v1|MIT|ThirdParty/Alpha|alpha.h|M|F|WARN|'
+            'ThirdParty/Alpha/LICENSE"\n)\n'
+        )
+        cases = {
+            "font missing from the inventory": (
+                {"A.ttf": _font_entry()},
+                ["A.ttf", "B.ttf"],
+                "has no entry for editor font B.ttf",
+            ),
+            "license text missing": (
+                {"A.ttf": _font_entry(license_file="Missing.txt")},
+                ["A.ttf"],
+                "license notice file does not exist: SparkEditor/Fonts/LICENSES/Missing.txt",
+            ),
+            "inventory without fonts": ({}, ["A.ttf"], "'fonts' is empty or malformed"),
+        }
+        for label, (fonts, files, expected) in cases.items():
+            with self.subTest(label):
+                tmp = tempfile.TemporaryDirectory()
+                self.addCleanup(tmp.cleanup)
+                root = Path(tmp.name)
+                (root / "ThirdParty/Alpha").mkdir(parents=True)
+                (root / "ThirdParty/dependencies.lock").write_text(lock, encoding="utf-8")
+                (root / "ThirdParty/Alpha/LICENSE").write_text(LIBRARY_LICENSE, encoding="utf-8")
+                licenses = root / "SparkEditor/Fonts/LICENSES"
+                licenses.mkdir(parents=True)
+                (licenses / "OFL-1.1-Fixture.txt").write_text(FONT_LICENSE, encoding="utf-8")
+                (licenses / "fonts.json").write_text(json.dumps({"schema": 1, "fonts": fonts}), encoding="utf-8")
+                for name in files:
+                    (root / "SparkEditor/Fonts" / name).write_bytes(b"font")
+                script = root / "render.cmake"
+                script.write_text(
+                    f'include("{AUDIT_MODULE.as_posix()}")\n'
+                    f'spark_thirdparty_generate_notice("{(root / "ThirdParty/dependencies.lock").as_posix()}" '
+                    f'"{(root / "out.txt").as_posix()}")\n',
+                    encoding="utf-8",
+                )
+                result = subprocess.run(["cmake", "-P", str(script)], capture_output=True, text=True, timeout=120)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(expected, " ".join(result.stderr.split()))
 
 
 @unittest.skipUnless(shutil.which("git"), "git is required for the end-to-end fixture")
@@ -211,6 +1229,14 @@ class EndToEndTests(unittest.TestCase):
         code, _, err = _run_main("--root", str(self.root), "--require-complete")
         self.assertEqual(code, 1)
         self.assertIn("ThirdParty/Alpha", err)
+
+    def test_require_complete_fails_on_a_font_without_license_text(self) -> None:
+        (self.root / "Editor").mkdir()
+        (self.root / "Editor" / "Face.ttf").write_bytes(_sfnt({0: FIXTURE_COPYRIGHT}))
+        subprocess.run(["git", "-C", str(self.root), "add", "-A"], check=True)
+        code, _, err = _run_main("--root", str(self.root), "--require-complete")
+        self.assertEqual(code, 1)
+        self.assertIn("font without license text: no license file on disk for Editor/Face.ttf", err)
 
     def test_malformed_lock_exits_two(self) -> None:
         (self.root / "ThirdParty" / "supply-chain.lock").write_text("{not json", encoding="utf-8")

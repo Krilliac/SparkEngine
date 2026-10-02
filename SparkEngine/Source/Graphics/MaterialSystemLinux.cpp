@@ -2,8 +2,7 @@
  * @file MaterialSystemLinux.cpp
  * @brief Linux MaterialSystem methods — RHI-based stubs for texture/sampler/binding
  *
- * Contains LoadTexture, UnloadTexture, GetSampler, BindMaterial,
- * CreateDefaultMaterials, CreateSampler, GetFileTimestamp, LoadTextureFromFile,
+ * Contains GetSampler, BindMaterial, CreateDefaultMaterials, CreateSampler,
  * PerformPeriodicMaintenance — all using RHI abstractions or no-op stubs.
  * Platform-independent code (lifecycle, CRUD, metrics) stays in MaterialSystem.cpp.
  * Windows counterpart lives in MaterialSystemWindows.cpp.
@@ -14,18 +13,6 @@
 
 #include "MaterialSystem.h"
 #include "RHI/RHI.h"
-#include <sys/stat.h>
-
-ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTexture(const std::string& /*filePath*/)
-{
-    return ComPtr<ID3D11ShaderResourceView>();
-}
-
-void MaterialSystem::UnloadTexture(const std::string& filePath)
-{
-    m_textureCache.erase(filePath);
-    UpdateMetrics();
-}
 
 ComPtr<ID3D11SamplerState> MaterialSystem::GetSampler(const TextureSampling& /*sampling*/)
 {
@@ -126,21 +113,6 @@ HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11Sam
         return E_FAIL;
 
     return S_OK;
-}
-
-uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
-{
-    struct stat fileStat;
-    if (stat(filePath.c_str(), &fileStat) == 0)
-    {
-        return static_cast<uint64_t>(fileStat.st_mtime);
-    }
-    return 0;
-}
-
-ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTextureFromFile(const std::string& /*filePath*/)
-{
-    return ComPtr<ID3D11ShaderResourceView>();
 }
 
 void MaterialSystem::PerformPeriodicMaintenance()

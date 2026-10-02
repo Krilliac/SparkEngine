@@ -22,6 +22,7 @@
 #include <functional>
 #include <chrono>
 
+#include "EditorDocument.h"
 #include "EditorLogger.h"
 #include "EditorLayoutManager.h"
 #include "EditorNotificationManager.h"
@@ -163,17 +164,17 @@ namespace SparkEditor
         LiveEditBridge* GetLiveEditBridge() { return m_liveEditBridge.get(); }
 
         /// @brief The single live ECS World being edited (the document). Owned by
-        /// EditorUI; panels (SceneView, Hierarchy, Inspector) hold a non-owning
-        /// pointer to it via their own SetWorld().
-        World* GetWorld() { return m_world.get(); }
+        /// the EditorDocument member; panels (SceneView, Hierarchy, Inspector)
+        /// hold a non-owning pointer to it via their own SetWorld().
+        World* GetWorld() const { return m_document.GetWorld(); }
 
         /// @brief The currently selected ECS entity (Unit C2) — the
         /// document-level selection for World-backed panels (Hierarchy
         /// publishes it, Inspector (C3) consumes it). Distinct from the
         /// legacy SceneFile SelectionManager used by the dormant SceneFile
         /// hierarchy path. entt::null when nothing is selected.
-        ::EntityID GetSelectedEntity() const { return m_selectedEntity; }
-        void SetSelectedEntity(::EntityID e) { m_selectedEntity = e; }
+        ::EntityID GetSelectedEntity() const { return m_document.GetSelectedEntity(); }
+        void SetSelectedEntity(::EntityID e) { m_document.SetSelectedEntity(e); }
 
         /// @brief Set non-owning pointer to the plugin manager (owned by EditorApplication)
         void SetPluginManager(EditorPluginManager* pluginManager) { m_pluginManager = pluginManager; }
@@ -204,14 +205,18 @@ namespace SparkEditor
 
         /// Document operations shared by menus, shortcuts, command palette,
         /// and World-backed panels. These are the only scene model the editor
-        /// renders and serializes.
+        /// renders and serializes. The entity and snapshot operations forward
+        /// to EditorDocument, which records them on CommandHistory.
         void NewScene();
         void ShowOpenSceneDialog();
         bool SaveScene();
-        bool CreateDocumentEntity(const std::string& name);
-        bool DeleteSelectedDocumentEntity();
-        std::string CaptureDocumentSnapshot() const;
-        bool RecordAppliedDocumentMutation(const std::string& before, const std::string& description);
+        bool CreateDocumentEntity(const std::string& name) { return m_document.CreateEntity(name); }
+        bool DeleteSelectedDocumentEntity() { return m_document.DeleteSelected(); }
+        std::string CaptureDocumentSnapshot() const { return m_document.Capture(); }
+        bool RecordAppliedDocumentMutation(const std::string& before, const std::string& description)
+        {
+            return m_document.RecordApplied(before, description);
+        }
 
         // Simple layout operations
         bool SaveLayout(const std::string& layoutName, const std::string& description = "");
@@ -267,7 +272,7 @@ namespace SparkEditor
         bool SaveCurrentScene(const std::string& path);
 
         /// @brief Load a reflected scene JSON (as written by SaveCurrentScene)
-        /// into a fresh ::World, replace m_world with it, and re-wire the
+        /// into a fresh ::World, make it the document World, and re-wire the
         /// caching panels (SceneView, Hierarchy) so they don't dangle a
         /// pointer to the old World. Returns false (leaving the current
         /// World untouched) if the load fails.
@@ -359,7 +364,7 @@ namespace SparkEditor
         std::vector<float> m_frameTimeHistory;
         static constexpr size_t MAX_FRAME_HISTORY = 60;
 
-        // Recovery records are captured only while EditorUI owns m_world. A
+        // Recovery records are captured only while a document World exists. A
         // valid pending snapshot blocks new captures until the user restores
         // or discards it, so an older recovery record cannot be silently
         // replaced before its explicit decision UI is shown.
@@ -396,15 +401,12 @@ namespace SparkEditor
         bool m_snapEnabled = false;
         float m_snapValue = 1.0f;
 
-        // The single live ECS World being edited (the document). Panels that
+        // The document: the single live ECS World being edited and the
+        // selected entity (entt::null when nothing is selected). Panels that
         // display/manipulate scene content (SceneView, Hierarchy, Inspector)
-        // are wired to this via non-owning World* accessors.
-        std::unique_ptr<World> m_world;
-
-        // The currently selected ECS entity (Unit C2). entt::null when
-        // nothing is selected. Published by HierarchyPanel, consumed by
-        // InspectorPanel (C3).
-        ::EntityID m_selectedEntity = entt::null;
+        // are wired to its World via non-owning World* accessors; Hierarchy
+        // publishes the selection and the Inspector consumes it.
+        EditorDocument m_document;
         ::EntityID m_selectedEntityBeforePlay = entt::null;
 
 #ifdef _WIN32
@@ -439,7 +441,7 @@ namespace SparkEditor
         /// @brief Atomically replace the edited document World. Clears the
         /// undo/redo command history FIRST (so no queued command can reference
         /// the about-to-be-freed old World — prevents use-after-free on a later
-        /// Undo/Redo), then moves newWorld into m_world, then calls
+        /// Undo/Redo), then installs newWorld in m_document, then calls
         /// RewirePanelsToWorld(). Both OpenScene() and the initial world
         /// creation in SetGraphicsDevice() route through it.
         void SwapWorld(std::unique_ptr<::World> newWorld);
@@ -467,13 +469,12 @@ namespace SparkEditor
         void RenderRecoveryModal();
 
         /// @brief Re-point the panels that cache a raw ::World* (SceneView,
-        /// Hierarchy) at the current m_world and clear selection. Must be
-        /// called any time m_world is (re)assigned — both the initial seed
+        /// Hierarchy) at the current document World and clear selection. Must be
+        /// called any time that World is (re)assigned — both the initial seed
         /// wiring in SetGraphicsDevice() and OpenScene() share this path so
         /// the caching panels never dangle a pointer to a freed World.
         /// InspectorPanel needs no re-wire — it reads GetWorld() live.
         void RewirePanelsToWorld();
-        bool RestoreWorldSnapshot(const std::string& json, ::EntityID selection);
         void RenderMainMenuBar();
         void RenderFileMenu();
         void RenderFileSceneItems();

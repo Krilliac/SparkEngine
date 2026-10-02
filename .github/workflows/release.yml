@@ -89,58 +89,23 @@ jobs:
         INPUT_RELEASE_TAG: ${{ github.event.client_payload.release_tag || '' }}
       run: |
         set -euo pipefail
-        DEFAULT_VERSION=$(sed -nE 's/^set\(SPARK_ENGINE_VERSION "([0-9]+\.[0-9]+\.[0-9]+)" CACHE.*/\1/p' CMakeLists.txt | head -n 1)
-        if [[ ! "$DEFAULT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "Could not determine the default semantic version from CMakeLists.txt" >&2
-          exit 1
-        fi
+        # One authoritative version source: the single CMake SPARK_ENGINE_VERSION default.
+        DEFAULT_VERSION="$(python3 .github/scripts/stable_release_tag.py default-version)"
 
         if [[ "$EVENT_NAME" == "repository_dispatch" && -n "$INPUT_RELEASE_TAG" ]]; then
-          TAG="$INPUT_RELEASE_TAG"
-        else
-          TAG=""
-        fi
-
-        if [[ -n "$TAG" ]]; then
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tag must have the form vMAJOR.MINOR.PATCH; got: $TAG" >&2
-            exit 1
-          fi
-          # An override must not manufacture a stable version absent from the source.
-          # Nightly deliberately has no versioned-changelog requirement.
-          python3 - "${TAG#v}" "$DEFAULT_VERSION" <<'PYVERSION'
-        import re
-        import sys
-        from pathlib import Path
-
-        version, default = sys.argv[1:]
-        declarations = re.findall(
-            r"(?im)^[ \t]*set\s*\(\s*SPARK_ENGINE_VERSION(?=\s|\))",
-            Path("CMakeLists.txt").read_text(encoding="utf-8"),
-        )
-        if len(declarations) != 1 or version != default:
-            sys.exit("Stable tag must equal the single CMake SPARK_ENGINE_VERSION default")
-        changelog = Path("CHANGELOG.md")
-        if not changelog.is_file():
-            sys.exit("Stable publication requires CHANGELOG.md")
-        heading = re.compile(r"## \[" + re.escape(version) + r"\](?: - \d{4}-\d{2}-\d{2})?[ \t]*")
-        count = sum(heading.fullmatch(line) is not None
-                    for line in changelog.read_text(encoding="utf-8").splitlines())
-        if count != 1:
-            sys.exit(f"Stable publication requires exactly one CHANGELOG.md heading for [{version}]; found {count}")
-        PYVERSION
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "cmake_version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          # A stable vX.Y.Z tag must equal that default and have exactly one
+          # versioned CHANGELOG.md heading, so an override cannot manufacture a
+          # stable version absent from the source.
+          VERSION="$(python3 .github/scripts/stable_release_tag.py verify "$INPUT_RELEASE_TAG")"
+          echo "tag=$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "cmake_version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "is_versioned=true" >> "$GITHUB_OUTPUT"
         else
-          if [[ ! "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]*$ ||
-                ! "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ||
-                ! "${GITHUB_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "Immutable nightly identity requires the authenticated run ID, attempt, and 40-hex source SHA." >&2
-            exit 1
-          fi
-          NIGHTLY_TAG="nightly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:12}"
+          # Nightly deliberately has no versioned-changelog requirement. Its tag is
+          # unique per authenticated run, attempt, and source SHA, and is never moved.
+          NIGHTLY_TAG="$(python3 .github/scripts/nightly_release_tag.py \
+            "${GITHUB_RUN_ID:-}" "${GITHUB_RUN_ATTEMPT:-}" "${GITHUB_SHA:-}")"
           echo "tag=$NIGHTLY_TAG" >> "$GITHUB_OUTPUT"
           echo "version=nightly" >> "$GITHUB_OUTPUT"
           echo "cmake_version=$DEFAULT_VERSION" >> "$GITHUB_OUTPUT"
@@ -211,6 +176,9 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        # The v0.9.0 bootstrap qualification resolves the source commit's
+        # parent to bind its evidence to the reviewed baselineCommit.
+        fetch-depth: 2
 
     - name: Test native Windows signature rejection
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -218,6 +186,20 @@ jobs:
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+    # RHI-225: both ctest paths below run D3D12_Validation, which needs
+    # d3d12SDKLayers.dll and fails closed without it.
+    - name: Install D3D12 debug layer
+      shell: pwsh
+      run: |
+        $layers = Join-Path $env:SystemRoot 'System32\d3d12SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layers)) {
+          Add-WindowsCapability -Online -Name 'Tools.Graphics.DirectX~~~~0.0.1.0' -ErrorAction Stop | Out-Host
+        }
+        if (-not (Test-Path -LiteralPath $layers)) {
+          throw "Graphics Tools installed but $layers is missing; D3D12_Validation cannot run"
+        }
+        "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
 
     - name: Configure Windows stable validation
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -332,6 +314,24 @@ jobs:
         path: runtime-layout.log
         if-no-files-found: ignore
         retention-days: 7
+
+    # SEC-110: every third-party file in the staged package must map to a
+    # locked dependency, and the package notices must list exactly the locked
+    # versions. Windows never builds SDL2; the stable Shipping preset also
+    # omits AngelScript and glad. A declared-absent component that does ship
+    # fails reconciliation, so a declaration cannot outlive its configuration.
+    - name: Reconcile staged package inventory with the dependency lock
+      shell: pwsh
+      env:
+        SPARK_NOT_CONFIGURED: ${{ matrix.profile == 'stable-v1' && 'SDL2 AngelScript glad' || 'SDL2' }}
+      run: |
+        $reportDir = Join-Path "${{ github.workspace }}" "package-reconciliation"
+        New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+        $report = Join-Path $reportDir "reconcile-Windows-${{ matrix.config }}.json"
+        $notConfigured = @($env:SPARK_NOT_CONFIGURED -split ' ' | Where-Object { $_ } | ForEach-Object { '--not-configured'; $_ })
+        python tools/generate-sbom.py reconcile --package-root "${{ github.workspace }}/stage" @notConfigured --json-report $report
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        if (-not (Test-Path -LiteralPath $report -PathType Leaf)) { throw "Package reconciliation report was not written" }
 
     - name: Generate CPack packages
       shell: pwsh
@@ -468,8 +468,15 @@ jobs:
       # v0.9.0 is the one explicitly permitted bootstrap release: it has no
       # older stable MSI. The qualifier's omitted predecessor arguments still
       # exercises native install, package smoke, repair, and uninstall. Any
-      # other version must use the exact published N-1 path below.
+      # other version must use the exact published N-1 path below. The evidence
+      # is bound to the owner-reviewed predecessorRelease baselineCommit here,
+      # before any installer command; an unrecorded baseline fails closed.
       run: |
+        $readiness = Get-Content -Raw -LiteralPath "${{ github.workspace }}/docs/site/readiness.json" | ConvertFrom-Json
+        $baselineCommit = $readiness.predecessorRelease.sourceCommitEvidence.baselineCommit
+        if (-not ($baselineCommit -is [string]) -or [string]::IsNullOrEmpty($baselineCommit)) {
+          throw 'predecessorRelease.sourceCommitEvidence.baselineCommit is not recorded; bootstrap qualification requires the reviewed baseline'
+        }
         $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
         python .github/scripts/write-shipping-package-manifest.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
@@ -481,7 +488,8 @@ jobs:
           --version "${{ needs.prepare.outputs.cmake_version }}" `
           --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
           --package-manifest $packageManifest `
-          --bootstrap-repair `
+          --bootstrap-repair --reviewed-baseline-commit $baselineCommit `
+          --drills interrupt `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -528,6 +536,8 @@ jobs:
           --previous-version $previousVersion `
           --previous-package-manifest $previousManifest `
           --previous-signer-thumbprint "${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}" `
+          --previous-receipt $previousReceipt `
+          --drills interrupt `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `
           --source-sha "${{ github.sha }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -559,6 +569,10 @@ jobs:
         }
         python .github/scripts/validate-extracted-package.py --preflight-archive "$($archives[0].FullName)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # REL-100: every packaged Spark executable, the archive name and the SDK
+        # ConfigVersion embed exactly the release version.
+        python tools/verify_package_versions.py --version "${{ needs.prepare.outputs.cmake_version }}" "$($archives[0].FullName)"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Remove-Item -LiteralPath ${{ matrix.build_dir }}/packages/_CPack_Packages -Recurse -Force -ErrorAction SilentlyContinue
         $extractRoot = Join-Path "${{ github.workspace }}" "package-extract"
         New-Item -ItemType Directory -Force -Path $extractRoot | Out-Null
@@ -572,7 +586,7 @@ jobs:
           }
           $packageRoot = $roots[0].FullName
         }
-        python .github/scripts/validate-extracted-package.py --package-root "$packageRoot" --stage-root "${{ github.workspace }}/stage" --archive "$($archives[0].FullName)"
+        python .github/scripts/validate-extracted-package.py --package-root "$packageRoot" --stage-root "${{ github.workspace }}/stage" --archive "$($archives[0].FullName)" --package-profile ${{ matrix.profile }}
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_PACKAGE_PROFILE=${{ matrix.profile }} -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -643,7 +657,32 @@ jobs:
 
     # REL-100: bind the final (signed, qualified) package bytes to the source
     # SHA, committed dependency-lock digest, CMake toolchain, and configuration.
-    # The record is a separate artifact so the stable asset boundary is unchanged.
+    # Schema v2 also records the Windows SDK, exact MSVC tools version, VS
+    # instance, linker/archiver, and CPU ISA baseline; a stable-v1 record fails
+    # closed here when any is missing or the baseline is above the OD-04 floor.
+    # The publisher also attaches this record to the immutable release.
+    - name: Reconcile final package inventories with the source lock
+      shell: pwsh
+      env:
+        SPARK_NOT_CONFIGURED: ${{ matrix.profile == 'stable-v1' && 'SDL2 AngelScript glad' || 'SDL2' }}
+      run: |
+        $notConfigured = @($env:SPARK_NOT_CONFIGURED -split ' ' | Where-Object { $_ } | ForEach-Object { '--not-configured'; $_ })
+        python tools/release_package_reconciliation.py record `
+          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --platform Windows --configuration "${{ matrix.config }}" @notConfigured `
+          --report "final-package-reconciliation/reconcile-Windows-${{ matrix.config }}.json"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload package reconciliation report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-reconciliation-Windows-${{ matrix.config }}
+        path: final-package-reconciliation/reconcile-Windows-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
+
     - name: Record per-artifact build provenance
       shell: pwsh
       run: |
@@ -696,7 +735,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Configure CMake
       run: |
@@ -712,11 +751,17 @@ jobs:
     - name: Build
       run: cmake --build build --parallel $(nproc)
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence published by
+    # build.yml's advisory experimental-module-lifecycle job, never a release gate.
+    # The OpenGL/Vulkan golden comparisons stay out of this lane: build.yml compares
+    # them on this same SHA (build-linux-gcc inside the Required CI Gate, which the
+    # release jobs re-verify, and the Mesa-pinned golden-linux job). Repeating them
+    # here would judge the images against whatever Mesa this runner resolves.
     - name: Run Tests
       run: |
         cd build
-        ctest --output-on-failure --no-tests=error
-        if [ -f bin/SparkTests ]; then ./bin/SparkTests; fi
+        ctest --label-exclude '^experimental-modules$' --exclude-regex '^(SparkOpenGLGoldenTests|VulkanGoldenTests)$' --output-on-failure --no-tests=error
+        if [ -f bin/SparkTests ]; then SPARK_TEST_EXCLUDE=OpenGLGolden_,VulkanGolden_RHI230_ ./bin/SparkTests; fi
 
     - name: Validate external package consumption
       run: |
@@ -749,6 +794,16 @@ jobs:
         cmake \
           -DSPARK_PACKAGE_ROOT="${{ github.workspace }}/stage" \
           -P cmake/ValidateStagedPackageExecutables.cmake
+
+    # SEC-110: the installed package (build/install_manifest.txt) must
+    # reconcile with ThirdParty/dependencies.lock before it is packaged.
+    - name: Reconcile installed package inventory with the dependency lock
+      run: |
+        set -euo pipefail
+        mkdir -p package-reconciliation
+        python3 tools/generate-sbom.py reconcile --install-manifest build/install_manifest.txt \
+          --json-report "package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
+        test -f "package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
 
     - name: Generate CPack packages
       run: |
@@ -795,6 +850,23 @@ jobs:
           -DSPARK_C_COMPILER=gcc-14 \
           -DSPARK_CXX_COMPILER=g++-14 \
           -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Reconcile final package inventories with the source lock
+      run: |
+        set -euo pipefail
+        python3 tools/release_package_reconciliation.py record \
+          --packages build/packages --source-root . --source-sha "${{ github.sha }}" \
+          --platform Linux --configuration "${{ matrix.config }}" \
+          --report "final-package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
+
+    - name: Upload package reconciliation report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-reconciliation-Linux-${{ matrix.config }}
+        path: final-package-reconciliation/reconcile-Linux-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
 
     - name: Record per-artifact build provenance
       run: |
@@ -895,6 +967,16 @@ jobs:
           -DSPARK_PACKAGE_ROOT="${{ github.workspace }}/stage" \
           -P cmake/ValidateStagedPackageExecutables.cmake
 
+    # SEC-110: the installed package (build/install_manifest.txt) must
+    # reconcile with ThirdParty/dependencies.lock before it is packaged.
+    - name: Reconcile installed package inventory with the dependency lock
+      run: |
+        set -euo pipefail
+        mkdir -p package-reconciliation
+        python3 tools/generate-sbom.py reconcile --install-manifest build/install_manifest.txt \
+          --json-report "package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
+        test -f "package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
+
     - name: Generate CPack packages
       run: cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
 
@@ -937,6 +1019,23 @@ jobs:
           -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -P cmake/VerifyInstalledTemplates.cmake
+
+    - name: Reconcile final package inventories with the source lock
+      run: |
+        set -euo pipefail
+        python3 tools/release_package_reconciliation.py record \
+          --packages build/packages --source-root . --source-sha "${{ github.sha }}" \
+          --platform macOS --configuration "${{ matrix.config }}" \
+          --report "final-package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
+
+    - name: Upload package reconciliation report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-reconciliation-macOS-${{ matrix.config }}
+        path: final-package-reconciliation/reconcile-macOS-${{ matrix.config }}.json
+        retention-days: 90
+        if-no-files-found: error
 
     - name: Record per-artifact build provenance
       run: |
@@ -1014,6 +1113,8 @@ jobs:
           cmake --build build-installer/build --config Release --target
           SparkInstaller
           SparkInstallerGitTests
+          SparkInstallerInstallStateTests
+          SparkInstallerTransactionTests
           SparkBuildProcessRunnerTests
           SparkBuildDownloaderTests
           -j
@@ -1039,6 +1140,24 @@ jobs:
           "./staging/${{ matrix.artifact_name }}" --help | tee installer-help.txt
           sed $'s/\r$//' installer-version.txt | grep -Fqx -- "SparkInstaller ${EXPECTED_VERSION} (${EXPECTED_PLATFORM})"
           grep -Fq "Usage:" installer-help.txt
+
+      - name: Reconcile final standalone installer inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/release_package_reconciliation.py record \
+            --packages staging --source-root . --source-sha "${{ github.sha }}" \
+            --platform "Installer-${{ matrix.platform_name }}" --configuration Release \
+            --report "final-package-reconciliation/reconcile-Installer-${{ matrix.platform_name }}-Release.json"
+
+      - name: Upload standalone installer reconciliation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-reconciliation-Installer-${{ matrix.platform_name }}-Release
+          path: final-package-reconciliation/reconcile-Installer-${{ matrix.platform_name }}-Release.json
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Record per-artifact build provenance
         shell: bash
@@ -1066,12 +1185,153 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # Profile-required candidate gates (REL-190)
+  # ===========================================================================
+  # Candidate gating is its own named job so an unqualified candidate fails as
+  # a red profile-required-gates job and the environment-protected release job
+  # never starts: no stable-release approval is requested and no publication
+  # mutation can begin. It holds no write permission, secret, or environment.
+  # The release job still re-verifies the exact Required CI Gate to freeze its
+  # evidence, and the stable publish step revalidates readiness immediately
+  # before the acceptance PATCH.
+  profile-required-gates:
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      statuses: read
+    steps:
+    - name: Checkout exact candidate source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+
+    - name: Verify candidate commit passed Required CI Gate
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        GITHUB_OUTPUT="$RUNNER_TEMP/profile-required-gates-exact-ci.out" \
+          python3 .github/scripts/verify-exact-required-gate.py
+
+    - name: Verify stable-v1 candidate is qualified for versioned publication
+      if: needs.prepare.outputs.is_versioned == 'true'
+      shell: bash
+      # Strict validation, no waiver: every requiredCiJobs/testSelectors and
+      # path reference in the contract must resolve. The --allow-legacy-contract
+      # waiver was retired once the contract validated strictly; never
+      # reintroduce it to make a versioned publication green.
+      run: |
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          python3 tools/site-data/validate.py --require-predecessor-candidate
+        else
+          python3 tools/site-data/validate.py --require-candidate-ready
+        fi
+
+    - name: Verify SEC-120 parser fuzz-policy closure
+      # SEC-120 is release-blocking: publication must fail while any inventoried
+      # parser still lacks a sanitizer-backed fuzz target and bounded corpus.
+      # The structural gate in build.yml blocks merges; this blocks releases.
+      run: python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure
+
+    - name: Qualify candidate and record the release qualification report
+      # REL-190: stage readiness, every transitive qualification item's
+      # requiredCiJobs able to block publication, and a well-formed exact-SHA
+      # record for this commit. Runs even after an earlier gate failed so the
+      # refusal and its reasons are retained; it can only fail the job.
+      if: ${{ !cancelled() && needs.prepare.outputs.is_versioned == 'true' }}
+      shell: bash
+      env:
+        CANDIDATE_SHA: ${{ github.sha }}
+      run: |
+        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+          stage=predecessor
+        else
+          stage=stable-v1
+        fi
+        python3 tools/release_qualification.py --stage "$stage" --candidate-sha "$CANDIDATE_SHA" \
+          --exact-ci "$RUNNER_TEMP/profile-required-gates-exact-ci.out" \
+          --output "$RUNNER_TEMP/release-qualification.json"
+
+    - name: Retain the release qualification report
+      if: ${{ always() && needs.prepare.outputs.is_versioned == 'true' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: release-qualification-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/release-qualification.json
+        if-no-files-found: warn
+        retention-days: 90
+
+  # ===========================================================================
+  # Protected stable-release approval (REL-190)
+  # ===========================================================================
+  # A versioned candidate that passed every gate and build stops here for
+  # Krilliac's stable-release environment review. The job verifies the
+  # environment protection and retains the pre-publication approval record, so
+  # a missing or rejected approval fails a named job before the publisher can
+  # start. It holds no write permission or secret. The release job keeps the
+  # stable-release environment as well (defense in depth: two reviews per
+  # stable run) and records the final approval set the consumer rebuilds.
+  # Like the publisher, the job has no job-level if (a skipped need would skip
+  # the release job): a nightly runs it in nightly-release with every step off.
+  release-approval:
+    needs: [prepare, profile-required-gates, build-windows, build-linux, build-macos, build-installer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
+    permissions:
+      actions: read
+      contents: read
+    steps:
+    - name: Checkout exact approval source
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+
+    - name: Verify stable publication environment protection
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: python3 .github/scripts/verify_release_environment.py
+
+    - name: Record pre-publication stable-release approval
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/record_release_approval.py \
+          --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --source-commit "$GITHUB_SHA" --output "$RUNNER_TEMP/stable-release-prepublication-approval.json"
+
+    - name: Retain pre-publication stable-release approval evidence
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: stable-release-prepublication-approval-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/stable-release-prepublication-approval.json
+        if-no-files-found: error
+        retention-days: 90
+
+  # ===========================================================================
   # Publish GitHub Release (versioned or rolling "latest")
   # ===========================================================================
   release:
-    needs: [prepare, build-windows, build-linux, build-macos, build-installer]
+    needs: [prepare, profile-required-gates, build-windows, build-linux, build-macos, build-installer, release-approval]
     runs-on: ubuntu-latest
     environment: ${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}
+    outputs:
+      # The independent consumer rebuilds the approval record from the GitHub
+      # API and requires this exact digest (REL-110 release-approval evidence).
+      approval_record_sha256: ${{ steps.release-approval.outputs.sha256 }}
+      approval_run_attempt: ${{ steps.release-approval.outputs.run_attempt }}
     env:
       IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
       # Stable and uniquely tagged nightly releases are both immutable. The
@@ -1110,6 +1370,33 @@ jobs:
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: python3 .github/scripts/verify_release_environment.py
 
+    # The job only starts after the stable-release environment review, so the
+    # run's approval history must now hold Krilliac's approval and no rejection.
+    - name: Record protected stable-release approval event
+      id: release-approval
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        record="$RUNNER_TEMP/stable-release-approval.json"
+        python3 .github/scripts/record_release_approval.py \
+          --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --source-commit "$GITHUB_SHA" --output "$record"
+        {
+          echo "sha256=$(sha256sum "$record" | cut -d' ' -f1)"
+          echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Retain protected stable-release approval evidence
+      if: needs.prepare.outputs.is_versioned == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: stable-release-approval-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/stable-release-approval.json
+        if-no-files-found: error
+        retention-days: 90
+
     - name: Verify v0.9.0 source seal before publication mutation
       if: needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'
       env:
@@ -1139,20 +1426,6 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         TARGET_SHA: ${{ github.sha }}
       run: python3 .github/scripts/verify-exact-required-gate.py
-
-    - name: Verify stable-v1 candidate is qualified for versioned publication
-      if: needs.prepare.outputs.is_versioned == 'true'
-      shell: bash
-      # Strict validation, no waiver: every requiredCiJobs/testSelectors and
-      # path reference in the contract must resolve. The --allow-legacy-contract
-      # waiver was retired once the contract validated strictly; never
-      # reintroduce it to make a versioned publication green.
-      run: |
-        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
-          python3 tools/site-data/validate.py --require-predecessor-candidate
-        else
-          python3 tools/site-data/validate.py --require-candidate-ready
-        fi
 
     - name: Freeze durable exact CI evidence release asset
       env:
@@ -1217,12 +1490,6 @@ jobs:
         python3 tools/site-data/exact_evidence.py write \
           --output "$GITHUB_WORKSPACE/SparkEngine-Exact-CI-Evidence.json"
 
-    # SEC-120 is release-blocking: publication must fail while any inventoried
-    # parser still lacks a sanitizer-backed fuzz target and bounded corpus.
-    # The structural gate in build.yml blocks merges; this blocks releases.
-    - name: Verify SEC-120 parser fuzz-policy closure
-      run: python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-closure
-
     # Download counters are durable generated state on one moving tag. Keeping
     # them off Working lets branch protection stay strict and leaves the source
     # commit unchanged throughout exact-CI revalidation.
@@ -1256,7 +1523,12 @@ jobs:
             exit 1
           fi
         else
-          git checkout --detach "$(git rev-parse HEAD)"
+          # Never reseed from Working's older checked-in ledger: it would drop
+          # archived asset records and any pending-publication recovery marker.
+          # Bootstrapping is an explicit update-downloads.yml dispatch only.
+          echo "Counter state tag $STATE_REF is missing; refusing to publish against Working's stale ledger." >&2
+          echo "Restore the tag, or bootstrap it via Update Download Badges (bootstrap_counter_state_seed)." >&2
+          exit 1
         fi
         echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
         echo "state_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -1279,15 +1551,100 @@ jobs:
         pattern: ${{ needs.prepare.outputs.is_versioned == 'true' && 'build-provenance-Windows-MinSizeRel' || 'build-provenance-*' }}
         path: build-provenance
 
+    - name: Download package reconciliation reports
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        pattern: ${{ needs.prepare.outputs.is_versioned == 'true' && 'package-reconciliation-Windows-MinSizeRel' || 'package-reconciliation-*' }}
+        path: supply-chain/reconciliation
+        merge-multiple: true
+
+    # SEC-110: bind the channel's packages to the source lock. Every package
+    # this channel publishes must have a passing reconciliation report from its
+    # build job, and the lock-derived SPDX SBOM must generate from this exact
+    # commit (lockfiles equal to their committed blobs) and reproduce byte for
+    # byte. Both are retained as the release's supply-chain evidence.
+    - name: Verify package reconciliation and generate lock-bound SPDX SBOM
+      env:
+        IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
+        BUILD_CONFIGS: ${{ needs.prepare.outputs.configs }}
+      run: |
+        set -euo pipefail
+        python3 - <<'PY'
+        import hashlib
+        import json
+        import os
+        from pathlib import Path
+
+        root = Path("supply-chain/reconciliation")
+        if os.environ["IS_VERSIONED"] == "true":
+            expected = {"Windows-MinSizeRel"}
+        else:
+            configs = json.loads(os.environ["BUILD_CONFIGS"])
+            expected = {"Windows-Debug", "Windows-Release"}
+            expected |= {f"{platform}-{config}" for platform in ("Linux", "macOS") for config in configs}
+            expected |= {f"Installer-{platform}-Release" for platform in ("Windows", "Linux", "macOS")}
+        found = {path.name[len("reconcile-"):-len(".json")] for path in root.glob("reconcile-*.json")}
+        if found != expected:
+            raise SystemExit(f"package reconciliation reports {sorted(found)} != expected {sorted(expected)}")
+        for name in sorted(expected):
+            report = json.loads((root / f"reconcile-{name}.json").read_text(encoding="utf-8"))
+            if report.get("schema") != "spark-package-inventory-reconciliation-v2":
+                raise SystemExit(f"reconcile-{name}.json has an unexpected schema")
+            if report.get("errors") != [] or not report.get("artifacts"):
+                raise SystemExit(f"reconcile-{name}.json does not record a passing reconciliation")
+            source = report.get("source", {})
+            if source.get("sha") != os.environ["GITHUB_SHA"] or source.get("dependencyLockSha256") != hashlib.sha256(Path("ThirdParty/dependencies.lock").read_bytes()).hexdigest():
+                raise SystemExit(f"reconcile-{name}.json source or dependency lock drifted")
+            for artifact in report["artifacts"]:
+                if not artifact.get("name") or not artifact.get("sha256") or not artifact.get("inventory"):
+                    raise SystemExit(f"reconcile-{name}.json lacks a final artifact inventory")
+            print(f"{name}: final artifact inventory present; byte binding is verified after asset collection")
+        PY
+        python3 tools/generate-sbom.py --source-sha "$GITHUB_SHA" --out supply-chain/SparkEngine-Lock-SBOM.spdx.json
+        python3 tools/generate-sbom.py --check supply-chain/SparkEngine-Lock-SBOM.spdx.json
+
+    - name: Retain release supply-chain evidence
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: supply-chain-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: supply-chain/
+        retention-days: 90
+        if-no-files-found: error
+
     - name: Generate SPDX software bill of materials
       uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
       with:
         path: release-assets
         format: spdx-json
-        output-file: SparkEngine.spdx.json
+        # One canonical SBOM file name: the stable bundle verifiers, the signing
+        # tests and verify_published_stable_release.py all consume this exact
+        # published asset (checked by test-workflow-failure-propagation.py).
+        output-file: SparkEngine-SBOM.spdx.json
         artifact-name: SparkEngine-SBOM.spdx.json
         upload-artifact: false
         upload-release-assets: false
+
+    # REL-110: scan exactly the SBOM generated above. The action itself never
+    # fails the build on severity; the gate below decides, so a Critical or
+    # High finding can pass only through an owned, unexpired exception in
+    # ThirdParty/supply-chain.lock. A scanner or vulnerability-database failure
+    # fails this step, and an empty or incomplete report fails the gate.
+    - name: Scan SBOM for known vulnerabilities
+      uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+      with:
+        sbom: SparkEngine-SBOM.spdx.json
+        output-format: json
+        output-file: SparkEngine-vulnerabilities.grype.json
+        fail-build: false
+
+    - name: Enforce vulnerability policy on the release SBOM
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/verify_vulnerability_findings.py \
+          --report "SparkEngine-vulnerabilities.grype.json" \
+          --sbom "SparkEngine-SBOM.spdx.json" \
+          --lockfile "ThirdParty/supply-chain.lock" \
+          --summary "$GITHUB_STEP_SUMMARY"
 
     - name: Collect release assets
       id: assets
@@ -1336,6 +1693,22 @@ jobs:
           find "$package_root" -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
                -o -name "SparkInstaller-*" -o -name "shipping-package-manifest.json" \) -print0
+        )
+
+        # Publish lock binding and exact toolchain records for the lifetime of
+        # the release. Actions artifact retention alone is not durable evidence.
+        test -f supply-chain/SparkEngine-Lock-SBOM.spdx.json
+        cp supply-chain/SparkEngine-Lock-SBOM.spdx.json .
+        while IFS= read -r -d '' evidence; do
+          name=$(basename "$evidence")
+          if [[ -e "$name" || -L "$evidence" ]]; then
+            echo "Duplicate or link-like release evidence: $name" >&2
+            exit 1
+          fi
+          cp -- "$evidence" "$name"
+        done < <(
+          find supply-chain/reconciliation build-provenance -type f \
+            \( -name 'reconcile-*.json' -o -name 'build-provenance-*.json' \) -print0
         )
 
         # Publish version-independent aliases for direct README downloads.
@@ -1415,6 +1788,7 @@ jobs:
           find . -maxdepth 1 -type f \
             \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.exe" -o -name "*.msi" \
                -o -name "SparkInstaller-*" -o -name "*.spdx.json" \
+               -o -name "reconcile-*.json" -o -name "build-provenance-*.json" \
                -o -name "shipping-package-manifest.json" \
                -o -name "SparkEngine-Exact-CI-Evidence.json" \) -print0 | sort -z
         )
@@ -1455,6 +1829,13 @@ jobs:
     # REL-100: every published distributable (aliases included) must be covered
     # by a build record from this exact source SHA whose dependency-lock digest
     # equals the committed lock, and every recorded artifact must be published.
+    - name: Verify final package inventories against every published artifact
+      run: |
+        set -euo pipefail
+        python3 tools/release_package_reconciliation.py verify \
+          --reports-dir supply-chain/reconciliation --assets-dir . \
+          --assets-file expected-release-assets.txt --source-root . --source-sha "${{ github.sha }}"
+
     - name: Verify per-artifact build provenance before publication mutation
       env:
         IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
@@ -2238,6 +2619,50 @@ jobs:
         fi
         printf 'started_at=%s\n' "$RUN_STARTED_AT" >> "$GITHUB_OUTPUT"
 
+    # REL-190: the immutable stable body is rendered from the stable-v1 profile
+    # in the readiness contract, the single CHANGELOG.md version section, the
+    # frozen SHA256SUMS and expected asset inventory, and the signature control
+    # asset. Any inconsistency fails here, before the draft is staged; the
+    # rendering is deterministic, so a resumed draft receives identical text.
+    # Nightly releases keep their short workflow body.
+    - name: Render fail-closed stable release notes
+      id: stable-notes
+      if: needs.prepare.outputs.is_versioned == 'true'
+      env:
+        RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        SIGNATURE_KEY_FINGERPRINT: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT }}
+        SOURCE_COMMIT: ${{ github.sha }}
+        BUILT_AT: ${{ steps.run-start.outputs.started_at }}
+        SERVER_URL: ${{ github.server_url }}
+        TITLE_SUFFIX: ${{ steps.suffix.outputs.label }}
+      run: |
+        set -euo pipefail
+        NOTES="$RUNNER_TEMP/stable-release-notes.md"
+        python3 "$GITHUB_WORKSPACE/tools/release_notes.py" \
+          --version "$RELEASE_VERSION" \
+          --readiness "$GITHUB_WORKSPACE/docs/site/readiness.json" \
+          --changelog "$GITHUB_WORKSPACE/CHANGELOG.md" \
+          --sha256sums "$GITHUB_WORKSPACE/SHA256SUMS" \
+          --expected-assets-file "$GITHUB_WORKSPACE/expected-release-assets.txt" \
+          --signature-control-asset "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz" \
+          --signer-fingerprint "$SIGNATURE_KEY_FINGERPRINT" \
+          --source-commit "$SOURCE_COMMIT" \
+          --built-at "$BUILT_AT" \
+          --repository "$GITHUB_REPOSITORY" \
+          --server-url "$SERVER_URL" \
+          --title-suffix "$TITLE_SUFFIX" \
+          --output "$NOTES"
+        DELIMITER="SPARK_RELEASE_NOTES_$(openssl rand -hex 16)"
+        if grep -qF -- "$DELIMITER" "$NOTES"; then
+          echo "Rendered release notes collide with the output delimiter." >&2
+          exit 1
+        fi
+        {
+          echo "body<<${DELIMITER}"
+          cat -- "$NOTES"
+          echo "${DELIMITER}"
+        } >> "$GITHUB_OUTPUT"
+
     - name: Reverify frozen asset counts immediately before staging
       id: release-freeze
       env:
@@ -2264,17 +2689,7 @@ jobs:
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}
         RELEASE_TITLE: "SparkEngine ${{ needs.prepare.outputs.version }} (Stable)${{ steps.suffix.outputs.label }}"
-        RELEASE_BODY: |
-          ## SparkEngine ${{ needs.prepare.outputs.version }} — Stable Release${{ steps.suffix.outputs.label }}
-
-          Built from commit [`${{ steps.sha.outputs.short }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
-          Built on: ${{ steps.run-start.outputs.started_at }}
-
-          > **Stable-v1 releases** contain Windows x64 Shipping packages built with the authoritative `windows-shipping` preset and validated separately in Release. Stable releases and uniquely tagged nightly prereleases are immutable; the historical `nightly` release is never modified.
-
-          ### Downloads
-
-          ${{ steps.assets.outputs.table }}
+        RELEASE_BODY: ${{ steps.stable-notes.outputs.body }}
       run: python3 .github/scripts/stage_release_draft.py
 
     - name: Stage nightly rolling release as draft
@@ -2293,7 +2708,7 @@ jobs:
           Built on: ${{ steps.run-start.outputs.started_at }}
           Branch: `${{ github.ref_name }}`
 
-          > **Nightly builds are immutable prereleases.** Each run has a unique tag and remains available in the releases list; the historical `nightly` rolling release is not modified.
+          > **Nightly builds are immutable prereleases.** Each run has a unique tag; the historical `nightly` rolling release is not modified. Nightly builds are unsupported prereleases.
 
           ${{ steps.assets.outputs.table }}
       run: python3 .github/scripts/stage_release_draft.py
@@ -2816,7 +3231,6 @@ jobs:
         fi
 
     - name: Verify published release attestation as a consumer
-      if: needs.prepare.outputs.is_versioned == 'true'
       env:
         GH_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -3000,6 +3414,8 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         SIGNATURE_KEY_FINGERPRINT: ${{ vars.SPARKENGINE_STABLE_SIGNATURE_KEY_FINGERPRINT }}
+        APPROVAL_RECORD_SHA256: ${{ needs.release.outputs.approval_record_sha256 }}
+        APPROVAL_RUN_ATTEMPT: ${{ needs.release.outputs.approval_run_attempt }}
       run: |
         set -euo pipefail
         python3 .github/scripts/verify_published_stable_release.py \
@@ -3009,7 +3425,8 @@ jobs:
            --signature-control-asset "SparkEngine-release-signature-bundle.tar.gz" \
           --fingerprint "$SIGNATURE_KEY_FINGERPRINT" --gate-output "$RUNNER_TEMP/consumer-exact-ci.out" \
           --receipt "$RUNNER_TEMP/stable-publication-evidence.json" \
-          --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+          --approval-record-sha256 "$APPROVAL_RECORD_SHA256" --approval-run-attempt "$APPROVAL_RUN_ATTEMPT"
 
     - name: Retain immutable independent publication evidence
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -3,7 +3,7 @@
 > Complete visual guide to how SparkEngine works, from boot to shutdown.
 
 <!-- AUTO:flowchart_stats -->
-_Generated from 733 headers, 605 source files, 79 ECS components, 11 ECS systems, 64 editor panels, 6 RHI backends._
+_Generated from 771 headers, 650 source files, 81 ECS components, 12 ECS systems, 64 editor panels, 6 RHI backends._
 <!-- /AUTO:flowchart_stats -->
 
 ---
@@ -141,8 +141,8 @@ The engine boots through a strict initialization order. Dependencies flow top-do
     └────────┬──────────────┘   │ Fixed 60Hz Tick Loop     │
              │                  │ (sleep-regulated)         │
     ┌────────▼──────────────┐   └─────────────────────────┘
-    │ RegisterCoreSubsystems│
-    │ (via EngineSetup)     │
+    │ InitPhysics           │
+    │ (Jolt world)          │
     └────────┬──────────────┘
              │
     ┌────────▼──────────────┐
@@ -192,7 +192,7 @@ The engine boots through a strict initialization order. Dependencies flow top-do
 
 **Key files:**
 - `SparkEngine/Source/Core/SparkEngine.cpp` — `wWinMain()`, `main()`, `InitInstance()`, `InitEngineContext()`
-- `SparkEngine/Source/Core/EngineBootstrap.h` — `EngineSetup::RegisterCoreSubsystems()`
+- `SparkEngine/Source/Core/EngineSetup.h` — `EngineSetup::InitializeJobSystem()`, `CreatePhaseSystemManager()`
 - `SparkEngine/Source/Core/GameplaySystemLifecycle.cpp` — `InitGameplaySystems()`
 - `SparkEngine/Source/Utils/ConsoleProcessManager.h` — subprocess management
 
@@ -410,7 +410,7 @@ SparkEngine uses [EnTT](https://github.com/skypjack/entt) as its entity-componen
 **Key files:**
 - `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` — System definitions and execution order
 - `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` — Transform, MeshRenderer, Camera, Script
-- `SparkEngine/Source/Engine/ECS/Components/` — All 12+ domain component headers
+- `SparkEngine/Source/Engine/ECS/Components/` — Domain component headers (see the generated ECS inventory above)
 
 
 ## 5. Rendering Pipeline

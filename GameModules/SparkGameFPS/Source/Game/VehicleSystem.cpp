@@ -1,11 +1,9 @@
 #include "VehicleSystem.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 #include "Player.h"
 #include "Projectiles/ProjectilePool.h"
 #include "Input/InputManager.h"
-#include "Utils/MathUtils.h"
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -193,7 +191,11 @@ namespace Spark
 
     bool Vehicle::EnterSeat(Player* player, int seatIndex)
     {
-        SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, player, false);
+        if (player == nullptr)
+        {
+            FPS_LOG_ERROR("{}: 'player' must not be null", __func__);
+            return false;
+        }
         if (!player || IsDestroyed())
             return false;
 
@@ -527,8 +529,7 @@ namespace Spark
 
     bool VehicleSystem::Initialize()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing VehicleSystem");
+        FPS_LOG_INFO("Initializing VehicleSystem");
         InitVehicleDefinitions();
         return true;
     }
@@ -562,9 +563,10 @@ namespace Spark
     Vehicle* VehicleSystem::SpawnVehicle(VehicleType type, const XMFLOAT3& position, ID3D11Device* device,
                                          ID3D11DeviceContext* context)
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_WARN_IF(Spark::LogCategory::Game, (int)m_vehicles.size() >= MAX_VEHICLES - 1,
-                      "Vehicle count near maximum capacity");
+        if (static_cast<int>(m_vehicles.size()) >= MAX_VEHICLES - 1)
+        {
+            FPS_LOG_WARN("Vehicle count near maximum capacity");
+        }
         if ((int)m_vehicles.size() >= MAX_VEHICLES)
             return nullptr;
 

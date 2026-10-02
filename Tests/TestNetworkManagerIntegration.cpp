@@ -10,13 +10,18 @@
 #include "TestFramework.h"
 #include "Engine/Networking/InstabilitySimulator.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Fixtures/NetworkTestSecurity.h"
+#include "Fixtures/SecureTestPeer.h"
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <memory>
 #include <optional>
+#include <span>
+#include <unordered_map>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -74,6 +79,18 @@ namespace Spark::Net
             return static_cast<size_t>(std::count_if(peer->second.unacknowledgedMessages.begin(),
                                                      peer->second.unacknowledgedMessages.end(),
                                                      [](const auto& entry) { return entry.second.sensitive; }));
+        }
+
+        static size_t UnackedMessagesWithPayload(const NetworkManager& manager, ClientID peerKey,
+                                                 const std::vector<uint8_t>& payload)
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
+            const auto peer = manager.m_peers.find(peerKey);
+            if (peer == manager.m_peers.end())
+                return 0;
+            return static_cast<size_t>(std::count_if(peer->second.unacknowledgedMessages.begin(),
+                                                     peer->second.unacknowledgedMessages.end(), [&](const auto& entry)
+                                                     { return entry.second.payload == payload; }));
         }
 
         static void ReceiveAvailableIncomingForTest(NetworkManager& manager)
@@ -288,6 +305,52 @@ namespace
         return datagrams;
     }
 
+    /// Legacy-shaped Connect payload (magic, version, name). SendSecure upgrades a Connect carrying it
+    /// into the real NET-100 v2 handshake, whose ClientFinished carries the name.
+    std::vector<uint8_t> ConnectRequestPayload(const std::string& name = "Player")
+    {
+        return SparkTestFixtures::LegacyConnectPayload(name);
+    }
+
+    /// Non-blocking read of one datagram from a (possibly blocking) test socket.
+    std::optional<std::vector<uint8_t>> PollDatagram(SOCKET socket)
+    {
+        fd_set readSet;
+        FD_ZERO(&readSet);
+        FD_SET(socket, &readSet);
+        timeval timeout{0, 0};
+#ifdef SPARK_PLATFORM_WINDOWS
+        const int ready = select(0, &readSet, nullptr, nullptr, &timeout);
+#else
+        const int ready = select(socket + 1, &readSet, nullptr, nullptr, &timeout);
+#endif
+        if (ready <= 0)
+            return std::nullopt;
+        std::vector<uint8_t> buffer(MAX_UDP_WIRE_DATAGRAM_SIZE);
+        const int received = recvfrom(socket, reinterpret_cast<char*>(buffer.data()), static_cast<int>(buffer.size()),
+                                      0, nullptr, nullptr);
+        if (received <= 0)
+            return std::nullopt;
+        buffer.resize(static_cast<size_t>(received));
+        return buffer;
+    }
+
+    /// NET-100 v2: send one hand-built client message from @p socket the way a v2 client would.
+    /// A Connect runs the real handshake (pumping the singleton server); anything later is sealed.
+    /// Returns the message size on success so callers can keep comparing against it.
+    int SendSecure(SparkTestFixtures::WireAdapter& wire, SOCKET socket, const sockaddr_in& server,
+                   const std::vector<uint8_t>& message)
+    {
+        const auto rawSend = [&](std::span<const uint8_t> datagram)
+        {
+            return sendto(socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()), 0,
+                          reinterpret_cast<const sockaddr*>(&server),
+                          sizeof(server)) == static_cast<int>(datagram.size());
+        };
+        return wire.Send(message, rawSend, [&] { return PollDatagram(socket); }) ? static_cast<int>(message.size())
+                                                                                 : -1;
+    }
+
     bool ContainsBytes(const std::vector<uint8_t>& haystack, const std::vector<uint8_t>& needle)
     {
         return !needle.empty() &&
@@ -342,14 +405,14 @@ TEST(NetworkManager_GeneratedClientIdsWrapBeforeReservedSentinels)
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(nm.GetBoundPort());
     serverAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
 
     SOCKET first = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     ASSERT_TRUE(first != INVALID_SOCKET);
     ASSERT_TRUE(BindLoopbackEphemeral(first));
-    ASSERT_EQ(sendto(first, reinterpret_cast<const char*>(connect.data()), static_cast<int>(connect.size()), 0,
-                     reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress)),
-              static_cast<int>(connect.size()));
+    SparkTestFixtures::WireAdapter firstWire;
+    ASSERT_EQ(SendSecure(firstWire, first, serverAddress, connect), static_cast<int>(connect.size()));
     for (int i = 0; i < 50 && nm.GetClients().size() < 1; ++i)
     {
         nm.Update(0.01f);
@@ -361,9 +424,8 @@ TEST(NetworkManager_GeneratedClientIdsWrapBeforeReservedSentinels)
     SOCKET second = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     ASSERT_TRUE(second != INVALID_SOCKET);
     ASSERT_TRUE(BindLoopbackEphemeral(second));
-    ASSERT_EQ(sendto(second, reinterpret_cast<const char*>(connect.data()), static_cast<int>(connect.size()), 0,
-                     reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress)),
-              static_cast<int>(connect.size()));
+    SparkTestFixtures::WireAdapter secondWire;
+    ASSERT_EQ(SendSecure(secondWire, second, serverAddress, connect), static_cast<int>(connect.size()));
     for (int i = 0; i < 50 && nm.GetClients().size() < 2; ++i)
     {
         nm.Update(0.01f);
@@ -403,7 +465,8 @@ TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
     serverAddr.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-    auto sendPacket = [&](MessageType type)
+    SparkTestFixtures::WireAdapter wire;
+    auto sendPacket = [&](MessageType type, const std::vector<uint8_t>& payload = {})
     {
         std::vector<uint8_t> packet;
         auto put32 = [&](uint32_t value)
@@ -422,12 +485,12 @@ TEST(NetworkManager_MessageCallbackMayWaitForCrossThreadStopServer)
         put32(INVALID_CLIENT);
         put32(0);
         put32(0);
-        put32(0);
-        return sendto(rawSock, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
-                      reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+        put32(static_cast<uint32_t>(payload.size()));
+        packet.insert(packet.end(), payload.begin(), payload.end());
+        return SendSecure(wire, rawSock, serverAddr, packet);
     };
 
-    ASSERT_TRUE(sendPacket(MessageType::Connect) > 0);
+    ASSERT_TRUE(sendPacket(MessageType::Connect, ConnectRequestPayload()) > 0);
     for (int i = 0; i < 50 && nm.GetClients().empty(); ++i)
     {
         nm.Update(0.016f);
@@ -487,9 +550,11 @@ TEST(NetworkManager_StartServer_Succeeds)
     auto& nm = NetworkManager::GetInstance();
     EXPECT_TRUE(nm.Initialize());
 
-    // Use a high port to avoid conflicts
-    bool serverOk = nm.StartServer(39100, 8);
-    EXPECT_TRUE(serverOk);
+    // Port 0: the OS picks a free port. A fixed port fails when Windows reserves its range
+    // (WSL/Hyper-V dynamic port exclusions), and a failed start must not pass silently.
+    bool serverOk = nm.StartServer(0, 8);
+    ASSERT_TRUE(serverOk);
+    EXPECT_NE(nm.GetBoundPort(), uint16_t{0});
     EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::Server));
 
     nm.StopServer();
@@ -500,7 +565,7 @@ TEST(NetworkManager_StopServer_ResetsRole)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.StartServer(39101, 4);
+    ASSERT_TRUE(nm.StartServer(0, 4));
     nm.StopServer();
     EXPECT_EQ(static_cast<int>(nm.GetRole()), static_cast<int>(NetworkRole::None));
     nm.Shutdown();
@@ -510,7 +575,7 @@ TEST(NetworkManager_ServerUpdate_ProcessesWithoutClients)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.StartServer(39102, 4);
+    ASSERT_TRUE(nm.StartServer(0, 4));
 
     // Run a few update ticks with no clients connected
     for (int i = 0; i < 5; ++i)
@@ -527,7 +592,7 @@ TEST(NetworkManager_ServerDisconnect_CleansUpGracefully)
 {
     auto& nm = NetworkManager::GetInstance();
     nm.Initialize();
-    nm.StartServer(39103, 4);
+    ASSERT_TRUE(nm.StartServer(0, 4));
     nm.Disconnect();
     EXPECT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Disconnected));
     nm.Shutdown();
@@ -595,24 +660,31 @@ TEST(NetworkManager_ProcessIncoming_RejectsForgedSenderIDFromUnknownAddress)
     for (int i = 0; i < 8; ++i)
         packet.push_back(0);
 
+    // NET-100 v2: the forged message is sent unframed and again inside a plaintext handshake
+    // frame. Neither is a sealed frame from an established peer, so both are dropped at the
+    // frame layer, before the wire senderID is even parsed.
     int sent = sendto(rawSock, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
                       reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
     EXPECT_EQ(sent, static_cast<int>(packet.size()));
+    const auto framed = SparkTestFixtures::HandshakeFrame(packet);
+    sent = sendto(rawSock, reinterpret_cast<const char*>(framed.data()), static_cast<int>(framed.size()), 0,
+                  reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
+    EXPECT_EQ(sent, static_cast<int>(framed.size()));
 
     closesocket(rawSock);
 
-    // Give the server a few ticks to receive and process the datagram.
-    for (int i = 0; i < 20 && nm.GetPacketValidator().GetStatistics().totalValidated == 0; ++i)
+    // Give the server a few ticks to receive and process the datagrams.
+    for (int i = 0; i < 20 && nm.GetStats().plaintextFramesDropped < 2; ++i)
     {
         nm.Update(0.016f);
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 
-    auto stats = nm.GetPacketValidator().GetStatistics();
-    EXPECT_TRUE(stats.totalValidated >= 1);
-    // The forged sender must be rejected as unauthenticated -- NOT accepted via a
-    // spoofed senderID (that would be the pre-fix auth-bypass behavior).
-    EXPECT_TRUE(stats.rejectedUnauthenticated >= 1);
+    // The forged sender never reaches the validator, let alone a handler: it is not
+    // accepted via a spoofed senderID (that would be the pre-fix auth-bypass behavior).
+    EXPECT_TRUE(nm.GetStats().plaintextFramesDropped >= 2u);
+    EXPECT_EQ(nm.GetPacketValidator().GetStatistics().totalValidated, 0u);
+    EXPECT_TRUE(nm.GetClients().empty());
 
     nm.StopServer();
     nm.Shutdown();
@@ -655,6 +727,7 @@ TEST(NetworkManager_ProcessIncoming_RejectsInvalidChannelBeforeConnect)
     put32(0);
     put32(0);
     put32(0);
+    packet.insert(packet.begin(), NETWORK_FRAME_HANDSHAKE); // a well-framed handshake with a bad channel
 
     const int sent = sendto(rawSock, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
                             reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
@@ -708,7 +781,7 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
 #else
     socklen_t clientAddrLength = sizeof(clientAddr);
 #endif
-    std::vector<uint8_t> receiveBuffer(1024);
+    std::vector<uint8_t> receiveBuffer(2048);
     int received = SOCKET_ERROR;
     for (int i = 0; i < 20 && received == SOCKET_ERROR; ++i)
     {
@@ -719,27 +792,19 @@ TEST(NetworkManager_ClientAcceptsOnlyConfiguredServerEndpoint)
         if (received == SOCKET_ERROR)
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    EXPECT_TRUE(received > 0);
+    ASSERT_TRUE(received > 0);
 
-    std::vector<uint8_t> accepted;
-    auto put32 = [&](uint32_t value)
-    {
-        for (int shift = 0; shift < 32; shift += 8)
-            accepted.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
-    };
-    auto put16 = [&](uint16_t value)
-    {
-        accepted.push_back(static_cast<uint8_t>(value & 0xFF));
-        accepted.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
-    };
-    put32(0x5350524B);
-    put16(static_cast<uint16_t>(MessageType::ConnectAccepted));
-    accepted.push_back(static_cast<uint8_t>(ChannelType::Reliable));
-    put32(INVALID_CLIENT);
-    put32(1);
-    put32(0);
-    put32(4);
-    put32(42);
+    // A correctly signed v2 ConnectAccepted for the ClientHello the client sent.
+    const auto connect = SparkTestFixtures::ParseWire(
+        std::span<const uint8_t>(receiveBuffer.data(), static_cast<size_t>(received)).subspan(1));
+    ASSERT_TRUE(connect.has_value());
+    auto response = RespondToClientHello(connect->payload, SparkTestFixtures::SecureRawServer::AcceptPrefix(42),
+                                         SparkTestFixtures::TestServerIdentity());
+    ASSERT_TRUE(response.has_value());
+    const auto accepted = SparkTestFixtures::HandshakeFrame(SparkTestFixtures::BuildWire(
+        MessageType::ConnectAccepted,
+        SparkTestFixtures::SecureRawServer::AcceptPayload(42, NETWORK_PROTOCOL_VERSION, response->serverHello),
+        ChannelType::Unreliable));
 
     EXPECT_EQ(sendto(spoofSock, reinterpret_cast<const char*>(accepted.data()), static_cast<int>(accepted.size()), 0,
                      reinterpret_cast<sockaddr*>(&clientAddr), sizeof(clientAddr)),
@@ -782,38 +847,23 @@ TEST(NetworkManager_RejectedConnectDoesNotTriggerEntitySync)
     serverAddr.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-    std::vector<uint8_t> connectPacket;
-    auto put32 = [&](uint32_t value)
-    {
-        for (int shift = 0; shift < 32; shift += 8)
-            connectPacket.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
-    };
-    auto put16 = [&](uint16_t value)
-    {
-        connectPacket.push_back(static_cast<uint8_t>(value & 0xFF));
-        connectPacket.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
-    };
-    put32(0x5350524B);
-    put16(static_cast<uint16_t>(MessageType::Connect));
-    connectPacket.push_back(static_cast<uint8_t>(ChannelType::Reliable));
-    put32(INVALID_CLIENT);
-    put32(0);
-    put32(0);
-    put32(0);
+    const auto connectPacket =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
 
-    auto sendConnect = [&]()
+    // NET-100 v2: each connect is a real handshake; the second one is refused (ServerFull),
+    // so its handshake never completes.
+    auto sendConnect = [&](bool expectAdmission)
     {
         SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         EXPECT_TRUE(client != INVALID_SOCKET);
         EXPECT_TRUE(BindLoopbackEphemeral(client));
-        const int sent =
-            sendto(client, reinterpret_cast<const char*>(connectPacket.data()), static_cast<int>(connectPacket.size()),
-                   0, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
-        EXPECT_EQ(sent, static_cast<int>(connectPacket.size()));
+        SparkTestFixtures::WireAdapter wire;
+        const int sent = SendSecure(wire, client, serverAddr, connectPacket);
+        EXPECT_EQ(sent == static_cast<int>(connectPacket.size()), expectAdmission);
         return client;
     };
 
-    SOCKET admitted = sendConnect();
+    SOCKET admitted = sendConnect(true);
     for (int i = 0; i < 20 && nm.GetClients().empty(); ++i)
     {
         nm.Update(0.016f);
@@ -822,7 +872,7 @@ TEST(NetworkManager_RejectedConnectDoesNotTriggerEntitySync)
     EXPECT_EQ(nm.GetClients().size(), 1u);
     EXPECT_EQ(nm.GetStats().fullEntitySyncs, 1u);
 
-    SOCKET rejected = sendConnect();
+    SOCKET rejected = sendConnect(false);
     for (int i = 0; i < 10; ++i)
     {
         nm.Update(0.016f);
@@ -895,12 +945,10 @@ TEST(NetworkManager_ProtocolHandlersAndApplicationObserversBothRunExactlyOnce)
     serverAddr.sin_port = htons(nm.GetBoundPort());
     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
-    auto sendPacket = [&](const std::vector<uint8_t>& packet)
-    {
-        return sendto(client, reinterpret_cast<const char*>(packet.data()), static_cast<int>(packet.size()), 0,
-                      reinterpret_cast<const sockaddr*>(&serverAddr), sizeof(serverAddr));
-    };
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
+    auto wire = std::make_unique<SparkTestFixtures::WireAdapter>();
+    auto sendPacket = [&](const std::vector<uint8_t>& packet) { return SendSecure(*wire, client, serverAddr, packet); };
 
     EXPECT_EQ(sendPacket(connect), static_cast<int>(connect.size()));
     for (int i = 0; i < 20 && connectCallbacks == 0; ++i)
@@ -924,7 +972,8 @@ TEST(NetworkManager_ProtocolHandlersAndApplicationObserversBothRunExactlyOnce)
     EXPECT_TRUE(nm.GetClients().empty());
 
     // The released capacity is usable immediately; reconnect admission and its
-    // observer each occur once, with a fresh full sync.
+    // observer each occur once, with a fresh full sync (a new session, new keys).
+    wire = std::make_unique<SparkTestFixtures::WireAdapter>();
     EXPECT_EQ(sendPacket(connect), static_cast<int>(connect.size()));
     for (int i = 0; i < 20 && connectCallbacks < 2; ++i)
     {
@@ -979,11 +1028,40 @@ TEST(NetworkManager_PolicyKickDropsGameplayQueuedBehindConnectInSameReceivePump)
                       reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress));
     };
 
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
-    const auto gameplay = BuildWireMessage(MessageType::UserDefined, ChannelType::Unreliable, INVALID_CLIENT,
-                                           std::vector<uint8_t>{'g', 'a', 'm', 'e', 'p', 'l', 'a', 'y'});
-    const uint64_t droppedBefore = NetworkManagerClientIdTestAccess::DroppedIncomingMessages(nm);
+    // NET-100 v2: admission happens when ClientFinished opens. Complete the key exchange by
+    // hand, then deliver ClientFinished and a gameplay message in the same receive pump.
+    ClientHandshake handshake;
+    const auto hello = handshake.Begin(NETWORK_PROTOCOL_VERSION);
+    ASSERT_TRUE(hello.has_value());
+    const auto connect = SparkTestFixtures::HandshakeFrame(
+        SparkTestFixtures::BuildWire(MessageType::Connect, *hello, ChannelType::Reliable));
     ASSERT_EQ(sendPacket(connect), static_cast<int>(connect.size()));
+    std::optional<SparkTestFixtures::WireMessage> accepted;
+    for (int i = 0; i < 50 && !accepted; ++i)
+    {
+        nm.Update(0.01f);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        while (auto datagram = PollDatagram(client))
+        {
+            auto inner = SparkTestFixtures::OpenFrame(nullptr, *datagram);
+            auto message = inner ? SparkTestFixtures::ParseWire(*inner) : std::nullopt;
+            if (message && message->type == MessageType::ConnectAccepted)
+                accepted = std::move(message);
+        }
+    }
+    ASSERT_TRUE(accepted.has_value());
+    auto channel = handshake.Finish(std::span(accepted->payload).first(CONNECT_ACCEPT_PREFIX_SIZE),
+                                    std::span(accepted->payload).subspan(CONNECT_ACCEPT_PREFIX_SIZE),
+                                    SparkTestFixtures::TestServerIdentity().publicKey);
+    ASSERT_TRUE(channel.has_value());
+    const auto finished = SparkTestFixtures::FrameForSend(
+        channel->get(),
+        SparkTestFixtures::BuildWire(MessageType::ClientFinished, SparkTestFixtures::EncodeName("PolicyDenied")));
+    const auto gameplay = SparkTestFixtures::FrameForSend(
+        channel->get(), BuildWireMessage(MessageType::UserDefined, ChannelType::Unreliable, INVALID_CLIENT,
+                                         std::vector<uint8_t>{'g', 'a', 'm', 'e', 'p', 'l', 'a', 'y'}));
+    const uint64_t droppedBefore = NetworkManagerClientIdTestAccess::DroppedIncomingMessages(nm);
+    ASSERT_EQ(sendPacket(finished), static_cast<int>(finished.size()));
     ASSERT_EQ(sendPacket(gameplay), static_cast<int>(gameplay.size()));
 
     for (int i = 0; i < 50 && connectCallbacks == 0; ++i)
@@ -998,7 +1076,9 @@ TEST(NetworkManager_PolicyKickDropsGameplayQueuedBehindConnectInSameReceivePump)
     EXPECT_EQ(gameplayCallbacks, 0);
     EXPECT_EQ(gameplayEntity, static_cast<uint32_t>(0));
     EXPECT_EQ(nm.GetStats().fullEntitySyncs, 0u);
-    EXPECT_EQ(NetworkManagerClientIdTestAccess::DroppedIncomingMessages(nm), droppedBefore + 1);
+    // Both the queued copy of ClientFinished (kept for the reliable layer) and the gameplay
+    // message are fenced after the kick.
+    EXPECT_EQ(NetworkManagerClientIdTestAccess::DroppedIncomingMessages(nm), droppedBefore + 2);
 
     closesocket(client);
     nm.StopServer();
@@ -1019,10 +1099,10 @@ TEST(NetworkManager_ConcurrentLoopbackQueriesExerciseAdmittedAddressMapDuringSto
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(nm.GetBoundPort());
     serverAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    const auto connect = BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT);
-    ASSERT_EQ(sendto(client, reinterpret_cast<const char*>(connect.data()), static_cast<int>(connect.size()), 0,
-                     reinterpret_cast<const sockaddr*>(&serverAddr), sizeof(serverAddr)),
-              static_cast<int>(connect.size()));
+    const auto connect =
+        BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
+    SparkTestFixtures::WireAdapter wire;
+    ASSERT_EQ(SendSecure(wire, client, serverAddr, connect), static_cast<int>(connect.size()));
     for (int i = 0; i < 50 && nm.GetClients().empty(); ++i)
     {
         nm.Update(0.01f);
@@ -1131,18 +1211,20 @@ TEST(NetworkManager_DisconnectDiscardsOwnedDelayedCredentialAndRetainsUnownedTra
     InstabilitySimulator::GetInstance().Shutdown();
     ASSERT_TRUE(nm.Initialize());
 
-    SOCKET loopbackReceiver = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    ASSERT_TRUE(loopbackReceiver != INVALID_SOCKET);
-    ASSERT_TRUE(BindLoopbackEphemeral(loopbackReceiver));
-    ASSERT_TRUE(SetNonBlocking(loopbackReceiver));
-    const uint16_t loopbackReceiverPort = BoundPort(loopbackReceiver);
+    // NET-100 v2: a sensitive message only leaves inside a channel, so the first receiver is a
+    // fake server that completes the handshake before the credential is sent.
+    auto fakeServer = std::make_unique<SparkTestFixtures::SecureRawServer>();
+    ASSERT_TRUE(fakeServer->Socket().IsReady());
+    const uint16_t loopbackReceiverPort = fakeServer->Port();
     ASSERT_TRUE(loopbackReceiverPort != 0);
 
     {
         const ScopedNetworkBindMode loopbackMode("loopback");
         ASSERT_TRUE(nm.Connect("127.0.0.1", loopbackReceiverPort, "DelayedLocalOnly"));
-        nm.Update(0.01f); // Flush the ordinary Connect before enabling delay.
-        ASSERT_FALSE(ReceiveDatagrams(loopbackReceiver, std::chrono::milliseconds(100)).empty());
+        ASSERT_TRUE(fakeServer->AwaitConnect(nm).has_value());
+        ASSERT_FALSE(fakeServer->Accept(7).empty());
+        ASSERT_TRUE(fakeServer->AwaitType(nm, MessageType::ClientFinished).has_value());
+        ASSERT_EQ(static_cast<int>(nm.GetConnectionState()), static_cast<int>(ConnectionState::Connected));
 
         InstabilitySettings settings;
         settings.enabled = true;
@@ -1160,22 +1242,29 @@ TEST(NetworkManager_DisconnectDiscardsOwnedDelayedCredentialAndRetainsUnownedTra
         const std::vector<uint8_t> retainedTraffic{'u', 'n', 'o', 'w', 'n', 'e', 'd', '-',
                                                    't', 'r', 'a', 'f', 'f', 'i', 'c'};
         InstabilitySimulator::GetInstance().QueuePacket(retainedTraffic, 1000.0f);
-        ASSERT_EQ(InstabilitySimulator::GetInstance().GetQueuedPacketCount(), static_cast<size_t>(2));
+        // The credential (and possibly a heartbeat of this session) is held, plus the unowned packet.
+        ASSERT_TRUE(InstabilitySimulator::GetInstance().GetQueuedPacketCount() >= static_cast<size_t>(2));
         credential.ClearSensitivePayload();
         nm.Disconnect();
         EXPECT_EQ(InstabilitySimulator::GetInstance().GetQueuedPacketCount(), static_cast<size_t>(1));
         EXPECT_TRUE(InstabilitySimulator::GetInstance().GetSettings().enabled);
 
-        const auto terminalPackets = ReceiveDatagrams(loopbackReceiver, std::chrono::milliseconds(100));
-        const bool receivedDisconnect =
-            std::any_of(terminalPackets.begin(), terminalPackets.end(),
-                        [&](const auto& data)
-                        {
-                            NetworkMessage message;
-                            return NetworkManagerClientIdTestAccess::DeserializeMessageForTest(nm, data, message) &&
-                                   message.type == MessageType::Disconnect;
-                        });
+        bool receivedDisconnect = false;
+        const auto terminalDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        while (!receivedDisconnect && std::chrono::steady_clock::now() < terminalDeadline)
+        {
+            while (auto datagram = fakeServer->Socket().Receive())
+            {
+                const auto message = fakeServer->Open(*datagram);
+                receivedDisconnect = receivedDisconnect || (message && message->type == MessageType::Disconnect);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
         EXPECT_TRUE(receivedDisconnect);
+        // The delayed credential never reached this receiver in any form.
+        const std::vector<uint8_t> secret{'d', 'e', 'l', 'a', 'y', 'e', 'd', '-', 's', 'e', 'c', 'r', 'e', 't'};
+        for (const auto& datagram : fakeServer->Socket().Captured())
+            EXPECT_FALSE(ContainsBytes(datagram, secret));
     }
 
     SOCKET reconnectReceiver = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -1185,7 +1274,7 @@ TEST(NetworkManager_DisconnectDiscardsOwnedDelayedCredentialAndRetainsUnownedTra
     const uint16_t reconnectReceiverPort = BoundPort(reconnectReceiver);
     ASSERT_TRUE(reconnectReceiverPort != 0);
     ASSERT_NE(reconnectReceiverPort, loopbackReceiverPort);
-    closesocket(loopbackReceiver);
+    fakeServer.reset();
 
     InstabilitySettings noAdditionalDelay;
     noAdditionalDelay.enabled = true;
@@ -1203,8 +1292,10 @@ TEST(NetworkManager_DisconnectDiscardsOwnedDelayedCredentialAndRetainsUnownedTra
     const std::vector<uint8_t> retainedTraffic{'u', 'n', 'o', 'w', 'n', 'e', 'd', '-',
                                                't', 'r', 'a', 'f', 'f', 'i', 'c'};
     const std::vector<uint8_t> discardedSecret{'d', 'e', 'l', 'a', 'y', 'e', 'd', '-', 's', 'e', 'c', 'r', 'e', 't'};
-    EXPECT_TRUE(std::any_of(afterReconnect.begin(), afterReconnect.end(),
-                            [&](const auto& datagram) { return datagram == retainedTraffic; }));
+    // The unowned packet survived the lifecycle (it was not discarded with the credential), and on
+    // release it was not transmitted: NetworkManager sends nothing it cannot frame or seal (NET-100).
+    EXPECT_FALSE(std::any_of(afterReconnect.begin(), afterReconnect.end(),
+                             [&](const auto& datagram) { return ContainsBytes(datagram, retainedTraffic); }));
     EXPECT_FALSE(std::any_of(afterReconnect.begin(), afterReconnect.end(),
                              [&](const auto& datagram) { return ContainsBytes(datagram, discardedSecret); }));
     EXPECT_EQ(InstabilitySimulator::GetInstance().GetQueuedPacketCount(), static_cast<size_t>(0));
@@ -1317,7 +1408,8 @@ TEST(NetworkManager_ClearApplicationHandlersPreservesConnectRejectedTransition)
 
     NetBuffer reason;
     reason.WriteString("Server maintenance");
-    const auto rejection = BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, reason.GetData());
+    const auto rejection = SparkTestFixtures::HandshakeFrame(
+        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, reason.GetData()));
     EXPECT_EQ(sendto(server, reinterpret_cast<const char*>(rejection.data()), static_cast<int>(rejection.size()), 0,
                      reinterpret_cast<const sockaddr*>(&clientAddr), clientAddrLength),
               static_cast<int>(rejection.size()));
@@ -1391,6 +1483,9 @@ TEST(NetworkManager_ConnectRejectedSecurelyDrainsQueuedAndDelayedLifecycleTraffi
     delayed.latencyMs = 1000.0f;
     simulator.SetSettings(delayed);
 
+    // NET-100 v2: while Connecting there is no channel, so sensitive messages are refused
+    // outright instead of queueing behind the handshake. Ordinary reliable traffic still
+    // queues, and a rejection must drain it.
     const std::vector<uint8_t> delayedSecretBytes{'d', 'e', 'l', 'a', 'y', 'e', 'd', '-', 'r', 'e', 'j', 'e',
                                                   'c', 't', 'e', 'd', '-', 's', 'e', 'c', 'r', 'e', 't'};
     NetworkMessage delayedSecret;
@@ -1398,10 +1493,12 @@ TEST(NetworkManager_ConnectRejectedSecurelyDrainsQueuedAndDelayedLifecycleTraffi
     delayedSecret.channel = ChannelType::Reliable;
     delayedSecret.payload = delayedSecretBytes;
     delayedSecret.sensitive = true;
+    const uint32_t refusedBefore = nm.GetStats().unsealedSendsRefused;
     nm.SendMessage(delayedSecret);
     delayedSecret.ClearSensitivePayload();
     nm.Update(0.01f);
-    ASSERT_EQ(simulator.GetQueuedPacketCount(), static_cast<size_t>(1));
+    EXPECT_EQ(nm.GetStats().unsealedSendsRefused, refusedBefore + 1);
+    ASSERT_EQ(simulator.GetQueuedPacketCount(), static_cast<size_t>(0));
 
     const std::vector<uint8_t> queuedSecretBytes{'q', 'u', 'e', 'u', 'e', 'd', '-', 'r', 'e', 'j', 'e',
                                                  'c', 't', 'e', 'd', '-', 's', 'e', 'c', 'r', 'e', 't'};
@@ -1412,13 +1509,19 @@ TEST(NetworkManager_ConnectRejectedSecurelyDrainsQueuedAndDelayedLifecycleTraffi
     queuedSecret.sensitive = true;
     nm.SendMessage(queuedSecret);
     queuedSecret.ClearSensitivePayload();
+    EXPECT_EQ(NetworkManagerClientIdTestAccess::PendingClientSensitiveReliableMessages(nm), static_cast<size_t>(0));
+
+    NetworkMessage ordinary;
+    ordinary.type = MessageType::UserDefined;
+    ordinary.channel = ChannelType::Reliable;
+    ordinary.payload = {'o', 'r', 'd', 'i', 'n', 'a', 'r', 'y'};
+    nm.SendMessage(ordinary);
     ASSERT_EQ(NetworkManagerClientIdTestAccess::PendingOutgoingMessages(nm), static_cast<size_t>(1));
-    ASSERT_TRUE(NetworkManagerClientIdTestAccess::PendingClientReliableMessages(nm) >= static_cast<size_t>(1));
-    ASSERT_EQ(NetworkManagerClientIdTestAccess::PendingClientSensitiveReliableMessages(nm), static_cast<size_t>(1));
 
     NetBuffer reason;
     reason.WriteString("Rejected with queued secrets");
-    const auto rejection = BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, reason.GetData());
+    const auto rejection = SparkTestFixtures::HandshakeFrame(
+        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, reason.GetData()));
     ASSERT_EQ(sendto(rejectingServer, reinterpret_cast<const char*>(rejection.data()),
                      static_cast<int>(rejection.size()), 0, reinterpret_cast<const sockaddr*>(&clientAddr),
                      clientAddrLength),
@@ -1512,12 +1615,12 @@ TEST(NetworkManager_ConnectRejectedStopsSameBatchRejectedLifecycleDispatch)
 
     NetBuffer acceptedReason;
     acceptedReason.WriteString("First rejection wins");
-    const auto acceptedRejection =
-        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, acceptedReason.GetData());
+    const auto acceptedRejection = SparkTestFixtures::HandshakeFrame(
+        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, acceptedReason.GetData()));
     NetBuffer staleReason;
     staleReason.WriteString("Stale rejection must not dispatch");
-    const auto staleRejection =
-        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, staleReason.GetData());
+    const auto staleRejection = SparkTestFixtures::HandshakeFrame(
+        BuildWireMessage(MessageType::ConnectRejected, ChannelType::Reliable, 0, staleReason.GetData()));
     ASSERT_EQ(sendto(server, reinterpret_cast<const char*>(acceptedRejection.data()),
                      static_cast<int>(acceptedRejection.size()), 0, reinterpret_cast<const sockaddr*>(&clientAddr),
                      clientAddrLength),
@@ -1558,6 +1661,228 @@ TEST(NetworkManager_ConnectRejectedStopsSameBatchRejectedLifecycleDispatch)
     closesocket(reconnectServer);
     simulator.Shutdown();
     nm.Shutdown();
+}
+
+// ============================================================================
+// TF-110: impairment applies to server unicast, per destination
+// ============================================================================
+
+namespace
+{
+    /// Loopback server plus raw UDP clients. Owns the NetworkManager and
+    /// InstabilitySimulator singletons for one test and restores both on exit.
+    /// Server time only advances through Advance(), so simulated delays are
+    /// exact and independent of wall-clock speed.
+    class ImpairmentServerFixture
+    {
+      public:
+        ImpairmentServerFixture()
+        {
+            auto& nm = NetworkManager::GetInstance();
+            nm.Shutdown();
+            InstabilitySimulator::GetInstance().Shutdown();
+            m_ready = nm.Initialize() && nm.StartServer(0, 4, NetworkEndpointPolicy::Loopback());
+        }
+
+        ~ImpairmentServerFixture()
+        {
+            InstabilitySimulator::GetInstance().Shutdown();
+            for (SOCKET client : m_sockets)
+                closesocket(client);
+            auto& nm = NetworkManager::GetInstance();
+            nm.StopServer();
+            nm.Shutdown();
+        }
+
+        ImpairmentServerFixture(const ImpairmentServerFixture&) = delete;
+        ImpairmentServerFixture& operator=(const ImpairmentServerFixture&) = delete;
+
+        bool Ready() const { return m_ready; }
+
+        /// Admit one raw client with impairment still off and drain its
+        /// admission traffic. Returns INVALID_CLIENT on failure.
+        ClientID AdmitClient(SOCKET& outSocket)
+        {
+            auto& nm = NetworkManager::GetInstance();
+            outSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if (outSocket == INVALID_SOCKET)
+                return INVALID_CLIENT;
+            m_sockets.push_back(outSocket);
+            if (!BindLoopbackEphemeral(outSocket) || !SetNonBlocking(outSocket))
+                return INVALID_CLIENT;
+
+            const auto before = nm.GetClients();
+            sockaddr_in serverAddress{};
+            serverAddress.sin_family = AF_INET;
+            serverAddress.sin_port = htons(nm.GetBoundPort());
+            serverAddress.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            const auto connect =
+                BuildWireMessage(MessageType::Connect, ChannelType::Reliable, INVALID_CLIENT, ConnectRequestPayload());
+            auto wire = std::make_unique<SparkTestFixtures::WireAdapter>();
+            if (SendSecure(*wire, outSocket, serverAddress, connect) != static_cast<int>(connect.size()))
+                return INVALID_CLIENT;
+            const ClientID id = wire->Id();
+            if (!nm.GetClients().contains(id) || before.contains(id))
+                return INVALID_CLIENT;
+            (void)Receive(outSocket, std::chrono::milliseconds(20));
+            m_wires[outSocket] = std::move(wire);
+            return id;
+        }
+
+        /// Datagrams received on @p client, opened back into inner messages with its session.
+        std::vector<std::vector<uint8_t>> Receive(SOCKET client, std::chrono::milliseconds duration)
+        {
+            std::vector<std::vector<uint8_t>> messages;
+            const auto it = m_wires.find(client);
+            for (const auto& datagram : ReceiveDatagrams(client, duration))
+            {
+                auto inner =
+                    it != m_wires.end() ? it->second->Open(datagram) : SparkTestFixtures::OpenFrame(nullptr, datagram);
+                if (inner)
+                    messages.push_back(std::move(*inner));
+            }
+            return messages;
+        }
+
+        /// Advance server time by `seconds` in `steps` Update calls.
+        static void Advance(float seconds, int steps)
+        {
+            for (int i = 0; i < steps; ++i)
+                NetworkManager::GetInstance().Update(seconds / static_cast<float>(steps));
+        }
+
+      private:
+        bool m_ready = false;
+        std::vector<SOCKET> m_sockets;
+        std::unordered_map<SOCKET, std::unique_ptr<SparkTestFixtures::WireAdapter>> m_wires;
+    };
+
+    NetworkMessage MarkerMessage(const std::vector<uint8_t>& marker, ChannelType channel)
+    {
+        NetworkMessage message;
+        message.type = MessageType::UserDefined;
+        message.channel = channel;
+        message.payload = marker;
+        return message;
+    }
+
+    size_t CountWithMarker(const std::vector<std::vector<uint8_t>>& datagrams, const std::vector<uint8_t>& marker)
+    {
+        return static_cast<size_t>(std::count_if(datagrams.begin(), datagrams.end(), [&](const auto& datagram)
+                                                 { return ContainsBytes(datagram, marker); }));
+    }
+
+    void EnableImpairment(float latencyMs, float reorderPercent = 0.0f, float duplicatePercent = 0.0f)
+    {
+        InstabilitySettings settings;
+        settings.enabled = true;
+        settings.latencyMs = latencyMs;
+        settings.reorderPercent = reorderPercent;
+        settings.duplicatePercent = duplicatePercent;
+        InstabilitySimulator::GetInstance().SetSettings(settings);
+    }
+} // namespace
+
+TEST(NetImpairment_ServerUnicastIsDelayed)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET client = INVALID_SOCKET;
+    const ClientID id = fixture.AdmitClient(client);
+    ASSERT_TRUE(id != INVALID_CLIENT);
+
+    EnableImpairment(200.0f);
+    const std::vector<uint8_t> marker{'u', 'n', 'i', 'c', 'a', 's', 't', '-', 'd', 'e', 'l', 'a', 'y'};
+    NetworkManager::GetInstance().SendToClient(id, MarkerMessage(marker, ChannelType::Unreliable));
+
+    ImpairmentServerFixture::Advance(0.10f, 5); // 100 ms of simulated time: still held
+    EXPECT_EQ(CountWithMarker(fixture.Receive(client, std::chrono::milliseconds(30)), marker), size_t{0});
+
+    ImpairmentServerFixture::Advance(0.30f, 6); // 400 ms total: released
+    EXPECT_EQ(CountWithMarker(fixture.Receive(client, std::chrono::milliseconds(50)), marker), size_t{1});
+}
+
+TEST(NetImpairment_DelayedUnicastReachesOnlyItsClient)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET clientA = INVALID_SOCKET;
+    SOCKET clientB = INVALID_SOCKET;
+    const ClientID idA = fixture.AdmitClient(clientA);
+    const ClientID idB = fixture.AdmitClient(clientB);
+    ASSERT_TRUE(idA != INVALID_CLIENT);
+    ASSERT_TRUE(idB != INVALID_CLIENT);
+    (void)fixture.Receive(clientA, std::chrono::milliseconds(20)); // traffic from B's admission
+
+    EnableImpairment(50.0f);
+    const std::vector<uint8_t> marker{'o', 'n', 'l', 'y', '-', 'f', 'o', 'r', '-', 'a'};
+    NetworkManager::GetInstance().SendToClient(idA, MarkerMessage(marker, ChannelType::Unreliable));
+    EXPECT_EQ(CountWithMarker(fixture.Receive(clientA, std::chrono::milliseconds(20)), marker), size_t{0});
+
+    ImpairmentServerFixture::Advance(0.10f, 5);
+    EXPECT_EQ(CountWithMarker(fixture.Receive(clientA, std::chrono::milliseconds(50)), marker), size_t{1});
+    EXPECT_EQ(CountWithMarker(fixture.Receive(clientB, std::chrono::milliseconds(50)), marker), size_t{0});
+}
+
+TEST(NetImpairment_DuplicatedReliableKeepsOneSequence)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET client = INVALID_SOCKET;
+    const ClientID id = fixture.AdmitClient(client);
+    ASSERT_TRUE(id != INVALID_CLIENT);
+
+    EnableImpairment(0.0f, 0.0f, 100.0f);
+    const std::vector<uint8_t> marker{'d', 'u', 'p', '-', 'r', 'e', 'l', 'i', 'a', 'b', 'l', 'e'};
+    auto& nm = NetworkManager::GetInstance();
+    nm.SendToClient(id, MarkerMessage(marker, ChannelType::Reliable));
+    ImpairmentServerFixture::Advance(0.02f, 2); // releases the trailing copy, well before any retransmit
+
+    std::vector<uint32_t> sequences;
+    for (const auto& datagram : fixture.Receive(client, std::chrono::milliseconds(50)))
+    {
+        NetworkMessage parsed;
+        if (NetworkManagerClientIdTestAccess::DeserializeMessageForTest(nm, datagram, parsed) &&
+            parsed.payload == marker)
+            sequences.push_back(parsed.sequence);
+    }
+    // Two copies on the wire with one reliable sequence, tracked once: the
+    // receiver's per-peer dedup delivers it a single time.
+    ASSERT_EQ(sequences.size(), size_t{2});
+    EXPECT_TRUE(sequences[0] != 0);
+    EXPECT_EQ(sequences[0], sequences[1]);
+    EXPECT_EQ(NetworkManagerClientIdTestAccess::UnackedMessagesWithPayload(nm, id, marker), size_t{1});
+}
+
+TEST(NetImpairment_ReorderLetsLaterUnreliableOvertake)
+{
+    ImpairmentServerFixture fixture;
+    ASSERT_TRUE(fixture.Ready());
+    SOCKET client = INVALID_SOCKET;
+    const ClientID id = fixture.AdmitClient(client);
+    ASSERT_TRUE(id != INVALID_CLIENT);
+
+    auto& nm = NetworkManager::GetInstance();
+    const std::vector<uint8_t> first{'r', 'e', 'o', 'r', 'd', 'e', 'r', '-', 'f', 'i', 'r', 's', 't'};
+    const std::vector<uint8_t> second{'r', 'e', 'o', 'r', 'd', 'e', 'r', '-', 's', 'e', 'c', 'o', 'n', 'd'};
+    EnableImpairment(0.0f, 100.0f); // held for the default 40 ms reorder window
+    nm.SendToClient(id, MarkerMessage(first, ChannelType::Unreliable));
+    EnableImpairment(0.0f, 0.0f); // still enabled: the held packet stays queued
+    nm.SendToClient(id, MarkerMessage(second, ChannelType::Unreliable));
+    ImpairmentServerFixture::Advance(0.06f, 3);
+
+    const auto datagrams = fixture.Receive(client, std::chrono::milliseconds(50));
+    const auto indexOf = [&](const std::vector<uint8_t>& marker)
+    {
+        const auto it = std::find_if(datagrams.begin(), datagrams.end(),
+                                     [&](const auto& datagram) { return ContainsBytes(datagram, marker); });
+        return it == datagrams.end() ? datagrams.size() : static_cast<size_t>(it - datagrams.begin());
+    };
+    const size_t firstIndex = indexOf(first);
+    const size_t secondIndex = indexOf(second);
+    ASSERT_TRUE(firstIndex < datagrams.size());
+    ASSERT_TRUE(secondIndex < datagrams.size());
+    EXPECT_TRUE(secondIndex < firstIndex);
 }
 
 #endif // ENABLE_NETWORKING

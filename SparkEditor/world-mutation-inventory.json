@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "description": "EDT-210: every World/registry mutation call in SparkEditor/Source, by enclosing function. Checked by Tests/Tools/test_editor_world_mutation_inventory.py (CTest EditorUndo_WorldMutationInventory). 'sites' is the exact number of mutation calls the scanner finds in that function.",
+  "sites": [
+    {
+      "file": "SparkEditor/Source/Core/EditorDocument.cpp",
+      "function": "EditorDocument::CreateEntity",
+      "sites": 7,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Core/EditorDocument.cpp",
+      "function": "EditorDocument::DeleteSelected",
+      "sites": 1,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Core/EditorDocument.cpp",
+      "function": "EditorDocument::Restore",
+      "sites": 1,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Core/EditorUI.cpp",
+      "function": "EditorUI::NewSceneNow",
+      "sites": 9,
+      "class": "fresh-world",
+      "reason": "Seeds a local World for File > New Scene; SwapWorld installs it with a cleared history."
+    },
+    {
+      "file": "SparkEditor/Source/Core/EditorUI.cpp",
+      "function": "EditorUI::SetGraphicsDevice",
+      "sites": 3,
+      "class": "fresh-world",
+      "reason": "Seeds the onboarding World when no document exists yet; SwapWorld installs it with a cleared history."
+    },
+    {
+      "file": "SparkEditor/Source/Core/EditorUI.h",
+      "function": "EditorUI::CreateDocumentEntity",
+      "sites": 1,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Core/ProjectManager.cpp",
+      "function": "ProjectManager::CreateDefaultScene",
+      "sites": 12,
+      "class": "fresh-world",
+      "reason": "Builds a project template's starter scene in a local World and saves it to disk; it never becomes the open document directly."
+    },
+    {
+      "file": "SparkEditor/Source/Gizmos/SceneEditTools.cpp",
+      "function": "CommitEntityRename",
+      "sites": 2,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Gizmos/SceneEditTools.cpp",
+      "function": "CommitEntityReparent",
+      "sites": 3,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Gizmos/SceneEditTools.cpp",
+      "function": "CommitSceneImport",
+      "sites": 6,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Gizmos/SceneEditToolsDuplicate.cpp",
+      "function": "CloneComponents",
+      "sites": 2,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Gizmos/SceneEditToolsDuplicate.cpp",
+      "function": "DuplicateEntity",
+      "sites": 1,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Panels/InspectorPanel.cpp",
+      "function": "InspectorPanel::RenderWorldAddComponentMenu",
+      "sites": 1,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Panels/InspectorPanel.cpp",
+      "function": "InspectorPanel::RenderWorldBackedInspector",
+      "sites": 1,
+      "class": "command",
+      "case": "EditorUndo_WorldMatrix_EveryCommandEntryPointRoundTrips"
+    },
+    {
+      "file": "SparkEditor/Source/Panels/PrefabEditorPanel.cpp",
+      "function": "PrefabEditorPanel::RenderPrefabInspector",
+      "sites": 2,
+      "class": "non-document",
+      "reason": "Edits a PrefabAsset's SerializedComponent list, not the document World."
+    },
+    {
+      "file": "SparkEditor/Source/Panels/PrefabEditorPanel.cpp",
+      "function": "PrefabEditorPanel::RenderToolbar",
+      "sites": 1,
+      "class": "non-document",
+      "reason": "Builds a new PrefabAsset's SerializedComponent list, not the document World."
+    },
+    {
+      "file": "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+      "function": "PrefabManager::CreateEmptyPrefab",
+      "sites": 1,
+      "class": "non-document",
+      "reason": "Builds a PrefabAsset's SerializedComponent list, not the document World."
+    },
+    {
+      "file": "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+      "function": "PrefabManager::CreatePrefabFromEntity",
+      "sites": 3,
+      "class": "non-document",
+      "reason": "Copies a scene-file object into a PrefabAsset's SerializedComponent list; the document World is only read."
+    },
+    {
+      "file": "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+      "function": "PrefabManager::CreateSamplePrefabs",
+      "sites": 13,
+      "class": "non-document",
+      "reason": "Builds the built-in sample PrefabAssets' SerializedComponent lists, not the document World."
+    },
+    {
+      "file": "SparkEditor/Source/Terrain/TerrainEditor.cpp",
+      "function": "TerrainEditor::SyncToEngine",
+      "sites": 3,
+      "class": "non-document",
+      "reason": "Writes the engine runtime World from EngineContext::Get()->GetWorld(); SparkEditor never registers the document World there. Routing terrain into the document is separate work."
+    }
+  ]
+}

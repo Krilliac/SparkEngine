@@ -31,9 +31,11 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "EngineSetup.h"
-#include "Engine/ECS/Components.h" // ::World — engine-owned ECS world service
+#include "Engine/ECS/Components.h"                 // ::World — engine-owned ECS world service
+#include "SceneManager/ReflectedSceneSerializer.h" // -scene: Spark::LoadWorld
 #include "AssetIntegration.h"
 #include "GameplaySystemLifecycle.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Engine/UI/UISystem.h"
@@ -117,6 +119,16 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
             return false;
         }
         return manager.LoadModulesFromManifest(*manifest);
+    }
+
+    // -scene without -game/-manifest is an explicit engine-only scene run (the
+    // Windows host suppresses its project selector for the same reason). A
+    // module found by the manifest or directory fallback below would take over
+    // the loop and leave the requested scene unused.
+    if (HasArgument(argc, argv, "-scene"))
+    {
+        console.LogInfo("[-scene] Engine-only scene run: implicit module discovery skipped");
+        return false;
     }
 
     // 3. Check for the executable-directory module manifest.
@@ -253,13 +265,13 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
     auto* ctx = EngineContext::Get();
     if (!ctx)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — Linux init aborted");
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — Linux init stopped");
         return;
     }
 
     InitPhysics();
+    GetEngineRuntime().CheckInitializationPointForTesting("host-physics");
 
-    Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     if (!g_noJobSystem)
     {
         Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
@@ -300,6 +312,10 @@ void InitLinuxCoreSubsystems(bool registerGameplay)
     {
         ctx->SetAssetPipeline(GetEngineRuntime().graphics->GetAssetPipeline());
     }
+
+    // Game modules compile and attach scripts in OnLoad, which runs before the
+    // gameplay lifecycle stage, so the script engine is a core service.
+    Spark::Core::Lifecycle::InitializeScriptingServiceImpl();
 
     // Initialize neural inference engine (GPU compute-based, no external ML deps)
     auto& neuralInference = Spark::Graphics::Neural::NeuralInferenceEngine::GetInstance();
@@ -403,16 +419,62 @@ void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio)
     LogMissingModuleWarnings();
 }
 
+bool LoadLinuxLaunchScene(int argc, char* argv[])
+{
+    if (!HasArgument(argc, argv, "-scene"))
+        return true;
+
+    auto& console = Spark::SimpleConsole::GetInstance();
+    const auto scenePath = ArgumentValue(argc, argv, "-scene");
+    if (!scenePath)
+    {
+        console.LogError("[-scene] requires a non-empty scene path");
+        return false;
+    }
+
+    // LoadGameModulesLinux skips implicit discovery for -scene and main()
+    // rejects -scene with -game/-manifest, so a module here means the launch
+    // contract was bypassed: the module would own the loop, not the scene.
+    if (GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules())
+    {
+        console.LogError("[-scene] A game module is active; the requested scene cannot run");
+        return false;
+    }
+
+    // Load straight into the engine-owned ECS world that EngineContext already
+    // publishes, so console commands and systems operate on the scene that runs
+    // and ShutdownEngine tears it down with every other engine-lifetime object.
+    // LoadWorld replaces the world only when a candidate fully deserializes.
+    extern std::unique_ptr<::World> g_engineEcsWorld;
+    std::string loadError;
+    if (!g_engineEcsWorld || !Spark::LoadWorld(*g_engineEcsWorld, *scenePath, &loadError))
+    {
+        console.LogError("[-scene] Failed to load '" + *scenePath + "'" + (loadError.empty() ? "" : ": " + loadError));
+        return false;
+    }
+
+    const size_t entityCount = g_engineEcsWorld->GetEntityCount();
+    size_t renderableCount = 0;
+    for ([[maybe_unused]] auto entity : g_engineEcsWorld->GetEntitiesWith<Transform, MeshRenderer>())
+        ++renderableCount;
+    console.LogSuccess("[-scene] Loaded '" + *scenePath + "' (" + std::to_string(entityCount) + " entities)");
+
+    // Machine-readable record parsed by cmake/RunSparkLinuxScenePreview.cmake.
+    std::fprintf(stdout, "SPARK_SCENE_LOADED entities=%zu renderables=%zu\n", entityCount, renderableCount);
+    std::fflush(stdout);
+    return true;
+}
+
 /**
  * @brief Common shutdown sequence for all Linux startup paths.
  */
-void ShutdownLinuxAfterPreflight()
+bool ShutdownLinuxAfterPreflight()
 {
     // Every Linux loop reaches this function only after a successful
     // CanShutdownEngine checkpoint. Commit without a second fallible gate.
     GetEngineRuntime().moduleHotReload.reset();
     Spark::SimpleConsole::GetInstance().LogInfo("Shutting down...");
-    ShutdownEngineAfterPreflight();
+    return ShutdownEngineAfterPreflight();
 }
 
 #endif // !SPARK_PLATFORM_WINDOWS

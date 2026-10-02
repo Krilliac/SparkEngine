@@ -2,8 +2,7 @@
 
 #include "Character/RPGCharacterSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
-#include "Utils/LogMacros.h"
-#include "Utils/SparkConsole.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -49,7 +48,7 @@ namespace RPG
         RegisterRPGDialogueTrees();
         RegisterDialogueHooks();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Gameplay bridge initialized (engine quest/dialogue)");
+        Spark::ModuleLog::Info(m_context, "[RPG] Gameplay bridge initialized (engine quest/dialogue)");
         return true;
     }
 
@@ -88,15 +87,15 @@ namespace RPG
 
     void RPGGameplayBridge::OnQuestStarted(uint32_t entityId, const Spark::Gameplay::QuestDefinition& questDef)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest started through engine system: %s (entity=%u)",
-                       questDef.name.c_str(), entityId);
+        Spark::ModuleLog::Info(m_context, "[RPG] Quest started through engine system: {} (entity={})",
+                               questDef.name.c_str(), entityId);
     }
 
     void RPGGameplayBridge::OnObjectiveProgress(uint32_t entityId, uint32_t questId,
                                                 const Spark::Gameplay::QuestObjective& objective)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "[RPG] Objective update entity=%u quest=%u '%s' (%u/%u)", entityId,
-                        questId, objective.description.c_str(), objective.currentCount, objective.requiredCount);
+        Spark::ModuleLog::Debug(m_context, "[RPG] Objective update entity={} quest={} '{}' ({}/{})", entityId, questId,
+                                objective.description.c_str(), objective.currentCount, objective.requiredCount);
     }
 
     void RPGGameplayBridge::OnQuestCompleted(uint32_t entityId, const Spark::Gameplay::QuestDefinition& questDef)
@@ -105,8 +104,8 @@ namespace RPG
         {
             m_characterSystem->AddXP(entityId, questDef.xpReward);
         }
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[RPG] Quest completed through engine system: %s (entity=%u)",
-                       questDef.name.c_str(), entityId);
+        Spark::ModuleLog::Info(m_context, "[RPG] Quest completed through engine system: {} (entity={})",
+                               questDef.name.c_str(), entityId);
     }
 
     void RPGGameplayBridge::RegisterRPGQuests()

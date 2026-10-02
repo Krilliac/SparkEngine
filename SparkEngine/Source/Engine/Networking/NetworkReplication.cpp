@@ -12,6 +12,7 @@
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #ifdef SendMessage
@@ -24,6 +25,11 @@ namespace Spark::Net
 
     namespace
     {
+        bool IsFiniteVector(const XMFLOAT3& value) noexcept
+        {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+
         // Serializes an entity's state without touching m_replicatedEntities.
         // Callers that hold m_replicationMutex use this directly; locking wrappers
         // must not call SerializeEntityState while holding the mutex (non-recursive).
@@ -195,8 +201,11 @@ namespace Spark::Net
         // into O(connects * replicated-entities) CPU amplification.
         {
             std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
-            if (!m_clients.contains(targetClient))
-                return;
+            const auto target = m_clients.find(targetClient);
+            if (target == m_clients.end() || target->second.state != ConnectionState::Connected)
+            {
+                return; // unknown, or still Securing (NET-100): no entity walk before admission
+            }
         }
 
         ++m_stats.fullEntitySyncs;
@@ -289,20 +298,31 @@ namespace Spark::Net
             return;
         }
 
+        // Validate the whole transform before touching any entity: a truncated
+        // packet must not zero an entity and a NaN/Inf must never reach
+        // interpolation, physics or rendering.
+        const XMFLOAT3 position = inBuffer.ReadVector3();
+        const XMFLOAT3 rotation = inBuffer.ReadVector3();
+        const XMFLOAT3 velocity = inBuffer.ReadVector3();
+        if (inBuffer.HasError())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "DeserializeEntityState: truncated transform for netID=%u",
+                           networkID);
+            return;
+        }
+        if (!IsFiniteVector(position) || !IsFiniteVector(rotation) || !IsFiniteVector(velocity))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "DeserializeEntityState: non-finite transform for netID=%u",
+                           networkID);
+            return;
+        }
+
         {
             std::lock_guard<std::mutex> lock(m_replicationMutex);
             auto it = m_replicatedEntities.find(networkID);
             if (it == m_replicatedEntities.end())
             {
-                // Entity not known locally -- create a placeholder
-                SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u",
-                                networkID);
-                ReplicatedEntity placeholder;
-                placeholder.networkID = networkID;
-                placeholder.position = inBuffer.ReadVector3();
-                placeholder.rotation = inBuffer.ReadVector3();
-                placeholder.velocity = inBuffer.ReadVector3();
-                // Skip remaining property data
+                // Skip property data: an unknown entity has no deserializers.
                 uint16_t propCount = inBuffer.ReadUint16();
                 if (inBuffer.HasError())
                 {
@@ -314,18 +334,36 @@ namespace Spark::Net
                 {
                     inBuffer.ReadString(); // name
                     inBuffer.ReadUint8();  // type
-                    // Cannot deserialize without a handler -- skip
                 }
+
+                // Entity not known locally -- create a placeholder, but never past the
+                // cap: every unique ID would otherwise add a permanent map entry.
+                if (m_replicatedEntities.size() >= kMaxReplicatedEntities)
+                {
+                    m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network,
+                                    "Dropping state for unknown entity netID=%u: %zu entities tracked (cap %zu)",
+                                    networkID, m_replicatedEntities.size(), kMaxReplicatedEntities);
+                    return;
+                }
+                // Trace, not Debug: one line per unknown entity, and a peer controls how many arrive.
+                SPARK_LOG_TRACE(Spark::LogCategory::Network, "Creating placeholder for unknown entity netID=%u",
+                                networkID);
+                ReplicatedEntity placeholder;
+                placeholder.networkID = networkID;
+                placeholder.position = position;
+                placeholder.rotation = rotation;
+                placeholder.velocity = velocity;
                 placeholder.lastUpdateTime = m_serverTime;
-                m_replicatedEntities[networkID] = placeholder;
+                m_replicatedEntities[networkID] = std::move(placeholder);
                 ++m_replicationMutationEpoch;
                 return;
             }
 
             auto& entity = it->second;
-            entity.position = inBuffer.ReadVector3();
-            entity.rotation = inBuffer.ReadVector3();
-            entity.velocity = inBuffer.ReadVector3();
+            entity.position = position;
+            entity.rotation = rotation;
+            entity.velocity = velocity;
             entity.lastUpdateTime = m_serverTime;
             ++m_replicationMutationEpoch;
         }
@@ -476,13 +514,9 @@ namespace Spark::Net
 
                 // Snapshot client IDs once — both code paths need them so we can
                 // apply the per-connection interest filter instead of broadcasting.
-                std::vector<ClientID> connectedClients;
-                {
-                    std::lock_guard<std::mutex> clientLock(m_clientsMutex);
-                    connectedClients.reserve(m_clients.size());
-                    for (const auto& [cid, cinfo] : m_clients)
-                        connectedClients.push_back(cid);
-                }
+                // Only admitted (Connected) clients: a Securing slot has not proven
+                // its channel (NET-100) and must receive nothing but its ConnectAccepted.
+                const std::vector<ClientID> connectedClients = GetConnectedClientIDs();
 
                 NetBuffer serializedState;
                 apiLock.unlock();

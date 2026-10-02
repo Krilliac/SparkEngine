@@ -1,8 +1,11 @@
+#include "PathSecurity.h"
 #include "ProcessRunner.h"
 
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -71,7 +74,9 @@ namespace
             std::ifstream file(path);
             uint64_t pid = 0;
             if (file >> pid; pid > 1)
+            {
                 return pid;
+            }
             std::this_thread::sleep_for(10ms);
         }
         return 0;
@@ -118,6 +123,8 @@ namespace
     {
         return "\"" + QuoteNativeArgument(executable.string()) + " --exit-success\"";
     }
+
+
 #else
     std::string QuoteShellArgument(const std::string& argument)
     {
@@ -125,9 +132,13 @@ namespace
         for (char character : argument)
         {
             if (character == '\'')
+            {
                 quoted += "'\\''";
+            }
             else
+            {
                 quoted.push_back(character);
+            }
         }
         quoted.push_back('\'');
         return quoted;
@@ -142,7 +153,44 @@ namespace
     {
         return QuoteShellArgument(executable.string()) + " --exit-success";
     }
+
+
 #endif
+
+    // RunSync parses argv directly; the shell wrappers used by RunAsync
+    // fixtures would turn the entire command into one executable name here.
+    std::string BuildBinaryOutputCommand(const std::filesystem::path& executable)
+    {
+        std::string command = "\"";
+        for (const char character : executable.string())
+        {
+            if (character == '\\' || character == '\"')
+            {
+                command.push_back('\\');
+            }
+            command.push_back(character);
+        }
+        command += "\" --emit-binary-output";
+        return command;
+    }
+
+    std::string ExpectedBinaryOutput()
+    {
+        std::string expected(4095, 'A');
+        expected.push_back('\0');
+        expected.append(4096, 'B');
+        expected.push_back('\0');
+        expected.append("git\0files\0", 10);
+        return expected;
+    }
+
+    int BinaryOutputMain()
+    {
+        const std::string output = ExpectedBinaryOutput();
+        const bool writeSucceeded = std::fwrite(output.data(), 1, output.size(), stdout) == output.size();
+        const bool flushSucceeded = std::fflush(stdout) == 0;
+        return writeSucceeded && flushSucceeded ? 0 : 2;
+    }
 
     ExactChild SpawnExactChild(const std::filesystem::path& executable, const char* mode,
                                const std::filesystem::path& pidFile)
@@ -156,7 +204,9 @@ namespace
             QuoteNativeArgument(executable.string()) + " " + mode + " " + QuoteNativeArgument(pidFile.string());
         if (!::CreateProcessA(executable.string().c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
                               nullptr, nullptr, &startup, &process))
+        {
             return child;
+        }
         ::CloseHandle(process.hThread);
         child.process = process.hProcess;
         child.pid = process.dwProcessId;
@@ -169,7 +219,9 @@ namespace
             _exit(127);
         }
         if (pid > 0)
+        {
             child.pid = pid;
+        }
 #endif
         return child;
     }
@@ -186,12 +238,16 @@ namespace
     bool ExactChildIsAlive(const ExactChild& child)
     {
         if (!ExactChildIsValid(child))
+        {
             return false;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         return ::WaitForSingleObject(child.process, 0) == WAIT_TIMEOUT;
 #else
         if (::kill(child.pid, 0) == 0)
+        {
             return true;
+        }
         return errno == EPERM;
 #endif
     }
@@ -199,17 +255,23 @@ namespace
     bool ProcessIdIsAlive(uint64_t pid)
     {
         if (pid <= 1)
+        {
             return false;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         HANDLE process = ::OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(pid));
         if (!process)
+        {
             return false;
+        }
         const bool alive = ::WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
         ::CloseHandle(process);
         return alive;
 #else
         if (::kill(static_cast<pid_t>(pid), 0) == 0)
+        {
             return true;
+        }
         return errno == EPERM;
 #endif
     }
@@ -217,10 +279,14 @@ namespace
     void StopExactChild(ExactChild& child)
     {
         if (!ExactChildIsValid(child))
+        {
             return;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         if (::WaitForSingleObject(child.process, 0) == WAIT_TIMEOUT)
+        {
             (void)::TerminateProcess(child.process, 0);
+        }
         (void)::WaitForSingleObject(child.process, 5000);
         ::CloseHandle(child.process);
         child.process = nullptr;
@@ -250,10 +316,14 @@ namespace
     int SentinelMain(const std::filesystem::path& pidFile)
     {
         if (!WritePidFile(pidFile))
+        {
             return 2;
+        }
         const auto deadline = std::chrono::steady_clock::now() + 30s;
         while (std::chrono::steady_clock::now() < deadline)
+        {
             std::this_thread::sleep_for(100ms);
+        }
         return 0;
     }
 
@@ -261,7 +331,9 @@ namespace
     {
         ExactChild descendant = SpawnExactChild(executable, "--sentinel", pidFile);
         if (!ExactChildIsValid(descendant))
+        {
             return 3;
+        }
 #ifdef SPARK_PLATFORM_WINDOWS
         (void)::WaitForSingleObject(descendant.process, INFINITE);
         ::CloseHandle(descendant.process);
@@ -332,7 +404,9 @@ namespace
 
         const auto descendantDeadline = std::chrono::steady_clock::now() + 3s;
         while (ProcessIdIsAlive(descendantPid) && std::chrono::steady_clock::now() < descendantDeadline)
+        {
             std::this_thread::sleep_for(10ms);
+        }
 
         {
             std::lock_guard<std::mutex> lock(completionMutex);
@@ -455,21 +529,230 @@ namespace
         }
         return 0;
     }
+
+    int RunSyncBinaryOutputTest(const std::filesystem::path& executable)
+    {
+        SparkBuild::ProcessRunner runner;
+        std::string output;
+        const int exitCode = runner.RunSync(BuildBinaryOutputCommand(executable), {}, output);
+        if (exitCode != 0)
+        {
+            std::cerr << "FAIL: RunSync binary-output child exited with " << exitCode << '\n';
+            return 1;
+        }
+        const std::string expected = ExpectedBinaryOutput();
+        if (output != expected)
+        {
+            std::cerr << "FAIL: RunSync did not preserve binary output (expected " << expected.size() << " bytes, got "
+                      << output.size() << ")\n";
+            return 1;
+        }
+        return 0;
+    }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    constexpr char kPathListSeparator = ';';
+#else
+    constexpr char kPathListSeparator = ':';
+#endif
+
+    // Replaces PATH for one scope and restores the previous value.
+    class ScopedPathVariable
+    {
+      public:
+        explicit ScopedPathVariable(const std::string& value)
+        {
+            const char* current = std::getenv("PATH");
+            m_hadValue = current != nullptr;
+            if (m_hadValue)
+            {
+                m_previous = current;
+            }
+            m_ok = Set(value);
+        }
+        ~ScopedPathVariable()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            (void)Set(m_hadValue ? m_previous : std::string());
+#else
+            if (m_hadValue)
+            {
+                (void)Set(m_previous);
+            }
+            else
+            {
+                (void)::unsetenv("PATH");
+            }
+#endif
+        }
+        ScopedPathVariable(const ScopedPathVariable&) = delete;
+        ScopedPathVariable& operator=(const ScopedPathVariable&) = delete;
+
+        bool IsSet() const { return m_ok; }
+        const std::string& Previous() const { return m_previous; }
+
+      private:
+        static bool Set(const std::string& value)
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            return _putenv_s("PATH", value.c_str()) == 0;
+#else
+            return ::setenv("PATH", value.c_str(), 1) == 0;
+#endif
+        }
+
+        std::string m_previous;
+        bool m_hadValue = false;
+        bool m_ok = false;
+    };
+
+    // SEC finding 19: a bare tool name ("git", "cmake") must never resolve to
+    // a binary planted in the current directory (Windows' implicit
+    // CreateProcess search, cmd.exe's command search, and execvp with an
+    // empty PATH entry all look there). A copy of this test binary stands in
+    // for the planted tool; run with --exit-success it exits 0, so a zero exit
+    // proves the planted file ran.
+    int RunPlantedToolSearchTest(const std::filesystem::path& executable)
+    {
+        namespace fs = std::filesystem;
+        int failures = 0;
+        auto check = [&failures](bool condition, const std::string& message)
+        {
+            if (!condition)
+            {
+                ++failures;
+                std::cerr << "FAIL: " << message << '\n';
+            }
+        };
+
+        const std::string toolName = "sparkbuild-planted-probe";
+        const fs::path plantDirectory =
+            fs::temp_directory_path() / ("sparkbuild-planted-" + std::to_string(CurrentProcessIdValue()) + "-" +
+                                         std::to_string(CurrentSteadyTick()));
+        const fs::path planted = plantDirectory / (toolName + SPARK_EXE_EXT);
+        std::error_code error;
+        fs::create_directories(plantDirectory, error);
+        if (!error)
+        {
+            fs::copy_file(executable, planted, fs::copy_options::overwrite_existing, error);
+        }
+#ifndef SPARK_PLATFORM_WINDOWS
+        if (!error)
+        {
+            fs::permissions(planted, fs::perms::owner_exec, fs::perm_options::add, error);
+        }
+#endif
+        if (error)
+        {
+            std::cerr << "FAIL: could not plant the probe tool: " << error.message() << '\n';
+            fs::remove_all(plantDirectory, error);
+            return 1;
+        }
+        const std::string command = toolName + " --exit-success";
+
+        // The resolver itself never accepts relative or empty PATH entries.
+        const std::string relativeEntries =
+            std::string(".") + kPathListSeparator + kPathListSeparator + plantDirectory.filename().string();
+        const fs::path previousDirectory = fs::current_path(error);
+        fs::current_path(plantDirectory, error);
+        check(!error, "could not enter the plant directory");
+        check(SparkBuild::PathSecurity::ResolveExecutableIn(toolName, relativeEntries).empty(),
+              "an empty, '.' or relative PATH entry resolved a tool from the current directory");
+        check(SparkBuild::PathSecurity::ResolveExecutableIn(toolName, plantDirectory.string()) ==
+                  planted.lexically_normal().string(),
+              "an absolute PATH entry did not resolve the tool");
+        check(!SparkBuild::PathSecurity::IsBareProgramName("tools/" + toolName) &&
+                  SparkBuild::PathSecurity::IsBareProgramName(toolName),
+              "bare-name classification is wrong");
+
+        {
+            // Leading empty entry: execvp treats it as the current directory.
+            ScopedPathVariable path(std::string(1, kPathListSeparator) + "." + kPathListSeparator +
+                                    std::string(std::getenv("PATH") ? std::getenv("PATH") : ""));
+            check(path.IsSet(), "could not set PATH for the planted-tool test");
+            SparkBuild::ProcessRunner runner;
+            std::string output;
+            check(runner.RunSync(command, {}, output) != 0, "RunSync executed a tool planted in the current directory");
+        }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+        {
+            // RunAsync goes through cmd.exe, which searches its working directory first by default.
+            std::mutex completionMutex;
+            std::condition_variable completionCondition;
+            bool completed = false;
+            bool succeeded = true;
+            SparkBuild::ProcessRunner runner;
+            const bool launched = runner.RunAsync(
+                command, plantDirectory.string(), [](const std::string&) {},
+                [&](int exitCode, bool success)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(completionMutex);
+                        completed = true;
+                        succeeded = success && exitCode == 0;
+                    }
+                    completionCondition.notify_all();
+                });
+            check(launched, "RunAsync rejected the planted-tool launch");
+            std::unique_lock<std::mutex> lock(completionMutex);
+            check(completionCondition.wait_for(lock, 8s, [&] { return completed; }),
+                  "planted-tool RunAsync did not complete");
+            check(!succeeded, "RunAsync (cmd.exe) executed a tool planted in its working directory");
+        }
+#endif
+
+        fs::current_path(previousDirectory, error);
+        check(!error, "could not restore the working directory");
+
+        {
+            // Positive control: the same tool on an absolute PATH entry still runs.
+            const char* current = std::getenv("PATH");
+            ScopedPathVariable path(plantDirectory.string() + kPathListSeparator + (current ? current : ""));
+            check(path.IsSet(), "could not prepend the plant directory to PATH");
+            SparkBuild::ProcessRunner runner;
+            std::string output;
+            check(runner.RunSync(command, {}, output) == 0,
+                  "RunSync did not run a tool found on an absolute PATH entry");
+            check(SparkBuild::PathSecurity::ResolveExecutable(toolName) == planted.lexically_normal().string(),
+                  "ResolveExecutable did not return the absolute PATH match");
+        }
+
+        fs::remove_all(plantDirectory, error);
+        return failures == 0 ? 0 : 1;
+    }
 } // namespace
 
 int main(int argc, char** argv)
 {
     const std::filesystem::path executable = std::filesystem::absolute(argv[0]);
     if (argc == 3 && std::string(argv[1]) == "--sentinel")
+    {
         return SentinelMain(argv[2]);
+    }
     if (argc == 3 && std::string(argv[1]) == "--spawn-descendant")
+    {
         return DescendantSpawnerMain(executable, argv[2]);
+    }
     if (argc == 2 && std::string(argv[1]) == "--exit-success")
+    {
         return 0;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--emit-binary-output")
+    {
+        return BinaryOutputMain();
+    }
     if (argc != 1)
+    {
         return 64;
+    }
     const int cancellationResult = RunCancellationTreeTest(executable);
     const int reentryResult = RunCompletionReentryTest(executable);
     const int destructionResult = RunCompletionOwnedDestructionTest(executable);
-    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 ? 0 : 1;
+    const int binaryOutputResult = RunSyncBinaryOutputTest(executable);
+    const int plantedToolResult = RunPlantedToolSearchTest(executable);
+    return cancellationResult == 0 && reentryResult == 0 && destructionResult == 0 && binaryOutputResult == 0 &&
+                   plantedToolResult == 0
+               ? 0
+               : 1;
 }

@@ -6,10 +6,16 @@
 #include "CollaborativeEditSession.h"
 #include "StandaloneCollaborationClient.h"
 #include "Engine/Networking/NetworkBindPolicy.h"
+#include "Utils/PasswordHash.h"
+#include "Utils/SecureRandom.h"
 #include "Utils/Validate.h"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdint>
 #include <cstring>
+#include <span>
 #include <sstream>
 
 #ifdef _WIN32
@@ -70,7 +76,9 @@ namespace SparkEditor
         void CloseSocket(CollaborativeSocketHandle socket)
         {
             if (!IsValidSocket(socket))
+            {
                 return;
+            }
 #ifdef _WIN32
             ::closesocket(ToNativeSocket(socket));
 #else
@@ -95,169 +103,6 @@ namespace SparkEditor
 #else
             return 0;
 #endif
-        }
-
-        void WriteU8(std::vector<uint8_t>& buf, uint8_t val)
-        {
-            buf.push_back(val);
-        }
-
-        void WriteU32(std::vector<uint8_t>& buf, uint32_t val)
-        {
-            buf.push_back(static_cast<uint8_t>((val >> 24) & 0xFF));
-            buf.push_back(static_cast<uint8_t>((val >> 16) & 0xFF));
-            buf.push_back(static_cast<uint8_t>((val >> 8) & 0xFF));
-            buf.push_back(static_cast<uint8_t>(val & 0xFF));
-        }
-
-        void WriteU64(std::vector<uint8_t>& buf, uint64_t val)
-        {
-            WriteU32(buf, static_cast<uint32_t>((val >> 32) & 0xFFFFFFFF));
-            WriteU32(buf, static_cast<uint32_t>(val & 0xFFFFFFFF));
-        }
-
-        void WriteFloat(std::vector<uint8_t>& buf, float val)
-        {
-            uint32_t bits;
-            std::memcpy(&bits, &val, sizeof(bits));
-            WriteU32(buf, bits);
-        }
-
-        void WriteString(std::vector<uint8_t>& buf, const std::string& str)
-        {
-            WriteU32(buf, static_cast<uint32_t>(str.size()));
-            buf.insert(buf.end(), str.begin(), str.end());
-        }
-
-        struct Reader
-        {
-            const uint8_t* data;
-            size_t size;
-            size_t pos = 0;
-
-            bool HasBytes(size_t n) const { return pos + n <= size; }
-
-            bool failed = false;
-
-            uint8_t ReadU8()
-            {
-                if (!HasBytes(1))
-                {
-                    failed = true;
-                    return 0;
-                }
-                uint8_t val = data[pos++];
-                return val;
-            }
-
-            uint32_t ReadU32()
-            {
-                if (!HasBytes(4))
-                {
-                    failed = true;
-                    return 0;
-                }
-                uint32_t val = (static_cast<uint32_t>(data[pos]) << 24) | (static_cast<uint32_t>(data[pos + 1]) << 16) |
-                               (static_cast<uint32_t>(data[pos + 2]) << 8) | static_cast<uint32_t>(data[pos + 3]);
-                pos += 4;
-                return val;
-            }
-
-            uint64_t ReadU64()
-            {
-                uint64_t hi = ReadU32();
-                uint64_t lo = ReadU32();
-                return (hi << 32) | lo;
-            }
-
-            float ReadFloat()
-            {
-                uint32_t bits = ReadU32();
-                float val = 0.0f;
-                if (!failed)
-                    std::memcpy(&val, &bits, sizeof(val));
-                return val;
-            }
-
-            std::string ReadString()
-            {
-                uint32_t len = ReadU32();
-                if (failed || !HasBytes(len))
-                {
-                    failed = true;
-                    return "";
-                }
-                std::string str(reinterpret_cast<const char*>(data + pos), len);
-                pos += len;
-                return str;
-            }
-        };
-
-        void WriteEditMessage(std::vector<uint8_t>& buf, const EditMessage& edit)
-        {
-            WriteU8(buf, static_cast<uint8_t>(edit.type));
-            WriteU32(buf, edit.sourceEditor);
-            WriteString(buf, edit.nodeId);
-            WriteString(buf, edit.componentType);
-            WriteString(buf, edit.propertyName);
-            WriteString(buf, edit.newValue);
-            WriteString(buf, edit.oldValue);
-            WriteU64(buf, edit.timestamp);
-        }
-
-        EditMessage ReadEditMessage(Reader& r)
-        {
-            EditMessage edit;
-            if (r.failed)
-                return edit;
-            edit.type = static_cast<EditMessageType>(r.ReadU8());
-            edit.sourceEditor = r.ReadU32();
-            edit.nodeId = r.ReadString();
-            edit.componentType = r.ReadString();
-            edit.propertyName = r.ReadString();
-            edit.newValue = r.ReadString();
-            edit.oldValue = r.ReadString();
-            edit.timestamp = r.ReadU64();
-            return edit;
-        }
-
-        void WriteEditorPeer(std::vector<uint8_t>& buf, const EditorPeer& peer)
-        {
-            WriteU32(buf, peer.id);
-            WriteString(buf, peer.userName);
-            WriteString(buf, peer.selectedNode);
-            WriteFloat(buf, peer.viewportCameraPos.x);
-            WriteFloat(buf, peer.viewportCameraPos.y);
-            WriteFloat(buf, peer.viewportCameraPos.z);
-            WriteFloat(buf, peer.viewportCameraDir.x);
-            WriteFloat(buf, peer.viewportCameraDir.y);
-            WriteFloat(buf, peer.viewportCameraDir.z);
-            WriteFloat(buf, peer.color.r);
-            WriteFloat(buf, peer.color.g);
-            WriteFloat(buf, peer.color.b);
-            WriteFloat(buf, peer.color.a);
-        }
-
-        EditorPeer ReadEditorPeer(Reader& r)
-        {
-            EditorPeer peer;
-            if (r.failed)
-                return peer;
-            peer.id = r.ReadU32();
-            peer.userName = r.ReadString();
-            peer.selectedNode = r.ReadString();
-            peer.viewportCameraPos.x = r.ReadFloat();
-            peer.viewportCameraPos.y = r.ReadFloat();
-            peer.viewportCameraPos.z = r.ReadFloat();
-            peer.viewportCameraDir.x = r.ReadFloat();
-            peer.viewportCameraDir.y = r.ReadFloat();
-            peer.viewportCameraDir.z = r.ReadFloat();
-            peer.color.r = r.ReadFloat();
-            peer.color.g = r.ReadFloat();
-            peer.color.b = r.ReadFloat();
-            peer.color.a = r.ReadFloat();
-            peer.isActive = true;
-            return peer;
         }
 
         // Send length-prefixed message over TCP (thread-safe per socket)
@@ -290,53 +135,92 @@ namespace SparkEditor
             return sendAll(sock, header, 4) && sendAll(sock, data.data(), data.size());
         }
 
+        using SteadyClock = std::chrono::steady_clock;
+
         // Receive one length-prefixed frame from TCP.
         // Socket should have SO_RCVTIMEO set so recv() returns periodically,
-        // allowing us to check m_shuttingDown. Returns empty on disconnect/error.
-        std::vector<uint8_t> RecvFramed(CollaborativeSocketHandle sock, const std::atomic<bool>& shuttingDown)
+        // allowing us to check shuttingDown and the deadlines. Returns empty on
+        // disconnect, error, an oversized length, or a missed deadline:
+        //  - firstByteDeadline bounds the whole receive, including the wait for the
+        //    frame to start (SteadyClock::time_point::max() waits indefinitely
+        //    between frames);
+        //  - once the first byte arrives, the whole frame must land within
+        //    kCollabFrameCompletionSeconds, so a peer that sends a header and then
+        //    stalls cannot pin a buffer and a thread forever.
+        // The payload buffer grows with the bytes actually received instead of being
+        // sized from the untrusted length prefix up front.
+        std::vector<uint8_t> RecvFramed(CollaborativeSocketHandle sock, const std::atomic<bool>& shuttingDown,
+                                        uint32_t maxFrameBytes,
+                                        SteadyClock::time_point firstByteDeadline = SteadyClock::time_point::max())
         {
-            auto recvAll = [&](void* buf, size_t totalLen) -> bool
+            SteadyClock::time_point deadline = firstByteDeadline;
+            bool frameStarted = false;
+
+            auto recvSome = [&](char* ptr, size_t wanted) -> size_t
             {
-                auto* ptr = static_cast<char*>(buf);
-                size_t received = 0;
-                while (received < totalLen)
+                while (true)
                 {
                     if (shuttingDown.load(std::memory_order_acquire))
-                        return false;
-                    auto n = ::recv(ToNativeSocket(sock), ptr + received, static_cast<int>(totalLen - received), 0);
+                        return 0;
+                    if (SteadyClock::now() > deadline)
+                        return 0;
+                    auto n = ::recv(ToNativeSocket(sock), ptr, static_cast<int>(wanted), 0);
                     if (n > 0)
                     {
-                        received += static_cast<size_t>(n);
-                        continue;
+                        if (!frameStarted)
+                        {
+                            // Never extends a caller's absolute deadline (the handshake's).
+                            frameStarted = true;
+                            deadline = std::min<SteadyClock::time_point>(
+                                deadline, SteadyClock::now() + std::chrono::seconds(kCollabFrameCompletionSeconds));
+                        }
+                        return static_cast<size_t>(n);
                     }
                     if (n == 0)
-                        return false; // Clean disconnect
+                        return 0; // Clean disconnect
 #ifdef _WIN32
                     if (WSAGetLastError() == WSAETIMEDOUT)
-                        continue; // Timeout — retry after checking shuttingDown
+                        continue; // Timeout — retry after checking shuttingDown/deadline
 #else
                     if (errno == EAGAIN || errno == EWOULDBLOCK)
-                        continue; // Timeout — retry after checking shuttingDown
+                        continue; // Timeout — retry after checking shuttingDown/deadline
 #endif
-                    return false; // Real error
+                    return 0; // Real error
                 }
-                return true;
             };
 
             uint8_t header[4];
-            if (!recvAll(header, 4))
-                return {};
+            size_t headerReceived = 0;
+            while (headerReceived < sizeof(header))
+            {
+                const size_t n =
+                    recvSome(reinterpret_cast<char*>(header) + headerReceived, sizeof(header) - headerReceived);
+                if (n == 0)
+                    return {};
+                headerReceived += n;
+            }
 
             uint32_t len = (static_cast<uint32_t>(header[0]) << 24) | (static_cast<uint32_t>(header[1]) << 16) |
                            (static_cast<uint32_t>(header[2]) << 8) | static_cast<uint32_t>(header[3]);
-
-            // Sanity check: max 16MB message
-            if (len > 16 * 1024 * 1024)
+            if (len == 0 || len > maxFrameBytes)
                 return {};
 
-            std::vector<uint8_t> data(len);
-            if (!recvAll(data.data(), len))
-                return {};
+            constexpr size_t kReceiveChunkBytes = size_t{64} * 1024;
+            std::vector<uint8_t> data;
+            while (data.size() < len)
+            {
+                const size_t received = data.size();
+                const size_t chunk = std::min(kReceiveChunkBytes, static_cast<size_t>(len) - received);
+                data.resize(received + chunk);
+                size_t filled = 0;
+                while (filled < chunk)
+                {
+                    const size_t n = recvSome(reinterpret_cast<char*>(data.data() + received + filled), chunk - filled);
+                    if (n == 0)
+                        return {};
+                    filled += n;
+                }
+            }
 
             return data;
         }
@@ -478,53 +362,53 @@ namespace SparkEditor
 
     } // namespace
 
-    // ============================================================================
-    // Public Serialization API
-    // ============================================================================
-
-    std::vector<uint8_t> SerializeMessage(const InternalMessage& msg)
+    bool IsValidCollabJoinCode(std::string_view joinCode)
     {
-        static const EditMessage defaultEditMessage{};
-        std::vector<uint8_t> buf;
-        buf.reserve(256);
-
-        WriteU8(buf, static_cast<uint8_t>(msg.type));
-        WriteU32(buf, msg.sourcePeer);
-        WriteString(buf, msg.nodeId);
-        WriteString(buf, msg.payload);
-        WriteU64(buf, msg.timestamp);
-        // The fixed-width legacy frame always carries an edit section. Keep that
-        // section canonical for non-edit messages so irrelevant caller state can
-        // never leak nondeterministic bytes onto the wire.
-        WriteEditMessage(buf, msg.type == InternalMessageType::EditBroadcast ? msg.editMessage : defaultEditMessage);
-        WriteEditorPeer(buf, msg.peerInfo);
-
-        return buf;
+        return joinCode.size() == kCollabJoinSecretBytes * 2 &&
+               std::all_of(joinCode.begin(), joinCode.end(),
+                           [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
     }
 
-    bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMsg)
+    std::string ComputeCollabJoinProof(std::string_view joinCode, std::string_view nonce, std::string_view userName)
     {
-        if (!data || size == 0)
-            return false;
+        static constexpr std::string_view kDomain = "SparkCollabJoin/v1";
+        std::vector<uint8_t> message;
+        message.reserve(kDomain.size() + nonce.size() + userName.size());
+        message.insert(message.end(), kDomain.begin(), kDomain.end());
+        message.insert(message.end(), nonce.begin(), nonce.end());
+        message.insert(message.end(), userName.begin(), userName.end());
 
-        Reader r{data, size, 0};
-        if (!r.HasBytes(1))
-            return false;
+        const auto* keyBytes = reinterpret_cast<const uint8_t*>(joinCode.data());
+        const auto digest = Spark::PasswordHash::ComputeHmacSha256(std::span<const uint8_t>(keyBytes, joinCode.size()),
+                                                                   std::span<const uint8_t>(message));
 
-        outMsg.type = static_cast<InternalMessageType>(r.ReadU8());
-        outMsg.sourcePeer = r.ReadU32();
-        outMsg.nodeId = r.ReadString();
-        outMsg.payload = r.ReadString();
-        outMsg.timestamp = r.ReadU64();
-        outMsg.editMessage = ReadEditMessage(r);
-        outMsg.peerInfo = ReadEditorPeer(r);
-
-        // If any read went out of bounds, the message is malformed
-        if (r.failed)
-            return false;
-
-        return true;
+        static constexpr char kHexDigits[] = "0123456789abcdef";
+        std::string hex(digest.size() * 2, '\0');
+        for (size_t i = 0; i < digest.size(); ++i)
+        {
+            hex[i * 2] = kHexDigits[digest[i] >> 4];
+            hex[i * 2 + 1] = kHexDigits[digest[i] & 0x0f];
+        }
+        return hex;
     }
+
+    namespace
+    {
+        // Compares two strings without an early exit on the first mismatching byte.
+        bool ConstantTimeEquals(std::string_view a, std::string_view b)
+        {
+            if (a.size() != b.size())
+            {
+                return false;
+            }
+            unsigned char difference = 0;
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                difference |= static_cast<unsigned char>(a[i] ^ b[i]);
+            }
+            return difference == 0;
+        }
+    } // namespace
 
     // ============================================================================
     // Construction / Destruction
@@ -554,9 +438,9 @@ namespace SparkEditor
                                         const Spark::Net::NetworkEndpointPolicy& endpointPolicy)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
-        if (userName.empty())
+        if (userName.empty() || userName.size() > kCollabMaxUserNameBytes)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot host: userName is empty.");
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot host: userName is empty or too long.");
             return false;
         }
         if (m_connected.load(std::memory_order_acquire))
@@ -614,11 +498,33 @@ namespace SparkEditor
             return false;
         }
 
+        // Report the port actually bound (port 0 asks the OS to choose one).
+        sockaddr_in boundAddr{};
+        socklen_t boundLength = sizeof(boundAddr);
+        if (::getsockname(ToNativeSocket(m_listenSocket), reinterpret_cast<sockaddr*>(&boundAddr), &boundLength) != 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Failed to query the bound collaboration port.");
+            CloseSocket(m_listenSocket);
+            m_listenSocket = INVALID_COLLAB_SOCKET;
+            return false;
+        }
+
+        // Every peer must prove knowledge of this secret before it is admitted.
+        std::string joinCode = Spark::SecureRandom::HexToken(kCollabJoinSecretBytes);
+        if (!IsValidCollabJoinCode(joinCode))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Cannot host: the OS random source is unavailable.");
+            CloseSocket(m_listenSocket);
+            m_listenSocket = INVALID_COLLAB_SOCKET;
+            return false;
+        }
+
         m_isHost = true;
+        m_joinCode = std::move(joinCode);
         m_localUserName = userName;
         m_localPeerID = AllocatePeerID();
         m_sessionTime = 0.0f;
-        m_port = port;
+        m_port = ntohs(boundAddr.sin_port);
         m_shuttingDown.store(false, std::memory_order_release);
 
         // Register self as a peer
@@ -638,17 +544,19 @@ namespace SparkEditor
         // Spawn accept thread
         m_networkThread = std::thread(&CollaborativeEditSession::NetworkThreadHost, this);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Hosting collab session on port %u as '%s' (PeerID=%u).", port,
+        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Hosting collab session on port %u as '%s' (PeerID=%u).", m_port,
                        userName.c_str(), m_localPeerID);
         return true;
     }
 
-    bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName)
+    bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName,
+                                           const std::string& joinCode)
     {
-        return Connect(address, port, userName, Spark::Net::CaptureNetworkEndpointPolicy());
+        return Connect(address, port, userName, joinCode, Spark::Net::CaptureNetworkEndpointPolicy());
     }
 
     bool CollaborativeEditSession::Connect(const std::string& address, uint16_t port, const std::string& userName,
+                                           const std::string& joinCode,
                                            const Spark::Net::NetworkEndpointPolicy& endpointPolicy)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
@@ -657,9 +565,14 @@ namespace SparkEditor
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot connect: address is empty.");
             return false;
         }
-        if (userName.empty())
+        if (userName.empty() || userName.size() > kCollabMaxUserNameBytes)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot connect: userName is empty.");
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot connect: userName is empty or too long.");
+            return false;
+        }
+        if (!IsValidCollabJoinCode(joinCode))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Cannot connect: the join code is not a 64-digit hex code.");
             return false;
         }
         if (m_connected.load(std::memory_order_acquire))
@@ -722,13 +635,26 @@ namespace SparkEditor
         ConfigureSigPipeSuppression(m_clientSocket);
         SetSocketTimeout(m_clientSocket, 2);
 
+        // Prove knowledge of the join code before anything else is exchanged. The
+        // host answers with the PeerID it assigned, which this editor adopts so its
+        // own messages and the host's view of it agree.
+        m_shuttingDown.store(false, std::memory_order_release);
+        const PeerID assignedPeerId = AuthenticateToHost(userName, joinCode);
+        if (assignedPeerId == INVALID_PEER)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "The collaboration host at %s:%u rejected the join handshake.",
+                            address.c_str(), port);
+            CloseSocket(m_clientSocket);
+            m_clientSocket = INVALID_COLLAB_SOCKET;
+            return false;
+        }
+
         m_isHost = false;
         m_localUserName = userName;
-        m_localPeerID = AllocatePeerID();
+        m_localPeerID = assignedPeerId;
         m_sessionTime = 0.0f;
         m_port = port;
         m_hostAddress = address;
-        m_shuttingDown.store(false, std::memory_order_release);
 
         // Register self as a peer
         EditorPeer self;
@@ -743,15 +669,6 @@ namespace SparkEditor
         }
 
         m_connected.store(true, std::memory_order_release);
-
-        // Send PeerConnect handshake to host
-        InternalMessage handshake;
-        handshake.type = InternalMessageType::PeerConnect;
-        handshake.sourcePeer = m_localPeerID;
-        handshake.peerInfo = self;
-        handshake.timestamp = 0;
-        auto data = SerializeMessage(handshake);
-        SendFramed(m_clientSocket, data);
 
         // Spawn receive thread
         m_networkThread = std::thread(&CollaborativeEditSession::NetworkThreadClient, this);
@@ -800,6 +717,7 @@ namespace SparkEditor
         }
 
         CloseAllSockets();
+        m_joinCode.clear();
 
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
@@ -908,15 +826,28 @@ namespace SparkEditor
                 continue;
             }
 
+            // Bound concurrent connections (pending handshakes included) before any
+            // per-connection thread or buffer exists: each connection costs a thread.
+            ReapFinishedClientThreads();
+            {
+                std::lock_guard<std::mutex> lock(m_clientThreadsMutex);
+                if (m_clientThreads.size() >= kCollabMaxPeerConnections)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                                   "Refusing collaboration connection: %zu connections already open.",
+                                   m_clientThreads.size());
+                    CloseSocket(clientSock);
+                    continue;
+                }
+            }
+
             // Set recv timeout so handler thread can check m_shuttingDown
             ConfigureSigPipeSuppression(clientSock);
             SetSocketTimeout(clientSock, 2);
 
+            // The socket is registered in m_peerSockets (and so receives relayed
+            // traffic) only after HandleClientSocket has verified the join proof.
             PeerID newPeerId = AllocatePeerID();
-            {
-                std::lock_guard<std::mutex> lock(m_socketMutex);
-                m_peerSockets[newPeerId] = clientSock;
-            }
 
             // Spawn a thread to handle this client's messages. The shared flag lets the
             // main thread reap this handler once it exits (see ReapFinishedClientThreads).
@@ -927,18 +858,131 @@ namespace SparkEditor
                 m_clientThreads.push_back({std::move(handler), std::move(finished)});
             }
 
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Accepted client connection (PeerID=%u).", newPeerId);
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Accepted client connection (PeerID=%u), awaiting join proof.",
+                           newPeerId);
         }
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Host accept thread stopped.");
     }
 
+    bool CollaborativeEditSession::AuthenticatePeer(CollaborativeSocketHandle clientSocket, PeerID peerId,
+                                                    InternalMessage& outConnect)
+    {
+        std::array<uint8_t, kCollabChallengeNonceBytes> nonceBytes{};
+        if (!Spark::SecureRandom::Fill(nonceBytes.data(), nonceBytes.size()))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Cannot challenge PeerID=%u: OS random source unavailable.",
+                            peerId);
+            return false;
+        }
+        const std::string nonce(reinterpret_cast<const char*>(nonceBytes.data()), nonceBytes.size());
+
+        InternalMessage challenge;
+        challenge.type = InternalMessageType::AuthChallenge;
+        challenge.payload = nonce;
+        if (!SendFramed(clientSocket, SerializeMessage(challenge)))
+        {
+            return false;
+        }
+
+        // The first and only frame accepted before authentication is a PeerConnect
+        // carrying the join proof; it is small, and it must arrive promptly.
+        const auto deadline = SteadyClock::now() + std::chrono::seconds(kCollabHandshakeTimeoutSeconds);
+        const auto data = RecvFramed(clientSocket, m_shuttingDown, kCollabMaxHandshakeFrameBytes, deadline);
+        InternalMessage connect;
+        if (data.empty() || !DeserializeMessage(data.data(), data.size(), connect) ||
+            connect.type != InternalMessageType::PeerConnect)
+        {
+            return false;
+        }
+
+        const std::string& userName = connect.peerInfo.userName;
+        if (userName.empty() || userName.size() > kCollabMaxUserNameBytes)
+        {
+            return false;
+        }
+        if (!ConstantTimeEquals(connect.payload, ComputeCollabJoinProof(m_joinCode, nonce, userName)))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Rejected collaboration peer: invalid join proof.");
+            return false;
+        }
+
+        // Identity and presentation are assigned by the host, never taken from the peer.
+        connect.payload.clear();
+        connect.sourcePeer = peerId;
+        connect.peerInfo.id = peerId;
+        connect.peerInfo.color = kPeerColors[peerId % (sizeof(kPeerColors) / sizeof(kPeerColors[0]))];
+        outConnect = std::move(connect);
+        return true;
+    }
+
+    PeerID CollaborativeEditSession::AuthenticateToHost(const std::string& userName, const std::string& joinCode)
+    {
+        const auto deadline = SteadyClock::now() + std::chrono::seconds(kCollabHandshakeTimeoutSeconds);
+
+        const auto challengeData = RecvFramed(m_clientSocket, m_shuttingDown, kCollabMaxHandshakeFrameBytes, deadline);
+        InternalMessage challenge;
+        if (challengeData.empty() || !DeserializeMessage(challengeData.data(), challengeData.size(), challenge) ||
+            challenge.type != InternalMessageType::AuthChallenge ||
+            challenge.payload.size() != kCollabChallengeNonceBytes)
+        {
+            return INVALID_PEER;
+        }
+
+        InternalMessage connect;
+        connect.type = InternalMessageType::PeerConnect;
+        connect.payload = ComputeCollabJoinProof(joinCode, challenge.payload, userName);
+        connect.peerInfo.userName = userName;
+        connect.peerInfo.isActive = true;
+        if (!SendFramed(m_clientSocket, SerializeMessage(connect)))
+        {
+            return INVALID_PEER;
+        }
+
+        const auto acceptData = RecvFramed(m_clientSocket, m_shuttingDown, kCollabMaxHandshakeFrameBytes, deadline);
+        InternalMessage accepted;
+        if (acceptData.empty() || !DeserializeMessage(acceptData.data(), acceptData.size(), accepted) ||
+            accepted.type != InternalMessageType::AuthAccepted)
+        {
+            return INVALID_PEER;
+        }
+        return accepted.sourcePeer;
+    }
+
     void CollaborativeEditSession::HandleClientSocket(CollaborativeSocketHandle clientSocket, PeerID peerId,
                                                       std::shared_ptr<std::atomic<bool>> finished)
     {
-        while (!m_shuttingDown.load(std::memory_order_acquire))
+        // Nothing from this connection is queued, relayed or registered until the
+        // peer has proven knowledge of the join code.
+        InternalMessage connect;
+        const bool authenticated = AuthenticatePeer(clientSocket, peerId, connect);
+        if (authenticated)
         {
-            auto data = RecvFramed(clientSocket, m_shuttingDown);
+            InternalMessage accepted;
+            accepted.type = InternalMessageType::AuthAccepted;
+            accepted.sourcePeer = peerId;
+            {
+                // Register and acknowledge under the socket lock so no relay can reach
+                // the peer ahead of its AuthAccepted frame.
+                std::lock_guard<std::mutex> lock(m_socketMutex);
+                SendFramed(clientSocket, SerializeMessage(accepted));
+                m_peerSockets[peerId] = clientSocket;
+
+                const auto announce = SerializeMessage(connect);
+                for (auto& [otherPeerId, otherSock] : m_peerSockets)
+                {
+                    if (otherPeerId != peerId && IsValidSocket(otherSock))
+                    {
+                        SendFramed(otherSock, announce);
+                    }
+                }
+            }
+            EnqueueMessage(m_incomingMessages, std::move(connect), "incoming");
+        }
+
+        while (authenticated && !m_shuttingDown.load(std::memory_order_acquire))
+        {
+            auto data = RecvFramed(clientSocket, m_shuttingDown, kCollabMaxFrameBytes);
             if (data.empty())
                 break;
 
@@ -946,36 +990,35 @@ namespace SparkEditor
             if (!DeserializeMessage(data.data(), data.size(), msg))
                 continue;
 
-            // If this is a PeerConnect, assign the server-side peer ID and register
-            if (msg.type == InternalMessageType::PeerConnect)
+            // Session membership and lock arbitration are host-originated: a peer may
+            // not re-announce itself, disconnect someone else, or forge a grant/denial.
+            switch (msg.type)
             {
-                msg.peerInfo.id = peerId;
-                msg.sourcePeer = peerId;
-
-                // Assign a color based on peer ID
-                size_t colorIdx = peerId % (sizeof(kPeerColors) / sizeof(kPeerColors[0]));
-                msg.peerInfo.color = kPeerColors[colorIdx];
+            case InternalMessageType::PeerConnect:
+            case InternalMessageType::PeerDisconnect:
+            case InternalMessageType::AuthChallenge:
+            case InternalMessageType::AuthAccepted:
+            case InternalMessageType::LockGranted:
+            case InternalMessageType::LockDenied:
+                continue;
+            default:
+                break;
             }
-            else
+
+            // Remap source peer to server-assigned ID
+            msg.sourcePeer = peerId;
+            if (msg.type == InternalMessageType::EditBroadcast)
             {
-                // Remap source peer to server-assigned ID
-                msg.sourcePeer = peerId;
-                if (msg.type == InternalMessageType::EditBroadcast)
-                    msg.editMessage.sourceEditor = peerId;
+                msg.editMessage.sourceEditor = peerId;
             }
 
             // Push to incoming queue for main thread processing (bounded)
-            EnqueueMessage(m_incomingMessages, InternalMessage(msg), m_incomingOverflowWarned, "incoming");
+            EnqueueMessage(m_incomingMessages, InternalMessage(msg), "incoming");
 
             // Lock arbitration is authoritative through the host: a LockRequest is
-            // answered below with LockGranted/LockDenied, and those replies are only
-            // ever originated by the host — so none of them are blind-relayed here.
-            const bool isLockArbitration = msg.type == InternalMessageType::LockRequest ||
-                                           msg.type == InternalMessageType::LockGranted ||
-                                           msg.type == InternalMessageType::LockDenied;
-
-            // Relay to all other connected clients (host-mediated broadcast)
-            if (!isLockArbitration)
+            // answered with LockGranted/LockDenied by ProcessIncomingMessages, so it
+            // is never blind-relayed here.
+            if (msg.type != InternalMessageType::LockRequest)
             {
                 std::lock_guard<std::mutex> lock(m_socketMutex);
                 auto relayData = SerializeMessage(msg);
@@ -990,23 +1033,32 @@ namespace SparkEditor
         }
 
         // Peer disconnected — clean up
+        if (authenticated)
         {
-            std::lock_guard<std::mutex> lock(m_socketMutex);
-            auto it = m_peerSockets.find(peerId);
-            if (it != m_peerSockets.end())
             {
-                CloseSocket(it->second);
-                m_peerSockets.erase(it);
+                std::lock_guard<std::mutex> lock(m_socketMutex);
+                auto it = m_peerSockets.find(peerId);
+                if (it != m_peerSockets.end())
+                {
+                    CloseSocket(it->second);
+                    m_peerSockets.erase(it);
+                }
             }
+
+            // Queue a disconnect message
+            InternalMessage disc;
+            disc.type = InternalMessageType::PeerDisconnect;
+            disc.sourcePeer = peerId;
+            EnqueueMessage(m_incomingMessages, std::move(disc), "incoming");
+
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Client PeerID=%u disconnected.", peerId);
         }
-
-        // Queue a disconnect message
-        InternalMessage disc;
-        disc.type = InternalMessageType::PeerDisconnect;
-        disc.sourcePeer = peerId;
-        EnqueueMessage(m_incomingMessages, std::move(disc), m_incomingOverflowWarned, "incoming");
-
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Client PeerID=%u disconnected.", peerId);
+        else
+        {
+            // Never registered, so this thread is the socket's only owner.
+            CloseSocket(clientSocket);
+            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Connection PeerID=%u closed before authenticating.", peerId);
+        }
 
         // Signal the main thread that this handler has exited so it can be reaped.
         if (finished)
@@ -1029,7 +1081,7 @@ namespace SparkEditor
             if (!IsValidSocket(clientFd))
                 break;
 
-            auto data = RecvFramed(clientFd, m_shuttingDown);
+            auto data = RecvFramed(clientFd, m_shuttingDown, kCollabMaxFrameBytes);
             if (data.empty())
                 break;
 
@@ -1038,7 +1090,7 @@ namespace SparkEditor
                 continue;
 
             // Push to incoming queue for main thread processing (bounded)
-            EnqueueMessage(m_incomingMessages, std::move(msg), m_incomingOverflowWarned, "incoming");
+            EnqueueMessage(m_incomingMessages, std::move(msg), "incoming");
         }
 
         // Host disconnected
@@ -1111,11 +1163,7 @@ namespace SparkEditor
 
         // Drain outgoing queue and send over network
         {
-            std::queue<InternalMessage> outgoing;
-            {
-                std::lock_guard<std::mutex> lock(m_messageMutex);
-                std::swap(outgoing, m_outgoingMessages);
-            }
+            std::queue<InternalMessage> outgoing = TakeQueuedMessages(m_outgoingMessages);
             while (!outgoing.empty())
             {
                 SendToAllPeers(outgoing.front());
@@ -1194,7 +1242,7 @@ namespace SparkEditor
         msg.nodeId = nodeId;
         msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
 
-        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
+        EnqueueMessage(m_outgoingMessages, std::move(msg), "outgoing");
     }
 
     void CollaborativeEditSession::SetLocalViewportCamera(const DirectX::XMFLOAT3& position,
@@ -1247,7 +1295,7 @@ namespace SparkEditor
         msg.sourcePeer = m_localPeerID;
         msg.nodeId = nodeId;
         msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
-        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
+        EnqueueMessage(m_outgoingMessages, std::move(msg), "outgoing");
 
         return true;
     }
@@ -1276,7 +1324,7 @@ namespace SparkEditor
             msg.sourcePeer = m_localPeerID;
             msg.nodeId = nodeId;
             msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
-            EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
+            EnqueueMessage(m_outgoingMessages, std::move(msg), "outgoing");
         }
     }
 
@@ -1350,7 +1398,7 @@ namespace SparkEditor
         msg.timestamp = outgoing.timestamp;
         msg.editMessage = outgoing;
 
-        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
+        EnqueueMessage(m_outgoingMessages, std::move(msg), "outgoing");
 
         // Call local callback immediately
         if (m_onEditReceived)
@@ -1396,11 +1444,7 @@ namespace SparkEditor
 
     void CollaborativeEditSession::ProcessIncomingMessages()
     {
-        std::queue<InternalMessage> localQueue;
-        {
-            std::lock_guard<std::mutex> lock(m_messageMutex);
-            std::swap(localQueue, m_incomingMessages);
-        }
+        std::queue<InternalMessage> localQueue = TakeQueuedMessages(m_incomingMessages);
 
         while (!localQueue.empty())
         {
@@ -1594,6 +1638,11 @@ namespace SparkEditor
                     m_onPeerDisconnected(msg.sourcePeer);
                 break;
             }
+
+            case InternalMessageType::AuthChallenge:
+            case InternalMessageType::AuthAccepted:
+                // Handshake frames are consumed synchronously by Connect()/HandleClientSocket.
+                break;
             }
         }
     }
@@ -1618,7 +1667,7 @@ namespace SparkEditor
         msg.timestamp = static_cast<uint64_t>(m_sessionTime * 1000.0f);
         msg.peerInfo = localPeerSnapshot;
 
-        EnqueueMessage(m_outgoingMessages, std::move(msg), m_outgoingOverflowWarned, "outgoing");
+        EnqueueMessage(m_outgoingMessages, std::move(msg), "outgoing");
     }
 
     void CollaborativeEditSession::ExpireStaleNodes()
@@ -1650,29 +1699,57 @@ namespace SparkEditor
         return m_nextPeerID++;
     }
 
-    void CollaborativeEditSession::EnqueueMessage(std::queue<InternalMessage>& queue, InternalMessage&& msg,
-                                                  bool& overflowWarned, const char* queueName)
+    namespace
     {
+        // Heap-owned bytes a queued message pins (string payloads dominate).
+        size_t ApproximateQueuedBytes(const InternalMessage& msg)
+        {
+            const EditMessage& edit = msg.editMessage;
+            return sizeof(InternalMessage) + msg.nodeId.size() + msg.payload.size() + edit.nodeId.size() +
+                   edit.componentType.size() + edit.propertyName.size() + edit.newValue.size() + edit.oldValue.size() +
+                   msg.peerInfo.userName.size() + msg.peerInfo.selectedNode.size();
+        }
+    } // namespace
+
+    void CollaborativeEditSession::EnqueueMessage(BoundedMessageQueue& queue, InternalMessage&& msg,
+                                                  const char* queueName)
+    {
+        const size_t messageBytes = ApproximateQueuedBytes(msg);
         std::lock_guard<std::mutex> lock(m_messageMutex);
-        if (queue.size() >= kMaxQueuedMessages)
+
+        // Drop the oldest messages until both the entry count and the byte budget
+        // fit: a peer streaming faster than the main thread can drain must not be
+        // able to exhaust the heap, whether with many small or fewer large frames.
+        // Warn once per sustained overflow so the log is not flooded.
+        bool dropped = false;
+        while (!queue.messages.empty() && (queue.messages.size() >= kMaxQueuedMessages ||
+                                           queue.queuedBytes + messageBytes > kCollabMaxQueuedBytes))
         {
-            // Drop the oldest message to bound memory: a peer streaming faster than the
-            // main thread can drain must not be able to exhaust the heap. Warn once per
-            // sustained overflow so the log is not flooded.
-            queue.pop();
-            if (!overflowWarned)
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor,
-                               "Collab %s message queue exceeded %zu entries; dropping oldest.", queueName,
-                               kMaxQueuedMessages);
-                overflowWarned = true;
-            }
+            const size_t oldestBytes = ApproximateQueuedBytes(queue.messages.front());
+            queue.queuedBytes -= std::min(queue.queuedBytes, oldestBytes);
+            queue.messages.pop();
+            dropped = true;
         }
-        else
+
+        if (dropped && !queue.overflowWarned)
         {
-            overflowWarned = false;
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "Collab %s message queue exceeded %zu entries or %zu bytes; dropping oldest.", queueName,
+                           kMaxQueuedMessages, kCollabMaxQueuedBytes);
         }
-        queue.push(std::move(msg));
+        queue.overflowWarned = dropped;
+
+        queue.queuedBytes += messageBytes;
+        queue.messages.push(std::move(msg));
+    }
+
+    std::queue<InternalMessage> CollaborativeEditSession::TakeQueuedMessages(BoundedMessageQueue& queue)
+    {
+        std::queue<InternalMessage> taken;
+        std::lock_guard<std::mutex> lock(m_messageMutex);
+        std::swap(taken, queue.messages);
+        queue.queuedBytes = 0;
+        return taken;
     }
 
     void CollaborativeEditSession::ReapFinishedClientThreads()

@@ -44,7 +44,7 @@ EXPECTED_UNRESOLVED_TARGET_WARNINGS = [
     {
         "category": EXPECTED_WARNING_CATEGORY,
         "severity": "warning",
-        "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:190 cannot be resolved statically",
+        "message": "Target name '${TARGET_NAME}' at cmake/SparkGameModule.cmake:245 cannot be resolved statically",
         "detail": "Recorded as an explicit unknown so it is not mistaken for an absent declaration.",
     },
     {

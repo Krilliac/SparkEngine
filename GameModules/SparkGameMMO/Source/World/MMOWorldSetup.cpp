@@ -4,6 +4,7 @@
  */
 
 #include "MMOWorldSetup.h"
+#include "MMOClientStateCodec.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
@@ -20,9 +21,11 @@
 #include <imgui.h>
 #endif
 
+#include <iterator>
+#include <optional>
+
 namespace MMO
 {
-
     MMOWorldSetup::~MMOWorldSetup()
     {
         Shutdown();
@@ -65,6 +68,7 @@ namespace MMO
         MMOAreaInfo town{};
         town.areaId = 1;
         town.name = "TownSquare";
+        town.sceneFile = "Assets/Scenes/MMO/town_square.scene";
         town.boundsMinX = -500.0f;
         town.boundsMinY = -50.0f;
         town.boundsMinZ = -500.0f;
@@ -82,6 +86,7 @@ namespace MMO
         MMOAreaInfo wilderness{};
         wilderness.areaId = 2;
         wilderness.name = "Wilderness";
+        wilderness.sceneFile = "Assets/Scenes/MMO/wilderness.scene";
         wilderness.boundsMinX = 500.0f;
         wilderness.boundsMinY = -100.0f;
         wilderness.boundsMinZ = -2000.0f;
@@ -99,6 +104,7 @@ namespace MMO
         MMOAreaInfo dungeon{};
         dungeon.areaId = 3;
         dungeon.name = "ShadowCrypt";
+        dungeon.sceneFile = "Assets/Scenes/MMO/shadow_crypt.scene";
         dungeon.boundsMinX = -200.0f;
         dungeon.boundsMinY = -300.0f;
         dungeon.boundsMinZ = -200.0f;
@@ -116,6 +122,7 @@ namespace MMO
         MMOAreaInfo battleground{};
         battleground.areaId = 4;
         battleground.name = "Battleground";
+        battleground.sceneFile = "Assets/Scenes/MMO/battleground.scene";
         battleground.boundsMinX = -1000.0f;
         battleground.boundsMinY = -50.0f;
         battleground.boundsMinZ = 2000.0f;
@@ -158,7 +165,7 @@ namespace MMO
             def.name = area.name;
             def.boundsMin = {area.boundsMinX, area.boundsMinY, area.boundsMinZ};
             def.boundsMax = {area.boundsMaxX, area.boundsMaxY, area.boundsMaxZ};
-            def.scenePath = "Assets/Scenes/" + area.name + ".scene";
+            def.scenePath = area.sceneFile;
             def.priority = area.isInstanced ? 0 : 1;
 
             streamingMgr->RegisterArea(def);
@@ -203,7 +210,7 @@ namespace MMO
                 Spark::Net::AreaServerConfig areaConfig{};
                 areaConfig.areaId = area.areaId;
                 areaConfig.areaName = area.name;
-                areaConfig.scenePath = "Assets/Scenes/" + area.name + ".scene";
+                areaConfig.scenePath = area.sceneFile;
                 areaConfig.port = basePort++;
                 areaConfig.interServerPort = basePort++;
                 areaConfig.tickRate = 60.0f;
@@ -270,50 +277,38 @@ namespace MMO
         if (!nm)
             return false;
 
-        if (!nm->IsInitialized())
+        const bool serverAlreadyRunning = nm->GetRole() == Spark::Net::NetworkRole::Server;
+        if (!serverAlreadyRunning && !nm->IsInitialized())
         {
             if (!nm->Initialize())
                 return false;
         }
 
-        if (!nm->StartServer(port, 128))
+        if (!serverAlreadyRunning &&
+            (!nm->UseDefaultSecurityConfig(Spark::Net::NetworkRole::Server) || !nm->StartServer(port, 128)))
+        {
             return false;
+        }
 
-        // Chat routing remains owned by MMOChatSystem. Preserve the engine's
-        // canonical client snapshot handling while adding the dedicated-server
-        // relay needed for client-authored entity snapshots.
+        // Chat routing remains owned by MMOChatSystem. Clients author their own
+        // player movement, so the server consumes their EntityStateUpdate as a
+        // state *request*: it is validated and bound to the sender's server-owned
+        // entity, then republished by normal replication. It is never relayed
+        // verbatim (that let any peer forge state for entities it does not own and
+        // fanned each datagram out to every other client). The client role is
+        // handled by NetworkManager's protocol handler (deserialize + delta ack).
         nm->RegisterHandler(Spark::Net::MessageType::EntityStateUpdate,
-                            [nm](const Spark::Net::NetworkMessage& msg)
+                            [this, nm](const Spark::Net::NetworkMessage& msg)
                             {
-                                const auto role = nm->GetRole();
-                                if (role == Spark::Net::NetworkRole::Server)
+                                if (nm->GetRole() == Spark::Net::NetworkRole::Server && !m_sessionGateRequired)
                                 {
-                                    nm->SendToAllExcept(msg.senderID, msg);
-                                    return;
+                                    (void)ApplyClientStateRequest(*nm, msg);
                                 }
-                                if (role != Spark::Net::NetworkRole::Client)
-                                    return;
-
-                                Spark::Net::NetBuffer buffer;
-                                buffer.WriteBytes(msg.payload.data(), msg.payload.size());
-                                nm->DeserializeEntityState(buffer);
-                                if (buffer.HasError() || nm->GetRole() != Spark::Net::NetworkRole::Client ||
-                                    msg.channel != Spark::Net::ChannelType::Unreliable || msg.sequence == 0)
-                                {
-                                    return;
-                                }
-
-                                Spark::Net::NetworkMessage ack;
-                                ack.type = Spark::Net::MessageType::DeltaAck;
-                                ack.channel = Spark::Net::ChannelType::Unreliable;
-                                ack.senderID = nm->GetLocalClientID();
-                                Spark::Net::NetBuffer ackBuffer;
-                                ackBuffer.WriteUint32(msg.sequence);
-                                ack.payload = ackBuffer.GetData();
-                                nm->SendMessage(ack);
                             });
+        m_serverPlayerEntities.clear();
 
         m_networkServerRunning = true;
+        m_networkOwnedByModule = !serverAlreadyRunning;
         m_knownClients.clear();
 
         auto& console = Spark::SimpleConsole::GetInstance();
@@ -321,10 +316,69 @@ namespace MMO
         return true;
     }
 
+    uint32_t MMOWorldSetup::ApplyClientStateRequest(Spark::Net::NetworkManager& network,
+                                                    const Spark::Net::NetworkMessage& message)
+    {
+        const Spark::Net::ClientID sender = message.senderID;
+        if (m_sessionGateRequired || network.GetRole() != Spark::Net::NetworkRole::Server ||
+            sender == Spark::Net::INVALID_CLIENT)
+        {
+            return 0;
+        }
+
+        const std::optional<ClientStateRequest> request = DecodeClientStateRequest(message.payload);
+        if (!request)
+        {
+            return 0;
+        }
+        const DirectX::XMFLOAT3& position = request->position;
+        const DirectX::XMFLOAT3& rotation = request->rotation;
+        const DirectX::XMFLOAT3& velocity = request->velocity;
+
+        uint32_t networkId = 0;
+        if (const auto owned = m_serverPlayerEntities.find(sender); owned != m_serverPlayerEntities.end())
+        {
+            const auto snapshot = network.GetReplicatedEntitySnapshot(owned->second);
+            if (snapshot && snapshot->ownerID == sender)
+            {
+                networkId = owned->second;
+            }
+            else
+            {
+                m_serverPlayerEntities.erase(owned);
+            }
+        }
+
+        if (networkId == 0)
+        {
+            Spark::Net::ReplicatedEntity entity;
+            entity.ownerID = sender;
+            entity.entityType = "MMOPlayer";
+            entity.position = position;
+            entity.rotation = rotation;
+            entity.velocity = velocity;
+            networkId = network.RegisterReplicatedEntity(entity);
+            m_serverPlayerEntities[sender] = networkId;
+            return networkId;
+        }
+
+        Spark::Net::ReplicatedEntityUpdate update;
+        update.position = position;
+        update.rotation = rotation;
+        update.velocity = velocity;
+        update.needsFullSync = true;
+        return network.UpdateReplicatedEntity(networkId, update) ? networkId : 0;
+    }
+
     void MMOWorldSetup::ServerTick(float deltaTime)
     {
         if (!m_networkServerRunning)
             return;
+
+        if (!m_networkOwnedByModule)
+        {
+            return;
+        }
 
         // Networking is resolved through the injected engine context, not the global singleton
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
@@ -332,12 +386,23 @@ namespace MMO
             return;
 
         nm->Update(deltaTime);
+        // Only admitted players exist for the WorldServer. A slot still Securing (NET-100:
+        // handshake answered, no ClientFinished yet) has no name and may be a spoofed
+        // Connect; it is "not present" for both the join and the leave diff below.
+        auto clients = nm->GetClients();
+        std::erase_if(clients,
+                      [](const auto& entry) { return entry.second.state != Spark::Net::ConnectionState::Connected; });
+
+        // NetworkManager already removed a departed client's owned entities; forget
+        // the mapping so the table stays bounded by the admitted clients.
+        for (auto owned = m_serverPlayerEntities.begin(); owned != m_serverPlayerEntities.end();)
+        {
+            owned = clients.contains(owned->first) ? std::next(owned) : m_serverPlayerEntities.erase(owned);
+        }
 
         // Detect new client connections and bridge to WorldServer
-        if (m_worldServer && m_worldServer->IsRunning())
+        if (m_worldServer && m_worldServer->IsRunning() && !m_sessionGateRequired)
         {
-            const auto& clients = nm->GetClients();
-
             // Detect new connections
             for (const auto& [clientId, info] : clients)
             {
@@ -374,10 +439,18 @@ namespace MMO
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
         if (nm)
         {
-            nm->StopServer();
+            // The relay observer captures this object and lives in this module image; remove (never
+            // replace) it with the server it serves, so no callback outlives this object or image.
+            nm->UnregisterHandler(Spark::Net::MessageType::EntityStateUpdate);
+            if (m_networkOwnedByModule)
+            {
+                nm->StopServer();
+            }
         }
         m_knownClients.clear();
+        m_serverPlayerEntities.clear();
         m_networkServerRunning = false;
+        m_networkOwnedByModule = false;
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[MMO World] Network server stopped");
@@ -395,6 +468,7 @@ namespace MMO
             m_worldServer.reset();
         }
         m_knownClients.clear();
+        m_serverPlayerEntities.clear();
 #endif
 
         if (m_context || m_initialized)
@@ -411,6 +485,7 @@ namespace MMO
 
         m_areas.clear();
         m_worldTime = 0.0f;
+        m_sessionGateRequired = false;
         m_context = nullptr;
         m_initialized = false;
     }

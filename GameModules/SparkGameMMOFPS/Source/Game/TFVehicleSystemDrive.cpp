@@ -236,8 +236,7 @@ namespace Terrafront
         }
         if (HealthComponent* hc = world->GetComponent<HealthComponent>(e))
         {
-            hc->health = v.hp;
-            hc->isDead = v.hp <= 0.0f;
+            hc->SetHealth(v.hp);
         }
         if (TFVehicleComp* vc = world->GetComponent<TFVehicleComp>(e))
             std::memcpy(vc->seats, v.seats, sizeof(vc->seats));

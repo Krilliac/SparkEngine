@@ -159,6 +159,8 @@ execute_process(
         -NoProfile -NonInteractive -File
         "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
         -ImagePath "${_image}"
+        -LogPath "${_audit}"
+        -ExpectedSceneDirectory "${_run_root}/bin/Assets/Scenes"
     RESULT_VARIABLE _visual_result
     OUTPUT_VARIABLE _visual_stdout
     ERROR_VARIABLE _visual_stderr
@@ -175,6 +177,8 @@ execute_process(
         -NoProfile -NonInteractive -File
         "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/CheckFPSVisibleFrame.ps1"
         -ImagePath "${_survival_image}"
+        -LogPath "${_audit}"
+        -ExpectedSceneDirectory "${_run_root}/bin/Assets/Scenes"
     RESULT_VARIABLE _survival_visual_result
     ERROR_VARIABLE _survival_visual_stderr
     TIMEOUT 30)

@@ -59,7 +59,7 @@ integration; individual capabilities retain their own verification boundaries.
 | File | Responsibility |
 |------|---------------|
 | `GraphicsEngine.h` | Central engine class -- device creation, frame management, render dispatch |
-| `MaterialSystem.h` | PBR material management, texture slots, variants, hot-reload |
+| `MaterialSystem.h` | PBR material management, texture slots, variants (in-memory; no file import) |
 | `TextureSystem.h` | Texture loading, streaming, LRU eviction, quality settings |
 | `LightManager.h` | Per-frame light culling, tile binning, shadow atlas |
 | `LightingSystem.h` | Deferred lighting pass, light components, environment lighting |
@@ -411,6 +411,27 @@ struct VolumetricSettings {
 };
 ```
 
+### Declared post set and D3D11 pass goldens (RHI-210)
+
+On Windows, `GraphicsEngine::RenderPostProcessing` drives
+`Spark::Graphics::PostProcessingPipeline` (`SetInputSRV` / `SetDepthSRV` /
+`SetOutputRTV`, `Process`, `Render`) with the embedded HLSL in
+`PostProcessingPipelineWindowsShaders{AO,Color,Filter,Lens}.h`. The shipped
+runtime enables **no** pass by default: every settings struct in
+`PostProcessingTypes.h` defaults to `enabled = false`, and passes are turned on
+only through `pp_enable <effect>` (`SubsystemConsoleCommands.cpp`). No game
+module enables one.
+
+The declared post set with golden evidence on the `d3d11-warp` row is
+**Tonemapping (ACES), Bloom, FXAA and GTAO**. CTest `D3D11PassGolden`
+(`Tests/TestRHI210D3D11PassGoldenReal.cpp`, `D3D11PassGolden_*`) runs
+each pass alone through the production pipeline on a WARP device over a fixed
+64x64 HDR input, checks pixels against a CPU evaluation of the shader formula,
+and compares the frame with the reviewed baseline in
+`Tests/GoldenImages/d3d11-warp/` (owner review pending). The main
+`SparkEngineTests` run excludes the family. The other twelve passes have no
+golden yet.
+
 ---
 
 ## Shadow Mapping
@@ -627,6 +648,20 @@ struct RenderStatistics {
 };
 ```
 
+**Linux/RHI counters report recorded work only (RHI-240).** The Linux passes in
+`GraphicsRenderPipelinesLinux.cpp` no longer issue unbound full-screen
+`Draw(3, 0)` calls (lighting resolve, Bloom, SSAO, tone mapping, TAA, motion
+blur) or an unbound Forward+ light-culling `Dispatch`, and they never bump
+`drawCalls` themselves. `drawCalls` comes from the RHI backend's own statistics,
+folded in by `EndFrame`; `postProcessPasses` is the number of
+`PostProcessingPipeline` passes that actually executed, which is 0 on Linux
+today. Expect lower numbers than before on Linux; they are the true ones. Real
+passes will be added one at a time with golden-image evidence.
+`Tests/TestGraphicsEngineLinuxPassTruthReal.cpp` checks this on NullRHI.
+Note that `RenderPipeline.cpp` is compiled on Windows only, so on Linux the
+deferred/Forward+/post-process sub-passes have no production caller today; the
+live Linux frame is `BeginFrame` -> `RenderScene` -> `EndFrame`.
+
 ---
 
 ## ECS Draw Submission
@@ -654,14 +689,43 @@ graphics.ProcessDrawList(viewMatrix, projMatrix);
 
 - `GraphicsEngine` -- Main thread for all render operations. Uses `std::atomic<bool> m_frameInProgress` for frame state. Metrics access protected by `std::mutex m_metricsMutex`.
 - `TextureSystem` -- Main thread for render operations. Background worker threads for async texture loading and streaming. Cache access protected by `std::mutex m_texturesMutex`.
-- `MaterialSystem` -- Metrics access protected by `std::mutex m_metricsMutex`. Hot-reload runs on main thread only.
+- `MaterialSystem` -- Main thread only. Metrics access protected by `std::mutex m_metricsMutex`.
 - `LightManager` -- Single-threaded (call from main render thread only).
+
+---
+
+## D3D11 Device Health: Validation and Device-Loss Recovery (RHI-210)
+
+**Debug-layer validation.** `SPARK_D3D11_DEBUG_LAYER=1` turns the D3D11 debug layer on in any build (`_DEBUG` builds always have it). Any other value makes `GraphicsEngine::Initialize` fail with `E_INVALIDARG`. When the layer is requested but the Windows "Graphics Tools" optional feature is missing, device creation fails with `DXGI_ERROR_SDK_COMPONENT_MISSING` and a named fatal log. The engine never retries without the layer, so an unvalidated run cannot report itself as clean.
+
+With the layer on:
+- The engine keeps the device's `ID3D11InfoQueue`, which never breaks into the debugger.
+- `EndFrame` drains the queue every frame into running corruption, error and warning totals. The first 32 errors are logged with their text.
+- `GetValidationCounts()` returns the totals, or `std::nullopt` when the layer is off.
+- `Shutdown` prints one logger-free record: `SPARK_D3D11_VALIDATION corruption=N errors=N warnings=N`.
+
+**Device-loss recovery.** Both `EndFrame` (when `Present` returns `DXGI_ERROR_DEVICE_REMOVED` or `DXGI_ERROR_DEVICE_RESET`) and `gfx_reset_device` (`Console_ResetDevice`) go through `HandleDeviceLost`. The console command injects `DXGI_ERROR_DEVICE_RESET` at that HRESULT boundary, because a real driver TDR cannot be forced from inside the process. Recovery then does three things:
+1. It releases every device-owned object, including the post-processing, temporal, upscaling, VRAM-monitor and GPU-driven subsystems, the lazily created basic-path states and textures, and the basic texture and material caches.
+2. It creates a new device and swap chain for the stored window.
+3. It re-runs `CreateDeviceDependentResources`.
+
+It gives up after `MAX_DEVICE_RECOVERY` (3) consecutive failures. In device-attach mode (`InitializeFromDevice`) there is no window, so recovery refuses before releasing anything.
+
+The `AssetPipeline` is rebuilt empty on the new device, so mesh owners must load their meshes again. Game-module meshes that hold buffers from the lost device are not reloaded automatically yet (RHI-210 packaged-recovery slice).
+
+| CTest | Tests | Needs |
+|-------|-------|-------|
+| `D3D11_Validation` | `D3D11_Validation_*` (4): 16 WARP engine frames around a resize are clean, the counter sees an injected `CreateBuffer` error, the RHI golden triangle is clean, and 2,000 texture, buffer and pipeline create/destroy cycles raise no errors and return to the debug layer's live-object baseline | Graphics Tools debug layer |
+| `D3D11_DeviceLoss` | `D3D11_DeviceLoss_*` (4): a reset or an injected DEVICE_REMOVED creates a new, healthy device that renders the same frame again once the mesh owner reloads its mesh; repeated resets return the failure budget to zero; attach mode refuses without teardown | WARP |
+| `D3D11_Resource` | `D3D11_Resource_*` (3): the render-target contracts and rendering after a resize to 1x1, 1920x1080 and 320x240 | a D3D11 device (the render-target contracts fail when unavailable); WARP for the resize |
+
+Only `D3D11_Validation_` is excluded from the main `SparkEngineTests` run: on a host without the debug layer it fails in its own lane (label `d3d11-debug-layer`) and nowhere else. `build-windows-vs2022` installs the Graphics Tools feature (`Tools.Graphics.DirectX~~~~0.0.1.0`) before running ctest and fails that step if `d3d11_3SDKLayers.dll` is still missing. The fixture lives in `Tests/RHI210D3D11EngineFixture.h`.
 
 ---
 
 ## Console Commands
 
-The graphics engine registers 200+ debug commands. Common ones:
+The graphics engine registers a broad set of debug commands. Common ones:
 
 ```
 graphics_info              # GPU adapter, driver version, VRAM, feature level
@@ -789,3 +853,21 @@ from the installed Mesa/runtime configuration and are not release-certified.
 - [Terrain and Procedural Generation](../gameplay-tools/Terrain-and-Procedural-Generation.md) -- Procedural mesh and terrain rendering
 - [Physics](Physics.md) -- Debug draw overlay for collision shapes
 - [Day Night Cycle and Weather](../gameplay-tools/Day-Night-Cycle-and-Weather.md) -- Dynamic lighting and weather effects
+
+### RHI-210 continuation (2026-10-01)
+
+New reset/removal tests cover the consecutive-failure budget returning to zero
+across separate successful resets and an injected DEVICE_REMOVED (a test friend at
+HandleDeviceLost; it does not force a driver TDR). Recovery rebuilds the
+AssetPipeline empty, so mesh owners load their meshes again: the CPU draw-list path
+only binds meshes, and the lazy reload exists only in the GPU-driven branch, which
+is compiled out. Module-owned mesh rehydration and allocation-pressure recovery
+remain unresolved. Golden fixtures require the debug layer and zero warnings as
+well as errors, corruption and discarded messages; the counter negative control
+injects both a warning and an invalid-buffer error. `GPUTimestampQuery` brackets
+only frames that time a pass, so a frame without timers no longer abandons an
+unread disjoint query (debug-layer warning #408). The frame/FPS/world/primary
+golden suites are registered but disabled until the renderer defects they exposed
+are fixed and their captures reviewed (`Tests/GoldenImages/RHI210-CAPTURE.md`).
+See [the capture handoff](../../Tests/GoldenImages/RHI210-CAPTURE.md) for exact
+commands, deferred-pass gaps, pending captures and owner review.

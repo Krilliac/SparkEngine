@@ -4,6 +4,14 @@ This page explains how to use SparkEngine's built-in profiling tools to identify
 
 **Source:** `SparkEngine/Source/Utils/Profiler.h`, `ChromeTracing.h`, `MemoryDebugger.h`, `DebugOverlay.h`, `FrameInspector.h`
 
+`performance-budget-governance` is a required CI job. It validates
+`perf-budgets/v1` and runs the comparator's adversarial and CLI regression tests,
+including an over-budget result that must exit nonzero. CTest also registers the
+hardening suite as `PerformanceBudget_Hardening`. This is policy enforcement:
+the committed metrics are still `pending_measurement`, with no certified
+hardware rows or accepted measured baselines. No runtime performance gate is
+claimed until a real result producer and certified baseline are available.
+
 ---
 
 ## Quick Start
@@ -267,6 +275,26 @@ All profiling tools are accessible via the debug console:
 2. Check `profiler.hotspots 20` for excessive allocation sites
 3. Consider object pooling for frequently allocated types
 4. Run `profiler.leaks` at shutdown to catch leaks
+
+### Headless NullRHI Soak (PERF-100)
+
+`tools/perf-budget/run_nullrhi_soak.py` runs the real headless host
+(`-headless -game <module> -require-game -test-frames N`) for `--duration`
+seconds and watches it from outside. It fails on a crash, a hang, a memory
+slope above the provisional `--max-leak-bytes-per-hour` ceiling, or NullRHI
+resources still live at device shutdown (the host's single
+`SPARK_HEADLESS_NULLRHI_RESOURCES live=N` record must say `live=0`).
+
+| Host | Memory series | Main-thread heartbeat | Output |
+|---|---|---|---|
+| Linux | `VmRSS` from `/proc` | voluntary context switches and CPU time | `--report`, and `--out` for a >= 1 h run on the `linux-nullrhi-ci` row |
+| Windows | `PrivateUsage` from `K32GetProcessMemoryInfo` | `QueryThreadCycleTime` of the earliest-created thread | `--report` only; no Windows soak metric row is defined yet |
+
+A main thread blocked on a lock advances neither heartbeat and is declared
+hung after `--heartbeat-timeout`. Unbounded queue growth inside the host shows
+up only as a rising memory slope. `ctest -L nullrhi-soak` runs the 120 s
+`Soak_NullRHIHeadlessSmoke` on both hosts; its budgets are provisional harness
+guards, and `nullrhi.soak.*` stay `pending_measurement` in `perf-budgets/v1`.
 
 ### Frame Spikes
 

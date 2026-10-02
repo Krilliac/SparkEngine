@@ -5,6 +5,8 @@
 
 #include "ShaderService.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -40,12 +42,21 @@ namespace Spark::Daemon
             if (!parsed)
                 continue;
 
+            // Size-first validation: no legitimate blob exceeds one wire frame,
+            // because PutCacheEntry carries it inside a single kMaxPayloadSize
+            // payload. A budget configured before Initialize is honoured too, so
+            // startup never pulls more into memory than the operator allowed.
+            std::error_code sizeEc;
+            const std::uintmax_t fileSize = entry.file_size(sizeEc);
+            if (sizeEc || fileSize > kMaxPayloadSize)
+                continue;
+            const auto size = static_cast<size_t>(fileSize);
+            if (m_maxBytes != 0 && size > m_maxBytes - std::min(m_totalBytes, m_maxBytes))
+                continue;
+
             std::ifstream in(entry.path(), std::ios::binary);
             if (!in)
                 continue;
-            in.seekg(0, std::ios::end);
-            auto size = static_cast<size_t>(in.tellg());
-            in.seekg(0, std::ios::beg);
 
             std::vector<uint8_t> blob(size);
             if (size > 0)
@@ -63,6 +74,7 @@ namespace Spark::Daemon
 
     void ShaderService::SetMaxBytes(uint64_t maxBytes)
     {
+        std::lock_guard persistLock(m_persistMutex); // eviction deletes disk files
         std::lock_guard lock(m_mutex);
         m_maxBytes = maxBytes;
         EvictUntilUnderBudget();
@@ -130,6 +142,8 @@ namespace Spark::Daemon
 
         Key key{req.key.sourceHash, req.key.target, req.key.stage};
         std::vector<uint8_t> blobCopyForDisk;
+        bool entrySurvived = false;
+        std::lock_guard persistLock(m_persistMutex);
         {
             std::lock_guard lock(m_mutex);
             InsertOrReplace(key, std::move(req.blob));
@@ -137,21 +151,40 @@ namespace Spark::Daemon
             // Grab a copy only if the entry survived the eviction pass (if it
             // didn't, writing it to disk just to delete it on the next call is
             // pointless).
-            if (m_diskBacked)
+            auto it = m_index.find(key);
+            entrySurvived = (it != m_index.end());
+            if (m_diskBacked && entrySurvived)
             {
-                auto it = m_index.find(key);
-                if (it != m_index.end())
-                    blobCopyForDisk = it->second->blob;
+                blobCopyForDisk = it->second->blob;
             }
         }
 
-        if (m_diskBacked && !blobCopyForDisk.empty())
-            WriteBlobFile(key, blobCopyForDisk);
-        else if (m_diskBacked)
+        if (m_diskBacked)
         {
-            // Entry was evicted in the same call (or blob was empty). Make
-            // sure no stale disk file lingers under this key.
-            DeleteBlobFile(key);
+            if (!entrySurvived || blobCopyForDisk.empty())
+            {
+                // Entry was evicted in the same call (or blob was empty). Make
+                // sure no stale disk file lingers under this key.
+                DeleteBlobFile(key);
+            }
+            else if (!WriteBlobFile(key, blobCopyForDisk))
+            {
+                // Fail closed: never report success for a value that did not
+                // reach disk. Drop it from memory and remove any older file so
+                // a restart cannot resurrect a value the client replaced.
+                {
+                    std::lock_guard lock(m_mutex);
+                    auto it = m_index.find(key);
+                    if (it != m_index.end())
+                    {
+                        m_totalBytes -= it->second->blob.size();
+                        m_lruList.erase(it->second);
+                        m_index.erase(it);
+                    }
+                }
+                DeleteBlobFile(key);
+                return MakeError("shader cache write failed");
+            }
         }
 
         ServiceResponse out;
@@ -162,6 +195,7 @@ namespace Spark::Daemon
     ServiceResponse ShaderService::HandleClearCache()
     {
         bool deleteFromDisk = false;
+        std::lock_guard persistLock(m_persistMutex);
         {
             std::lock_guard lock(m_mutex);
             m_lruList.clear();

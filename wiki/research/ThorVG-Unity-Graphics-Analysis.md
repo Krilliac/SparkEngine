@@ -16,7 +16,7 @@ As of the 2026-06-08 codebase verification, **many of the Tier 1 post-processing
 
 ## Source 1: ThorVG (Vector Graphics Engine)
 
-ThorVG is a production-ready C++ vector graphics engine (~150KB) supporting SVG and Lottie with CPU/SIMD, OpenGL, and WebGPU backends (used by Tizen, Samsung, Godot). Key patterns:
+ThorVG is a C++ vector graphics engine (~150KB) supporting SVG and Lottie with CPU/SIMD, OpenGL, and WebGPU backends (used by Tizen, Samsung, Godot). Key patterns:
 
 1. **Dirty Region Tracking** (16x16 grid, double-buffered dirty lists) — redraw only changed UI cells.
 2. **Retained Scene Graph with Update Flags** — bitwise `RenderUpdateFlag` (Path, Color, Transform, Image, Blend) per node.

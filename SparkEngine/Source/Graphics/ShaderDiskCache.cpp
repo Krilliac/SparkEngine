@@ -111,7 +111,8 @@ namespace Spark::Graphics
         std::lock_guard lock(m_mutex);
         auto path = GetBlobPath(hash, target, source.stage);
 
-        if (!std::filesystem::exists(path))
+        std::error_code existsError;
+        if (!std::filesystem::exists(path, existsError))
             return std::nullopt;
 
         std::ifstream ifs(path, std::ios::binary);
@@ -125,7 +126,31 @@ namespace Spark::Graphics
             return std::nullopt;
         }
 
-        auto fileSize = std::filesystem::file_size(path);
+        // The cache directory is writable by anything running as this user, so
+        // the file length is untrusted: an oversized (or planted sparse) file
+        // must not size the allocation below. The daemon path enforces the same
+        // cap on its decoded bytecode.
+        std::error_code sizeError;
+        const auto fileSize = std::filesystem::file_size(path, sizeError);
+        if (sizeError || fileSize > kMaxShaderDaemonBytecodeBytes)
+        {
+            SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                           "ShaderDiskCache: cached blob '%s' is unreadable or larger than %u bytes — treating as miss",
+                           PathForLog(path).c_str(), kMaxShaderDaemonBytecodeBytes);
+            return std::nullopt;
+        }
+
+        // Store never writes an empty entry, so a zero-length file is a torn write (a crash
+        // between Store's truncating open and its write) or a planted file. Returning it as a
+        // successful blob handed the driver empty bytecode on every later run and the shader
+        // was never recompiled; treat it as a miss so the next compile rewrites the entry.
+        if (fileSize == 0)
+        {
+            SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Graphics,
+                           "ShaderDiskCache: cached blob '%s' is empty — treating as miss", PathForLog(path).c_str());
+            return std::nullopt;
+        }
+
         CompiledShaderBlob blob;
         blob.bytecode.resize(fileSize);
         ifs.read(reinterpret_cast<char*>(blob.bytecode.data()), static_cast<std::streamsize>(fileSize));

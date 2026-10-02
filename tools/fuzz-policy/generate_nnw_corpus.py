@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT = ROOT / "Tests" / "fuzz-corpora" / "neural-weights-nnw"
+DEFAULT_OUTPUT = ROOT / "FuzzerTests" / "corpora" / "neural-weights-nnw"
 MAGIC = 0x574E4E53
 OPTIMIZER_FLAG = 0x01
 

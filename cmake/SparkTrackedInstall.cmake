@@ -7,6 +7,11 @@ include_guard(GLOBAL)
 # Exclusion regexes are matched against forward-slash paths with a leading slash
 # (for example, /tests(/|$) or \\.pyc$). In a source archive without local .git
 # metadata, the same expressions are passed to install(DIRECTORY ... REGEX ...).
+#
+# Every file is installed from a configure-time snapshot, never from SOURCE.
+# SNAPSHOT_ROOT optionally names that snapshot directory (absolute, beneath
+# CMAKE_BINARY_DIR; it is emptied first) so a caller can verify the exact bytes
+# the install rules copy; by default it is a hashed directory under CMakeFiles.
 function(spark_install_tracked_directory)
     if(ARGC EQUAL 0)
         message(FATAL_ERROR "spark_install_tracked_directory requires arguments")
@@ -23,7 +28,7 @@ function(spark_install_tracked_directory)
 
     cmake_parse_arguments(PARSE_ARGV 0 SPARK_TRACKED
         "FLATTEN"
-        "SOURCE;DESTINATION;COMPONENT"
+        "SOURCE;DESTINATION;COMPONENT;SNAPSHOT_ROOT"
         "EXCLUDE_REGEXES;INCLUDE_REGEXES")
     if(SPARK_TRACKED_UNPARSED_ARGUMENTS)
         message(FATAL_ERROR
@@ -154,7 +159,10 @@ function(spark_install_tracked_directory)
                 "Git resolved a repository root outside CMAKE_SOURCE_DIR: ${_spark_git_root}")
         endif()
 
-        cmake_path(RELATIVE_PATH _spark_source_directory
+        # Both sides real: CMAKE_SOURCE_DIR may keep a spelling (such as the
+        # 8.3 alias C:/Users/RUNNER~1) that REAL_PATH expands, and relating the
+        # spelled path to the real root would name a pathspec outside the repo.
+        cmake_path(RELATIVE_PATH _spark_source_directory_real
             BASE_DIRECTORY "${_spark_git_root_real}"
             OUTPUT_VARIABLE _spark_git_source_relative)
         string(REPLACE "\\" "/" _spark_git_source_relative
@@ -235,6 +243,16 @@ function(spark_install_tracked_directory)
     endif()
     set(_spark_snapshot_root
         "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/spark-tracked-install/${_spark_snapshot_hash}.payload")
+    if(DEFINED SPARK_TRACKED_SNAPSHOT_ROOT)
+        set(_spark_snapshot_root "${SPARK_TRACKED_SNAPSHOT_ROOT}")
+        cmake_path(IS_ABSOLUTE _spark_snapshot_root _spark_snapshot_is_absolute)
+        cmake_path(IS_PREFIX CMAKE_BINARY_DIR "${_spark_snapshot_root}" NORMALIZE _spark_snapshot_is_bounded)
+        cmake_path(COMPARE "${CMAKE_BINARY_DIR}" EQUAL "${_spark_snapshot_root}" _spark_snapshot_is_binary_dir)
+        if(NOT _spark_snapshot_is_absolute OR NOT _spark_snapshot_is_bounded OR _spark_snapshot_is_binary_dir)
+            message(FATAL_ERROR
+                "SNAPSHOT_ROOT must be an absolute directory beneath CMAKE_BINARY_DIR: ${_spark_snapshot_root}")
+        endif()
+    endif()
     file(REMOVE_RECURSE "${_spark_snapshot_root}")
     file(MAKE_DIRECTORY "${_spark_snapshot_root}")
 

@@ -5,17 +5,13 @@
 
 #include "RTSEngineSystems.h"
 #include "RTSPersistence.h"
-#include "Engine/AI/AISystem.h"
-#include "Engine/AI/BehaviorTree.h"
-#include "Engine/AI/NavMesh.h"
 #include "Engine/Events/EventSystem.h"
 #include "Audio/MusicManager.h"
 #include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/World/TimeOfDaySystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #include <unordered_map>
 
@@ -26,24 +22,20 @@ namespace RTS
     // Lifecycle
     // =========================================================================
 
-    bool RTSEngineSystems::Initialize(Spark::IEngineContext* context, RTSUnitSystem* unitSystem,
-                                      RTSBuildingSystem* buildingSystem, RTSResourceSystem* resourceSystem,
-                                      RTSCommandSystem* commandSystem)
+    bool RTSEngineSystems::Initialize(Spark::IEngineContext* context, const RTSSkirmishSystems& systems,
+                                      RTSSkirmishSimulation* simulation)
     {
         if (!context)
             return false;
 
         m_context = context;
-        m_unitSystem = unitSystem;
-        m_buildingSystem = buildingSystem;
-        m_resourceSystem = resourceSystem;
-        m_commandSystem = commandSystem;
+        m_systems = systems;
+        m_simulation = simulation;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[RTS] Initializing engine system integrations...");
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initializing");
+        Spark::ModuleLog::Info(m_context, "[RTS] Initializing engine system integrations...");
 
-        SetupAI();
+        // The Swarm opponent is decided inside the fixed-step skirmish tick (RTSSkirmishSimulation), so no engine
+        // behavior tree is registered: no RTS entity carries an AIComponent that could run one.
         SetupEvents();
         SetupAudio();
         SetupWeather();
@@ -51,8 +43,7 @@ namespace RTS
         SetupSaveSystem();
         SetupCoroutines();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems initialized (7 subsystems wired)");
-        console.LogInfo("[RTS] Engine system integrations initialized (7 subsystems wired)");
+        Spark::ModuleLog::Info(m_context, "[RTS] Engine system integrations initialized (6 subsystems wired)");
         return true;
     }
 
@@ -64,15 +55,13 @@ namespace RTS
         {
             m_autosaveTimer = 0.0f;
             if (!SaveMatch("rts_autosave"))
-                Spark::SimpleConsole::GetInstance().LogWarning("[RTS] Autosave failed");
+                Spark::ModuleLog::Warn(m_context, "[RTS] Autosave failed");
         }
     }
 
     void RTSEngineSystems::Shutdown()
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[RTS] Shutting down engine system integrations...");
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS engine systems shutting down");
+        Spark::ModuleLog::Info(m_context, "[RTS] Shutting down engine system integrations...");
 
         // CoroutineScheduler.h cannot be included from game module DLLs
         // (C++20 coroutine header bugs with GCC 13). Coroutine cleanup
@@ -82,98 +71,10 @@ namespace RTS
         // RAII handles auto-unsubscribe, but clear explicitly for clarity
         m_eventHandles.clear();
 
+        Spark::ModuleLog::Info(m_context, "[RTS] Engine system integrations shut down");
         m_context = nullptr;
-        m_unitSystem = nullptr;
-        m_buildingSystem = nullptr;
-        m_resourceSystem = nullptr;
-        m_commandSystem = nullptr;
-        console.LogInfo("[RTS] Engine system integrations shut down");
-    }
-
-    // =========================================================================
-    // AI / BehaviorTree / NavMesh
-    // =========================================================================
-
-    void RTSEngineSystems::SetupAI()
-    {
-        auto* ai = m_context->GetAI();
-        if (!ai)
-            return;
-
-        // --- Behavior trees for RTS unit archetypes ---
-
-        // Worker: gather resources -> return to base -> build if ordered
-        Spark::AI::AIAgentConfig workerConfig;
-        workerConfig.moveSpeed = 3.5f;
-        workerConfig.detectionRange = 10.0f;
-        workerConfig.attackRange = 0.0f; // Workers don't fight
-        workerConfig.canUseCover = false;
-        workerConfig.canSprint = false;
-
-        auto workerTree = std::make_unique<Spark::AI::BehaviorTree>("rts_worker");
-        auto workerRoot = std::make_unique<Spark::AI::SelectorNode>("WorkerRoot");
-        workerRoot->AddChild(
-            std::make_unique<Spark::AI::ActionNode>("Gather",
-                                                    [](float, Spark::AI::Blackboard& bb) -> Spark::AI::NodeStatus
-                                                    {
-                                                        bool hasResource = bb.Get<bool>("hasResource", false);
-                                                        if (!hasResource)
-                                                        {
-                                                            bb.Set("gathering", true);
-                                                            return Spark::AI::NodeStatus::Running;
-                                                        }
-                                                        return Spark::AI::NodeStatus::Success;
-                                                    }));
-        workerRoot->AddChild(
-            std::make_unique<Spark::AI::ActionNode>("ReturnToBase",
-                                                    [](float, Spark::AI::Blackboard& bb) -> Spark::AI::NodeStatus
-                                                    {
-                                                        bool hasResource = bb.Get<bool>("hasResource", false);
-                                                        if (hasResource)
-                                                        {
-                                                            bb.Set("returning", true);
-                                                            return Spark::AI::NodeStatus::Running;
-                                                        }
-                                                        return Spark::AI::NodeStatus::Success;
-                                                    }));
-        workerRoot->AddChild(std::make_unique<Spark::AI::ActionNode>(
-            "Build",
-            [](float, Spark::AI::Blackboard& bb) -> Spark::AI::NodeStatus
-            {
-                bool buildOrdered = bb.Get<bool>("buildOrdered", false);
-                return buildOrdered ? Spark::AI::NodeStatus::Running : Spark::AI::NodeStatus::Failure;
-            }));
-        workerTree->SetRoot(std::move(workerRoot));
-        ai->RegisterBehavior("rts_worker", std::move(workerTree));
-
-        // Soldier: patrol -> engage -> retreat if low health
-        Spark::AI::AIAgentConfig soldierConfig;
-        soldierConfig.moveSpeed = 5.0f;
-        soldierConfig.detectionRange = 25.0f;
-        soldierConfig.attackRange = 12.0f;
-        soldierConfig.accuracy = 0.6f;
-
-        auto soldierTree = Spark::AI::FPSBehaviors::CreateCombatBehavior(soldierConfig);
-        ai->RegisterBehavior("rts_soldier", std::move(soldierTree));
-
-        // Scout: explore fog, flee on contact
-        auto scoutTree = Spark::AI::FPSBehaviors::CreateFleeBehavior(40.0f);
-        ai->RegisterBehavior("rts_scout", std::move(scoutTree));
-
-        // --- NavMesh configuration for RTS maps ---
-        auto& navMgr = Spark::AI::NavMeshManager::GetInstance();
-        // RTS maps use larger walkable areas with wider agent radius for group movement
-        Spark::AI::NavMeshBuildSettings rtsSettings;
-        rtsSettings.cellSize = 0.5f;    // Coarser for large RTS maps
-        rtsSettings.agentRadius = 0.8f; // Wider for unit formations
-        rtsSettings.agentHeight = 2.0f;
-        rtsSettings.agentMaxClimb = 0.5f; // Flatter terrain in RTS
-        // NavMesh will be built at map load from terrain geometry
-        (void)navMgr;
-        (void)rtsSettings;
-
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS AI: 3 behavior trees registered");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] AI: 3 behavior trees registered (worker, soldier, scout)");
+        m_systems = {};
+        m_simulation = nullptr;
     }
 
     // =========================================================================
@@ -190,9 +91,8 @@ namespace RTS
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
             [this](const Spark::EntityKilledEvent& e)
             {
-                auto& console = Spark::SimpleConsole::GetInstance();
-                console.LogInfo("[RTS] Unit killed: entity " + std::to_string(e.entityId) + " by " +
-                                std::to_string(e.killerId) + " (" + e.cause + ")");
+                Spark::ModuleLog::Info(m_context, "[RTS] Unit killed: entity {} by {} ({})", e.entityId, e.killerId,
+                                       e.cause);
                 // Transition music based on combat state
                 if (!m_inCombat)
                 {
@@ -205,16 +105,14 @@ namespace RTS
 
         // Weather changes affect gameplay
         m_eventHandles.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
-            [](const Spark::WeatherChangedEvent& e)
+            [context = m_context](const Spark::WeatherChangedEvent& e)
             {
-                auto& console = Spark::SimpleConsole::GetInstance();
-                console.LogInfo("[RTS] Weather changed to type " + std::to_string(e.newType) +
-                                " (intensity: " + std::to_string(e.intensity) + ")");
+                Spark::ModuleLog::Info(context, "[RTS] Weather changed to type {} (intensity: {})", e.newType,
+                                       e.intensity);
                 // Rain slows ground units, fog reduces vision -- handled in Update()
             }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS subscribed to EntityKilled and WeatherChanged events");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Events: subscribed to EntityKilled, WeatherChanged");
+        Spark::ModuleLog::Info(m_context, "[RTS] Events: subscribed to EntityKilled, WeatherChanged");
     }
 
     // =========================================================================
@@ -230,39 +128,39 @@ namespace RTS
         // Register faction themes
         Spark::Audio::MusicTrack faction1Theme;
         faction1Theme.name = "faction_1_theme";
-        faction1Theme.filepath = "Audio/Music/RTS/faction_1_theme.ogg";
+        faction1Theme.filepath = "Assets/Audio/RTS/Music/faction_1_theme.wav";
         faction1Theme.loop = true;
         music->RegisterTrack(faction1Theme);
 
         Spark::Audio::MusicTrack faction2Theme;
         faction2Theme.name = "faction_2_theme";
-        faction2Theme.filepath = "Audio/Music/RTS/faction_2_theme.ogg";
+        faction2Theme.filepath = "Assets/Audio/RTS/Music/faction_2_theme.wav";
         faction2Theme.loop = true;
         music->RegisterTrack(faction2Theme);
 
         Spark::Audio::MusicTrack faction3Theme;
         faction3Theme.name = "faction_3_theme";
-        faction3Theme.filepath = "Audio/Music/RTS/faction_3_theme.ogg";
+        faction3Theme.filepath = "Assets/Audio/RTS/Music/faction_3_theme.wav";
         faction3Theme.loop = true;
         music->RegisterTrack(faction3Theme);
 
         // Combat and outcome tracks
         Spark::Audio::MusicTrack battleTrack;
         battleTrack.name = "battle_music";
-        battleTrack.filepath = "Audio/Music/RTS/battle_music.ogg";
+        battleTrack.filepath = "Assets/Audio/RTS/Music/battle_music.wav";
         battleTrack.loop = true;
         battleTrack.bpm = 140.0f;
         music->RegisterTrack(battleTrack);
 
         Spark::Audio::MusicTrack victoryTrack;
         victoryTrack.name = "victory";
-        victoryTrack.filepath = "Audio/Music/RTS/victory.ogg";
+        victoryTrack.filepath = "Assets/Audio/RTS/Music/victory.wav";
         victoryTrack.loop = false;
         music->RegisterTrack(victoryTrack);
 
         Spark::Audio::MusicTrack defeatTrack;
         defeatTrack.name = "defeat";
-        defeatTrack.filepath = "Audio/Music/RTS/defeat.ogg";
+        defeatTrack.filepath = "Assets/Audio/RTS/Music/defeat.wav";
         defeatTrack.loop = false;
         music->RegisterTrack(defeatTrack);
 
@@ -273,7 +171,7 @@ namespace RTS
         dynamicState.transitionDuration = 3.0f;
         music->SetDynamicMusicState(dynamicState);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Audio: 6 music tracks registered, dynamic music configured");
+        Spark::ModuleLog::Info(m_context, "[RTS] Audio: 6 music tracks registered, dynamic music configured");
     }
 
     // =========================================================================
@@ -290,19 +188,18 @@ namespace RTS
 
             // Register callback: weather affects unit stats
             weather->SetOnWeatherChanged(
-                [](Spark::WeatherType oldType, Spark::WeatherType newType)
+                [context = m_context](Spark::WeatherType oldType, Spark::WeatherType newType)
                 {
                     (void)oldType;
-                    auto& console = Spark::SimpleConsole::GetInstance();
                     // Rain slows ground units by reducing move speed
                     if (newType == Spark::WeatherType::Rain || newType == Spark::WeatherType::Storm)
                     {
-                        console.LogInfo("[RTS] Weather: ground units slowed by precipitation");
+                        Spark::ModuleLog::Info(context, "[RTS] Weather: ground units slowed by precipitation");
                     }
                     // Fog reduces vision range further on top of fog-of-war
                     if (newType == Spark::WeatherType::Fog)
                     {
-                        console.LogInfo("[RTS] Weather: fog reducing unit vision ranges");
+                        Spark::ModuleLog::Info(context, "[RTS] Weather: fog reducing unit vision ranges");
                     }
                 });
         }
@@ -315,8 +212,8 @@ namespace RTS
             timeOfDay->SetTimeScale(30.0f); // 1 real second = 30 game seconds
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[RTS] Weather/TimeOfDay: clear sky, 10:00 start, night vision penalty active");
+        Spark::ModuleLog::Info(m_context,
+                               "[RTS] Weather/TimeOfDay: clear sky, 10:00 start, night vision penalty active");
     }
 
     // =========================================================================
@@ -357,8 +254,7 @@ namespace RTS
         wallPattern.SetParticleEffect("fx_dust_burst");
         destruction->RegisterPattern("rts_wall_breach", wallPattern);
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[RTS] Destruction: 3 fracture patterns registered (barracks, tower, wall)");
+        Spark::ModuleLog::Info(m_context, "[RTS] Destruction: 3 fracture patterns registered (barracks, tower, wall)");
     }
 
     // =========================================================================
@@ -377,7 +273,7 @@ namespace RTS
         // Configure autosave: 5 rotating slots for RTS matches
         saveSystem->SetMaxAutoSaves(5);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] SaveSystem: initialized (Saves/RTS, 5 autosave slots)");
+        Spark::ModuleLog::Info(m_context, "[RTS] SaveSystem: initialized (Saves/RTS, 5 autosave slots)");
     }
 
     // =========================================================================
@@ -390,7 +286,7 @@ namespace RTS
         // (C++20 coroutine header bugs with GCC 13). Coroutine sequences:
         // rts_build_timer (5s+5s construction), rts_research_timer, rts_train_timer
         // — started on demand by gameplay code via IEngineContext::GetCoroutineScheduler().
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Coroutines: build/research/train timers configured");
+        Spark::ModuleLog::Info(m_context, "[RTS] Coroutines: build/research/train timers configured");
     }
 
     // =========================================================================
@@ -401,21 +297,21 @@ namespace RTS
     {
         if (!IsValidSlotName(slotName))
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid save slot: " + slotName);
+            Spark::ModuleLog::Error(m_context, "[RTS] Invalid save slot: {}", slotName);
             return false;
         }
 
         auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
         if (!saveSystem)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] SaveSystem not available");
+            Spark::ModuleLog::Error(m_context, "[RTS] SaveSystem not available");
             return false;
         }
 
         auto* world = m_context->GetWorld();
-        if (!world || !m_unitSystem || !m_buildingSystem || !m_resourceSystem)
+        if (!world || !HasMatchState())
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] World or gameplay state is not available");
+            Spark::ModuleLog::Error(m_context, "[RTS] World or gameplay state is not available");
             return false;
         }
 
@@ -424,12 +320,11 @@ namespace RTS
         meta.sceneName = "RTSMatch";
         meta.playTime = static_cast<float>(m_context->GetElapsedTime());
 
-        const RTSPersistenceSnapshot snapshot =
-            RTSPersistence::Capture(*m_unitSystem, *m_buildingSystem, *m_resourceSystem);
-        const std::string encoded = RTSPersistence::Serialize(snapshot);
+        std::string error;
+        const std::string encoded = RTSPersistence::Serialize(RTSPersistence::Capture(m_systems, *m_simulation), error);
         if (encoded.empty())
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to serialize match state");
+            Spark::ModuleLog::Error(m_context, "[RTS] Failed to serialize match state: {}", error);
             return false;
         }
 
@@ -437,11 +332,11 @@ namespace RTS
             {std::string(RTSPersistence::StateKey), encoded}};
         if (!saveSystem->Save(slotName, *world, meta, customState))
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to write save slot: " + slotName);
+            Spark::ModuleLog::Error(m_context, "[RTS] Failed to write save slot: {}", slotName);
             return false;
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match saved to slot: " + slotName);
+        Spark::ModuleLog::Info(m_context, "[RTS] Match saved to slot: {}", slotName);
         return true;
     }
 
@@ -449,57 +344,62 @@ namespace RTS
     {
         if (!IsValidSlotName(slotName))
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid save slot: " + slotName);
+            Spark::ModuleLog::Error(m_context, "[RTS] Invalid save slot: {}", slotName);
             return false;
         }
 
         auto* saveSystem = m_context ? m_context->GetSaveSystem() : nullptr;
         if (!saveSystem)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] SaveSystem not available");
+            Spark::ModuleLog::Error(m_context, "[RTS] SaveSystem not available");
             return false;
         }
 
         auto* world = m_context->GetWorld();
-        if (!world || !m_unitSystem || !m_buildingSystem || !m_resourceSystem)
+        if (!world || !HasMatchState())
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] World or gameplay state is not available");
+            Spark::ModuleLog::Error(m_context, "[RTS] World or gameplay state is not available");
             return false;
         }
 
         if (!saveSystem->SaveExists(slotName))
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Save slot not found: " + slotName);
+            Spark::ModuleLog::Error(m_context, "[RTS] Save slot not found: {}", slotName);
             return false;
         }
 
-        std::unordered_map<std::string, std::string> customState;
-        if (!saveSystem->Load(slotName, *world, customState))
-        {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Failed to read save slot: " + slotName);
-            return false;
-        }
-
-        const auto encoded = customState.find(std::string(RTSPersistence::StateKey));
-        if (encoded == customState.end())
-        {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Save slot has no RTS match state: " + slotName);
-            return false;
-        }
-
+        // Decode the RTS state before the SaveSystem commits the ECS world, so a retired, damaged, or truncated
+        // slot leaves both the world and the running match untouched.
         RTSPersistenceSnapshot snapshot;
         std::string error;
-        if (!RTSPersistence::Deserialize(encoded->second, snapshot, error) ||
-            !RTSPersistence::Apply(snapshot, *m_unitSystem, *m_buildingSystem, *m_resourceSystem, m_commandSystem,
-                                   error))
+        const auto decodeMatchState = [&](const std::unordered_map<std::string, std::string>& state)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Invalid match state in slot '" + slotName +
-                                                         "': " + error);
+            const auto encoded = state.find(std::string(RTSPersistence::StateKey));
+            if (encoded != state.end())
+                return RTSPersistence::Deserialize(encoded->second, snapshot, error);
+            error = state.contains(std::string(RTSPersistence::LegacyStateKeyV1))
+                        ? "slot uses the retired v1 format, which cannot resume a match"
+                        : "slot has no RTS match state";
+            return false;
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!saveSystem->Load(slotName, *world, customState, decodeMatchState) ||
+            !RTSPersistence::Apply(snapshot, m_systems, *m_simulation, error))
+        {
+            Spark::ModuleLog::Error(m_context, "[RTS] Failed to load slot '{}': {}", slotName,
+                                    error.empty() ? std::string("unreadable save") : error);
             return false;
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match loaded from slot: " + slotName);
+        Spark::ModuleLog::Info(m_context, "[RTS] Match loaded from slot: {}", slotName);
         return true;
+    }
+
+    bool RTSEngineSystems::HasMatchState() const
+    {
+        const auto& [units, buildings, resources, commands, fog, match] = m_systems;
+        return units && buildings && resources && commands && fog && match && m_simulation;
     }
 
     bool RTSEngineSystems::IsValidSlotName(const std::string& slotName)
@@ -512,7 +412,7 @@ namespace RTS
         auto* weather = m_context ? m_context->GetWeather() : nullptr;
         if (!weather)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] WeatherSystem not available");
+            Spark::ModuleLog::Error(m_context, "[RTS] WeatherSystem not available");
             return;
         }
 
@@ -529,7 +429,7 @@ namespace RTS
             type = Spark::WeatherType::Cloudy;
 
         weather->SetWeather(type, -1.0f, 5.0f);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Weather set to: " + weatherName);
+        Spark::ModuleLog::Info(m_context, "[RTS] Weather set to: {}", weatherName);
     }
 
     void RTSEngineSystems::SetTimeOfDay(float hour) const
@@ -537,12 +437,12 @@ namespace RTS
         auto* timeOfDay = m_context ? m_context->GetTimeOfDay() : nullptr;
         if (!timeOfDay)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] TimeOfDaySystem not available");
+            Spark::ModuleLog::Error(m_context, "[RTS] TimeOfDaySystem not available");
             return;
         }
 
         timeOfDay->SetTimeOfDay(hour);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Time of day set to: " + std::to_string(hour));
+        Spark::ModuleLog::Info(m_context, "[RTS] Time of day set to: {}", hour);
     }
 
 } // namespace RTS

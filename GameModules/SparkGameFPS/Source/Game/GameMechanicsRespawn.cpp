@@ -9,12 +9,12 @@
  */
 
 #include "GameMechanics.h"
+#include "Core/FPSLog.h"
 
 #include "Core/Platform.h"
 #include "Engine/Events/EventSystem.h"
 #include "SceneManager/SceneManager.h"
 #include "Utils/EventBus.h"
-#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <charconv>
@@ -198,9 +198,8 @@ namespace Spark
             if (!m_missingBusReported)
             {
                 m_missingBusReported = true;
-                SPARK_LOG_WARN(Spark::LogCategory::Game,
-                               "RespawnSystem: no event bus attached - the pending respawn cannot be published and "
-                               "the player stays dead");
+                FPS_LOG_WARN("RespawnSystem: no event bus attached - the pending respawn cannot be published and "
+                             "the player stays dead");
             }
             return false;
         }

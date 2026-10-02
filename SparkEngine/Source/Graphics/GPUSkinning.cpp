@@ -102,11 +102,23 @@ namespace Spark::Graphics
                                         kSkinningEntryPoint, kSkinningShaderModel, compileFlags, 0,
                                         shaderBlob.GetAddressOf(), errorBlob.GetAddressOf());
         if (FAILED(hr))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "GPUSkinning: cannot compile Shaders/HLSL/Compute/SkinningCS.hlsl (HR=0x%08lX)%s%s",
+                            static_cast<unsigned long>(hr), errorBlob ? ": " : "",
+                            errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer()) : "");
             return false;
+        }
 
         hr = device->CreateComputeShader(shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), nullptr,
                                          m_skinningShader.GetAddressOf());
-        return SUCCEEDED(hr);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "GPUSkinning: CreateComputeShader failed (HR=0x%08lX)",
+                            static_cast<unsigned long>(hr));
+            return false;
+        }
+        return true;
     }
 
     // =========================================================================

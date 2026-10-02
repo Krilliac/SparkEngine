@@ -149,7 +149,7 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
                 set(_block_end "${_line_count}")
             endif()
 
-            set(_marker "    > [exec] frame ${_frame} (t=${_time}s): ${_command}")
+            set(_marker "    > [exec] frame ${_frame} (t=${_time}s, entry=${_header_position}): ${_command}")
             set(_marker_count 0)
             set(_marker_index -1)
             if(_block_start LESS _block_end)
@@ -234,6 +234,12 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# cmake/RunSparkHeadlessFPSSaveReload.cmake reuses the exact writer/reader audit
+# validator above for the source-tree NullRHI save/reload run.
+if(SPARK_FPS_SAVE_RELOAD_PARSER_ONLY)
+    return()
+endif()
+
 if(SPARK_FPS_SAVE_RELOAD_PARSER_SELF_TEST)
     function(_spark_expect_fps_audit_case name phase result fresh audit expected_ok)
         _spark_validate_fps_audit("${phase}" "${result}" "${fresh}" "${audit}" _actual_ok _reason)
@@ -245,34 +251,34 @@ if(SPARK_FPS_SAVE_RELOAD_PARSER_SELF_TEST)
     endfunction()
 
     set(_writer_valid [=[frame 1 t=0.0s | ok  | level
-    > [exec] frame 1 (t=0.0s): level
+    > [exec] frame 1 (t=0.0s, entry=0): level
     > === Progression ===
 Level: 1/50
 XP: 0/282
 Progress: 0%
 frame 2 t=0.0s | ok  | xp 37
-    > [exec] frame 2 (t=0.0s): xp 37
+    > [exec] frame 2 (t=0.0s, entry=1): xp 37
     > Awarded 37 XP (level 1)
 frame 3 t=0.1s | ok  | level
-    > [exec] frame 3 (t=0.1s): level
+    > [exec] frame 3 (t=0.1s, entry=2): level
     > === Progression ===
 Level: 1/50
 XP: 37/282
 Progress: 13%
 frame 4 t=0.1s | ok  | quicksave
-    > [exec] frame 4 (t=0.1s): quicksave
+    > [exec] frame 4 (t=0.1s, entry=3): quicksave
     > Quick save written to slot 'fps_quicksave'
 ]=])
     set(_reader_valid [=[frame 1 t=0.0s | ok  | level
-    > [exec] frame 1 (t=0.0s): level
+    > [exec] frame 1 (t=0.0s, entry=0): level
     > === Progression ===
 Level: 1/50
 XP: 0/282
 frame 2 t=0.0s | ok  | quickload
-    > [exec] frame 2 (t=0.0s): quickload
+    > [exec] frame 2 (t=0.0s, entry=1): quickload
     > Quick load restored level 1 (37 XP)
 frame 3 t=0.1s | ok  | level
-    > [exec] frame 3 (t=0.1s): level
+    > [exec] frame 3 (t=0.1s, entry=2): level
     > === Progression ===
 Level: 1/50
 XP: 37/282
@@ -296,13 +302,13 @@ XP: 37/282
         "Quick save FAILED to write slot 'fps_quicksave'" _save_failure "${_writer_valid}")
     _spark_expect_fps_audit_case(save-failure writer 0 TRUE "${_save_failure}" FALSE)
     string(REPLACE
-        "    > [exec] frame 4 (t=0.1s): quicksave\n    > Quick save written to slot 'fps_quicksave'"
-        "    > Quick save written to slot 'fps_quicksave'\n    > [exec] frame 4 (t=0.1s): quicksave"
+        "    > [exec] frame 4 (t=0.1s, entry=3): quicksave\n    > Quick save written to slot 'fps_quicksave'"
+        "    > Quick save written to slot 'fps_quicksave'\n    > [exec] frame 4 (t=0.1s, entry=3): quicksave"
         _stale_success "${_writer_valid}")
     _spark_expect_fps_audit_case(stale-success-before-marker writer 0 TRUE "${_stale_success}" FALSE)
     string(REPLACE "XP: 37/282" "XP: 38/282" _wrong_xp "${_writer_valid}")
     _spark_expect_fps_audit_case(wrong-xp writer 0 TRUE "${_wrong_xp}" FALSE)
-    string(REPLACE "    > [exec] frame 2 (t=0.0s): quickload" ""
+    string(REPLACE "    > [exec] frame 2 (t=0.0s, entry=1): quickload" ""
         _missing_marker "${_reader_valid}")
     _spark_expect_fps_audit_case(missing-marker reader 0 TRUE "${_missing_marker}" FALSE)
     string(REPLACE "Quick load restored level 1 (37 XP)"

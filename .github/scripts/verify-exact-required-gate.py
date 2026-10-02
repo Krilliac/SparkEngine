@@ -46,6 +46,15 @@ WORKFLOW_REQUIRED_INVENTORY_PATTERN = re.compile(
     r"^ *EXPECTED_REQUIRED_JOBS_JSON: '(\[[^']*\])'[ \t]*$", re.MULTILINE
 )
 WORKFLOW_EXPRESSION_PATTERN = re.compile(r"\$\{\{.*?\}\}")
+# Job-level `if:` guards whose truth depends only on the triggering event. Each
+# maps the exact committed expression to the events on which the job runs. A
+# non-required job carrying one of these guards may be skipped only when the
+# verified source event is outside that set. This is an exact-match allowlist,
+# never an expression evaluator: any other `if:` leaves a skipped job rejected.
+EVENT_ONLY_JOB_GUARDS: dict[str, frozenset[str]] = {
+    "github.event_name == 'workflow_dispatch'": frozenset({"workflow_dispatch"}),
+    "always() && github.event_name == 'pull_request'": frozenset({"pull_request"}),
+}
 STATUS_CONTEXT = "Build Matrix Verifier / Exact Source"
 VERIFIER_WORKFLOW_NAME = "Build Matrix Verifier"
 VERIFIER_WORKFLOW_PATH = ".github/workflows/build-matrix-verifier.yml"
@@ -264,6 +273,7 @@ class SourceWorkflowJobs:
     required: frozenset[str]
     advisory: frozenset[str]
     display_names: tuple[tuple[str, str], ...]
+    conditions: tuple[tuple[str, str], ...]
 
 
 def _object(payload: Any, label: str) -> dict[str, Any]:
@@ -860,8 +870,9 @@ def _parse_workflow_needs_inline(value: str) -> list[str]:
 
 
 def _parse_source_workflow_jobs(text: str) -> SourceWorkflowJobs:
-    """Parse job keys, display names, advisory flags, and the required inventory."""
+    """Parse job keys, display names, job-level conditions, advisory flags, and the required inventory."""
     display: dict[str, str] = {}
+    conditions: dict[str, str] = {}
     needs: dict[str, list[str]] = {}
     advisory: set[str] = set()
     inside_jobs = False
@@ -903,6 +914,10 @@ def _parse_source_workflow_jobs(text: str) -> SourceWorkflowJobs:
             display[current] = _unquote_workflow_scalar(value)
         elif name == "continue-on-error" and value == "true":
             advisory.add(current)
+        elif name == "if":
+            if current in conditions:
+                raise ValueError(f"exact Build workflow declares job '{current}' condition twice")
+            conditions[current] = value
         elif name == "needs":
             if value:
                 needs[current] = _parse_workflow_needs_inline(value)
@@ -940,6 +955,7 @@ def _parse_source_workflow_jobs(text: str) -> SourceWorkflowJobs:
         required=frozenset(inventory),
         advisory=frozenset(advisory),
         display_names=tuple(sorted(display.items())),
+        conditions=tuple(sorted(conditions.items())),
     )
 
 
@@ -990,6 +1006,17 @@ def _workflow_job_key(workflow: SourceWorkflowJobs, job_name: str) -> str | None
     return matched[0]
 
 
+def _skipped_by_event_guard(workflow: SourceWorkflowJobs, job_key: str | None, event: str) -> bool:
+    """True when the exact workflow guards a non-required job off for the verified event."""
+    if job_key is None or job_key in workflow.required or job_key == REQUIRED_GATE_JOB_KEY:
+        return False
+    condition = dict(workflow.conditions).get(job_key)
+    if condition is None:
+        return False
+    running_events = EVENT_ONLY_JOB_GUARDS.get(condition)
+    return running_events is not None and event in ALLOWED_EVENTS and event not in running_events
+
+
 def _verify_source_jobs(
     fetch_json: FetchJson, repository: str, source: dict[str, Any]
 ) -> BuildJobEvidence:
@@ -1037,8 +1064,11 @@ def _verify_source_jobs(
     # A lane that build.yml declares continue-on-error at this exact commit is
     # allowed to fail or skip; every other job must still finish successfully.
     # Proving the declaration from the verified source is stricter than an
-    # allowlist.
+    # allowlist. A non-required job may also be skipped when its exact
+    # committed `if:` is an allowlisted event-only guard that is false for the
+    # verified source event (for example a workflow_dispatch-only lane on push).
     workflow = _verify_source_workflow(fetch_json, repository, source_sha)
+    source_event = str(source.get("event", ""))
     for job in jobs:
         job_name = str(job.get("name", "<unknown>"))
         if job.get("status") != "completed":
@@ -1046,11 +1076,10 @@ def _verify_source_jobs(
         conclusion = job.get("conclusion")
         if conclusion == "success":
             continue
-        advisory_key = _workflow_job_key(workflow, job_name)
-        if (
-            advisory_key in workflow.advisory
-            and conclusion in {"failure", "skipped"}
-        ):
+        job_key = _workflow_job_key(workflow, job_name)
+        if job_key in workflow.advisory and conclusion in {"failure", "skipped"}:
+            continue
+        if conclusion == "skipped" and _skipped_by_event_guard(workflow, job_key, source_event):
             continue
         raise ValueError(f"unexpected non-success Build job: {job_name}")
     for name in SOURCE_REQUIRED_STEPS:

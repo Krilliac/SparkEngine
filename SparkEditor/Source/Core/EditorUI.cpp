@@ -139,6 +139,26 @@ namespace SparkEditor
     {
         m_crashHandler = &EditorCrashHandler::GetInstance();
         m_notificationManager = std::make_unique<EditorNotificationManager>();
+
+        // Every document mutation recorded by EditorDocument feeds crash
+        // recovery the same way; every snapshot restore re-points the panels.
+        m_document.SetHooks(
+            [this](const std::string& description)
+            {
+                auto& history = Spark::Editor::CommandHistory::GetInstance();
+                RecordRecoveryOperation(description);
+                m_recoveryCaptureGate.NoteNewMutation();
+                m_lastObservedEditSequence = history.GetEditSequence();
+                m_lastObservedUndoDepth = history.UndoCount();
+                m_lastObservedRedoDepth = history.RedoCount();
+                CaptureRecoveryIfDue(true);
+            },
+            [this]()
+            {
+                RewirePanelsToWorld();
+                ::World* world = m_document.GetWorld();
+                m_playModeManager.SetRegistry(&world->GetRegistry(), static_cast<uint32_t>(world->GetEntityCount()));
+            });
     }
 
     EditorUI::~EditorUI()
@@ -167,38 +187,28 @@ namespace SparkEditor
             m_playModeManager.SetSnapshotCallbacks(
                 [this](std::vector<uint8_t>& data)
                 {
-                    if (!m_world)
-                        return false;
-                    const std::string json = Spark::SerializeWorld(*m_world);
+                    const std::string json = m_document.Capture();
                     data.assign(json.begin(), json.end());
                     if (data.empty())
                         return false;
-                    m_selectedEntityBeforePlay = m_selectedEntity;
+                    m_selectedEntityBeforePlay = m_document.GetSelectedEntity();
                     m_sceneModifiedBeforePlay = m_sceneModified;
                     return Spark::Editor::CommandHistory::GetInstance().BeginTransientSession();
                 },
                 [this](const std::vector<uint8_t>& data)
                 {
-                    auto restored = std::make_unique<::World>();
+                    // The snapshot callback above produced this text in-process.
+                    // Restore preserves the World object's address and all
+                    // pre-play command objects. Commands capture this World and
+                    // stable entity IDs; replacing it via SwapWorld used to
+                    // discard the entire document undo history on every Stop.
                     const std::string json(data.begin(), data.end());
-                    if (!Spark::DeserializeInto(*restored, json))
+                    if (!m_document.Restore(json, m_selectedEntityBeforePlay))
                     {
                         Spark::Editor::CommandHistory::GetInstance().RollbackTransientSession();
                         return false;
                     }
-
-                    // Preserve the World object's address and all pre-play
-                    // command objects. Commands capture this World and stable
-                    // entity IDs; replacing it via SwapWorld used to discard
-                    // the entire document undo history on every Stop.
-                    m_world->GetRegistry() = std::move(restored->GetRegistry());
-                    RewirePanelsToWorld();
-                    if (m_selectedEntityBeforePlay != entt::null &&
-                        m_world->GetRegistry().valid(m_selectedEntityBeforePlay))
-                        m_selectedEntity = m_selectedEntityBeforePlay;
                     m_sceneModified = m_sceneModifiedBeforePlay;
-                    m_playModeManager.SetRegistry(&m_world->GetRegistry(),
-                                                  static_cast<uint32_t>(m_world->GetEntityCount()));
                     Spark::Editor::CommandHistory::GetInstance().RollbackTransientSession();
                     return true;
                 });
@@ -231,8 +241,16 @@ namespace SparkEditor
             // for executable smoke tests.
             if (m_projectManager && !config.projectPath.empty() && config.projectPath != ".")
             {
-                if (!m_projectManager->OpenProject(config.projectPath))
-                    console.LogWarning("Could not open startup project: " + config.projectPath);
+                std::string openError;
+                if (!m_projectManager->OpenProject(config.projectPath, &openError))
+                {
+                    console.LogWarning("Could not open startup project: " +
+                                       (openError.empty() ? config.projectPath : openError));
+                }
+                else if (!openError.empty())
+                {
+                    console.LogWarning(openError);
+                }
             }
 
             // Show project browser on startup if no project is loaded (skip in test mode)
@@ -418,6 +436,20 @@ namespace SparkEditor
                     }
                 }
 
+                // Project prefabs live in <project>/Prefabs: SavePrefab writes there and the
+                // project's prefabs are loaded now, each through the version gate and .bak recovery.
+                if (m_prefabManager)
+                {
+                    m_prefabManager->SetProjectPrefabDirectory(PathFromUtf8(project.path) / "Prefabs");
+                    std::vector<std::string> prefabDiagnostics;
+                    const size_t loadedPrefabs = m_prefabManager->LoadProjectPrefabs(prefabDiagnostics);
+                    auto& console = Spark::SimpleConsole::GetInstance();
+                    for (const std::string& diagnostic : prefabDiagnostics)
+                        console.LogWarning(diagnostic);
+                    if (loadedPrefabs > 0)
+                        console.LogInfo("Loaded " + std::to_string(loadedPrefabs) + " project prefab(s)");
+                }
+
                 // Open the project's last scene through the live reflected
                 // World path. Pointing at the file without loading it left the
                 // previous hard-coded Soldier World active and Ctrl+S then
@@ -451,6 +483,8 @@ namespace SparkEditor
                         gameView->SetFPSHUDPreviewEnabled(false);
 
                 ResetWorldAfterProjectClose();
+                if (m_prefabManager)
+                    m_prefabManager->SetProjectPrefabDirectory({});
 
                 auto it = m_panels.find("AssetBrowser");
                 if (it != m_panels.end())
@@ -885,7 +919,7 @@ namespace SparkEditor
         // Retire the document World through the same SwapWorld() funnel as
         // OpenScene()/init: the process-lifetime CommandHistory singleton
         // outlives this EditorUI, so its commands (which may close over raw
-        // entities of m_world) must be cleared BEFORE the World is freed —
+        // entities of the document World) must be cleared BEFORE the World is freed —
         // otherwise a later editor re-init could Undo into freed memory.
         // m_panels is already empty here, so the rewire step is a no-op.
         SwapWorld(nullptr);
@@ -921,9 +955,11 @@ namespace SparkEditor
         ImGui::PushStyleColor(ImGuiCol_WindowBg, theme.backgroundDark.ToImVec4()); // Darker than main bg
         if (ImGui::Begin("##StatusBar", nullptr, flags))
         {
-            const int liveObjectCount = m_world ? static_cast<int>(m_world->GetEntityCount()) : m_sceneObjectCount;
+            const ::World* world = GetWorld();
+            const ::EntityID selected = GetSelectedEntity();
+            const int liveObjectCount = world ? static_cast<int>(world->GetEntityCount()) : m_sceneObjectCount;
             const int liveSelectedCount =
-                m_world && m_selectedEntity != entt::null && m_world->GetRegistry().valid(m_selectedEntity) ? 1 : 0;
+                world && selected != entt::null && world->GetRegistry().valid(selected) ? 1 : 0;
             const bool sceneModified = IsSceneModified();
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
@@ -1291,7 +1327,10 @@ namespace SparkEditor
                 }
             }
             if (!m_layoutManager->SaveCurrentLayout(layoutName, description))
+            {
+                Spark::SimpleConsole::GetInstance().LogError(m_layoutManager->GetLastError());
                 return false;
+            }
 
             const std::filesystem::path filePath =
                 std::filesystem::path(m_layoutManager->GetLayoutDirectory()) / (layoutName + ".ini");
@@ -1326,8 +1365,16 @@ namespace SparkEditor
         // Implementation for loading ImGui docking layout
         try
         {
-            if (!m_layoutManager || !m_layoutManager->LoadLayout(layoutName))
+            if (!m_layoutManager)
+            {
                 return false;
+            }
+            if (!m_layoutManager->LoadLayout(layoutName))
+            {
+                // A damaged or newer-version layout changes nothing; say why instead of failing silently.
+                Spark::SimpleConsole::GetInstance().LogError(m_layoutManager->GetLastError());
+                return false;
+            }
 
             const std::filesystem::path filePath =
                 std::filesystem::path(m_layoutManager->GetLayoutDirectory()) / (layoutName + ".ini");
@@ -1554,7 +1601,7 @@ namespace SparkEditor
 
     void EditorUI::ObserveDocumentHistoryForRecovery()
     {
-        if (!m_world)
+        if (!GetWorld())
             return;
 
         auto& history = Spark::Editor::CommandHistory::GetInstance();
@@ -1584,7 +1631,7 @@ namespace SparkEditor
 
     void EditorUI::CaptureRecoveryIfDue(bool force)
     {
-        if (!m_world || !m_projectManager || !m_projectManager->HasOpenProject() || !m_recoveryStore ||
+        if (!GetWorld() || !m_projectManager || !m_projectManager->HasOpenProject() || !m_recoveryStore ||
             m_recoveryController.Snapshot() || !m_recoveryCaptureGate.AllowsCapture() || m_recoveryRecordInvalid ||
             !IsSceneModified())
         {
@@ -1605,7 +1652,7 @@ namespace SparkEditor
     bool EditorUI::PersistRecoverySnapshotOnUiThread(uint64_t editSequence)
     {
         const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
-        if (projectIdentity.empty() || !m_world || !m_recoveryStore)
+        if (projectIdentity.empty() || !GetWorld() || !m_recoveryStore)
             return false;
 
         try
@@ -1622,7 +1669,7 @@ namespace SparkEditor
 
             std::string error;
             const EditorRecoverySnapshot snapshot =
-                CaptureRecoverySnapshotOnCallingThread(*m_world, std::move(metadata));
+                CaptureRecoverySnapshotOnCallingThread(*GetWorld(), std::move(metadata));
             if (!m_recoveryStore->Save(snapshot, error))
             {
                 if (!m_recoveryWriteFailureShown)
@@ -2086,10 +2133,17 @@ namespace SparkEditor
         {
             const std::string projectPath = m_pendingProjectPath;
             ClearPendingProjectTransition();
-            if (!m_projectManager || !m_projectManager->OpenProject(projectPath))
+            std::string openError;
+            if (!m_projectManager || !m_projectManager->OpenProject(projectPath, &openError))
             {
-                ShowNotification("Failed to open project: " + projectPath, "error");
+                ShowNotification("Failed to open project: " + (openError.empty() ? projectPath : openError), "error",
+                                 8.0f);
                 return false;
+            }
+            // Opened from the retained .bak: say why, so the user knows the primary was damaged.
+            if (!openError.empty())
+            {
+                ShowNotification(openError, "warning", 8.0f);
             }
             return true;
         }
@@ -2200,184 +2254,6 @@ namespace SparkEditor
         return true;
     }
 
-    bool EditorUI::CreateDocumentEntity(const std::string& name)
-    {
-        if (!m_world)
-            return false;
-
-        const std::string before = Spark::SerializeWorld(*m_world);
-        const ::EntityID selectionBefore = m_selectedEntity;
-
-        const ::EntityID entity = m_world->CreateEntity(name == "Empty" ? "Entity" : name);
-        m_world->AddComponent<::Transform>(entity);
-
-        auto failUnsupported = [&]()
-        {
-            m_world->DestroyEntity(entity);
-            return false;
-        };
-
-        if (name == "Cube" || name == "Sphere" || name == "Cylinder" || name == "Plane")
-        {
-            auto& mesh = m_world->AddComponent<::MeshRenderer>(entity);
-            mesh.meshPath = "__spark_primitive_" + name + ".obj";
-        }
-        else if (name == "Camera")
-        {
-            auto& camera = m_world->AddComponent<::Camera>(entity);
-            bool hasMainCamera = false;
-            for (const ::EntityID e : m_world->GetEntitiesWith<::Camera>())
-            {
-                if (e != entity && m_world->GetComponent<::Camera>(e)->isMainCamera)
-                {
-                    hasMainCamera = true;
-                    break;
-                }
-            }
-            camera.isMainCamera = !hasMainCamera;
-        }
-        else if (name == "Directional Light" || name == "Point Light" || name == "Spot Light")
-        {
-            auto& light = m_world->AddComponent<::LightComponent>(entity);
-            light.type = name == "Directional Light" ? ::LightComponent::Type::Directional
-                         : name == "Spot Light"      ? ::LightComponent::Type::Spot
-                                                     : ::LightComponent::Type::Point;
-        }
-        else if (name != "Empty")
-        {
-            static const std::unordered_map<std::string, std::vector<std::string>> componentMap = {
-                {"Sprite", {"SpriteRenderer"}},
-                {"Animated Sprite", {"SpriteRenderer", "SpriteAnimator"}},
-                {"Tilemap", {"TilemapComponent"}},
-                {"Camera 2D", {"Camera2D"}},
-                {"Parallax Background", {"ParallaxBackground"}},
-                {"Nine-Slice Sprite", {"NineSliceSprite"}},
-                {"Trigger Volume", {"TriggerVolumeComponent"}},
-                {"Post-Process Volume", {"PostProcessVolumeComponent"}},
-                {"Fog Volume", {"FogVolumeComponent"}},
-                {"Audio Reverb Zone", {"AudioReverbZoneComponent"}},
-                {"Wind Zone", {"WindZoneComponent"}},
-                {"Cinematic Trigger", {"CinematicTriggerComponent"}},
-                {"Area Boundary", {"AreaBoundaryComponent"}},
-                {"Reflection Probe", {"ReflectionProbeComponent"}},
-                {"Light Probe", {"LightProbeComponent"}},
-                {"Water Plane", {"WaterPlaneComponent"}},
-                {"Spawn Point", {"SpawnPointComponent"}},
-                {"NavMesh Obstacle", {"NavObstacleComponent"}},
-                {"Occluder", {"OccluderComponent"}},
-                {"Billboard", {"BillboardComponent"}},
-                {"Destructible", {"DestructibleComponent"}},
-                {"Dialogue Trigger", {"DialogueTriggerComponent"}},
-                {"Physics Joint", {"PhysicsJointComponent"}},
-                {"Character Controller", {"CharacterControllerComponent"}},
-                {"Vehicle", {"VehicleComponent"}},
-                {"Cover Point", {"CoverPointComponent"}},
-                {"Tactical Point", {"TacticalPointComponent"}},
-                {"Nav Region", {"NavRegionComponent"}},
-                {"Nav Link", {"NavLinkComponent"}},
-                {"Skybox", {"SkyboxComponent"}},
-                {"Trail Renderer", {"TrailRendererComponent"}},
-                {"Text 3D", {"Text3DComponent"}},
-                {"Foliage Volume", {"FoliageVolumeComponent"}},
-                {"Ragdoll", {"RagdollComponent"}},
-                {"Soft Body", {"SoftBodyComponent"}},
-                {"Constant Force", {"ConstantForceComponent"}},
-                {"Force Region", {"ForceRegionComponent"}},
-                {"Buoyancy Volume", {"BuoyancyVolumeComponent"}},
-                {"Spring Arm", {"SpringArmComponent"}},
-            };
-            const auto it = componentMap.find(name);
-            if (it == componentMap.end())
-                return failUnsupported();
-            auto& factory = Spark::ComponentFactory::Get();
-            for (const std::string& type : it->second)
-            {
-                if (!factory.IsRegistered(type))
-                    return failUnsupported();
-                factory.AddComponent(type, m_world.get(), static_cast<uint32_t>(entity));
-            }
-        }
-
-        const std::string after = Spark::SerializeWorld(*m_world);
-        const std::string description = "Create " + (name == "Empty" ? std::string("Entity") : name);
-        auto& history = Spark::Editor::CommandHistory::GetInstance();
-        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [this, after, entity]() { RestoreWorldSnapshot(after, entity); },
-            [this, before, selectionBefore]() { RestoreWorldSnapshot(before, selectionBefore); }, description));
-        RecordRecoveryOperation(description);
-        m_recoveryCaptureGate.NoteNewMutation();
-        m_lastObservedEditSequence = history.GetEditSequence();
-        m_lastObservedUndoDepth = history.UndoCount();
-        m_lastObservedRedoDepth = history.RedoCount();
-        CaptureRecoveryIfDue(true);
-        return true;
-    }
-
-    bool EditorUI::DeleteSelectedDocumentEntity()
-    {
-        if (!m_world || m_selectedEntity == entt::null || !m_world->GetRegistry().valid(m_selectedEntity))
-            return false;
-        const std::string before = Spark::SerializeWorld(*m_world);
-        const ::EntityID selectionBefore = m_selectedEntity;
-        m_world->DestroyEntity(m_selectedEntity);
-        m_selectedEntity = entt::null;
-        const std::string after = Spark::SerializeWorld(*m_world);
-        constexpr const char* description = "Delete Entity";
-        auto& history = Spark::Editor::CommandHistory::GetInstance();
-        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [this, after]() { RestoreWorldSnapshot(after, entt::null); },
-            [this, before, selectionBefore]() { RestoreWorldSnapshot(before, selectionBefore); }, description));
-        RecordRecoveryOperation(description);
-        m_recoveryCaptureGate.NoteNewMutation();
-        m_lastObservedEditSequence = history.GetEditSequence();
-        m_lastObservedUndoDepth = history.UndoCount();
-        m_lastObservedRedoDepth = history.RedoCount();
-        CaptureRecoveryIfDue(true);
-        return true;
-    }
-
-    bool EditorUI::RestoreWorldSnapshot(const std::string& json, ::EntityID selection)
-    {
-        if (!m_world)
-            return false;
-        auto restored = std::make_unique<::World>();
-        if (!Spark::DeserializeInto(*restored, json))
-            return false;
-
-        m_world->GetRegistry() = std::move(restored->GetRegistry());
-        RewirePanelsToWorld();
-        if (selection != entt::null && m_world->GetRegistry().valid(selection))
-            m_selectedEntity = selection;
-        m_playModeManager.SetRegistry(&m_world->GetRegistry(), static_cast<uint32_t>(m_world->GetEntityCount()));
-        return true;
-    }
-
-    std::string EditorUI::CaptureDocumentSnapshot() const
-    {
-        return m_world ? Spark::SerializeWorld(*m_world) : std::string{};
-    }
-
-    bool EditorUI::RecordAppliedDocumentMutation(const std::string& before, const std::string& description)
-    {
-        if (!m_world || before.empty())
-            return false;
-        const std::string after = Spark::SerializeWorld(*m_world);
-        if (after == before)
-            return false;
-        const ::EntityID selection = m_selectedEntity;
-        Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [this, after, selection]() { RestoreWorldSnapshot(after, selection); },
-            [this, before, selection]() { RestoreWorldSnapshot(before, selection); }, description));
-        auto& history = Spark::Editor::CommandHistory::GetInstance();
-        RecordRecoveryOperation(description);
-        m_recoveryCaptureGate.NoteNewMutation();
-        m_lastObservedEditSequence = history.GetEditSequence();
-        m_lastObservedUndoDepth = history.UndoCount();
-        m_lastObservedRedoDepth = history.RedoCount();
-        CaptureRecoveryIfDue(true);
-        return true;
-    }
-
     void EditorUI::StopPlayModeForDocumentTransition()
     {
         if (m_playModeManager.IsInPlayMode())
@@ -2389,22 +2265,23 @@ namespace SparkEditor
         StopPlayModeForDocumentTransition();
 
         // Clear the command history BEFORE the outgoing World is freed. Commands
-        // may close over raw entities/components of the old m_world (e.g.
+        // may close over raw entities/components of the old World (e.g.
         // LambdaCommands), so a later Undo/Redo would re-execute against a freed
         // World -- use-after-free. Clearing first makes that impossible.
         Spark::Editor::CommandHistory::GetInstance().Clear();
 
         // Install the new document. The previous World is freed here, after the
         // history that could reference it has already been cleared.
-        m_world = std::move(newWorld);
+        m_document.ReplaceWorld(std::move(newWorld));
         ResetRecoveryCaptureTracking();
 
         // SceneView/Hierarchy cache a raw ::World*; re-point them at the new
         // World (also clears the now-foreign selection) so nothing dangles.
         RewirePanelsToWorld();
 
-        m_playModeManager.SetRegistry(m_world ? &m_world->GetRegistry() : nullptr,
-                                      m_world ? static_cast<uint32_t>(m_world->GetEntityCount()) : 0u);
+        ::World* world = GetWorld();
+        m_playModeManager.SetRegistry(world ? &world->GetRegistry() : nullptr,
+                                      world ? static_cast<uint32_t>(world->GetEntityCount()) : 0u);
     }
 
     void EditorUI::SetTransformTool(TransformTool tool)
@@ -2439,15 +2316,15 @@ namespace SparkEditor
         auto& console = Spark::SimpleConsole::GetInstance();
 
         // SceneView caches a raw ::World* — re-point it at the current
-        // m_world (used both for the initial seed wiring in
-        // SetGraphicsDevice() and for OpenScene(), which replaces m_world).
+        // document World (used both for the initial seed wiring in
+        // SetGraphicsDevice() and for OpenScene(), which replaces that World).
         auto svIt = m_panels.find("SceneView");
         if (svIt != m_panels.end())
         {
             auto* sceneView = dynamic_cast<SceneViewPanel*>(svIt->second.get());
             if (sceneView)
             {
-                sceneView->SetWorld(m_world.get());
+                sceneView->SetWorld(GetWorld());
             }
         }
 
@@ -2458,7 +2335,7 @@ namespace SparkEditor
             auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierarchyIt->second.get());
             if (hierarchy)
             {
-                hierarchy->SetWorld(m_world.get());
+                hierarchy->SetWorld(GetWorld());
                 // Selection is a document concern, not a graphics-device
                 // concern. This also keeps hierarchy actions functional in
                 // headless/Linux/device-initialization-failure modes.
@@ -2470,7 +2347,7 @@ namespace SparkEditor
         if (gameViewIt != m_panels.end())
         {
             if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
-                gameView->SetWorld(m_world.get());
+                gameView->SetWorld(GetWorld());
         }
 
         // SceneStatistics counts the live document instead of sample data.
@@ -2478,7 +2355,7 @@ namespace SparkEditor
         if (sceneStatsIt != m_panels.end())
         {
             if (auto* sceneStats = dynamic_cast<SceneStatisticsPanel*>(sceneStatsIt->second.get()))
-                sceneStats->SetWorld(m_world.get());
+                sceneStats->SetWorld(GetWorld());
         }
 
         // Search enumerates the live document and the project's real asset tree,
@@ -2488,7 +2365,7 @@ namespace SparkEditor
         {
             if (auto* search = dynamic_cast<SearchPanel*>(searchIt->second.get()))
             {
-                search->SetWorld(m_world.get());
+                search->SetWorld(GetWorld());
                 search->SetSelectionHandler([this](uint32_t id) { SetSelectedEntity(static_cast<::EntityID>(id)); });
                 const std::string projectPath = ProjectManager::GetActiveProjectPath();
                 if (!projectPath.empty())
@@ -2510,7 +2387,7 @@ namespace SparkEditor
 
         // The previously-selected entity belongs to the old World; clear it
         // so the Inspector doesn't try to reflect a stale/foreign handle.
-        m_selectedEntity = entt::null;
+        m_document.SetSelectedEntity(entt::null);
 
         console.LogSuccess("Panels rewired to current World");
     }
@@ -2520,7 +2397,7 @@ namespace SparkEditor
         if (path.empty())
             return false;
 
-        if (!m_world)
+        if (!GetWorld())
             return false;
 
         try
@@ -2553,10 +2430,11 @@ namespace SparkEditor
             // Full-fidelity save via the reflection-driven scene serializer
             // (replaces the old lossy names-only JSON writer). The live ECS
             // World is the single source of truth for scene content.
-            if (!Spark::SaveWorld(*m_world, resolvedPath))
+            std::string saveError;
+            if (!Spark::SaveWorld(*GetWorld(), resolvedPath, &saveError))
             {
                 auto& console = Spark::SimpleConsole::GetInstance();
-                console.LogError("Failed to save scene (Spark::SaveWorld): " + resolvedPath);
+                console.LogError("Failed to save scene (Spark::SaveWorld): " + saveError);
                 return false;
             }
 
@@ -2613,12 +2491,13 @@ namespace SparkEditor
         // corrupts the World currently being edited.
         auto fresh = std::make_unique<::World>();
         std::string loadedPath = path;
+        std::string loadError;
         const bool loaded = m_projectManager && m_projectManager->HasOpenProject()
-                                ? m_projectManager->LoadProjectScene(path, *fresh, loadedPath)
-                                : Spark::LoadWorld(*fresh, path);
+                                ? m_projectManager->LoadProjectScene(path, *fresh, loadedPath, &loadError)
+                                : Spark::LoadWorld(*fresh, path, &loadError);
         if (!loaded)
         {
-            console.LogError("Failed to open scene (Spark::LoadWorld): " + path);
+            console.LogError("Failed to open scene: " + (loadError.empty() ? path : loadError));
             return false;
         }
 
@@ -2672,7 +2551,7 @@ namespace SparkEditor
         // it with the demo entity, moved here from SceneViewPanel (Unit C1).
         // This is the shared World that Hierarchy/Inspector/Save (C2/C3/C4)
         // will operate on.
-        if (!m_world)
+        if (!GetWorld())
         {
             // Build the seed document on a local World, then install it via
             // SwapWorld so the initial world creation shares the same
@@ -2719,7 +2598,7 @@ namespace SparkEditor
             {
                 gameView->SetDevice(device, context);
                 gameView->SetGraphics(m_graphics.get());
-                gameView->SetWorld(m_world.get());
+                gameView->SetWorld(GetWorld());
                 console.LogSuccess("Graphics device passed to Game View panel");
             }
         }

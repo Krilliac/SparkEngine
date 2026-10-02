@@ -4,8 +4,8 @@
  */
 
 #include "PlatformerHazardSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Engine/ECS/Components.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -19,19 +19,16 @@ namespace Platformer
 
     bool PlatformerHazardSystem::Initialize(Spark::IEngineContext* context)
     {
-        if (!context)
-            return false;
-
+        // The context is only stored; hazard placement and simulation are self-contained, so a null
+        // context (the level-flow tests) is valid.
         m_context = context;
 
         BuildDemoHazards();
+        PlaceSpikeTiles();
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer hazard system initialized with %zu hazards",
-                       m_hazards.size());
-        console.LogInfo("[Platformer Hazard] System initialized with " + std::to_string(m_hazards.size()) + " hazards");
+        Spark::ModuleLog::Info(m_context, "[Platformer Hazard] System initialized with {} hazards", m_hazards.size());
         return true;
     }
 
@@ -253,8 +250,6 @@ namespace Platformer
                 proj.velY = hazard.fireDirY * hazard.projectileSpeed;
                 proj.damage = hazard.damage;
                 m_projectiles.push_back(proj);
-                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer projectile fired from (%.0f, %.0f)", hazard.posX,
-                                hazard.posY);
             }
         }
 
@@ -283,12 +278,62 @@ namespace Platformer
 
             float cycleTime = hazard.laserOnTime + hazard.laserOffTime;
             float t = std::fmod(m_globalTimer, cycleTime);
-            bool wasActive = hazard.active;
             hazard.active = (t < hazard.laserOnTime);
-            if (hazard.active != wasActive)
-                SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer laser %u toggled %s", hazard.id,
-                                hazard.active ? "ON" : "OFF");
         }
+    }
+
+    void PlatformerHazardSystem::PlaceSpikeTiles()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!world)
+            return;
+
+        // spike_hazard (tools/blender/author_platformer_kit.py) is a 1 x 1 m tile whose spike tips stand 0.64 m
+        // above its base; metres, pivot at the base centre. Each spike pit's damage box is tiled edge to edge from
+        // its floor, and the tiles are stretched so the tips reach the top of the box: what hurts is exactly what
+        // looks sharp. The spikes are static, so the tiles are placed once and never updated.
+        constexpr float TileHeight = 0.64f;
+        for (const HazardInstance& hazard : m_hazards)
+        {
+            if (hazard.type != HazardType::Spikes || hazard.width <= 0.0f || hazard.depth <= 0.0f)
+                continue;
+
+            const int columns = std::max(1, static_cast<int>(std::lround(hazard.width)));
+            const int rows = std::max(1, static_cast<int>(std::lround(hazard.depth)));
+            const float tileWidth = hazard.width / static_cast<float>(columns);
+            const float tileDepth = hazard.depth / static_cast<float>(rows);
+            const DirectX::XMFLOAT3 scale{tileWidth, hazard.height / TileHeight, tileDepth};
+            const float floorY = hazard.posY - hazard.height * 0.5f;
+            for (int row = 0; row < rows; ++row)
+            {
+                for (int column = 0; column < columns; ++column)
+                {
+                    const DirectX::XMFLOAT3 position{
+                        hazard.posX - hazard.width * 0.5f + (static_cast<float>(column) + 0.5f) * tileWidth, floorY,
+                        hazard.posZ - hazard.depth * 0.5f + (static_cast<float>(row) + 0.5f) * tileDepth};
+                    EntityID entity = world->CreateEntity("Platformer_SpikeTile");
+                    world->AddComponent<Transform>(entity, Transform{position, {0.0f, 0.0f, 0.0f}, scale});
+                    world->AddComponent<MeshRenderer>(entity).meshPath =
+                        "Assets/Models/Platformer/Kit/spike_hazard.obj";
+                    m_spikeTileEntities.push_back(static_cast<uint32_t>(entity));
+                }
+            }
+        }
+    }
+
+    void PlatformerHazardSystem::RemoveSpikeTiles()
+    {
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (world)
+        {
+            for (uint32_t entityId : m_spikeTileEntities)
+            {
+                const auto entity = static_cast<EntityID>(entityId);
+                if (world->GetRegistry().valid(entity))
+                    world->DestroyEntity(entity);
+            }
+        }
+        m_spikeTileEntities.clear();
     }
 
     bool PlatformerHazardSystem::PointInBox(float px, float py, float pz, const HazardInstance& hazard) const
@@ -403,8 +448,8 @@ namespace Platformer
         if (!m_initialized)
             return;
 
-        // In a full implementation, this would render:
-        // - Spike meshes with sharp geometry
+        // Spike pits are drawn by the engine's RenderSystem from the kit tiles PlaceSpikeTiles adds to the world.
+        // In a full implementation, this would also render:
         // - Lava with animated scrolling texture and glow
         // - Crusher block with chains/pistons
         // - Sawblade spinning mesh on its patrol path
@@ -415,6 +460,7 @@ namespace Platformer
 
     void PlatformerHazardSystem::Shutdown()
     {
+        RemoveSpikeTiles();
         m_hazards.clear();
         m_projectiles.clear();
         m_initialized = false;

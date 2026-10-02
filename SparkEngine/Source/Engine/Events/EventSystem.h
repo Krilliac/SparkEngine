@@ -209,6 +209,25 @@ namespace Spark
     };
 
     // =============================================================================
+    // Scripting Events
+    // =============================================================================
+
+    /**
+     * @brief Fired when a script calls `fireEvent(name)`.
+     *
+     * Published synchronously on the engine EventBus (EngineContext::GetEventBus())
+     * from the game thread that runs the script, so C++ subscribers observe it
+     * before the script callback returns.
+     */
+    struct ScriptEvent
+    {
+        static constexpr uint32_t kNoEntity = 0xFFFFFFFFu; ///< entt::null as uint32_t.
+
+        std::string eventName;             ///< Name passed to fireEvent().
+        uint32_t sourceEntity = kNoEntity; ///< Entity whose script fired the event, or kNoEntity.
+    };
+
+    // =============================================================================
     // Input Events
     // =============================================================================
 

@@ -23,6 +23,8 @@
  */
 
 #include "TestFramework.h"
+#include "Fixtures/ScopedUnboundedFileSize.h"
+#include "Graphics/ShaderDaemonBridge.h"
 #include "Graphics/ShaderDiskCache.h"
 
 #include <chrono>
@@ -372,6 +374,74 @@ TEST(ShaderDiskCachePhaseV_StoreEmptyBytecodeIgnored)
     cache.Store(MakeSource(), Spark::Graphics::ShaderTarget::DXBC, empty);
 
     EXPECT_EQ(cache.GetEntryCount(), static_cast<size_t>(0));
+
+    cache.Shutdown();
+    std::filesystem::remove_all(dir);
+}
+
+TEST(ShaderDiskCachePhaseV_EmptyCachedBlobIsAMiss)
+{
+    // SEC-120 fuzz finding (SparkFuzzShaderDiskCache): a zero-length .blob, left by a crash
+    // between Store's truncating open and its write or planted in the user-writable cache,
+    // was returned as a successful blob with empty bytecode on every run, so the shader was
+    // handed to the driver empty and never recompiled.
+    ResetDiskCache();
+    auto dir = MakeCacheDir("emptyblob");
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    cache.Initialize(dir);
+    const auto source = MakeSource("empty cached blob");
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x5A, 16));
+    ASSERT_EQ(cache.GetEntryCount(), static_cast<size_t>(1));
+
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), 0);
+    }
+    EXPECT_FALSE(cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    // The next compile's Store rewrites the entry and it hits again.
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x5A, 16));
+    const auto retrieved = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(retrieved.has_value());
+    EXPECT_EQ(retrieved->bytecode.size(), static_cast<size_t>(16));
+
+    cache.Shutdown();
+    std::filesystem::remove_all(dir);
+}
+
+TEST(ShaderDiskCachePhaseV_OversizedCachedBlobIsAMiss)
+{
+    // The cache directory is writable by any process of the user, so the file length is
+    // untrusted: a planted blob one byte past the daemon bytecode cap (sparse where the file
+    // system allows) must be a miss, not an allocation handed to the driver. The POSIX daemon
+    // suite covers the same branch; this one also runs on Windows.
+    ResetDiskCache();
+    auto dir = MakeCacheDir("oversizedblob");
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    cache.Initialize(dir);
+    const auto source = MakeSource("oversized cached blob");
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x3C, 16));
+    ASSERT_EQ(cache.GetEntryCount(), static_cast<size_t>(1));
+
+    // cap + 1 exceeds the sanitizer wrapper's 16 MiB soft RLIMIT_FSIZE.
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
+    constexpr std::uintmax_t kCap = Spark::Graphics::kMaxShaderDaemonBytecodeBytes;
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), kCap + 1);
+    }
+    EXPECT_FALSE(cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    // Exactly at the cap is still a hit.
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), kCap);
+    }
+    const auto atCap = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(atCap.has_value());
+    EXPECT_EQ(atCap->bytecode.size(), static_cast<size_t>(kCap));
 
     cache.Shutdown();
     std::filesystem::remove_all(dir);

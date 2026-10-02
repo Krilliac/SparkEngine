@@ -107,7 +107,11 @@ namespace Terrafront
         // trust. Seated shooters are exempt: fireWeapon there is the
         // server-resolved seat weapon (GetSeatWeapon), not client input.
         if (!viaVehicleSeat && !IsWeaponInLoadout(fireWeapon, pawn))
+        {
+            TFServerValidation::Get().RecordForgedStateReject(shooter, TFForgedState::FireWeaponNotInLoadout,
+                                                              ServerNow());
             return;
+        }
 
         // W8 unlock enforcement (the deliberate non-wiring from W6): a
         // loadout-ELIGIBLE weapon must also be UNLOCKED for this player
@@ -132,6 +136,8 @@ namespace Terrafront
             if (!defaultPrimary)
             {
                 ++m_shotsRejected;
+                TFServerValidation::Get().RecordForgedStateReject(shooter, TFForgedState::FireWeaponLocked,
+                                                                  ServerNow());
                 return;
             }
         }

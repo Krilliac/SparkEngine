@@ -682,31 +682,76 @@ function(_spark_run_staged_nullrhi_smoke)
     # A runtime layout is not release evidence until the staged executable loads
     # the staged first-party module and completes the real no-render lifecycle.
     # The file and --help/--version checks cannot catch a corrupt or unloadable
-    # module whose sidecar hash was regenerated to match it. Reuse the strict
-    # terminal-record parser so this gate rejects a missing module-ready record,
-    # rendered backend, incomplete update/fixed loop, or unsafe shutdown.
+    # module whose sidecar hash was regenerated to match it. The arena runner
+    # reuses the strict NullRHI terminal-record parser (missing module-ready
+    # record, rendered backend, incomplete update/fixed loop, unsafe shutdown)
+    # and also requires the module's SPARK_FPS_HEADLESS_ARENA record to match an
+    # independent parse of the STAGED level1 scene (ASSET-220): the installed
+    # runtime must load its authored arena from the package, not a source tree.
+    set(_spark_arena_scene "${SPARK_PACKAGE_ROOT}/bin/Assets/Scenes/level1.scene")
+    _spark_require_bounded_regular_file("${_spark_arena_scene}" "Staged FPS arena scene")
+
+    # Run from a fresh directory outside both the package and the validator's
+    # source checkout. SparkGameFPS resolves Assets/ from the executable
+    # directory first, so the staged scene must still load, and no cwd-relative
+    # fallback into a source tree can mask a missing staged Assets tree.
+    if(CMAKE_HOST_WIN32)
+        set(_spark_scratch_base "$ENV{TEMP}")
+    elseif(NOT "$ENV{TMPDIR}" STREQUAL "")
+        set(_spark_scratch_base "$ENV{TMPDIR}")
+    else()
+        set(_spark_scratch_base "/tmp")
+    endif()
+    if(_spark_scratch_base STREQUAL "" OR NOT IS_ABSOLUTE "${_spark_scratch_base}"
+       OR NOT IS_DIRECTORY "${_spark_scratch_base}")
+        message(FATAL_ERROR
+            "Could not locate a temporary directory for the staged NullRHI smoke: '${_spark_scratch_base}'")
+    endif()
+    file(REAL_PATH "${_spark_scratch_base}" _spark_scratch_base)
+    string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef _spark_scratch_nonce)
+    set(_spark_scratch_cwd "${_spark_scratch_base}/spark-pkg-cwd-${_spark_scratch_nonce}")
+    file(REAL_PATH "${CMAKE_CURRENT_LIST_DIR}/.." _spark_validator_source_root)
+    set(_spark_scratch_compare "${_spark_scratch_cwd}")
+    set(_spark_package_compare "${_spark_package_root_real}")
+    set(_spark_source_compare "${_spark_validator_source_root}")
+    if(CMAKE_HOST_WIN32)
+        string(TOLOWER "${_spark_scratch_compare}" _spark_scratch_compare)
+        string(TOLOWER "${_spark_package_compare}" _spark_package_compare)
+        string(TOLOWER "${_spark_source_compare}" _spark_source_compare)
+    endif()
+    cmake_path(IS_PREFIX _spark_package_compare "${_spark_scratch_compare}" NORMALIZE _spark_cwd_in_package)
+    cmake_path(IS_PREFIX _spark_source_compare "${_spark_scratch_compare}" NORMALIZE _spark_cwd_in_source)
+    if(_spark_cwd_in_package OR _spark_cwd_in_source OR EXISTS "${_spark_scratch_cwd}"
+       OR IS_SYMLINK "${_spark_scratch_cwd}")
+        message(FATAL_ERROR
+            "Staged NullRHI smoke working directory must be fresh and outside the package and source tree: "
+            "${_spark_scratch_cwd}")
+    endif()
+    file(MAKE_DIRECTORY "${_spark_scratch_cwd}")
+
     execute_process(
         COMMAND "${CMAKE_COMMAND}"
             "-DSPARK_ENGINE_EXECUTABLE=${SPARK_PACKAGE_ROOT}/bin/SparkEngine${SPARK_EXECUTABLE_SUFFIX}"
             "-DSPARK_GAME_MODULE=${SPARK_PACKAGE_ROOT}/bin/SparkGameFPS.dll"
-            "-DSPARK_WORKING_DIRECTORY=${SPARK_PACKAGE_ROOT}/bin"
-            -DSPARK_RHI_BACKEND=null
-            -P "${CMAKE_CURRENT_LIST_DIR}/RunSparkHeadlessNullRHILifecycle.cmake"
+            "-DSPARK_WORKING_DIRECTORY=${_spark_scratch_cwd}"
+            "-DSPARK_ARENA_SCENE=${_spark_arena_scene}"
+            -P "${CMAKE_CURRENT_LIST_DIR}/RunSparkFPSHeadlessArena.cmake"
         RESULT_VARIABLE _spark_nullrhi_result
         OUTPUT_VARIABLE _spark_nullrhi_stdout
         ERROR_VARIABLE _spark_nullrhi_stderr
-        TIMEOUT 90
+        TIMEOUT 120
         ENCODING UTF-8
     )
+    file(REMOVE_RECURSE "${_spark_scratch_cwd}")
     if(NOT _spark_nullrhi_result EQUAL 0)
         message(FATAL_ERROR
-            "Staged SparkEngine package NullRHI lifecycle smoke failed "
+            "Staged SparkEngine package NullRHI arena lifecycle smoke failed "
             "(exit ${_spark_nullrhi_result})\n"
             "stdout:\n${_spark_nullrhi_stdout}\n"
             "stderr:\n${_spark_nullrhi_stderr}")
     endif()
     message(STATUS
-        "Validated staged SparkEngine package NullRHI lifecycle in "
+        "Validated staged SparkEngine package NullRHI lifecycle and staged arena assets in "
         "${SPARK_PACKAGE_ROOT}/bin")
 endfunction()
 
@@ -733,11 +778,18 @@ set(_spark_required_runtime_files
     bin/Shaders/ForwardPlus/DepthPrepass.hlsl
     bin/Shaders/HLSL/BasicVS.hlsl
     bin/Shaders/HLSL/Compute/GPUCull.hlsl
-    bin/Assets/MMOFPS/Data/continents.json
     bin/Assets/Engine/Branding/sparkengine_wordmark.svg
     bin/Resources/Config/settings.ini
     bin/Resources/Config/controls.cfg
 )
+# stable-v1 ships only the SparkGameFPS runtime asset closure (RDY-020), whose
+# entry scene is Scenes/level1.scene; the TERRAFRONT data tables belong to the
+# modules only the default profile ships.
+if(SPARK_PACKAGE_PROFILE STREQUAL "stable-v1")
+    list(APPEND _spark_required_runtime_files bin/Assets/Scenes/level1.scene)
+else()
+    list(APPEND _spark_required_runtime_files bin/Assets/MMOFPS/Data/continents.json)
+endif()
 set(_spark_missing_runtime_files "")
 foreach(_spark_relative_path IN LISTS _spark_required_runtime_files)
     set(_spark_runtime_path "${SPARK_PACKAGE_ROOT}/${_spark_relative_path}")
@@ -757,6 +809,17 @@ if(_spark_missing_runtime_files)
         "Staged SparkEngine package is missing required runtime content:\n"
         "  ${_spark_missing_runtime_report}")
 endif()
+
+# GOV-400: every shipped font and third-party payload file must be covered by the
+# package's THIRD_PARTY_NOTICES.txt, and an uncovered file fails the package.
+# The editor fonts are covered by the blocks cmake/SparkThirdPartyAudit.cmake
+# generates from SparkEditor/Fonts/LICENSES/fonts.json (GOV-400 D8).
+# -DSPARK_PACKAGE_NOTICE_COVERAGE=report downgrades the gate to warnings for
+# local investigation only.
+if(NOT DEFINED SPARK_PACKAGE_NOTICE_COVERAGE OR SPARK_PACKAGE_NOTICE_COVERAGE STREQUAL "")
+    set(SPARK_PACKAGE_NOTICE_COVERAGE enforce)
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/ValidateStagedPackageNotices.cmake")
 
 # Console and editor have interactive entry points; all remaining required tools
 # retain their --help smoke, including service tools in the default profile.

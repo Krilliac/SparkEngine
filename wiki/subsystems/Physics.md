@@ -108,7 +108,7 @@ enum class PhysicsBodyType {
 
 ```cpp
 enum class CollisionShapeType {
-    Box,          // Axis-aligned box (half-extents in dimensions)
+    Box,          // Axis-aligned box (FULL extents in dimensions; see note below)
     Sphere,       // Sphere (uses radius field)
     Capsule,      // Capsule -- character controllers (uses radius + height)
     Cylinder,     // Cylinder (uses radius + height)
@@ -120,12 +120,25 @@ enum class CollisionShapeType {
 };
 ```
 
+> **Box dimensions are full extents.** `PhysicsSystem::CreateBoxShape` (`PhysicsShapeFactory.cpp`) halves
+> `dimensions` before building the Jolt `BoxShape`, so `{2, 1, 4}` is a 2 x 1 x 4 m box, even though the
+> `CollisionShapeDesc::dimensions` comment in `PhysicsTypes.h` still says half-extents. Found while building the
+> SparkGameRacing chassis and run-off slab (MOD-380): a desc filled with half-extents yields a body half the
+> intended size.
+
+> **Shape cache key.** `CreateCollisionShape` caches shapes for the life of the `PhysicsSystem` and returns the
+> cached shape on a key match, so `HashShape` (`PhysicsShapeFactory.cpp`) hashes every geometry field, including the
+> vertex, index and heightfield data by content. Before MOD-380's review it hashed only the counts, so two inline
+> meshes with the same vertex/index counts (two procedurally built road surfaces, say) shared the first mesh's
+> geometry. `PhysicsShapeCache_InlineMeshesWithEqualCountsKeepTheirOwnGeometry` (`Tests/TestPhysicsTeardownGuard.cpp`)
+> raycasts both meshes in one world. Cached shapes are not evicted until `Shutdown()`.
+
 ### CollisionShapeDesc
 
 ```cpp
 struct CollisionShapeDesc {
     CollisionShapeType type = CollisionShapeType::Box;
-    XMFLOAT3 dimensions    = {1.0f, 1.0f, 1.0f};  // Half-extents for Box
+    XMFLOAT3 dimensions    = {1.0f, 1.0f, 1.0f};  // Full extents for Box (halved for Jolt)
     float radius           = 0.5f;                   // Radius for Sphere/Capsule/Cylinder/Cone
     float height           = 1.0f;                   // Height for Capsule/Cylinder/Cone
     std::string meshPath;                             // File path for Mesh shapes
@@ -250,6 +263,28 @@ enum class ConstraintType {
 
 ---
 
+## Vehicle Physics
+
+`PhysicsSystem::CreateVehicle(body, VehicleDesc)` attaches a Jolt `VehicleConstraint` to an existing dynamic body. The wrapper (`Physics/VehiclePhysics.h`) follows these rules:
+
+- `SetInput(throttle, brake, steerAngle, handbrake)` takes the steering angle in **radians**; positive steers toward +X (right, left-handed convention). It is clamped to the largest wheel `maxSteerAngle` and converted to the fraction Jolt expects, so `GetWheelSteerAngle()` reports the requested angle. Throttle is clamped to [-1, 1] (negative selects reverse); brake and handbrake to [0, 1].
+- Any non-zero input wakes a sleeping car body; Jolt skips the vehicle constraint of a sleeping body, so a parked car would otherwise never respond.
+- Four or more wheels get all-wheel drive: one differential per axle (wheels 0/1 front, 2/3 rear), each taking half the engine torque (Jolt requires the ratios to sum to 1).
+- `reverseGearRatio` replaces Jolt's default reverse gear and accepts either sign.
+- The wheel ray collision tester uses the car body's own object layer.
+- `CreateVehicle` returns `nullptr` when the body or descriptor is unusable, instead of a vehicle that ignores input.
+
+**Tracked vehicles** (`PhysicsVehicleType::Tracked`) use Jolt's `TrackedVehicleController` with `WheelSettingsTV` wheels:
+
+- Wheels join a track by the sign of `position.x`. Engine +X wheels form Jolt's `ETrackSide::Left` track, because positions reach Jolt unconverted and Jolt's right-handed frame calls +X left. A wheel at `x == 0`, or a layout with no wheels on one side, is rejected.
+- Each track is driven through its rearmost wheel, as in Jolt's tank sample. It brakes with the sum of its wheels' `maxBrakeTorque` and uses `differentialRatio` as its gearbox-to-sprocket ratio. The wheels' friction multipliers scale Jolt's track friction (4 longitudinal, 2 lateral). Anti-roll bars are not built for tracks.
+- Steering is by track speed. `steerAngle / trackedFullSteerAngle` (default 0.5 rad) moves the inner track's ratio from 1 through a stop to -1. Jolt rejects an exact 0, so a stopped inner track is commanded as ±0.05.
+- Steering with no throttle or brake below 1 m/s pivots the hull in place (counter-rotating tracks). The handbrake acts as the brake.
+
+`Tests/TestMOD380VehiclePhysicsReal.cpp` (`VehiclePhysics_JoltVehicle*`) drives a real car on a static ground slab with `StepFixed()`: throttle accelerates it forward, braking decelerates it at more than twice the coasting rate, reverse works, steering yaws it in the input's sign, a sleeping car wakes on input, and two identical input scripts give bitwise-identical poses. `VehiclePhysics_JoltTrackedVehicle*` and `VehiclePhysics_TrackedVehicleRejects*` drive a ten-wheel tracked hull: it goes straight on equal tracks, brakes to a stop, yaws toward the steer side while driving, pivots in place, and rejects one-sided or centred-wheel layouts. SparkGameRacing drives its whole grid through this wrapper (MOD-380): `RacingVehicleSystem` builds one chassis per racer, steps the shared world once per engine fixed step with `StepFixed(1)`, and `RacingTrackSystem` supplies static road-mesh and run-off colliders; `RacingCompleteRace_*` runs full races on them.
+
+---
+
 ## Raycasting
 
 ```cpp
@@ -330,6 +365,25 @@ physics.SetTriggerCallback([](PhysicsBody* trigger, PhysicsBody* other, bool ent
     }
 });
 ```
+
+The trigger callback receives the two bodies in the order Jolt reported them, so check
+`IsTrigger()` to tell which one is the sensor.
+
+### EventBus contact events
+
+With `SetEventBus()` set (the engine does this in `InitPhysics()`), every step also publishes
+`Spark::CollisionEvent` for each new solid contact and `Spark::TriggerEnterEvent` /
+`Spark::TriggerExitEvent` once when a sensor overlap begins or ends. These are published whether or
+not callbacks are installed. In the trigger events, `triggerId` is always the sensor body's entity
+and `entityId` is the body that entered it. Jolt stops reporting contacts for a sleeping body, so an
+overlap whose bodies are all asleep or static stays active: a crate that comes to rest inside a
+sensor gets no exit (and no second enter when it wakes). The exit fires on the first step after a
+woken body is no longer reported inside, so a sleeping body moved out without being activated
+exits only once it wakes. `SetTriggerCallback()` follows the same enter/exit rules. A body created
+outside the ECS (terrain, props, ragdoll parts) reports entity id `0`, the physics "no entity"
+value. The script runtime subscribes to these events to call
+`OnCollision` / `OnTriggerEnter` / `OnTriggerExit` (see
+[Scripting with AngelScript](Scripting-with-AngelScript.md#contact-dispatch-engine-owned)).
 
 ---
 

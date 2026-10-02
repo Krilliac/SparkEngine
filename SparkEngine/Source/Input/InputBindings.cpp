@@ -7,10 +7,8 @@
 #include "../Core/FaultIsolation.h"
 #include "../Utils/Validate.h"
 
-#include <fstream>
 #include <sstream>
 #include <algorithm>
-#include <regex>
 
 namespace Spark
 {
@@ -152,94 +150,6 @@ namespace Spark
         leftHandPreset.bindings["Interact"] = InputBinding{0xBF, 0, -1, 0.0f, false};    // Slash
         leftHandPreset.bindings["Inventory"] = InputBinding{0xBC, 0, -1, 0.0f, false};   // Comma
         RegisterPreset(leftHandPreset);
-    }
-
-    bool InputBindingManager::SaveToFile(const std::string& filePath) const
-    {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
-        SPARK_VALIDATE_RET(Spark::LogCategory::Input, !filePath.empty(), false);
-        std::ofstream file(filePath);
-        if (!file.is_open())
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Input, "Failed to open file for saving bindings: %s", filePath.c_str());
-            return false;
-        }
-
-        file << "{\n";
-        file << "  \"accessibility\": " << static_cast<uint32_t>(m_accessibilityFlags) << ",\n";
-        file << "  \"bindings\": {\n";
-
-        bool first = true;
-        for (const auto& [action, binding] : m_bindings)
-        {
-            if (!first)
-            {
-                file << ",\n";
-            }
-            first = false;
-            file << "    \"" << action << "\": {" << "\"primary\": " << binding.primaryKey << ", "
-                 << "\"alternate\": " << binding.alternateKey << ", " << "\"gamepad\": " << binding.gamepadButton
-                 << ", " << "\"holdToToggle\": " << (binding.holdToToggle ? "true" : "false") << "}";
-        }
-
-        file << "\n  }\n}\n";
-        file.flush();
-        if (!file.good())
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Input, "Error writing bindings to file: %s", filePath.c_str());
-            return false;
-        }
-        return true;
-    }
-
-    bool InputBindingManager::LoadFromFile(const std::string& filePath)
-    {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Input);
-        SPARK_VALIDATE_RET(Spark::LogCategory::Input, !filePath.empty(), false);
-        std::ifstream file(filePath);
-        if (!file.is_open())
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Input, "Failed to open file for loading bindings: %s", filePath.c_str());
-            return false;
-        }
-
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-        try
-        {
-            // Parse accessibility flags
-            std::regex accessRegex(R"~~("accessibility"\s*:\s*(\d+))~~");
-            std::smatch accessMatch;
-            if (std::regex_search(content, accessMatch, accessRegex))
-            {
-                m_accessibilityFlags = static_cast<AccessibilityFlags>(std::stoul(accessMatch[1].str()));
-            }
-
-            // Parse bindings
-            std::regex bindingRegex(
-                R"~~("(\w+)"\s*:\s*\{\s*"primary"\s*:\s*(\d+)\s*,\s*"alternate"\s*:\s*(\d+)\s*,\s*"gamepad"\s*:\s*(-?\d+)\s*,\s*"holdToToggle"\s*:\s*(true|false)\s*\})~~");
-            auto begin = std::sregex_iterator(content.begin(), content.end(), bindingRegex);
-            auto end = std::sregex_iterator();
-
-            for (auto it = begin; it != end; ++it)
-            {
-                const std::smatch& match = *it;
-                InputBinding binding;
-                binding.primaryKey = std::stoi(match[2].str());
-                binding.alternateKey = std::stoi(match[3].str());
-                binding.gamepadButton = std::stoi(match[4].str());
-                binding.holdToToggle = (match[5].str() == "true");
-                m_bindings[match[1].str()] = binding;
-            }
-        }
-        catch (const std::exception& e)
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Input, "Failed to parse bindings file %s: %s", filePath.c_str(),
-                            e.what());
-            return false;
-        }
-
-        return true;
     }
 
     void InputBindingManager::OnBindingChanged(std::function<void(const std::string&, const InputBinding&)> callback)

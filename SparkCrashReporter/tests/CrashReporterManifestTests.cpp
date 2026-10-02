@@ -104,9 +104,11 @@ namespace
 
     int failures = 0;
     int skips = 0;
+    int checks = 0;
 
     void Check(bool condition, std::string_view message)
     {
+        ++checks;
         if (!condition)
         {
             std::cerr << "FAIL: " << message << '\n';
@@ -346,22 +348,6 @@ namespace
                       fs::canonical(trusted / reporterName),
                   "reporter resolves beside canonical executable directory");
         }
-    }
-
-    void TestFullMemoryDumpCredentialGate()
-    {
-        using Spark::CrashHandlerDetail::CanCaptureFullMemoryDump;
-
-        Check(!CanCaptureFullMemoryDump(false, {}, {}, {}, {}), "full-memory capture remains opt-in");
-        Check(CanCaptureFullMemoryDump(true, {}, {}, {}, {}), "explicit local-only full-memory capture is permitted");
-        Check(!CanCaptureFullMemoryDump(true, "github-pat", {}, {}, {}),
-              "GitHub credentials disable full-memory capture");
-        Check(!CanCaptureFullMemoryDump(true, {}, "smtp-password", {}, {}),
-              "SMTP credentials disable full-memory capture");
-        Check(!CanCaptureFullMemoryDump(true, {}, {}, "https://crashes.example.test/upload", {}),
-              "upload endpoints disable full-memory capture because their paths may be bearer capabilities");
-        Check(!CanCaptureFullMemoryDump(true, {}, {}, {}, "https://relay.example.test/crash"),
-              "proxy endpoints disable full-memory capture because their paths may be bearer capabilities");
     }
 
     void TestArtifactConfinementAndDisclosure(const fs::path& scratch)
@@ -658,14 +644,8 @@ namespace
         Check(result == 2, "watcher reports a rejected ready manifest as a failure");
     }
 
-    void TestReadOnlyReporterLaunchPolicyAndManifestNames()
+    void TestManifestPublicationNames()
     {
-        Check(Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(false, false),
-              "read-only reporter may launch only for interactive local review");
-        Check(!Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(true, false),
-              "configured engine upload retains ownership");
-        Check(!Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(false, true),
-              "headless mode never launches reporter UI");
         Check(Spark::CrashHandlerDetail::CrashManifestReadyName("0000000000000001") ==
                       "crash_manifest_0000000000000001.json" &&
                   Spark::CrashHandlerDetail::IsCrashManifestReadyName("crash_manifest_0000000000000001.json"),
@@ -743,12 +723,25 @@ namespace
             fcntl(inheritableSentinel[0], F_SETFL, O_NONBLOCK);
         const ScopedEnvironment sentinel("SPARK_FAKE_GH_SENTINEL_FD", std::to_string(inheritableSentinel[1]));
 #endif
+        // Every automatic Issue is confirmed per crash. The user answers yes
+        // here; CrashReporter_Consent covers refusals and unanswered prompts.
+        size_t publicationQuestions = 0;
+        SparkCrashReporter::ReporterUi ui;
+        ui.ask = [&](const std::string&, const char*, bool publication)
+        {
+            if (publication)
+                ++publicationQuestions;
+            return true;
+        };
+        ui.notifyIssueOutcome = [](const std::string& message, bool) { std::cerr << message << '\n'; };
+
         Check(SparkCrashReporter::SetAutoIssuesEnabled(false), "automatic issues start disabled");
         Check(!SparkCrashReporter::AutoIssuesEnabled(), "no manifest can enable GitHub Issues");
 
         const auto disabled = MakeAutoIssueManifest(scratch, "disabled");
-        Check(SparkCrashReporter::RunCrashReporter(disabled) == 0, "forged manifest remains local without opt-in");
+        Check(SparkCrashReporter::RunCrashReporter(disabled, ui) == 0, "forged manifest remains local without opt-in");
         Check(!fs::exists(capture), "disabled reporter never launches fake gh");
+        Check(publicationQuestions == 0, "no publication question is asked without the user's opt-in");
 
         Check(SparkCrashReporter::SetAutoIssuesEnabled(true), "user explicitly enables automatic issues");
         Check(SparkCrashReporter::AutoIssuesEnabled(), "explicit opt-in persists");
@@ -757,7 +750,7 @@ namespace
                                                    { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }),
               "public correlation ID comes from bounded random hexadecimal output");
         const auto success = MakeAutoIssueManifest(scratch, "success");
-        Check(SparkCrashReporter::RunCrashReporter(success) == 0, "authenticated fake gh confirms issue URL");
+        Check(SparkCrashReporter::RunCrashReporter(success, ui) == 0, "authenticated fake gh confirms issue URL");
         std::ifstream captured(capture, std::ios::binary);
         const std::string sent((std::istreambuf_iterator<char>(captured)), std::istreambuf_iterator<char>());
         Check(sent.find("\ngithub.com/Krilliac/SparkEngine\n") != std::string::npos &&
@@ -771,6 +764,8 @@ namespace
                   sent.find("attacker/repo") == std::string::npos && sent.find(scratch.string()) == std::string::npos,
               "submitted arguments contain no untrusted crash content, credentials, or paths");
         Check(sent.find("--end-call--") != std::string::npos, "fake gh received exactly one issue command");
+        Check(publicationQuestions == 1,
+              "a requireConsent=false manifest still asks one publication question before posting");
         std::ostringstream statusOutput;
         std::streambuf* previousStatus = std::cout.rdbuf(statusOutput.rdbuf());
         const int statusResult = SparkCrashReporter::ShowAutoIssueStatus(success.artifactRoot);
@@ -788,7 +783,7 @@ namespace
               "GitHub CLI inherits no unrelated POSIX descriptors");
 #endif
         const auto firstCallEnd = sent.find("--end-call--");
-        Check(SparkCrashReporter::RunCrashReporter(success) == 3, "same incident is never posted twice");
+        Check(SparkCrashReporter::RunCrashReporter(success, ui) == 3, "same incident is never posted twice");
         std::ifstream repeatedCapture(capture, std::ios::binary);
         const std::string afterRepeat((std::istreambuf_iterator<char>(repeatedCapture)),
                                       std::istreambuf_iterator<char>());
@@ -799,7 +794,7 @@ namespace
         const auto failure = MakeAutoIssueManifest(scratch, "failure");
         std::ostringstream failureOutput;
         std::streambuf* previousFailureError = std::cerr.rdbuf(failureOutput.rdbuf());
-        const int failureResult = SparkCrashReporter::RunCrashReporter(failure);
+        const int failureResult = SparkCrashReporter::RunCrashReporter(failure, ui);
         std::cerr.rdbuf(previousFailureError);
         Check(failureResult == 3, "gh authentication or network failure is reported");
         Check(failureOutput.str().find("GitHub CLI could not create an issue") != std::string::npos,
@@ -808,8 +803,8 @@ namespace
 
         ScopedEnvironment timeoutMode("SPARK_FAKE_GH_MODE", "timeout");
         const auto timeout = MakeAutoIssueManifest(scratch, "timeout");
-        Check(SparkCrashReporter::RunCrashReporter(timeout) == 3, "gh timeout is unconfirmed, not success");
-        Check(SparkCrashReporter::RunCrashReporter(timeout) == 3, "uncertain timeout is not retried automatically");
+        Check(SparkCrashReporter::RunCrashReporter(timeout, ui) == 3, "gh timeout is unconfirmed, not success");
+        Check(SparkCrashReporter::RunCrashReporter(timeout, ui) == 3, "uncertain timeout is not retried automatically");
         std::ostringstream timeoutStatus;
         std::streambuf* oldTimeoutStatus = std::cout.rdbuf(timeoutStatus.rdbuf());
         const int timeoutStatusResult = SparkCrashReporter::ShowAutoIssueStatus(timeout.artifactRoot);
@@ -819,14 +814,14 @@ namespace
 
         ScopedEnvironment unconfirmedMode("SPARK_FAKE_GH_MODE", "unconfirmed");
         const auto unconfirmed = MakeAutoIssueManifest(scratch, "unconfirmed");
-        Check(SparkCrashReporter::RunCrashReporter(unconfirmed) == 3, "unexpected issue URL is rejected");
+        Check(SparkCrashReporter::RunCrashReporter(unconfirmed, ui) == 3, "unexpected issue URL is rejected");
 
         const auto missingGh = MakeAutoIssueManifest(scratch, "missing-gh");
         {
             ScopedEnvironment missingGhPath("PATH", "");
             std::ostringstream missingGhOutput;
             std::streambuf* previousError = std::cerr.rdbuf(missingGhOutput.rdbuf());
-            const int missingGhResult = SparkCrashReporter::RunCrashReporter(missingGh);
+            const int missingGhResult = SparkCrashReporter::RunCrashReporter(missingGh, ui);
             std::cerr.rdbuf(previousError);
             Check(missingGhResult == 3, "missing gh fails without contacting GitHub");
             Check(missingGhOutput.str().find("https://github.com/Krilliac/SparkEngine/issues/new") != std::string::npos,
@@ -839,7 +834,7 @@ namespace
         Check(!fs::exists(missingGhReceipt), "certain missing-gh preflight does not consume one-shot attempt");
         {
             ScopedEnvironment restoredGhMode("SPARK_FAKE_GH_MODE", "success");
-            Check(SparkCrashReporter::RunCrashReporter(missingGh) == 0,
+            Check(SparkCrashReporter::RunCrashReporter(missingGh, ui) == 0,
                   "installing gh later can submit the same previously unattempted crash");
         }
 
@@ -879,37 +874,80 @@ namespace
 
 int main(int argc, char* argv[])
 {
+    // Usage: SparkCrashReporterManifestTests [--group=all|path-escape|secret-redaction] [fake-gh]
+    // The named groups back the OPS-100 CrashManifest_* CTest selectors; "all"
+    // (the default) is the full ManifestCompatibility run and needs the fake gh.
+    std::string_view group = "all";
+    int firstPositional = 1;
+    constexpr std::string_view groupFlag = "--group=";
+    if (argc > 1 && std::string_view(argv[1]).starts_with(groupFlag))
+    {
+        group = std::string_view(argv[1]).substr(groupFlag.size());
+        firstPositional = 2;
+    }
+    if (group != "all" && group != "path-escape" && group != "secret-redaction")
+    {
+        std::cerr << "unknown test group '" << group << "' (expected all, path-escape or secret-redaction)\n";
+        return 2;
+    }
+    if (group != "all" && argc > firstPositional)
+    {
+        std::cerr << "test group '" << group << "' takes no positional arguments\n";
+        return 2;
+    }
+
     ScratchDirectory scratch;
 #ifdef _WIN32
     ScopedEnvironment configRoot("LOCALAPPDATA", (scratch.path / "private-config").string());
 #else
     ScopedEnvironment configRoot("XDG_CONFIG_HOME", (scratch.path / "private-config").string());
 #endif
-    TestEngineWriterSpacingAndEscapes(scratch.path);
-    TestWriterRoundTrip(scratch.path);
-    TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
-    TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
-    TestConsentArchiveAllowlistAndReporterResolution(scratch.path);
-    TestFullMemoryDumpCredentialGate();
-    TestArtifactConfinementAndDisclosure(scratch.path);
-    TestPrivateArtifactDirectoryCreation(scratch.path);
-    TestManifestAndArtifactSubstitutionRejection(scratch.path);
-    TestIdentitySwapAndBoundedLogRead(scratch.path);
-    TestSequentialNonfatalManifestLifecycle(scratch.path);
-    TestMalformedReadyManifestFailsClosed(scratch.path);
-    TestReadOnlyReporterLaunchPolicyAndManifestNames();
-    TestUtf8CrashArtifactPathConversion();
-    if (argc == 2)
-        TestAutomaticIssuesAreOptInBoundedAndIdempotent(scratch.path, argv[1]);
-    else
-        Check(false, "fake gh executable path must be supplied");
-
-    if (failures != 0)
+    if (group == "path-escape")
     {
-        std::cerr << failures << " CrashReporter manifest test(s) failed\n";
+        TestArtifactConfinementAndDisclosure(scratch.path);
+        TestPrivateArtifactDirectoryCreation(scratch.path);
+        TestManifestAndArtifactSubstitutionRejection(scratch.path);
+        TestIdentitySwapAndBoundedLogRead(scratch.path);
+        TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
+    }
+    else if (group == "secret-redaction")
+    {
+        TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
+        TestWriterRoundTrip(scratch.path);
+    }
+    else
+    {
+        TestEngineWriterSpacingAndEscapes(scratch.path);
+        TestWriterRoundTrip(scratch.path);
+        TestMalformedInputRejectedWithoutPartialMutation(scratch.path);
+        TestNoUploadPathIsTruthfulAndDoesNotExposeCredentials(scratch.path);
+        TestConsentArchiveAllowlistAndReporterResolution(scratch.path);
+        TestArtifactConfinementAndDisclosure(scratch.path);
+        TestPrivateArtifactDirectoryCreation(scratch.path);
+        TestManifestAndArtifactSubstitutionRejection(scratch.path);
+        TestIdentitySwapAndBoundedLogRead(scratch.path);
+        TestSequentialNonfatalManifestLifecycle(scratch.path);
+        TestMalformedReadyManifestFailsClosed(scratch.path);
+        TestManifestPublicationNames();
+        TestUtf8CrashArtifactPathConversion();
+        if (argc == firstPositional + 1)
+            TestAutomaticIssuesAreOptInBoundedAndIdempotent(scratch.path, argv[firstPositional]);
+        else
+            Check(false, "fake gh executable path must be supplied");
+    }
+
+    // A group that selected nothing must not report success.
+    if (checks == 0)
+    {
+        std::cerr << "test group '" << group << "' executed no checks\n";
         return 1;
     }
-    std::cout << "CrashReporter manifest compatibility tests passed";
+    if (failures != 0)
+    {
+        std::cerr << failures << " CrashReporter manifest test(s) failed in group '" << group << "'\n";
+        return 1;
+    }
+    std::cout << "CrashReporter manifest tests passed (group " << group << ", " << checks << " checks)";
     if (skips != 0)
         std::cout << " with " << skips << " explicitly reported fixture skip(s)";
     std::cout << '\n';

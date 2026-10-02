@@ -385,6 +385,8 @@ TEST(CoverageScripting_VisualCompilerEventsFunctionsMetadataAndFallbacks)
         event.outputs = {Pin(PinKind::Execution)};
         if (type == ScriptNodeType::OnKeyPress)
             event.properties["key"] = "K";
+        if (type == ScriptNodeType::OnCustomEvent)
+            event.properties["event"] = "boss defeated";
         graph.nodes.push_back(std::move(event));
     }
     graph.variables.push_back({"player score", PinKind::Int, "7"});

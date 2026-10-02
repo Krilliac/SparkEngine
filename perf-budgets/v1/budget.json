@@ -113,6 +113,19 @@
       "status": "pending_measurement"
     },
     {
+      "id": "nullrhi.headless.shutdown_time",
+      "category": "shutdown_time",
+      "scene": "headless-fps-boot-loop",
+      "backend": "nullrhi",
+      "product": "SparkEngine",
+      "unit": "ms",
+      "direction": "lower_is_better",
+      "percentile": null,
+      "hardwareRowId": null,
+      "budget": 5000,
+      "status": "suspended"
+    },
+    {
       "id": "windows.client.startup_time",
       "category": "startup_time",
       "scene": "cold-start",

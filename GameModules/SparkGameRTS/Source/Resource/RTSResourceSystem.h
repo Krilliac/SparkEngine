@@ -81,9 +81,22 @@ namespace RTS
         const std::map<uint32_t, ResourceNode>& GetNodes() const;
         std::string GetResourceListString() const;
 
-        /** Replace the economy and resource nodes from a validated persistence snapshot. */
+        /** @brief Id the next created node receives (ids are never reused, so this is persistent state). */
+        uint32_t GetNextNodeId() const;
+        /** @brief Seconds accumulated toward the next harvest trip, in [0, GATHER_INTERVAL). */
+        float GetGatherTimer() const;
+
+        /**
+         * @brief Replace the economy and resource nodes from a validated persistence snapshot.
+         * @param nextNodeId   Id the next node receives; 0 derives it as one past the highest restored id,
+         *                     otherwise it must exceed every restored id.
+         * @param gatherTimer  Harvest-trip progress; must be finite and in [0, GATHER_INTERVAL).
+         * @return false (leaving state untouched) if any record, the id counter, or the timer is invalid.
+         */
         bool RestoreState(const std::vector<std::pair<RTSFaction, PlayerResources>>& players,
-                          const std::vector<ResourceNode>& nodes);
+                          const std::vector<ResourceNode>& nodes, uint32_t nextNodeId = 0, float gatherTimer = 0.0f);
+
+        static constexpr float GATHER_INTERVAL = 2.0f; ///< Seconds per resource tick
 
       private:
         void GatherResources(float deltaTime);
@@ -96,7 +109,6 @@ namespace RTS
         std::map<uint32_t, ResourceNode> m_nodes;
         uint32_t m_nextNodeId = 1;
 
-        static constexpr float GATHER_INTERVAL = 2.0f; ///< Seconds per resource tick
         static constexpr int MINERALS_PER_TRIP = 8;
         static constexpr int GAS_PER_TRIP = 4;
         float m_gatherTimer = 0.0f;

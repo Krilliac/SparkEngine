@@ -14,7 +14,23 @@ if(NOT DEFINED IMGUI_INCLUDE_DIR OR NOT IMGUI_INCLUDE_DIR)
     )
 endif()
 
-if(IMGUI_INCLUDE_DIR)
+# Off Windows the ImGui backends are SDL2 + OpenGL. A build without them (ENABLE_SDL2=OFF and no
+# system SDL2, as a headless runtime configures) gets no imgui target instead of a failed
+# configure; every consumer checks IMGUI_FOUND (SparkEditor, SparkLauncher, the optional
+# SparkInstaller GUI).
+set(_IMGUI_BACKEND_AVAILABLE TRUE)
+if(IMGUI_INCLUDE_DIR AND NOT TARGET imgui AND NOT WIN32)
+    if(NOT TARGET SDL2::SDL2 AND NOT TARGET SDL2)
+        find_package(SDL2 QUIET)
+    endif()
+    find_package(OpenGL QUIET)
+    if(NOT (TARGET SDL2::SDL2 OR TARGET SDL2 OR SDL2_FOUND) OR NOT OpenGL_FOUND)
+        set(_IMGUI_BACKEND_AVAILABLE FALSE)
+        message(STATUS "Dear ImGui: SDL2 or OpenGL not available, so the imgui target is not built")
+    endif()
+endif()
+
+if(IMGUI_INCLUDE_DIR AND _IMGUI_BACKEND_AVAILABLE)
     if(NOT TARGET imgui)
         message(STATUS "Found Dear ImGui at: ${IMGUI_INCLUDE_DIR}")
 

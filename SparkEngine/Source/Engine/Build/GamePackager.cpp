@@ -1,7 +1,12 @@
 #include "GamePackager.h"
 
+#include "Utils/FileUtils.h"
+
 #include <cstdio>
 #include <format>
+#include <optional>
+#include <string>
+#include <vector>
 
 namespace Spark::Build
 {
@@ -44,19 +49,33 @@ namespace Spark::Build
             return platform == PackagePlatform::WindowsX64 ? ".exe" : std::string_view{};
         }
 
+        /// UTF-8 text for diagnostic messages only. path::string() goes through the
+        /// Windows ANSI code page and throws for a name it cannot spell. Never feed
+        /// the result into a packaging decision or the manifest: the placeholder
+        /// matches no filter, so a policy check on it fails open.
+        std::string DisplayName(const fs::path& path)
+        {
+            return FileUtils::TryPathToUtf8(path).value_or("<unrepresentable name>");
+        }
+
         bool IsLegacyBinary(const fs::path& path, PackagePlatform platform, bool debugBuild)
         {
-            const auto extension = path.extension().string();
+            const std::optional<std::string> extension = FileUtils::TryPathToUtf8(path.extension());
+            if (!extension)
+            {
+                return false;
+            }
             const auto moduleExtension = ModuleExtension(platform);
             const auto executableExtension = ExecutableExtension(platform);
-            return extension == moduleExtension || extension == executableExtension ||
-                   (debugBuild && extension == ".pdb");
+            return *extension == moduleExtension || *extension == executableExtension ||
+                   (debugBuild && *extension == ".pdb");
         }
 
         bool IsCountedLegacyBinary(const fs::path& path, PackagePlatform platform)
         {
-            const auto extension = path.extension().string();
-            return extension == ModuleExtension(platform) || extension == ExecutableExtension(platform);
+            const std::optional<std::string> extension = FileUtils::TryPathToUtf8(path.extension());
+            return extension &&
+                   (*extension == ModuleExtension(platform) || *extension == ExecutableExtension(platform));
         }
 
     } // namespace
@@ -95,8 +114,9 @@ namespace Spark::Build
 
         const auto configName = config.debugBuild ? "Debug" : "Release";
         const fs::path outputRoot =
-            fs::absolute(fs::path(config.outputDirectory) /
-                         std::format("{}_{}_{}", config.projectName, PlatformName(config.platform), configName));
+            fs::absolute(FileUtils::PathFromUtf8(config.outputDirectory) /
+                         FileUtils::PathFromUtf8(
+                             std::format("{}_{}_{}", config.projectName, PlatformName(config.platform), configName)));
         const fs::path binDestination = outputRoot / "Bin";
         const fs::path assetsDestination = outputRoot / "Assets";
         const fs::path configDestination = outputRoot / "Config";
@@ -133,11 +153,27 @@ namespace Spark::Build
             {
                 if (!entry.is_regular_file(ec))
                     continue;
-                const auto relative = fs::relative(entry.path(), assetsSource, ec).string();
+                const fs::path relativePath = fs::relative(entry.path(), assetsSource, ec);
+                // The editor filter must see the real name. A Windows name that is not
+                // well-formed UTF-16 has no UTF-8 spelling to filter on, so the package
+                // fails instead of shipping an entry the filter never examined.
+                if (ec || relativePath.empty())
+                {
+                    result.errors.push_back(std::format("Failed to resolve asset path: {}", ec.message()));
+                    ec.clear();
+                    continue;
+                }
+                const std::optional<std::string> relativeUtf8 = FileUtils::TryPathToUtf8(relativePath);
+                if (!relativeUtf8)
+                {
+                    result.errors.emplace_back("Asset name is not valid Unicode; refusing to package it unfiltered");
+                    continue;
+                }
+                const std::string& relative = *relativeUtf8;
                 if (!config.includeEditor && relative.starts_with("Editor"))
                     continue;
 
-                const fs::path destination = assetsDestination / relative;
+                const fs::path destination = assetsDestination / relativePath;
                 fs::create_directories(destination.parent_path(), ec);
                 fs::copy_file(entry.path(), destination, fs::copy_options::overwrite_existing, ec);
                 if (ec)
@@ -162,7 +198,15 @@ namespace Spark::Build
             if (!entry.is_regular_file(ec) || !IsLegacyBinary(entry.path(), config.platform, config.debugBuild))
                 continue;
 
-            const auto filename = entry.path().filename().string();
+            // As for assets: filter on the real name, or fail rather than copy an
+            // unexamined binary into a shipping package.
+            const std::optional<std::string> filenameUtf8 = FileUtils::TryPathToUtf8(entry.path().filename());
+            if (!filenameUtf8)
+            {
+                result.errors.emplace_back("Binary name is not valid Unicode; refusing to package it unfiltered");
+                continue;
+            }
+            const std::string& filename = *filenameUtf8;
             if (!config.includeEditor && filename.find("Editor") != std::string::npos)
                 continue;
 
@@ -202,14 +246,62 @@ namespace Spark::Build
                 if (ec)
                 {
                     result.warnings.push_back(
-                        std::format("Could not remove debug file '{}'", entry.path().filename().string()));
+                        std::format("Could not remove debug file '{}'", DisplayName(entry.path().filename())));
                     ec.clear();
                 }
             }
         }
 
+        // The output directory is reused between runs, so it can hold files this run
+        // did not copy. The manifest must name every one of them truthfully; a name
+        // with no UTF-8 spelling would be recorded as a placeholder, so fail instead.
+        const std::optional<std::string> outputRootUtf8 = FileUtils::TryPathToUtf8(outputRoot);
+        if (!outputRootUtf8)
+        {
+            result.errors.emplace_back("Output directory name is not valid Unicode");
+        }
+        struct ManifestLine
+        {
+            std::string relativePath;
+            unsigned long long sizeBytes = 0;
+        };
+        std::vector<ManifestLine> manifestLines;
+        for (const auto& entry : fs::recursive_directory_iterator(outputRoot, ec))
+        {
+            if (!entry.is_regular_file(ec))
+            {
+                continue;
+            }
+            const auto relative = fs::relative(entry.path(), outputRoot, ec);
+            std::optional<std::string> relativeUtf8 = ec ? std::nullopt : FileUtils::TryPathToUtf8(relative);
+            if (!relativeUtf8)
+            {
+                result.errors.emplace_back("Package output contains a file whose name is not valid Unicode");
+                ec.clear();
+                continue;
+            }
+            // A manifest left by an earlier run is rewritten below; it does not list itself.
+            if (*relativeUtf8 == "manifest.txt")
+            {
+                continue;
+            }
+            manifestLines.push_back({std::move(*relativeUtf8), static_cast<unsigned long long>(entry.file_size(ec))});
+        }
+        if (!result.errors.empty())
+        {
+            result.outputPath.clear();
+            result.totalSizeMB = 0.0f;
+            result.success = false;
+            return publish(result, false);
+        }
+
         const fs::path manifestPath = outputRoot / "manifest.txt";
-        if (FILE* manifest = std::fopen(manifestPath.string().c_str(), "w"))
+#ifdef _WIN32
+        FILE* manifest = _wfopen(manifestPath.c_str(), L"w");
+#else
+        FILE* manifest = std::fopen(manifestPath.c_str(), "w");
+#endif
+        if (manifest)
         {
             const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
             std::fprintf(manifest, "# SparkEngine Package Manifest\n");
@@ -220,14 +312,9 @@ namespace Spark::Build
             std::fprintf(manifest, "# Timestamp: %lld\n", static_cast<long long>(now));
             std::fprintf(manifest, "# Assets: %u\n", result.assetCount);
             std::fprintf(manifest, "# DLLs: %u\n\n", result.dllCount);
-            for (const auto& entry : fs::recursive_directory_iterator(outputRoot, ec))
+            for (const ManifestLine& line : manifestLines)
             {
-                if (entry.is_regular_file(ec))
-                {
-                    const auto relative = fs::relative(entry.path(), outputRoot, ec);
-                    std::fprintf(manifest, "%s %llu\n", relative.string().c_str(),
-                                 static_cast<unsigned long long>(entry.file_size(ec)));
-                }
+                std::fprintf(manifest, "%s %llu\n", line.relativePath.c_str(), line.sizeBytes);
             }
             std::fclose(manifest);
         }
@@ -261,7 +348,8 @@ namespace Spark::Build
             if (entry.is_regular_file(ec))
                 totalBytes += entry.file_size(ec);
         }
-        result.outputPath = outputRoot.string();
+        // A non-Unicode output root was already recorded as an error above; never dereference it.
+        result.outputPath = outputRootUtf8.value_or(std::string{});
         result.totalSizeMB = static_cast<float>(totalBytes) / (1024.0f * 1024.0f);
         result.success = result.errors.empty();
         return publish(result, result.success);

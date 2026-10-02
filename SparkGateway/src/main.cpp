@@ -88,7 +88,8 @@ int main(int argc, char** argv)
     }
 
     // Local ingress and area control use owner-only key material and HMAC-authenticated framing.
-    auto authenticator = std::make_unique<Spark::Gateway::KeyFileAuthenticator>(parsed.options->keyFile);
+    // Admission uses the same key unless a local, deterministic admission fixture is configured.
+    auto authenticator = Spark::Gateway::CreateGatewayAuthenticator(*parsed.options);
     auto controlPlane = std::make_unique<Spark::Gateway::LocalAreaControlPlane>(parsed.options->keyFile);
     Spark::Gateway::GatewayApplication application(std::move(*parsed.options), std::move(authenticator),
                                                    std::move(controlPlane));

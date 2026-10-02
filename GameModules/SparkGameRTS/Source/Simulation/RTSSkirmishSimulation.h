@@ -15,6 +15,7 @@
 
 #include "Enums/RTSEnums.h"
 
+#include <cstddef>
 #include <cstdint>
 
 namespace Spark
@@ -29,6 +30,7 @@ namespace RTS
     class RTSFogOfWarSystem;
     class RTSMatchSystem;
     class RTSResourceSystem;
+    class RTSScriptedCommander;
     class RTSUnitSystem;
 
     /// @brief Non-owning pointers to the gameplay systems the skirmish tick drives
@@ -45,8 +47,8 @@ namespace RTS
     /**
      * @brief Owns the ordered, fixed-step skirmish loop
      *
-     * Tick order: AI opponents -> commands/movement -> combat -> unit cleanup -> construction/production ->
-     * economy -> fog of war -> elimination and win/loss.
+     * Tick order: scripted Human commander (when bound) -> AI opponents -> commands/movement -> combat -> unit
+     * cleanup -> construction/production -> economy -> fog of war -> elimination and win/loss.
      */
     class RTSSkirmishSimulation
     {
@@ -80,13 +82,39 @@ namespace RTS
         /** @brief Execute exactly one fixed tick. No-op once the match has left the Playing state. */
         void Step();
 
-        /** @brief Discard accumulated wall-clock time and restart the tick counter (after reset or load). */
+        /**
+         * @brief Bind (or clear with nullptr) the commander that issues Human orders at the start of every tick.
+         *        Not owned; it must outlive the binding.
+         */
+        void SetScriptedCommander(const RTSScriptedCommander* commander) { m_commander = commander; }
+
+        /** @brief Discard accumulated wall-clock time and restart the tick counter (after a reset). */
         void ResetClock();
+
+        /**
+         * @brief ResetClock semantics for a loaded match: discard accumulated wall-clock time and resume the tick
+         *        counter (and with it the AI decision phase) at the saved tick.
+         */
+        void RestoreClock(uint64_t tick);
 
         uint64_t GetTick() const;
 
-        /** @brief FNV-1a hash of the complete simulation state, walked in canonical (id) order. */
+        /**
+         * @brief FNV-1a hash of the complete simulation state, walked in canonical (id) order.
+         *
+         * Covers every field a save persists, so a resumed match that diverges in any of them changes the hash.
+         * Only the sub-tick wall-clock remainder is excluded: it never influences simulated state.
+         */
         uint64_t ComputeStateHash() const;
+
+        /**
+         * @brief Fog cells the most recent vision refresh visited, summed over factions.
+         *
+         * Each faction's refresh is capped at RTSFogOfWarSystem::MAX_VISION_CELLS_PER_REFRESH: units are
+         * revealed in ascending id order and a unit whose disc would exceed the remaining budget reveals
+         * nothing that tick, so a restored save cannot make one tick's fog work grow with units * range^2.
+         */
+        size_t GetLastVisionCellWork() const;
 
       private:
         void RunAIOpponents();
@@ -96,8 +124,10 @@ namespace RTS
 
         Spark::IEngineContext* m_context{nullptr};
         RTSSkirmishSystems m_systems;
+        const RTSScriptedCommander* m_commander{nullptr};
         double m_accumulatedSeconds{0.0};
         uint64_t m_tick{0};
+        size_t m_lastVisionCellWork{0};
     };
 
 } // namespace RTS

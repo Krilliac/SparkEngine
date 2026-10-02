@@ -573,6 +573,31 @@ namespace Spark
         return true;
     }
 
+    std::string SimpleConsole::RedactSensitiveArguments(const std::string& commandLine) const
+    {
+        std::string resolved = ResolveAliases(commandLine);
+        const auto clearResolved = MakeScopeExit([&] { SecureClear(resolved); });
+        auto resolvedTokens = ParseCommand(resolved);
+        const auto clearResolvedTokens = MakeScopeExit([&] { SecureClear(resolvedTokens); });
+        if (resolvedTokens.empty())
+            return commandLine;
+
+        auto typedTokens = ParseCommand(commandLine);
+        const auto clearTypedTokens = MakeScopeExit([&] { SecureClear(typedTokens); });
+        const std::string& effective = resolvedTokens.front();
+        const bool sensitive = IsSensitiveCommand(effective);
+        // Fail closed: a command nobody registered yet (its module is not loaded)
+        // may still be a credential command, so its arguments are not trusted.
+        const bool unrecognized =
+            !sensitive && !HasCommand(effective) && CVarRegistry::Get().Find(effective) == nullptr;
+        if (!sensitive && !(unrecognized && typedTokens.size() > 1))
+            return commandLine;
+
+        // Keep only the name the caller typed: an alias may itself embed the credential.
+        return typedTokens.empty() ? std::string("<arguments-redacted>")
+                                   : typedTokens.front() + " <arguments-redacted>";
+    }
+
     bool SimpleConsole::IsSensitiveCommand(const std::string& command) const
     {
         std::lock_guard<std::mutex> commandLock(m_commandMutex);
@@ -788,7 +813,7 @@ namespace Spark
     // Private helpers
     // ============================================================================
 
-    std::vector<std::string> SimpleConsole::ParseCommand(const std::string& commandLine)
+    std::vector<std::string> SimpleConsole::ParseCommand(const std::string& commandLine) const
     {
         std::vector<std::string> args;
         std::string current;
@@ -879,7 +904,7 @@ namespace Spark
         return closest;
     }
 
-    std::string SimpleConsole::ResolveAliases(const std::string& cmd)
+    std::string SimpleConsole::ResolveAliases(const std::string& cmd) const
     {
         std::lock_guard<std::mutex> lock(m_commandMutex);
         std::string resolved = cmd;

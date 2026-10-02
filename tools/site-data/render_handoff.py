@@ -35,6 +35,27 @@ def code_block(commands: Iterable[str]) -> list[str]:
     return ["```bash", *values, "```"]
 
 
+def acceptance_counts(items: Iterable[dict[str, Any]]) -> tuple[int, int, int]:
+    """(criteria, implemented-or-evidenced, evidenced) across the given work items."""
+    states = [entry["state"] for item in items for entry in item["acceptanceStatus"]]
+    return len(states), sum(state != "unmet" for state in states), states.count("evidenced")
+
+
+def percent(part: int, whole: int) -> str:
+    return f"{(100 * part / whole):.0f}%" if whole else "n/a"
+
+
+def acceptance_lines(item: dict[str, Any]) -> list[str]:
+    """Numbered criteria, each tagged with its recorded state, evidence, and note."""
+    lines: list[str] = []
+    for index, (criterion, entry) in enumerate(zip(item["acceptanceCriteria"], item["acceptanceStatus"]), start=1):
+        lines.append(f"{index}. **[{entry['state']}]** {criterion}")
+        if entry["evidence"]:
+            lines.append("   - Evidence: " + ", ".join(f"`{value}`" for value in entry["evidence"]))
+        lines.append(f"   - {entry['note']}")
+    return lines or ["1. None declared."]
+
+
 def render_work_item(item: dict[str, Any]) -> list[str]:
     identifier = item["id"]
     lines = [
@@ -70,7 +91,9 @@ def render_work_item(item: dict[str, Any]) -> list[str]:
         "",
         "**Acceptance criteria**",
         "",
-        *numbered(item["acceptanceCriteria"]),
+        "Progress: {1} of {0} implemented, {2} evidenced at an exact commit.".format(*acceptance_counts([item])),
+        "",
+        *acceptance_lines(item),
         "",
         "**Required commands**",
         "",
@@ -118,6 +141,11 @@ def render_handoff(contract: dict[str, Any]) -> str:
     first_id = execution.get("firstUnblockedWorkItemId")
     first = work_by_id.get(first_id)
     open_blockers = [item for item in work_items if item["blocking"] and item["status"] != "done"]
+    criteria_total, criteria_implemented, criteria_evidenced = acceptance_counts(work_items)
+    status_counts = {
+        state: sum(1 for item in work_items if item["status"] == state)
+        for state in ("done", "in-progress", "blocked", "open")
+    }
     gate_counts = {
         state: sum(1 for gate in gates if gate["state"] == state)
         for state in ("passing", "at-risk", "blocked", "not-evaluated")
@@ -139,6 +167,12 @@ def render_handoff(contract: dict[str, Any]) -> str:
         f"- Gate states: **{gate_counts['passing']} passing**, **{gate_counts['at-risk']} at risk**, **{gate_counts['blocked']} blocked**, **{gate_counts['not-evaluated']} not evaluated**",
         f"- Work items: **{len(work_items)} total**, **{len(open_blockers)} unfinished ledger items "
         "marked blocking** (profile applicability determines release impact)",
+        f"- Work-item status: **{status_counts['done']} done**, **{status_counts['in-progress']} in progress**, "
+        f"**{status_counts['blocked']} blocked**, **{status_counts['open']} open**",
+        f"- Acceptance criteria: **{criteria_total} total**, **{criteria_implemented} implemented** "
+        f"({percent(criteria_implemented, criteria_total)}), **{criteria_evidenced} evidenced** "
+        f"({percent(criteria_evidenced, criteria_total)}). Only evidenced criteria (exact-commit CI) count toward release; "
+        "implemented means committed code with a committed check.",
         f"- First unblocked item: **`{first_id}` — {first['title'] if first else 'none'}**",
         "",
         "### Release means all of the following",
@@ -164,7 +198,7 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "",
                 "### Session acceptance",
                 "",
-                *numbered(first["acceptanceCriteria"]),
+                *acceptance_lines(first),
                 "",
                 "### Session verification",
                 "",
@@ -339,17 +373,19 @@ def render_handoff(contract: dict[str, Any]) -> str:
                 "",
                 wave["objective"],
                 "",
-                "| Work item | Priority | Status | Depends on | Safe parallel work |",
-                "|---|---|---|---|---|",
+                "| Work item | Priority | Status | Criteria implemented / evidenced | Depends on | Safe parallel work |",
+                "|---|---|---|---|---|---|",
             ]
         )
         for item in wave_items:
             dependencies = ", ".join(f"`{value}`" for value in item["dependencies"]) or "—"
             parallel = ", ".join(f"`{value}`" for value in item["parallelWith"]) or "—"
             anchor = github_heading_slug(f"{item['id']} — {item['title']}")
+            total, implemented, evidenced = acceptance_counts([item])
             lines.append(
                 f"| [`{item['id']}`](#{anchor}) "
-                f"{inline(item['title'])} | {item['priority']} | **{item['status']}** | {dependencies} | {parallel} |"
+                f"{inline(item['title'])} | {item['priority']} | **{item['status']}** | "
+                f"{implemented}/{total} · {evidenced}/{total} | {dependencies} | {parallel} |"
             )
         lines.append("")
 

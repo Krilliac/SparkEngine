@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <system_error>
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -293,28 +294,57 @@ void GraphicsEngine::SetBasicTexture(ID3D11ShaderResourceView* srv)
 // Minimal extraction of "albedo"/"normal" (strings), "roughness" (string or
 // scalar) and "tiling" ([x, y]) from the small material JSON files under
 // Assets/Materials. Not a general JSON parser.
+//
+// Texture diagnostics: a declared texture path that is rooted, absolute or
+// escapes the project is malformed content, so the whole material fails
+// (logged error, negative-cached, nullptr) instead of rendering untextured.
+// A declared texture that is missing or fails to decode logs an error naming
+// the material, the key, the declared path and the reason; the material stays
+// cached so an editor import of the texture (InvalidateBasicTexture) is
+// picked up by retryTextures on the next lookup.
 const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& jsonPath,
                                                                             std::string_view projectRootUtf8)
 {
     if (jsonPath.empty() || projectRootUtf8.empty())
         return nullptr;
 
-    auto loadTexture = [this, &jsonPath](std::string_view projectRoot,
-                                         std::string& declaredPath) -> ID3D11ShaderResourceView*
+    bool rejectedTexturePath = false;
+    auto rejectTexture = [&jsonPath, &rejectedTexturePath](const char* key, const std::string& declaredPath)
     {
-        if (declaredPath.empty())
-            return nullptr;
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                        "GetOrLoadBasicMaterial: material '%s' key '%s' declares rejected texture path '%s' "
+                        "(rooted, absolute or outside the project); the material is not loaded",
+                        jsonPath.c_str(), key, declaredPath.c_str());
+        rejectedTexturePath = true;
+    };
+
+    auto loadTexture = [this, &jsonPath, &rejectTexture](std::string_view projectRoot, const char* key,
+                                                         std::string& declaredPath) -> ID3D11ShaderResourceView*
+    {
+        // The declared spelling, kept for the diagnostic: on Windows the cache key
+        // that replaces declaredPath below is case-folded.
+        const std::string declared = declaredPath;
         const auto resolved = Spark::ResolveProjectAssetPath(projectRoot, declaredPath);
         if (!resolved)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                           "GetOrLoadBasicMaterial: rejected texture path '%s' declared by '%s'", declaredPath.c_str(),
-                           jsonPath.c_str());
+            rejectTexture(key, declaredPath);
             declaredPath.clear();
             return nullptr;
         }
         declaredPath = resolved->cacheKey;
-        return GetOrLoadTextureSRV(declaredPath);
+        ID3D11ShaderResourceView* srv = GetOrLoadTextureSRV(declaredPath);
+        // A null result outside the negative cache is a transient (COM/allocation)
+        // failure that retryTextures handles silently on a later lookup.
+        if (!srv && m_failedBasicTexturePaths.contains(declaredPath))
+        {
+            std::error_code ec;
+            const bool exists = std::filesystem::is_regular_file(resolved->nativePath, ec) && !ec;
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                            "GetOrLoadBasicMaterial: material '%s' key '%s' texture '%s' failed to load (%s); "
+                            "rendering it with the default texture until the file is fixed",
+                            jsonPath.c_str(), key, declared.c_str(), exists ? "decode failure" : "missing file");
+        }
+        return srv;
     };
 
     auto retryTextures = [this](BasicMaterial& material)
@@ -394,16 +424,20 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
     // Material texture paths are relative to Assets/ unless already prefixed.
     // When WorldBasicRenderer supplies a project root, resolve every declared
     // file through the same project-confinement boundary as direct textures.
-    auto normalizeTexturePath = [](std::string p) -> std::string
+    auto normalizeTexturePath = [&rejectTexture](const char* key, std::string p) -> std::string
     {
         try
         {
             const std::filesystem::path declaredPath = std::filesystem::u8path(p);
             if (declaredPath.is_absolute() || declaredPath.has_root_name() || declaredPath.has_root_directory())
+            {
+                rejectTexture(key, p);
                 return {};
+            }
         }
         catch (const std::filesystem::filesystem_error&)
         {
+            rejectTexture(key, p);
             return {};
         }
         if (p.rfind("Assets/", 0) != 0 && p.rfind("Assets\\", 0) != 0)
@@ -414,9 +448,9 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
     std::string albedo = findStringValue("albedo");
     if (!albedo.empty())
     {
-        mat.albedoPath = normalizeTexturePath(std::move(albedo));
+        mat.albedoPath = normalizeTexturePath("albedo", std::move(albedo));
         if (!mat.albedoPath.empty())
-            mat.srv = loadTexture(mat.projectRoot, mat.albedoPath);
+            mat.srv = loadTexture(mat.projectRoot, "albedo", mat.albedoPath);
     }
 
     // "normal" : "path" — tangent-space normal map, bound at t1 by
@@ -424,9 +458,9 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
     std::string normalPath = findStringValue("normal");
     if (!normalPath.empty())
     {
-        mat.normalPath = normalizeTexturePath(std::move(normalPath));
+        mat.normalPath = normalizeTexturePath("normal", std::move(normalPath));
         if (!mat.normalPath.empty())
-            mat.normalSrv = loadTexture(mat.projectRoot, mat.normalPath);
+            mat.normalSrv = loadTexture(mat.projectRoot, "normal", mat.normalPath);
     }
 
     // "roughness" : "path" OR scalar (e.g. 0.3) — the shipped materials use
@@ -446,9 +480,9 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
                 size_t q2 = content.find('"', vp + 1);
                 if (q2 != std::string::npos && q2 > vp + 1)
                 {
-                    mat.roughnessPath = normalizeTexturePath(content.substr(vp + 1, q2 - vp - 1));
+                    mat.roughnessPath = normalizeTexturePath("roughness", content.substr(vp + 1, q2 - vp - 1));
                     if (!mat.roughnessPath.empty())
-                        mat.roughnessSrv = loadTexture(mat.projectRoot, mat.roughnessPath);
+                        mat.roughnessSrv = loadTexture(mat.projectRoot, "roughness", mat.roughnessPath);
                 }
             }
             else
@@ -485,6 +519,13 @@ const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(cons
                     mat.tiling = {tx, ty};
             }
         }
+    }
+
+    if (rejectedTexturePath)
+    {
+        m_failedBasicMaterialPaths.emplace(materialCacheKey);
+        m_basicMaterialAliases[declaredCacheKey] = materialCacheKey;
+        return nullptr;
     }
 
     auto ins = m_basicMaterialCache.emplace(materialCacheKey, std::move(mat)).first;
