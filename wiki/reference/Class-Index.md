@@ -99,8 +99,8 @@
 | `AdvNetBuffer` | class | Tests | [TestAdversarialEngine.cpp:L1501](../../Tests/TestAdversarialEngine.cpp#L1501) |  |
 | `AdvSnapshot` | struct | Tests | [TestAdversarialEngine.cpp:L1697](../../Tests/TestAdversarialEngine.cpp#L1697) |  |
 | `AffixData` | struct | GameModules | [ARPGLootSystem.h:L25](../../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.h#L25) | A single stat modifier on an item |
-| `after` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L499](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L499) |  |
-| `after` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1234](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1234) |  |
+| `after` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L513](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L513) |  |
+| `after` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1262](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1262) |  |
 | `after` | struct | SparkEngine | [EventResponseSystem.cpp:L143](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L143) |  |
 | `after` | struct | Tests | [TestCrashHandlerGatingReal.cpp:L472](../../Tests/TestCrashHandlerGatingReal.cpp#L472) |  |
 | `Agent` | struct | Tests | [TestCollisionAvoidance.cpp:L27](../../Tests/TestCollisionAvoidance.cpp#L27) |  |
@@ -420,7 +420,7 @@
 | `BatchOperation` | struct | SparkEditor | [AssetPipelineTypes.h:L214](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L214) | Batch processing operation |
 | `BatchOutput` | struct | SparkShaderCompiler | [main.cpp:L261](../../SparkShaderCompiler/src/main.cpp#L261) |  |
 | `Bed` | struct | GameModules | [TFAudioAmbience.h:L85](../../GameModules/SparkGameMMOFPS/Source/Game/TFAudioAmbience.h#L85) |  |
-| `before` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1201](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1201) |  |
+| `before` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1229](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1229) |  |
 | `before` | struct | Tests | [TestCrashHandlerGatingReal.cpp:L457](../../Tests/TestCrashHandlerGatingReal.cpp#L457) |  |
 | `BehaviorTree` | class | SparkEngine | [BehaviorTree.h:L99](../../SparkEngine/Source/Engine/AI/BehaviorTree.h#L99) |  |
 | `BehaviorTreeHandleTag` | struct | SparkEngine | [OpaqueHandle.h:L88](../../SparkEngine/Source/Utils/OpaqueHandle.h#L88) |  |
@@ -791,7 +791,7 @@
 | `CommandRegistry` | class | SparkConsole | [CommandRegistry.h:L31](../../SparkConsole/src/CommandRegistry.h#L31) | Stores and dispatches named console commands. |
 | `CommandRegistry` | class | SparkEngine | [ConsoleProcessManager.h:L31](../../SparkEngine/Source/Utils/ConsoleProcessManager.h#L31) |  |
 | `CommandRegistry` | class | SparkEngine | [ConsoleProcessManager.h:L185](../../SparkEngine/Source/Utils/ConsoleProcessManager.h#L185) | Simple command registry for console commands |
-| `CommandResult` | struct | SparkCrashReporter | [CrashAutoIssues.cpp:L207](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L207) |  |
+| `CommandResult` | struct | SparkCrashReporter | [CrashAutoIssues.cpp:L245](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L245) |  |
 | `CommandResult` | struct | SparkEditor | [IntegrationTypes.h:L146](../../SparkEditor/Source/Integration/IntegrationTypes.h#L146) | Command execution result |
 | `CommandResult` | struct | SparkEditor | [SparkEngineIntegration.h:L156](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L156) | Command execution result |
 | `CommitInfo` | struct | SparkEditor | [VersionControlTypes.h:L44](../../SparkEditor/Source/VersionControl/VersionControlTypes.h#L44) | Commit information |
@@ -921,7 +921,7 @@
 | `ControlsSettings` | struct | Tests | [TestEngineSettingsParser.cpp:L147](../../Tests/TestEngineSettingsParser.cpp#L147) |  |
 | `ConversationState` | struct | SparkEngine | [DialogueSystem.h:L178](../../SparkEngine/Source/Engine/Dialogue/DialogueSystem.h#L178) | Runtime state of an active conversation. |
 | `CookLogEntry` | struct | SparkEditor | [DedicatedServerPanel.h:L194](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L194) |  |
-| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L711](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L711) |  |
+| `CookOutputLock` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L725](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L725) |  |
 | `CookPackageScenario` | class | Tests | [TestEditorCookPackageReal.cpp:L129](../../Tests/TestEditorCookPackageReal.cpp#L129) |  |
 | `CookRecord` | struct | SparkAssetPipelineCore | [AssetCooker.h:L12](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L12) |  |
 | `CookRequest` | struct | SparkAssetPipelineCore | [AssetCooker.h:L20](../../SparkAssetPipelineCore/include/SparkAssetPipelineCore/AssetCooker.h#L20) |  |
@@ -2077,11 +2077,11 @@
 | `InboundCommand` | struct | SparkEngine | [RemoteDebugSystem.h:L158](../../SparkEngine/Source/Engine/RemoteDebug/RemoteDebugSystem.h#L158) |  |
 | `INetworkRuntime` | class | SparkEngine | [INetworkRuntime.h:L19](../../SparkEngine/Source/Engine/Networking/INetworkRuntime.h#L19) | DedicatedServer-facing networking runtime abstraction. |
 | `INetworkService` | class | SparkSDK | [ServiceInterfaces.h:L15](../../SparkSDK/Include/Spark/ServiceInterfaces.h#L15) | Thin runtime interface for networking lifecycle orchestration. |
-| `info` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L435](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L435) |  |
+| `info` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L449](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L449) |  |
 | `info` | struct | SparkBuild | [PathSecurity.cpp:L92](../../SparkBuild/src/PathSecurity.cpp#L92) |  |
 | `info` | struct | SparkBuild | [PathSecurity.cpp:L285](../../SparkBuild/src/PathSecurity.cpp#L285) |  |
 | `info` | struct | SparkBuild | [PathSecurity.cpp:L308](../../SparkBuild/src/PathSecurity.cpp#L308) |  |
-| `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L627](../../SparkCrashReporter/src/CrashReporterApp.cpp#L627) |  |
+| `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L775](../../SparkCrashReporter/src/CrashReporterApp.cpp#L775) |  |
 | `info` | struct | SparkEditor | [EditorFileRead.h:L101](../../SparkEditor/Source/Utils/EditorFileRead.h#L101) |  |
 | `info` | struct | SparkEngine | [EventResponseSystem.cpp:L99](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L99) |  |
 | `info` | struct | SparkEngine | [ModSystem.cpp:L218](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L218) |  |
@@ -2097,7 +2097,7 @@
 | `info` | struct | SparkInstaller | [InstallerPreflight.cpp:L86](../../SparkInstaller/src/InstallerPreflight.cpp#L86) |  |
 | `info` | struct | SparkLauncher | [LauncherProcess.cpp:L525](../../SparkLauncher/src/LauncherProcess.cpp#L525) |  |
 | `info` | struct | Tests | [TestDocumentDurableWrite.cpp:L93](../../Tests/TestDocumentDurableWrite.cpp#L93) |  |
-| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L802](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L802) |  |
+| `information` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L816](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L816) |  |
 | `information` | struct | SparkEditor | [ProjectManager.cpp:L445](../../SparkEditor/Source/Core/ProjectManager.cpp#L445) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L223](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L223) |  |
 | `information` | struct | SparkEngine | [DynamicPluginHost.cpp:L309](../../SparkEngine/Source/Core/DynamicPluginHost.cpp#L309) |  |
@@ -2497,7 +2497,7 @@
 | `ManagerScope` | struct | Tests | [TestLIFE200ModuleReloadLoopReal.cpp:L117](../../Tests/TestLIFE200ModuleReloadLoopReal.cpp#L117) |  |
 | `ManagerScope` | struct | Tests | [TestLIFE200ModuleReloadReal.cpp:L114](../../Tests/TestLIFE200ModuleReloadReal.cpp#L114) |  |
 | `ManifestEntry` | struct | SparkEngine | [GamePackager.h:L80](../../SparkEngine/Source/Engine/Build/GamePackager.h#L80) | A single file entry in the package manifest |
-| `ManifestJsonReader` | class | SparkCrashReporter | [CrashReporterApp.cpp:L104](../../SparkCrashReporter/src/CrashReporterApp.cpp#L104) |  |
+| `ManifestJsonReader` | class | SparkCrashReporter | [CrashReporterApp.cpp:L108](../../SparkCrashReporter/src/CrashReporterApp.cpp#L108) |  |
 | `ManifestLine` | struct | SparkEngine | [GamePackager.cpp:L263](../../SparkEngine/Source/Engine/Build/GamePackager.cpp#L263) |  |
 | `MapRotation` | class | Tests | [TestDedicatedServer.cpp:L244](../../Tests/TestDedicatedServer.cpp#L244) |  |
 | `MarqueeRect` | struct | SparkEditor | [SelectionManager.h:L103](../../SparkEditor/Source/Panels/SelectionManager.h#L103) | Rectangle in screen space for marquee selection |
@@ -2791,9 +2791,9 @@
 | `Name` | struct | Tests | [TestMovementSystem.cpp:L47](../../Tests/TestMovementSystem.cpp#L47) |  |
 | `NameComponent` | struct | SparkEngine | [CoreComponents.h:L31](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h#L31) | Human-readable name for an entity, used in editor UI and debug logs. |
 | `NameComponent` | struct | Tests | [TestCrossSystemIntegration.cpp:L108](../../Tests/TestCrossSystemIntegration.cpp#L108) |  |
-| `named` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L446](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L446) |  |
+| `named` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L460](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L460) |  |
 | `named` | struct | SparkEngine | [VirtualFileSystem.cpp:L324](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp#L324) |  |
-| `namedInfo` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L738](../../SparkCrashReporter/src/CrashReporterApp.cpp#L738) |  |
+| `namedInfo` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L906](../../SparkCrashReporter/src/CrashReporterApp.cpp#L906) |  |
 | `NarrowPathFixture` | struct | Tests | [TestSEC4NarrowPathsReal.cpp:L84](../../Tests/TestSEC4NarrowPathsReal.cpp#L84) |  |
 | `NativeCoroutineWrapper` | class | SparkEngine | [CoroutineTypes.h:L471](../../SparkEngine/Source/Engine/Coroutine/CoroutineTypes.h#L471) | Wraps a C++20 GameCoroutine so the scheduler can manage it |
 | `NavGraph` | struct | Tests | [TestAIStress.cpp:L348](../../Tests/TestAIStress.cpp#L348) |  |
@@ -3256,7 +3256,7 @@
 | `PIEDedicatedServerConfig` | struct | SparkEngine | [PlayModeManager.h:L377](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L377) | Configuration for launching a local dedicated server during PIE. |
 | `PIEServerConfig` | struct | SparkEditor | [DedicatedServerPanel.h:L85](../../SparkEditor/Source/Panels/DedicatedServerPanel.h#L85) |  |
 | `PinDescriptor` | struct | Tests | [TestShaderGraphCompiler.cpp:L211](../../Tests/TestShaderGraphCompiler.cpp#L211) |  |
-| `PinnedDirectory` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L599](../../SparkCrashReporter/src/CrashReporterApp.cpp#L599) |  |
+| `PinnedDirectory` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L741](../../SparkCrashReporter/src/CrashReporterApp.cpp#L741) |  |
 | `PinnedFile` | struct | SparkEngine | [CrashHandler.cpp:L259](../../SparkEngine/Source/Utils/CrashHandler.cpp#L259) |  |
 | `Pipeline` | struct | Tests | [TestRHI225D3D12ParityReal.cpp:L375](../../Tests/TestRHI225D3D12ParityReal.cpp#L375) |  |
 | `PipelineCacheMetrics` | struct | SparkEngine | [PipelineStateCache.h:L103](../../SparkEngine/Source/Graphics/PipelineStateCache.h#L103) | Cache metrics for profiling state object reuse. |
@@ -4097,7 +4097,7 @@
 | `ScopedCurrentPath` | class | Tests | [TestGamePackager.cpp:L27](../../Tests/TestGamePackager.cpp#L27) |  |
 | `ScopedCurrentPath` | class | Tests | [TestRuntimePackage.cpp:L15](../../Tests/TestRuntimePackage.cpp#L15) |  |
 | `ScopedCurrentPath` | class | Tests | [TestTemplatesCompile.cpp:L49](../../Tests/TestTemplatesCompile.cpp#L49) |  |
-| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L830](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L830) |  |
+| `ScopedDirectoryCleanup` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L846](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L846) |  |
 | `ScopedDirectoryCleanup` | class | SparkEditor | [BuildPipeline.cpp:L252](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L252) |  |
 | `ScopedEntity` | struct | SparkEngine | [ConnectionScope.h:L52](../../SparkEngine/Source/Engine/Networking/ConnectionScope.h#L52) |  |
 | `ScopedEntity` | struct | Tests | [TestConnectionScope.cpp:L23](../../Tests/TestConnectionScope.cpp#L23) |  |
@@ -4110,11 +4110,11 @@
 | `ScopedEnvironmentVariable` | class | Tests | [TF120PeerProcess.h:L100](../../Tests/TF120PeerProcess.h#L100) |  |
 | `ScopedEnvironmentVariable` | class | Tests | [TestSparkServerApplication.cpp:L26](../../Tests/TestSparkServerApplication.cpp#L26) |  |
 | `ScopedEnvironmentVariable` | class | Tests | [TestUserDataPathsReal.cpp:L23](../../Tests/TestUserDataPathsReal.cpp#L23) | RAII override of one environment variable, restored on scope exit. |
-| `ScopedFd` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L281](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L281) |  |
+| `ScopedFd` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L295](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L295) |  |
 | `ScopedFd` | class | SparkEngine | [HeldHandles.h:L130](../../SparkEngine/Source/Engine/Modding/HeldHandles.h#L130) |  |
 | `ScopedGameModuleKind` | class | Tests | [TestSparkServerHealth.cpp:L53](../../Tests/TestSparkServerHealth.cpp#L53) |  |
 | `ScopedGPUEvent` | class | SparkEngine | [GPUDebugMarkers.h:L348](../../SparkEngine/Source/Graphics/GPUDebugMarkers.h#L348) | RAII scoped GPU event — begins on construction, ends on destruction |
-| `ScopedHandle` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L227](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L227) |  |
+| `ScopedHandle` | class | SparkAssetPipelineCore | [AssetCooker.cpp:L241](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L241) |  |
 | `ScopedHandle` | class | SparkEngine | [HeldHandles.h:L38](../../SparkEngine/Source/Engine/Modding/HeldHandles.h#L38) |  |
 | `ScopedHostConsoleBinding` | struct | Tests | [TestFPSMultiplayer.cpp:L1390](../../Tests/TestFPSMultiplayer.cpp#L1390) |  |
 | `ScopedInjectedContext` | class | Tests | [TestEditorPanelsRealBackends.cpp:L83](../../Tests/TestEditorPanelsRealBackends.cpp#L83) | Installs an injected EngineContext for one scope and clears it on exit. |
@@ -4123,13 +4123,13 @@
 | `ScopedLoggerBaseline` | struct | Tests | [ScopedLoggerBaseline.h:L20](../../Tests/ScopedLoggerBaseline.h#L20) |  |
 | `ScopedLoggerCapture` | class | Tests | [TestPrototypeModuleKitReal.cpp:L77](../../Tests/TestPrototypeModuleKitReal.cpp#L77) |  |
 | `ScopedLogLines` | class | Tests | [TestD3D11DeviceContractsReal.cpp:L547](../../Tests/TestD3D11DeviceContractsReal.cpp#L547) |  |
-| `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L92](../../SparkCrashReporter/src/CrashReporterApp.cpp#L92) |  |
+| `ScopedManifestCredentialWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L96](../../SparkCrashReporter/src/CrashReporterApp.cpp#L96) |  |
 | `ScopedMinimumFileSizeLimit` | class | Tests | [Test_persistence_SaveSystem.cpp:L44](../../Tests/harden/Test_persistence_SaveSystem.cpp#L44) |  |
 | `ScopedMOD350SaveDirectory` | class | Tests | [TestMOD350RPGQuestSliceReal.cpp:L232](../../Tests/TestMOD350RPGQuestSliceReal.cpp#L232) |  |
 | `ScopedMOD360SaveDirectory` | class | Tests | [TestMOD360OpenWorldPersistenceReal.cpp:L134](../../Tests/TestMOD360OpenWorldPersistenceReal.cpp#L134) |  |
 | `ScopedModuleEnvironment` | class | Tests | [TestModuleLifecycleReal.cpp:L89](../../Tests/TestModuleLifecycleReal.cpp#L89) | A SPARK_MODULE_ABI_ |
 | `ScopedModuleLogBinding` | struct | Tests | [TestPrototypeModuleKitReal.cpp:L312](../../Tests/TestPrototypeModuleKitReal.cpp#L312) |  |
-| `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L547](../../SparkCrashReporter/src/CrashReporterApp.cpp#L547) |  |
+| `ScopedNativeHandle` | class | SparkCrashReporter | [CrashReporterApp.cpp:L687](../../SparkCrashReporter/src/CrashReporterApp.cpp#L687) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestNetworkManagerIntegration.cpp:L211](../../Tests/TestNetworkManagerIntegration.cpp#L211) |  |
 | `ScopedNetworkBindMode` | class | Tests | [TestSparkServerApplication.cpp:L57](../../Tests/TestSparkServerApplication.cpp#L57) |  |
 | `ScopedNetworkSecurity` | class | Tests | [NetworkTestSecurity.h:L36](../../Tests/Fixtures/NetworkTestSecurity.h#L36) | Restores the singleton's security configuration when it goes out of scope |
@@ -4154,7 +4154,7 @@
 | `ScopedStderrSilencer` | class | Tests | [TestSparkError.cpp:L81](../../Tests/TestSparkError.cpp#L81) |  |
 | `ScopedStdin` | class | SparkCrashReporter | [CrashReporterConsentTests.cpp:L102](../../SparkCrashReporter/tests/CrashReporterConsentTests.cpp#L102) |  |
 | `ScopedStdoutCapture` | class | Tests | [TestSparkServerHealth.cpp:L87](../../Tests/TestSparkServerHealth.cpp#L87) |  |
-| `ScopedStringWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L66](../../SparkCrashReporter/src/CrashReporterApp.cpp#L66) |  |
+| `ScopedStringWiper` | class | SparkCrashReporter | [CrashReporterApp.cpp:L70](../../SparkCrashReporter/src/CrashReporterApp.cpp#L70) |  |
 | `ScopedTempDir` | class | Tests | [TestEditorPanelsRealBackends.cpp:L51](../../Tests/TestEditorPanelsRealBackends.cpp#L51) |  |
 | `ScopedTemporaryPath` | class | SparkBuild | [Downloader.cpp:L73](../../SparkBuild/src/Downloader.cpp#L73) |  |
 | `ScopedTestEnvironment` | class | Tests | [TestModuleABI.cpp:L199](../../Tests/TestModuleABI.cpp#L199) | Sets one fixture switch for a scope and restores its previous value on exit. |
@@ -4490,7 +4490,7 @@
 | `SoundEntry` | struct | Tests | [TestAudioEngine.cpp:L37](../../Tests/TestAudioEngine.cpp#L37) |  |
 | `SoundPlayedEvent` | struct | SparkEngine | [EventSystem.h:L270](../../SparkEngine/Source/Engine/Events/EventSystem.h#L270) | Fired when a sound begins playing. |
 | `SourceAuthority` | struct | Tests | [TestTF120Travel.cpp:L200](../../Tests/TestTF120Travel.cpp#L200) |  |
-| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1362](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1362) |  |
+| `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1396](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1396) |  |
 | `SourceReference` | struct | Tests | [TestAssetManifestReal.cpp:L226](../../Tests/TestAssetManifestReal.cpp#L226) |  |
 | `SparkBodyActivationListener` | class | SparkEngine | [PhysicsSystem.cpp:L282](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L282) |  |
 | `SparkBPLayerInterface` | class | SparkEngine | [PhysicsSystem.cpp:L75](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L75) |  |

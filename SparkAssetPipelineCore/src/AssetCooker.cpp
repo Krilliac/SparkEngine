@@ -62,14 +62,20 @@ namespace Spark::AssetPipeline
                 if (m_bufferSize > 56)
                 {
                     while (m_bufferSize < 64)
+                    {
                         m_buffer[m_bufferSize++] = 0;
+                    }
                     Transform(m_buffer.data());
                     m_bufferSize = 0;
                 }
                 while (m_bufferSize < 56)
+                {
                     m_buffer[m_bufferSize++] = 0;
+                }
                 for (size_t i = 0; i < 8; ++i)
+                {
                     m_buffer[63 - i] = static_cast<uint8_t>(m_bitLength >> (i * 8u));
+                }
                 Transform(m_buffer.data());
                 constexpr char kHex[] = "0123456789abcdef";
                 std::string result(64, '0');
@@ -77,7 +83,7 @@ namespace Spark::AssetPipeline
                 {
                     for (size_t byte = 0; byte < 4; ++byte)
                     {
-                        const uint8_t value = static_cast<uint8_t>(m_state[i] >> ((3u - byte) * 8u));
+                        const auto value = static_cast<uint8_t>(m_state[i] >> ((3u - byte) * 8u));
                         const size_t offset = (i * 8u) + (byte * 2u);
                         result[offset] = kHex[value >> 4u];
                         result[offset + 1] = kHex[value & 0x0fu];
@@ -173,11 +179,15 @@ namespace Spark::AssetPipeline
         {
             const auto relative = ComparisonForm(child).lexically_relative(ComparisonForm(parent));
             if (relative.empty() || relative.is_absolute())
+            {
                 return false;
+            }
             for (const auto& component : relative)
             {
                 if (component == "..")
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -187,7 +197,9 @@ namespace Spark::AssetPipeline
             std::error_code ec;
             const auto status = std::filesystem::symlink_status(path, ec);
             if (!ec && std::filesystem::is_symlink(status))
+            {
                 return true;
+            }
 #if defined(_WIN32)
             const DWORD attributes = ::GetFileAttributesW(path.c_str());
             return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
@@ -199,7 +211,9 @@ namespace Spark::AssetPipeline
         bool IsUnsafeOutputLink(const std::filesystem::path& path)
         {
             if (IsLinkLike(path))
+            {
                 return true;
+            }
             std::error_code ec;
             return std::filesystem::is_regular_file(path, ec) && !ec &&
                    std::filesystem::hard_link_count(path, ec) > 1 && !ec;
@@ -213,7 +227,7 @@ namespace Spark::AssetPipeline
             try
             {
                 const std::u8string utf8 = path.u8string();
-                return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+                return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
             }
             catch (const std::system_error&)
             {
@@ -464,7 +478,7 @@ namespace Spark::AssetPipeline
                 ::unlink(destination.c_str());
                 return false;
             };
-            std::vector<char> buffer(64 * 1024);
+            std::vector<char> buffer(static_cast<size_t>(64 * 1024));
             for (;;)
             {
                 const ssize_t got = ::read(input.Get(), buffer.data(), buffer.size());
@@ -809,7 +823,9 @@ namespace Spark::AssetPipeline
                 while (::flock(m_fd, LOCK_EX) != 0)
                 {
                     if (errno == EINTR)
+                    {
                         continue;
+                    }
                     error = "failed to acquire cook lock: " + std::string(std::strerror(errno));
                     return false;
                 }
@@ -856,7 +872,9 @@ namespace Spark::AssetPipeline
                 generation = MakeStagePath(outputRoot);
                 std::error_code ec;
                 if (std::filesystem::create_directory(generation, ec))
+                {
                     return true;
+                }
                 if (ec && ec != std::errc::file_exists)
                 {
                     error = "failed to create cook generation directory: " + ec.message();
@@ -893,7 +911,9 @@ namespace Spark::AssetPipeline
                                                generationMissing))
             {
                 if (ec)
+                {
                     error = "failed to inspect generated asset: " + ec.message();
+                }
                 return false;
             }
 
@@ -907,7 +927,9 @@ namespace Spark::AssetPipeline
                 bool missing = false;
                 if (!ComputeFileSha256Opened(previousOutput, previousOutputRoot, previousSha256, error, missing) &&
                     !missing)
+                {
                     return false;
+                }
                 if (!missing)
                 {
                     updated = previousSha256 != actualSha256;
@@ -941,8 +963,8 @@ namespace Spark::AssetPipeline
             for (size_t i = 0; i < records.size(); ++i)
             {
                 const auto& record = records[i];
-                stream << "    {\"path\": \"" << EscapeJson(record.path) << "\", \"sha256\": \"" << record.sha256
-                       << "\", \"size\": " << record.size << "}" << (i + 1 == records.size() ? "\n" : ",\n");
+                stream << R"(    {"path": ")" << EscapeJson(record.path) << R"(", "sha256": ")" << record.sha256
+                       << R"(", "size": )" << record.size << "}" << (i + 1 == records.size() ? "\n" : ",\n");
             }
             stream << "  ]\n}\n";
             stream.flush();
@@ -978,7 +1000,9 @@ namespace Spark::AssetPipeline
                 {
                     backup = MakeStagePath(outputRoot);
                     if (!std::filesystem::exists(backup, ec) && !ec)
+                    {
                         break;
+                    }
                     ec.clear();
                     backup.clear();
                 }
@@ -1026,7 +1050,9 @@ namespace Spark::AssetPipeline
         {
             std::ostringstream body;
             for (const auto& record : records)
+            {
                 body << record.path << '\0' << record.sha256 << '\0' << record.size << '\n';
+            }
             const std::string bytes = body.str();
             Sha256 sha;
             sha.Update(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
@@ -1080,7 +1106,9 @@ namespace Spark::AssetPipeline
             if (ec || !ComputeFileSha256Opened(stage, stage.parent_path(), actualSha256, error, stagedMissing))
             {
                 if (ec)
+                {
                     error = "failed to inspect staged asset: " + ec.message();
+                }
                 removeStage();
                 return false;
             }
@@ -1129,7 +1157,7 @@ namespace Spark::AssetPipeline
         {
             missing = false;
             Sha256 sha;
-            std::vector<uint8_t> buffer(64 * 1024);
+            std::vector<uint8_t> buffer(static_cast<size_t>(64 * 1024));
 #if defined(_WIN32)
             const DWORD openFlags =
                 FILE_FLAG_SEQUENTIAL_SCAN | (containmentRoot.empty() ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
@@ -1326,7 +1354,9 @@ namespace Spark::AssetPipeline
 
         CookOutputLock outputLock;
         if (!outputLock.Acquire(output, result.error))
+        {
             return result;
+        }
         if (IsLinkLike(output))
         {
             result.error = "output root must not be a link or reparse point";
@@ -1347,7 +1377,9 @@ namespace Spark::AssetPipeline
             !ValidateOutputTarget(manifestLexical, outputLexical, result.error, "cook manifest"))
         {
             if (result.error.empty())
+            {
                 result.error = "cook manifest escapes the output root";
+            }
             return result;
         }
         const auto manifest = std::filesystem::weakly_canonical(manifestLexical, ec);
@@ -1357,7 +1389,9 @@ namespace Spark::AssetPipeline
             return result;
         }
         if (!ValidateOutputTarget(manifest, output, result.error, "cook manifest"))
+        {
             return result;
+        }
 
         struct SourceEntry
         {
@@ -1395,7 +1429,9 @@ namespace Spark::AssetPipeline
         {
             const auto status = iterator->symlink_status(ec);
             if (ec)
+            {
                 break;
+            }
             if (std::filesystem::is_symlink(status) || IsLinkLike(iterator->path()))
             {
                 iterator.disable_recursion_pending();
@@ -1411,7 +1447,9 @@ namespace Spark::AssetPipeline
                 SourceEntry entry;
                 entry.path = canonical;
                 if (!makePortableRelative(canonical, source, entry.portablePath))
+                {
                     return result;
+                }
                 files.push_back(std::move(entry));
             }
             iterator.increment(ec);
@@ -1429,7 +1467,9 @@ namespace Spark::AssetPipeline
         if (!request.dryRun)
         {
             if (!CreateGenerationDirectory(output, generation, result.error))
+            {
                 return result;
+            }
             generationCleanup = std::make_unique<ScopedDirectoryCleanup>(generation);
         }
         for (const auto& file : files)
@@ -1443,7 +1483,9 @@ namespace Spark::AssetPipeline
                 if (!ValidateOutputTarget(previousDestination, output, result.error, "cooked output") ||
                     !StageAndCookFile(file.path, source, previousDestination, {}, true, record.updated, record.sha256,
                                       record.size, result.error))
+                {
                     return result;
+                }
             }
             else
             {
@@ -1453,14 +1495,18 @@ namespace Spark::AssetPipeline
                                         record.updated, record.sha256, record.size, result.error))
                 {
                     if (result.error.empty())
+                    {
                         result.error = "cooked output escapes the generation directory";
+                    }
                     return result;
                 }
             }
             record.updated ? ++result.updatedCount : ++result.unchangedCount;
             result.records.push_back(std::move(record));
             if (request.onProgress)
+            {
                 request.onProgress(result.records.back(), result.records.size(), files.size());
+            }
         }
         result.manifestSha256 = HashRecords(result.records);
         if (!request.dryRun)
@@ -1469,7 +1515,9 @@ namespace Spark::AssetPipeline
             const auto generationManifest = (generation / manifestRelative).lexically_normal();
             std::string manifestRecordPath;
             if (!makePortableRelative(manifest, output, manifestRecordPath))
+            {
                 return result;
+            }
             const bool conflictsWithAsset =
                 std::any_of(result.records.begin(), result.records.end(),
                             [&](const CookRecord& record) { return record.path == manifestRecordPath; });
@@ -1482,11 +1530,15 @@ namespace Spark::AssetPipeline
                 !WriteManifest(generationManifest, result.records, result.manifestSha256, result.error))
             {
                 if (result.error.empty())
+                {
                     result.error = "cook manifest escapes the generation directory";
+                }
                 return result;
             }
             if (!PublishGeneration(generation, output, result.error))
+            {
                 return result;
+            }
             generationCleanup->Release();
         }
         return result;
