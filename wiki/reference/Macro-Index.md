@@ -802,8 +802,8 @@
 | `NotifyCallback` | alias | SparkEngine | [AnimNotify.h:L142](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L142) | Manages animation notifies across all clips |
 | `NotifyReboundFn` | alias | SparkEngine | [Reflection.h:L300](../../SparkEngine/Source/Core/Reflection.h#L300) |  |
 | `NS` | alias | SparkEngine | [EngineSettings.cpp:L214](../../SparkEngine/Source/Core/EngineSettings.cpp#L214) |  |
-| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L226](../../SparkEngine/Source/Utils/CrashHandler.cpp#L226) |  |
-| `NtSetInformationFileFn` | alias | SparkEngine | [CrashHandler.cpp:L627](../../SparkEngine/Source/Utils/CrashHandler.cpp#L627) |  |
+| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L232](../../SparkEngine/Source/Utils/CrashHandler.cpp#L232) |  |
+| `NtSetInformationFileFn` | alias | SparkEngine | [CrashHandler.cpp:L648](../../SparkEngine/Source/Utils/CrashHandler.cpp#L648) |  |
 | `ObjectID` | alias | SparkEditor | [SceneFileTypes.h:L38](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L38) | Unique identifier for scene objects |
 | `ObjectKeys` | alias | GameModules | [TFSocialSystemStore.cpp:L43](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L43) |  |
 | `ObjectType` | alias | SparkEngine | [JsonUtils.h:L103](../../SparkEngine/Source/Utils/JsonUtils.h#L103) | A JSON value that can be null, bool, number, string, array, or object. |
@@ -934,7 +934,7 @@
 | `RHIShaderHandle` | alias | SparkEngine | [RHITypes.h:L452](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L452) |  |
 | `RHITextureHandle` | alias | SparkEngine | [RHITypes.h:L451](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L451) |  |
 | `RS` | alias | SparkEngine | [EngineSettings.cpp:L105](../../SparkEngine/Source/Core/EngineSettings.cpp#L105) |  |
-| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L828](../../SparkEngine/Source/Utils/CrashHandler.cpp#L828) |  |
+| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L849](../../SparkEngine/Source/Utils/CrashHandler.cpp#L849) |  |
 | `S_FALSE` | macro | SparkEngine | [PlatformTypes.h:L62](../../SparkEngine/Source/Core/PlatformTypes.h#L62) |  |
 | `S_OK` | macro | SparkEngine | [PlatformTypes.h:L59](../../SparkEngine/Source/Core/PlatformTypes.h#L59) |  |
 | `SamplerHandle` | alias | SparkEngine | [RHIHandlePool.h:L100](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L100) |  |

@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 345682 |
+| **SparkEngine/Source** | 346119 |
 | **SparkEditor/Source** | 106228 |
 | **GameModules** | 163546 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3136 |
-| **Tests** | 275588 |
+| **Tests** | 275661 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~930664** |
+| **Total C++ (excl. ThirdParty)** | **~931174** |
 
 ### File Counts
 
@@ -44,8 +44,8 @@ Graphics contains 125297 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 125297 | 36.2% |
-| Engine (all subsystems) | 100706 | 29.1% |
-| Utils | 48917 | 14.1% |
+| Engine (all subsystems) | 100706 | 29.0% |
+| Utils | 49354 | 14.2% |
 | Core | 33513 | 9.6% |
 | Physics | 11142 | 3.2% |
 | Audio | 6961 | 2.0% |
@@ -111,7 +111,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 734 |
-| TEST() definitions | 8508 |
+| TEST() definitions | 8512 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -157,8 +157,8 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
+| `CrashHandler.cpp` | 2859 |
 | `OpenGLDevice.cpp` | 2588 |
-| `CrashHandler.cpp` | 2580 |
 | `NetworkConnection.cpp` | 2500 |
 | `ModuleManager.cpp` | 2223 |
 | `D3D11Device.cpp` | 2139 |

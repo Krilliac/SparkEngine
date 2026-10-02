@@ -570,3 +570,76 @@ TEST(FreezeDetector_StartHonoursTheShippingHeartbeatGate)
     detector.Stop();
     EXPECT_FALSE(detector.IsRunning());
 }
+
+
+TEST(CrashSignalManifest_PreservesSchemaConsentAndCrashTime)
+{
+    Spark::CrashHandlerDetail::SignalCrashManifest manifest;
+    manifest.processId = 4242;
+    manifest.epochSeconds = 1709164800; // 2024-02-29T00:00:00Z
+    manifest.logName = "quoted\"name.log";
+    manifest.coreHintName = "local.core_hint";
+    manifest.title = "SIGSEGV";
+    manifest.requireConsent = true;
+    manifest.allowScreenshotRefusal = false;
+    manifest.promptUserDescription = true;
+    manifest.fullMemoryDump = false;
+    char output[2048]{};
+    const size_t size = Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, output, sizeof(output));
+    ASSERT_TRUE(size > size_t{0});
+    const std::string json(output, size);
+    EXPECT_TRUE(json.find("\"enginePID\": \"4242\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"timestamp\": \"2024-02-29T00:00:00Z\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"logFile\": \"quoted\\\"name.log\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"dumpFile\": \"local.core_hint\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"screenshotFile\": \"\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"zipFile\": \"\"") != std::string::npos);
+    EXPECT_TRUE(json.find("\"requireConsent\": true") != std::string::npos);
+    EXPECT_TRUE(json.find("\"allowScreenshotRefusal\": false") != std::string::npos);
+    EXPECT_TRUE(json.find("\"promptUserDescription\": true") != std::string::npos);
+    EXPECT_TRUE(json.find("\"fullMemoryDump\": false") != std::string::npos);
+}
+
+TEST(CrashSignalManifest_RejectsIncompleteOutputAndPreservesBoundaries)
+{
+    Spark::CrashHandlerDetail::SignalCrashManifest manifest;
+    manifest.logName = "local.log";
+    char output[2048]{};
+    manifest.epochSeconds = 0;
+    ASSERT_TRUE(Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, output, sizeof(output)) > size_t{0});
+    EXPECT_TRUE(std::string(output).find("1970-01-01T00:00:00Z") != std::string::npos);
+    manifest.epochSeconds = 253402300799ULL;
+    ASSERT_TRUE(Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, output, sizeof(output)) > size_t{0});
+    EXPECT_TRUE(std::string(output).find("9999-12-31T23:59:59Z") != std::string::npos);
+    ++manifest.epochSeconds;
+    EXPECT_EQ(Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, output, sizeof(output)), size_t{0});
+    manifest.epochSeconds = 0;
+    char boundedOutput[33];
+    std::memset(boundedOutput, 'X', sizeof(boundedOutput));
+    EXPECT_EQ(Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, boundedOutput, 32), size_t{0});
+    EXPECT_EQ(boundedOutput[32], 'X');
+    EXPECT_EQ(Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, nullptr, 0), size_t{0});
+    manifest.logName = {};
+    EXPECT_EQ(Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, output, sizeof(output)), size_t{0});
+}
+
+TEST(CrashSignalManifest_ReservesFatalSlotWithinExistingQueueBound)
+{
+    using Spark::CrashHandlerDetail::HasNonfatalCrashManifestCapacity;
+    EXPECT_TRUE(HasNonfatalCrashManifestCapacity(30, true));
+    EXPECT_FALSE(HasNonfatalCrashManifestCapacity(31, true));
+    EXPECT_FALSE(HasNonfatalCrashManifestCapacity(32, true));
+    EXPECT_TRUE(HasNonfatalCrashManifestCapacity(31, false));
+    EXPECT_FALSE(HasNonfatalCrashManifestCapacity(32, false));
+}
+
+TEST(CrashSignalManifest_IncompleteQueueScanFailsClosed)
+{
+    using Spark::CrashHandlerDetail::CrashManifestCountOrFull;
+    EXPECT_EQ(CrashManifestCountOrFull(0, true), size_t{0});
+    EXPECT_EQ(CrashManifestCountOrFull(30, true), size_t{30});
+    EXPECT_EQ(CrashManifestCountOrFull(33, true), size_t{32});
+    EXPECT_EQ(CrashManifestCountOrFull(0, false), size_t{32});
+    EXPECT_EQ(CrashManifestCountOrFull(30, false), size_t{32});
+    EXPECT_FALSE(Spark::CrashHandlerDetail::HasNonfatalCrashManifestCapacity(CrashManifestCountOrFull(0, false), true));
+}
