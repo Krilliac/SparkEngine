@@ -11,31 +11,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 346119 |
+| **SparkEngine/Source** | 346752 |
 | **SparkEditor/Source** | 106228 |
 | **GameModules** | 163546 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3136 |
-| **Tests** | 275661 |
+| **Tests** | 276119 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~931174** |
+| **Total C++ (excl. ThirdParty)** | **~932265** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1245 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1982 |
-| HLSL shader files | 42 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1247 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1986 |
+| HLSL shader files | 44 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 734 |
+| Test-bearing implementation files (.cpp/.mm) | 737 |
 | Wiki pages (.md) | 206 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 125297 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,7 +43,7 @@ Graphics contains 125297 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 125297 | 36.2% |
+| Graphics | 125930 | 36.3% |
 | Engine (all subsystems) | 100706 | 29.0% |
 | Utils | 49354 | 14.2% |
 | Core | 33513 | 9.6% |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 734 |
-| TEST() definitions | 8512 |
+| Test files | 737 |
+| TEST() definitions | 8520 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -174,8 +174,8 @@ inventory is implementation evidence, not support certification.
 |------|------:|
 | `RenderGraph.h` | 1427 |
 | `Telemetry.h` | 1424 |
+| `GraphicsEngine.h` | 1368 |
 | `JsonUtils.h` | 1365 |
-| `GraphicsEngine.h` | 1354 |
 | `NetworkManager.h` | 1272 |
 | `OnlineServices.h` | 1225 |
 | `EngineSettings.h` | 1149 |
@@ -202,7 +202,7 @@ inventory is implementation evidence, not support certification.
 
 | Type | Count | Location |
 |------|------:|----------|
-| HLSL shaders | 42 | `Shaders/HLSL/` (includes Compute, MeshShaders, RayTracing) |
+| HLSL shaders | 44 | `Shaders/HLSL/` (includes Compute, MeshShaders, RayTracing) |
 | GLSL shaders | 14 | `Shaders/GLSL/` |
 | Compiled bytecode (.cso) | varies | `Shaders/Compiled/` |
 

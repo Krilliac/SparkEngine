@@ -19,10 +19,18 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 #include <new>
 #include <string>
 #include <system_error>
 #include <vector>
+#include <wincodec.h>
+#include <memory>
+#include <objbase.h>
+
+#if SPARK_HAS_STB_IMAGE
+#include <stb_image.h>
+#endif
 
 // ============================================================================
 // TEXTURE ASSET IMPLEMENTATION (Windows / D3D11)
@@ -30,6 +38,9 @@
 
 namespace
 {
+    constexpr uintmax_t kMaxEncodedTextureBytes = 256ull * 1024ull * 1024ull;
+    constexpr uint64_t kMaxDecodedTextureBytes = 512ull * 1024ull * 1024ull;
+
     /// Decode an uncompressed 24/32-bpp TGA into RGBA8 pixels.
     ///
     /// Every header field is untrusted. Dimensions are capped at the D3D11
@@ -105,6 +116,165 @@ namespace
         height = h;
         return true;
     }
+
+#if SPARK_HAS_STB_IMAGE
+    bool BoundedImageDimensions(uint32_t width, uint32_t height) noexcept
+    {
+        return width > 0 && height > 0 && width <= D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION &&
+               height <= D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION &&
+               static_cast<uint64_t>(width) * height * 4ull <= kMaxDecodedTextureBytes;
+    }
+
+    // Caller-thread COM reference only; no shared state or heap allocation.
+    // Releases our successful initialization after all WIC objects are destroyed,
+    // including exception exits. An existing STA is also usable by WIC.
+    class ScopedImageCom
+    {
+      public:
+        ScopedImageCom() : m_result(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
+        ~ScopedImageCom()
+        {
+            if (SUCCEEDED(m_result))
+            {
+                CoUninitialize();
+            }
+        }
+        ScopedImageCom(const ScopedImageCom&) = delete;
+        ScopedImageCom& operator=(const ScopedImageCom&) = delete;
+        bool Ready() const noexcept { return SUCCEEDED(m_result) || m_result == RPC_E_CHANGED_MODE; }
+
+      private:
+        HRESULT m_result;
+    };
+
+    bool DecodeWicImage(std::vector<uint8_t>& bytes, uint32_t& width, uint32_t& height, std::vector<uint32_t>& pixels,
+                        std::string& failureReason)
+    {
+        // The checked-in stb compatibility implementation only decodes BMP/TGA.
+        // Use the same WIC COM APIs as GraphicsDeviceResourcesWindowsTextures.cpp
+        // for PNG/JPEG, without adding a third-party decoder or a new link dependency.
+        ScopedImageCom com;
+        if (!com.Ready())
+        {
+            failureReason = "COM initialization failed for image decode";
+            return false;
+        }
+        Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+        HRESULT result =
+            CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
+        Microsoft::WRL::ComPtr<IWICStream> stream;
+        if (SUCCEEDED(result))
+        {
+            result = factory->CreateStream(&stream);
+        }
+        if (SUCCEEDED(result))
+        {
+            result = stream->InitializeFromMemory(bytes.data(), static_cast<DWORD>(bytes.size()));
+        }
+        Microsoft::WRL::ComPtr<IWICBitmapDecoder> decoder;
+        if (SUCCEEDED(result))
+        {
+            result = factory->CreateDecoderFromStream(stream.Get(), nullptr, WICDecodeMetadataCacheOnDemand, &decoder);
+        }
+        Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> frame;
+        if (SUCCEEDED(result))
+        {
+            result = decoder->GetFrame(0, &frame);
+        }
+        UINT w = 0;
+        UINT h = 0;
+        if (SUCCEEDED(result))
+        {
+            result = frame->GetSize(&w, &h);
+        }
+        if (FAILED(result))
+        {
+            failureReason = "Windows Imaging Component could not read image metadata";
+            return false;
+        }
+        // Check the frame before initializing a converter or allocating decoded pixels.
+        if (!BoundedImageDimensions(w, h))
+        {
+            failureReason = "decoded dimensions exceed the bounded texture budget";
+            return false;
+        }
+        Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+        result = factory->CreateFormatConverter(&converter);
+        if (SUCCEEDED(result))
+        {
+            result = converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppRGBA, WICBitmapDitherTypeNone, nullptr,
+                                           0.0, WICBitmapPaletteTypeCustom);
+        }
+        if (SUCCEEDED(result))
+        {
+            pixels.resize(static_cast<size_t>(w) * h);
+            // Windows RGBA8 bytes have the existing uint32_t ABGR representation.
+            result = converter->CopyPixels(nullptr, w * 4u, static_cast<UINT>(pixels.size() * 4u),
+                                           reinterpret_cast<BYTE*>(pixels.data()));
+        }
+        if (FAILED(result))
+        {
+            failureReason = "Windows Imaging Component could not decode RGBA pixels";
+            return false;
+        }
+        width = w;
+        height = h;
+        return true;
+    }
+
+    bool DecodeStbImage(const std::string& path, uint32_t& width, uint32_t& height, std::vector<uint32_t>& pixels,
+                        std::string& failureReason)
+    {
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        const auto end = file.tellg();
+        if (!file || end <= 0 || static_cast<uintmax_t>(end) > kMaxEncodedTextureBytes)
+        {
+            failureReason = "image is unreadable, empty or exceeds the 256 MiB encoded limit";
+            return false;
+        }
+        std::vector<uint8_t> bytes(static_cast<size_t>(end));
+        file.seekg(0, std::ios::beg);
+        file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!file || static_cast<size_t>(file.gcount()) != bytes.size())
+        {
+            failureReason = "unable to read the bounded image bytes";
+            return false;
+        }
+        int imageWidth = 0;
+        int imageHeight = 0;
+        int sourceChannels = 0;
+        const int byteCount = static_cast<int>(bytes.size()); // encoded cap is below INT_MAX
+        if (!stbi_info_from_memory(bytes.data(), byteCount, &imageWidth, &imageHeight, &sourceChannels))
+        {
+            return DecodeWicImage(bytes, width, height, pixels, failureReason);
+        }
+        if (imageWidth <= 0 || imageHeight <= 0 ||
+            !BoundedImageDimensions(static_cast<uint32_t>(imageWidth), static_cast<uint32_t>(imageHeight)))
+        {
+            failureReason = "decoded dimensions exceed the bounded texture budget";
+            return false;
+        }
+        const int metadataWidth = imageWidth;
+        const int metadataHeight = imageHeight;
+        std::unique_ptr<stbi_uc, decltype(&stbi_image_free)> decoded(
+            stbi_load_from_memory(bytes.data(), byteCount, &imageWidth, &imageHeight, &sourceChannels, STBI_rgb_alpha),
+            &stbi_image_free);
+        if (!decoded)
+        {
+            return DecodeWicImage(bytes, width, height, pixels, failureReason);
+        }
+        if (imageWidth != metadataWidth || imageHeight != metadataHeight)
+        {
+            failureReason = "decoded dimensions disagree with image metadata";
+            return false;
+        }
+        pixels.resize(static_cast<size_t>(imageWidth) * static_cast<size_t>(imageHeight));
+        std::memcpy(pixels.data(), decoded.get(), pixels.size() * sizeof(uint32_t));
+        width = static_cast<uint32_t>(imageWidth);
+        height = static_cast<uint32_t>(imageHeight);
+        return true;
+    }
+#endif
 } // namespace
 
 HRESULT TextureAsset::Load(ID3D11Device* device)
@@ -113,6 +283,7 @@ HRESULT TextureAsset::Load(ID3D11Device* device)
 
     std::vector<uint32_t> pixelData;
     bool loadedFromFile = false;
+    std::string fallbackReason = "file does not exist or has an unsupported extension";
 
     // Attempt to load from file (TGA format — simple, no external library needed)
     if (!m_path.empty() && std::filesystem::exists(m_path))
@@ -146,10 +317,37 @@ HRESULT TextureAsset::Load(ID3D11Device* device)
             else
             {
                 pixelData.clear();
+                fallbackReason = "TGA is unsupported, truncated or over the bounded dimensions";
                 SPARK_LOG_WARN(Spark::LogCategory::Graphics,
                                "TextureAsset: rejected TGA '%s' (unsupported, truncated or over %u px); using fallback",
                                m_path.c_str(), static_cast<unsigned>(D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION));
             }
+        }
+        else if (ext != ".dds")
+        {
+#if SPARK_HAS_STB_IMAGE
+            uint32_t width = 0;
+            uint32_t height = 0;
+            try
+            {
+                loadedFromFile = DecodeStbImage(m_path, width, height, pixelData, fallbackReason);
+            }
+            catch (const std::bad_alloc&)
+            {
+                loadedFromFile = false;
+                fallbackReason = "decoded image exceeded available memory";
+            }
+
+            if (loadedFromFile)
+            {
+                m_width = width;
+                m_height = height;
+                Spark::SimpleConsole::GetInstance().LogSuccess(
+                    "Loaded image: " + m_path + " (" + std::to_string(m_width) + "x" + std::to_string(m_height) + ")");
+            }
+#else
+            fallbackReason = "stb_image support is unavailable in this build";
+#endif
         }
         else if (ext == ".dds")
         {
@@ -161,6 +359,8 @@ HRESULT TextureAsset::Load(ID3D11Device* device)
     // Fallback: 2x2 checkerboard
     if (!loadedFromFile)
     {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "TextureAsset: using 2x2 fallback for '%s': %s", m_path.c_str(),
+                       fallbackReason.c_str());
         m_width = 2;
         m_height = 2;
         pixelData = {0xFFFFFFFF, 0xFF000000, 0xFF000000, 0xFFFFFFFF};

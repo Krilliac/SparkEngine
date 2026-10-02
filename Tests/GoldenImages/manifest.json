@@ -189,22 +189,28 @@
       "scene": "Primary_DeferredGeometry",
       "backendRow": "d3d11-warp",
       "software": true,
-      "status": "awaiting-capture",
-      "thresholdPolicy": "set from measured variance"
+      "perPixelThreshold": 0,
+      "tolerancePercent": 0,
+      "reviewer": "User approved 2026-10-02: explicit Yes to exact hashed Primary review packet Sentinel_2378f2266ca48191873a1f638547f3b4 and zero-difference thresholds; WARP 10.0.26100.9278, Windows 10.0.26200.0; Library libfile_891deddd026881919c3011fed0e778b6",
+      "baselineSha256": "6e25c22bd2c2d929bf5e851292b333e5bd3df31d4236b826697ad16a7db420ac"
     },
     {
       "scene": "Primary_DeferredLighting",
       "backendRow": "d3d11-warp",
       "software": true,
-      "status": "awaiting-capture",
-      "thresholdPolicy": "set from measured variance"
+      "perPixelThreshold": 0,
+      "tolerancePercent": 0,
+      "reviewer": "User approved 2026-10-02: explicit Yes to exact hashed Primary review packet Sentinel_2378f2266ca48191873a1f638547f3b4 and zero-difference thresholds; WARP 10.0.26100.9278, Windows 10.0.26200.0; Library libfile_ba6a1e4f817881918e9d9dc94c6d78ea",
+      "baselineSha256": "6f88f8c2a024afe456a6d1923493a4baa70cd11a90f46eea65f4b46dd63680ae"
     },
     {
       "scene": "Primary_ShadowDepth",
       "backendRow": "d3d11-warp",
       "software": true,
-      "status": "awaiting-capture",
-      "thresholdPolicy": "set from measured variance"
+      "perPixelThreshold": 0,
+      "tolerancePercent": 0,
+      "reviewer": "User approved 2026-10-02: explicit Yes to exact hashed Primary review packet Sentinel_2378f2266ca48191873a1f638547f3b4 and zero-difference thresholds; WARP 10.0.26100.9278, Windows 10.0.26200.0; Library libfile_1c87d9c65c3c81918112fe7eb245fb4e",
+      "baselineSha256": "b083f6cec0dab16b593b127b3ee43c7ab3828a9665762fb2da1ce2fb3b7451b3"
     }
   ]
 }
