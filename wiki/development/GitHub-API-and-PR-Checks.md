@@ -93,3 +93,13 @@ gh pr checks --fail-fast
 - [CI Reproducible Builds](CI-Reproducible-Builds.md) — job ↔ command table
 - [Workflow Patterns](Workflow-Patterns.md) — post-push verification flow
 - [Project conventions (CLAUDE.md)](../../CLAUDE.md) — "Post-PR checks" section
+
+## Scoped native source diagnostics
+
+The branch-scoped native source qualification workflow runs the existing Linux
+Clang Release compile, full CTest selection and count validation against four
+explicit source SHAs. It records the checked-out commit/tree separately from
+the workflow-bearing commit and verifies source cleanliness before tests. Its
+results are diagnostic checkout evidence, not the Required CI Gate or a release
+attestation. The source mapping is fixed in the workflow matrix; moving PR heads
+require a new reviewed mapping. Original build-matrix jobs remain unchanged.
