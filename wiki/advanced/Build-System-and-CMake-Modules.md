@@ -505,6 +505,19 @@ target_link_libraries(MyTarget PRIVATE SparkECS SparkGraphics SparkPhysics)
 
 `SparkEngineLib` remains as an umbrella target that links all components for backward compatibility.
 
+### SparkCxxRuntime.cmake
+
+On non-Windows producers, this helper detects libc++ or libstdc++ from the
+selected standard-library headers for each configuration. It rejects ambiguous
+or mixed-family configurations. The selected family is exported as C++ compile
+and link requirements on `SparkEngineLib` and `SparkEngineInterface`, so installed
+consumers retain the producer's standard-library choice. Windows keeps its
+existing CRT/toolset contract.
+
+`SDKCxxRuntime_ExportContract` checks the configure/export/import wiring without
+enabling a compiler. It does not establish native ABI compatibility; the installed
+SDK consumer build and module-load checks remain necessary.
+
 ### SparkEngineConfig.cmake
 
 Enables `find_package(SparkEngine)` for standalone game projects. Defines the `Spark::SparkEngineLib` imported target.
