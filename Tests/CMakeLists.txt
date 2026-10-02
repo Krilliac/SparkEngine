@@ -1521,11 +1521,12 @@ if(SPARK_JOLT_PHYSICS_AVAILABLE OR TARGET Jolt)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_PHYSICS)
     # ENG-200: script physics/event bindings against the real AngelScript VM and
     # Jolt world (TestENG200ScriptBindingsReal.cpp) plus the audio/animation
-    # bindings (TestENG200ScriptAudioAnimationReal.cpp); the count pins all ten.
+    # bindings (TestENG200ScriptAudioAnimationReal.cpp); the count pins all eleven,
+    # including the platform-specific live-voice test.
     if(SPARK_ANGELSCRIPT_AVAILABLE)
         add_test(NAME ScriptBindingsReal COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
         set_tests_properties(ScriptBindingsReal PROPERTIES
-            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=10"
+            ENVIRONMENT "SPARK_TEST_NAME_PREFIX=ScriptBindings_;SPARK_TEST_EXPECT_COUNT=11"
             LABELS "scripting;scripting-integration;physics;integration"
             TIMEOUT 120)
         # ENG-200: engine-owned collision/trigger dispatch from the real Jolt world

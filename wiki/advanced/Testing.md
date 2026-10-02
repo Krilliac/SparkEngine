@@ -1783,3 +1783,10 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `Test_ui-2d_tween` | 7 |
 | `Test_ui-2d_ui` | 3 |
 <!-- /AUTO:test_inventory -->
+
+### ScriptBindingsReal selection count
+
+The focused ScriptBindingsReal registration selects eleven cases, including
+the platform-specific live-voice case. A platform skip still counts as a
+selected case; the expected-count guard must match the complete selection.
+The existing skip policy and audio-device requirements remain in force.
