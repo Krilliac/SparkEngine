@@ -1,0 +1,267 @@
+name: Measure missing clang-tidy roots
+
+# Temporary evidence producer for the focused stacked PR. No publication,
+# secret access, persistent installation, or privileged runner is needed.
+on:
+  push:
+    branches: [claude/tidy-product-source-roots-evidence]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tidy-missing-roots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      MEASUREMENT_BASE: b656f435025ff3896b7eba5337e4202e421f4579
+      MEASUREMENT_SOURCE_SHA: ffb7de21abf7151b4a4b02db76a79602024582de
+    steps:
+      - name: Checkout exact pushed head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.MEASUREMENT_SOURCE_SHA }}
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install and verify exact toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p measurement-evidence/logs
+          . /etc/os-release
+          test "$VERSION_ID" = 24.04
+          cp /etc/os-release measurement-evidence/os-release.txt
+          sudo apt-get update
+          sudo apt-get install -y clang-18 clang-tidy-18 ccache libgl-dev libsdl2-dev libfreetype-dev libc++-18-dev libc++abi-18-dev python3-venv python3-yaml
+          python3 -m venv "$RUNNER_TEMP/clang-format-18.1.3"
+          "$RUNNER_TEMP/clang-format-18.1.3/bin/python" -m pip install --no-deps --no-index \
+            'https://files.pythonhosted.org/packages/d5/9c/4f3806d20397790b3cd80aef89d295bf399581804f5c5758b6207e54e902/clang_format-18.1.3-py2.py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=059f2c2e7166f97cf06f78d9bd31d83a9c0416527845cb397296daa43bd2c6e2'
+          mkdir -p "$RUNNER_TEMP/tidy-toolchain"
+          ln -s /usr/bin/clang-18 "$RUNNER_TEMP/tidy-toolchain/clang"
+          ln -s /usr/bin/clang++-18 "$RUNNER_TEMP/tidy-toolchain/clang++"
+          ln -s /usr/bin/clang-tidy-18 "$RUNNER_TEMP/tidy-toolchain/clang-tidy"
+          ln -s "$RUNNER_TEMP/clang-format-18.1.3/bin/clang-format" "$RUNNER_TEMP/tidy-toolchain/clang-format"
+          ln -s /usr/bin/python3 "$RUNNER_TEMP/tidy-toolchain/python3"
+          export PATH="$RUNNER_TEMP/tidy-toolchain:$PATH"
+          echo "$RUNNER_TEMP/tidy-toolchain" >> "$GITHUB_PATH"
+          python3 -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)" > measurement-evidence/python-version.txt
+          clang --version > measurement-evidence/clang-version.txt
+          clang-tidy --version > measurement-evidence/clang-tidy-version.txt
+          clang-format --version > measurement-evidence/clang-format-version.txt
+          grep -E 'LLVM version 18\.' measurement-evidence/clang-tidy-version.txt
+          grep -E '^clang-format version 18\.1\.3([[:space:]]|$)' measurement-evidence/clang-format-version.txt
+          cmake --version > measurement-evidence/cmake-version.txt
+          git rev-parse HEAD > measurement-evidence/head.txt
+          test "$(cat measurement-evidence/head.txt)" = "$MEASUREMENT_SOURCE_SHA"
+          git submodule status --recursive > measurement-evidence/submodules.txt
+          sha256sum .clang-tidy .clang-format > measurement-evidence/config-sha256.txt
+          cp .clang-tidy measurement-evidence/clang-tidy-config.yml
+          cp .clang-format measurement-evidence/clang-format-config.yml
+
+      - name: Configure with the blocking tidy job flags
+        id: configure
+        run: |
+          set -euo pipefail
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
+            -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON 2>&1 | tee measurement-evidence/configure.log
+          cmake --build build --target SparkServerBuildIdentity 2>&1 | tee measurement-evidence/generated-header.log
+          cp build/compile_commands.json build/CMakeCache.txt measurement-evidence/
+          sha256sum build/compile_commands.json > measurement-evidence/compile-commands-sha256.txt
+
+      - name: Analyze all four newly covered translation units serially
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          files = sorted(str(path) for root in ("SparkAssetPipelineCore/src", "SparkCrashReporter/src")
+                         for path in Path(root).rglob("*.cpp"))
+          expected = ["SparkAssetPipelineCore/src/AssetCooker.cpp", "SparkCrashReporter/src/CrashAutoIssues.cpp",
+                      "SparkCrashReporter/src/CrashReporterApp.cpp", "SparkCrashReporter/src/main.cpp"]
+          assert files == expected, files
+          commands = json.loads(Path("build/compile_commands.json").read_text())
+          registered = {Path(entry["file"]).resolve() for entry in commands}
+          assert all(Path(path).resolve() in registered for path in files), "missing compile command"
+          Path("measurement-evidence/files.txt").write_text("\n".join(files) + "\n")
+          PY
+          failed=0
+          while IFS= read -r source; do
+            log="measurement-evidence/logs/${source//\//__}.log"
+            set +e
+            clang-tidy -p build --warnings-as-errors="" "$source" > "$log" 2>&1
+            result=$?
+            set -e
+            printf '%s\t%s\n' "$source" "$result" >> measurement-evidence/analyzer-exits.tsv
+            if [ "$result" -ne 0 ]; then failed=1; fi
+          done < measurement-evidence/files.txt
+          find measurement-evidence/logs -type f -name '*.log' -print0 | sort -z | xargs -0 cat > measurement-evidence/clang-tidy-output.log
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "Tools")
+          import clang_tidy_budget as budget
+          root = Path.cwd()
+          diagnostics = budget.parse_diagnostics(Path("measurement-evidence/clang-tidy-output.log").read_text(), root)
+          counts = budget.count_by_file(diagnostics)
+          files = Path("measurement-evidence/files.txt").read_text().splitlines()
+          report = {"head": Path("measurement-evidence/head.txt").read_text().strip(),
+                    "runId": __import__("os").environ["GITHUB_RUN_ID"], "files": files,
+                    "diagnosticsByFile": counts, "newFileCounts": {path: counts.get(path, {}) for path in files},
+                    "otherDiagnosticPaths": sorted(set(counts) - set(files)), "totalDistinct": len(diagnostics)}
+          Path("measurement-evidence/diagnostics.json").write_text(json.dumps(report, indent=2) + "\n")
+          print(json.dumps(report, indent=2))
+          PY
+          exit "$failed"
+
+      - name: Verify new-file-only budget and existing-entry invariants
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+          from collections import Counter
+          from pathlib import Path
+          sys.path.insert(0, "Tools")
+          import clang_tidy_budget as tool
+          original = json.loads(subprocess.check_output(["git", "show", os.environ["MEASUREMENT_BASE"] + ":Tools/clang-tidy-budget.json"]))
+          candidate = tool.load_budget(Path("Tools/clang-tidy-budget.json"))
+          selected = set(Path("measurement-evidence/files.txt").read_text().splitlines())
+          for path, checks in original["files"].items():
+              assert candidate["files"].get(path) == checks, f"existing entry changed: {path}"
+          assert set(candidate["files"]) - set(original["files"]) <= selected, "unrelated budget addition"
+          parsed = tool.parse_diagnostics(Path("measurement-evidence/clang-tidy-output.log").read_text(), Path.cwd())
+          assert all(item.path in selected for item in parsed), "classify genuine header diagnostics before budgeting"
+          files = {path: checks for path, checks in candidate["files"].items() if path in selected}
+          totals = Counter()
+          for checks in files.values(): totals.update(checks)
+          projected = dict(candidate, files=files, checks=dict(sorted(totals.items())), total=sum(totals.values()))
+          Path("measurement-evidence/new-files-budget.json").write_text(json.dumps(projected, indent=2) + "\n")
+          PY
+          python3 Tools/clang_tidy_budget.py check \
+            --log measurement-evidence/clang-tidy-output.log \
+            --budget measurement-evidence/new-files-budget.json \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --clang-tidy-version-file measurement-evidence/clang-tidy-version.txt \
+            --summary "$GITHUB_STEP_SUMMARY" 2>&1 | tee measurement-evidence/new-files-budget-check.log
+
+      - name: Budget contracts
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_clang_tidy_budget.py 2>&1 | tee measurement-evidence/budget-contracts.log
+
+      - name: Workflow propagation contracts
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/test-workflow-failure-propagation.py 2>&1 | tee measurement-evidence/propagation-contracts.log
+
+      - name: Build matrix parity contracts
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_build_matrix_parity.py 2>&1 | tee measurement-evidence/parity-contracts.log
+
+      - name: Crash security source contracts
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_ops100_crash_security.py 2>&1 | tee measurement-evidence/crash-security-contracts.log
+
+      - name: Documentation contracts
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_docs_health.py 2>&1 | tee measurement-evidence/docs-contracts.log
+
+      - name: Supply-chain repository contract
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_supply_chain_license_policy.py TestRealRepositoryLicenses.test_real_checker_passes \
+            2>&1 | tee measurement-evidence/supply-chain-contract.log
+
+      - name: Strict site-data validation
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 tools/site-data/validate.py 2>&1 | tee measurement-evidence/site-validation.log
+
+      - name: Exact formatter parity for task sources
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+          paths = subprocess.check_output(["git", "diff", "--name-only", "--diff-filter=ACMR", os.environ["MEASUREMENT_BASE"], "HEAD"]).decode().splitlines()
+          cpp = sorted(path for path in paths if Path(path).suffix in (".h", ".hpp", ".cpp") and "/Metal/" not in path)
+          Path("measurement-evidence/format-files.txt").write_text("\n".join(cpp) + ("\n" if cpp else ""))
+          print(f"Changed C++ files: {len(cpp)}")
+          if cpp: subprocess.run(["clang-format", "--dry-run", "--Werror", *cpp], check=True)
+          PY
+          git diff --check "$MEASUREMENT_BASE" HEAD
+
+      - name: Build and exercise the affected C++ products
+        if: always() && steps.configure.outcome == 'success'
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2 --target \
+            SparkAssetPipelineCoreTests SparkCooker SparkCrashReporter \
+            SparkCrashReporterFakeGh SparkCrashReporterManifestTests \
+            SparkCrashReporterConsentTests SparkCrashReporterProductionTimeoutTests \
+            2>&1 | tee measurement-evidence/product-build.log
+          focused='^(SparkAssetPipelineCoreTests|SparkCookerExecutableSmoke|SparkCrashReporter\.(ManifestCompatibility|ProductionTimeout|ExecutableSmoke)|CrashManifest_(PathEscape|SecretRedaction)|CrashReporter_Consent)$'
+          ctest --test-dir build --show-only=json-v1 -R "$focused" > measurement-evidence/product-test-inventory.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          selected = {test['name'] for test in json.loads(Path('measurement-evidence/product-test-inventory.json').read_text())['tests']}
+          expected = {'SparkAssetPipelineCoreTests', 'SparkCookerExecutableSmoke',
+                      'SparkCrashReporter.ManifestCompatibility', 'SparkCrashReporter.ProductionTimeout',
+                      'SparkCrashReporter.ExecutableSmoke', 'CrashManifest_PathEscape',
+                      'CrashManifest_SecretRedaction', 'CrashReporter_Consent'}
+          assert selected == expected, selected
+          print(f'Exactly {len(selected)} affected product tests selected')
+          PY
+          ctest --test-dir build --output-on-failure --no-tests=error --parallel 1 -R "$focused" \
+            2>&1 | tee measurement-evidence/product-tests.log
+
+      - name: Verify exact documentation currentness
+        if: always()
+        run: |
+          set -euo pipefail
+          bash docs/update-all-docs.sh check 2>&1 | tee measurement-evidence/docs-currentness.log
+
+      - name: Regenerate documentation required for source edits
+        if: always()
+        run: |
+          set -uo pipefail
+          export SPARK_DOC_HEALTH_OUTPUT="$GITHUB_WORKSPACE/measurement-evidence/docs-health.json"
+          bash docs/update-all-docs.sh 2>&1 | tee measurement-evidence/docs-generation.log
+          result=${PIPESTATUS[0]}
+          git diff --binary > measurement-evidence/generated-docs.patch
+          git diff --name-only > measurement-evidence/generated-docs-paths.txt
+          exit "$result"
+
+      - name: Retain exact-head raw evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tidy-final-head-${{ env.MEASUREMENT_SOURCE_SHA }}
+          path: measurement-evidence/
+          retention-days: 14
+          if-no-files-found: error
