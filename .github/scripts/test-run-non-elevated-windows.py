@@ -63,7 +63,8 @@ class NonElevatedLauncherTests(unittest.TestCase):
     def test_cleanup_failure_is_surfaced(self) -> None:
         terminate = mock.Mock(return_value=True)
         wait = mock.Mock(return_value=MODULE.WAIT_TIMEOUT)
-        with self.assertRaisesRegex(OSError, "child did not terminate"):
+        with mock.patch.object(MODULE.ctypes, "get_last_error", return_value=5, create=True), \
+                self.assertRaisesRegex(OSError, "child did not terminate.*Win32 error 5"):
             MODULE._reap_child(17, terminate=terminate, wait=wait)
         terminate.assert_called_once_with(17, 1)
         self.assertEqual(wait.call_args_list, [mock.call(17, 0), mock.call(17, 5000)])
