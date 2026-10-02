@@ -21,6 +21,19 @@ gh pr checks --json name,state,conclusion   # machine-readable
 
 Exit code 1 from `gh pr checks` while checks are still running is **not** a failure signal — ignore it and re-poll. See the `--watch` caveat in [Build Optimizations](Build-Optimizations.md).
 
+### Exhausted commit-status contexts
+
+GitHub limits a SHA/context pair to 1,000 commit statuses. Its explicit HTTP 422
+status-cap rejection is permanent for that pair; another pending write cannot
+restore capacity. The trusted aggregate terminal publisher preserves the original
+error without a recovery POST for that specific response. Other uncertain errors
+retain the existing fail-closed pending recovery, authenticated evidence checks
+and pending ownership rules.
+
+This guard does not repair an initial pending-write failure or implement semantic
+deduplication. Do not retry the exhausted pair or rename its required context to
+bypass the gate. See [GitHub's commit-status limit](https://docs.github.com/rest/commits/statuses#create-a-commit-status).
+
 ## 2 — Identify the failing job
 
 ```bash
