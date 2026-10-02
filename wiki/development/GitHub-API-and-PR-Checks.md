@@ -123,3 +123,13 @@ pass to cause a real pixel mismatch while unaffected scenes still match.
 These diagnostics preserve disabled CTest flags and cannot promote release
 acceptance. The generated SDK consumer test also loads its exact module through
 the installed host; compilation or sidecar validation alone is insufficient.
+
+### Pinned combined Windows follow-through
+
+The initial combined diagnostic push skipped its Windows job because the copied
+job retained a Working/PR/manual-event restriction. The isolated Windows-only
+workflow removes that event restriction and checks out exact combined source
+`371a49950d021f46c802fe3b618be00dbe851c49`. Its workflow head is separate;
+checkout verification and the test-statistics commit field identify the source.
+The configure/build/full CTest, SDK runtime gate and approved Primary checks are
+unchanged. This does not rerun the four active Linux rows or replace release gates.
