@@ -583,7 +583,7 @@
 | `PixelClass` | enum | Tests | [RHI210D3D11GoldenSupport.h:L770](../../Tests/RHI210D3D11GoldenSupport.h#L770) |  |
 | `PixelFormat` | enum | SparkEngine | [RHITypes.h:L47](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L47) |  |
 | `PlacementMode` | enum | SparkEditor | [ObjectPlacementPanel.h:L22](../../SparkEditor/Source/Panels/ObjectPlacementPanel.h#L22) | Editor panel for placing, scattering, and snapping objects in the scene. |
-| `PlaneIndex` | enum | SparkEngine | [D3D11FrustumCulling.h:L30](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L30) |  |
+| `PlaneIndex` | enum | SparkEngine | [D3D11FrustumCulling.h:L31](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L31) |  |
 | `PlaneIndex` | enum | SparkEngine | [FrustumCulling.h:L124](../../SparkEngine/Source/Graphics/FrustumCulling.h#L124) | Plane indices for readability. |
 | `PlatformKeyCode` | enum | SparkEngine | [PlatformInput.h:L49](../../SparkEngine/Source/Input/PlatformInput.h#L49) | Unified key/button codes across all input devices. |
 | `PlatformType` | enum | GameModules | [PlatformerEnums.h:L40](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L40) | Types of platforms with different behaviors |

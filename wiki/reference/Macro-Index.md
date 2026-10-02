@@ -433,7 +433,7 @@
 | `FPS_REQUIRE_MSG` | macro | GameModules | [FPSAssert.h:L49](../../GameModules/SparkGameFPS/Source/Core/FPSAssert.h#L49) |  |
 | `FPS_REQUIRE_NOT_NULL` | macro | GameModules | [FPSAssert.h:L58](../../GameModules/SparkGameFPS/Source/Core/FPSAssert.h#L58) |  |
 | `FrameCapturedCallback` | alias | SparkEngine | [MovieRenderPipeline.h:L201](../../SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h#L201) | Offline-render job-state prototype (singleton); no pixel output. |
-| `FrustumPlanes` | alias | SparkEngine | [D3D11FrustumCulling.h:L41](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L41) |  |
+| `FrustumPlanes` | alias | SparkEngine | [D3D11FrustumCulling.h:L42](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L42) |  |
 | `FuncT` | alias | Tests | [TestMultiISADispatch.cpp:L37](../../Tests/TestMultiISADispatch.cpp#L37) |  |
 | `FuncT` | alias | Tests | [TestMultiISADispatch.cpp:L55](../../Tests/TestMultiISADispatch.cpp#L55) |  |
 | `FuncT` | alias | Tests | [TestMultiISADispatch.cpp:L70](../../Tests/TestMultiISADispatch.cpp#L70) |  |

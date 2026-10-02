@@ -2161,7 +2161,7 @@
 | `BasicMaterialEditorPanel::Shutdown` | method | SparkEditor | [BasicMaterialEditorPanel.cpp:L190](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L190) |  |
 | `BasicMaterialEditorPanel::TexturePathExists` | method | SparkEditor | [BasicMaterialEditorDrawing.cpp:L62](../../SparkEditor/Source/Panels/BasicMaterialEditorDrawing.cpp#L62) |  |
 | `BasicMaterialEditorPanel::Update` | method | SparkEditor | [BasicMaterialEditorPanel.cpp:L170](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L170) |  |
-| `BasicNormalMatrixForUpload` | function | SparkEngine | [D3D11FrustumCulling.h:L25](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L25) |  |
+| `BasicNormalMatrixForUpload` | function | SparkEngine | [D3D11FrustumCulling.h:L26](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L26) |  |
 | `basis` | function | Tests | [TestGraphicsIntegration.cpp:L229](../../Tests/TestGraphicsIntegration.cpp#L229) |  |
 | `BasisFromEuler` | function | GameModules | [RacingVehicleChassis.cpp:L67](../../GameModules/SparkGameRacing/Source/Vehicle/RacingVehicleChassis.cpp#L67) |  |
 | `batch` | function | SparkEngine | [Telemetry.h:L612](../../SparkEngine/Source/Utils/Telemetry.h#L612) |  |
@@ -7469,7 +7469,7 @@
 | `DirectStorageLoader::StopIoWorkers` | method | SparkEngine | [DirectStorageLoader.cpp:L282](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L282) |  |
 | `DirectStorageLoader::Submit` | method | SparkEngine | [DirectStorageLoader.cpp:L88](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L88) |  |
 | `DirectX::XMMatrixIdentity` | method | GameModules | [TFSecondaryMotion.cpp:L196](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp#L196) |  |
-| `DirectX::XMMatrixInverse` | method | SparkEngine | [D3D11FrustumCulling.h:L27](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L27) |  |
+| `DirectX::XMMatrixInverse` | method | SparkEngine | [D3D11FrustumCulling.h:L28](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L28) |  |
 | `dirPath` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L626](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L626) |  |
 | `dirToTarget` | function | SparkEngine | [PerceptionSystem.h:L240](../../SparkEngine/Source/Engine/AI/PerceptionSystem.h#L240) |  |
 | `dirUtf8` | function | Tests | [TestShaderHotReload.cpp:L72](../../Tests/TestShaderHotReload.cpp#L72) |  |
@@ -9293,7 +9293,7 @@
 | `ExtractColor` | function | SparkEditor | [EditorThemeDocument.cpp:L69](../../SparkEditor/Source/Core/EditorThemeDocument.cpp#L69) |  |
 | `ExtractDepth` | function | SparkEngine | [DrawSortKey.h:L173](../../SparkEngine/Source/Graphics/DrawSortKey.h#L173) |  |
 | `ExtractFloat` | function | SparkEngine | [UILayoutExtensions.h:L276](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L276) |  |
-| `ExtractFrustumPlanes` | function | SparkEngine | [D3D11FrustumCulling.h:L48](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L48) |  |
+| `ExtractFrustumPlanes` | function | SparkEngine | [D3D11FrustumCulling.h:L49](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L49) |  |
 | `ExtractFrustumPlanes` | function | SparkEngine | [LightManager.h:L109](../../SparkEngine/Source/Graphics/LightManager.h#L109) |  |
 | `ExtractJsonString` | function | SparkEditor | [ProjectDocument.cpp:L172](../../SparkEditor/Source/Core/ProjectDocument.cpp#L172) |  |
 | `ExtractJsonStringArray` | function | SparkEditor | [ProjectDocument.cpp:L243](../../SparkEditor/Source/Core/ProjectDocument.cpp#L243) |  |
@@ -37209,7 +37209,7 @@
 | `SignalSafeWrite` | function | SparkEngine | [CrashHandler.cpp:L2019](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2019) |  |
 | `SignalSafeWriteNumber` | function | SparkEngine | [CrashHandler.cpp:L2025](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2025) |  |
 | `SignedBody` | function | SparkGateway | [GatewayAreaControl.cpp:L552](../../SparkGateway/src/GatewayAreaControl.cpp#L552) |  |
-| `SignedDistance` | function | SparkEngine | [D3D11FrustumCulling.h:L83](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L83) |  |
+| `SignedDistance` | function | SparkEngine | [D3D11FrustumCulling.h:L84](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L84) |  |
 | `silent` | function | Tests | [TestNetTransportSecurity.cpp:L412](../../Tests/TestNetTransportSecurity.cpp#L412) |  |
 | `silentSystem` | function | Tests | [TestENG200ScriptAudioAnimationReal.cpp:L215](../../Tests/TestENG200ScriptAudioAnimationReal.cpp#L215) |  |
 | `Sim` | function | Tests | [TestMOD380RacingCompleteRaceReal.cpp:L73](../../Tests/TestMOD380RacingCompleteRaceReal.cpp#L73) |  |
@@ -38011,7 +38011,7 @@
 | `SphereAABBOverlap` | function | SparkEngine | [Octree.h:L223](../../SparkEngine/Source/Utils/Octree.h#L223) |  |
 | `SphereCast` | function | SparkEngine | [PhysicsSystem.h:L375](../../SparkEngine/Source/Physics/PhysicsSystem.h#L375) |  |
 | `SphereCastFiltered` | function | SparkEngine | [PhysicsSystem.h:L400](../../SparkEngine/Source/Physics/PhysicsSystem.h#L400) | Sphere sweep from `from` to `to` restricted to `layerMask`. |
-| `SphereIntersects` | function | SparkEngine | [D3D11FrustumCulling.h:L88](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L88) |  |
+| `SphereIntersects` | function | SparkEngine | [D3D11FrustumCulling.h:L89](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L89) |  |
 | `SphereIntersectsAABB` | function | SparkEngine | [ClusteredLightCulling.h:L166](../../SparkEngine/Source/Graphics/ClusteredLightCulling.h#L166) | Test whether a sphere intersects an AABB. |
 | `SphereObject::CreateMesh` | method | SparkEngine | [SphereObject.cpp:L30](../../SparkEngine/Source/Game/SphereObject.cpp#L30) |  |
 | `SphereObject::Initialize` | method | SparkEngine | [SphereObject.cpp:L20](../../SparkEngine/Source/Game/SphereObject.cpp#L20) |  |

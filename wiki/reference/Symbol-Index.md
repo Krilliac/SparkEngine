@@ -2774,7 +2774,7 @@
 | `BasicMaterialEditorPanel::Shutdown` | method | SparkEditor | [BasicMaterialEditorPanel.cpp:L190](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L190) |  |
 | `BasicMaterialEditorPanel::TexturePathExists` | method | SparkEditor | [BasicMaterialEditorDrawing.cpp:L62](../../SparkEditor/Source/Panels/BasicMaterialEditorDrawing.cpp#L62) |  |
 | `BasicMaterialEditorPanel::Update` | method | SparkEditor | [BasicMaterialEditorPanel.cpp:L170](../../SparkEditor/Source/Panels/BasicMaterialEditorPanel.cpp#L170) |  |
-| `BasicNormalMatrixForUpload` | function | SparkEngine | [D3D11FrustumCulling.h:L25](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L25) |  |
+| `BasicNormalMatrixForUpload` | function | SparkEngine | [D3D11FrustumCulling.h:L26](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L26) |  |
 | `BasicObjectConstants` | struct | SparkEngine | [GraphicsEngineRHI.h:L47](../../SparkEngine/Source/Graphics/GraphicsEngineRHI.h#L47) |  |
 | `basis` | function | Tests | [TestGraphicsIntegration.cpp:L229](../../Tests/TestGraphicsIntegration.cpp#L229) |  |
 | `BasisFileHeader` | struct | SparkEngine | [BasisTranscoder.h:L70](../../SparkEngine/Source/Graphics/BasisTranscoder.h#L70) | Basis Universal file header (simplified) |
@@ -9163,7 +9163,7 @@
 | `DirectStorageLoader::Submit` | method | SparkEngine | [DirectStorageLoader.cpp:L88](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L88) |  |
 | `DirectStorageStats` | struct | SparkEngine | [DirectStorageLoader.h:L87](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L87) | Performance statistics |
 | `DirectX::XMMatrixIdentity` | method | GameModules | [TFSecondaryMotion.cpp:L196](../../GameModules/SparkGameMMOFPS/Source/Game/TFSecondaryMotion.cpp#L196) |  |
-| `DirectX::XMMatrixInverse` | method | SparkEngine | [D3D11FrustumCulling.h:L27](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L27) |  |
+| `DirectX::XMMatrixInverse` | method | SparkEngine | [D3D11FrustumCulling.h:L28](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L28) |  |
 | `dirPath` | function | SparkEditor | [AdvancedAssetPipeline.cpp:L626](../../SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.cpp#L626) |  |
 | `dirToTarget` | function | SparkEngine | [PerceptionSystem.h:L240](../../SparkEngine/Source/Engine/AI/PerceptionSystem.h#L240) |  |
 | `DirtyFlag` | enum | SparkEngine | [UIDirtyTracking.h:L35](../../SparkEngine/Source/Engine/UI/UIDirtyTracking.h#L35) | Bitfield flags indicating what changed on a widget |
@@ -11432,7 +11432,7 @@
 | `ExtractColor` | function | SparkEditor | [EditorThemeDocument.cpp:L69](../../SparkEditor/Source/Core/EditorThemeDocument.cpp#L69) |  |
 | `ExtractDepth` | function | SparkEngine | [DrawSortKey.h:L173](../../SparkEngine/Source/Graphics/DrawSortKey.h#L173) |  |
 | `ExtractFloat` | function | SparkEngine | [UILayoutExtensions.h:L276](../../SparkEngine/Source/Engine/UI/UILayoutExtensions.h#L276) |  |
-| `ExtractFrustumPlanes` | function | SparkEngine | [D3D11FrustumCulling.h:L48](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L48) |  |
+| `ExtractFrustumPlanes` | function | SparkEngine | [D3D11FrustumCulling.h:L49](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L49) |  |
 | `ExtractFrustumPlanes` | function | SparkEngine | [LightManager.h:L109](../../SparkEngine/Source/Graphics/LightManager.h#L109) |  |
 | `ExtractJsonString` | function | SparkEditor | [ProjectDocument.cpp:L172](../../SparkEditor/Source/Core/ProjectDocument.cpp#L172) |  |
 | `ExtractJsonStringArray` | function | SparkEditor | [ProjectDocument.cpp:L243](../../SparkEditor/Source/Core/ProjectDocument.cpp#L243) |  |
@@ -13398,7 +13398,7 @@
 | `Frustum` | class | Tests | [TestParallelCulling.cpp:L50](../../Tests/TestParallelCulling.cpp#L50) |  |
 | `FrustumContains` | function | Tests | [TestRenderECSIntegration.cpp:L45](../../Tests/TestRenderECSIntegration.cpp#L45) |  |
 | `FrustumPlane` | struct | Tests | [TestGPUDrivenRenderer.cpp:L21](../../Tests/TestGPUDrivenRenderer.cpp#L21) |  |
-| `FrustumPlanes` | alias | SparkEngine | [D3D11FrustumCulling.h:L41](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L41) |  |
+| `FrustumPlanes` | alias | SparkEngine | [D3D11FrustumCulling.h:L42](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L42) |  |
 | `FrustumPlanes` | struct | SparkEngine | [MeshClusterSystem.h:L168](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L168) | Six frustum planes for culling (ax + by + cz + d = 0) |
 | `FrustumQuery` | function | SparkEngine | [BVHAccelerator.h:L114](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L114) | Query all primitives whose bounding boxes intersect the frustum. |
 | `FrustumQueryRecursive` | function | SparkEngine | [BVHAccelerator.h:L372](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L372) |  |
@@ -32164,7 +32164,7 @@
 | `Plane` | struct | Tests | [TestFrustumCulling.cpp:L33](../../Tests/TestFrustumCulling.cpp#L33) |  |
 | `plane` | function | Tests | [TestLegacyGameObjectMaterial.cpp:L54](../../Tests/TestLegacyGameObjectMaterial.cpp#L54) |  |
 | `Plane` | struct | Tests | [TestParallelCulling.cpp:L29](../../Tests/TestParallelCulling.cpp#L29) |  |
-| `PlaneIndex` | enum | SparkEngine | [D3D11FrustumCulling.h:L30](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L30) |  |
+| `PlaneIndex` | enum | SparkEngine | [D3D11FrustumCulling.h:L31](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L31) |  |
 | `PlaneIndex` | enum | SparkEngine | [FrustumCulling.h:L124](../../SparkEngine/Source/Graphics/FrustumCulling.h#L124) | Plane indices for readability. |
 | `PlaneObject` | class | SparkEngine | [PlaneObject.h:L51](../../SparkEngine/Source/Game/PlaneObject.h#L51) |  |
 | `PlaneObject::CreateMesh` | method | SparkEngine | [PlaneObject.cpp:L27](../../SparkEngine/Source/Game/PlaneObject.cpp#L27) |  |
@@ -43343,7 +43343,7 @@
 | `SignalSafeWrite` | function | SparkEngine | [CrashHandler.cpp:L2019](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2019) |  |
 | `SignalSafeWriteNumber` | function | SparkEngine | [CrashHandler.cpp:L2025](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2025) |  |
 | `SignedBody` | function | SparkGateway | [GatewayAreaControl.cpp:L552](../../SparkGateway/src/GatewayAreaControl.cpp#L552) |  |
-| `SignedDistance` | function | SparkEngine | [D3D11FrustumCulling.h:L83](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L83) |  |
+| `SignedDistance` | function | SparkEngine | [D3D11FrustumCulling.h:L84](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L84) |  |
 | `silent` | function | Tests | [TestNetTransportSecurity.cpp:L412](../../Tests/TestNetTransportSecurity.cpp#L412) |  |
 | `silentSystem` | function | Tests | [TestENG200ScriptAudioAnimationReal.cpp:L215](../../Tests/TestENG200ScriptAudioAnimationReal.cpp#L215) |  |
 | `Sim` | function | Tests | [TestMOD380RacingCompleteRaceReal.cpp:L73](../../Tests/TestMOD380RacingCompleteRaceReal.cpp#L73) |  |
@@ -44699,7 +44699,7 @@
 | `SphereAABBOverlap` | function | SparkEngine | [Octree.h:L223](../../SparkEngine/Source/Utils/Octree.h#L223) |  |
 | `SphereCast` | function | SparkEngine | [PhysicsSystem.h:L375](../../SparkEngine/Source/Physics/PhysicsSystem.h#L375) |  |
 | `SphereCastFiltered` | function | SparkEngine | [PhysicsSystem.h:L400](../../SparkEngine/Source/Physics/PhysicsSystem.h#L400) | Sphere sweep from `from` to `to` restricted to `layerMask`. |
-| `SphereIntersects` | function | SparkEngine | [D3D11FrustumCulling.h:L88](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L88) |  |
+| `SphereIntersects` | function | SparkEngine | [D3D11FrustumCulling.h:L89](../../SparkEngine/Source/Graphics/D3D11FrustumCulling.h#L89) |  |
 | `SphereIntersectsAABB` | function | SparkEngine | [ClusteredLightCulling.h:L166](../../SparkEngine/Source/Graphics/ClusteredLightCulling.h#L166) | Test whether a sphere intersects an AABB. |
 | `SphereObject` | class | SparkEngine | [SphereObject.h:L52](../../SparkEngine/Source/Game/SphereObject.h#L52) |  |
 | `SphereObject` | class | Tests | [TestShadowPassReal.cpp:L49](../../Tests/TestShadowPassReal.cpp#L49) |  |

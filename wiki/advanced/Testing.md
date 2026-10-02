@@ -1041,6 +1041,13 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 - [Getting Started](../getting-started/Getting-Started.md) -- Building the project
 - [Contributing](Contributing.md) -- Contribution workflow, pre-commit checks, and adding tests
 
+## D3D11 CPU math contracts
+
+`RHI210_MatrixContracts` checks normal-matrix upload, the six Direct3D clip
+planes and FPS arena visibility through the production math helpers. Plane
+indices use a compact byte enum and explicit `size_t` conversion for array
+extents; this does not change plane order or clip-space calculations.
+
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->

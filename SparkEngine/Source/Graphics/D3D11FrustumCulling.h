@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 
 namespace Spark::Graphics::D3D11RenderMath
 {
@@ -27,7 +28,7 @@ namespace Spark::Graphics::D3D11RenderMath
         return DirectX::XMMatrixInverse(nullptr, world);
     }
 
-    enum class PlaneIndex : size_t
+    enum class PlaneIndex : std::uint8_t
     {
         Left = 0,
         Right,
