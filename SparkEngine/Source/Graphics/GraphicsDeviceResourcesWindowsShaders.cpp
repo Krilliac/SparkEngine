@@ -11,18 +11,21 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 
-#include "GraphicsEngine.h"
-#include "Shader.h"
+#include "../Core/RuntimePackage.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
+#include "GraphicsEngine.h"
+#include "Shader.h"
 
-#include <windows.h>
 #include <d3d11_1.h>
-#include <wrl.h>
 #include <d3dcompiler.h>
+#include <windows.h>
+#include <wrl.h>
 
-#include <string>
 #include <cstring>
+#include <filesystem>
+#include <string>
+#include <system_error>
 
 using Microsoft::WRL::ComPtr;
 
@@ -96,6 +99,13 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
         return hr;
     }
 
+    hr = InitializeDeferredGBufferShader();
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to initialize deferred G-buffer shader", L"ERROR");
+        return hr;
+    }
+
     // Create basic sampler state
     D3D11_SAMPLER_DESC samplerDesc = {};
     samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -123,6 +133,58 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Basic shader system initialized successfully", L"SUCCESS");
     return S_OK;
+}
+
+HRESULT GraphicsEngine::InitializeDeferredGBufferShader()
+{
+    // Prefer staged engine content even when relative scene/project arguments
+    // preserve the caller's working directory. Keep the established cwd fallback
+    // without changing global cwd or searching its ancestors.
+    std::error_code pathError;
+    const auto workingDirectory = std::filesystem::current_path(pathError);
+    const auto roots =
+        Spark::RuntimePackage::ResolveContentRoots(L"Shaders/HLSL", Spark::RuntimePackage::GetExecutableDirectory(),
+                                                   pathError ? std::filesystem::path{} : workingDirectory);
+
+    ComPtr<ID3DBlob> blob;
+    HRESULT lastResult = E_FAIL;
+    for (const auto& root : roots)
+    {
+        const auto candidate = root / L"DeferredGBufferPS.hlsl";
+        if (!std::filesystem::exists(candidate))
+        {
+            continue;
+        }
+
+        lastResult = CompileShaderFromFile(candidate.wstring(), "main", "ps_5_0", &blob);
+        if (SUCCEEDED(lastResult))
+        {
+            break;
+        }
+    }
+
+    if (FAILED(lastResult) || !blob)
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Deferred G-buffer shader source was not found or failed to compile", L"WARNING");
+        // Preserve the forward renderer when an installation omitted the
+        // optional deferred shader asset; the deferred pipeline then remains
+        // visibly unsupported instead of preventing engine startup.
+        return S_FALSE;
+    }
+
+    ComPtr<ID3D11PixelShader> deferredShader;
+    lastResult = m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, &deferredShader);
+    if (FAILED(lastResult))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create deferred G-buffer pixel shader", L"ERROR");
+        return lastResult;
+    }
+    lastResult = m_basicPixelShader->SetPrivateDataInterface(kDeferredGBufferShaderGuid, deferredShader.Get());
+    if (FAILED(lastResult))
+    {
+        return lastResult;
+    }
+    return InitializeDeferredLighting();
 }
 
 HRESULT GraphicsEngine::CreateBasicConstantBuffer()

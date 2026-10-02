@@ -184,24 +184,51 @@ namespace Spark
             const bool isCube = path == "__spark_primitive_Cube.obj";
             const bool isSphere = path == "__spark_primitive_Sphere.obj";
             const bool isCylinder = path == "__spark_primitive_Cylinder.obj";
-            const bool isPlane = path == "__spark_primitive_Plane.obj" || path == "__spark_primitive_ground__.obj" ||
-                                 path == "__spark_primitive_sprite__.obj";
-            if (!isCube && !isSphere && !isCylinder && !isPlane)
+            const bool isGround = path == "__spark_primitive_Plane.obj" || path == "__spark_primitive_ground__.obj";
+            const bool isSprite = path == "__spark_primitive_sprite__.obj";
+            if (!isCube && !isSphere && !isCylinder && !isGround && !isSprite)
+            {
                 return false;
+            }
 
             const HRESULT initialized = mesh.Initialize(graphics.GetDevice(), graphics.GetContext());
             if (FAILED(initialized))
+            {
                 return true;
+            }
 
             HRESULT result = E_INVALIDARG;
             if (isCube)
+            {
                 result = mesh.CreateCube(1.0f);
+            }
             else if (isSphere)
+            {
                 result = mesh.CreateSphere(0.5f, 24, 16);
+            }
             else if (isCylinder)
+            {
                 result = CreateCylinderMesh(mesh);
-            else if (isPlane)
+            }
+            else if (isGround)
+            {
+                // Reserved ground faces +Y. CalculateNormals derives normals from
+                // winding, so authored +Y normals alone cannot fix back-face culling.
+                const std::vector<Vertex> vertices = {
+                    {{-0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
+                    {{0.5f, 0.0f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+                    {{0.5f, 0.0f, 0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+                    {{-0.5f, 0.0f, 0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+                };
+                const std::vector<unsigned int> indices = {0, 2, 1, 0, 3, 2};
+                result = mesh.CreateFromVertices(vertices, indices);
+            }
+            else if (isSprite)
+            {
+                // Preserve CreatePlane's -Y winding: the sprite's +90-degree X
+                // rotation turns it toward -Z. A global winding change breaks it.
                 result = mesh.CreatePlane(1.0f, 1.0f);
+            }
 
             if (FAILED(result))
             {

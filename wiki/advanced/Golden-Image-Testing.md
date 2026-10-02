@@ -16,6 +16,24 @@ run in CI and through CTest `GoldenImage_ReviewGate`.
 
 > **Status (2026-09-26):** two software rows have entries. `vulkan-lavapipe` has `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). `opengl-llvmpipe` has eight scenes of the shipped GLSL (BasicVS+BasicPS lit sphere, the ACES/Reinhard/Uncharted2/FXAA `PostProcess` variants, horizontal and vertical `GaussianBlur`, and `BloomExtract`) rendered through `GLDevice` on Mesa llvmpipe by `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Both are software-row shader evidence, not engine-pass goldens or hardware certification. `d3d11-warp` has `PostPass_TonemapACES`, `PostPass_Bloom`, `PostPass_FXAA` and `PostPass_GTAO`, the production `PostProcessingPipeline` passes rendered one at a time on WARP by `Tests/TestRHI210D3D11PassGoldenReal.cpp` (RHI-210, CTest `D3D11PassGolden`), owner-approved in September 2026 with the D3D11 WARP checklist below. The canonical-content goldens and the `d3d11-hw` row have no entries yet.
 
+## Primary deferred WARP baselines (2026-10-02)
+
+`Primary_DeferredGeometry`, `Primary_DeferredLighting` and `Primary_ShadowDepth`
+have user-approved reference images and exact SHA256 records in the manifest.
+All five captures matched byte-for-byte; the approved threshold and differing
+pixel tolerance are both zero. The normal four-test Primary suite passed after
+registration. Disabling geometry, lighting or shadow depth produced actual pixel
+comparison failures against the corresponding reference, while unaffected scenes
+matched. Approval is recorded against review message
+`Sentinel_2378f2266ca48191873a1f638547f3b4` and the delivered Library image IDs.
+
+This is local WARP qualification of three intermediate outputs. ShadowDepth
+does not establish visible shadows in the final lit frame. The remaining seven
+canonical scenes and exact-commit hosted evidence are pending; CTest disabled
+states and release-readiness claims are unchanged. See
+[`RHI210-CAPTURE.md`](../../Tests/GoldenImages/RHI210-CAPTURE.md) for scope and
+follow-up checks.
+
 ## Overview
 
 | Class | Responsibility |
