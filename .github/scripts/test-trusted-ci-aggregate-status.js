@@ -402,6 +402,43 @@ assert.throws(() => contract.validateCreatedStatus(forgedCreator, {
     }));
     assert.deepStrictEqual(malformedCalls.map(request => request.state), ['success', 'pending']);
 
+    for (const state of ['success', 'failure']) {
+        const requests = [];
+        const limitError = Object.assign(new Error('status bucket exhausted'), {
+            status: 422,
+            response: { data: { errors:
+                'Validation failed: This SHA and context has reached the maximum number of statuses.' } }
+        });
+        await assert.rejects(() => contract.publishValidatedTerminalStatus({
+            createStatus: async request => { requests.push(request); throw limitError; },
+            request: { owner: 'Krilliac', repo: 'SparkEngine', sha: SHA },
+            state, context: CONTEXT, targetUrl: OWN_TARGET,
+            successDescription: 'passed', failureDescription: 'failed', pendingDescription: 'uncertain'
+        }), error => error === limitError);
+        assert.deepStrictEqual(requests.map(request => request.state), [state],
+            'A definitively exhausted bucket must fail without another POST');
+    }
+
+    for (const status of [422, 503]) {
+        const requests = [];
+        const originalError = Object.assign(new Error('other response'), {
+            status, response: { data: { errors: 'unrelated or uncertain error' } }
+        });
+        await assert.rejects(() => contract.publishValidatedTerminalStatus({
+            createStatus: async request => {
+                requests.push(request);
+                if (requests.length === 1) throw originalError;
+                return { data: { id: 900, state: 'pending', context: CONTEXT,
+                    target_url: OWN_TARGET, creator: creator() } };
+            },
+            request: { owner: 'Krilliac', repo: 'SparkEngine', sha: SHA },
+            state: 'success', context: CONTEXT, targetUrl: OWN_TARGET,
+            successDescription: 'passed', pendingDescription: 'uncertain'
+        }), error => error === originalError);
+        assert.deepStrictEqual(requests.map(request => request.state), ['success', 'pending'],
+            'Unrecognized errors must retain the existing fail-closed recovery');
+    }
+
     console.log('trusted aggregate commit-status response contracts passed');
 })().catch(error => {
     console.error(error);
