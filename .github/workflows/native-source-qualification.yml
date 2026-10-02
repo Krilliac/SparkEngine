@@ -1,0 +1,182 @@
+# Diagnostic exact-source evidence only; original required release gates remain intact.
+name: Scoped native source qualification
+on:
+  push:
+    branches: [codex/native-source-evidence-20261002]
+    paths: [.github/workflows/native-source-qualification.yml]
+permissions:
+  contents: read
+concurrency:
+  group: scoped-native-source-${{ github.sha }}
+  cancel-in-progress: false
+env:
+  ARTIFACT_RETENTION_DAYS: 1
+  ERROR_RETENTION_DAYS: 1
+  CCACHE_COMPRESS: 'true'
+  CCACHE_COMPRESSLEVEL: '6'
+  CCACHE_MAXSIZE: 1G
+  CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,file_stat_matches
+  CCACHE_BASEDIR: ${{ github.workspace }}
+jobs:
+  build-linux-clang:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - pr: 591
+          source_sha: 0d2d43060abb9d179c7543d21c9ed017dfc1ad38
+          config: Release
+        - pr: 592
+          source_sha: ee164606c00398788818b9ce11e328ff76eaa432
+          config: Release
+        - pr: 594
+          source_sha: b60af6271aa0f389c665b0ef1dda1551a9f3d3fa
+          config: Release
+        - pr: 595
+          source_sha: 226519ea19fd1c832fd6e620c917a483ea41df97
+          config: Release
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        submodules: recursive
+        ref: ${{ matrix.source_sha }}
+        persist-credentials: false
+    - name: Record and verify exact source provenance
+      env:
+        EXPECTED_SOURCE_SHA: ${{ matrix.source_sha }}
+      shell: bash
+      run: |-
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+        git diff --exit-code HEAD
+        python3 - <<'PY'
+        import json, os, pathlib, subprocess
+        source = subprocess.check_output(['git','rev-parse','HEAD'], text=True).strip()
+        tree = subprocess.check_output(['git','rev-parse','HEAD^{tree}'], text=True).strip()
+        record = {'sourceSha':source, 'sourceTree':tree, 'workflowSha':os.environ['GITHUB_SHA'], 'runId':os.environ['GITHUB_RUN_ID'], 'runAttempt':os.environ['GITHUB_RUN_ATTEMPT'], 'scope':'Clang Release build and existing full CTest selection; diagnostic only, not Required CI Gate'}
+        pathlib.Path(os.environ['RUNNER_TEMP'], 'native-source-provenance.json').write_text(json.dumps(record, indent=2)+'\n')
+        print(json.dumps(record, indent=2))
+        PY
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
+    - name: Setup ccache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: ~/.ccache
+        key: diagnostic-native-ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ matrix.source_sha }}
+        restore-keys: |
+          ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-linux-clang-${{ matrix.config }}-
+    - name: Restore build directory
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: build
+        key: diagnostic-native-build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ matrix.source_sha }}
+        restore-keys: |
+          build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          build-linux-clang-${{ matrix.config }}-
+    - name: Scrub restored test evidence
+      if: always()
+      shell: bash
+      run: |
+        rm -f \
+          build/SparkTests-junit.xml \
+          build/SparkTests.log \
+          build/SparkTests-output.log \
+          build/SparkTests-load-junit.xml \
+          build/SparkTests-load.log \
+          build/SparkTests-load-output.log \
+          build/ctest-junit.xml \
+          build/*-process-smoke.log \
+          build/*-process-smoke.json \
+          build/*-process-smoke.xml
+    - name: Configure CMake
+      run: |
+        set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
+        command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
+        cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
+          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DBUILD_TESTS=ON \
+          -DENABLE_LTO=OFF \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+          -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" 2>&1 | tee cmake-configure.log
+    - name: Build all targets
+      run: "set -o pipefail\n# Remove stale PCH files \xE2\u20AC\u201D cached build dirs may have PCH built against\n# older system headers (e.g. unistd_64.h mtime changes after apt-get).\nfind build -name '*.pch' -delete 2>/dev/null || true\n# Purge cached static archives unconditionally. apt-get install of\n# clang between cached runs can change the object-file ABI (LLVM\n# major version bump, libc++ ABI bump). The on-disk .a archive\n# looks valid to `ar t`, but ld rejects it with\n#   libJolt.a: error adding symbols: file format not recognized\n# Deleting the archive forces CMake to rebuild just the final lib\n# (all the underlying .o files still come straight out of ccache).\nfind build -name 'lib*.a' -delete 2>/dev/null || true\ncmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log\n"
+    - name: Verify source still matches before tests
+      env:
+        EXPECTED_SOURCE_SHA: ${{ matrix.source_sha }}
+      shell: bash
+      run: |
+        test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+        git diff --exit-code HEAD
+    - name: Print ccache stats
+      if: always()
+      run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
+    - name: Run Tests
+      run: |
+        set -o pipefail
+        ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
+          --output-on-failure --no-tests=error --parallel 2 \
+          --output-junit ctest-junit.xml 2>&1 | tee test-results.log
+    - name: Validate and summarize test statistics
+      if: always()
+      run: "test -s build/SparkTests-junit.xml\ntest -s build/SparkTests.log\ntest -s build/SparkTests-output.log\ntest -s build/ctest-junit.xml\ntest -s build/SparkTests-load-junit.xml\ntest -s build/test-registration-count.json\npython3 .github/scripts/summarize-test-results.py \\\n  build/SparkTests-junit.xml \\\n  build/SparkTests-load-junit.xml \\\n  --min-tests 6900 \\\n  --registration-count build/test-registration-count.json \\\n  --title \"SparkTests \xE2\u20AC\u201D Linux Clang ${{ matrix.config }}\" \\\n  --json test-stats-linux-clang-${{ matrix.config }}.json\n"
+    - name: Upload machine-readable test results
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: test-results-linux-clang-${{ matrix.config }}-pr${{ matrix.pr }}-${{ matrix.source_sha }}
+        path: |
+          build/SparkTests-junit.xml
+          build/SparkTests.log
+          build/SparkTests-output.log
+          build/SparkTests-load-junit.xml
+          build/SparkTests-load.log
+          build/SparkTests-load-output.log
+          build/ctest-junit.xml
+          build/*-process-smoke.log
+          build/*-process-smoke.json
+          build/*-process-smoke.xml
+          test-stats-linux-clang-${{ matrix.config }}.json
+          test-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+    - name: Extract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "build-linux-clang-${{ matrix.config }}" \
+          error-summary.json \
+          cmake-configure.log cmake-build.log test-results.log
+    - name: Upload error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: ci-errors-linux-clang-${{ matrix.config }}-pr${{ matrix.pr }}-${{ matrix.source_sha }}
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+    - name: Upload source provenance
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: source-provenance-pr${{ matrix.pr }}-${{ matrix.source_sha }}
+        path: ${{ runner.temp }}/native-source-provenance.json
+        if-no-files-found: error
+        retention-days: 1
+    name: Clang Release / PR${{ matrix.pr }} / ${{ matrix.source_sha }}
+    timeout-minutes: 120
