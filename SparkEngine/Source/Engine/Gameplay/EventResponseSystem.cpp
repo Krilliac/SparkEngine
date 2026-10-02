@@ -9,7 +9,7 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
-#include "Engine/Modding/HeldHandles.h"
+#include "Utils/ScopeGuard.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -34,19 +34,20 @@ namespace Spark::Gameplay
         std::optional<std::string> ReadRulesFile(const std::string& path, size_t maxBytes)
         {
 #ifdef _WIN32
-            Spark::HeldHandles::ScopedHandle handle(
+            const HANDLE handle =
                 ::CreateFileW(std::filesystem::path(path).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr));
-            if (!handle.IsValid())
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+            if (handle == nullptr || handle == INVALID_HANDLE_VALUE)
             {
                 return std::nullopt;
             }
+            const auto closeHandle = Spark::MakeScopeExit([handle]() noexcept { ::CloseHandle(handle); });
 
             BY_HANDLE_FILE_INFORMATION info{};
             LARGE_INTEGER size{};
-            if (::GetFileType(handle.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(handle.Get(), &info) ||
+            if (::GetFileType(handle) != FILE_TYPE_DISK || !::GetFileInformationByHandle(handle, &info) ||
                 (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0 ||
-                !::GetFileSizeEx(handle.Get(), &size) || size.QuadPart < 0 ||
+                !::GetFileSizeEx(handle, &size) || size.QuadPart < 0 ||
                 static_cast<unsigned long long>(size.QuadPart) > maxBytes)
             {
                 return std::nullopt;
@@ -58,7 +59,7 @@ namespace Spark::Gameplay
             {
                 const DWORD request = static_cast<DWORD>(std::min<size_t>(text.size() - offset, 64 * 1024));
                 DWORD read = 0;
-                if (!::ReadFile(handle.Get(), text.data() + offset, request, &read, nullptr) || read == 0)
+                if (!::ReadFile(handle, text.data() + offset, request, &read, nullptr) || read == 0)
                 {
                     return std::nullopt;
                 }
@@ -67,7 +68,7 @@ namespace Spark::Gameplay
 
             char extra = 0;
             DWORD extraRead = 0;
-            if (!::ReadFile(handle.Get(), &extra, 1, &extraRead, nullptr))
+            if (!::ReadFile(handle, &extra, 1, &extraRead, nullptr))
             {
                 if (::GetLastError() != ERROR_HANDLE_EOF)
                 {
@@ -80,7 +81,7 @@ namespace Spark::Gameplay
             }
 
             BY_HANDLE_FILE_INFORMATION after{};
-            if (!::GetFileInformationByHandle(handle.Get(), &after) ||
+            if (!::GetFileInformationByHandle(handle, &after) ||
                 after.dwVolumeSerialNumber != info.dwVolumeSerialNumber ||
                 after.nFileIndexHigh != info.nFileIndexHigh || after.nFileIndexLow != info.nFileIndexLow ||
                 after.nFileSizeHigh != info.nFileSizeHigh || after.nFileSizeLow != info.nFileSizeLow ||
@@ -90,16 +91,17 @@ namespace Spark::Gameplay
             }
             return text;
 #else
-            Spark::HeldHandles::ScopedFd handle(::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK));
-            if (handle.Get() < 0)
+            const int handle = ::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+            if (handle < 0)
             {
                 return std::nullopt;
             }
+            const auto closeHandle = Spark::MakeScopeExit([handle]() noexcept { ::close(handle); });
 
             struct stat info
             {
             };
-            if (::fstat(handle.Get(), &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
+            if (::fstat(handle, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size < 0 ||
                 static_cast<unsigned long long>(info.st_size) > maxBytes)
             {
                 return std::nullopt;
@@ -109,7 +111,7 @@ namespace Spark::Gameplay
             size_t offset = 0;
             while (offset < text.size())
             {
-                const ssize_t read = ::read(handle.Get(), text.data() + offset, text.size() - offset);
+                const ssize_t read = ::read(handle, text.data() + offset, text.size() - offset);
                 if (read < 0 && errno == EINTR)
                 {
                     continue;
@@ -124,7 +126,7 @@ namespace Spark::Gameplay
             char extra = 0;
             for (;;)
             {
-                const ssize_t read = ::read(handle.Get(), &extra, 1);
+                const ssize_t read = ::read(handle, &extra, 1);
                 if (read < 0 && errno == EINTR)
                 {
                     continue;
@@ -143,7 +145,7 @@ namespace Spark::Gameplay
             struct stat after
             {
             };
-            if (::fstat(handle.Get(), &after) != 0 || after.st_dev != info.st_dev || after.st_ino != info.st_ino ||
+            if (::fstat(handle, &after) != 0 || after.st_dev != info.st_dev || after.st_ino != info.st_ino ||
                 after.st_size != info.st_size ||
 #if defined(__APPLE__)
                 after.st_mtimespec.tv_sec != info.st_mtimespec.tv_sec ||

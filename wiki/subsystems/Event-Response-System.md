@@ -11,6 +11,14 @@ The Event Response System lets designers and modders assemble gameplay rules out
 
 ---
 
+## Rules-file resource ownership
+
+The gameplay rules reader uses `Utils/ScopeGuard.h` to close its native Windows
+handle or POSIX descriptor on every exit path. Gameplay does not depend on
+Modding's handle wrapper. Existing regular-file checks, size bounds, read errors
+and file-identity checks are retained. Production-class coverage is in
+`Tests/TestEventResponseSystemPhaseEE.cpp`; its FIFO case is Linux-only.
+
 ## Rule model
 
 Every rule has the same three pieces:
