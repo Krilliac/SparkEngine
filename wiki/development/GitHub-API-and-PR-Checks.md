@@ -21,6 +21,19 @@ gh pr checks --json name,state,conclusion   # machine-readable
 
 Exit code 1 from `gh pr checks` while checks are still running is **not** a failure signal — ignore it and re-poll. See the `--watch` caveat in [Build Optimizations](Build-Optimizations.md).
 
+### Exhausted commit-status contexts
+
+GitHub limits a SHA/context pair to 1,000 commit statuses. Its explicit HTTP 422
+status-cap rejection is permanent for that pair; another pending write cannot
+restore capacity. The trusted aggregate terminal publisher preserves the original
+error without a recovery POST for that specific response. Other uncertain errors
+retain the existing fail-closed pending recovery, authenticated evidence checks
+and pending ownership rules.
+
+This guard does not repair an initial pending-write failure or implement semantic
+deduplication. Do not retry the exhausted pair or rename its required context to
+bypass the gate. See [GitHub's commit-status limit](https://docs.github.com/rest/commits/statuses#create-a-commit-status).
+
 ## 2 — Identify the failing job
 
 ```bash
@@ -93,3 +106,20 @@ gh pr checks --fail-fast
 - [CI Reproducible Builds](CI-Reproducible-Builds.md) — job ↔ command table
 - [Workflow Patterns](Workflow-Patterns.md) — post-push verification flow
 - [Project conventions (CLAUDE.md)](../../CLAUDE.md) — "Post-PR checks" section
+
+## Combined source diagnostic qualification
+
+The isolated `codex/combined-qualification-20261002` push workflow runs one
+Clang Debug row, one Clang Release row, the full existing TSan job, coverage,
+and one VS2026 Release row against its exact source commit. Existing test
+selections, count floors, sanitizer evidence and coverage thresholds remain.
+Each job is bounded to 120 minutes on an existing standard hosted runner;
+permissions remain contents-read. Product artifact packaging is omitted.
+It does not dispatch Wine or SDE rows or replace Required CI Gate.
+
+The Windows row additionally checks the owner's three approved Primary WARP
+images at their exact hashes and zero tolerance, then requires each disabled
+pass to cause a real pixel mismatch while unaffected scenes still match.
+These diagnostics preserve disabled CTest flags and cannot promote release
+acceptance. The generated SDK consumer test also loads its exact module through
+the installed host; compilation or sidecar validation alone is insufficient.

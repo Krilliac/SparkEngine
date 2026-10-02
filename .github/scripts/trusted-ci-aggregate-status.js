@@ -274,6 +274,13 @@ async function publishValidatedTerminalStatus({
         });
         return validateCreatedStatus(response?.data, { state, context, targetUrl });
     } catch (error) {
+        // GitHub definitively rejected this write: another status in the same
+        // exhausted SHA/context bucket cannot restore pending. Preserve the
+        // error and the pre-publication pending lease instead of retrying.
+        if (error?.status === 422 && error?.response?.data?.errors ===
+            'Validation failed: This SHA and context has reached the maximum number of statuses.') {
+            throw error;
+        }
         try {
             const recovery = await createStatus({
                 ...request,

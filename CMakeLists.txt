@@ -1492,6 +1492,11 @@ endif()
 add_library(SparkEngineLib STATIC ${SPARK_ENGINE_LIB_SOURCES})
 set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
 
+# Export the producer standard-library ABI to ordinary installed consumers.
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/SparkCxxRuntime.cmake")
+spark_detect_cxx_runtime(SPARK_CXX_RUNTIME)
+spark_apply_cxx_runtime(SparkEngineLib PUBLIC "${SPARK_CXX_RUNTIME}")
+
 # 9a.5) SparkEngineInterface — header-only view of SparkEngineLib
 #
 # On Linux, game module .so files must NOT link SparkEngineLib's object
@@ -1517,6 +1522,7 @@ set_target_properties(SparkEngineLib PROPERTIES OUTPUT_NAME "SparkEngineLib")
 # section 11.6 / 12 / 13).
 if(NOT WIN32)
     add_library(SparkEngineInterface INTERFACE)
+    spark_apply_cxx_runtime(SparkEngineInterface INTERFACE "${SPARK_CXX_RUNTIME}")
     target_include_directories(SparkEngineInterface INTERFACE
         $<BUILD_INTERFACE:$<TARGET_PROPERTY:SparkEngineLib,INTERFACE_INCLUDE_DIRECTORIES>>
         $<INSTALL_INTERFACE:include>

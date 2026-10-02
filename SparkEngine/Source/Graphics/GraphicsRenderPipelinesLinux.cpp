@@ -16,6 +16,7 @@
 
 #include "GraphicsEngine.h"
 #include "GraphicsEngineRHI.h"
+#include "D3D11FrustumCulling.h"
 #include "PostProcessingPipeline.h"
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
@@ -165,57 +166,9 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     }
     else
     {
-        // Frustum culling via view-projection matrix
-        XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projMatrix);
-        XMFLOAT4X4 vp;
-        XMStoreFloat4x4(&vp, viewProj);
-
-        // Extract 6 frustum planes from VP matrix (Griggs-Hartmann method)
-        float planes[6][4];
-        // Left:   row3 + row0
-        planes[0][0] = vp.m[0][3] + vp.m[0][0];
-        planes[0][1] = vp.m[1][3] + vp.m[1][0];
-        planes[0][2] = vp.m[2][3] + vp.m[2][0];
-        planes[0][3] = vp.m[3][3] + vp.m[3][0];
-        // Right:  row3 - row0
-        planes[1][0] = vp.m[0][3] - vp.m[0][0];
-        planes[1][1] = vp.m[1][3] - vp.m[1][0];
-        planes[1][2] = vp.m[2][3] - vp.m[2][0];
-        planes[1][3] = vp.m[3][3] - vp.m[3][0];
-        // Bottom: row3 + row1
-        planes[2][0] = vp.m[0][3] + vp.m[0][1];
-        planes[2][1] = vp.m[1][3] + vp.m[1][1];
-        planes[2][2] = vp.m[2][3] + vp.m[2][1];
-        planes[2][3] = vp.m[3][3] + vp.m[3][1];
-        // Top:    row3 - row1
-        planes[3][0] = vp.m[0][3] - vp.m[0][1];
-        planes[3][1] = vp.m[1][3] - vp.m[1][1];
-        planes[3][2] = vp.m[2][3] - vp.m[2][1];
-        planes[3][3] = vp.m[3][3] - vp.m[3][1];
-        // Near:   row2
-        planes[4][0] = vp.m[0][2];
-        planes[4][1] = vp.m[1][2];
-        planes[4][2] = vp.m[2][2];
-        planes[4][3] = vp.m[3][2];
-        // Far:    row3 - row2
-        planes[5][0] = vp.m[0][3] - vp.m[0][2];
-        planes[5][1] = vp.m[1][3] - vp.m[1][2];
-        planes[5][2] = vp.m[2][3] - vp.m[2][2];
-        planes[5][3] = vp.m[3][3] - vp.m[3][2];
-
-        // Normalize planes
-        for (auto& p : planes)
-        {
-            float len = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-            if (len > 0.0f)
-            {
-                float inv = 1.0f / len;
-                p[0] *= inv;
-                p[1] *= inv;
-                p[2] *= inv;
-                p[3] *= inv;
-            }
-        }
+        // DirectXMath uses row vectors, so extraction uses view-projection columns.
+        const XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projMatrix);
+        const auto planes = Spark::Graphics::D3D11RenderMath::ExtractFrustumPlanes(viewProj);
 
         for (auto* obj : objects)
         {
@@ -225,16 +178,7 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
             // Sphere-based frustum test
             XMFLOAT3 pos = obj->GetPosition();
             constexpr float boundingRadius = 5.0f;
-            bool visible = true;
-            for (int i = 0; i < 6; ++i)
-            {
-                float dist = planes[i][0] * pos.x + planes[i][1] * pos.y + planes[i][2] * pos.z + planes[i][3];
-                if (dist < -boundingRadius)
-                {
-                    visible = false;
-                    break;
-                }
-            }
+            const bool visible = Spark::Graphics::D3D11RenderMath::SphereIntersects(planes, pos, boundingRadius);
             if (visible)
                 visibleObjects.push_back(obj);
         }

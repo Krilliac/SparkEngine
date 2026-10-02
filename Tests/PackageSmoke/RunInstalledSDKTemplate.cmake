@@ -560,5 +560,55 @@ if(NOT _boundary_error STREQUAL "")
     message(FATAL_ERROR "The SDK-only ${_module_name} build is not source-tree free: ${_boundary_error}")
 endif()
 
+# The SDK consumer must cross the real host/module ABI, not merely link.
+# Reuse the production headless lifecycle parser: one initialized module,
+# successful update/fixed/unload, no render callback, no guarded faults.
+set(_engine "${_prefix}/bin/SparkEngine")
+if(CMAKE_HOST_WIN32)
+    string(APPEND _engine ".exe")
+endif()
+if(NOT EXISTS "${_engine}")
+    message(FATAL_ERROR "Installed SDK runtime host is missing: ${_engine}")
+endif()
+set(_user_root "${SPARK_TEST_ROOT}/runtime-user")
+set(_runtime_env "SPARK_RHI_BACKEND=null")
+if(CMAKE_HOST_WIN32)
+    list(APPEND _runtime_env "LOCALAPPDATA=${_user_root}/local" "APPDATA=${_user_root}/roaming")
+else()
+    foreach(_kind IN ITEMS DATA CONFIG CACHE STATE)
+        string(TOLOWER "${_kind}" _directory)
+        list(APPEND _runtime_env "XDG_${_kind}_HOME=${_user_root}/${_directory}")
+    endforeach()
+endif()
+foreach(_directory IN ITEMS local roaming data config cache state)
+    file(MAKE_DIRECTORY "${_user_root}/${_directory}")
+endforeach()
+set(SPARK_HEADLESS_NULLRHI_PARSER_ONLY ON)
+include("${SPARK_SOURCE_ROOT}/cmake/RunSparkHeadlessNullRHILifecycle.cmake")
+unset(SPARK_HEADLESS_NULLRHI_PARSER_ONLY)
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env --unset=SPARK_ENGINE_DIR ${_runtime_env}
+        "${_engine}" -headless -game "${_images}" -require-game
+        -test-frames 30 -threads 2 -no-subprocess
+    WORKING_DIRECTORY "${_source}"
+    RESULT_VARIABLE _runtime_result
+    OUTPUT_VARIABLE _runtime_stdout
+    ERROR_VARIABLE _runtime_stderr
+    TIMEOUT 120
+    ENCODING UTF-8)
+file(WRITE "${SPARK_TEST_ROOT}/runtime-stdout.log" "${_runtime_stdout}")
+file(WRITE "${SPARK_TEST_ROOT}/runtime-stderr.log" "${_runtime_stderr}")
+_spark_validate_headless_nullrhi_result("${_runtime_result}" "${_runtime_stdout}" "${_runtime_stderr}"
+    _runtime_ok _runtime_reason)
+if(NOT _runtime_ok)
+    message(FATAL_ERROR "SDK template runtime lifecycle failed: ${_runtime_reason}\n"
+        "${_runtime_stdout}\n${_runtime_stderr}")
+endif()
+file(SHA256 "${_images}" _runtime_image_sha256)
+if(NOT _runtime_image_sha256 STREQUAL _image_sha256)
+    message(FATAL_ERROR "SDK module image changed during runtime qualification")
+endif()
+message(STATUS "SPARK_SDK_TEMPLATE_RUNTIME module=${_module_name} sha256=${_image_sha256} lifecycle=passed")
+
 message(STATUS
     "SPARK_SDK_TEMPLATE module=${_module_name} sdk_version=${_sdk_version} scanned=${_scanned} violations=0")

@@ -1,9 +1,17 @@
 # RHI-210 capture handoff
 
-The new WARP goldens are capture plans, not reviewed baselines. Their manifest
-status is `awaiting-capture`; their threshold policy is **set from measured
-variance**. No image, threshold, reviewer or baseline hash is supplied by this
-change. Existing approved post-processing entries remain unchanged.
+The three Primary WARP scenes are reviewed baselines, explicitly approved by
+the user on 2026-10-02 in response to the exact hashed packet
+`Sentinel_2378f2266ca48191873a1f638547f3b4`. Their manifest records zero RGB-distance
+threshold, zero-percent tolerance, exact PNG hashes and Library image IDs.
+Five normal captures were byte-identical. After registration the four-test
+Primary suite passed, and each disabled pass produced an actual pixel mismatch
+against its approved baseline. These are local WARP results, not release or
+exact-commit hosted qualification.
+
+The other seven scenes remain capture plans with `awaiting-capture` status and
+thresholds to be set from measured variance. Existing post-processing entries
+remain unchanged.
 
 | Scene | Production path | Disabled-pass token |
 | --- | --- | --- |
@@ -23,18 +31,19 @@ loop, weapon, HUD or time-dependent entities. Shadow capture checks the depth
 pass itself, not sampled shadows in the final lit framebuffer. All new lanes
 require the debug layer, including zero warning/error/corruption/discard counts.
 
-## Known production blockers
+## Production implementation and remaining qualification
 
-At the task base, `FillGBuffer` delegates to the basic single-output object
-shader. The other G-buffer attachments are not populated by that shader.
-`LightingPass` binds and updates lights and shadows but has no G-buffer lighting
-resolve. `RenderDeferred` then redraws the objects. The new intermediate tests
-deliberately reject missing attachment writes and a blank lighting result;
-capturing the later forward redraw would conceal those defects.
+The production deferred geometry pass now writes albedo, encoded normals and
+material attachments, and the single-sample deferred resolve consumes those
+attachments plus depth. Local WARP regressions passed for light, sky and material
+changes/reversion, along with zero debug-layer diagnostics. The resolve remains
+limited: no shadow visibility sampling, area lights, IBL or motion history;
+point/spot behavior, fallback/recovery and complete scene lifecycle still need
+their dedicated qualification. ShadowDepth validates caster depth output only.
 
-These guards must be resolved in production before a full review packet can be
-accepted. Do not lower the content checks or substitute a test-only resolve.
-RHI-210[0] remains unmet, awaiting owner review of 10 goldens.
+RHI-210[0] remains incomplete: seven planned scenes and exact-commit hosted
+evidence are still pending. The four CTest suite disabled flags remain unchanged
+until their integration requirements are satisfied.
 
 Integration on Windows (2026-10-01) found further production defects behind the
 CPU-reference checks: the basic shader receives the plain inverse instead of the
