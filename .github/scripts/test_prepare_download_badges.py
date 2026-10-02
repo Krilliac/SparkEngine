@@ -2655,7 +2655,13 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                 f"SparkEngine-7.8.9-Windows-AMD64-{config}-Runtime.exe"
             )
         aliases["SparkInstaller-Windows-x64.exe"] = "SparkInstaller-Windows-x64.exe"
-        for missing in (None, *aliases.values()):
+        sbom = "supply-chain/SparkEngine-Lock-SBOM.spdx.json"
+        evidence = {
+            sbom: '{"spdxVersion":"SPDX-2.3"}\n',
+            "supply-chain/reconciliation/reconcile-windows.json": '{"fixture":"reconciliation"}\n',
+            "build-provenance/build-provenance-windows.json": '{"fixture":"toolchain"}\n',
+        }
+        for missing in (None, *aliases.values(), sbom):
             with self.subTest(missing=missing), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
                 packages = root / "release-assets"
@@ -2664,6 +2670,11 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                 for source in aliases.values():
                     if source != missing:
                         (packages / source).write_text(source, encoding="utf-8")
+                for relative, contents in evidence.items():
+                    if relative != missing:
+                        destination = root / relative
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        destination.write_text(contents, encoding="utf-8")
                 result = subprocess.run(
                     [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "IS_VERSIONED": "false", "RELEASE_VERSION": "7.8.9",
@@ -2671,14 +2682,36 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                 )
                 if missing:
                     self.assertNotEqual(result.returncode, 0, "Incomplete nightly must not publish")
-                    self.assertIn("Missing README nightly asset", result.stderr)
+                    if missing != sbom:
+                        self.assertIn("Missing README nightly asset", result.stderr)
                     self.assertFalse((root / "expected-release-assets.txt").exists())
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
                     assets = set((root / "expected-release-assets.txt").read_text().splitlines())
-                    self.assertEqual(assets, set(aliases) | set(aliases.values()) | {"SHA256SUMS"})
+                    evidence_names = {Path(relative).name for relative in evidence}
+                    self.assertEqual(
+                        assets, set(aliases) | set(aliases.values()) | evidence_names | {"SHA256SUMS"}
+                    )
                     for alias, source in aliases.items():
                         self.assertEqual((root / alias).read_text(), source)
+                    for relative, contents in evidence.items():
+                        self.assertEqual((root / Path(relative).name).read_text(), contents)
+                    for manifest, expected in (
+                        ("SHA256SUMS", assets - {"SHA256SUMS"}),
+                        ("expected-release-digests.txt", assets),
+                    ):
+                        digests = {}
+                        for line in (root / manifest).read_text().splitlines():
+                            # GNU sha256sum uses a space for text mode and '*' for
+                            # binary mode, including Git Bash's Windows default.
+                            match = re.fullmatch(r"([0-9a-f]{64}) [ *](.+)", line)
+                            self.assertIsNotNone(match, line)
+                            digest, name = match.groups()
+                            self.assertNotIn(name, digests)
+                            digests[name] = digest
+                        self.assertEqual(set(digests), expected)
+                        for name, digest in digests.items():
+                            self.assertEqual(digest, hashlib.sha256((root / name).read_bytes()).hexdigest())
 
     def test_rolling_release_uses_fail_closed_production_order(self):
         text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
