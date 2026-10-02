@@ -4613,6 +4613,13 @@ endif()
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(
+    NAME SDKCxxRuntime_ExportContract
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_sdk_cxx_runtime.py)
+set_tests_properties(SDKCxxRuntime_ExportContract PROPERTIES
+    ENVIRONMENT "SPARK_CMAKE_COMMAND=${CMAKE_COMMAND}"
+    LABELS "sdk;unit;python"
+    TIMEOUT 300)
+add_test(
     NAME FPSSceneMaterialContract
     COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_SOURCE_DIR}/Tests/Tools/test_fps_scene_material_contract.py)
