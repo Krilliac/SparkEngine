@@ -36,7 +36,7 @@ jobs:
           test "$VERSION_ID" = 24.04
           cp /etc/os-release measurement-evidence/os-release.txt
           sudo apt-get update
-          sudo apt-get install -y clang-18 clang-tidy-18 ccache libgl-dev libsdl2-dev libfreetype-dev libc++-18-dev libc++abi-18-dev python3-venv
+          sudo apt-get install -y clang-18 clang-tidy-18 ccache libgl-dev libsdl2-dev libfreetype-dev libc++-18-dev libc++abi-18-dev python3-venv python3-yaml
           python3 -m venv "$RUNNER_TEMP/clang-format-18.1.3"
           "$RUNNER_TEMP/clang-format-18.1.3/bin/python" -m pip install --no-deps --no-index \
             'https://files.pythonhosted.org/packages/d5/9c/4f3806d20397790b3cd80aef89d295bf399581804f5c5758b6207e54e902/clang_format-18.1.3-py2.py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=059f2c2e7166f97cf06f78d9bd31d83a9c0416527845cb397296daa43bd2c6e2'
@@ -45,8 +45,10 @@ jobs:
           ln -s /usr/bin/clang++-18 "$RUNNER_TEMP/tidy-toolchain/clang++"
           ln -s /usr/bin/clang-tidy-18 "$RUNNER_TEMP/tidy-toolchain/clang-tidy"
           ln -s "$RUNNER_TEMP/clang-format-18.1.3/bin/clang-format" "$RUNNER_TEMP/tidy-toolchain/clang-format"
+          ln -s /usr/bin/python3 "$RUNNER_TEMP/tidy-toolchain/python3"
           export PATH="$RUNNER_TEMP/tidy-toolchain:$PATH"
           echo "$RUNNER_TEMP/tidy-toolchain" >> "$GITHUB_PATH"
+          python3 -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)" > measurement-evidence/python-version.txt
           clang --version > measurement-evidence/clang-version.txt
           clang-tidy --version > measurement-evidence/clang-tidy-version.txt
           clang-format --version > measurement-evidence/clang-format-version.txt
@@ -189,7 +191,7 @@ jobs:
           print(f"Changed C++ files: {len(cpp)}")
           if cpp: subprocess.run(["clang-format", "--dry-run", "--Werror", *cpp], check=True)
           PY
-          git diff --check
+          git diff --check "$MEASUREMENT_BASE" HEAD
 
       - name: Retain exact-head raw evidence
         if: always()
