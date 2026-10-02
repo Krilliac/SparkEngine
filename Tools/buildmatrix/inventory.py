@@ -1085,10 +1085,10 @@ _REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS = {
             "target": "check-fuzz-policy",
             "kind": "utility",
             "file": "cmake/SparkFuzzPolicy.cmake",
-            "line": 19,
+            "line": 30,
             "conditionFrames": [
                 {
-                    "id": "cmake/SparkFuzzPolicy.cmake:18",
+                    "id": "cmake/SparkFuzzPolicy.cmake:29",
                     "branch": 0,
                     "branches": ["NOT TARGET check-fuzz-policy"],
                 }

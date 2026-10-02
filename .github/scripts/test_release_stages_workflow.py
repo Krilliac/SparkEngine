@@ -83,7 +83,8 @@ class WorkflowTests(unittest.TestCase):
         recovery = next(step for step in steps if step["name"] == "Recover incomplete public release")
         self.assertEqual(recovery["if"], "failure() && needs.prepare.outputs.is_versioned == 'false'")
         attestation = next(step for step in steps if step["name"] == "Verify published release attestation as a consumer")
-        self.assertEqual(attestation["if"], "needs.prepare.outputs.is_versioned == 'true'")
+        # Both stable and uniquely tagged nightly releases require consumer verification.
+        self.assertNotIn("if", attestation)
 
     def test_profile_required_gates_block_the_publisher_without_authority(self):
         gates = self.workflow["jobs"]["profile-required-gates"]

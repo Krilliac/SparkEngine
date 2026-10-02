@@ -1466,17 +1466,17 @@
       "description": "Enable optional FreeType rasterizer",
       "default": "ON",
       "file": "cmake/BuildImGui.cmake",
-      "line": 24,
+      "line": 40,
       "conditionFrames": [
         {
-          "id": "cmake/BuildImGui.cmake:17",
+          "id": "cmake/BuildImGui.cmake:33",
           "branch": 0,
           "branches": [
-            "IMGUI_INCLUDE_DIR"
+            "IMGUI_INCLUDE_DIR AND _IMGUI_BACKEND_AVAILABLE"
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:18",
+          "id": "cmake/BuildImGui.cmake:34",
           "branch": 0,
           "branches": [
             "NOT TARGET imgui"
@@ -3335,7 +3335,7 @@
       "target": "SparkFuzzLauncherModuleManifest",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3732,
+      "line": 3735,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3345,7 +3345,7 @@
       "target": "SparkFuzzLauncherTemplate",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3728,
+      "line": 3730,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4424,10 +4424,10 @@
       "target": "check-fuzz-policy",
       "kind": "utility",
       "file": "cmake/SparkFuzzPolicy.cmake",
-      "line": 19,
+      "line": 30,
       "conditionFrames": [
         {
-          "id": "cmake/SparkFuzzPolicy.cmake:18",
+          "id": "cmake/SparkFuzzPolicy.cmake:29",
           "branch": 0,
           "branches": [
             "NOT TARGET check-fuzz-policy"
@@ -4469,24 +4469,24 @@
       "target": "imgui",
       "kind": "static_library",
       "file": "cmake/BuildImGui.cmake",
-      "line": 50,
+      "line": 66,
       "conditionFrames": [
         {
-          "id": "cmake/BuildImGui.cmake:17",
+          "id": "cmake/BuildImGui.cmake:33",
           "branch": 0,
           "branches": [
-            "IMGUI_INCLUDE_DIR"
+            "IMGUI_INCLUDE_DIR AND _IMGUI_BACKEND_AVAILABLE"
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:18",
+          "id": "cmake/BuildImGui.cmake:34",
           "branch": 0,
           "branches": [
             "NOT TARGET imgui"
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:49",
+          "id": "cmake/BuildImGui.cmake:65",
           "branch": 0,
           "branches": [
             "WIN32"
@@ -4501,24 +4501,24 @@
       "target": "imgui",
       "kind": "static_library",
       "file": "cmake/BuildImGui.cmake",
-      "line": 70,
+      "line": 86,
       "conditionFrames": [
         {
-          "id": "cmake/BuildImGui.cmake:17",
+          "id": "cmake/BuildImGui.cmake:33",
           "branch": 0,
           "branches": [
-            "IMGUI_INCLUDE_DIR"
+            "IMGUI_INCLUDE_DIR AND _IMGUI_BACKEND_AVAILABLE"
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:18",
+          "id": "cmake/BuildImGui.cmake:34",
           "branch": 0,
           "branches": [
             "NOT TARGET imgui"
           ]
         },
         {
-          "id": "cmake/BuildImGui.cmake:49",
+          "id": "cmake/BuildImGui.cmake:65",
           "branch": 1,
           "branches": [
             "WIN32",
@@ -6326,7 +6326,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3732,
+          "line": 3735,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6344,7 +6344,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3728,
+          "line": 3730,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -8052,7 +8052,7 @@
       "declarations": [
         {
           "file": "cmake/SparkFuzzPolicy.cmake",
-          "line": 19,
+          "line": 30,
           "kind": "utility",
           "origin": "function-template",
           "definitionScope": [
@@ -8090,7 +8090,7 @@
       "declarations": [
         {
           "file": "cmake/BuildImGui.cmake",
-          "line": 50,
+          "line": 66,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8098,7 +8098,7 @@
         },
         {
           "file": "cmake/BuildImGui.cmake",
-          "line": 70,
+          "line": 86,
           "kind": "static_library",
           "origin": "declaration",
           "definitionScope": [],
