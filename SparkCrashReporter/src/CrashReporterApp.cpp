@@ -1626,7 +1626,7 @@ namespace SparkCrashReporter
             return 2;
         }
 
-        constexpr size_t kMaxCrashLogBytes = static_cast<size_t>(8 * 1024 * 1024);
+        constexpr auto kMaxCrashLogBytes = static_cast<size_t>(8 * 1024 * 1024);
         std::string crashLog;
         if (!ReadArtifact(root, manifest.logFile, manifest.logIdentity, kMaxCrashLogBytes, crashLog))
         {

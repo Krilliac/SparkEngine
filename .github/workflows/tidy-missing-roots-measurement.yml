@@ -219,6 +219,12 @@ jobs:
           ctest --test-dir build --output-on-failure --no-tests=error --parallel 1 -R "$focused" \
             2>&1 | tee measurement-evidence/product-tests.log
 
+      - name: Verify exact documentation currentness
+        if: always()
+        run: |
+          set -euo pipefail
+          bash docs/update-all-docs.sh check 2>&1 | tee measurement-evidence/docs-currentness.log
+
       - name: Regenerate documentation required for source edits
         if: always()
         run: |
