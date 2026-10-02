@@ -97,7 +97,8 @@ def _run_one(exe: Path, output: Path, file_name: str, count: int, *, disable: st
     env = _environment(output, disable=disable, file_name=file_name, count=count)
     try:
         completed = subprocess.run(
-            [str(exe), "--warn-is-error", "--empty-is-error", "--junit-xml", str(junit_path)],
+            [str(exe), "--warn-is-error", "--empty-is-error", "--junit-xml", str(junit_path),
+             "--output-file", str(junit_path.with_suffix(".runner.log"))],
             cwd=str(exe.parent), env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=TIMEOUT_SECONDS, check=False,
         )

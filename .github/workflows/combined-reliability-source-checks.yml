@@ -1,7 +1,7 @@
 name: Combined reliability source checks
 on:
   push:
-    branches: [codex/combined-reliability-followup-20261002]
+    branches: [codex/combined-reliability-followup-20261002, codex/primary-verifier-followup-20261002]
 permissions:
   contents: read
 concurrency:
@@ -26,6 +26,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
           git show -s --format='%H %T' HEAD
           python3 -c 'import sys, yaml; print(sys.version, "PyYAML", yaml.__version__)'
+      - name: Verify Primary capture and mutation contracts
+        run: |
+          set -euo pipefail
+          python3 -B Tests/Tools/test_rhi210_capture.py
+          python3 -B Tests/Tools/test_verify_approved_primary.py
       - name: Run cleanup and diagnostic contracts
         run: |
           set -euo pipefail

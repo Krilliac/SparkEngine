@@ -135,3 +135,16 @@ publication or native matrix. These checks do not transfer the earlier native
 candidate results to a new source SHA. Its draft targets the combined candidate
 branch, so the existing Working/claude-targeted native and analysis workflows are
 not duplicated by this source-only qualification.
+
+## Primary verifier follow-up
+
+The primary-verifier follow-up uses the existing 20-minute source-only workflow
+and explicitly runs both `test_rhi210_capture.py` and
+`test_verify_approved_primary.py`. Capture requests a separate runner output log
+so the existing test framework retains per-case JUnit assertion details.
+Geometry mutation must change geometry and downstream lighting; lighting and
+shadow mutations affect only their respective scenes. Strict assertion evidence,
+approved image hashes, zero tolerance and unchanged scenes remain required.
+Source tests do not qualify native rendering. All four normal/control invocations
+still need exact-binary native evidence; no earlier result is retroactively accepted.
+This workflow installs no dependencies and starts no native build.
