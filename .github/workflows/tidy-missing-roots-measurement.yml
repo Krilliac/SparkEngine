@@ -185,6 +185,9 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          # The real site-data job generates this ignored API fixture before
+          # its health tests; a fresh checkout does not contain .symbols.tsv.
+          bash docs/generate-api-docs.sh generate 2>&1 | tee measurement-evidence/docs-api-fixture.log
           python3 Tests/Tools/test_docs_health.py 2>&1 | tee measurement-evidence/docs-contracts.log
 
       - name: Supply-chain repository contract
