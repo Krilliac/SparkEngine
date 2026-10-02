@@ -101,7 +101,7 @@
 | `AffixData` | struct | GameModules | [ARPGLootSystem.h:L25](../../GameModules/SparkGameARPG/Source/Loot/ARPGLootSystem.h#L25) | A single stat modifier on an item |
 | `after` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L499](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L499) |  |
 | `after` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1234](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1234) |  |
-| `after` | struct | SparkEngine | [EventResponseSystem.cpp:L143](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L143) |  |
+| `after` | struct | SparkEngine | [EventResponseSystem.cpp:L145](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L145) |  |
 | `after` | struct | Tests | [TestCrashHandlerGatingReal.cpp:L472](../../Tests/TestCrashHandlerGatingReal.cpp#L472) |  |
 | `Agent` | struct | Tests | [TestCollisionAvoidance.cpp:L27](../../Tests/TestCollisionAvoidance.cpp#L27) |  |
 | `AgentBudgetEntry` | struct | SparkEngine | [AIBudgetTypes.h:L37](../../SparkEngine/Source/Engine/AI/AIBudgetTypes.h#L37) | Tracking data for a single AI agent within the budget system. |
@@ -1137,7 +1137,7 @@
 | `DepthOfFieldSettings` | struct | SparkEngine | [PostProcessingTypes.h:L99](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L99) | Depth of Field settings |
 | `DepthOfFieldSettings` | struct | Tests | [TestPostProcessingPipeline.cpp:L47](../../Tests/TestPostProcessingPipeline.cpp#L47) |  |
 | `DepthScope` | class | SparkEditor | [SceneJSONReader.cpp:L258](../../SparkEditor/Source/SceneSystem/SceneJSONReader.cpp#L258) |  |
-| `DepthScope` | struct | SparkEngine | [EventResponseSystem.cpp:L607](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L607) |  |
+| `DepthScope` | struct | SparkEngine | [EventResponseSystem.cpp:L609](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L609) |  |
 | `Derived` | struct | Tests | [TestSafetyCoreUtils.cpp:L144](../../Tests/TestSafetyCoreUtils.cpp#L144) |  |
 | `Descriptor` | struct | SparkEngine | [D3D12Types.h:L229](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L229) |  |
 | `DescriptorAllocation` | struct | SparkEngine | [D3D12Types.h:L108](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L108) | Manages a contiguous ID3D12DescriptorHeap with free-list allocation. |
@@ -2083,7 +2083,7 @@
 | `info` | struct | SparkBuild | [PathSecurity.cpp:L308](../../SparkBuild/src/PathSecurity.cpp#L308) |  |
 | `info` | struct | SparkCrashReporter | [CrashReporterApp.cpp:L627](../../SparkCrashReporter/src/CrashReporterApp.cpp#L627) |  |
 | `info` | struct | SparkEditor | [EditorFileRead.h:L101](../../SparkEditor/Source/Utils/EditorFileRead.h#L101) |  |
-| `info` | struct | SparkEngine | [EventResponseSystem.cpp:L99](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L99) |  |
+| `info` | struct | SparkEngine | [EventResponseSystem.cpp:L101](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L101) |  |
 | `info` | struct | SparkEngine | [ModSystem.cpp:L218](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L218) |  |
 | `info` | struct | SparkEngine | [VirtualFileSystem.cpp:L307](../../SparkEngine/Source/Engine/Modding/VirtualFileSystem.cpp#L307) |  |
 | `info` | struct | SparkEngine | [CrashArtifactDirectory.h:L293](../../SparkEngine/Source/Utils/CrashArtifactDirectory.h#L293) |  |
