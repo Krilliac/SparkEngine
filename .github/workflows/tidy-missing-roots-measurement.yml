@@ -62,6 +62,7 @@ jobs:
           cp .clang-format measurement-evidence/clang-format-config.yml
 
       - name: Configure with the blocking tidy job flags
+        id: configure
         run: |
           set -euo pipefail
           spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
@@ -192,6 +193,42 @@ jobs:
           if cpp: subprocess.run(["clang-format", "--dry-run", "--Werror", *cpp], check=True)
           PY
           git diff --check "$MEASUREMENT_BASE" HEAD
+
+      - name: Build and exercise the affected C++ products
+        if: always() && steps.configure.outcome == 'success'
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2 --target \
+            SparkAssetPipelineCoreTests SparkCooker SparkCrashReporter \
+            SparkCrashReporterFakeGh SparkCrashReporterManifestTests \
+            SparkCrashReporterConsentTests SparkCrashReporterProductionTimeoutTests \
+            2>&1 | tee measurement-evidence/product-build.log
+          focused='^(SparkAssetPipelineCoreTests|SparkCookerExecutableSmoke|SparkCrashReporter\.(ManifestCompatibility|ProductionTimeout|ExecutableSmoke)|CrashManifest_(PathEscape|SecretRedaction)|CrashReporter_Consent)$'
+          ctest --test-dir build --show-only=json-v1 -R "$focused" > measurement-evidence/product-test-inventory.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          selected = {test['name'] for test in json.loads(Path('measurement-evidence/product-test-inventory.json').read_text())['tests']}
+          expected = {'SparkAssetPipelineCoreTests', 'SparkCookerExecutableSmoke',
+                      'SparkCrashReporter.ManifestCompatibility', 'SparkCrashReporter.ProductionTimeout',
+                      'SparkCrashReporter.ExecutableSmoke', 'CrashManifest_PathEscape',
+                      'CrashManifest_SecretRedaction', 'CrashReporter_Consent'}
+          assert selected == expected, selected
+          print(f'Exactly {len(selected)} affected product tests selected')
+          PY
+          ctest --test-dir build --output-on-failure --no-tests=error --parallel 1 -R "$focused" \
+            2>&1 | tee measurement-evidence/product-tests.log
+
+      - name: Regenerate documentation required for source edits
+        if: always()
+        run: |
+          set -uo pipefail
+          export SPARK_DOC_HEALTH_OUTPUT="$GITHUB_WORKSPACE/measurement-evidence/docs-health.json"
+          bash docs/update-all-docs.sh 2>&1 | tee measurement-evidence/docs-generation.log
+          result=${PIPESTATUS[0]}
+          git diff --binary > measurement-evidence/generated-docs.patch
+          git diff --name-only > measurement-evidence/generated-docs-paths.txt
+          exit "$result"
 
       - name: Retain exact-head raw evidence
         if: always()

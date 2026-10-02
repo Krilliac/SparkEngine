@@ -99,7 +99,9 @@ int main(int argc, char* argv[])
         return 0;
     }
     if (argc == 3 && mode == "--issue-status")
+    {
         return SparkCrashReporter::ShowAutoIssueStatus(argv[2]);
+    }
 
     if (mode == "--watch" && argc == 4)
     {

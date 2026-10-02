@@ -47,8 +47,8 @@ namespace SparkCrashReporter
 
     namespace
     {
-        constexpr size_t kMaxManifestBytes = 1024 * 1024;
-        constexpr size_t kMaxJsonStringBytes = 256 * 1024;
+        constexpr size_t kMaxManifestBytes = static_cast<size_t>(1024 * 1024);
+        constexpr size_t kMaxJsonStringBytes = static_cast<size_t>(256 * 1024);
         constexpr size_t kMaxJsonDepth = 16;
         constexpr size_t kMaxCollectionEntries = 4096;
         constexpr size_t kMaxReadyManifests = 32;
@@ -56,10 +56,14 @@ namespace SparkCrashReporter
         void SecureWipeString(std::string& value) noexcept
         {
             if (value.empty())
+            {
                 return;
+            }
             volatile char* bytes = value.data();
             for (size_t index = 0; index < value.size(); ++index)
+            {
                 bytes[index] = 0;
+            }
             value.clear();
         }
 
@@ -110,32 +114,46 @@ namespace SparkCrashReporter
             {
                 SkipWhitespace();
                 if (!Consume('{'))
+                {
                     return false;
+                }
 
                 SkipWhitespace();
                 if (Consume('}'))
+                {
                     return Finish();
+                }
 
                 size_t entryCount = 0;
                 while (entryCount++ < kMaxCollectionEntries)
                 {
                     std::string key;
                     if (!ParseString(key) || !m_seenKeys.insert(key).second)
+                    {
                         return false;
+                    }
 
                     SkipWhitespace();
                     if (!Consume(':'))
+                    {
                         return false;
+                    }
                     SkipWhitespace();
 
                     if (!ParseManifestMember(key, manifest))
+                    {
                         return false;
+                    }
 
                     SkipWhitespace();
                     if (Consume('}'))
+                    {
                         return Finish();
+                    }
                     if (!Consume(','))
+                    {
                         return false;
+                    }
                     SkipWhitespace();
                 }
                 return false;
@@ -154,7 +172,9 @@ namespace SparkCrashReporter
                 {
                     const char c = m_json[m_position];
                     if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
+                    {
                         break;
+                    }
                     ++m_position;
                 }
             }
@@ -162,7 +182,9 @@ namespace SparkCrashReporter
             bool Consume(char expected)
             {
                 if (m_position >= m_json.size() || m_json[m_position] != expected)
+                {
                     return false;
+                }
                 ++m_position;
                 return true;
             }
@@ -170,24 +192,34 @@ namespace SparkCrashReporter
             static int HexValue(char c)
             {
                 if (c >= '0' && c <= '9')
+                {
                     return c - '0';
+                }
                 if (c >= 'a' && c <= 'f')
+                {
                     return c - 'a' + 10;
+                }
                 if (c >= 'A' && c <= 'F')
+                {
                     return c - 'A' + 10;
+                }
                 return -1;
             }
 
             bool ParseHex4(uint32_t& value)
             {
                 if (m_json.size() - m_position < 4)
+                {
                     return false;
+                }
                 value = 0;
                 for (int index = 0; index < 4; ++index)
                 {
                     const int digit = HexValue(m_json[m_position++]);
                     if (digit < 0)
+                    {
                         return false;
+                    }
                     value = (value << 4) | static_cast<uint32_t>(digit);
                 }
                 return true;
@@ -222,16 +254,22 @@ namespace SparkCrashReporter
             bool ParseString(std::string& output)
             {
                 if (!Consume('"'))
+                {
                     return false;
+                }
 
                 output.clear();
                 while (m_position < m_json.size())
                 {
-                    const unsigned char c = static_cast<unsigned char>(m_json[m_position++]);
+                    const auto c = static_cast<unsigned char>(m_json[m_position++]);
                     if (c == '"')
+                    {
                         return output.size() <= kMaxJsonStringBytes;
+                    }
                     if (c < 0x20)
+                    {
                         return false;
+                    }
 
                     if (c != '\\')
                     {
@@ -240,7 +278,9 @@ namespace SparkCrashReporter
                     else
                     {
                         if (m_position >= m_json.size())
+                        {
                             return false;
+                        }
                         const char escape = m_json[m_position++];
                         switch (escape)
                         {
@@ -268,16 +308,22 @@ namespace SparkCrashReporter
                         {
                             uint32_t codePoint = 0;
                             if (!ParseHex4(codePoint))
+                            {
                                 return false;
+                            }
                             if (codePoint >= 0xD800 && codePoint <= 0xDBFF)
                             {
                                 if (m_json.size() - m_position < 6 || m_json[m_position] != '\\' ||
                                     m_json[m_position + 1] != 'u')
+                                {
                                     return false;
+                                }
                                 m_position += 2;
                                 uint32_t low = 0;
                                 if (!ParseHex4(low) || low < 0xDC00 || low > 0xDFFF)
+                                {
                                     return false;
+                                }
                                 codePoint = 0x10000 + ((codePoint - 0xD800) << 10) + (low - 0xDC00);
                             }
                             else if (codePoint >= 0xDC00 && codePoint <= 0xDFFF)
@@ -293,7 +339,9 @@ namespace SparkCrashReporter
                     }
 
                     if (output.size() > kMaxJsonStringBytes)
+                    {
                         return false;
+                    }
                 }
                 return false;
             }
@@ -319,21 +367,31 @@ namespace SparkCrashReporter
             {
                 const size_t start = m_position;
                 if (m_position < m_json.size() && m_json[m_position] == '-')
+                {
                     ++m_position;
+                }
                 if (m_position >= m_json.size())
+                {
                     return false;
+                }
                 if (m_json[m_position] == '0')
                 {
                     ++m_position;
                     if (m_position < m_json.size() && m_json[m_position] >= '0' && m_json[m_position] <= '9')
+                    {
                         return false;
+                    }
                 }
                 else
                 {
                     if (m_json[m_position] < '1' || m_json[m_position] > '9')
+                    {
                         return false;
+                    }
                     while (m_position < m_json.size() && m_json[m_position] >= '0' && m_json[m_position] <= '9')
+                    {
                         ++m_position;
+                    }
                 }
 
                 int64_t parsed = 0;
@@ -342,7 +400,9 @@ namespace SparkCrashReporter
                 const auto result = std::from_chars(begin, end, parsed);
                 if (result.ec != std::errc{} || result.ptr != end || parsed < std::numeric_limits<int>::min() ||
                     parsed > std::numeric_limits<int>::max())
+                {
                     return false;
+                }
                 output = static_cast<int>(parsed);
                 return true;
             }
@@ -350,9 +410,13 @@ namespace SparkCrashReporter
             bool SkipNumber()
             {
                 if (m_position < m_json.size() && m_json[m_position] == '-')
+                {
                     ++m_position;
+                }
                 if (m_position >= m_json.size())
+                {
                     return false;
+                }
                 if (m_json[m_position] == '0')
                 {
                     ++m_position;
@@ -360,29 +424,43 @@ namespace SparkCrashReporter
                 else
                 {
                     if (m_json[m_position] < '1' || m_json[m_position] > '9')
+                    {
                         return false;
+                    }
                     while (m_position < m_json.size() && m_json[m_position] >= '0' && m_json[m_position] <= '9')
+                    {
                         ++m_position;
+                    }
                 }
                 if (m_position < m_json.size() && m_json[m_position] == '.')
                 {
                     ++m_position;
                     const size_t fractionStart = m_position;
                     while (m_position < m_json.size() && m_json[m_position] >= '0' && m_json[m_position] <= '9')
+                    {
                         ++m_position;
+                    }
                     if (fractionStart == m_position)
+                    {
                         return false;
+                    }
                 }
                 if (m_position < m_json.size() && (m_json[m_position] == 'e' || m_json[m_position] == 'E'))
                 {
                     ++m_position;
                     if (m_position < m_json.size() && (m_json[m_position] == '+' || m_json[m_position] == '-'))
+                    {
                         ++m_position;
+                    }
                     const size_t exponentStart = m_position;
                     while (m_position < m_json.size() && m_json[m_position] >= '0' && m_json[m_position] <= '9')
+                    {
                         ++m_position;
+                    }
                     if (exponentStart == m_position)
+                    {
                         return false;
+                    }
                 }
                 return true;
             }
@@ -390,7 +468,9 @@ namespace SparkCrashReporter
             bool SkipValue(size_t depth)
             {
                 if (depth > kMaxJsonDepth || m_position >= m_json.size())
+                {
                     return false;
+                }
 
                 if (m_json[m_position] == '"')
                 {
@@ -402,24 +482,36 @@ namespace SparkCrashReporter
                     ++m_position;
                     SkipWhitespace();
                     if (Consume('}'))
+                    {
                         return true;
+                    }
                     size_t entries = 0;
                     while (entries++ < kMaxCollectionEntries)
                     {
                         std::string ignoredKey;
                         if (!ParseString(ignoredKey))
+                        {
                             return false;
+                        }
                         SkipWhitespace();
                         if (!Consume(':'))
+                        {
                             return false;
+                        }
                         SkipWhitespace();
                         if (!SkipValue(depth + 1))
+                        {
                             return false;
+                        }
                         SkipWhitespace();
                         if (Consume('}'))
+                        {
                             return true;
+                        }
                         if (!Consume(','))
+                        {
                             return false;
+                        }
                         SkipWhitespace();
                     }
                     return false;
@@ -429,17 +521,25 @@ namespace SparkCrashReporter
                     ++m_position;
                     SkipWhitespace();
                     if (Consume(']'))
+                    {
                         return true;
+                    }
                     size_t entries = 0;
                     while (entries++ < kMaxCollectionEntries)
                     {
                         if (!SkipValue(depth + 1))
+                        {
                             return false;
+                        }
                         SkipWhitespace();
                         if (Consume(']'))
+                        {
                             return true;
+                        }
                         if (!Consume(','))
+                        {
                             return false;
+                        }
                         SkipWhitespace();
                     }
                     return false;
@@ -460,45 +560,85 @@ namespace SparkCrashReporter
             bool ParseManifestMember(const std::string& key, CrashManifest& manifest)
             {
                 if (key == "enginePID")
+                {
                     return ParseString(manifest.enginePID);
+                }
                 if (key == "timestamp")
+                {
                     return ParseString(manifest.timestamp);
+                }
                 if (key == "dumpFile")
+                {
                     return ParseString(manifest.dumpFile);
+                }
                 if (key == "logFile")
+                {
                     return ParseString(manifest.logFile);
+                }
                 if (key == "screenshotFile")
+                {
                     return ParseString(manifest.screenshotFile);
+                }
                 if (key == "zipFile")
+                {
                     return ParseString(manifest.zipFile);
+                }
                 if (key == "crashTitle")
+                {
                     return ParseString(manifest.crashTitle);
+                }
                 if (key == "uploadURL")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "proxyURL")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "githubRepo")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "githubToken")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "githubLabels")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "smtpUser")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "smtpPass")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "emailTo")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "emailFrom")
+                {
                     return ParseDiscardedString();
+                }
                 if (key == "requireConsent")
+                {
                     return ParseBoolean(manifest.requireConsent);
+                }
                 if (key == "allowScreenshotRefusal")
+                {
                     return ParseBoolean(manifest.allowScreenshotRefusal);
+                }
                 if (key == "promptUserDescription")
+                {
                     return ParseBoolean(manifest.promptUserDescription);
+                }
                 if (key == "fullMemoryDump")
+                {
                     return ParseBoolean(manifest.fullMemoryDump);
+                }
                 if (key == "timeoutSeconds")
                 {
                     int ignored = 0;
@@ -525,7 +665,7 @@ namespace SparkCrashReporter
 #ifdef _WIN32
             return std::filesystem::u8path(path.begin(), path.end());
 #else
-            return std::filesystem::path(path);
+            return {path};
 #endif
         }
 
@@ -584,7 +724,9 @@ namespace SparkCrashReporter
             void Reset()
             {
                 if (m_value == Invalid())
+                {
                     return;
+                }
 #ifdef _WIN32
                 CloseHandle(m_value);
 #else
@@ -615,29 +757,43 @@ namespace SparkCrashReporter
             }
             const bool directory = (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
             if (requireRegularFile && (directory || info.nNumberOfLinks != 1))
+            {
                 return false;
+            }
             if (!requireRegularFile && !directory)
+            {
                 return false;
+            }
             identity.device = info.dwVolumeSerialNumber;
             identity.file = (static_cast<std::uint64_t>(info.nFileIndexHigh) << 32) | info.nFileIndexLow;
             identity.valid = true;
             if (size)
+            {
                 *size = (static_cast<std::uint64_t>(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+            }
 #else
             struct stat info
             {
             };
             if (fstat(handle, &info) != 0)
+            {
                 return false;
+            }
             if (requireRegularFile && (!S_ISREG(info.st_mode) || info.st_nlink != 1))
+            {
                 return false;
+            }
             if (!requireRegularFile && !S_ISDIR(info.st_mode))
+            {
                 return false;
+            }
             identity.device = static_cast<std::uint64_t>(info.st_dev);
             identity.file = static_cast<std::uint64_t>(info.st_ino);
             identity.valid = true;
             if (size)
+            {
                 *size = static_cast<std::uint64_t>(info.st_size);
+            }
 #endif
             return true;
         }
@@ -647,7 +803,9 @@ namespace SparkCrashReporter
             std::error_code error;
             const std::filesystem::path absoluteRoot = std::filesystem::absolute(root, error).lexically_normal();
             if (error || absoluteRoot.empty())
+            {
                 return false;
+            }
 
 #ifdef _WIN32
             ScopedNativeHandle handle(CreateFileW(absoluteRoot.c_str(), FILE_READ_ATTRIBUTES,
@@ -668,7 +826,9 @@ namespace SparkCrashReporter
 #endif
             ArtifactIdentity identity;
             if (!handle || !GetHandleIdentity(handle.Get(), false, identity))
+            {
                 return false;
+            }
 
             output.handle = std::move(handle);
             output.path = absoluteRoot;
@@ -680,19 +840,25 @@ namespace SparkCrashReporter
         {
             namespace fs = std::filesystem;
             if (artifactPath.empty())
+            {
                 return false;
+            }
 
             const fs::path candidate = PathFromUtf8(artifactPath).lexically_normal();
             if (candidate.is_absolute())
             {
                 if (candidate.parent_path() != root.path)
+                {
                     return false;
+                }
                 name = candidate.filename();
             }
             else
             {
                 if (candidate.has_parent_path())
+                {
                     return false;
+                }
                 name = candidate;
             }
             return !name.empty() && name != "." && name != "..";
@@ -718,7 +884,9 @@ namespace SparkCrashReporter
             ScopedNativeHandle handle(openat(root.handle.Get(), name.c_str(), flags));
 #endif
             if (!handle || !GetHandleIdentity(handle.Get(), true, identity, size))
+            {
                 return false;
+            }
             output = std::move(handle);
             return true;
         }
@@ -739,7 +907,9 @@ namespace SparkCrashReporter
             {
             };
             if (fstatat(root.handle.Get(), name.c_str(), &namedInfo, AT_SYMLINK_NOFOLLOW) != 0)
+            {
                 return false;
+            }
             ArtifactIdentity namedIdentity;
             namedIdentity.device = static_cast<std::uint64_t>(namedInfo.st_dev);
             namedIdentity.file = static_cast<std::uint64_t>(namedInfo.st_ino);
@@ -752,32 +922,44 @@ namespace SparkCrashReporter
                             std::string& output)
         {
             if (size > maximumBytes || size > static_cast<std::uint64_t>(std::numeric_limits<size_t>::max()))
+            {
                 return false;
+            }
             output.assign(static_cast<size_t>(size), '\0');
             size_t offset = 0;
 #ifdef _WIN32
             LARGE_INTEGER beginning{};
             if (!SetFilePointerEx(handle, beginning, nullptr, FILE_BEGIN))
+            {
                 return false;
+            }
             while (offset < output.size())
             {
                 DWORD count = 0;
                 const DWORD requested = static_cast<DWORD>(
                     (std::min)(output.size() - offset, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
                 if (!ReadFile(handle, output.data() + offset, requested, &count, nullptr) || count == 0)
+                {
                     return false;
+                }
                 offset += count;
             }
 #else
             if (lseek(handle, 0, SEEK_SET) < 0)
+            {
                 return false;
+            }
             while (offset < output.size())
             {
                 const ssize_t count = read(handle, output.data() + offset, output.size() - offset);
                 if (count < 0 && errno == EINTR)
+                {
                     continue;
+                }
                 if (count <= 0)
+                {
                     return false;
+                }
                 offset += static_cast<size_t>(count);
             }
 #endif
@@ -788,7 +970,9 @@ namespace SparkCrashReporter
                                      std::string_view content)
         {
             if (name.empty() || name.has_parent_path())
+            {
                 return false;
+            }
 #ifdef _WIN32
             ScopedNativeHandle handle(CreateFileW((root.path / name).c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                                                   CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
@@ -803,7 +987,9 @@ namespace SparkCrashReporter
             ScopedNativeHandle handle(openat(root.handle.Get(), name.c_str(), flags, S_IRUSR | S_IWUSR));
 #endif
             if (!handle)
+            {
                 return false;
+            }
 
             size_t offset = 0;
             while (offset < content.size())
@@ -813,13 +999,19 @@ namespace SparkCrashReporter
                 const DWORD requested = static_cast<DWORD>(
                     (std::min)(content.size() - offset, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
                 if (!WriteFile(handle.Get(), content.data() + offset, requested, &count, nullptr) || count == 0)
+                {
                     return false;
+                }
 #else
                 const ssize_t count = write(handle.Get(), content.data() + offset, content.size() - offset);
                 if (count < 0 && errno == EINTR)
+                {
                     continue;
+                }
                 if (count <= 0)
+                {
                     return false;
+                }
 #endif
                 offset += static_cast<size_t>(count);
             }
@@ -830,15 +1022,21 @@ namespace SparkCrashReporter
                              bool required)
         {
             if (artifactPath.empty())
+            {
                 return !required;
+            }
 
             std::filesystem::path name;
             if (!ArtifactNameInRoot(root, artifactPath, name))
+            {
                 return false;
+            }
 
             ScopedNativeHandle handle;
             if (!OpenArtifact(root, name, handle, identity))
+            {
                 return false;
+            }
             artifactPath = PathToUtf8(root.path / name);
             return true;
         }
@@ -863,14 +1061,18 @@ namespace SparkCrashReporter
         {
             std::filesystem::path name;
             if (!ArtifactNameInRoot(root, artifactPath, name))
+            {
                 return false;
+            }
 
             ScopedNativeHandle handle;
             ArtifactIdentity actualIdentity;
             std::uint64_t size = 0;
             if (!OpenArtifact(root, name, handle, actualIdentity, &size) ||
                 !SameIdentity(expectedIdentity, actualIdentity))
+            {
                 return false;
+            }
             return ReadOpenedFile(handle.Get(), size, maximumBytes, output);
         }
 
@@ -878,10 +1080,14 @@ namespace SparkCrashReporter
                               const ArtifactIdentity& expectedIdentity, bool required)
         {
             if (artifactPath.empty())
+            {
                 return !required;
+            }
             std::filesystem::path name;
             if (!ArtifactNameInRoot(root, artifactPath, name))
+            {
                 return false;
+            }
             ScopedNativeHandle handle;
             ArtifactIdentity actualIdentity;
             return OpenArtifact(root, name, handle, actualIdentity) && SameIdentity(expectedIdentity, actualIdentity);
@@ -890,13 +1096,17 @@ namespace SparkCrashReporter
         bool ParseManifestJsonPayload(std::string_view json, CrashManifest& output)
         {
             if (json.empty() || json.size() > kMaxManifestBytes)
+            {
                 return false;
+            }
 
             CrashManifest parsed;
             ScopedManifestCredentialWiper wipeParsedCredentials(parsed);
             ManifestJsonReader reader(json);
             if (!reader.Parse(parsed))
+            {
                 return false;
+            }
 
             SecureWipeTransportConfiguration(output);
             output = std::move(parsed);
@@ -907,7 +1117,9 @@ namespace SparkCrashReporter
                                              CrashManifest& output, bool consume = false)
         {
             if (manifestName.empty() || manifestName.has_parent_path())
+            {
                 return false;
+            }
 
             ScopedNativeHandle manifestHandle;
             ArtifactIdentity manifestIdentity;
@@ -921,15 +1133,21 @@ namespace SparkCrashReporter
             std::string json;
             ScopedStringWiper wipeJson(json);
             if (!ReadOpenedFile(manifestHandle.Get(), manifestSize, kMaxManifestBytes, json))
+            {
                 return false;
+            }
 
             CrashManifest parsed;
             if (!ParseManifestJsonPayload(json, parsed) || parsed.logFile.empty() ||
                 !NormalizeManifestArtifacts(parsed, root))
+            {
                 return false;
+            }
 
             if (consume && !RemoveOpenedArtifact(root, manifestName, manifestHandle.Get(), manifestIdentity))
+            {
                 return false;
+            }
 
             SecureWipeTransportConfiguration(output);
             output = std::move(parsed);
@@ -948,7 +1166,9 @@ namespace SparkCrashReporter
             for (const char character : name.substr(prefix.size(), 16))
             {
                 if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')))
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -968,7 +1188,9 @@ namespace SparkCrashReporter
                     {
                         manifests.push_back(name);
                         if (manifests.size() >= kMaxReadyManifests)
+                        {
                             break;
+                        }
                     }
                 } while (FindNextFileW(search, &entry));
                 FindClose(search);
@@ -986,7 +1208,9 @@ namespace SparkCrashReporter
 #endif
             const int directoryHandle = openat(root.handle.Get(), ".", flags);
             if (directoryHandle < 0)
+            {
                 return manifests;
+            }
             DIR* directory = fdopendir(directoryHandle);
             if (!directory)
             {
@@ -999,7 +1223,9 @@ namespace SparkCrashReporter
                 {
                     manifests.emplace_back(entry->d_name);
                     if (manifests.size() >= kMaxReadyManifests)
+                    {
                         break;
+                    }
                 }
             }
             closedir(directory);
@@ -1013,7 +1239,9 @@ namespace SparkCrashReporter
                            std::filesystem::path& claimedName)
         {
             if (!IsReadyManifestName(PathToUtf8(readyName)))
+            {
                 return false;
+            }
             claimedName = readyName;
             claimedName += ".claimed.";
 #ifdef _WIN32
@@ -1034,7 +1262,9 @@ namespace SparkCrashReporter
             ScopedNativeHandle handle;
             ArtifactIdentity identity;
             if (OpenArtifact(root, claimedName, handle, identity, nullptr, true))
+            {
                 RemoveOpenedArtifact(root, claimedName, handle.Get(), identity);
+            }
         }
 
         bool ClaimNextManifest(PinnedDirectory& root, CrashManifest& output, bool& rejectedManifest)
@@ -1044,9 +1274,13 @@ namespace SparkCrashReporter
             {
                 std::filesystem::path claimedName;
                 if (!ClaimManifest(root, readyName, claimedName))
+                {
                     continue;
+                }
                 if (LoadManifestFromPinnedDirectory(root, claimedName, output, true))
+                {
                     return true;
+                }
                 rejectedManifest = true;
                 RemoveClaimedManifest(root, claimedName);
             }
@@ -1067,19 +1301,33 @@ namespace SparkCrashReporter
         for (unsigned char c : s)
         {
             if (c == '"')
+            {
                 out += "\\\"";
+            }
             else if (c == '\\')
+            {
                 out += "\\\\";
+            }
             else if (c == '\b')
+            {
                 out += "\\b";
+            }
             else if (c == '\f')
+            {
                 out += "\\f";
+            }
             else if (c == '\n')
+            {
                 out += "\\n";
+            }
             else if (c == '\r')
+            {
                 out += "\\r";
+            }
             else if (c == '\t')
+            {
                 out += "\\t";
+            }
             else if (c < 0x20)
             {
                 out += "\\u00";
@@ -1087,7 +1335,9 @@ namespace SparkCrashReporter
                 out.push_back(hex[c & 0x0F]);
             }
             else
+            {
                 out += static_cast<char>(c);
+            }
         }
         return out;
     }
@@ -1102,11 +1352,15 @@ namespace SparkCrashReporter
         PinnedDirectory root;
         if (!OpenPinnedDirectory(
                 manifestPath.parent_path().empty() ? std::filesystem::path(".") : manifestPath.parent_path(), root))
+        {
             return false;
+        }
 
         std::filesystem::path manifestName;
         if (!ArtifactNameInRoot(root, path, manifestName))
+        {
             return false;
+        }
         return LoadManifestFromPinnedDirectory(root, manifestName, out);
     }
 
@@ -1116,21 +1370,25 @@ namespace SparkCrashReporter
         PinnedDirectory root;
         if (!OpenPinnedDirectory(
                 manifestPath.parent_path().empty() ? std::filesystem::path(".") : manifestPath.parent_path(), root))
+        {
             return false;
+        }
 
         std::filesystem::path manifestName;
         if (!ArtifactNameInRoot(root, path, manifestName))
+        {
             return false;
+        }
 
         std::ostringstream json;
         json << "{\n";
-        json << "  \"enginePID\": \"" << JsonEscape(m.enginePID) << "\",\n";
-        json << "  \"timestamp\": \"" << JsonEscape(m.timestamp) << "\",\n";
-        json << "  \"dumpFile\": \"" << JsonEscape(m.dumpFile) << "\",\n";
-        json << "  \"logFile\": \"" << JsonEscape(m.logFile) << "\",\n";
-        json << "  \"screenshotFile\": \"" << JsonEscape(m.screenshotFile) << "\",\n";
-        json << "  \"zipFile\": \"" << JsonEscape(m.zipFile) << "\",\n";
-        json << "  \"crashTitle\": \"" << JsonEscape(m.crashTitle) << "\",\n";
+        json << R"(  "enginePID": ")" << JsonEscape(m.enginePID) << "\",\n";
+        json << R"(  "timestamp": ")" << JsonEscape(m.timestamp) << "\",\n";
+        json << R"(  "dumpFile": ")" << JsonEscape(m.dumpFile) << "\",\n";
+        json << R"(  "logFile": ")" << JsonEscape(m.logFile) << "\",\n";
+        json << R"(  "screenshotFile": ")" << JsonEscape(m.screenshotFile) << "\",\n";
+        json << R"(  "zipFile": ")" << JsonEscape(m.zipFile) << "\",\n";
+        json << R"(  "crashTitle": ")" << JsonEscape(m.crashTitle) << "\",\n";
         json << "  \"requireConsent\": " << (m.requireConsent ? "true" : "false") << ",\n";
         json << "  \"allowScreenshotRefusal\": " << (m.allowScreenshotRefusal ? "true" : "false") << ",\n";
         json << "  \"promptUserDescription\": " << (m.promptUserDescription ? "true" : "false") << ",\n";
@@ -1227,7 +1485,9 @@ namespace SparkCrashReporter
             {
                 const auto continuation = static_cast<unsigned char>(text[index + offset]);
                 if ((continuation & 0xC0) != 0x80)
+                {
                     wellFormed = false;
+                }
                 codePoint = (codePoint << 6) | (continuation & 0x3Fu);
             }
             if (wellFormed)
@@ -1265,7 +1525,9 @@ namespace SparkCrashReporter
         // so a failed read declines regardless of the prompt's default.
         constexpr size_t kMaxAnswerBytes = 64;
         if (!input.good())
+        {
             return false;
+        }
 
         // Read at most kMaxAnswerBytes + 1 characters. An unbounded
         // std::getline would buffer a newline-free stdin (a pipe, /dev/zero)
@@ -1285,19 +1547,25 @@ namespace SparkCrashReporter
             // of an endless stream would never end, and a declined prompt
             // reads no further input.
             if (answer.size() == kMaxAnswerBytes)
+            {
                 return false;
+            }
             answer.push_back(next);
         }
         // Like std::getline, end of input with nothing read is no answer.
         if (!terminated && answer.empty())
+        {
             return false;
+        }
 
         const auto isSpace = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
         const auto first = std::find_if_not(answer.begin(), answer.end(), isSpace);
         const auto last = std::find_if_not(answer.rbegin(), answer.rend(), isSpace).base();
         std::string word = first < last ? std::string(first, last) : std::string{};
         if (word.empty())
+        {
             return emptyMeansYes; // Interactive Enter keeps the documented default.
+        }
 
         std::transform(word.begin(), word.end(), word.begin(),
                        [](unsigned char c) { return static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c); });
@@ -1358,7 +1626,7 @@ namespace SparkCrashReporter
             return 2;
         }
 
-        constexpr size_t kMaxCrashLogBytes = 8 * 1024 * 1024;
+        constexpr size_t kMaxCrashLogBytes = static_cast<size_t>(8 * 1024 * 1024);
         std::string crashLog;
         if (!ReadArtifact(root, manifest.logFile, manifest.logIdentity, kMaxCrashLogBytes, crashLog))
         {
@@ -1378,27 +1646,39 @@ namespace SparkCrashReporter
         std::cerr << "Crash log: " << TerminalSafe(manifest.logFile) << "\n";
         std::cerr << "Crash log bytes read safely: " << crashLog.size() << "\n";
         if (!manifest.dumpFile.empty())
+        {
             std::cerr << "Dump file: " << TerminalSafe(manifest.dumpFile) << "\n";
+        }
         if (!manifest.screenshotFile.empty())
+        {
             std::cerr << "Screenshot: " << TerminalSafe(manifest.screenshotFile) << "\n";
+        }
         if (!manifest.zipFile.empty())
+        {
             std::cerr << "Prebuilt archive: ignored by this read-only reporter\n";
+        }
         std::cerr << "\n";
 
         // This setting is user-local. No manifest field, including the legacy
         // transport fields or requireConsent, can opt a user into publishing.
         const bool autoIssues = AutoIssuesEnabled();
         if (autoIssues)
+        {
             std::cerr << "Automatic GitHub Issues are enabled by this user's local setting. "
                          "Issue metadata will be public; no crash artifacts will be sent.\n";
+        }
         // Only automatic-Issue runs report an outcome, and every one of them
         // asked the user first, so the outcome is always shown.
         const auto showIssueOutcome = [&](const std::string& message, bool confirmed)
         {
             if (ui.notifyIssueOutcome)
+            {
                 ui.notifyIssueOutcome(message, confirmed);
+            }
             else
+            {
                 std::cerr << message << '\n';
+            }
         };
         constexpr std::string_view manualIssueUrl = "https://github.com/Krilliac/SparkEngine/issues/new";
 
@@ -1412,8 +1692,10 @@ namespace SparkCrashReporter
         {
             std::string consentMessage = BuildConsentMessage(manifest);
             if (autoIssues)
+            {
                 consentMessage += "\n\nIf you continue, a metadata-only GitHub Issue will be attempted publicly. "
                                   "No log, dump, screenshot, path, or description will be sent.";
+            }
             shouldReview = ui.ask && ui.ask(consentMessage, "Crash Report", autoIssues); // no dialog declines
         }
 
@@ -1524,19 +1806,27 @@ namespace SparkCrashReporter
         for (const auto& entry : std::filesystem::directory_iterator(root.path, error))
         {
             if (++entries > 4096)
+            {
                 break;
+            }
             const std::filesystem::path name = entry.path().filename();
             const std::string text = PathToUtf8(name);
             if (text.size() != prefix.size() + 16 + suffix.size() || !text.starts_with(prefix) ||
                 !text.ends_with(suffix))
+            {
                 continue;
+            }
             if (!std::all_of(text.begin() + static_cast<std::ptrdiff_t>(prefix.size()),
                              text.end() - static_cast<std::ptrdiff_t>(suffix.size()),
                              [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+            {
                 continue;
+            }
             receipts.push_back(name);
             if (receipts.size() == 32)
+            {
                 break;
+            }
         }
         if (error)
         {
@@ -1555,7 +1845,9 @@ namespace SparkCrashReporter
             ScopedNativeHandle receiptHandle;
             ArtifactIdentity identity;
             if (!OpenArtifact(root, receiptName, receiptHandle, identity))
+            {
                 continue;
+            }
             const std::string key = PathToUtf8(receiptName).substr(prefix.size(), 16);
             const std::filesystem::path resultName = "issue_result_" + key + ".txt";
             ScopedNativeHandle resultHandle;
@@ -1563,13 +1855,17 @@ namespace SparkCrashReporter
             std::uint64_t resultBytes = 0;
             std::string status;
             if (OpenArtifact(root, resultName, resultHandle, resultIdentity, &resultBytes) && resultBytes <= 256)
+            {
                 (void)ReadOpenedFile(resultHandle.Get(), resultBytes, 256, status);
+            }
             std::cout << "Incident " << key << ": ";
             if (status.starts_with("confirmed\n"))
             {
                 std::string_view url(status.data() + 10, status.size() - 10);
                 if (!url.empty() && url.back() == '\n')
+                {
                     url.remove_suffix(1);
+                }
                 if (url.starts_with(urlPrefix) && url.size() > urlPrefix.size() &&
                     std::all_of(url.begin() + static_cast<std::ptrdiff_t>(urlPrefix.size()), url.end(),
                                 [](char c) { return c >= '0' && c <= '9'; }))
@@ -1590,28 +1886,38 @@ namespace SparkCrashReporter
     static bool IsProcessAlive(const std::string& pidStr)
     {
         if (pidStr.empty())
+        {
             return false;
+        }
 
         std::uint64_t parsedPid = 0;
         const auto [end, error] = std::from_chars(pidStr.data(), pidStr.data() + pidStr.size(), parsedPid);
         if (error != std::errc{} || end != pidStr.data() + pidStr.size() || parsedPid == 0)
+        {
             return false;
+        }
 
 #ifdef _WIN32
         if (parsedPid > (std::numeric_limits<DWORD>::max)())
+        {
             return false;
+        }
         const DWORD pid = static_cast<DWORD>(parsedPid);
         HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
         if (!hProcess)
+        {
             return false;
+        }
         DWORD exitCode = 0;
         GetExitCodeProcess(hProcess, &exitCode);
         CloseHandle(hProcess);
         return (exitCode == STILL_ACTIVE);
 #else
         if (parsedPid > static_cast<std::uint64_t>((std::numeric_limits<pid_t>::max)()))
+        {
             return false;
-        const pid_t pid = static_cast<pid_t>(parsedPid);
+        }
+        const auto pid = static_cast<pid_t>(parsedPid);
         return kill(pid, 0) == 0 || errno == EPERM;
 #endif
     }
@@ -1646,7 +1952,9 @@ namespace SparkCrashReporter
                 std::cerr << "[CrashReporter] Crash manifest detected!\n";
                 const int reportResult = RunCrashReporter(manifest);
                 if (reportResult != 0)
+                {
                     result = reportResult;
+                }
                 continue;
             }
 
