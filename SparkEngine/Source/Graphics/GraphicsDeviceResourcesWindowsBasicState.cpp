@@ -13,6 +13,7 @@
 #include "GraphicsEngine.h"
 #include "ProjectAssetPath.h"
 #include "Shader.h"
+#include "D3D11FrustumCulling.h"
 #include "../Utils/LogMacros.h"
 
 #include <windows.h>
@@ -87,7 +88,10 @@ void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX&
     PerObjectConstants constants = {};
     constants.WorldMatrix = XMMatrixTranspose(world);
     constants.WorldViewProjectionMatrix = XMMatrixTranspose(world * view * proj);
-    constants.WorldInverseTransposeMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, world));
+    // D3D11's column-major constant-buffer interpretation supplies the single
+    // transpose required by BasicVS.hlsl. Keep the CPU value untransposed so
+    // the shader sees the true inverse transpose for non-uniform scale.
+    constants.WorldInverseTransposeMatrix = Spark::Graphics::D3D11RenderMath::BasicNormalMatrixForUpload(world);
     constants.ObjectColor = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
     constants.MaterialProperties = XMFLOAT4(0.0f, 0.5f, 0.0f, 1.0f); // Default material
     constants.UVTiling = XMFLOAT4(1.0f, 1.0f, 0.0f, 0.0f);           // Default UV tiling
@@ -158,7 +162,7 @@ void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX&
     PerObjectConstants constants = {};
     constants.WorldMatrix = XMMatrixTranspose(world);
     constants.WorldViewProjectionMatrix = XMMatrixTranspose(world * view * proj);
-    constants.WorldInverseTransposeMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, world));
+    constants.WorldInverseTransposeMatrix = Spark::Graphics::D3D11RenderMath::BasicNormalMatrixForUpload(world);
     constants.ObjectColor = color;
     constants.MaterialProperties = XMFLOAT4(0.0f, 0.5f, 0.0f, 1.0f);
     constants.UVTiling = XMFLOAT4(uvTiling.x, uvTiling.y, 0.0f, 0.0f);
@@ -182,7 +186,7 @@ void GraphicsEngine::UpdateBasicConstants(const XMMATRIX& world, const XMMATRIX&
     PerObjectConstants constants = {};
     constants.WorldMatrix = XMMatrixTranspose(world);
     constants.WorldViewProjectionMatrix = XMMatrixTranspose(world * view * proj);
-    constants.WorldInverseTransposeMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, world));
+    constants.WorldInverseTransposeMatrix = Spark::Graphics::D3D11RenderMath::BasicNormalMatrixForUpload(world);
     constants.ObjectColor = color;
     // z: emissive glow, w: alpha — read by the basic PS (both default to no-op).
     constants.MaterialProperties = XMFLOAT4(0.0f, 0.5f, emissive, alpha);

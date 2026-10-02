@@ -1041,10 +1041,17 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 - [Getting Started](../getting-started/Getting-Started.md) -- Building the project
 - [Contributing](Contributing.md) -- Contribution workflow, pre-commit checks, and adding tests
 
+## D3D11 CPU math contracts
+
+`RHI210_MatrixContracts` checks normal-matrix upload, the six Direct3D clip
+planes and FPS arena visibility through the production math helpers. Plane
+indices use a compact byte enum and explicit `size_t` conversion for array
+extents; this does not change plane order or clip-space calculations.
+
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*734 test-bearing `.cpp`/`.mm` files, 8508 source-level test definitions*
+*737 test-bearing `.cpp`/`.mm` files, 8516 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1522,6 +1529,7 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestProximityTriggerSystem` | 4 |
 | `TestQuaternionStubsReal` | 14 |
 | `TestQuestSystem` | 11 |
+| `TestRHI210D3D11DeferredResolveReal` | 3 |
 | `TestRHI210D3D11DeviceLossReal` | 5 |
 | `TestRHI210D3D11FrameGoldenReal` | 5 |
 | `TestRHI210D3D11GoldenReal` | 4 |
@@ -1530,6 +1538,8 @@ SDL2 must be built with OpenGL/GLX support (install `libgl-dev` *before* buildin
 | `TestRHI210D3D11SceneGoldenReal` | 3 |
 | `TestRHI210D3D11ValidationReal` | 4 |
 | `TestRHI210D3D11WorldGoldenReal` | 2 |
+| `TestRHI210MatrixContracts` | 3 |
+| `TestRHI210TextureDecode` | 2 |
 | `TestRHI225D3D12FallbackReal` | 3 |
 | `TestRHI225D3D12ParityReal` | 12 |
 | `TestRHI225D3D12ValidationReal` | 5 |

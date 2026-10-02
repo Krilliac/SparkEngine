@@ -10,13 +10,13 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 
+#include "../Game/GameObject.h"
+#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
 #include "GraphicsEngine.h"
 #include "LightingSystem.h"
 #include "Mesh.h"
 #include "TerrainRenderer.h"
-#include "../Game/GameObject.h"
-#include "../Utils/LogMacros.h"
-#include "../Utils/SparkConsole.h"
 #ifdef SPARK_HYBRID_RT
 #include "HybridRT/HybridRTManager.h"
 #ifdef SPARK_HARDWARE_RT
@@ -24,9 +24,9 @@
 #endif
 #endif
 
-#include <windows.h>
-#include <d3d11_1.h>
 #include "Core/Platform.h"
+#include <d3d11_1.h>
+#include <windows.h>
 #include <wrl.h>
 
 #include <cstring>
@@ -123,23 +123,18 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
         return;
     }
 
-    // Verify G-Buffer targets are valid before attempting deferred rendering
-    bool gBufferValid = true;
-    for (int i = 0; i < 4; ++i)
+    // Reject incomplete shaders and mismatched/MSAA attachments before geometry.
+    // This resolve uses Texture2D.Load and the engine's single-sample depth.
+    if (!CanResolveDeferredLighting())
     {
-        if (!m_gBufferRTVs[i])
-        {
-            gBufferValid = false;
-            break;
-        }
-    }
-    if (!gBufferValid)
-    {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
-                       "RenderDeferred: G-Buffer render targets not created, falling back to forward");
+        m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), m_depthStencilView.Get());
         RenderForward(viewMatrix, projMatrix, objects);
         return;
     }
+
+    XMFLOAT3 cameraPosition;
+    XMStoreFloat3(&cameraPosition, XMMatrixInverse(nullptr, viewMatrix).r[3]);
+    UpdateFrameConstants(viewMatrix, projMatrix, cameraPosition);
 
     // Phase 1: Fill G-Buffer
     FillGBuffer(objects, viewMatrix, projMatrix);
@@ -147,50 +142,10 @@ void GraphicsEngine::RenderDeferred(const XMMATRIX& viewMatrix, const XMMATRIX& 
     // Phase 2: Lighting pass
     LightingPass(viewMatrix, projMatrix);
 
-    // Phase 3: Forward rendering for transparent objects
-    uint32_t transparentDrawCalls = 0;
-    uint32_t transparentTriangles = 0;
-    uint32_t transparentVertices = 0;
-    for (auto* obj : objects)
-    {
-        if (obj && obj->IsActive() && obj->IsVisible())
-        {
-            try
-            {
-                obj->Render(viewMatrix, projMatrix);
-                transparentDrawCalls++;
-                if (const Mesh* mesh = obj->GetMesh())
-                {
-                    transparentTriangles += mesh->GetIndexCount() / 3;
-                    transparentVertices += mesh->GetVertexCount();
-                }
-            }
-            catch (const std::exception& e)
-            {
-                static int errorCount = 0;
-                if (++errorCount <= 3)
-                {
-                    std::wstring msg =
-                        L"Render error (deferred transparent): " + std::wstring(e.what(), e.what() + strlen(e.what()));
-                    LOG_TO_CONSOLE_IMMEDIATE(msg.c_str(), L"WARNING");
-                }
-            }
-            catch (...)
-            {
-                static int errorCount = 0;
-                if (++errorCount <= 3)
-                    LOG_TO_CONSOLE_IMMEDIATE(L"Unknown render error in deferred transparent pass", L"WARNING");
-            }
-        }
-    }
-
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        m_statistics.drawCalls += transparentDrawCalls;
-        m_statistics.triangles += transparentTriangles;
-        m_statistics.vertices += transparentVertices;
-    }
+    // GameObject has no transparent classification contract. Replaying this
+    // opaque list would overwrite the lighting resolve with forward shading.
+    // Restore the scene target/depth for subsequent explicitly scheduled draws.
+    m_context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), m_depthStencilView.Get());
 }
 
 void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix,
@@ -266,6 +221,5 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
         m_statistics.vertices = vertices;
     }
 }
-
 
 #endif // SPARK_PLATFORM_WINDOWS

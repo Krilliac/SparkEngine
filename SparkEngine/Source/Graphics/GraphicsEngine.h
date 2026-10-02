@@ -182,7 +182,8 @@ class GraphicsEngine
     // RHI-210 tests inspect intermediate pass resources without widening the
     // production API; the accessor is defined only in the test translation unit.
     friend struct RHI210PassAccess;
-    friend struct RHI210GoldenPassAccess; // Test-only access to real deferred pass outputs, before forward replay.
+    friend struct RHI210GoldenPassAccess;      // Test-only access to real deferred pass outputs, before forward replay.
+    friend struct RHI210DeferredResolveAccess; // Native regression access to the production resolve inputs.
 
   public:
     /**
@@ -1197,6 +1198,13 @@ class GraphicsEngine
     // Basic shader system resources (fallback rendering pipeline)
     ComPtr<ID3D11VertexShader> m_basicVertexShader;
     ComPtr<ID3D11PixelShader> m_basicPixelShader;
+#ifdef SPARK_PLATFORM_WINDOWS
+    // The forward pixel shader owns its deferred variant through D3D11 private
+    // interface data. Resetting the basic shader (reload/recovery/shutdown) also
+    // releases the variant; there is no separate device lifetime to keep in sync.
+    inline static constexpr GUID kDeferredGBufferShaderGuid = {
+        0x94ef71a4, 0x7a9e, 0x43c2, {0x98, 0x38, 0xf2, 0x62, 0xe7, 0x19, 0xb2, 0x21}};
+#endif
     ComPtr<ID3D11InputLayout> m_basicInputLayout;
     ComPtr<ID3D11Buffer> m_basicConstantBuffer;
     ComPtr<ID3D11Buffer> m_basicFrameConstantBuffer; ///< Per-frame constant buffer (camera, lighting)
@@ -1335,6 +1343,12 @@ class GraphicsEngine
         float roughness);                                    ///< Cached 1x1 texture for scalar "roughness" JSON values
     HRESULT CompileEmbeddedVertexShader(ID3DBlob** blobOut); ///< Compile built-in vertex shader from source string
     HRESULT CompileEmbeddedPixelShader(ID3DBlob** blobOut);  ///< Compile built-in pixel shader from source string
+    HRESULT InitializeDeferredGBufferShader();
+#ifdef SPARK_PLATFORM_WINDOWS
+    HRESULT InitializeDeferredLighting();    ///< Render-thread initialization; resources owned by the basic shader.
+    bool CanResolveDeferredLighting() const; ///< Requires complete, matching single-sample attachments.
+    bool ResolveDeferredLighting(const XMMATRIX& view, const XMMATRIX& projection, uint32_t& resolvedLights);
+#endif
 
     // Per-frame camera state (stored during UpdateFrameConstants for system queries)
     DirectX::XMMATRIX m_frameViewMatrix = DirectX::XMMatrixIdentity();

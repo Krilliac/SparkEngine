@@ -43,7 +43,15 @@ struct RHI210GoldenPassAccess
     static void Geometry(GraphicsEngine& engine, const std::vector<GameObject*>& objects, const XMMATRIX& view,
                          const XMMATRIX& projection)
     {
+        engine.SetBasicShaders();
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> forward;
+        engine.GetContext()->PSGetShader(&forward, nullptr, nullptr);
         engine.FillGBuffer(objects, view, projection);
+        // Geometry can be captured without calling LightingPass. Its temporary
+        // shader must already be restored, including the bound context state.
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> restored;
+        engine.GetContext()->PSGetShader(&restored, nullptr, nullptr);
+        EXPECT_TRUE(restored.Get() == forward.Get());
     }
 
     static void Lighting(GraphicsEngine& engine, const XMMATRIX& view, const XMMATRIX& projection)

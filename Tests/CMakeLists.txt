@@ -1168,12 +1168,15 @@ target_sources(SparkTests PRIVATE
     TestLIFE200LifecycleLoopReal.cpp
     TestLIFE200ModuleReloadLoopReal.cpp
     TestD3D11DeviceContractsReal.cpp
+    TestRHI210MatrixContracts.cpp
+    TestRHI210TextureDecode.cpp
     TestRHI210D3D11GoldenReal.cpp
     TestRHI210D3D11PassGoldenReal.cpp
     TestRHI210D3D11FrameGoldenReal.cpp
     TestRHI210D3D11SceneGoldenReal.cpp
     TestRHI210D3D11WorldGoldenReal.cpp
     TestRHI210D3D11PrimaryGoldenReal.cpp
+    TestRHI210D3D11DeferredResolveReal.cpp
     TestRHI210D3D11ValidationReal.cpp
     TestRHI210D3D11DeviceLossReal.cpp
     TestSEC2RenderingHardeningReal.cpp
@@ -3012,7 +3015,19 @@ endif()
 
 # RHI-210: D3D11 golden-frame and render-target resource contracts. Exact
 # counts so a filter that silently selects nothing (or a skip) cannot pass.
+add_test(NAME RHI210_MatrixContracts COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+set_tests_properties(RHI210_MatrixContracts PROPERTIES
+    ENVIRONMENT "SPARK_TEST_FILE=TestRHI210MatrixContracts.cpp;SPARK_TEST_EXPECT_COUNT=3"
+    LABELS "rendering;unit;cpu"
+    TIMEOUT 30)
 if(WIN32)
+    add_test(NAME RHI210_TextureDecode COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    set_tests_properties(RHI210_TextureDecode PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI210TextureDecode.cpp;SPARK_TEST_EXPECT_COUNT=2"
+        LABELS "rendering;d3d11;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
+    spark_exclude_from_main_suite(RHI210_TextureAsset_)
     add_test(NAME D3D11_Golden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11_Golden PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_Golden_;SPARK_TEST_EXPECT_COUNT=2"
@@ -3063,6 +3078,15 @@ if(WIN32)
         RUN_SERIAL TRUE
         TIMEOUT 300)
     spark_exclude_from_main_suite(D3D11WorldGolden_)
+    # Focused production deferred resolve regressions; no golden baseline dependency.
+    add_test(NAME D3D11DeferredResolve COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+    set_tests_properties(D3D11DeferredResolve PROPERTIES
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI210D3D11DeferredResolveReal.cpp;SPARK_TEST_EXPECT_COUNT=3"
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:SparkTests>"
+        LABELS "d3d11;d3d11-validation;d3d11-debug-layer"
+        RUN_SERIAL TRUE
+        TIMEOUT 120)
+    spark_exclude_from_main_suite(D3D11DeferredResolve_)
     add_test(NAME D3D11PrimaryGolden COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(D3D11PrimaryGolden PROPERTIES
         ENVIRONMENT
