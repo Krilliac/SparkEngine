@@ -12,7 +12,7 @@ import tempfile
 import time
 import zipfile
 
-SOURCE = "2b14035640e9e1ee00967dd60905d56eb7000adf"
+SOURCE = "d90b86e42fd586a56d53f077bbca6a457200d9bd"
 TARGETS = "SparkEngine SparkGameFPS SparkEditor SparkConsole SparkShaderCompiler SparkCrashReporter SparkCooker SparkWorker SparkAutomation SparkLauncher SparkBuild SparkInstaller SparkMismatchedModuleFixture SparkPreviousSdkModuleFixture".split()
 
 
