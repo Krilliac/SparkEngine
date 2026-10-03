@@ -6,6 +6,35 @@ The `SceneManager` handles loading, saving, and manipulating scenes at runtime. 
 
 **Source:** `SparkEngine/Source/SceneManager/SceneManager.h`
 
+## Reflected startup scenes in FPS
+
+The editor packages its selected default scene as `Startup.sparkscene` beside
+the game host. SparkGameFPS consumes that file through `SceneManager::LoadScene`
+before initializing its camera and player. Selection uses the executable directory,
+not the working directory. Only a genuinely absent startup file permits the legacy
+`Assets/Scenes/level1.scene` path; an unreadable or invalid selected file fails module
+initialization. The host's separate `-scene` preview mode is unchanged.
+
+This is a deliberately bounded adapter, not complete ECS-to-FPS scene support.
+It accepts root entities with unique nonempty names and Transform plus either an
+OBJ MeshRenderer or one main Camera. Position/rotation/scale, camera FOV and clipping
+are transferred to gameplay state. Camera scale must be one, pitch must be within
+[-89,89] degrees, FOV within [10,170], near within [0.01,10], and far within [100,10000]
+with near below far. Hierarchy, other components, explicit materials, nondefault
+visibility/shadow/emissive settings, missing meshes and unsupported camera values
+fail rather than silently lose authored state. Unicode and quoted names are accepted;
+the legacy node lookup requires unique names. Mesh references must resolve beneath
+the scene's project root and load as actual OBJ geometry, without placeholder fallback.
+
+The primary reflected document is read with the existing strict deserializer and
+size bound, without automatic `.bak` recovery. The existing LoadScene transaction
+retains the old nodes, object ownership, path and dirty state on failure. Successful
+windowed FPS startup exposes committed node, actual mesh, camera and player records.
+Data-only SceneManager loading cannot establish GPU mesh consumption, and the separate
+headless FPS arena does not exercise this startup adapter. Native regression and
+installed windowed WARP results are required for the new source; prior Release
+evidence does not cover it or certify a final Shipping playthrough.
+
 ## Overview
 
 The SceneManager owns:

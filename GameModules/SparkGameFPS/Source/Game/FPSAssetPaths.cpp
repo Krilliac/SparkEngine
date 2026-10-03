@@ -76,6 +76,12 @@ namespace Spark
         {
             static const std::filesystem::path resolved = []
             {
+                std::filesystem::path startup;
+                bool present = false;
+                std::string startupError;
+                ResolveStartupScene(startup, present, startupError);
+                if (present)
+                    return startup.parent_path() / "Assets";
                 std::filesystem::path found = FindAssetRoot(DefaultSearchBases());
                 if (!found.empty())
                     return found;
@@ -91,6 +97,45 @@ namespace Spark
         {
             std::error_code error;
             return std::filesystem::is_directory(Root(), error);
+        }
+
+        bool ResolveStartupScene(std::filesystem::path& resolved, bool& present, std::string& error)
+        {
+            present = false;
+            error.clear();
+            resolved.clear();
+            std::error_code ec;
+            const auto executable = ExecutableDirectory();
+            if (executable.empty())
+            {
+                error = "host executable directory is unavailable";
+                return false;
+            }
+            const auto root = std::filesystem::canonical(executable, ec);
+            if (ec)
+            {
+                error = "host executable directory cannot be resolved";
+                return false;
+            }
+            resolved = root / "Startup.sparkscene";
+            const auto status = std::filesystem::symlink_status(resolved, ec);
+            if (status.type() == std::filesystem::file_type::not_found &&
+                (!ec || ec == std::errc::no_such_file_or_directory))
+                return true;
+            present = true;
+            if (ec || !std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status))
+            {
+                error = "Startup.sparkscene must be a readable regular file beside the host";
+                return false;
+            }
+            const auto canonical = std::filesystem::canonical(resolved, ec);
+            if (ec || canonical.parent_path() != root)
+            {
+                error = "Startup.sparkscene resolves outside the host directory";
+                return false;
+            }
+            resolved = canonical;
+            return true;
         }
 
         std::wstring Resolve(const std::wstring& relativeToAssetRoot)
