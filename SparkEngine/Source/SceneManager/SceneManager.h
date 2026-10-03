@@ -162,9 +162,11 @@ class SceneManager
      * File format is determined by extension and the versioned file header:
      * - `.scene` → authored INI or versioned text; older object rows remain readable
      * - `.json` → versioned text (the historical method name predates this format)
-     * - `.sparkscene` → strict reflected root mesh/main-camera subset; unsupported
+     * - `.sparkscene` → strict reflected root mesh/main-camera/neutral player-spawn subset; unsupported
      *   components, hierarchy, materials or asset references reject the load. No backup
-     *   or placeholder fallback is used. SaveScene does not write this reflected format.
+     *   or placeholder fallback is used. Spawn points require default tag, enabled, team 0, radius/cooldown 0,
+     *   unlimited concurrency, unit scale, supported pitch and at most 32 points; priority/facing are preserved.
+     *   SaveScene does not write this reflected format.
      *
      * @param filepath  Absolute or asset-relative path to the scene file.
      * @return          `true` on success; `false` if the file is missing or malformed.

@@ -72,7 +72,7 @@ Workflow triggers and required/advisory matrix rows are defined in `.github/work
 
 ## Testing
 
-8,537 test definitions across 739 files in `Tests/` with internal framework + CTest.
+8,543 test definitions across 740 files in `Tests/` with internal framework + CTest.
 
 ```powershell
 # Registered CTest cases; an empty selection is an error.

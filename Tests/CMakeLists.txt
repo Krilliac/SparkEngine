@@ -1198,6 +1198,7 @@ target_sources(SparkTests PRIVATE
     TestSEC100ChatAuditLogReal.cpp
     TestSEC100RemoteAdminUnavailableReal.cpp
     TestSaveSystemRoundTripReal.cpp
+    TestFPSOwnedSaveDecode.cpp
     TestSAVE230NewerFormatSlotReal.cpp
     TestSaveInterruptionReal.cpp
     TestDocumentInterruptionReal.cpp

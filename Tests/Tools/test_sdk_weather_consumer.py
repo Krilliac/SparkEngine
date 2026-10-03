@@ -124,9 +124,14 @@ class WeatherConsumerContracts(unittest.TestCase):
                 for weather,available in (('',0),('-weather',1)):
                     (sdk/f'runtime{weather}-stdout.log').write_text(f'SPARK_SDK_WEATHER module=SparkGeneratedGame available={available} accepted={available} invalid_rejected={available} clear_accepted={available} callback=OnLoad\n')
                     (sdk/f'runtime{weather}-stderr.log').write_text('x'*20000)
-                variables=dict(SPARK_TEST_ROOT=sdk.as_posix(),_module_name='SparkGeneratedGame',SPARK_WEATHER_SOURCE_SHA='a'*40,SPARK_WEATHER_WORKFLOW_SHA='b'*40,SPARK_WEATHER_RUN_ID='123',SPARK_WEATHER_RUN_ATTEMPT='1',_weather_consumer_sha256='d'*64,_weather_host_after='c'*64,_image_sha256='e'*64,_weather_sidecar_after='f'*64)
+                variables=dict(_scanned='2',SPARK_TEST_ROOT=sdk.as_posix(),_module_name='SparkGeneratedGame',SPARK_WEATHER_SOURCE_SHA='a'*40,SPARK_WEATHER_WORKFLOW_SHA='b'*40,SPARK_WEATHER_RUN_ID='123',SPARK_WEATHER_RUN_ATTEMPT='1',_weather_consumer_sha256='d'*64,_weather_host_after='c'*64,_image_sha256='e'*64,_weather_sidecar_after='f'*64)
                 self.cmake('\n'.join('set('+key+' '+bracket(value)+')' for key,value in variables.items())+'\n'+writer)
                 receipt=sdk/'weather-identity.json'
+                boundary=json.loads(receipt.read_text())
+                self.assertIs(type(boundary['boundary_scanned']),int)
+                self.assertEqual(boundary['boundary_scanned'],2)
+                self.assertIs(type(boundary['boundary_violations']),int)
+                self.assertEqual(boundary['boundary_violations'],0)
                 binding=dict(passed=True,source_sha='a'*40,host_sha256='c'*64,weather_identity_sha256=module.digest(receipt))
                 module.save(root/'sdk-binding.json',binding)
                 if mutation=='missing-receipt':receipt.unlink()

@@ -1,12 +1,16 @@
 #include "TestFramework.h"
 #include "Engine/ECS/Components.h"
+#include "Engine/Events/EventSystem.h"
+#include "Game/GameMechanics.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 #include "SceneManager/SceneManager.h"
+#include "Utils/EventBus.h"
 
 #include <nlohmann_json.h>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <utility>
 
 namespace
 {
@@ -47,6 +51,26 @@ namespace
         }
 
         void Write(const std::string& text) const { std::ofstream(scene, std::ios::binary) << text; }
+
+        std::string WithSpawns(int count = 2) const
+        {
+            World world;
+            ASSERT_TRUE(Spark::DeserializeInto(world, original, Spark::SceneDeserializeMode::StrictRecovery));
+            for (int i = 0; i < count; ++i)
+            {
+                auto entity = world.CreateEntity("AuthoredSpawn" + std::to_string(i));
+                auto& transform = world.AddComponent<Transform>(entity);
+                transform.position = {7.0f + i, 11.0f, -13.0f};
+                transform.rotation = {10.0f, 90.0f, 0.0f};
+                auto& spawn = world.AddComponent<SpawnPointComponent>(entity);
+                spawn.spawnRadius = 0.0f;
+                spawn.respawnDelay = 0.0f;
+                spawn.priority = i;
+            }
+            std::string result;
+            ASSERT_TRUE(Spark::TrySerializeWorld(world, result));
+            return result;
+        }
 
         void ExpectRejectedWithRollback(const std::string& text)
         {
@@ -126,4 +150,136 @@ TEST(SceneManager_ReflectedGameplayRejectsMaterialLoss)
             if (component["type"] == "MeshRenderer")
                 component["fields"]["materialPath"] = "Assets/Materials/authored.json";
     fixture.ExpectRejectedWithRollback(document.dump());
+}
+
+TEST(SceneManager_ReflectedGameplaySpawnSelectionAndRespawnUseAuthoredPoint)
+{
+    ReflectedGameplayFixture fixture;
+    fixture.Write(fixture.WithSpawns());
+    SceneManager scene(nullptr, nullptr);
+    ASSERT_TRUE(scene.LoadScene(fixture.scene.wstring()));
+    Spark::RespawnSystem respawn;
+    ASSERT_TRUE(respawn.Initialize());
+    ASSERT_EQ(respawn.BindSpawnPoints(Spark::RespawnSystem::CollectAuthoredSpawnPoints(scene)), 2);
+    // StartWaves (F11's production action) uses this exact selector. This is a
+    // real-class selection/event test, not keyboard or rendered-game evidence.
+    const auto selected = respawn.GetBestSpawnPoint(-1);
+    EXPECT_EQ(selected.name, std::string("AuthoredSpawn1"));
+    EXPECT_EQ(selected.position.x, 8.0f);
+    EXPECT_EQ(selected.position.y, 11.0f);
+    EXPECT_EQ(selected.position.z, -13.0f);
+    EXPECT_EQ(selected.rotation.y, 90.0f);
+
+    Spark::EventBus bus;
+    Spark::PlayerRespawnEvent event{};
+    int published = 0;
+    auto subscription = bus.Subscribe<Spark::PlayerRespawnEvent>(
+        [&](const Spark::PlayerRespawnEvent& value)
+        {
+            event = value;
+            ++published;
+        });
+    respawn.SetEventBus(&bus);
+    respawn.OnPlayerDeath("Enemy", "Rifle", false);
+    const float delay = respawn.GetRespawnDelay();
+    EXPECT_TRUE(delay > 0.0f); // Point cooldown=0 must not override the death timer.
+    respawn.Update(delay / 2.0f);
+    EXPECT_EQ(published, 0);
+    respawn.Update(delay);
+    EXPECT_EQ(published, 1);
+    EXPECT_EQ(event.spawnX, selected.position.x);
+    EXPECT_EQ(event.spawnY, selected.position.y);
+    EXPECT_EQ(event.spawnZ, selected.position.z);
+    ASSERT_TRUE(respawn.HasLastRespawnPoint());
+    EXPECT_EQ(respawn.GetLastRespawnPoint().rotation.y, selected.rotation.y);
+    auto tied = Spark::RespawnSystem::CollectAuthoredSpawnPoints(scene);
+    for (auto& spawn : tied)
+        spawn.priority = 4;
+    ASSERT_EQ(respawn.BindSpawnPoints(tied), 2);
+    EXPECT_EQ(respawn.GetBestSpawnPoint(-1).name, tied.front().name);
+}
+
+TEST(SceneManager_ReflectedGameplayRejectsUnsupportedSpawnSemantics)
+{
+    ReflectedGameplayFixture fixture;
+    const std::pair<const char*, const char*> unsupported[] = {
+        {"spawnTag", "wave_spawn"}, {"enabled", "false"},  {"teamID", "1"},
+        {"spawnRadius", "1"},       {"respawnDelay", "5"}, {"maxConcurrent", "1"}};
+    for (const auto& [field, value] : unsupported)
+    {
+        fixture.Write(fixture.original);
+        auto document = nlohmann::json::parse(fixture.WithSpawns(1));
+        for (auto& entity : document["entities"])
+            for (auto& component : entity["components"])
+                if (component["type"] == "SpawnPointComponent")
+                    component["fields"][field] = value;
+        fixture.ExpectRejectedWithRollback(document.dump());
+    }
+    // Missing fields cannot silently become supported zero-radius/cooldown values.
+    fixture.Write(fixture.original);
+    auto omitted = nlohmann::json::parse(fixture.WithSpawns(1));
+    for (auto& entity : omitted["entities"])
+        for (auto& component : entity["components"])
+            if (component["type"] == "SpawnPointComponent")
+                component["fields"].erase("spawnRadius");
+    fixture.ExpectRejectedWithRollback(omitted.dump());
+}
+
+TEST(SceneManager_ReflectedGameplayRejectsSpawnTruncationAndMeshlessScene)
+{
+    ReflectedGameplayFixture fixture;
+    fixture.Write(fixture.WithSpawns(32));
+    SceneManager boundary(nullptr, nullptr);
+    ASSERT_TRUE(boundary.LoadScene(fixture.scene.wstring()));
+    Spark::RespawnSystem respawn;
+    ASSERT_TRUE(respawn.Initialize());
+    EXPECT_EQ(respawn.BindSpawnPoints(Spark::RespawnSystem::CollectAuthoredSpawnPoints(boundary)), 32);
+    fixture.Write(fixture.original);
+    fixture.ExpectRejectedWithRollback(fixture.WithSpawns(33));
+    fixture.Write(fixture.original);
+    auto document = nlohmann::json::parse(fixture.WithSpawns(1));
+    auto& entities = document["entities"];
+    for (auto it = entities.begin(); it != entities.end();)
+    {
+        bool mesh = false;
+        for (const auto& component : (*it)["components"])
+            mesh = mesh || component["type"] == "MeshRenderer";
+        if (mesh)
+            it = entities.erase(it);
+        else
+            ++it;
+    }
+    fixture.ExpectRejectedWithRollback(document.dump());
+}
+
+TEST(SceneManager_ReflectedGameplayRejectsSpawnShapeAndUnexpectedFields)
+{
+    ReflectedGameplayFixture fixture;
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        World world;
+        ASSERT_TRUE(Spark::DeserializeInto(world, fixture.WithSpawns(1), Spark::SceneDeserializeMode::StrictRecovery));
+        for (auto entity : world.GetEntitiesWith<SpawnPointComponent>())
+        {
+            if (variant == 0)
+                world.GetComponent<Transform>(entity)->scale = {2, 1, 1};
+            else if (variant == 1)
+                world.GetComponent<Transform>(entity)->rotation.x = 90.0f;
+            else if (variant == 2)
+                world.AddComponent<MeshRenderer>(entity).meshPath = "Assets/Meshes/triangle.obj";
+            else
+                world.AddComponent<Camera>(entity).isMainCamera = true;
+        }
+        std::string serialized;
+        ASSERT_TRUE(Spark::TrySerializeWorld(world, serialized));
+        fixture.Write(fixture.original);
+        fixture.ExpectRejectedWithRollback(serialized);
+    }
+    fixture.Write(fixture.original);
+    auto runtimeField = nlohmann::json::parse(fixture.WithSpawns(1));
+    for (auto& entity : runtimeField["entities"])
+        for (auto& component : entity["components"])
+            if (component["type"] == "SpawnPointComponent")
+                component["fields"]["lastUsedTime"] = "0";
+    fixture.ExpectRejectedWithRollback(runtimeField.dump());
 }

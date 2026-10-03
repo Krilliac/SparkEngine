@@ -213,6 +213,11 @@ static bool LookupKeyState(const std::unordered_map<int, bool>& states, int key)
     return it != states.end() && it->second;
 }
 
+bool InputManager::IsFrameKeyDown(int key) const
+{
+    return LookupKeyState(m_frameKeyStates, key);
+}
+
 bool InputManager::WasKeyPressed(int key) const
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "WasKeyPressed - invalid key code");
@@ -245,6 +250,7 @@ bool InputManager::WasMouseButtonReleased(int button) const
 
 void InputManager::LatchFrameEdges()
 {
+    ++m_inputFrameSequence;
     // Hosts deliver this frame's input messages BEFORE calling Update(), so the
     // "previous" snapshot must be the one taken by the previous Update(), not a
     // copy of the live state taken now: that copy already holds this frame's

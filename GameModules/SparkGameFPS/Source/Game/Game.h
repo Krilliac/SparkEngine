@@ -645,6 +645,30 @@ class SPARK_GAME_API Game
      */
     void HandleInput(float dt);
 
+    // Default-off, read-only observations of actual production input dispatch.
+    void BeginInputObservation() noexcept;
+    void RecordInputObservation(const char* phase) noexcept;
+    void EndInputObservation() noexcept;
+    bool m_inputObservationChecked = false;
+    bool m_inputObservationEnabled = false;
+    bool m_inputObservationFailed = false;
+    bool m_inputObservationWanted = false;
+    bool m_inputObservationTransferred = false;
+    unsigned long long m_inputObservationUpdate = 0;
+    unsigned long long m_inputObservationOperation = 0;
+    unsigned int m_inputObservationRecords = 0;
+    size_t m_inputObservationBytes = 0;
+    unsigned int m_inputObservationMask = 0;
+    unsigned int m_inputObservationPreviousMask = ~0u;
+    unsigned int m_inputObservationStableFrames = 0;
+    unsigned int m_inputObservationPressed = 0;
+    unsigned int m_inputObservationReleased = 0;
+    int m_inputObservationAction = 0; // none/save/load/conflict = 0/1/2/3
+    int m_inputObservationResult = -1;
+    int m_inputObservationReason = 0; // none/missing quicksave = 0/1
+    Spark::FPSLocalProfile m_inputObservationTransfer;
+
+
     /// @brief Step the arena autopilot when enabled and fire when it is on target.
     void UpdateArenaAutopilot(float dt);
 

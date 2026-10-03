@@ -136,3 +136,22 @@ TEST(InputFrameEdgesReal_TimedReleaseIsAReleaseEdgeOnTheFrameThatAppliesIt)
     RunFrameInputStep(input);
     EXPECT_FALSE(input.WasKeyReleased(VK_SPACE));
 }
+
+TEST(InputFrameEdgesReal_ObservationIsLatchedAndSequenceAdvancesOnlyOnUpdate)
+{
+    InputManager input;
+    const auto initial = input.GetInputFrameSequence();
+    input.HandleMessage(WM_KEYDOWN, VK_F2, 0);
+    EXPECT_FALSE(input.IsFrameKeyDown(VK_F2));
+    EXPECT_EQ(input.GetInputFrameSequence(), initial);
+    input.Update();
+    EXPECT_EQ(input.GetInputFrameSequence(), initial + 1);
+    EXPECT_TRUE(input.IsFrameKeyDown(VK_F2));
+    input.HandleMessage(WM_KEYUP, VK_F2, 0);
+    EXPECT_TRUE(input.IsFrameKeyDown(VK_F2));
+    EXPECT_EQ(input.GetInputFrameSequence(), initial + 1);
+    input.Update();
+    EXPECT_FALSE(input.IsFrameKeyDown(VK_F2));
+    EXPECT_TRUE(input.WasKeyReleased(VK_F2));
+    EXPECT_EQ(input.GetInputFrameSequence(), initial + 2);
+}

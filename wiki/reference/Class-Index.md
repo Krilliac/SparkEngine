@@ -2136,9 +2136,9 @@
 | `InputManager` | class | SparkEngine | [InputManager.h:L49](../../SparkEngine/Source/Input/InputManager.h#L49) |  |
 | `InputManager` | class | SparkEngine | [SceneManager.h:L84](../../SparkEngine/Source/SceneManager/SceneManager.h#L84) |  |
 | `InputManager` | class | SparkSDK | [IEngineContext.h:L24](../../SparkSDK/Include/Spark/IEngineContext.h#L24) |  |
-| `InputMetrics` | struct | SparkEngine | [InputManager.h:L273](../../SparkEngine/Source/Input/InputManager.h#L273) | Input metrics structure for console integration |
+| `InputMetrics` | struct | SparkEngine | [InputManager.h:L280](../../SparkEngine/Source/Input/InputManager.h#L280) | Input metrics structure for console integration |
 | `InputPreset` | struct | SparkEngine | [InputBindings.h:L97](../../SparkEngine/Source/Input/InputBindings.h#L97) | A named preset containing a full set of input bindings. |
-| `InputSettings` | struct | SparkEngine | [InputManager.h:L293](../../SparkEngine/Source/Input/InputManager.h#L293) | Input settings structure for console control |
+| `InputSettings` | struct | SparkEngine | [InputManager.h:L300](../../SparkEngine/Source/Input/InputManager.h#L300) | Input settings structure for console control |
 | `InputState` | struct | Tests | [TestServerMockClient.cpp:L404](../../Tests/TestServerMockClient.cpp#L404) |  |
 | `InspectorPanel` | class | SparkEditor | [InspectorPanel.h:L41](../../SparkEditor/Source/Panels/InspectorPanel.h#L41) | Inspector panel |
 | `InspectorPendingWorldEdit` | class | SparkEditor | [InspectorPendingWorldEdit.h:L26](../../SparkEditor/Source/Panels/InspectorPendingWorldEdit.h#L26) |  |
@@ -3694,7 +3694,7 @@
 | `RecursiveEvent` | struct | Tests | [TestAdversarialEngine.cpp:L213](../../Tests/TestAdversarialEngine.cpp#L213) |  |
 | `RedeployFacts` | struct | Tests | [TestTFRedeployRules.cpp:L77](../../Tests/TestTFRedeployRules.cpp#L77) |  |
 | `ReflAttr_TestStruct` | struct | Tests | [TestReflectionReal.cpp:L35](../../Tests/TestReflectionReal.cpp#L35) |  |
-| `ReflectedGameplayFixture` | struct | Tests | [TestSceneManagerReflectedReal.cpp:L13](../../Tests/TestSceneManagerReflectedReal.cpp#L13) |  |
+| `ReflectedGameplayFixture` | struct | Tests | [TestSceneManagerReflectedReal.cpp:L17](../../Tests/TestSceneManagerReflectedReal.cpp#L17) |  |
 | `ReflectionProbe` | struct | SparkEngine | [ReflectionProbeCache.h:L35](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L35) |  |
 | `ReflectionProbeCache` | class | SparkEngine | [ReflectionProbeCache.h:L82](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L82) | Manages cached reflection probe cubemaps |
 | `ReflectionProbeComponent` | struct | SparkEngine | [VolumeComponents.h:L105](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L105) | Defines a reflection probe capture point. |
@@ -5214,7 +5214,7 @@
 | `TilemapRenderSystem` | class | SparkEngine | [Systems2D.h:L367](../../SparkEngine/Source/Engine/ECS/Systems/Systems2D.h#L367) | Submits tilemap tile draw commands to the SpriteBatch. |
 | `TilemapSnapshot` | struct | SparkEditor | [TilemapEditorPanel.h:L96](../../SparkEditor/Source/Panels/TilemapEditorPanel.h#L96) |  |
 | `TilesetInfo` | struct | SparkEngine | [Sprite2DComponents.h:L236](../../SparkEngine/Source/Engine/ECS/Components/Sprite2DComponents.h#L236) |  |
-| `TimedKeyRelease` | struct | SparkEngine | [InputManager.h:L93](../../SparkEngine/Source/Input/InputManager.h#L93) | A console-simulated key press waiting for its release deadline. |
+| `TimedKeyRelease` | struct | SparkEngine | [InputManager.h:L95](../../SparkEngine/Source/Input/InputManager.h#L95) | A console-simulated key press waiting for its release deadline. |
 | `TimeOfDayChangedEvent` | struct | SparkEngine | [EventSystem.h:L105](../../SparkEngine/Source/Engine/Events/EventSystem.h#L105) | Fired when the time of day changes significantly (e.g. dawn, dusk). |
 | `TimeOfDayPanel` | class | SparkEditor | [TimeOfDayPanel.h:L19](../../SparkEditor/Source/Panels/TimeOfDayPanel.h#L19) | Panel for controlling the engine TimeOfDaySystem day/night cycle |
 | `TimeOfDaySettings` | struct | SparkEngine | [EngineSettings.h:L570](../../SparkEngine/Source/Core/EngineSettings.h#L570) |  |

@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*739 test-bearing `.cpp`/`.mm` files, 8537 source-level test definitions*
+*740 test-bearing `.cpp`/`.mm` files, 8543 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1286,6 +1286,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSLANLoopback` | 2 |
 | `TestFPSMultiplayer` | 19 |
+| `TestFPSOwnedSaveDecode` | 1 |
 | `TestFPSWeatherPort` | 8 |
 | `TestFastNoise2SIMD` | 32 |
 | `TestFaultIsolation` | 14 |
@@ -1362,7 +1363,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestInGameConsole` | 12 |
 | `TestInputActionSystem` | 12 |
 | `TestInputBindings` | 5 |
-| `TestInputFrameEdgesReal` | 5 |
+| `TestInputFrameEdgesReal` | 6 |
 | `TestInputSystem` | 11 |
 | `TestInstanceManager` | 14 |
 | `TestInventorySystem` | 11 |
@@ -1599,7 +1600,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestSceneConfigDatabaseReal` | 9 |
 | `TestSceneGraph2D` | 14 |
 | `TestSceneManager` | 21 |
-| `TestSceneManagerReflectedReal` | 6 |
+| `TestSceneManagerReflectedReal` | 10 |
 | `TestSceneManagerUnicodeReal` | 1 |
 | `TestSceneRoundtrip` | 8 |
 | `TestSceneSaveConfinedReal` | 5 |
