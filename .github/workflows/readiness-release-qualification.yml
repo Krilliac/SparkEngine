@@ -95,7 +95,7 @@ jobs:
     - name: Checkout exact combined product
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: c5a879f648544c14e40dd620069ce5a775d83fb4
+        ref: d90b86e42fd586a56d53f077bbca6a457200d9bd
         path: product
         submodules: recursive
         persist-credentials: false
@@ -135,27 +135,27 @@ jobs:
     - name: sde
       timeout-minutes: 5
       run: python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha
-        c5a879f648544c14e40dd620069ce5a775d83fb4
+        d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: graphics
       timeout-minutes: 10
       run: python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT"
-        --source-sha c5a879f648544c14e40dd620069ce5a775d83fb4
+        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: configure
       timeout-minutes: 15
       run: python harness/.github/scripts/qualify-full-windows.py configure --source product --root "$env:QUAL_ROOT"
-        --source-sha c5a879f648544c14e40dd620069ce5a775d83fb4
+        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: build
       timeout-minutes: 120
       run: python harness/.github/scripts/qualify-full-windows.py build --source product --root "$env:QUAL_ROOT"
-        --source-sha c5a879f648544c14e40dd620069ce5a775d83fb4
+        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: test
       timeout-minutes: 80
       run: python harness/.github/scripts/qualify-full-windows.py test --source product --root "$env:QUAL_ROOT"
-        --source-sha c5a879f648544c14e40dd620069ce5a775d83fb4
+        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: pack
       timeout-minutes: 10
       run: python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT"
-        --source-sha c5a879f648544c14e40dd620069ce5a775d83fb4
+        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
       if: ${{ always() && env.QUAL_ROOT != '' }}
     - name: Retain bounded text proof
       if: ${{ always() && env.QUAL_ROOT != '' }}
