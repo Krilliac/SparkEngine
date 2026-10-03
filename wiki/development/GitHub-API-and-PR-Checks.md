@@ -172,3 +172,32 @@ cross-configuration/toolset rejection. This corrects the observed doubled-prefix
 save key but does not solve the previous run's 2,390 multiple-input non-cacheable
 compiler calls. Actual invocation/response-file evidence is needed before any
 compiler flag change. The active pinned native run is not modified or retried.
+
+## Final installed-host ABI rejection driver
+
+`Tests/PackageSmoke/run_installed_module_abi_rejection.py` complements the
+same-host positive lifecycle test with the existing benign SDK N+1/N-1 fixtures.
+Supply an exact final MinSizeRel installed prefix, both fixture DLLs/sidecars,
+an external short ASCII evidence root, and the declared source SHA. The native
+Windows driver checks image hashes and exact SDK-only metadata drift, selects
+each module explicitly, and requires exit 2, the exact pre-OS-load mismatch
+diagnostic, zero lifecycle callbacks and no execution sentinel. Crashes, timeouts,
+wrong paths/versions or input mutation fail and retain diagnostic evidence.
+
+Each case starts outside the installed prefix with fresh LOCALAPPDATA/APPDATA;
+the engine may reanchor a manifest-bearing package's cwd, while existing user-path
+handling routes normal logs, settings, saves and trace to the isolated user root.
+The source-only workflow runs metadata/verdict and mocked orchestration tests;
+it executes no native host. CLI source/configuration labels are declarations,
+not binary attestation: final build/install manifests must bind measured hashes,
+and a positive lifecycle result must use the same installed host hash.
+
+Example for a separately coordinated native qualification (not this source CI):
+
+```text
+python -B Tests/PackageSmoke/run_installed_module_abi_rejection.py --installed-root <final-prefix> --newer <MinSizeRel>/SparkMismatchedModuleFixture.dll --previous <MinSizeRel>/SparkPreviousSdkModuleFixture.dll --evidence-root <external-short-ASCII-directory> --source-sha <exact-final-SHA> --configuration MinSizeRel
+```
+
+The active Primary job is Release rendering capture only. It provides no installed
+MinSizeRel ABI qualification. This driver does not build/install, alter ABI rules,
+replace signature/installer checks, or qualify real predecessor upgrade/rollback.
