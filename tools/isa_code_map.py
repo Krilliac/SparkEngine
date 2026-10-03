@@ -528,6 +528,12 @@ def find_switch_tables(records: list[Record], start: int, end: int, image: Image
                    and records[n].mnemonic not in ("call", "callq")}
         leaders |= {index_of[t] for targets in edges.values() for t in targets if t in index_of}
         preds = _predecessors(records, index_of, edges, noreturn)
+        if reachable_only:
+            # The initial linear sweep still decodes table bytes as instructions.
+            # Their unreachable branches must not become incoming code paths to
+            # the base/bound proof. Rebuilt-stream confirmation below uses every
+            # remaining instruction, with no such predecessor filtering.
+            preds = [[p for p in incoming if p in live] for incoming in preds]
         matched = {}
         for i in live:
             if records[i].mnemonic in UNCONDITIONAL_JUMPS and re.fullmatch(r"\*%r\w+", records[i].operands):
