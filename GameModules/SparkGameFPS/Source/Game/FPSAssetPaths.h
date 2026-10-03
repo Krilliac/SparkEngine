@@ -41,7 +41,8 @@ namespace Spark
         std::vector<std::filesystem::path> DefaultSearchBases();
 
         /**
-         * @brief The resolved asset root, computed once per process.
+         * @brief The resolved asset root, computed once per process. A packaged
+         * Startup.sparkscene binds it to Assets beside the host executable.
          * @return The discovered root, or `<working directory>/Assets` when the
          *         search found nothing (so error messages name a real path).
          */
@@ -49,6 +50,16 @@ namespace Spark
 
         /** @brief True when Root() actually exists on disk. */
         bool RootExists();
+
+        /**
+         * @brief Select the packaged startup scene beside the host executable.
+         * @param resolved Receives the native absolute Startup.sparkscene path.
+         * @param present True for any present leaf, including an invalid one.
+         * @param error Receives a diagnostic on failure; no CWD/source fallback.
+         * @return True for a regular scene file or an absent optional scene.
+         * Content parsing and readability checks occur when the scene is loaded.
+         */
+        bool ResolveStartupScene(std::filesystem::path& resolved, bool& present, std::string& error);
 
         /**
          * @brief Resolve a path expressed relative to the asset root.

@@ -154,15 +154,17 @@ class SceneManager
     // =========================================================================
 
     /**
-     * @brief Load a scene from a JSON or legacy binary file, replacing the current scene.
+     * @brief Load a supported scene, committing the replacement only on success.
      *
-     * Clears the existing hierarchy, parses the file, populates `m_sceneNodes` and
-     * `m_metadata`, and calls `InstantiateNodes()` to create `GameObject` instances.
-     * The dirty flag is cleared on success.
+     * Preserves the current nodes, object ownership, path and dirty state on failure.
+     * The dirty flag is cleared after a replacement is committed.
      *
      * File format is determined by extension and the versioned file header:
      * - `.scene` → authored INI or versioned text; older object rows remain readable
      * - `.json` → versioned text (the historical method name predates this format)
+     * - `.sparkscene` → strict reflected root mesh/main-camera subset; unsupported
+     *   components, hierarchy, materials or asset references reject the load. No backup
+     *   or placeholder fallback is used. SaveScene does not write this reflected format.
      *
      * @param filepath  Absolute or asset-relative path to the scene file.
      * @return          `true` on success; `false` if the file is missing or malformed.
@@ -473,6 +475,9 @@ class SceneManager
     void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
   private:
+    // Strict reflected startup subset; outer LoadScene owns rollback/events.
+    bool LoadReflected(const std::wstring& path);
+
     /**
      * @brief Load an authored INI or legacy `.scene` text file.
      *

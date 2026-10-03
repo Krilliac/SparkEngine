@@ -16,6 +16,15 @@ From the installed package's `bin` directory:
    issue form. Sign in to GitHub to submit. If no browser opens, run
    `PlaytestSparkFPS.cmd report-url` and paste the printed link into a browser.
 
+Player controls (also shown by `PlaytestSparkFPS.cmd help` and before launch):
+
+- `WASD` moves; left mouse fires; `R` reloads; `Space` jumps.
+- `F11` starts or restarts survival. `F5`-`F10` select a class.
+- `F2` saves the world and local profile. `F3` restores that save. Release before pressing again;
+  use one key at a time. These actions do not require the developer console.
+  The single quicksave slot is overwritten by the next successful save.
+- Click the game window to capture mouse-look; `Esc` releases it.
+
 In the issue, include the engine version, package/release identity, Windows and
 graphics details, reproduction steps, expected/actual result, and whether the
 smoke ran. Include the exact build commit only if the package supplied it; do

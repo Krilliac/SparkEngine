@@ -8,11 +8,24 @@ set "SPARK_PLAYTEST_ISSUE_URL=https://github.com/Krilliac/SparkEngine/issues/new
 if /I "%~1"=="report-url" goto report_url
 if /I "%~1"=="report" goto report
 if /I "%~1"=="check" goto check
+if /I "%~1"=="help" goto help
 if /I "%~1"=="smoke" goto smoke
 if "%~1"=="" goto run
 if /I "%~1"=="run" goto run
-echo Usage: PlaytestSparkFPS.cmd [run^|check^|smoke^|report^|report-url]
+echo Usage: PlaytestSparkFPS.cmd [run^|check^|smoke^|help^|report^|report-url]
 exit /b 2
+
+:help
+call :controls
+exit /b 0
+
+:controls
+echo WASD: move; left mouse: fire; R: reload; Space: jump.
+echo F11: start/restart survival; F5-F10: choose class.
+echo F2: quicksave; F3: quickload. Release before pressing again.
+echo Use one key at a time. Saving overwrites the quicksave slot.
+echo Click the game window for mouse-look; Esc releases it.
+exit /b 0
 
 :require_package
 if not exist "%SPARK_PLAYTEST_ENGINE%" (
@@ -34,6 +47,7 @@ exit /b %errorlevel%
 :run
 call :require_package
 if errorlevel 1 exit /b 1
+call :controls
 pushd "%SPARK_PLAYTEST_BIN%" || exit /b 1
 "%SPARK_PLAYTEST_ENGINE%" -game "%SPARK_PLAYTEST_MODULE%" -require-game
 set "SPARK_PLAYTEST_EXIT=%errorlevel%"

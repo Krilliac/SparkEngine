@@ -129,11 +129,21 @@ namespace
     class CookPackageScenario
     {
       public:
-        explicit CookPackageScenario(const char* tag)
+        explicit CookPackageScenario(const char* tag, bool realFPS = false) : m_realFPS(realFPS)
         {
             const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
             m_root = fs::temp_directory_path() /
                      ("spark-edt210-cook-package-" + std::string(tag) + "-" + std::to_string(stamp));
+            if (m_realFPS)
+            {
+                const char* evidence = std::getenv("SPARK_EDITOR_FPS_EVIDENCE_ROOT");
+                ASSERT_TRUE(evidence && *evidence);
+                const fs::path parent(evidence);
+                ASSERT_TRUE(parent.is_absolute() && fs::is_directory(parent));
+                m_root = parent / tag;
+                ASSERT_FALSE(fs::exists(m_root));
+                ASSERT_TRUE(fs::create_directory(m_root));
+            }
             m_project = m_root / kProjectName;
             m_package = m_root / "Package";
         }
@@ -142,7 +152,8 @@ namespace
         {
             History().Clear();
             std::error_code ec;
-            fs::remove_all(m_root, ec);
+            if (!m_realFPS)
+                fs::remove_all(m_root, ec);
         }
 
         CookPackageScenario(const CookPackageScenario&) = delete;
@@ -160,6 +171,18 @@ namespace
             ASSERT_TRUE(engine && *engine);
             const fs::path host(engine);
             ASSERT_TRUE(fs::is_regular_file(host));
+            if (m_realFPS)
+            {
+                const char* prefix = std::getenv("SPARK_ENGINE_INSTALLED_PREFIX");
+                const char* module = std::getenv("SPARK_FPS_MODULE");
+                ASSERT_TRUE(prefix && *prefix && module && *module);
+                m_module = fs::path(module);
+                ASSERT_EQ(m_module.filename().string(), std::string("SparkGameFPS.dll"));
+                ASSERT_TRUE(fs::is_regular_file(m_module));
+                ASSERT_TRUE(fs::is_regular_file(fs::path(m_module.string() + ".sparkabi")));
+                ExpectInstalledHost(m_module);
+                m_installedAssets = host.parent_path() / "Assets";
+            }
             ExpectInstalledHost(host);
 
             Author();
@@ -171,22 +194,30 @@ namespace
         HostRun RunPackagedScene() const
         {
             HostRun run;
-            auto launched = Spark::Process::Builder(Utf8(m_package / "ScenePreview" / kScenePreviewHost))
-                                .Arg("-headless")
-                                .Arg("-test-frames")
-                                .Arg(std::to_string(kTestFrames))
+            Spark::Process::Builder builder(Utf8(m_realFPS ? m_package / "Crate Game.exe" :
+                                                           m_package / "ScenePreview" / kScenePreviewHost));
+            if (m_realFPS)
+                builder.Arg("-game").Arg(Utf8(m_package / m_module.filename())).Arg("-require-game")
+                    .Arg("-threads").Arg("2").Arg("-window-size").Arg("640x360");
+            else
+                builder.Arg("-headless").Arg("-scene").Arg("Scenes/Startup.sparkscene");
+            auto launched = builder.Arg("-test-frames").Arg(std::to_string(m_realFPS ? 30 : kTestFrames))
                                 .Arg("-no-subprocess")
-                                .Arg("-scene")
-                                .Arg("Scenes/Startup.sparkscene")
                                 .WorkingDirectory(Utf8(m_package))
-                                .CaptureStdout()
-                                .MergeStderrIntoStdout()
-                                .NoWindow()
-                                .Launch();
+                                .CaptureStdout().MergeStderrIntoStdout().NoWindow().Launch();
+            const auto finish = [&](HostRun result)
+            {
+                if (m_realFPS)
+                {
+                    std::ofstream(m_root / "runtime.log", std::ios::binary) << result.output;
+                    std::ofstream(m_root / "exit-code.txt", std::ios::binary) << result.exitCode << '\n';
+                }
+                return result;
+            };
             if (!launched)
             {
                 run.output = "launch failed: " + launched.error();
-                return run;
+                return finish(run);
             }
             Spark::Process& process = *launched;
             std::string line;
@@ -194,19 +225,29 @@ namespace
             while (process.IsRunning() && std::chrono::steady_clock::now() < deadline)
             {
                 while (process.TryReadLine(line))
+                {
                     run.output += line + '\n';
+                    if (m_realFPS && run.output.size() > 128 * 1024)
+                    {
+                        process.Kill();
+                        run.output += "<runtime proof exceeded 128 KiB; qualification failed>\n";
+                        return finish(run);
+                    }
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             if (process.IsRunning())
             {
                 process.Kill();
                 run.output += "<killed after 120 s>\n";
-                return run;
+                return finish(run);
             }
             run.output += process.ReadAllStdout();
             run.exitCode = process.WaitForExit();
+            if (m_realFPS && run.output.size() > 128 * 1024)
+                run.exitCode = -1;
             run.output.erase(std::remove(run.output.begin(), run.output.end(), '\r'), run.output.end());
-            return run;
+            return finish(run);
         }
 
       private:
@@ -247,6 +288,19 @@ namespace
             fs::create_directories(m_project / "Scenes");
             fs::create_directories(m_project / "Config");
             std::ofstream(mesh, std::ios::binary) << kCrateObj;
+            if (m_realFPS)
+            {
+                // Genuine FPS startup initializes these two weapon geometries.
+                // Copy only the installed inputs, then let the real cooker stage
+                // them; do not substitute source-tree assets or placeholder meshes.
+                fs::create_directories(assets / "Models");
+                for (const char* filename : {"pistol.obj", "rifle.obj"})
+                {
+                    const fs::path installedMesh = m_installedAssets / "Models" / filename;
+                    ASSERT_TRUE(fs::is_regular_file(installedMesh));
+                    ASSERT_TRUE(fs::copy_file(installedMesh, assets / "Models" / filename));
+                }
+            }
             std::ofstream(m_project / "Config" / "Game.json", std::ios::binary) << "{}\n";
             const fs::path document = m_project / (std::string(kProjectName) + ".sparkproject");
             std::ofstream(document, std::ios::binary)
@@ -262,6 +316,16 @@ namespace
             const ::EntityID crate = authored->CreateEntity("Crate");
             authored->AddComponent<::Transform>(crate);
             authored->AddComponent<::MeshRenderer>(crate);
+            if (m_realFPS)
+            {
+                authored->GetComponent<::Transform>(crate)->position = {3.0f, 2.0f, 5.0f};
+                const ::EntityID camera = authored->CreateEntity("AuthoredCamera");
+                authored->AddComponent<::Transform>(camera);
+                authored->AddComponent<::Camera>(camera);
+                authored->GetComponent<::Transform>(camera)->position = {7.0f, 11.0f, -13.0f};
+                authored->GetComponent<::Camera>(camera)->isMainCamera = true;
+                authored->GetComponent<::Camera>(camera)->fov = 70.0f;
+            }
             editorDocument.ReplaceWorld(std::move(authored));
             ::World& world = *editorDocument.GetWorld();
 
@@ -289,6 +353,16 @@ namespace
             ASSERT_TRUE(Spark::SaveWorld(world, Utf8(m_project / "Scenes" / "Default.sparkscene"), &error));
             ASSERT_TRUE(projects.RecordOpenedScene("Scenes/Default.sparkscene"));
             EXPECT_STR_CONTAINS(ReadText(document), "\"lastOpenedScene\": \"Scenes/Default.sparkscene\"");
+            if (m_realFPS)
+            {
+                ::World reopened;
+                std::string resolved;
+                ASSERT_TRUE(projects.LoadProjectScene("Scenes/Default.sparkscene", reopened, resolved));
+                ASSERT_EQ(reopened.GetEntityCount(), static_cast<size_t>(2));
+                ASSERT_TRUE(Spark::SaveWorld(reopened, Utf8(m_root / "reopened.sparkscene"), &error));
+                ASSERT_EQ(ReadText(m_root / "reopened.sparkscene"),
+                          ReadText(m_project / "Scenes" / "Default.sparkscene"));
+            }
             projects.RemoveRecentProject(Utf8(document));
             projects.CloseProject();
             // The recorded commands capture this function's document.
@@ -323,19 +397,24 @@ namespace
         {
             const fs::path artifacts = m_root / "Artifacts";
             fs::create_directories(artifacts);
-            std::ofstream(artifacts / kModuleFilename, std::ios::binary) << "placeholder module";
-            std::ofstream(artifacts / (std::string(kModuleFilename) + ".sparkabi"), std::ios::binary) << "abi";
+            if (!m_realFPS)
+            {
+                std::ofstream(artifacts / kModuleFilename, std::ios::binary) << "placeholder module";
+                std::ofstream(artifacts / (std::string(kModuleFilename) + ".sparkabi"), std::ios::binary) << "abi";
+            }
 
             const SparkEditor::BuildSettings settings = PackageSettings();
             std::string error;
             const bool assembled = BuildPipeline::AssembleNativePackage(
                 settings, (m_project / settings.outputDirectory).string(), host.string(),
-                (artifacts / kModuleFilename).string(), m_package.string(), &error);
+                (m_realFPS ? m_module : artifacts / kModuleFilename).string(), m_package.string(), &error);
             if (!assembled)
                 std::cerr << "  package: " << error << "\n";
             ASSERT_TRUE(assembled);
             ASSERT_TRUE(fs::is_regular_file(m_package / "ScenePreview" / kScenePreviewHost));
             ASSERT_TRUE(fs::is_regular_file(m_package / "Scenes" / "Startup.sparkscene"));
+            if (m_realFPS)
+                ASSERT_TRUE(fs::is_regular_file(m_package / "Startup.sparkscene"));
             ASSERT_TRUE(fs::is_regular_file(m_package / "Assets" / "Meshes" / "crate.obj"));
             EXPECT_STR_CONTAINS(ReadText(m_package / "Scenes" / "Startup.sparkscene"), kMeshReference);
         }
@@ -351,6 +430,9 @@ namespace
             return settings;
         }
 
+        bool m_realFPS = false;
+        fs::path m_module;
+        fs::path m_installedAssets;
         fs::path m_root;
         fs::path m_project;
         fs::path m_package;
@@ -394,5 +476,60 @@ TEST(EditorCookPackage_MissingCookedAssetIsReportedByPackagedRun)
     ASSERT_TRUE(fs::remove(scenario.Package() / "Assets" / "Meshes" / "crate.obj"));
     ExpectSceneRecords(scenario.RunPackagedScene(), 1);
 }
+
+
+#if defined(SPARK_EDITOR_FPS_LINEAGE_TESTS)
+TEST(EditorFPSLineage_AuthoredSceneLoadedByInstalledFPS)
+{
+    CookPackageScenario scenario("positive", true);
+    scenario.AuthorCookAndPackage();
+    const HostRun run = scenario.RunPackagedScene();
+    EXPECT_EQ(run.exitCode, 0);
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_SCENE_LOADED "), static_cast<size_t>(0));
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(1));
+    EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP scene=Startup.sparkscene nodes=2 rendering=1\n");
+    EXPECT_STR_CONTAINS(run.output, "type=model position=3,2,5 rotation=0,0,0 scale=1,1,1\n");
+    EXPECT_STR_CONTAINS(run.output, "type=Camera position=7,11,-13 rotation=0,0,0 scale=1,1,1\n");
+    EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP_CAMERA position=7,11,-13 fov=70 ");
+    EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP_PLAYER position=7,11,-13\n");
+    // The installed wrapper additionally validates the full WARP/FPS lifecycle and
+    // committed authored scene state from the preserved runtime.log.
+}
+
+TEST(EditorFPSLineage_MalformedStartupFailsClosed)
+{
+    CookPackageScenario scenario("malformed", true);
+    scenario.AuthorCookAndPackage();
+    ASSERT_TRUE(fs::is_regular_file(scenario.Package() / "Startup.sparkscene"));
+    std::ofstream(scenario.Package() / "Startup.sparkscene", std::ios::binary | std::ios::trunc)
+        << "not a reflected scene\n";
+    const HostRun run = scenario.RunPackagedScene();
+    EXPECT_TRUE(run.exitCode > 0);
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(run.output, "Reflected gameplay scene rejected: primary scene is invalid or has unsupported reflected fields");
+    EXPECT_STR_CONTAINS(run.output, "FPS packaged startup rejected: selected reflected scene failed to load");
+}
+
+TEST(EditorFPSLineage_MissingCookedAssetFailsClosed)
+{
+    CookPackageScenario scenario("missing-asset", true);
+    scenario.AuthorCookAndPackage();
+    ASSERT_TRUE(fs::remove(scenario.Package() / "Assets" / "Meshes" / "crate.obj"));
+    const HostRun run = scenario.RunPackagedScene();
+    EXPECT_TRUE(run.exitCode > 0);
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(run.output, "Reflected gameplay scene rejected: mesh must be an existing project-confined OBJ");
+    EXPECT_STR_CONTAINS(run.output, "FPS packaged startup rejected: selected reflected scene failed to load");
+}
+
+TEST(EditorFPSLineage_MissingRealModuleFailsClosed)
+{
+    CookPackageScenario scenario("missing-module", true);
+    scenario.AuthorCookAndPackage();
+    ASSERT_TRUE(fs::remove(scenario.Package() / "SparkGameFPS.dll"));
+    const HostRun run = scenario.RunPackagedScene();
+    EXPECT_TRUE(run.exitCode > 0);
+}
+#endif // SPARK_EDITOR_FPS_LINEAGE_TESTS
 
 #endif // defined(_WIN32)

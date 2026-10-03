@@ -564,7 +564,9 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
 
     try
     {
-        if (ext == L".scene")
+        if (ext == L".sparkscene")
+            loaded = LoadReflected(filepath);
+        else if (ext == L".scene")
             loaded = LoadCustom(filepath);
         else if (ext == L".json")
             loaded = LoadJSON(filepath);

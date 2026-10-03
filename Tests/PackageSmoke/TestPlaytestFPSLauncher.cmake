@@ -15,6 +15,20 @@ if(NOT EXISTS "${_launcher}" OR IS_DIRECTORY "${_launcher}")
 endif()
 
 execute_process(
+    COMMAND cmd /d /c "${_launcher}" help
+    WORKING_DIRECTORY "${_bin}"
+    RESULT_VARIABLE _help_result
+    OUTPUT_VARIABLE _help_output
+    ERROR_VARIABLE _help_error
+    TIMEOUT 10)
+if(NOT "${_help_result}" STREQUAL "0" OR
+   NOT _help_output MATCHES "F2: quicksave" OR
+   NOT _help_output MATCHES "F3: quickload" OR
+   NOT _help_output MATCHES "F5-F10: choose class")
+    message(FATAL_ERROR "Installed launcher persistence help failed: ${_help_result}\n${_help_output}\n${_help_error}")
+endif()
+
+execute_process(
     COMMAND cmd /d /c "${_launcher}" check
     WORKING_DIRECTORY "${_bin}"
     RESULT_VARIABLE _check_result
@@ -82,4 +96,4 @@ if(NOT _smoke_ok)
     message(FATAL_ERROR "Installed playtester NullRHI smoke failed: ${_smoke_reason}\nstdout:\n${_smoke_output}\nstderr:\n${_smoke_error}")
 endif()
 
-message(STATUS "Installed PlaytestSparkFPS check, report URL, invalid mode, and real NullRHI smoke passed")
+message(STATUS "Installed PlaytestSparkFPS help, check, report URL, invalid mode, and real NullRHI smoke passed")

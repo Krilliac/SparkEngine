@@ -10,6 +10,7 @@
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <chrono>
+#include <cstdio>
 
 #include "Game.h"
 #include "ClassSystem.h"
@@ -97,8 +98,22 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
 
     // SceneManager setup
     m_sceneManager = std::make_unique<SceneManager>(graphics, input);
-    const std::wstring authoredScenePath = Spark::FPSAssets::Resolve(L"Scenes/level1.scene");
+    std::filesystem::path startupScene;
+    bool packagedStartup = false;
+    std::string startupError;
+    if (!Spark::FPSAssets::ResolveStartupScene(startupScene, packagedStartup, startupError))
+    {
+        FPS_LOG_ERROR("FPS packaged startup rejected: {}", startupError);
+        return E_FAIL;
+    }
+    const std::wstring authoredScenePath =
+        packagedStartup ? startupScene.wstring() : Spark::FPSAssets::Resolve(L"Scenes/level1.scene");
     bool sceneLoaded = m_sceneManager->LoadScene(authoredScenePath);
+    if (packagedStartup && !sceneLoaded)
+    {
+        FPS_LOG_ERROR("FPS packaged startup rejected: selected reflected scene failed to load");
+        return E_FAIL;
+    }
     std::string sceneMsg = "SceneManager::LoadScene returned: " + std::string(sceneLoaded ? "SUCCESS" : "FAILURE");
     FPS_CONSOLE(sceneMsg, "INFO");
     LogSceneIdentity(sceneLoaded, authoredScenePath);
@@ -150,6 +165,11 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_camera->SetPosition(authoredCamera ? authoredCamera->position : XMFLOAT3{0.0f, 2.0f, -20.0f});
     if (authoredCamera)
     {
+        const auto fovProperty = authoredCamera->properties.find("fov");
+        float authoredFov = 0.0f;
+        if (fovProperty != authoredCamera->properties.end() &&
+            ParseAuthoredFiniteFloat(fovProperty->second, authoredFov) && authoredFov >= 10.0f && authoredFov <= 170.0f)
+            m_camera->Console_SetFOV(authoredFov);
         m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
                                       authoredCamera->rotation.z);
 
@@ -237,7 +257,8 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     /* Scene objects - Enhanced combat arena ----------------*/
     if (m_renderingEnabled)
     {
-        CreateCombatArena();
+        if (!packagedStartup)
+            CreateCombatArena();
 
         // Wire up graphics engine on all ModelObjects so they don't need the global
         for (auto& obj : m_gameObjects)
@@ -297,6 +318,36 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
                 "interactions, damage zones, and respawn",
                 "SUCCESS");
 
+    if (packagedStartup)
+    {
+        // Emit only after the real Game state is initialized, not from a preview
+        // or parser-only path. Scene hashes/installed image identity are retained
+        // by the caller; these records expose what the committed game consumed.
+        std::printf("SPARK_FPS_STARTUP scene=Startup.sparkscene nodes=%d rendering=%d\n",
+                    m_sceneManager->GetNodeCount(), m_renderingEnabled ? 1 : 0);
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const auto* node = m_sceneManager->GetNode(i);
+            std::printf("SPARK_FPS_STARTUP_NODE index=%d type=%s position=%.9g,%.9g,%.9g "
+                        "rotation=%.9g,%.9g,%.9g scale=%.9g,%.9g,%.9g\n",
+                        i, node->type.c_str(), node->position.x, node->position.y, node->position.z, node->rotation.x,
+                        node->rotation.y, node->rotation.z, node->scale.x, node->scale.y, node->scale.z);
+            const auto& object = m_sceneManager->GetObjects()[static_cast<size_t>(i)];
+            if (object)
+            {
+                const auto position = object->GetPosition();
+                const auto scale = object->GetScale();
+                std::printf("SPARK_FPS_STARTUP_MESH index=%d position=%.9g,%.9g,%.9g scale=%.9g,%.9g,%.9g\n", i,
+                            position.x, position.y, position.z, scale.x, scale.y, scale.z);
+            }
+        }
+        const auto state = m_camera->Console_GetState();
+        const auto spawn = m_player->GetPosition();
+        std::printf("SPARK_FPS_STARTUP_CAMERA position=%.9g,%.9g,%.9g fov=%.9g near=%.9g far=%.9g\n", state.position.x,
+                    state.position.y, state.position.z, state.defaultFov, state.nearPlane, state.farPlane);
+        std::printf("SPARK_FPS_STARTUP_PLAYER position=%.9g,%.9g,%.9g\n", spawn.x, spawn.y, spawn.z);
+        std::fflush(stdout);
+    }
     return S_OK;
 }
 
@@ -869,6 +920,21 @@ void Game::HandleInput(float)
     }
 
     m_camera->SetZoom(m_input->IsMouseButtonDown(1));
+
+    // Player-facing persistence remains available when the developer console is
+    // disabled. Edge queries prevent held keys from repeatedly rewriting/loading.
+    const bool savePressed = m_input->WasKeyPressed(VK_F2);
+    const bool loadPressed = m_input->WasKeyPressed(VK_F3);
+    // Simultaneous rising edges must not overwrite a slot before loading it.
+    if (savePressed != loadPressed)
+    {
+        std::string message;
+        const bool succeeded = savePressed ? QuickSaveProfile(message) : QuickLoadProfile(message);
+        if (succeeded)
+            FPS_LOG_INFO("{}", message);
+        else
+            FPS_LOG_WARN("{}", message);
+    }
 
     // Class switching with F5-F10 keys
     if (m_input->WasKeyPressed(VK_F5))

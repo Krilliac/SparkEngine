@@ -208,6 +208,7 @@ void Game::RenderDebugUI()
         CycleNextClass();
     }
 
-    ImGui::TextDisabled("F11: start survival | F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
+    ImGui::TextDisabled("F2: quicksave | F3: quickload | F11: start survival");
+    ImGui::TextDisabled("F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
 #endif
 }

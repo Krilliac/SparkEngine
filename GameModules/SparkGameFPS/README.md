@@ -19,6 +19,8 @@ commands do not certify the still-blocked `stable-v1` release.
 - `WASD` moves, left mouse fires, `R` reloads, and `Space` jumps.
 - On Windows, click in the window to capture the mouse for mouse-look; `Esc` releases it.
 - `1`-`4` select loadout slots; `F` and `G` activate class abilities.
+- `F2` saves the current world and local profile; `F3` restores the saved slot. Release before pressing again.
+  Use one key at a time. These controls work without the developer console.
 - `F5`-`F10` select a class, while `[` and `]` cycle classes.
 - `V` enters or exits the nearest vehicle.
 - `F11` starts or restarts the survival match (this also revives the player).
@@ -55,6 +57,36 @@ defaults on save and are not applied on load.
 
 The editor's **Spark Arena** panel exposes the same survival and class actions and shows the live player, round, wave,
 enemy, weapon, progression, time-scale, and engine-service state.
+
+## Editor-authored startup content
+
+An editor-built package places its selected default scene in `Startup.sparkscene`
+beside the game executable. The windowed FPS module loads that file through
+SceneManager, uses its authored camera for the player start, and renders its meshes
+instead of creating the procedural arena. Selection is executable-relative; changing
+the working directory does not select a different startup scene. The host's `-scene`
+preview mode is separate and does not run the FPS module.
+
+The current adapter supports root entities with unique nonempty names, each containing
+a Transform and either an OBJ MeshRenderer or the single main perspective Camera.
+Meshes must use the default material and default rendering flags, with OBJ references
+inside the packaged project. Transforms, camera FOV and supported clipping values are
+preserved. Hierarchy, other components, explicit materials, unsupported settings and
+missing or invalid meshes are rejected rather than silently replaced. See
+[the reflected startup contract](../../wiki/subsystems/Scene-Management.md#reflected-startup-scenes-in-fps)
+for the exact camera limits and loading behavior.
+
+Only an absent `Startup.sparkscene` permits the legacy `Assets/Scenes/level1.scene`
+startup. A present unreadable, malformed or unsupported scene fails module initialization;
+neither a `.bak` scene nor a placeholder mesh substitutes for it. The separate headless
+arena described above still uses the legacy scene and cannot verify this adapter.
+
+This is bounded source support, not native-qualified editor-to-game or overall release
+acceptance. The installed windowed lineage tests must run against the new source and
+real FPS module; normal-input playthrough and final Shipping qualification remain open.
+F2/F3 save and restore the host ECS world and declared local profile. They do not save
+the authored scene back to disk or reconstruct the module's complete live scene, and
+the current profile restoration does not restore the player's position.
 
 ## Useful console commands
 

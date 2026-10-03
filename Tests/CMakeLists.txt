@@ -646,7 +646,7 @@ add_executable(SparkTests
     TestMOD330ARPGWorldActors.cpp
     TestMOD350RPGQuestSliceReal.cpp
     TestMOD350RPGNPCNavigationReal.cpp
-    # TERRAFRONT (SparkGameMMOFPS) — header-only wire protocol, standalone
+    # TERRAFRONT (SparkGameMMOFPS) â€” header-only wire protocol, standalone
     # rule math, and validation of the real Assets/MMOFPS/Data tables.
     # Module .cpp sources are NOT compiled into SparkTests by design.
     TestTFNetProtocolLayout.cpp
@@ -671,7 +671,7 @@ add_executable(SparkTests
     # Security review: TERRAFRONT server trust-boundary regressions (header-only
     # rules + the TFAccountSystem/TFDatabase sources listed below)
     TestTFServerSecurity.cpp
-    # W5 onboarding (TFDatabase Task 1) — module .cpp added explicitly below
+    # W5 onboarding (TFDatabase Task 1) â€” module .cpp added explicitly below
     # since SparkTests does not compile module sources by default.
     TestTFOnboarding.cpp
     # DATA-120 atomic multi-row character commits + schema versioning (TFDatabase above)
@@ -705,7 +705,7 @@ add_executable(SparkTests
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Persistence/MMOCharacterRecord.cpp"
     "${CMAKE_SOURCE_DIR}/GameModules/SparkGameMMO/Source/Reputation/MMOReputationSystem.cpp"
-    # W7/W8 outfit persistence + secondary-motion chain math — both module
+    # W7/W8 outfit persistence + secondary-motion chain math â€” both module
     # .cpps are deliberately minimal-dependency and link standalone into
     # SparkTests (the TFDatabase.cpp pattern above).
     TestTFOutfitStore.cpp
@@ -983,7 +983,7 @@ target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_FORWARD_MINOR_PLUGIN_PATH="$<TARGET_FILE:SparkForwardMinorPluginFixture>"
     SPARK_TEST_ROLLBACK_REFUSING_PLUGIN_PATH="$<TARGET_FILE:SparkRollbackRefusingPluginFixture>")
 
-# Objective-C++ test sources — only compile when the Metal backend is
+# Objective-C++ test sources â€” only compile when the Metal backend is
 # actually available. SPARK_METAL_AVAILABLE is set by the root CMakeLists
 # when ENABLE_METAL AND APPLE is true and enable_language(OBJCXX) has run;
 # adding a .mm source unconditionally would fail CMake configure on the
@@ -992,7 +992,7 @@ if(APPLE AND SPARK_METAL_AVAILABLE)
     target_sources(SparkTests PRIVATE
         TestMetalRayTracing.cpp
         TestMetalRayTracingLive.mm)
-    # Match the engine's Metal linker flags — Foundation + Metal frameworks
+    # Match the engine's Metal linker flags â€” Foundation + Metal frameworks
     # are needed for MTLCreateSystemDefaultDevice and MTLDevice protocols.
     target_link_libraries(SparkTests PRIVATE "-framework Foundation" "-framework Metal")
 endif()
@@ -1112,7 +1112,7 @@ target_sources(SparkTests PRIVATE
 target_sources(SparkTests PRIVATE TestNetImpairmentWiring.cpp)
 
 # =============================================================================
-# Hardening regression tests (claude/harden-fleet) — shared TestMain runner
+# Hardening regression tests (claude/harden-fleet) â€” shared TestMain runner
 # =============================================================================
 target_sources(SparkTests PRIVATE
     harden/Test_core_hardening.cpp
@@ -1149,7 +1149,7 @@ target_sources(SparkTests PRIVATE
 target_include_directories(SparkTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # =============================================================================
-# Release-readiness sweep — production-source regression tests
+# Release-readiness sweep â€” production-source regression tests
 # =============================================================================
 target_sources(SparkTests PRIVATE
     TestAudioECSBindingReal.cpp
@@ -1228,6 +1228,7 @@ target_sources(SparkTests PRIVATE
     TestInputFrameEdgesReal.cpp
     TestQuaternionStubsReal.cpp
     TestSceneManagerUnicodeReal.cpp
+    TestSceneManagerReflectedReal.cpp
     TestSceneSaveConfinedReal.cpp
     TestWeaponMechanicsReal.cpp
     TestSEC2ConsoleIpcReal.cpp
@@ -1285,7 +1286,7 @@ target_compile_definitions(SparkTests PRIVATE
 # tests activate automatically. Tests use #ifdef SPARK_TEST_HAS_* guards.
 # =============================================================================
 
-# ImGui — enables full editor tests, OpenWorld module tests, CommandPalette, etc.
+# ImGui â€” enables full editor tests, OpenWorld module tests, CommandPalette, etc.
 if(TARGET imgui)
     target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_IMGUI)
     target_link_libraries(SparkTests PRIVATE imgui)
@@ -1454,9 +1455,9 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Profiler/PerformanceProfiler.cpp"
     )
 
-    message(STATUS "[Tests] ImGui available — gated editor + 6 game module tests enabled")
+    message(STATUS "[Tests] ImGui available â€” gated editor + 6 game module tests enabled")
 else()
-    message(STATUS "[Tests] ImGui not available — gated editor & OpenWorld tests disabled")
+    message(STATUS "[Tests] ImGui not available â€” gated editor & OpenWorld tests disabled")
 endif()
 
 # Propagate engine feature defines so tests can gate on them
@@ -3415,6 +3416,47 @@ if(WIN32 AND TARGET SparkEngine AND TARGET SparkCooker AND SPARK_HEADLESS_SUPPOR
         TIMEOUT 900)
 endif()
 
+# Actual FPS lineage remains distinct from the two preview-only editor cases.
+# Define the tests only when their dedicated installed lane can execute them.
+if(WIN32 AND TARGET SparkEngine AND TARGET SparkCooker AND TARGET SparkGameFPS AND SPARK_HEADLESS_SUPPORT)
+    target_compile_definitions(SparkTests PRIVATE SPARK_EDITOR_FPS_LINEAGE_TESTS)
+    add_dependencies(SparkTests SparkEngine SparkCooker SparkGameFPS)
+    if(TARGET SparkCrashReporter)
+        add_dependencies(SparkTests SparkCrashReporter)
+    endif()
+    get_test_property(SparkEngineTests ENVIRONMENT _spark_lineage_main_environment)
+    string(REGEX REPLACE "(^|;)SPARK_TEST_EXCLUDE=([^;]*)" "\\1SPARK_TEST_EXCLUDE=\\2,EditorFPSLineage_"
+        _spark_lineage_main_environment "${_spark_lineage_main_environment}")
+    set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_spark_lineage_main_environment}")
+    unset(_spark_lineage_main_environment)
+    find_package(Git REQUIRED)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_SOURCE_DIR}" rev-parse HEAD
+        RESULT_VARIABLE _spark_lineage_git_result OUTPUT_VARIABLE _spark_lineage_source
+        OUTPUT_STRIP_TRAILING_WHITESPACE TIMEOUT 10)
+    string(LENGTH "${_spark_lineage_source}" _spark_lineage_sha_length)
+    if(NOT "${_spark_lineage_git_result}" STREQUAL "0" OR NOT _spark_lineage_sha_length EQUAL 40 OR
+       NOT _spark_lineage_source MATCHES "^[0-9a-f]+$")
+        message(FATAL_ERROR "Installed FPS lineage requires a pinned source Git object")
+    endif()
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME EditorFPSLineage_InstalledRuntime
+        COMMAND ${CMAKE_COMMAND}
+            "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+            "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_CONFIG=$<CONFIG>"
+            "-DSPARK_TESTS_EXECUTABLE=$<TARGET_FILE:SparkTests>"
+            "-DSPARK_ENGINE_EXECUTABLE_NAME=$<TARGET_FILE_NAME:SparkEngine>"
+            "-DSPARK_EXPECTED_SOURCE_SHA=${_spark_lineage_source}"
+            "-DSPARK_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunEditorFPSInstalledLineage.cmake)
+    set_tests_properties(EditorFPSLineage_InstalledRuntime PROPERTIES
+        LABELS "editor;editor-integration;editor-package-roundtrip;installed-runtime;fps;d3d11;process"
+        RUN_SERIAL TRUE TIMEOUT 900)
+    unset(_spark_lineage_source)
+    unset(_spark_lineage_sha_length)
+    unset(_spark_lineage_git_result)
+endif()
+
 # SEC3: an -exec script that cannot be loaded (missing, or a directory) fails the
 # headless launch with exit 1 on both hosts instead of running an empty timeline
 # to its -test-frames limit and exiting 0; a readable script is the passing control.
@@ -3686,7 +3728,7 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARG
     endif()
 endif()
 
-# SEC2: legacy peer-hosted collaboration — join-code authentication, frame/queue/
+# SEC2: legacy peer-hosted collaboration â€” join-code authentication, frame/queue/
 # connection bounds and handshake deadlines. Hosting is a hard precondition in these
 # tests, so --empty-is-error plus the pinned count keep a hosting regression (or a
 # dropped test) from reading as a pass.
@@ -3697,7 +3739,7 @@ set_tests_properties(CollaborativeEditingSecurity PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 180)
 
-# SEC2: an opened project is untrusted — cook/package refuse project links and
+# SEC2: an opened project is untrusted â€” cook/package refuse project links and
 # link-redirected output, and oversized project documents are refused unread.
 add_test(NAME EditorUntrustedProject COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
 set_tests_properties(EditorUntrustedProject PROPERTIES
