@@ -3263,7 +3263,7 @@
 | `bottomUp` | function | Tests | [TestRHI240LinuxForwardPassReal.cpp:L320](../../Tests/TestRHI240LinuxForwardPassReal.cpp#L320) |  |
 | `bottomUp` | function | Tests | [TestRHI240OpenGLGoldenReal.cpp:L186](../../Tests/TestRHI240OpenGLGoldenReal.cpp#L186) |  |
 | `bound` | function | GameModules | [VisualScriptDemoRuntime.h:L154](../../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h#L154) |  |
-| `boundary` | function | Tests | [TestSceneManagerReflectedReal.cpp:L232](../../Tests/TestSceneManagerReflectedReal.cpp#L232) |  |
+| `boundary` | function | Tests | [TestSceneManagerReflectedReal.cpp:L233](../../Tests/TestSceneManagerReflectedReal.cpp#L233) |  |
 | `BoundaryHandling` | enum | SparkEditor | [LevelStreamingEnums.h:L127](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L127) | Tile boundary handling |
 | `BoundChar` | struct | GameModules | [TFOutfitSystem.h:L189](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L189) |  |
 | `BoundCharOf` | function | GameModules | [TFOutfitSystem.h:L209](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L209) |  |
@@ -11371,7 +11371,7 @@
 | `ExpectPost` | function | Tests | [TestFPSLANLoopback.cpp:L283](../../Tests/TestFPSLANLoopback.cpp#L283) |  |
 | `ExpectQuaternionNear` | function | Tests | [TestQuaternionStubsReal.cpp:L58](../../Tests/TestQuaternionStubsReal.cpp#L58) |  |
 | `ExpectRejected` | function | Tests | [TestSessionCompatibilityReal.cpp:L70](../../Tests/TestSessionCompatibilityReal.cpp#L70) |  |
-| `ExpectRejectedWithRollback` | function | Tests | [TestSceneManagerReflectedReal.cpp:L75](../../Tests/TestSceneManagerReflectedReal.cpp#L75) |  |
+| `ExpectRejectedWithRollback` | function | Tests | [TestSceneManagerReflectedReal.cpp:L76](../../Tests/TestSceneManagerReflectedReal.cpp#L76) |  |
 | `ExpectRenderToTextureThenSample` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L997](../../Tests/TestRHI225D3D12ParityReal.cpp#L997) |  |
 | `ExpectResult` | function | Tests | [TestHandoffParticipant.cpp:L61](../../Tests/TestHandoffParticipant.cpp#L61) |  |
 | `ExpectRetiredFixtureFailsClosed` | function | Tests | [Test_persistence_SaveSystem.cpp:L2420](../../Tests/harden/Test_persistence_SaveSystem.cpp#L2420) |  |
@@ -26910,7 +26910,7 @@
 | `ManagedTimer` | struct | SparkEngine | [TimerManager.h:L66](../../SparkEngine/Source/Utils/TimerManager.h#L66) | A single managed timer |
 | `manager` | function | Tests | [TestEditorSubsystems.cpp:L1486](../../Tests/TestEditorSubsystems.cpp#L1486) |  |
 | `manager` | function | Tests | [TestEditorSubsystems.cpp:L1536](../../Tests/TestEditorSubsystems.cpp#L1536) |  |
-| `manager` | function | Tests | [TestSceneManagerReflectedReal.cpp:L77](../../Tests/TestSceneManagerReflectedReal.cpp#L77) |  |
+| `manager` | function | Tests | [TestSceneManagerReflectedReal.cpp:L78](../../Tests/TestSceneManagerReflectedReal.cpp#L78) |  |
 | `ManagerScope` | struct | Tests | [TestLIFE200ModuleReloadLoopReal.cpp:L117](../../Tests/TestLIFE200ModuleReloadLoopReal.cpp#L117) |  |
 | `ManagerScope` | struct | Tests | [TestLIFE200ModuleReloadReal.cpp:L114](../../Tests/TestLIFE200ModuleReloadReal.cpp#L114) |  |
 | `manifest` | function | SparkEngine | [SparkEngineWindowsModules.cpp:L225](../../SparkEngine/Source/Core/SparkEngineWindowsModules.cpp#L225) |  |
@@ -35147,7 +35147,7 @@
 | `ReflAttr_TestStruct` | struct | Tests | [TestReflectionReal.cpp:L35](../../Tests/TestReflectionReal.cpp#L35) |  |
 | `ReflAttrMetadataFixture` | enum | Tests | [TestReflectionReal.cpp:L45](../../Tests/TestReflectionReal.cpp#L45) |  |
 | `ReflectedFixture` | function | Tests | [TestReflectedSceneCompatibility.cpp:L33](../../Tests/TestReflectedSceneCompatibility.cpp#L33) |  |
-| `ReflectedGameplayFixture` | struct | Tests | [TestSceneManagerReflectedReal.cpp:L17](../../Tests/TestSceneManagerReflectedReal.cpp#L17) |  |
+| `ReflectedGameplayFixture` | struct | Tests | [TestSceneManagerReflectedReal.cpp:L18](../../Tests/TestSceneManagerReflectedReal.cpp#L18) |  |
 | `ReflectionProbe` | struct | SparkEngine | [ReflectionProbeCache.h:L35](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L35) |  |
 | `ReflectionProbeCache` | class | SparkEngine | [ReflectionProbeCache.h:L82](../../SparkEngine/Source/Graphics/ReflectionProbeCache.h#L82) | Manages cached reflection probe cubemaps |
 | `ReflectionProbeComponent` | struct | SparkEngine | [VolumeComponents.h:L105](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L105) | Defines a reflection probe capture point. |
@@ -39419,9 +39419,9 @@
 | `scene` | function | Tests | [TestRHI225D3D12ValidationReal.cpp:L308](../../Tests/TestRHI225D3D12ValidationReal.cpp#L308) |  |
 | `scene` | function | Tests | [TestRHI225D3D12ValidationReal.cpp:L328](../../Tests/TestRHI225D3D12ValidationReal.cpp#L328) |  |
 | `scene` | function | Tests | [TestRHI225D3D12ValidationReal.cpp:L362](../../Tests/TestRHI225D3D12ValidationReal.cpp#L362) |  |
-| `scene` | function | Tests | [TestSceneManagerReflectedReal.cpp:L95](../../Tests/TestSceneManagerReflectedReal.cpp#L95) |  |
-| `scene` | function | Tests | [TestSceneManagerReflectedReal.cpp:L127](../../Tests/TestSceneManagerReflectedReal.cpp#L127) |  |
-| `scene` | function | Tests | [TestSceneManagerReflectedReal.cpp:L159](../../Tests/TestSceneManagerReflectedReal.cpp#L159) |  |
+| `scene` | function | Tests | [TestSceneManagerReflectedReal.cpp:L96](../../Tests/TestSceneManagerReflectedReal.cpp#L96) |  |
+| `scene` | function | Tests | [TestSceneManagerReflectedReal.cpp:L128](../../Tests/TestSceneManagerReflectedReal.cpp#L128) |  |
+| `scene` | function | Tests | [TestSceneManagerReflectedReal.cpp:L160](../../Tests/TestSceneManagerReflectedReal.cpp#L160) |  |
 | `scene` | function | Tests | [TestSceneManagerUnicodeReal.cpp:L90](../../Tests/TestSceneManagerUnicodeReal.cpp#L90) |  |
 | `scene` | function | Tests | [TestSceneSaveConfinedReal.cpp:L117](../../Tests/TestSceneSaveConfinedReal.cpp#L117) |  |
 | `scene` | function | Tests | [TestSceneSaveConfinedReal.cpp:L148](../../Tests/TestSceneSaveConfinedReal.cpp#L148) |  |
@@ -53527,7 +53527,7 @@
 | `withLogger` | function | Tests | [TestPrototypeModuleKitReal.cpp:L250](../../Tests/TestPrototypeModuleKitReal.cpp#L250) |  |
 | `WithOpacity` | function | SparkEngine | [StartupSplash.cpp:L219](../../SparkEngine/Source/Core/StartupSplash.cpp#L219) |  |
 | `WithServer` | function | Tests | [TestNetworkStress.cpp:L156](../../Tests/TestNetworkStress.cpp#L156) |  |
-| `WithSpawns` | function | Tests | [TestSceneManagerReflectedReal.cpp:L55](../../Tests/TestSceneManagerReflectedReal.cpp#L55) |  |
+| `WithSpawns` | function | Tests | [TestSceneManagerReflectedReal.cpp:L56](../../Tests/TestSceneManagerReflectedReal.cpp#L56) |  |
 | `WithSuffix` | function | Tests | [TestDATA120BackupRestore.cpp:L86](../../Tests/TestDATA120BackupRestore.cpp#L86) |  |
 | `WithSuffix` | function | Tests | [TestDocumentInterruptionReal.cpp:L120](../../Tests/TestDocumentInterruptionReal.cpp#L120) |  |
 | `WithSuffix` | function | Tests | [TestEditorStateCompatibility.cpp:L66](../../Tests/TestEditorStateCompatibility.cpp#L66) |  |
@@ -53815,7 +53815,7 @@
 | `Write` | function | Tests | [TestENG200ScriptHotReloadReal.cpp:L78](../../Tests/TestENG200ScriptHotReloadReal.cpp#L78) |  |
 | `Write` | function | Tests | [TestPrototypeModuleKitReal.cpp:L61](../../Tests/TestPrototypeModuleKitReal.cpp#L61) |  |
 | `Write` | function | Tests | [TestRHI210TextureDecode.cpp:L46](../../Tests/TestRHI210TextureDecode.cpp#L46) |  |
-| `Write` | function | Tests | [TestSceneManagerReflectedReal.cpp:L53](../../Tests/TestSceneManagerReflectedReal.cpp#L53) |  |
+| `Write` | function | Tests | [TestSceneManagerReflectedReal.cpp:L54](../../Tests/TestSceneManagerReflectedReal.cpp#L54) |  |
 | `write` | function | Tests | [TestSparkError.cpp:L77](../../Tests/TestSparkError.cpp#L77) |  |
 | `Write` | function | Tests | [TestSparkPak.cpp:L70](../../Tests/TestSparkPak.cpp#L70) |  |
 | `Write` | function | Tests | [TestVisualScriptCompiler.cpp:L718](../../Tests/TestVisualScriptCompiler.cpp#L718) |  |

@@ -8,6 +8,7 @@
 
 #include <nlohmann_json.h>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <utility>
@@ -117,7 +118,7 @@ TEST(SceneManager_ReflectedGameplayRejectsUnknownComponent)
 {
     ReflectedGameplayFixture fixture;
     auto document = nlohmann::json::parse(fixture.original);
-    document["entities"][0]["components"].push_back({{"type", "UnknownGameplay"}, {"fields", {}}});
+    document["entities"][std::size_t{0}]["components"].push_back({{"type", "UnknownGameplay"}, {"fields", {}}});
     fixture.ExpectRejectedWithRollback(document.dump());
 }
 
@@ -137,7 +138,7 @@ TEST(SceneManager_ReflectedGameplayRejectsHierarchy)
 {
     ReflectedGameplayFixture fixture;
     auto document = nlohmann::json::parse(fixture.original);
-    document["entities"][1]["parent"] = document["entities"][0]["id"];
+    document["entities"][1]["parent"] = document["entities"][std::size_t{0}]["id"];
     fixture.ExpectRejectedWithRollback(document.dump());
 }
 
