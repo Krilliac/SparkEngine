@@ -1,7 +1,7 @@
 name: Combined reliability source checks
 on:
   push:
-    branches: [codex/combined-reliability-followup-20261002, codex/primary-verifier-followup-20261002, codex/cache-contract-followup-20261003]
+    branches: [codex/combined-reliability-followup-20261002, codex/primary-verifier-followup-20261002, codex/cache-contract-followup-20261003, codex/installed-abi-contract-20261003]
 permissions:
   contents: read
 concurrency:
@@ -32,6 +32,7 @@ jobs:
           python3 -B Tests/Tools/test_rhi210_capture.py
           python3 -B Tests/Tools/test_verify_approved_primary.py
           python3 -B Tests/Tools/test_diagnostic_sccache_keys.py
+          python3 -B Tests/Tools/test_installed_module_abi_rejection.py
       - name: Run cleanup and diagnostic contracts
         run: |
           set -euo pipefail
