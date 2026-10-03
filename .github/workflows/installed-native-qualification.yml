@@ -1,7 +1,7 @@
 name: Installed MinSizeRel native diagnostic
 on:
   push:
-    branches: [codex/installed-native-qualification-20261003]
+    branches: [codex/installed-native-config-20261003]
 permissions:
   contents: read
 concurrency:
@@ -27,7 +27,7 @@ jobs:
       - name: Checkout exact product source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: f92d28016fc74e5076591173b4ac5518415fed2f
+          ref: 2b14035640e9e1ee00967dd60905d56eb7000adf
           path: product
           submodules: recursive
           persist-credentials: false
@@ -84,7 +84,7 @@ jobs:
         if: ${{ always() && env.QUAL_ROOT != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: installed-native-f92d28016
+          name: installed-native-2b1403564
           path: ${{ env.QUAL_ROOT }}/diagnostics-text
           if-no-files-found: error
           retention-days: 1

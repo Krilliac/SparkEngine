@@ -1,6 +1,6 @@
 # Installed native diagnostic
 
-The dedicated `codex/installed-native-qualification-20261003` push route uses a standard windows-2022 runner, its existing VS 2022/v143 x64 environment, and exact product source f92d28016fc74e5076591173b4ac5518415fed2f. Orchestration is checked out separately at the workflow SHA. This is a Windows Server diagnostic, not Windows 11 certification, MSI qualification or publication. Root schedules it only after the current Primary Release capture job terminates.
+The dedicated `codex/installed-native-config-20261003` push route uses a standard windows-2022 runner, its existing VS 2022/v143 x64 environment, and exact product source 2b14035640e9e1ee00967dd60905d56eb7000adf. Orchestration is checked out separately at the workflow SHA. This is a Windows Server diagnostic, not Windows 11 certification, MSI qualification or publication. This corrected-source route follows the diagnosed SDK configuration failure in run 37091188673; it does not rerun the unchanged failing source.
 
 No dependency installer, cache service, MSI transaction or signing command is included. Missing preinstalled prerequisites fail. The Shipping preset remains authoritative; only BUILD_TESTS is enabled to expose two benign incompatible-module fixture targets. Explicit product targets include SparkWorker and preserve the complete installer component inventory. Build project parallelism is one; the installed SDK consumer retains its existing parallelism two.
 
