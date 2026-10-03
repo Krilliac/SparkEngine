@@ -116,45 +116,48 @@ class WeatherConsumerContracts(unittest.TestCase):
         source=RUNNER.read_text()
         start=source.index('    # Complete identity proof')
         writer=source[start:source.index('    message(STATUS "SPARK_SDK_WEATHER_RUNTIME',start)]
-        for mutation in ('none','missing-receipt','missing-stream','tampered-stream','wrong-source','wrong-binding','wrong-result','duplicate-key','mode-omitted','missing-binding','failed-sdk'):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
-                root=Path(tmp);sdk=root/'sdk';sdk.mkdir()
-                identity=dict(source_sha='a'*40,workflow_sha='b'*40,run_id='123',run_attempt='1',host_sha256='c'*64,weather_consumer=True)
-                module.save(root/'identity.json',identity)
-                for weather,available in (('',0),('-weather',1)):
-                    (sdk/f'runtime{weather}-stdout.log').write_text(f'SPARK_SDK_WEATHER module=SparkGeneratedGame available={available} accepted={available} invalid_rejected={available} clear_accepted={available} callback=OnLoad\n')
-                    (sdk/f'runtime{weather}-stderr.log').write_text('x'*20000)
-                variables=dict(_scanned='2',SPARK_TEST_ROOT=sdk.as_posix(),_module_name='SparkGeneratedGame',SPARK_WEATHER_SOURCE_SHA='a'*40,SPARK_WEATHER_WORKFLOW_SHA='b'*40,SPARK_WEATHER_RUN_ID='123',SPARK_WEATHER_RUN_ATTEMPT='1',_weather_consumer_sha256='d'*64,_weather_host_after='c'*64,_image_sha256='e'*64,_weather_sidecar_after='f'*64)
-                self.cmake('\n'.join('set('+key+' '+bracket(value)+')' for key,value in variables.items())+'\n'+writer)
-                receipt=sdk/'weather-identity.json'
-                boundary=json.loads(receipt.read_text())
-                self.assertIs(type(boundary['boundary_scanned']),int)
-                self.assertEqual(boundary['boundary_scanned'],2)
-                self.assertIs(type(boundary['boundary_violations']),int)
-                self.assertEqual(boundary['boundary_violations'],0)
-                binding=dict(passed=True,source_sha='a'*40,host_sha256='c'*64,weather_identity_sha256=module.digest(receipt))
-                module.save(root/'sdk-binding.json',binding)
-                if mutation=='missing-receipt':receipt.unlink()
-                if mutation=='missing-stream':(sdk/'runtime-weather-stderr.log').unlink()
-                if mutation=='tampered-stream':(sdk/'runtime-weather-stderr.log').write_text('tampered')
-                if mutation=='wrong-source':
-                    value=json.loads(receipt.read_text());value['source_sha']='0'*40;module.save(receipt,value)
-                if mutation=='wrong-binding':binding['weather_identity_sha256']='0'*64;module.save(root/'sdk-binding.json',binding)
-                if mutation=='wrong-result':
-                    path=sdk/'runtime-weather-stdout.log';path.write_text(path.read_text().replace('accepted=1','accepted=0'))
-                    value=json.loads(receipt.read_text());value['streams'][path.name]=module.digest(path);module.save(receipt,value)
-                if mutation=='duplicate-key':receipt.write_text(receipt.read_text().replace('{','{"module":"bad",',1))
-                if mutation=='missing-binding':(root/'sdk-binding.json').unlink()
-                if mutation=='failed-sdk':
-                    (root/'sdk-binding.json').unlink();receipt.unlink();module.save(root/'sdk-failure.json',dict(error='fixture failure'))
-                if mutation in ('none','failed-sdk'):
-                    module.compact(root,True,'a'*40)
-                    self.assertEqual((root/'diagnostics-text/sdk/runtime-weather-stderr.log').stat().st_size,20000)
-                    if mutation=='none':self.assertEqual((root/'diagnostics-text/sdk/weather-identity.json').read_bytes(),receipt.read_bytes())
-                else:
-                    with self.assertRaises((ValueError,FileNotFoundError)):
-                        module.compact(root,mutation!='mode-omitted','a'*40)
-                    self.assertFalse((root/'diagnostics-text').exists())
+        # This unit owns consumer proof only; the permanent workflow tests exercise
+        # the real combined focused+consumer collector, including missing proofs.
+        with patch.object(module, 'focused_proof', return_value=None, create=True):
+            for mutation in ('none','missing-receipt','missing-stream','tampered-stream','wrong-source','wrong-binding','wrong-result','duplicate-key','mode-omitted','missing-binding','failed-sdk'):
+                with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as tmp:
+                    root=Path(tmp);sdk=root/'sdk';sdk.mkdir()
+                    identity=dict(source_sha='a'*40,workflow_sha='b'*40,run_id='123',run_attempt='1',host_sha256='c'*64,weather_consumer=True,focused={})
+                    module.save(root/'identity.json',identity)
+                    for weather,available in (('',0),('-weather',1)):
+                        (sdk/f'runtime{weather}-stdout.log').write_text(f'SPARK_SDK_WEATHER module=SparkGeneratedGame available={available} accepted={available} invalid_rejected={available} clear_accepted={available} callback=OnLoad\n')
+                        (sdk/f'runtime{weather}-stderr.log').write_text('x'*20000)
+                    variables=dict(_scanned='2',SPARK_TEST_ROOT=sdk.as_posix(),_module_name='SparkGeneratedGame',SPARK_WEATHER_SOURCE_SHA='a'*40,SPARK_WEATHER_WORKFLOW_SHA='b'*40,SPARK_WEATHER_RUN_ID='123',SPARK_WEATHER_RUN_ATTEMPT='1',_weather_consumer_sha256='d'*64,_weather_host_after='c'*64,_image_sha256='e'*64,_weather_sidecar_after='f'*64)
+                    self.cmake('\n'.join('set('+key+' '+bracket(value)+')' for key,value in variables.items())+'\n'+writer)
+                    receipt=sdk/'weather-identity.json'
+                    boundary=json.loads(receipt.read_text())
+                    self.assertIs(type(boundary['boundary_scanned']),int)
+                    self.assertEqual(boundary['boundary_scanned'],2)
+                    self.assertIs(type(boundary['boundary_violations']),int)
+                    self.assertEqual(boundary['boundary_violations'],0)
+                    binding=dict(passed=True,source_sha='a'*40,host_sha256='c'*64,weather_identity_sha256=module.digest(receipt))
+                    module.save(root/'sdk-binding.json',binding)
+                    if mutation=='missing-receipt':receipt.unlink()
+                    if mutation=='missing-stream':(sdk/'runtime-weather-stderr.log').unlink()
+                    if mutation=='tampered-stream':(sdk/'runtime-weather-stderr.log').write_text('tampered')
+                    if mutation=='wrong-source':
+                        value=json.loads(receipt.read_text());value['source_sha']='0'*40;module.save(receipt,value)
+                    if mutation=='wrong-binding':binding['weather_identity_sha256']='0'*64;module.save(root/'sdk-binding.json',binding)
+                    if mutation=='wrong-result':
+                        path=sdk/'runtime-weather-stdout.log';path.write_text(path.read_text().replace('accepted=1','accepted=0'))
+                        value=json.loads(receipt.read_text());value['streams'][path.name]=module.digest(path);module.save(receipt,value)
+                    if mutation=='duplicate-key':receipt.write_text(receipt.read_text().replace('{','{"module":"bad",',1))
+                    if mutation=='missing-binding':(root/'sdk-binding.json').unlink()
+                    if mutation=='failed-sdk':
+                        (root/'sdk-binding.json').unlink();receipt.unlink();module.save(root/'sdk-failure.json',dict(error='fixture failure'))
+                    if mutation in ('none','failed-sdk'):
+                        module.compact(root,True,'a'*40)
+                        self.assertEqual((root/'diagnostics-text/sdk/runtime-weather-stderr.log').stat().st_size,20000)
+                        if mutation=='none':self.assertEqual((root/'diagnostics-text/sdk/weather-identity.json').read_bytes(),receipt.read_bytes())
+                    else:
+                        with self.assertRaises((ValueError,FileNotFoundError)):
+                            module.compact(root,mutation!='mode-omitted','a'*40)
+                        self.assertFalse((root/'diagnostics-text').exists())
 
     def test_current_weather_source_and_run_cannot_drift(self):
         spec=importlib.util.spec_from_file_location('identity_collector',ROOT/'.github/scripts/qualify-installed-native.py')
