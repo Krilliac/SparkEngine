@@ -821,6 +821,21 @@
       "sha256": "40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608",
       "output": "$tmp_dir/dxvk.tar.gz",
       "verification": "sha256sum"
+    },
+    {
+      "name": "sccache v0.17.0 Windows archive (Primary native qualification)",
+      "class": "downloads",
+      "license_spdx": "MIT OR Apache-2.0",
+      "owner": "Krilliac",
+      "justification": "The approved Primary native workflow uses the existing reviewed hash-checked compiler cache archive.",
+      "path": ".github/workflows/primary-native-qualification.yml",
+      "pin_path": ".github/workflows/primary-native-qualification.yml",
+      "command": "try { Invoke-WebRequest -Uri $url -OutFile $archive; break }",
+      "source_url": "https://github.com/mozilla/sccache/releases/download/$env:SCCACHE_VERSION/$name.tar.gz",
+      "url": "https://github.com/mozilla/sccache/releases/download/v0.17.0/sccache-v0.17.0-x86_64-pc-windows-msvc.tar.gz",
+      "sha256": "caf1932d76a909c909b7a2e41443cdfe3c79a49a380da1a22fa422e1d00d3ca7",
+      "output": "archive",
+      "verification": "get-file-hash"
     }
   ]
 }
