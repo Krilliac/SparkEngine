@@ -205,3 +205,7 @@ replace signature/installer checks, or qualify real predecessor upgrade/rollback
 ## Installed MinSizeRel native diagnostic
 
 The separate bounded Windows 2022/v143 route builds exact product source `f92d28016fc74e5076591173b4ac5518415fed2f` and runs installed SDK lifecycle, the benign incompatible-module controls, and package closure on the same host image. It preserves Shipping policies and existing job/test ceilings. Workflow/source identities and measured image hashes are separate. See [execution and evidence scope](../../.github/scripts/installed-native-qualification.md). This staged hosted diagnostic does not replace Windows 11, MSI, signing or release gates.
+
+## Requested installed SDK consumer configuration
+
+The installed SDK template runner explicitly sets `CMAKE_CONFIGURATION_TYPES` to its requested `SPARK_CONFIG`. Ninja Multi-Config defaults omit MinSizeRel, so configuring without this argument let the host build succeed but rejected the Shipping consumer before compilation. The compiler-free regression exercises the production configure arguments: the old argument set lacks `build-MinSizeRel.ninja`, while the corrected set builds a LANGUAGES NONE marker target. Compiler selection, SDK boundaries, sidecars and lifecycle criteria remain unchanged.
