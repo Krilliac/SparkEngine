@@ -2039,7 +2039,10 @@ set_tests_properties(SparkSaveCompatibilityTests PROPERTIES
 # the slot to load the last completed (or in-flight) generation with a valid CRC, an intact
 # .bak and no promoted .tmp; two deterministic AtomicWrite_ tests pin the staged .bak refresh.
 # Spark::Process::Kill uses SIGKILL on POSIX and TerminateProcess on Windows.
-add_test(NAME SparkSaveInterruptionTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+# Keep the three framework case records independently of CTest's stdout cap.
+add_test(NAME SparkSaveInterruptionTests COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error
+    --output-file "${CMAKE_BINARY_DIR}/SparkTests-atomicwrite-output.log"
+    --junit-xml "${CMAKE_BINARY_DIR}/SparkTests-atomicwrite-junit.xml")
 set_tests_properties(SparkSaveInterruptionTests PROPERTIES
     ENVIRONMENT "SPARK_TEST_NAME_PREFIX=AtomicWrite_;SPARK_TEST_EXPECT_COUNT=3"
     LABELS "compatibility;save;process"
@@ -5134,7 +5137,8 @@ add_test(
     NAME CpuFloor_IsaBaselineChecker
     COMMAND ${Python3_EXECUTABLE} -B -m unittest
         Tests.Tools.test_check_isa_baseline Tests.Tools.test_pe_isa_ranges Tests.Tools.test_isa_guard_dominance
-        Tests.Tools.test_isa_fail_closed Tests.Tools.test_isa_scan_registration Tests.Tools.test_isa_code_map -v
+        Tests.Tools.test_isa_fail_closed Tests.Tools.test_isa_scan_registration Tests.Tools.test_isa_code_map
+        Tests.Tools.test_isa_code_map_release_fixture -v
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 set_tests_properties(CpuFloor_IsaBaselineChecker PROPERTIES
     LABELS "build;shipping;unit;python"

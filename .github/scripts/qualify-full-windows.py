@@ -20,6 +20,7 @@ REQUIRED = {'SparkEngineTests', 'SparkEngineLoadTests', 'SparkSaveInterruptionTe
 BUILD_PROOF = ('SparkTests-junit.xml', 'SparkTests-load-junit.xml',
                'SparkTests-output.log', 'SparkTests-load-output.log',
                'test-registration-count.json')
+ATOMIC_PROOF = ('SparkTests-atomicwrite-output.log', 'SparkTests-atomicwrite-junit.xml')
 BUILD_DIAGNOSTIC = ('SparkTests.log', 'SparkTests-load.log')
 
 
@@ -268,7 +269,7 @@ def main():
             except Exception as error:
                 errors.append('Primary: ' + str(error))
             immutable(record)
-            for name in (*BUILD_PROOF, *BUILD_DIAGNOSTIC):
+            for name in (*BUILD_PROOF, *ATOMIC_PROOF, *BUILD_DIAGNOSTIC):
                 if not (build / name).is_file() or (build / name).stat().st_size == 0:
                     errors.append('Missing or empty required native file: ' + name)
             save(root / 'terminal.json', {'passed': not errors, 'errors': errors,
@@ -277,7 +278,7 @@ def main():
                 raise ValueError('; '.join(errors))
         else:
             payloads, manifest = {}, []
-            def retain(path, name, cap, tail=False):
+            def retain(path, name, cap, tail=False, strict_utf8=False):
                 if not path.is_file():
                     return
                 size = path.stat().st_size
@@ -287,6 +288,10 @@ def main():
                     if tail:
                         stream.seek(max(0, size - cap))
                     data = stream.read(cap + 1)
+                if strict_utf8:
+                    if not data or b'\0' in data:
+                        raise ValueError('Empty or NUL-containing complete proof: ' + name)
+                    data.decode('utf-8')  # Complete framework proof must not be rewritten.
                 payloads[name] = data
                 manifest.append({'path': name, 'bytes': size, 'sha256': digest(path), 'tail_only': tail and size > cap})
             for path in root.glob('*.json'):
@@ -297,6 +302,8 @@ def main():
                 retain(path, 'diagnostics/' + path.name, 16384, True)
             for name in BUILD_PROOF:
                 retain(build / name, 'build/' + name, 6 * MIB)
+            for name in ATOMIC_PROOF:
+                retain(build / name, 'build/' + name, 128 * 1024, strict_utf8=True)
             # RunSparkTests keeps framework assertions in output-file/JUnit; raw
             # stdout/stderr logger/crash streams are diagnostic tails, explicitly marked.
             for name in BUILD_DIAGNOSTIC:
@@ -305,7 +312,7 @@ def main():
                 if path.suffix in ('.json', '.xml', '.log'):
                     retain(path, path.relative_to(root).as_posix(), MIB)
             if (root / 'terminal.json').exists() and read_json(root / 'terminal.json').get('passed'):
-                required = {'build/' + n for n in (*BUILD_PROOF, *BUILD_DIAGNOSTIC)} | {'ctest-junit.xml', 'cpu-floor.xml',
+                required = {'build/' + n for n in (*BUILD_PROOF, *ATOMIC_PROOF, *BUILD_DIAGNOSTIC)} | {'ctest-junit.xml', 'cpu-floor.xml',
                     'ctest-accounting.json', 'test-stats.json', 'test-source-census.json', 'primary/results.json',
                     'host.json', 'identity.json', 'prebuild-discovery.json', 'discovery.json'}
                 if not required <= payloads.keys():

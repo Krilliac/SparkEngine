@@ -227,6 +227,32 @@ static LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exInfo)
         WriteFile(hErr, " (", 2, &written, nullptr);
         WriteFile(hErr, excName, static_cast<DWORD>(strlen(excName)), &written, nullptr);
         WriteFile(hErr, ")\n", 2, &written, nullptr);
+        // Preserve the original fault record before the stack walker advances
+        // through frames. This opt-in probe does not recover from the exception.
+        if (std::getenv("SPARK_SHADOW_DEVICE_TRACE") && exInfo && exInfo->ExceptionRecord)
+        {
+            const EXCEPTION_RECORD& record = *exInfo->ExceptionRecord;
+            char details[256];
+            const int length =
+                std::snprintf(details, sizeof(details), "[shadow-probe] exception code=0x%08lx pc=%p parameters=%lu\n",
+                              static_cast<unsigned long>(record.ExceptionCode), record.ExceptionAddress,
+                              static_cast<unsigned long>(record.NumberParameters));
+            if (length > 0 && static_cast<size_t>(length) < sizeof(details))
+            {
+                WriteFile(hErr, details, static_cast<DWORD>(length), &written, nullptr);
+            }
+            if (record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record.NumberParameters >= 2)
+            {
+                const int accessLength = std::snprintf(details, sizeof(details),
+                                                       "[shadow-probe] access-operation=%llu access-target=0x%016llx\n",
+                                                       static_cast<unsigned long long>(record.ExceptionInformation[0]),
+                                                       static_cast<unsigned long long>(record.ExceptionInformation[1]));
+                if (accessLength > 0 && static_cast<size_t>(accessLength) < sizeof(details))
+                {
+                    WriteFile(hErr, details, static_cast<DWORD>(accessLength), &written, nullptr);
+                }
+            }
+        }
     }
 
     // Print to stdout as well so test output captures it
