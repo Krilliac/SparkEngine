@@ -538,6 +538,15 @@ This is a red control run and cannot qualify a release commit.
 
 ## clang-tidy diagnostic budget ratchet (CI-110, job `clang-tidy`)
 
+The blocking inventory includes `SparkAssetPipelineCore/src` and
+`SparkCrashReporter/src`; the workflow failure-propagation contract pins both
+roots. Measure newly covered translation units with Ubuntu 24.04 clang-tidy 18,
+the lane's configure flags and compile database, and the repository `.clang-tidy`.
+Prefer behavior-preserving fixes, add only measured new-file budget counts,
+never raise existing entries, and record provenance in `measuredAt`. A focused
+log checked against a projected budget proves those files only; the complete
+inventory remains the full static-analysis gate.
+
 `--warnings-as-errors=""` keeps a single diagnostic from failing the analysis,
 so `Tools/clang_tidy_budget.py` turns the diagnostic stream into a ratchet
 against the committed `Tools/clang-tidy-budget.json`. The run step writes one

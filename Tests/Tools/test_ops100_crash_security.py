@@ -54,12 +54,12 @@ class CrashSecurityTests(unittest.TestCase):
     def test_runtime_limit_constants_remain_source_anchored(self) -> None:
         source = (ROOT / "SparkCrashReporter" / "src" / "CrashReporterApp.cpp").read_text(encoding="utf-8")
         for declaration in (
-            "kMaxManifestBytes = 1024 * 1024",
-            "kMaxJsonStringBytes = 256 * 1024",
+            "kMaxManifestBytes = static_cast<size_t>(1024 * 1024)",
+            "kMaxJsonStringBytes = static_cast<size_t>(256 * 1024)",
             "kMaxJsonDepth = 16",
             "kMaxCollectionEntries = 4096",
             "kMaxReadyManifests = 32",
-            "kMaxCrashLogBytes = 8 * 1024 * 1024",
+            "kMaxCrashLogBytes = static_cast<size_t>(8 * 1024 * 1024)",
         ):
             self.assertIn(declaration, source)
 

@@ -644,6 +644,21 @@
       "verification": "get-file-hash"
     },
     {
+      "name": "Intel SDE 10.13.1 Windows full-suite qualification archive",
+      "class": "downloads",
+      "license_spdx": "LicenseRef-Intel-Simplified-Software-License",
+      "owner": "Krilliac",
+      "justification": "Owner-approved Intel Software Development Emulator runs the required Windows below-floor CPU startup test. CI tool only; no SDE files enter SparkEngine packages.",
+      "path": ".github/scripts/full-windows-sde.ps1",
+      "pin_path": ".github/scripts/full-windows-sde.ps1",
+      "command": "Invoke-WebRequest -Uri $url -OutFile $archive -TimeoutSec 240",
+      "source_url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz",
+      "url": "https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz",
+      "sha256": "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651",
+      "output": "archive",
+      "verification": "get-file-hash"
+    },
+    {
       "name": "Intel SDE 10.13.1 Linux CI archive",
       "class": "downloads",
       "license_spdx": "LicenseRef-Intel-Simplified-Software-License",

@@ -131,6 +131,8 @@ CLANG_TIDY_SOURCE_ROOTS = (
     "SparkBuild/src",
     "SparkInstaller/src",
     "SparkShaderCompiler/src",
+    "SparkAssetPipelineCore/src",
+    "SparkCrashReporter/src",
     "GameModules",
 )
 

@@ -4392,6 +4392,8 @@ jobs:
             SparkBuild/src
             SparkInstaller/src
             SparkShaderCompiler/src
+            SparkAssetPipelineCore/src
+            SparkCrashReporter/src
             GameModules
           )
           for root in "${source_roots[@]}"; do
