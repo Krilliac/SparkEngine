@@ -209,3 +209,7 @@ The separate bounded Windows 2022/v143 route builds exact product source `f92d28
 ## Requested installed SDK consumer configuration
 
 The installed SDK template runner explicitly sets `CMAKE_CONFIGURATION_TYPES` to its requested `SPARK_CONFIG`. Ninja Multi-Config defaults omit MinSizeRel, so configuring without this argument let the host build succeed but rejected the Shipping consumer before compilation. The compiler-free regression exercises the production configure arguments: the old argument set lacks `build-MinSizeRel.ninja`, while the corrected set builds a LANGUAGES NONE marker target. Compiler selection, SDK boundaries, sidecars and lifecycle criteria remain unchanged.
+
+## Atomic save interruption suite ownership
+
+The existing exact-three SparkSaveInterruptionTests lane owns the AtomicWrite_ family, retaining warning/error/serial/timeout requirements. The main suite excludes this already-duplicated family only when that lane is registered, using the existing coverage-audited helper. Native qualification must execute both main and dedicated lanes; this handoff does not establish timing improvement or resolve unfinished CPU-floor checking.
