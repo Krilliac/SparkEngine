@@ -1,6 +1,6 @@
 #include "Core/EngineWeatherAdapter.h"
 
-#include "Graphics/WeatherSystem.h"
+#include <Spark/IWeatherService.h>
 
 namespace SparkGameFPS
 {
@@ -9,27 +9,28 @@ namespace SparkGameFPS
         if (!m_weather)
             return false;
 
-        Spark::WeatherType enginePreset = Spark::WeatherType::Clear;
+        Spark::WeatherPreset enginePreset = Spark::WeatherPreset::Clear;
         switch (preset)
         {
         case WeatherPreset::Clear:
-            enginePreset = Spark::WeatherType::Clear;
+            enginePreset = Spark::WeatherPreset::Clear;
             break;
         case WeatherPreset::Rain:
-            enginePreset = Spark::WeatherType::Rain;
+            enginePreset = Spark::WeatherPreset::Rain;
             break;
         case WeatherPreset::Snow:
-            enginePreset = Spark::WeatherType::Snow;
+            enginePreset = Spark::WeatherPreset::Snow;
             break;
         case WeatherPreset::Fog:
-            enginePreset = Spark::WeatherType::Fog;
+            enginePreset = Spark::WeatherPreset::Fog;
             break;
         case WeatherPreset::Storm:
-            enginePreset = Spark::WeatherType::Storm;
+            enginePreset = Spark::WeatherPreset::Storm;
             break;
+        default:
+            return false;
         }
 
-        m_weather->SetWeather(enginePreset, intensity, transitionSeconds);
-        return true;
+        return m_weather->SetWeather(enginePreset, intensity, transitionSeconds);
     }
 } // namespace SparkGameFPS

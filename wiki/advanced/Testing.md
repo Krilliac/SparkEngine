@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*738 test-bearing `.cpp`/`.mm` files, 8530 source-level test definitions*
+*739 test-bearing `.cpp`/`.mm` files, 8537 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1286,7 +1286,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSLANLoopback` | 2 |
 | `TestFPSMultiplayer` | 19 |
-| `TestFPSWeatherPort` | 6 |
+| `TestFPSWeatherPort` | 8 |
 | `TestFastNoise2SIMD` | 32 |
 | `TestFaultIsolation` | 14 |
 | `TestFaultIsolationReal` | 8 |
@@ -1443,7 +1443,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 7 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 16 |
+| `TestModuleLifecycleReal` | 17 |
 | `TestModuleVersion` | 6 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
@@ -1615,6 +1615,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestScriptHookManagerPhaseBB` | 14 |
 | `TestScriptHotReload` | 16 |
 | `TestScriptSandbox` | 7 |
+| `TestSdkWeatherService` | 4 |
 | `TestSeamlessAreaManager` | 14 |
 | `TestSecDaemonCacheHardening` | 8 |
 | `TestSecDaemonPipeIdentity` | 5 |

@@ -85,7 +85,7 @@
 | `ALuint` | alias | SparkEngine | [OpenALAudioEngine.cpp:L31](../../SparkEngine/Source/Audio/OpenALAudioEngine.cpp#L31) |  |
 | `AnimationHandle` | alias | SparkEngine | [OpaqueHandle.h:L109](../../SparkEngine/Source/Utils/OpaqueHandle.h#L109) | Handle to an AnimationInstance managed by the AnimationUpdateSystem. |
 | `AnimationSystem` | alias | SparkEngine | [AnimationSystem.h:L564](../../SparkEngine/Source/Engine/Animation/AnimationSystem.h#L564) | Type alias so EngineContext/EngineSetup can reference "AnimationSystem" |
-| `AnimationSystem` | alias | SparkSDK | [IEngineContext.h:L41](../../SparkSDK/Include/Spark/IEngineContext.h#L41) |  |
+| `AnimationSystem` | alias | SparkSDK | [IEngineContext.h:L42](../../SparkSDK/Include/Spark/IEngineContext.h#L42) |  |
 | `AnimS` | alias | SparkEngine | [EngineSettings.cpp:L361](../../SparkEngine/Source/Core/EngineSettings.cpp#L361) |  |
 | `APIENTRY` | macro | SparkEngine | [PlatformTypes.h:L201](../../SparkEngine/Source/Core/PlatformTypes.h#L201) |  |
 | `ARCH_SET_GS` | macro | tools | [gvisor-wine-shim.c:L134](../../tools/gvisor-wine-shim.c#L134) |  |
@@ -756,7 +756,7 @@
 | `NavQueryHandle` | alias | SparkEngine | [OpaqueHandle.h:L115](../../SparkEngine/Source/Utils/OpaqueHandle.h#L115) | Handle to a NavMeshQuery managed by the AISystem. |
 | `NDEBUG` | macro | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L16](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L16) |  |
 | `NetworkEntityID` | alias | SparkEngine | [EntityReplicator.h:L30](../../SparkEngine/Source/Engine/Networking/EntityReplicator.h#L30) |  |
-| `NetworkManager` | alias | SparkSDK | [IEngineContext.h:L86](../../SparkSDK/Include/Spark/IEngineContext.h#L86) |  |
+| `NetworkManager` | alias | SparkSDK | [IEngineContext.h:L87](../../SparkSDK/Include/Spark/IEngineContext.h#L87) |  |
 | `NetworkTime` | alias | SparkEngine | [NetworkManager.h:L93](../../SparkEngine/Source/Engine/Networking/NetworkManager.h#L93) |  |
 | `NOMINMAX` | macro | GameModules | [TFSavePaths.h:L29](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L29) |  |
 | `NOMINMAX` | macro | SparkAssetPipelineCore | [AssetCooker.cpp:L22](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L22) |  |
@@ -1090,7 +1090,7 @@
 | `SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE` | macro | SparkEditor | [PerformanceProfiler.cpp:L21](../../SparkEditor/Source/Profiler/PerformanceProfiler.cpp#L21) |  |
 | `SPARK_EDITOR_HAS_DX_PROGRAMMABLE_CAPTURE` | macro | SparkEditor | [PerformanceProfiler.cpp:L23](../../SparkEditor/Source/Profiler/PerformanceProfiler.cpp#L23) |  |
 | `SPARK_ENABLE_BITMASK_OPERATORS` | macro | SparkEngine | [BitFlags.h:L53](../../SparkEngine/Source/Utils/BitFlags.h#L53) | Enable \|, &, ^, ~ operators for a scoped enum. |
-| `SPARK_ENGINE_VERSION_PACKED` | macro | SparkSDK | [Version.h:L43](../../SparkSDK/Include/Spark/Version.h#L43) |  |
+| `SPARK_ENGINE_VERSION_PACKED` | macro | SparkSDK | [Version.h:L47](../../SparkSDK/Include/Spark/Version.h#L47) |  |
 | `SPARK_ENSURE` | macro | SparkEngine | [Validate.h:L340](../../SparkEngine/Source/Utils/Validate.h#L340) | Postcondition check: logs fatal error and aborts if expr is false |
 | `SPARK_ENSURE_MSG` | macro | SparkEngine | [Validate.h:L355](../../SparkEngine/Source/Utils/Validate.h#L355) | Postcondition check with a diagnostic message |
 | `SPARK_ENSURES` | macro | SparkEngine | [Contracts.h:L51](../../SparkEngine/Source/Core/Contracts.h#L51) |  |
@@ -1307,7 +1307,7 @@
 | `SPARK_SCOPED_CONTEXT` | macro | SparkEngine | [SparkError.h:L420](../../SparkEngine/Source/Utils/SparkError.h#L420) |  |
 | `SPARK_SCOPED_TIMER` | macro | SparkEngine | [ScopedTimer.h:L103](../../SparkEngine/Source/Utils/ScopedTimer.h#L103) | Convenience macro: creates a ScopedTimer that prints to stdout. |
 | `SPARK_SCREENCAP_PNG` | macro | SparkEngine | [ScreenCapture.h:L39](../../SparkEngine/Source/Graphics/ScreenCapture.h#L39) |  |
-| `SPARK_SDK_VERSION` | macro | SparkSDK | [Version.h:L40](../../SparkSDK/Include/Spark/Version.h#L40) |  |
+| `SPARK_SDK_VERSION` | macro | SparkSDK | [Version.h:L44](../../SparkSDK/Include/Spark/Version.h#L44) |  |
 | `SPARK_SERVICE_TESTS_NOINLINE` | macro | SparkDaemon | [ServiceTests.cpp:L44](../../SparkDaemon/tests/ServiceTests.cpp#L44) |  |
 | `SPARK_SERVICE_TESTS_NOINLINE` | macro | SparkDaemon | [ServiceTests.cpp:L46](../../SparkDaemon/tests/ServiceTests.cpp#L46) |  |
 | `SPARK_SHARED_EXT` | macro | SparkBuild | [Platform.h:L35](../../SparkBuild/src/Platform.h#L35) |  |
@@ -1365,7 +1365,7 @@
 | `SPARK_TRACK_THREAD_START` | macro | SparkEngine | [ThreadDebugger.h:L490](../../SparkEngine/Source/Utils/ThreadDebugger.h#L490) | Print thread debugger summary |
 | `SPARK_TRACKED_LOCK` | macro | SparkEngine | [DeadlockDetector.h:L195](../../SparkEngine/Source/Utils/DeadlockDetector.h#L195) |  |
 | `SPARK_TRACKED_LOCK` | macro | SparkEngine | [DeadlockDetector.h:L197](../../SparkEngine/Source/Utils/DeadlockDetector.h#L197) |  |
-| `SPARK_TYPEID_DEFINED` | macro | SparkEngine | [EngineContext.h:L60](../../SparkEngine/Source/Core/EngineContext.h#L60) | Unique type identifier that does not require complete types |
+| `SPARK_TYPEID_DEFINED` | macro | SparkEngine | [EngineContext.h:L61](../../SparkEngine/Source/Core/EngineContext.h#L61) | Unique type identifier that does not require complete types |
 | `SPARK_UNREACHABLE` | macro | SparkEngine | [Validate.h:L375](../../SparkEngine/Source/Utils/Validate.h#L375) | Marks code paths that should never be reached — aborts in Debug, UB hint in Release |
 | `SPARK_UNREACHABLE` | macro | SparkEngine | [Validate.h:L377](../../SparkEngine/Source/Utils/Validate.h#L377) |  |
 | `SPARK_VALIDATE` | macro | SparkEngine | [Validate.h:L160](../../SparkEngine/Source/Utils/Validate.h#L160) | Soft validation: logs an error and returns (void) if expr is false |
@@ -1452,7 +1452,7 @@
 | `Type` | alias | SparkDaemon | [BoundedWireCodec.h:L19](../../SparkDaemon/src/BoundedWireCodec.h#L19) |  |
 | `Type` | alias | SparkDaemon | [BoundedWireCodec.h:L24](../../SparkDaemon/src/BoundedWireCodec.h#L24) |  |
 | `type` | alias | SparkEngine | [TypeTraits.h:L213](../../SparkEngine/Source/Utils/TypeTraits.h#L213) |  |
-| `TypeId` | alias | SparkEngine | [EngineContext.h:L61](../../SparkEngine/Source/Core/EngineContext.h#L61) | Unique type identifier that does not require complete types |
+| `TypeId` | alias | SparkEngine | [EngineContext.h:L62](../../SparkEngine/Source/Core/EngineContext.h#L62) | Unique type identifier that does not require complete types |
 | `TypeId` | alias | Tests | [TestReflection.cpp:L22](../../Tests/TestReflection.cpp#L22) |  |
 | `UIBoolBinding` | alias | SparkEngine | [UIFactory.h:L93](../../SparkEngine/Source/Engine/UI/UIFactory.h#L93) |  |
 | `UIFloatBinding` | alias | SparkEngine | [UIFactory.h:L91](../../SparkEngine/Source/Engine/UI/UIFactory.h#L91) |  |

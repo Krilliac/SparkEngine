@@ -5,7 +5,24 @@ The SDK ABI is an exact-match contract. `SPARK_SDK_VERSION` is defined in
 rebuilt against the installed SDK before loading. There is no N-1 module load
 or automatic ABI migration.
 
-## Current version: SDK ABI v9
+## Current version: SDK ABI v10
+
+Version 10 appends `IEngineContext::GetWeatherService()` and adds the public
+`Spark/IWeatherService.h` interface with explicit `WeatherPreset` values.
+Rebuild every module against SDK10 and regenerate its sidecar; SDK9 modules
+are rejected before loading. Do not edit a sidecar to disguise an old binary.
+
+Use the borrowed service on the game thread for weather commands. Check for
+a null getter and a false command result. The service is host-owned; accepted
+commands start a transition rather than reporting its completion. The old
+private `GetWeather()` getters remain in their original slots for migration;
+new module code should use the public command interface.
+
+The descriptor stays version1/64 bytes and runtime ABI1. This SDK bump does
+not change the separate plugin ABI or enable N-1 module loading. Prior SDK9
+qualification evidence remains attached to its original binaries.
+
+## Previous version: SDK ABI v9
 
 Version 9 appended `IEngineContext::GetStateValidation()` and the public
 `IStateValidation` interface. Modules that used the engine's private

@@ -69,6 +69,7 @@ add_executable(SparkTests
     TestPhysicsComponents.cpp
     TestEventSystem.cpp
     TestWeatherSystem.cpp
+    TestSdkWeatherService.cpp
     TestInventorySystem.cpp
     TestQuestSystem.cpp
     TestDayNightCycle.cpp

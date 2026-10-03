@@ -30,6 +30,7 @@ set(_required_sdk_files
     include/Spark/GeneratedVersion.h
     include/Spark/IModule.h
     include/Spark/ModuleABI.h
+    include/Spark/IWeatherService.h
     lib/cmake/SparkEngine/SparkEngineConfig.cmake
     lib/cmake/SparkEngine/SparkEngineConfigVersion.cmake
     lib/cmake/SparkEngine/SparkEngineTargets.cmake
@@ -63,7 +64,7 @@ set(_required_sdk_documentation
     "README.md|there is no N-1 load or migration path"
     "API-REFERENCE.md|## Module lifecycle"
     "API-REFERENCE.md|SparkModuleCompatibilityDescriptor"
-    "MIGRATION.md|## Current version: SDK ABI v9"
+    "MIGRATION.md|## Current version: SDK ABI v10"
     "MIGRATION.md|There is no N-1 module load")
 set(_missing_sdk_documentation)
 foreach(_required_documentation IN LISTS _required_sdk_documentation)

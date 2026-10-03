@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include "Spark/ServiceInterfaces.h"
+#include "Spark/IWeatherService.h"
 #include "Spark/Version.h"
 
 // Forward declarations — engine types accessible through the context.
@@ -374,6 +375,10 @@ namespace Spark
          * adds must be removed in its OnUnload (see <Spark/IStateValidation.h>).
          */
         virtual IStateValidation* GetStateValidation() { return nullptr; }
+
+        /// Optional host-owned weather commands. Borrowed until context destruction; game thread only.
+        /// Added in SDK 10. Existing concrete GetWeather() slots retain their original meaning.
+        virtual IWeatherService* GetWeatherService() { return nullptr; }
     };
 
     /**
@@ -389,9 +394,9 @@ namespace Spark
      * vtable changed without a SPARK_SDK_VERSION bump re-pinned in
      * SparkSDK/ABI/sdk-abi-surface.json.
      */
-    inline constexpr uint32_t EngineContextVirtualCount = 91;
+    inline constexpr uint32_t EngineContextVirtualCount = 92;
 
-    static_assert(EngineContextVirtualCount == 91 && SPARK_SDK_VERSION == 9,
+    static_assert(EngineContextVirtualCount == 92 && SPARK_SDK_VERSION == 10,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

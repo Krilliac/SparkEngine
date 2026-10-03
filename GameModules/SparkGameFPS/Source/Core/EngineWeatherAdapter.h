@@ -4,22 +4,22 @@
 
 namespace Spark
 {
-    class WeatherSystem;
+    class IWeatherService;
 }
 
 namespace SparkGameFPS
 {
-    /// Non-owning Core/Main adapter from the engine weather implementation to
+    /// Non-owning Core/Main adapter from the public SDK weather service to
     /// the module-owned weather vocabulary.
     class EngineWeatherAdapter final : public IFPSWeatherPort
     {
       public:
-        explicit EngineWeatherAdapter(Spark::WeatherSystem* weather) : m_weather(weather) {}
+        explicit EngineWeatherAdapter(Spark::IWeatherService* weather) : m_weather(weather) {}
 
-        /// [game thread] Forwards the module vocabulary to the engine weather system.
+        /// [game thread] Forwards the module vocabulary to the public SDK weather service.
         bool SetWeather(WeatherPreset preset, float intensity, float transitionSeconds) override;
 
       private:
-        Spark::WeatherSystem* m_weather{nullptr};
+        Spark::IWeatherService* m_weather{nullptr};
     };
 } // namespace SparkGameFPS

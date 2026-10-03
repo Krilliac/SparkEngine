@@ -37,7 +37,11 @@
 //     rules through the host instead of the private Utils/InvalidStateDetector.h.
 //     StateViolationSeverity, StateViolation and StateCheckFn moved into the SDK
 //     unchanged.
-#define SPARK_SDK_VERSION 9
+// v10: Appended IEngineContext::GetWeatherService() (one vtable slot, MOD-310)
+//      and public IWeatherService/WeatherPreset, so modules issue weather commands
+//      without including the private WeatherSystem. Rebuild every module against
+//      v10; SDK compatibility remains exact-match and old GetWeather slots remain.
+#define SPARK_SDK_VERSION 10
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

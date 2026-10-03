@@ -34,7 +34,7 @@
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
-#include "Utils/InvalidStateDetector.h"
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleRegistry.h>
 
 #include <optional>
@@ -279,59 +279,64 @@ bool SparkGameModule::InitializeFromContext()
     }
 
     // Register game-specific console commands
-    m_weatherAdapter = std::make_unique<SparkGameFPS::EngineWeatherAdapter>(m_context->GetWeather());
+    m_weatherAdapter = std::make_unique<SparkGameFPS::EngineWeatherAdapter>(m_context->GetWeatherService());
     g_game->SetWeatherPort(m_weatherAdapter.get());
     RegisterGameConsoleCommands();
 
-    // Register FPS-specific state validation rules on the HOST's detector.
-    // SparkEngineLib is linked statically into this DLL, so
-    // InvalidStateDetector::GetInstance() here is a module-local copy the host
-    // never ticks: rules registered on it would never run and the module would
-    // report validation it does not have.
-    Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr;
-    if (!hostDetector)
+    // The host service retains rules registered before its detector starts.
+    // This optional capability must never fall back to a DLL-local singleton.
+    Spark::IStateValidation* stateDetector = m_context ? m_context->GetStateValidation() : nullptr;
+    if (!stateDetector)
     {
-        FPS_LOG_WARN("SparkGameFPS: host exposes no InvalidStateDetector; FPS state rules are not registered");
+        FPS_LOG_WARN("SparkGameFPS: host exposes no IStateValidation; FPS state rules are not registered");
         m_initialized = true;
         Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
         return true;
     }
-    Spark::InvalidStateDetector& stateDetector = *hostDetector;
 
     // The FPS actors are GameObjects with their own health, not ECS entities, so
     // these rules inspect the module's own state. Rules are removed in Shutdown()
     // before g_game is destroyed, so reading the global here stays safe.
-    stateDetector.AddRule({"FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error, true,
-                           [](World&, std::vector<Spark::StateViolation>& out)
-                           {
-                               const Player* player = g_game ? g_game->GetPlayer() : nullptr;
-                               if (!player)
-                                   return;
-                               const DirectX::XMFLOAT3 velocity = player->GetVelocity();
-                               if (Spark::FPSStateRules::DeadActorIsMoving(player->GetHealth(), velocity.x, velocity.z))
-                               {
-                                   out.push_back({"FPS.DeadPlayerMoving", 0u, "Dead player still moving horizontally",
-                                                  Spark::StateViolationSeverity::Error});
-                               }
-                           }});
+    const bool playerRuleRegistered = stateDetector->AddRule(
+        "FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error,
+        [](World&, std::vector<Spark::StateViolation>& out)
+        {
+            const Player* player = g_game ? g_game->GetPlayer() : nullptr;
+            if (!player)
+                return;
+            const DirectX::XMFLOAT3 velocity = player->GetVelocity();
+            if (Spark::FPSStateRules::DeadActorIsMoving(player->GetHealth(), velocity.x, velocity.z))
+            {
+                out.push_back({"FPS.DeadPlayerMoving", 0u, "Dead player still moving horizontally",
+                               Spark::StateViolationSeverity::Error});
+            }
+        });
 
-    stateDetector.AddRule(
-        {"FPS.DeadEnemyActive", "FPS", Spark::StateViolationSeverity::Error, true,
-         [](World&, std::vector<Spark::StateViolation>& out)
-         {
-             if (!g_game)
-                 return;
-             uint32_t index = 0;
-             for (const Enemy* enemy : g_game->GetEnemies())
-             {
-                 const uint32_t id = index++;
-                 if (enemy && Spark::FPSStateRules::DeadActorStillActive(enemy->GetHealth(), enemy->IsActive()))
-                 {
-                     out.push_back({"FPS.DeadEnemyActive", id, "Dead enemy was never deactivated",
-                                    Spark::StateViolationSeverity::Error});
-                 }
-             }
-         }});
+    const bool enemyRuleRegistered = stateDetector->AddRule(
+        "FPS.DeadEnemyActive", "FPS", Spark::StateViolationSeverity::Error,
+        [](World&, std::vector<Spark::StateViolation>& out)
+        {
+            if (!g_game)
+                return;
+            uint32_t index = 0;
+            for (const Enemy* enemy : g_game->GetEnemies())
+            {
+                const uint32_t id = index++;
+                if (enemy && Spark::FPSStateRules::DeadActorStillActive(enemy->GetHealth(), enemy->IsActive()))
+                {
+                    out.push_back({"FPS.DeadEnemyActive", id, "Dead enemy was never deactivated",
+                                   Spark::StateViolationSeverity::Error});
+                }
+            }
+        });
+
+    // Validation is optional; report refusal without discarding an accepted sibling rule.
+    // Shutdown removes this module's FPS category whether one or both calls succeeded.
+    if (!playerRuleRegistered || !enemyRuleRegistered)
+    {
+        FPS_LOG_WARN("SparkGameFPS: host refused FPS state rules (player={}, enemy={})", playerRuleRegistered,
+                     enemyRuleRegistered);
+    }
 
     m_initialized = true;
     Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
@@ -353,12 +358,10 @@ void SparkGameModule::Shutdown()
         }
     }
     m_registeredConsoleCommands.clear();
-    // Same instance the rules were added to; the module-local singleton would
-    // silently remove nothing and leave the host holding rules that reference
-    // g_game after it is deleted below.
-    if (Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr)
+    // Release module-owned callbacks before deleting the actors they inspect.
+    if (Spark::IStateValidation* rules = m_context ? m_context->GetStateValidation() : nullptr)
     {
-        hostDetector->RemoveRulesByCategory("FPS");
+        rules->RemoveRulesByCategory("FPS");
     }
 
     if (g_game)

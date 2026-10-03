@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -102,10 +103,79 @@ def bind_graph(path, expected):
         raise ValueError("Closure graph host identity mismatch")
 
 
-def compact(root):
+def weather_source_identity(identity, git):
+    if git("rev-parse", "HEAD") != identity["source_sha"] or git("status", "--porcelain", "--untracked-files=no"):
+        raise ValueError("Weather source is not clean exact recorded source")
+    for key, env in (("workflow_sha", "GITHUB_SHA"), ("run_id", "GITHUB_RUN_ID"), ("run_attempt", "GITHUB_RUN_ATTEMPT")):
+        if identity.get(key) != os.environ.get(env):
+            raise ValueError("Weather workflow/run identity changed")
+
+
+def proof_json(path):
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Duplicate proof key")
+            result[key] = value
+        return result
+    with path.open("rb") as stream:
+        raw = stream.read(131073)
+    if len(raw) > 131072 or b"\0" in raw:
+        raise ValueError("Invalid bounded proof JSON")
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique,
+                      parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+
+
+def weather_proof(root, identity):
+    receipt = proof_json(root / "sdk/weather-identity.json")
+    expected = {key: identity[key] for key in ("source_sha", "workflow_sha", "run_id", "run_attempt", "host_sha256")}
+    expected.update(module="SparkGeneratedGame", headless="unavailable", windowed="accepted", lifecycle="passed")
+    if any(receipt.get(key) != value for key, value in expected.items()) or type(receipt.get("sdk_version")) is not int or receipt["sdk_version"] != 10:
+        raise ValueError("Weather receipt identity/result mismatch")
+    for key in ("consumer_sha256", "host_sha256", "module_sha256", "sidecar_sha256"):
+        if not isinstance(receipt.get(key), str) or not re.fullmatch(r"[0-9a-f]{64}", receipt[key]):
+            raise ValueError("Invalid weather image digest")
+    names = ("runtime-stdout.log", "runtime-stderr.log", "runtime-weather-stdout.log", "runtime-weather-stderr.log")
+    if not isinstance(receipt.get("streams"), dict) or set(receipt["streams"]) != set(names):
+        raise ValueError("Incomplete weather streams")
+    texts = []
+    for name in names:
+        with (root / "sdk" / name).open("rb") as stream:
+            raw = stream.read(131073)
+        if len(raw) > 131072 or b"\0" in raw or hashlib.sha256(raw).hexdigest() != receipt["streams"][name]:
+            raise ValueError("Weather stream digest/bounds mismatch")
+        texts.append(raw.decode("utf-8"))
+    for available, pair in ((0, texts[:2]), (1, texts[2:])):
+        records = [line for text in pair for line in text.splitlines() if "SPARK_SDK_WEATHER" in line]
+        expected_record = (f"SPARK_SDK_WEATHER module=SparkGeneratedGame available={available} accepted={available} "
+                           f"invalid_rejected={available} clear_accepted={available} callback=OnLoad")
+        if records != [expected_record]:
+            raise ValueError("Weather stream result mismatch")
+    return receipt
+
+
+def compact(root, weather_consumer=False, source_sha=None):
+    identity = proof_json(root / "identity.json") if (root / "identity.json").exists() else {}
+    enabled = identity.get("weather_consumer", False)
+    if type(enabled) is not bool or (identity and enabled is not weather_consumer) or (weather_consumer and not identity and not (root / "build-failure.json").exists()):
+        raise ValueError("Weather mode identity missing or inconsistent")
+    if identity and source_sha is not None and identity.get("source_sha") != source_sha:
+        raise ValueError("Collector source pin mismatch")
+    # Failed SDK attempts retain available diagnostics, never a success receipt.
+    if enabled and not (root / "sdk-binding.json").exists() and not any((root / name).exists() for name in ("build-failure.json", "sdk-failure.json")):
+        raise ValueError("Weather SDK phase has no success binding or failure record")
+    if enabled and (root / "sdk-binding.json").exists():
+        binding = proof_json(root / "sdk-binding.json")
+        if binding.get("passed") is not True or (root / "sdk-failure.json").exists():
+            raise ValueError("Contradictory weather phase result")
+        receipt = weather_proof(root, identity)
+        if binding.get("weather_identity_sha256") != digest(root / "sdk/weather-identity.json") or binding.get("source_sha") != identity.get("source_sha") or binding.get("host_sha256") != receipt["host_sha256"]:
+            raise ValueError("Weather phase binding mismatch")
     # Explicit evidence allowlist: never traverse a prefix, build tree or user data.
     files = list(root.glob("*.json")) + list(root.glob("*.log"))
     files += list((root / "sdk").glob("runtime-*.log"))
+    files += list((root / "sdk").glob("weather-identity.json"))
     files += list((root / "abi").glob("*/report.json"))
     files += list((root / "abi").glob("*/*/*.log"))
     files += list((root / "closure").glob("*/*.json"))
@@ -115,7 +185,8 @@ def compact(root):
     for path in sorted(set(files)):
         name = path.relative_to(root).as_posix()
         parts = path.relative_to(root).parts
-        runtime_proof = (name in ("sdk/runtime-stdout.log", "sdk/runtime-stderr.log") or
+        runtime_proof = (name in ("sdk/runtime-stdout.log", "sdk/runtime-stderr.log",
+                                 "sdk/runtime-weather-stdout.log", "sdk/runtime-weather-stderr.log") or
                          (len(parts) == 4 and parts[0] == "abi" and parts[2] in ("newer", "previous")
                           and parts[3] in ("stdout.log", "stderr.log")))
         size = path.stat().st_size
@@ -153,7 +224,7 @@ def compact(root):
         target.write_bytes(data)
 
 
-def run_phase(phase, source, root):
+def run_phase(phase, source, root, weather_consumer=False, source_sha=SOURCE):
     deadline = time.monotonic() + PHASE_SECONDS[phase]
     build = source / "build/windows-shipping"
     binary = build / "bin/MinSizeRel"
@@ -179,15 +250,15 @@ def run_phase(phase, source, root):
                 *extra, "-P", source / "Tests/PackageSmoke" / name]
 
     if phase == "build":
-        if git("rev-parse", "HEAD") != SOURCE or git("status", "--porcelain", "--untracked-files=no"):
+        if git("rev-parse", "HEAD") != source_sha or git("status", "--porcelain", "--untracked-files=no"):
             raise ValueError("Source checkout is not clean exact pinned source")
         submodules = git("submodule", "status", "--recursive")
         if any(line.startswith(("-", "+", "U")) for line in submodules.splitlines()):
             raise ValueError("Uninitialized or mismatched submodule")
-        identity = {"source_sha": SOURCE, "source_tree": git("rev-parse", "HEAD^{tree}"),
+        identity = {"source_sha": source_sha, "source_tree": git("rev-parse", "HEAD^{tree}"),
                     "workflow_sha": os.environ["GITHUB_SHA"], "helper_sha256": digest(__file__), "submodules": submodules,
                     "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
-                    "configuration": "MinSizeRel", "scope": "hosted diagnostic, not Windows 11 certification",
+                    "configuration": "MinSizeRel", "weather_consumer": weather_consumer, "scope": "hosted diagnostic, not Windows 11 certification",
                     "tools": {tool: shutil.which(tool) for tool in ("cl", "ninja", "cmake", "python")}}
         if not all(identity["tools"].values()):
             raise ValueError("Required preinstalled tool missing")
@@ -203,18 +274,28 @@ def run_phase(phase, source, root):
         identity["host_sha256"] = digest(built)
         save(identity_path, identity)
         return
-    identity = json.loads(identity_path.read_text())
+    identity = proof_json(identity_path)
+    if identity.get("source_sha") != source_sha or identity.get("weather_consumer", False) is not weather_consumer:
+        raise ValueError("Weather mode changed across phases")
+    if weather_consumer:
+        weather_source_identity(identity, git)
     expected = identity["host_sha256"]
     for path, recorded in identity["images"].items():
         if digest(path) != recorded:
             raise ValueError("Build input changed since identity capture: " + path)
     same_host(expected, built)
     if phase == "sdk":
+        weather_args = []
+        if weather_consumer:
+            weather_args = ["-DSPARK_SDK_WEATHER_CONSUMER=ON", f"-DSPARK_WEATHER_SOURCE_SHA={source_sha}",
+                            f"-DSPARK_WEATHER_WORKFLOW_SHA={identity['workflow_sha']}",
+                            f"-DSPARK_WEATHER_RUN_ID={identity['run_id']}",
+                            f"-DSPARK_WEATHER_RUN_ATTEMPT={identity['run_attempt']}"]
         run("sdk", cmake_script("RunInstalledSDKTemplate.cmake", [f"-DSPARK_TEST_ROOT={root / 'sdk'}",
             "-DSPARK_CONSUMER_GENERATOR=Ninja Multi-Config",
             f"-DSPARK_CONSUMER_MAKE_PROGRAM={shutil.which('ninja')}",
             f"-DSPARK_CONSUMER_COMPILER={shutil.which('cl')}",
-            f"-DSPARK_REFERENCE_SIDECAR={binary / 'SparkGameFPS.dll.sparkabi'}"]), 1780)
+            f"-DSPARK_REFERENCE_SIDECAR={binary / 'SparkGameFPS.dll.sparkabi'}", *weather_args]), 1780)
         same_host(expected, built, installed)
     elif phase == "abi":
         same_host(expected, built, installed)
@@ -229,7 +310,7 @@ def run_phase(phase, source, root):
         run("abi", [sys.executable, source / "Tests/PackageSmoke/run_installed_module_abi_rejection.py",
                     "--installed-root", root / "sdk/prefix", "--newer", binary / "SparkMismatchedModuleFixture.dll",
                     "--previous", binary / "SparkPreviousSdkModuleFixture.dll", "--evidence-root", root / "abi",
-                    "--source-sha", SOURCE, "--configuration", "MinSizeRel"], 250)
+                    "--source-sha", source_sha, "--configuration", "MinSizeRel"], 250)
         same_host(expected, built, installed)
         reports = list((root / "abi").glob("*/report.json"))
         if len(reports) != 1:
@@ -250,7 +331,11 @@ def run_phase(phase, source, root):
     for path, recorded in identity["images"].items():
         if digest(path) != recorded:
             raise ValueError("Build input changed during qualification: " + path)
-    save(root / (phase + "-binding.json"), {"passed": True, "host_sha256": expected, "source_sha": SOURCE})
+    binding = {"passed": True, "host_sha256": expected, "source_sha": source_sha}
+    if phase == "sdk" and weather_consumer:
+        weather_proof(root, identity)
+        binding["weather_identity_sha256"] = digest(root / "sdk/weather-identity.json")
+    save(root / (phase + "-binding.json"), binding)
 
 
 def main():
@@ -258,7 +343,14 @@ def main():
     parser.add_argument("phase", choices=("build", "sdk", "abi", "closure", "pack"))
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--weather-consumer", action="store_true")
+    parser.add_argument("--source-sha")
     args = parser.parse_args()
+    if args.weather_consumer and args.source_sha is None:
+        parser.error("Weather mode requires explicit --source-sha")
+    source_sha = SOURCE if args.source_sha is None else args.source_sha
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        parser.error("Expected exact lowercase 40-hex source SHA")
     root = args.root.resolve()
     source = args.source.resolve()
     runner_temp = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
@@ -269,9 +361,17 @@ def main():
     root.mkdir(parents=True, exist_ok=True)
     try:
         if args.phase == "pack":
-            compact(root)
+            if args.weather_consumer and (root / "identity.json").exists():
+                def pack_git(*git_args):
+                    with tempfile.TemporaryFile() as output:
+                        owned_run(["git", "-C", str(source), *git_args], cwd=source, stdout=output,
+                                  stderr=subprocess.STDOUT, timeout=30, check=True)
+                        output.seek(0)
+                        return output.read().decode("utf-8").strip()
+                weather_source_identity(proof_json(root / "identity.json"), pack_git)
+            compact(root, args.weather_consumer, source_sha)
         else:
-            run_phase(args.phase, source, root)
+            run_phase(args.phase, source, root, args.weather_consumer, source_sha)
     except Exception as error:
         save(root / (args.phase + "-failure.json"), {"error": str(error), "phase": args.phase})
         raise

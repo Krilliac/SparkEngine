@@ -51,6 +51,39 @@ cmake_minimum_required(VERSION 3.25)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkPackageConsumerBoundary.cmake")
 
+# Optional SDK10 weather call coverage uses this same installed consumer/image.
+# Windows headless has no weather subsystem; its null observation is separate
+# from the positive real-service windowed WARP run. No wrong-thread call is made.
+function(_spark_sdk_template_weather_result stdout stderr expected_available out_error)
+    set(_text "${stdout}\n${stderr}")
+    string(REPLACE "\r\n" "\n" _text "${_text}")
+    string(REPLACE "\r" "\n" _text "${_text}")
+    string(REPLACE ";" "\\;" _text "${_text}")
+    string(REPLACE "\n" ";" _lines "${_text}")
+    set(_records)
+    foreach(_line IN LISTS _lines)
+        if(_line MATCHES "SPARK_SDK_WEATHER")
+            list(APPEND _records "${_line}")
+        endif()
+    endforeach()
+    list(LENGTH _records _count)
+    set(_error "")
+    set(_expected "SPARK_SDK_WEATHER module=SparkGeneratedGame available=${expected_available} accepted=${expected_available} invalid_rejected=${expected_available} clear_accepted=${expected_available} callback=OnLoad")
+    if(NOT _count EQUAL 1)
+        set(_error "expected exactly one weather consumer record")
+    else()
+        list(GET _records 0 _record)
+        if(NOT _record STREQUAL _expected)
+            set(_error "weather consumer state/result does not match expected host capability")
+        endif()
+    endif()
+    set(${out_error} "${_error}" PARENT_SCOPE)
+endfunction()
+
+if(SPARK_SDK_WEATHER_PARSER_ONLY)
+    return()
+endif()
+
 set(_spark_sdk_template_keys
     format struct_size magic sdk_version runtime_abi_version compiler_family compiler_abi_version
     cxx_language_level runtime_library iterator_debug_level pointer_size binary_sha256)
@@ -451,6 +484,9 @@ if(NOT _sdk_line_count EQUAL 1 OR NOT _sdk_lines MATCHES "SPARK_SDK_VERSION[ \t]
     message(FATAL_ERROR "${_version_header} must define SPARK_SDK_VERSION exactly once as a decimal integer")
 endif()
 set(_sdk_version "${CMAKE_MATCH_1}")
+if(SPARK_SDK_WEATHER_CONSUMER AND (NOT CMAKE_HOST_WIN32 OR NOT _sdk_version STREQUAL "10"))
+    message(FATAL_ERROR "Optional weather consumer requires native Windows and installed SDK10")
+endif()
 
 # Generate the game with the installed CLI. It must locate the prefix from its
 # own install location (SPARK_ENGINE_DIR is unset) and write outside the prefix.
@@ -478,6 +514,51 @@ endif()
 file(REAL_PATH "${CMAKE_MATCH_1}" _printed_package_dir)
 if(NOT _printed_package_dir STREQUAL _package_dir_real)
     message(FATAL_ERROR "spark-cli new printed SparkEngine_DIR=${CMAKE_MATCH_1}, expected ${_package_dir_real}")
+endif()
+
+if(SPARK_SDK_WEATHER_CONSUMER)
+    foreach(_pin IN ITEMS SPARK_WEATHER_SOURCE_SHA SPARK_WEATHER_WORKFLOW_SHA)
+        string(LENGTH "${${_pin}}" _length)
+        if(NOT _length EQUAL 40 OR NOT "${${_pin}}" MATCHES "^[0-9a-f]+$")
+            message(FATAL_ERROR "Weather mode requires exact source/workflow provenance: ${_pin}")
+        endif()
+    endforeach()
+    foreach(_pin IN ITEMS SPARK_WEATHER_RUN_ID SPARK_WEATHER_RUN_ATTEMPT)
+        if(NOT "${${_pin}}" MATCHES "^[1-9][0-9]*$")
+            message(FATAL_ERROR "Weather mode requires run provenance: ${_pin}")
+        endif()
+    endforeach()
+endif()
+
+if(SPARK_SDK_WEATHER_CONSUMER)
+    set(_consumer_header "${_source}/Source/GameModule.h")
+    file(READ "${_consumer_header}" _consumer_text)
+    string(REGEX MATCHALL "m_context = context" _anchors "${_consumer_text}")
+    string(FIND "${_consumer_text}" "m_context = context;" _anchor_position)
+    list(LENGTH _anchors _anchor_count)
+    if(NOT _anchor_count EQUAL 1 OR _anchor_position LESS 0)
+        message(FATAL_ERROR "Installed template OnLoad hook changed; refuse ambiguous weather probe injection")
+    endif()
+    set(_weather_probe [=[m_context = context;
+        // Installed-consumer test only: all weather calls use public SDK types.
+        auto* weather = context ? context->GetWeatherService() : nullptr;
+        bool accepted = false;
+        bool invalidRejected = false;
+        bool clearAccepted = false;
+        if (weather)
+        {
+            accepted = weather->SetWeather(Spark::WeatherPreset::Rain, 0.25f, 0.5f);
+            invalidRejected = !weather->SetWeather(static_cast<Spark::WeatherPreset>(99), 1.0f, 0.5f);
+            clearAccepted = weather->SetWeather(Spark::WeatherPreset::Clear, -1.0f, 0.01f);
+        }
+        std::printf("SPARK_SDK_WEATHER module=SparkGeneratedGame available=%d accepted=%d invalid_rejected=%d clear_accepted=%d callback=OnLoad\n",
+                    weather ? 1 : 0, accepted ? 1 : 0, invalidRejected ? 1 : 0, clearAccepted ? 1 : 0);
+        std::fflush(stdout);
+        if (weather && (!accepted || !invalidRejected || !clearAccepted))
+            return false;]=])
+    string(REPLACE "m_context = context;" "${_weather_probe}" _consumer_text "${_consumer_text}")
+    file(WRITE "${_consumer_header}" "#include <Spark/IWeatherService.h>\n#include <cstdio>\n${_consumer_text}")
+    file(SHA256 "${_consumer_header}" _weather_consumer_sha256)
 endif()
 
 set(_configure
@@ -571,6 +652,10 @@ endif()
 if(NOT EXISTS "${_engine}")
     message(FATAL_ERROR "Installed SDK runtime host is missing: ${_engine}")
 endif()
+if(SPARK_SDK_WEATHER_CONSUMER)
+    file(SHA256 "${_engine}" _weather_host_before)
+    file(SHA256 "${_sidecar}" _weather_sidecar_before)
+endif()
 set(_user_root "${SPARK_TEST_ROOT}/runtime-user")
 set(_runtime_env "SPARK_RHI_BACKEND=null")
 if(CMAKE_HOST_WIN32)
@@ -610,6 +695,71 @@ if(NOT _runtime_image_sha256 STREQUAL _image_sha256)
     message(FATAL_ERROR "SDK module image changed during runtime qualification")
 endif()
 message(STATUS "SPARK_SDK_TEMPLATE_RUNTIME module=${_module_name} sha256=${_image_sha256} lifecycle=passed")
+
+if(SPARK_SDK_WEATHER_CONSUMER)
+    _spark_sdk_template_weather_result("${_runtime_stdout}" "${_runtime_stderr}" 0 _weather_error)
+    if(NOT _weather_error STREQUAL "")
+        message(FATAL_ERROR "Headless weather unavailability observation failed: ${_weather_error}")
+    endif()
+    # The real windowed host registers WeatherSystem before module OnLoad.
+    # Preserve both original headless streams; WARP evidence has distinct files.
+    set(_weather_user "${SPARK_TEST_ROOT}/weather-user")
+    file(MAKE_DIRECTORY "${_weather_user}/local" "${_weather_user}/roaming")
+    set(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY ON)
+    include("${SPARK_SOURCE_ROOT}/cmake/RunSparkModuleProfileLifecycle.cmake")
+    unset(SPARK_LIFECYCLE_PARSER_INCLUDE_ONLY)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env --unset=SPARK_ENGINE_DIR
+            "SPARK_RHI_BACKEND=d3d11" "SPARK_D3D11_DRIVER=warp"
+            "LOCALAPPDATA=${_weather_user}/local" "APPDATA=${_weather_user}/roaming"
+            "${_engine}" -game "${_images}" -require-game -test-frames 30
+            -threads 2 -no-subprocess -window-size 640x360
+        WORKING_DIRECTORY "${_source}"
+        RESULT_VARIABLE _weather_result OUTPUT_VARIABLE _weather_stdout ERROR_VARIABLE _weather_stderr
+        TIMEOUT 120 ENCODING UTF-8)
+    file(WRITE "${SPARK_TEST_ROOT}/runtime-weather-stdout.log" "${_weather_stdout}")
+    file(WRITE "${SPARK_TEST_ROOT}/runtime-weather-stderr.log" "${_weather_stderr}")
+    _spark_validate_lifecycle_result("${_weather_result}" "${_weather_stdout}" "${_weather_stderr}"
+        _weather_ok _weather_reason "${_module_name}")
+    _spark_sdk_template_weather_result("${_weather_stdout}" "${_weather_stderr}" 1 _weather_error)
+    if(NOT _weather_ok OR NOT _weather_error STREQUAL "")
+        message(FATAL_ERROR "Installed public weather call failed: ${_weather_reason}; ${_weather_error}")
+    endif()
+    file(SHA256 "${_engine}" _weather_host_after)
+    file(SHA256 "${_images}" _weather_module_after)
+    file(SHA256 "${_sidecar}" _weather_sidecar_after)
+    if(NOT _weather_host_before STREQUAL _weather_host_after OR NOT _image_sha256 STREQUAL _weather_module_after OR
+       NOT _weather_sidecar_before STREQUAL _weather_sidecar_after)
+        message(FATAL_ERROR "Installed weather host/module changed during qualification")
+    endif()
+    # Complete identity proof is independent of the diagnostic sdk.log tail.
+    set(_weather_receipt "{}")
+    foreach(_pair IN ITEMS
+            "module|${_module_name}" "source_sha|${SPARK_WEATHER_SOURCE_SHA}"
+            "workflow_sha|${SPARK_WEATHER_WORKFLOW_SHA}" "run_id|${SPARK_WEATHER_RUN_ID}"
+            "run_attempt|${SPARK_WEATHER_RUN_ATTEMPT}" "consumer_sha256|${_weather_consumer_sha256}"
+            "host_sha256|${_weather_host_after}" "module_sha256|${_image_sha256}"
+            "sidecar_sha256|${_weather_sidecar_after}" "headless|unavailable"
+            "windowed|accepted" "lifecycle|passed")
+        string(REPLACE "|" ";" _parts "${_pair}")
+        list(GET _parts 0 _key)
+        list(GET _parts 1 _value)
+        string(JSON _weather_receipt SET "${_weather_receipt}" "${_key}" "\"${_value}\"")
+    endforeach()
+    string(JSON _weather_receipt SET "${_weather_receipt}" sdk_version 10)
+    string(JSON _weather_receipt SET "${_weather_receipt}" streams "{}")
+    foreach(_stream IN ITEMS runtime-stdout.log runtime-stderr.log runtime-weather-stdout.log runtime-weather-stderr.log)
+        file(SIZE "${SPARK_TEST_ROOT}/${_stream}" _bytes)
+        if(_bytes GREATER 131072)
+            message(FATAL_ERROR "Weather runtime proof exceeds 128KiB: ${_stream}")
+        endif()
+        file(SHA256 "${SPARK_TEST_ROOT}/${_stream}" _sha)
+        string(JSON _weather_receipt SET "${_weather_receipt}" streams "${_stream}" "\"${_sha}\"")
+    endforeach()
+    file(WRITE "${SPARK_TEST_ROOT}/weather-identity.json" "${_weather_receipt}\n")
+    message(STATUS "SPARK_SDK_WEATHER_RUNTIME module=${_module_name} sdk_version=${_sdk_version} consumer_sha256=${_weather_consumer_sha256} host_sha256=${_weather_host_after} module_sha256=${_image_sha256} sidecar_sha256=${_weather_sidecar_after} headless=unavailable windowed=accepted lifecycle=passed")
+endif()
+
 
 message(STATUS
     "SPARK_SDK_TEMPLATE module=${_module_name} sdk_version=${_sdk_version} scanned=${_scanned} violations=0")

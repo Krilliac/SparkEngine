@@ -420,6 +420,12 @@ TEST(PrototypeModuleKit_StateRulesRegisterThroughSdkContext)
         detector.Shutdown();
         EXPECT_FALSE(detector.HasRule("Kit.Early"));
         EXPECT_TRUE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
+        // Public category cleanup must also release an early callback before host startup.
+        rules->RemoveRulesByCategory("Kit");
+        rules->RemoveRulesByCategory("Kit");
+        EXPECT_FALSE(detector.HasRule("Kit.Early"));
+        EXPECT_EQ(detector.GetRuleCount(), rulesBeforeStart);
+        EXPECT_TRUE(rules->AddRule("Kit.Early", "Kit", Spark::StateViolationSeverity::Error, probeCheck(probe, runs)));
         detector.Initialize();
         EXPECT_TRUE(detector.HasRule("Kit.Early"));
         detector.SetWorld(&world);
