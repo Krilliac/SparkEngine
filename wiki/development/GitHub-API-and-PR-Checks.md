@@ -201,3 +201,7 @@ python -B Tests/PackageSmoke/run_installed_module_abi_rejection.py --installed-r
 The active Primary job is Release rendering capture only. It provides no installed
 MinSizeRel ABI qualification. This driver does not build/install, alter ABI rules,
 replace signature/installer checks, or qualify real predecessor upgrade/rollback.
+
+## Installed MinSizeRel native diagnostic
+
+The separate bounded Windows 2022/v143 route builds exact product source `f92d28016fc74e5076591173b4ac5518415fed2f` and runs installed SDK lifecycle, the benign incompatible-module controls, and package closure on the same host image. It preserves Shipping policies and existing job/test ceilings. Workflow/source identities and measured image hashes are separate. See [execution and evidence scope](../../.github/scripts/installed-native-qualification.md). This staged hosted diagnostic does not replace Windows 11, MSI, signing or release gates.
