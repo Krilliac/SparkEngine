@@ -69,6 +69,7 @@ add_executable(SparkTests
     TestPhysicsComponents.cpp
     TestEventSystem.cpp
     TestWeatherSystem.cpp
+    TestSdkWeatherService.cpp
     TestInventorySystem.cpp
     TestQuestSystem.cpp
     TestDayNightCycle.cpp
@@ -1197,6 +1198,7 @@ target_sources(SparkTests PRIVATE
     TestSEC100ChatAuditLogReal.cpp
     TestSEC100RemoteAdminUnavailableReal.cpp
     TestSaveSystemRoundTripReal.cpp
+    TestFPSOwnedSaveDecode.cpp
     TestSAVE230NewerFormatSlotReal.cpp
     TestSaveInterruptionReal.cpp
     TestDocumentInterruptionReal.cpp

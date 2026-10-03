@@ -1,0 +1,254 @@
+name: Installed ABI10 weather qualification
+'on':
+  push:
+    branches:
+    - codex/public-weather-sdk-20261003
+permissions:
+  contents: read
+concurrency:
+  group: installed-weather-20261003
+  cancel-in-progress: false
+jobs:
+  source-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - name: Checkout exact source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Verify source and existing Python environment
+      env:
+        EXPECTED_SOURCE: ${{ github.sha }}
+      run: 'set -euo pipefail
+
+        test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+
+        git show -s --format=''%H %T'' HEAD
+
+        python3 -c ''import sys, yaml; print(sys.version, "PyYAML", yaml.__version__)''
+
+        '
+    - name: Verify Primary capture and mutation contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/Tools/test_rhi210_capture.py
+
+        python3 -B Tests/Tools/test_verify_approved_primary.py
+
+        python3 -B Tests/Tools/test_diagnostic_sccache_keys.py
+
+        python3 -B Tests/Tools/test_installed_module_abi_rejection.py
+
+        python3 -B Tests/Tools/test_installed_native_runner.py
+
+        python3 -B Tests/Tools/test_sdk_template_configuration.py
+
+        '
+    - name: Run cleanup and diagnostic contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/Tools/test_compare_build_outputs.py TwoTreeCleanupTests
+
+        python3 -B -m unittest discover -s Tests/Tools -p ''test_build_matrix_*diagnostics.py''
+
+        python3 -B Tests/Tools/test_build_matrix_report_upload.py
+
+        '
+    - name: Verify supply chain and workflow contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/Tools/test_supply_chain_license_policy.py
+
+        python3 -B .github/scripts/test-workflow-failure-propagation.py
+
+        python3 -B .github/scripts/test_workflow_privilege_boundaries.py
+
+        '
+    - name: Verify exact documentation and inventory
+      run: 'set -euo pipefail
+
+        bash docs/update-all-docs.sh check
+
+        python3 -B Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json
+
+        test -z "$(git status --porcelain)"
+
+        '
+    - name: Verify reconciled production contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/Tools/test_clang_tidy_budget.py
+
+        python3 -B Tests/Tools/test_ops100_crash_security.py CrashSecurityTests.test_runtime_limit_constants_remain_source_anchored
+
+        bash tools/check-test-registration.sh
+
+        '
+    - name: Verify extraction and arena acceptance contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/Tools/test_extract_sde_archive.py
+
+        cmake -DSPARK_FPS_ARENA_LOOP_PARSER_SELF_TEST=ON -P Tests/PackageSmoke/RunInstalledFPSArenaLoop.cmake
+
+        '
+    - name: Full Windows qualification contracts
+      run: python3 -B Tests/Tools/test_full_windows_qualification.py
+    - name: Reviewed ISA mapper and permanent native-byte fixture contracts
+      run: 'set -euo pipefail
+
+        python3 -B -m unittest Tests.Tools.test_isa_code_map Tests.Tools.test_isa_code_map_release_fixture Tests.Tools.test_check_isa_baseline.ClassifierTests
+
+        '
+    - name: Existing ISA diagnostic evidence contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/Tools/test_isa_failure_diagnostics.py
+
+        python3 -B Tests/Tools/test_isa_diagnostic_runner.py
+
+        '
+    - name: Verify editor FPS evidence and bounded qualification contracts
+      run: 'set -euo pipefail
+
+        python3 -B Tests/PackageSmoke/test_editor_fps_lineage.py
+
+        python3 -B .github/scripts/test_qualify_editor_fps.py
+
+        python3 -B Tests/Tools/test_module_private_dependencies.py
+
+        '
+    - name: Verify ABI10 weather and focused proof contracts
+      run: 'set -euo pipefail
+
+        python3 -B SparkSDK/Tools/sdk_abi_surface.py check
+
+        python3 -B -m unittest -v Tests.Tools.test_sdk240_abi_surface Tests.Tools.test_sdk_component_completeness Tests.Tools.test_installed_module_abi_rejection
+        Tests.Tools.test_module_private_dependencies Tests.Tools.test_sdk_weather_consumer Tests.Tools.test_fps_input_dispatch
+
+        python3 -B Tests/PackageSmoke/test_fps_owned_save_decode.py
+
+        python3 -B .github/scripts/test_qualify_weather_focused.py
+
+        python3 -B .github/scripts/test_qualify_input_dispatch.py
+
+        python3 -B .github/scripts/test_qualify_installed_lineage.py
+
+        '
+  installed-native:
+    needs: source-contracts
+    runs-on: windows-2022
+    timeout-minutes: 240
+    env:
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - name: Initialize owned evidence and monotonic job budget
+      run: '$ErrorActionPreference = ''Stop''
+
+        $q = Join-Path $env:RUNNER_TEMP "spark-weather-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+
+        if (Test-Path -LiteralPath $q) { throw ''Evidence root exists'' }
+
+        New-Item -ItemType Directory -Path $q | Out-Null
+
+        "QUAL_ROOT=$q" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+        python -c "import json,time,pathlib; pathlib.Path(r''$q/clock.json'').write_text(json.dumps({''deadline'':time.monotonic()+240*60}))"
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+    - name: Checkout workflow helper
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+        sparse-checkout: .github/scripts
+    - name: Checkout exact ABI10 weather product
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 25548f70f515af9445af7e4ed187e5ea7af87e3c
+        path: product
+        submodules: recursive
+        persist-credentials: false
+    - name: Require installed VS 2022 v143 environment and record host
+      run: "$ErrorActionPreference = 'Stop'\n$q = $env:QUAL_ROOT\nif (-not (Test-Path -LiteralPath \"$q/clock.json\")) { throw\
+        \ \"Missing initialized evidence clock\" }\n$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'\n\
+        $vs = & $vswhere -latest -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64\
+        \ -property installationPath\nif ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Preinstalled VS 2022 v143 unavailable'\
+        \ }\n$before = @{}\nGet-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }\nImport-Module (Join-Path\
+        \ $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')\nEnter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation\
+        \ -DevCmdArguments '-arch=x64 -host_arch=x64'\nif ($env:VCToolsVersion -notmatch '^14\\.[34][0-9]\\.') { throw 'Expected\
+        \ v143 toolset' }\nforeach ($entry in Get-ChildItem env:) {\n  if ($entry.Name.StartsWith('=') -or $entry.Value -match\
+        \ \"[`r`n]\") { continue }\n  if ($before[$entry.Name] -ne $entry.Value) {\n    \"$($entry.Name)=$($entry.Value)\"\
+        \ | Out-File $env:GITHUB_ENV -Append -Encoding utf8\n  }\n}\n$tools = @{}\nforeach ($name in @('cl.exe', 'cmake.exe',\
+        \ 'ninja.exe', 'python.exe', 'rc.exe')) {\n  $file = (Get-Command $name -ErrorAction Stop).Source\n  $tools[$name]\
+        \ = @{ path=$file; version=(Get-Item -LiteralPath $file).VersionInfo.FileVersion; sha256=(Get-FileHash -LiteralPath\
+        \ $file -Algorithm SHA256).Hash.ToLowerInvariant() }\n}\n$os = Get-CimInstance Win32_OperatingSystem\n@{ vs=$vs; vcToolsVersion=$env:VCToolsVersion;\
+        \ windowsSdkVersion=$env:WindowsSDKVersion; tools=$tools; os=$os.Caption; osVersion=$os.Version; osBuild=$os.BuildNumber;\
+        \ totalMemoryKiB=$os.TotalVisibleMemorySize; freeMemoryKiB=$os.FreePhysicalMemory; runnerImage=$env:ImageVersion;\
+        \ workflowSha=$env:GITHUB_SHA } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath \"$q/host.json\" -Encoding utf8\n\
+        cmake --version\nif ($LASTEXITCODE -ne 0) { throw 'CMake unavailable' }\nninja --version\nif ($LASTEXITCODE -ne 0)\
+        \ { throw 'Ninja unavailable' }\npython --version\nif ($LASTEXITCODE -ne 0) { throw 'Python unavailable' }\n"
+      timeout-minutes: 5
+    - name: graphics
+      timeout-minutes: 10
+      run: python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT" --source-sha
+        25548f70f515af9445af7e4ed187e5ea7af87e3c
+    - name: Build MinSizeRel product and run focused native families
+      timeout-minutes: 185
+      run: 'python harness/.github/scripts/qualify-installed-native.py build --source product --root "$env:QUAL_ROOT" --source-sha
+        25548f70f515af9445af7e4ed187e5ea7af87e3c --weather-consumer --input-dispatch --editor-lineage
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+    - name: Installed SDK weather acceptance on same host
+      timeout-minutes: 30
+      run: 'python harness/.github/scripts/qualify-installed-native.py sdk --source product --root "$env:QUAL_ROOT" --source-sha
+        25548f70f515af9445af7e4ed187e5ea7af87e3c --weather-consumer --input-dispatch --editor-lineage
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+    - name: Same installed host SDK9 and SDK11 rejection
+      timeout-minutes: 5
+      run: 'python harness/.github/scripts/qualify-installed-native.py abi --source product --root "$env:QUAL_ROOT" --source-sha
+        25548f70f515af9445af7e4ed187e5ea7af87e3c --weather-consumer --input-dispatch --editor-lineage
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+    - name: Package closure and same-host graph binding
+      timeout-minutes: 15
+      run: 'python harness/.github/scripts/qualify-installed-native.py closure --source product --root "$env:QUAL_ROOT" --source-sha
+        25548f70f515af9445af7e4ed187e5ea7af87e3c --weather-consumer --input-dispatch --editor-lineage
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+    - name: Retain complete bounded weather evidence
+      timeout-minutes: 5
+      run: 'python harness/.github/scripts/qualify-installed-native.py pack --source product --root "$env:QUAL_ROOT" --source-sha
+        25548f70f515af9445af7e4ed187e5ea7af87e3c --weather-consumer --input-dispatch --editor-lineage
+
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        '
+      if: ${{ always() && env.QUAL_ROOT != '' }}
+    - name: Retain installed weather qualification text
+      if: ${{ always() && env.QUAL_ROOT != '' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: installed-weather-text
+        path: ${{ env.QUAL_ROOT }}/diagnostics-text
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 6

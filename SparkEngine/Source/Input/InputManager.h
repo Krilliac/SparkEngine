@@ -56,6 +56,8 @@ class InputManager
     std::unordered_map<int, bool> m_frameKeyStates; ///< Keyboard states latched by this frame's Update()
     std::unordered_map<int, bool> m_prevKeyStates;  ///< Keyboard states latched by the previous Update()
 
+    unsigned long long m_inputFrameSequence = 0;
+
     bool m_mouseButtons[3];      ///< Live mouse button states [Left, Right, Middle]
     bool m_frameMouseButtons[3]; ///< Mouse button states latched by this frame's Update()
     bool m_prevMouseButtons[3];  ///< Mouse button states latched by the previous Update()
@@ -163,6 +165,11 @@ class InputManager
      * @return true if key is currently pressed, false otherwise
      */
     bool IsKeyDown(int key) const;
+
+    /// Read-only diagnostics for the same snapshot used by edge queries.
+    bool IsFrameKeyDown(int key) const;
+    unsigned long long GetInputFrameSequence() const noexcept { return m_inputFrameSequence; }
+
 
     /**
      * @brief Check if a key is currently released

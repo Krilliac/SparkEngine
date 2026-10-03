@@ -437,6 +437,7 @@ void Game::InvalidateSceneBasicMaterials()
 --------------------------------------------------------------*/
 void Game::Shutdown()
 {
+    EndInputObservation();
     if (m_isShutDown)
         return;
     m_isShutDown = true;
@@ -616,6 +617,7 @@ void Game::SetEventBus(Spark::EventBus* bus)
 --------------------------------------------------------------*/
 void Game::Update(float dt)
 {
+    BeginInputObservation();
     if (m_isPaused)
     {
         return;
@@ -642,12 +644,17 @@ void Game::Update(float dt)
         dt = 0.0f;
     }
 
+    bool inputUpdateCompleted = false;
     SPARK_CATCH_ALL("Game", {
         HandleInput(dt);
+        RecordInputObservation("dispatch");
         UpdateArenaAutopilot(dt);
         UpdateCamera(dt);
         UpdateGameObjects(dt);
+        inputUpdateCompleted = true;
     });
+    if (m_inputObservationEnabled && !inputUpdateCompleted)
+        m_inputObservationFailed = true;
 
     SPARK_GUARDED_UPDATE("Game:ClassSystem", "Game", {
         if (m_classSystem)
@@ -763,6 +770,7 @@ void Game::Update(float dt)
                 physics->Update(dt);
         }
     });
+    RecordInputObservation("complete");
 }
 
 /*-------------------------------------------------------------
@@ -930,10 +938,23 @@ void Game::HandleInput(float)
     {
         std::string message;
         const bool succeeded = savePressed ? QuickSaveProfile(message) : QuickLoadProfile(message);
+        if (m_inputObservationEnabled)
+        {
+            ++m_inputObservationOperation;
+            m_inputObservationAction = savePressed ? 1 : 2;
+            m_inputObservationResult = succeeded ? 1 : 0;
+            RecordInputObservation("operation");
+        }
         if (succeeded)
             FPS_LOG_INFO("{}", message);
         else
             FPS_LOG_WARN("{}", message);
+    }
+
+    if (m_inputObservationEnabled && savePressed && loadPressed)
+    {
+        m_inputObservationAction = 3;
+        RecordInputObservation("operation");
     }
 
     // Class switching with F5-F10 keys

@@ -22,6 +22,7 @@
 #include "Core/EngineSdkConsole.h"
 #include "Core/EngineSdkLogger.h"
 #include "Core/EngineSdkStateValidation.h"
+#include "Core/EngineSdkWeather.h"
 
 #include <algorithm>
 #include <any>
@@ -290,6 +291,8 @@ class EngineContext : public Spark::IEngineContext
     /// The SDK rule registry game modules use instead of the private Utils/InvalidStateDetector.h.
     Spark::IStateValidation* GetStateValidation() override { return &m_sdkStateValidation; }
 
+    Spark::IWeatherService* GetWeatherService() override { return GetWeather() ? &m_sdkWeather : nullptr; }
+
     // =========================================================================
     // Named setters — delegate to generic registry (R1.1)
     // =========================================================================
@@ -432,4 +435,6 @@ class EngineContext : public Spark::IEngineContext
     EngineSdkConsole m_sdkConsole;
     // Stateless: forwards to the host InvalidStateDetector singleton.
     EngineSdkStateValidation m_sdkStateValidation;
+    // Resolves the registry on each command; never retains a subsystem pointer.
+    EngineSdkWeather m_sdkWeather{*this};
 };

@@ -3,7 +3,9 @@
 #include "Game/FPSWeatherPort.h"
 #include "Game/FPSWeatherIntegration.h"
 #include "Core/EngineWeatherAdapter.h"
-#include "Graphics/WeatherSystem.h"
+#include <Spark/IWeatherService.h>
+
+#include <array>
 
 namespace
 {
@@ -22,6 +24,24 @@ namespace
         bool enabled{true};
         int calls{0};
         SparkGameFPS::WeatherPreset lastPreset{SparkGameFPS::WeatherPreset::Clear};
+        float lastIntensity{-1.0f};
+        float lastTransitionSeconds{-1.0f};
+    };
+    class RecordingWeatherService final : public Spark::IWeatherService
+    {
+      public:
+        bool SetWeather(Spark::WeatherPreset preset, float intensity, float transitionSeconds) override
+        {
+            ++calls;
+            lastPreset = preset;
+            lastIntensity = intensity;
+            lastTransitionSeconds = transitionSeconds;
+            return accepted;
+        }
+
+        bool accepted{true};
+        int calls{0};
+        Spark::WeatherPreset lastPreset{Spark::WeatherPreset::Clear};
         float lastIntensity{-1.0f};
         float lastTransitionSeconds{-1.0f};
     };
@@ -47,15 +67,41 @@ TEST(FPSWeatherPort_OptionalCapabilityCanBeUnavailable)
     EXPECT_EQ(port.calls, 1);
 }
 
-TEST(FPSWeatherPort_ProductionAdapterMapsToEngineWeather)
+TEST(FPSWeatherPort_ProductionAdapterMapsEveryPublicPreset)
 {
-    Spark::WeatherSystem weather;
+    RecordingWeatherService weather;
     SparkGameFPS::EngineWeatherAdapter adapter(&weather);
+    constexpr std::array modulePresets{SparkGameFPS::WeatherPreset::Clear, SparkGameFPS::WeatherPreset::Rain,
+                                       SparkGameFPS::WeatherPreset::Snow, SparkGameFPS::WeatherPreset::Fog,
+                                       SparkGameFPS::WeatherPreset::Storm};
+    constexpr std::array publicPresets{Spark::WeatherPreset::Clear, Spark::WeatherPreset::Rain,
+                                       Spark::WeatherPreset::Snow, Spark::WeatherPreset::Fog,
+                                       Spark::WeatherPreset::Storm};
+    for (size_t i = 0; i < modulePresets.size(); ++i)
+    {
+        ASSERT_TRUE(adapter.SetWeather(modulePresets[i], 0.8f, 3.0f));
+        EXPECT_EQ(weather.calls, static_cast<int>(i + 1));
+        EXPECT_EQ(static_cast<int>(weather.lastPreset), static_cast<int>(publicPresets[i]));
+        EXPECT_NEAR(weather.lastIntensity, 0.8f, 1.0e-6f);
+        EXPECT_NEAR(weather.lastTransitionSeconds, 3.0f, 1.0e-6f);
+    }
+}
 
-    ASSERT_TRUE(adapter.SetWeather(SparkGameFPS::WeatherPreset::Storm, 0.8f, 3.0f));
-    EXPECT_EQ(static_cast<int>(weather.GetTargetState().type), static_cast<int>(Spark::WeatherType::Storm));
-    EXPECT_NEAR(weather.GetTargetState().intensity, 0.8f, 1.0e-6f);
-    EXPECT_TRUE(weather.IsTransitioning());
+TEST(FPSWeatherPort_ProductionAdapterPropagatesServiceRefusal)
+{
+    RecordingWeatherService weather;
+    weather.accepted = false;
+    SparkGameFPS::EngineWeatherAdapter adapter(&weather);
+    EXPECT_FALSE(adapter.SetWeather(SparkGameFPS::WeatherPreset::Rain, 0.5f, 1.0f));
+    EXPECT_EQ(weather.calls, 1);
+}
+
+TEST(FPSWeatherPort_ProductionAdapterRejectsUnknownPresetWithoutServiceCall)
+{
+    RecordingWeatherService weather;
+    SparkGameFPS::EngineWeatherAdapter adapter(&weather);
+    EXPECT_FALSE(adapter.SetWeather(static_cast<SparkGameFPS::WeatherPreset>(-1), 0.5f, 1.0f));
+    EXPECT_EQ(weather.calls, 0);
 }
 
 TEST(FPSWeatherPort_ProductionAdapterReportsMissingEngineCapability)

@@ -135,16 +135,14 @@
         "Graphics/PostProcessingPipeline.h",
         "Graphics/Shader.h",
         "Graphics/TextureSystem.h",
-        "Graphics/WeatherSystem.h",
         "Input/InputManager.h",
         "Physics/CollisionSystem.h",
         "Physics/PhysicsSystem.h",
         "SceneManager/SceneManager.h",
         "Utils/EventBus.h",
-        "Utils/InvalidStateDetector.h",
         "Utils/SparkError.h"
       ],
-      "privateEngineHeaderCount": 38,
+      "privateEngineHeaderCount": 36,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

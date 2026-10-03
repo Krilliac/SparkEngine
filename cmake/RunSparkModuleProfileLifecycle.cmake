@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 
 function(_spark_validate_lifecycle_result child_result child_stdout child_stderr out_ok out_reason)
+    set(_expected_module "SparkGameFPS")
+    if(ARGC GREATER 5)
+        set(_expected_module "${ARGV5}")
+    endif()
+    if(NOT _expected_module MATCHES "^[A-Za-z][A-Za-z0-9_]*$")
+        set(${out_ok} FALSE PARENT_SCOPE)
+        set(${out_reason} "invalid expected module identity" PARENT_SCOPE)
+        return()
+    endif()
     set(_ok TRUE)
     set(_reason "")
 
@@ -58,9 +67,9 @@ function(_spark_validate_lifecycle_result child_result child_stdout child_stderr
         elseif(_ok)
             list(GET _lifecycle_candidates 0 _marker)
             if(NOT _marker MATCHES
-               "^SPARK_MODULE_LIFECYCLE module=SparkGameFPS create=[0-9]+ load=[0-9]+ update=[0-9]+ fixed=[0-9]+ render=[0-9]+ unload=[0-9]+ destroy=[0-9]+ faults=[0-9]+$")
+               "^SPARK_MODULE_LIFECYCLE module=${_expected_module} create=[0-9]+ load=[0-9]+ update=[0-9]+ fixed=[0-9]+ render=[0-9]+ unload=[0-9]+ destroy=[0-9]+ faults=[0-9]+$")
                 set(_ok FALSE)
-                set(_reason "the single lifecycle marker is not an exact standalone SparkGameFPS record")
+                set(_reason "the single lifecycle marker is not an exact standalone ${_expected_module} record")
             endif()
 
             if(_ok)

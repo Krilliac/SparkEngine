@@ -18,6 +18,7 @@ REQUIRED_FILES = (
     "include/Spark/GeneratedVersion.h",
     "include/Spark/IModule.h",
     "include/Spark/ModuleABI.h",
+    "include/Spark/IWeatherService.h",
     "lib/cmake/SparkEngine/SparkEngineConfig.cmake",
     "lib/cmake/SparkEngine/SparkEngineConfigVersion.cmake",
     "lib/cmake/SparkEngine/SparkEngineTargets.cmake",
@@ -54,7 +55,7 @@ class SdkComponentCompletenessTests(unittest.TestCase):
                 )
             elif relative.endswith("MIGRATION.md"):
                 path.write_text(
-                    "## Current version: SDK ABI v9\nThere is no N-1 module load\n",
+                    "## Current version: SDK ABI v10\nThere is no N-1 module load\n",
                     encoding="utf-8",
                 )
             else:
@@ -143,7 +144,7 @@ class SdkComponentCompletenessTests(unittest.TestCase):
 
             for relative, token in (
                 ("share/SparkEngine/sdk/API-REFERENCE.md", "## Module lifecycle"),
-                ("share/SparkEngine/sdk/MIGRATION.md", "## Current version: SDK ABI v9"),
+                ("share/SparkEngine/sdk/MIGRATION.md", "## Current version: SDK ABI v10"),
             ):
                 with self.subTest(missing_documentation=relative):
                     path = source / relative

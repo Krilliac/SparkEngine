@@ -625,6 +625,21 @@ TEST(ModuleLifecycleRecord_LibraryTargetNameDropsPlatformAffixes)
 #endif
 }
 
+TEST(ModuleLifecycleRecord_MissingOrAmbiguousGameCannotPublishSingleGameProof)
+{
+    ModuleManager::LifecycleEvidence evidence;
+    EXPECT_EQ(evidence.FindGameModule(), nullptr);
+    ModuleManager::ModuleLifecycleRecord first;
+    first.kind = Spark::ModuleKind::Game;
+    first.libraryPath = "SparkGeneratedGame.dll";
+    evidence.modules.push_back(first);
+    ASSERT_NE(evidence.FindGameModule(), nullptr);
+    evidence.modules.push_back(first);
+    EXPECT_EQ(evidence.FindGameModule(), nullptr);
+    evidence.modules[0].kind = Spark::ModuleKind::Addon;
+    EXPECT_EQ(evidence.FindGameModule(), &evidence.modules[1]);
+}
+
 TEST(ModuleLifecycleRecord_FormatsTheHostRecordByteCompatibly)
 {
     ModuleManager::ModuleLifecycleRecord record;

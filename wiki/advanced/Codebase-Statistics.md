@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 346913 |
+| **SparkEngine/Source** | 347065 |
 | **SparkEditor/Source** | 106228 |
-| **GameModules** | 163669 |
+| **GameModules** | 163862 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3188 |
-| **Tests** | 276437 |
+| **Tests** | 276883 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~933347** |
+| **Total C++ (excl. ThirdParty)** | **~934138** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1247 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1988 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1249 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1991 |
 | HLSL shader files | 44 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 738 |
+| Test-bearing implementation files (.cpp/.mm) | 740 |
 | Wiki pages (.md) | 206 |
 
 ### Largest Top-Level Source Section
@@ -43,14 +43,14 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 125930 | 36.3% |
+| Graphics | 125930 | 36.2% |
 | Engine (all subsystems) | 100706 | 29.0% |
 | Utils | 49354 | 14.2% |
-| Core | 33513 | 9.6% |
+| Core | 33578 | 9.6% |
 | Physics | 11142 | 3.2% |
 | Audio | 6961 | 2.0% |
-| Input | 3938 | 1.1% |
-| SceneManager | 4625 | 1.3% |
+| Input | 3951 | 1.1% |
+| SceneManager | 4650 | 1.3% |
 | Enums | 1025 | 0.2% |
 | Game | 2950 | 0.8% |
 | Camera | 999 | 0.2% |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 738 |
-| TEST() definitions | 8530 |
+| Test files | 740 |
+| TEST() definitions | 8543 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -121,7 +121,7 @@ It does not measure registration, runtime use, support, or readiness.
 | CMake option() declarations | 34 |
 | ENABLE_* feature toggles | 24 |
 | Game modules | 11 |
-| SDK public headers | 23 |
+| SDK public headers | 24 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 

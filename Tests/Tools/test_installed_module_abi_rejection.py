@@ -81,6 +81,7 @@ class InstalledAbiTests(unittest.TestCase):
 
 
 class OrchestrationTests(unittest.TestCase):
+    SDK_VERSION = 9
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="abi-contract-")
         self.addCleanup(self.temporary.cleanup)
@@ -104,9 +105,9 @@ class OrchestrationTests(unittest.TestCase):
             fields.update(sdk_version=str(version), binary_sha256=ABI.digest(path))
             Path(str(path) + ".sparkabi").write_text("\n".join(f"{k}={v}" for k, v in fields.items()))
             return path
-        image("SparkGameFPS.dll", 9)
-        self.newer = image("SparkMismatchedModuleFixture.dll", 10)
-        self.previous = image("SparkPreviousSdkModuleFixture.dll", 8)
+        image("SparkGameFPS.dll", self.SDK_VERSION)
+        self.newer = image("SparkMismatchedModuleFixture.dll", self.SDK_VERSION + 1)
+        self.previous = image("SparkPreviousSdkModuleFixture.dll", self.SDK_VERSION - 1)
         self.argv = ["--installed-root", str(self.prefix), "--newer", str(self.newer),
                      "--previous", str(self.previous), "--evidence-root", str(self.evidence),
                      "--source-sha", "a" * 40, "--configuration", "MinSizeRel"]
@@ -125,8 +126,8 @@ class OrchestrationTests(unittest.TestCase):
             self.assertTrue(Path(env[key]).is_relative_to(module.parent))
         self.assertFalse(Path(env["SPARK_MODULE_ABI_SENTINEL"]).exists())
         self.assertEqual(kwargs["timeout"], 120)
-        declared = 10 if "Mismatched" in module.name else 8
-        return subprocess.CompletedProcess(command, 2, InstalledAbiTests().output(str(module), 9, declared), "")
+        declared = self.SDK_VERSION + (1 if "Mismatched" in module.name else -1)
+        return subprocess.CompletedProcess(command, 2, InstalledAbiTests().output(str(module), self.SDK_VERSION, declared), "")
 
     def run_driver(self, effect):
         with mock.patch.object(ABI.subprocess, "run", side_effect=effect) as runner, \
@@ -176,6 +177,11 @@ class OrchestrationTests(unittest.TestCase):
         result, report, _, _ = self.run_driver(mutate)
         self.assertEqual(result, 1)
         self.assertTrue(all("changed" in case["error"] for case in report["cases"]))
+
+
+class Abi10OrchestrationTests(OrchestrationTests):
+    """Same mocked driver proof for host10 versus benign9/11 declarations."""
+    SDK_VERSION = 10
 
 
 if __name__ == "__main__":

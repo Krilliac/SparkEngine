@@ -45,7 +45,7 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         for (const auto& component : entity.at("components"))
         {
             const auto type = component.at("type").get<std::string>();
-            if (type != "Transform" && type != "MeshRenderer" && type != "Camera")
+            if (type != "Transform" && type != "MeshRenderer" && type != "Camera" && type != "SpawnPointComponent")
                 return reject("unsupported component");
         }
     }
@@ -59,18 +59,23 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
     std::vector<std::filesystem::path> meshes;
     std::set<std::string> names;
     size_t cameras = 0;
+    size_t meshCount = 0;
+    size_t spawnCount = 0;
     for (auto entity : world.GetEntitiesWith<Transform>())
     {
         const auto* transform = world.GetComponent<Transform>(entity);
         const auto* name = world.GetComponent<NameComponent>(entity);
         const auto* mesh = world.GetComponent<MeshRenderer>(entity);
         const auto* camera = world.GetComponent<Camera>(entity);
+        const auto* spawn = world.GetComponent<SpawnPointComponent>(entity);
         if (!name || name->name.empty() || !names.insert(name->name).second)
             return reject("entity names must be nonempty and unique");
         if (transform->parent != entt::null || !transform->children.empty())
             return reject("hierarchy is not supported by the gameplay adapter");
-        if ((mesh == nullptr) == (camera == nullptr))
-            return reject("each entity needs exactly one mesh or camera");
+        if (static_cast<int>(mesh != nullptr) + static_cast<int>(camera != nullptr) +
+                static_cast<int>(spawn != nullptr) !=
+            1)
+            return reject("each entity needs exactly one mesh, camera or supported spawn point");
         SceneNode node;
         node.name = name->name;
         node.position = transform->position;
@@ -89,8 +94,9 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
             node.type = "model";
             node.modelPath = resolved->cacheKey;
             meshes.push_back(resolved->nativePath);
+            ++meshCount;
         }
-        else
+        else if (camera)
         {
             if (!camera->isMainCamera || ++cameras != 1 || camera->fov < 10.0f || camera->fov > 170.0f ||
                 camera->nearPlane < 0.01f || camera->nearPlane > 10.0f || camera->farPlane < 100.0f ||
@@ -105,16 +111,33 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
                                {"farPlane", std::to_string(camera->farPlane)}};
             meshes.emplace_back();
         }
+        else
+        {
+            // The FPS consumer selects default-tag points with GetBestSpawnPoint(-1).
+            // Its 32-point table supports priority and exact position/facing, but
+            // has no point-reuse timer, radius, team or concurrency accounting.
+            // In particular respawnDelay here is a reuse cooldown, not the FPS
+            // player's independently configured death-to-respawn delay.
+            if (spawn->spawnTag != "default" || !spawn->enabled || spawn->teamID != 0 || spawn->spawnRadius != 0.0f ||
+                spawn->respawnDelay != 0.0f || spawn->maxConcurrent != -1 || node.scale.x != 1.0f ||
+                node.scale.y != 1.0f || node.scale.z != 1.0f || node.rotation.x < -89.0f || node.rotation.x > 89.0f ||
+                ++spawnCount > 32)
+                return reject("spawn requires neutral enabled default-tag exact-point semantics, no reuse "
+                              "cooldown/concurrency limit, unit scale, supported pitch and at most 32 points");
+            node.type = "SpawnPoint";
+            node.properties = {{"tag", spawn->spawnTag}, {"priority", std::to_string(spawn->priority)}};
+            meshes.emplace_back();
+        }
         nodes.push_back(std::move(node));
     }
-    if (nodes.size() != world.GetEntityCount() || cameras != 1 || nodes.size() < 2)
+    if (nodes.size() != world.GetEntityCount() || cameras != 1 || meshCount == 0)
         return reject("requires a main camera and at least one mesh, all with transforms");
 
     std::vector<std::unique_ptr<GameObject>> objects;
     const bool rendering = m_graphics && m_graphics->GetDevice() && m_graphics->GetContext();
     for (size_t i = 0; i < nodes.size(); ++i)
     {
-        if (!rendering || nodes[i].type == "Camera")
+        if (!rendering || nodes[i].type != "model")
         {
             objects.push_back(nullptr);
             continue;

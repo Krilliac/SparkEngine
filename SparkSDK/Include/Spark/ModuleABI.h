@@ -87,9 +87,9 @@ struct SparkModuleCompatibilityDescriptor
 // The descriptor is read by hosts of other SDK versions (that is how an old host
 // rejects a new module with a diagnostic instead of a crash), and its fields are
 // mirrored field-for-field by the .sparkabi sidecar that cmake/SparkGameModule.cmake
-// derives from the macros above. Pinned for SPARK_SDK_VERSION 9 / descriptor v1;
+// derives from the macros above. Pinned for SPARK_SDK_VERSION 10 / descriptor v1;
 // an SDK bump re-pins this block with SparkSDK/ABI/sdk-abi-surface.json.
-static_assert(SPARK_SDK_VERSION == 9 && SPARK_MODULE_ABI_DESCRIPTOR_VERSION == 1u,
+static_assert(SPARK_SDK_VERSION == 10 && SPARK_MODULE_ABI_DESCRIPTOR_VERSION == 1u,
               "SDK or descriptor version changed: re-pin the compatibility descriptor layout below");
 static_assert(sizeof(SparkModuleCompatibilityDescriptor) == SPARK_MODULE_ABI_DESCRIPTOR_SIZE,
               "Update the sidecar ABI writer when the compatibility descriptor changes");
