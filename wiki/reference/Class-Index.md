@@ -4548,7 +4548,7 @@
 | `Sphere` | struct | Tests | [TestFrustumCulling.cpp:L27](../../Tests/TestFrustumCulling.cpp#L27) |  |
 | `Sphere` | struct | Tests | [TestPhysicsStress.cpp:L81](../../Tests/TestPhysicsStress.cpp#L81) |  |
 | `SphereObject` | class | SparkEngine | [SphereObject.h:L52](../../SparkEngine/Source/Game/SphereObject.h#L52) |  |
-| `SphereObject` | class | Tests | [TestShadowPassReal.cpp:L49](../../Tests/TestShadowPassReal.cpp#L49) |  |
+| `SphereObject` | class | Tests | [TestShadowPassReal.cpp:L65](../../Tests/TestShadowPassReal.cpp#L65) |  |
 | `SphericalHarmonics` | struct | SparkEngine | [LightProbeSystem.h:L33](../../SparkEngine/Source/Graphics/LightProbeSystem.h#L33) | L2 spherical harmonics (9 coefficients per color channel) |
 | `SpinlockGuard` | class | SparkEngine | [GraphicsEngine.h:L158](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L158) | RAII guard for std::atomic_flag spinlocks — ensures release even on exception. |
 | `SplineComponent` | struct | SparkEngine | [SplineComponents.h:L37](../../SparkEngine/Source/Engine/ECS/Components/SplineComponents.h#L37) | Stores a spline path that can be followed by other entities. |
@@ -4813,7 +4813,7 @@
 | `TestObj` | struct | Tests | [TestObjectPool.cpp:L48](../../Tests/TestObjectPool.cpp#L48) |  |
 | `TestObject` | struct | Tests | [TestObjectPoolReal.cpp:L11](../../Tests/TestObjectPoolReal.cpp#L11) | Real-class tests for Spark::ObjectPool<T, ThreadSafe> |
 | `TestOutcomeInputs` | struct | Tests | [TestFramework.h:L122](../../Tests/TestFramework.h#L122) |  |
-| `TestOutput` | struct | Tests | [TestMain.cpp:L337](../../Tests/TestMain.cpp#L337) |  |
+| `TestOutput` | struct | Tests | [TestMain.cpp:L363](../../Tests/TestMain.cpp#L363) |  |
 | `TestPakReader` | class | Tests | [TestSparkPak.cpp:L151](../../Tests/TestSparkPak.cpp#L151) |  |
 | `TestPakWriter` | class | Tests | [TestSparkPak.cpp:L62](../../Tests/TestSparkPak.cpp#L62) |  |
 | `TestParallaxLayer` | struct | Tests | [TestSprite2DComponents.cpp:L617](../../Tests/TestSprite2DComponents.cpp#L617) |  |

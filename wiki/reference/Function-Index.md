@@ -5670,7 +5670,7 @@
 | `CrashReceiptKey` | function | SparkCrashReporter | [CrashAutoIssues.h:L15](../../SparkCrashReporter/src/CrashAutoIssues.h#L15) |  |
 | `CrashReporting` | function | SparkEngine | [EngineSettings.h:L982](../../SparkEngine/Source/Core/EngineSettings.h#L982) |  |
 | `CrashReporting` | function | SparkEngine | [EngineSettings.h:L983](../../SparkEngine/Source/Core/EngineSettings.h#L983) |  |
-| `CrashSignalHandler` | function | Tests | [TestMain.cpp:L259](../../Tests/TestMain.cpp#L259) |  |
+| `CrashSignalHandler` | function | Tests | [TestMain.cpp:L285](../../Tests/TestMain.cpp#L285) |  |
 | `crate` | function | SparkEditor | [PrefabManager.cpp:L507](../../SparkEditor/Source/Prefabs/PrefabManager.cpp#L507) |  |
 | `crate` | function | Tests | [TestPrefabPersistence.cpp:L86](../../Tests/TestPrefabPersistence.cpp#L86) |  |
 | `Crc32` | function | SparkBuild | [DownloaderTests.cpp:L285](../../SparkBuild/tests/DownloaderTests.cpp#L285) |  |
@@ -5966,7 +5966,7 @@
 | `CreateMesh` | function | SparkEngine | [RampObject.h:L105](../../SparkEngine/Source/Game/RampObject.h#L105) | Create or load the ramp mesh geometry |
 | `CreateMesh` | function | SparkEngine | [SphereObject.h:L111](../../SparkEngine/Source/Game/SphereObject.h#L111) | Create or load the sphere mesh geometry |
 | `CreateMesh` | function | SparkEngine | [WallObject.h:L105](../../SparkEngine/Source/Game/WallObject.h#L105) | Create or load the wall mesh geometry |
-| `CreateMesh` | function | Tests | [TestShadowPassReal.cpp:L56](../../Tests/TestShadowPassReal.cpp#L56) |  |
+| `CreateMesh` | function | Tests | [TestShadowPassReal.cpp:L72](../../Tests/TestShadowPassReal.cpp#L72) |  |
 | `CreateMeshShape` | function | SparkEngine | [PhysicsSystem.h:L803](../../SparkEngine/Source/Physics/PhysicsSystem.h#L803) |  |
 | `CreateMetalView` | function | SparkEngine | [SparkEngineMacOS.cpp:L57](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp#L57) |  |
 | `CreateMetalView` | function | SparkEngine | [SparkEngineMacOS.cpp:L123](../../SparkEngine/Source/Core/SparkEngineMacOS.cpp#L123) |  |
@@ -6204,7 +6204,7 @@
 | `CreateVSProTheme` | function | SparkEditor | [EditorTheme.h:L267](../../SparkEditor/Source/Core/EditorTheme.h#L267) | Create Visual Studio-inspired dark theme |
 | `CreateWallBody` | function | GameModules | [TFDeployableSystem.h:L202](../../GameModules/SparkGameMMOFPS/Source/Game/TFDeployableSystem.h#L202) |  |
 | `CreateWarpDevice` | function | Tests | [TestGPUDrivenRendererD3D11.cpp:L66](../../Tests/TestGPUDrivenRendererD3D11.cpp#L66) |  |
-| `CreateWarpDevice` | function | Tests | [TestShadowPassReal.cpp:L39](../../Tests/TestShadowPassReal.cpp#L39) |  |
+| `CreateWarpDevice` | function | Tests | [TestShadowPassReal.cpp:L41](../../Tests/TestShadowPassReal.cpp#L41) |  |
 | `CreateWarpScene` | function | Tests | [TestRHI210D3D11PassGoldenReal.cpp:L414](../../Tests/TestRHI210D3D11PassGoldenReal.cpp#L414) |  |
 | `CreateWeaponStats` | function | GameModules | [WeaponStats.cpp:L204](../../GameModules/SparkGameFPS/Source/Projectiles/WeaponStats.cpp#L204) |  |
 | `CreateWeaponStats` | function | GameModules | [WeaponStats.h:L128](../../GameModules/SparkGameFPS/Source/Projectiles/WeaponStats.h#L128) |  |
@@ -10720,7 +10720,7 @@
 | `FormatConditionParam` | function | SparkEditor | [EventResponsePanel.cpp:L83](../../SparkEditor/Source/Panels/EventResponsePanel.cpp#L83) |  |
 | `FormatDaemonStats` | function | SparkEngine | [DaemonDiagnostics.cpp:L96](../../SparkEngine/Source/Utils/DaemonDiagnostics.cpp#L96) |  |
 | `FormatDaemonStats` | function | Tests | [TestDaemonDiagnostics.cpp:L49](../../Tests/TestDaemonDiagnostics.cpp#L49) |  |
-| `FormatDuration` | function | Tests | [TestMain.cpp:L522](../../Tests/TestMain.cpp#L522) |  |
+| `FormatDuration` | function | Tests | [TestMain.cpp:L548](../../Tests/TestMain.cpp#L548) |  |
 | `FormatGiB` | function | SparkInstaller | [InstallerPreflight.cpp:L155](../../SparkInstaller/src/InstallerPreflight.cpp#L155) |  |
 | `FormatHealth` | function | SparkEngine | [OnlineServices.h:L1168](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L1168) |  |
 | `FormatHealthJson` | function | SparkServer | [ServerApplication.cpp:L809](../../SparkServer/src/ServerApplication.cpp#L809) |  |
@@ -18056,7 +18056,7 @@
 | `IndexOf` | function | Tests | [TestENG200ScriptBindingsReal.cpp:L234](../../Tests/TestENG200ScriptBindingsReal.cpp#L234) |  |
 | `IndexOfId` | function | GameModules | [TFDirectiveSystem.h:L112](../../GameModules/SparkGameMMOFPS/Source/Game/TFDirectiveSystem.h#L112) |  |
 | `indices` | function | GameModules | [RacingRaceManager.cpp:L396](../../GameModules/SparkGameRacing/Source/Race/RacingRaceManager.cpp#L396) |  |
-| `indices` | function | Tests | [TestMain.cpp:L1115](../../Tests/TestMain.cpp#L1115) |  |
+| `indices` | function | Tests | [TestMain.cpp:L1141](../../Tests/TestMain.cpp#L1141) |  |
 | `InDungeon` | function | GameModules | [MMODungeonSystem.h:L96](../../GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.h#L96) | Per-player dungeon state |
 | `inet_pton` | function | Tests | [TestReliableChannel.cpp:L473](../../Tests/TestReliableChannel.cpp#L473) |  |
 | `InferOutputPath` | function | SparkShaderCompiler | [main.cpp:L197](../../SparkShaderCompiler/src/main.cpp#L197) |  |
@@ -19024,9 +19024,9 @@
 | `InstallCrashHandler` | function | SparkEngine | [CrashHandler.cpp:L2829](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2829) |  |
 | `InstallCrashHandler` | function | SparkEngine | [CrashHandler.h:L81](../../SparkEngine/Source/Utils/CrashHandler.h#L81) |  |
 | `InstallCrashHandler` | function | SparkEngine | [CrashHandlerStub.cpp:L14](../../SparkEngine/Source/Utils/CrashHandlerStub.cpp#L14) |  |
-| `InstallCrashHandlers` | function | Tests | [TestMain.cpp:L253](../../Tests/TestMain.cpp#L253) |  |
-| `InstallCrashHandlers` | function | Tests | [TestMain.cpp:L316](../../Tests/TestMain.cpp#L316) |  |
-| `InstallCrashHandlers` | function | Tests | [TestMain.cpp:L325](../../Tests/TestMain.cpp#L325) |  |
+| `InstallCrashHandlers` | function | Tests | [TestMain.cpp:L279](../../Tests/TestMain.cpp#L279) |  |
+| `InstallCrashHandlers` | function | Tests | [TestMain.cpp:L342](../../Tests/TestMain.cpp#L342) |  |
+| `InstallCrashHandlers` | function | Tests | [TestMain.cpp:L351](../../Tests/TestMain.cpp#L351) |  |
 | `InstallDefaultSinks` | function | SparkEngine | [Logger.h:L488](../../SparkEngine/Source/Utils/Logger.h#L488) |  |
 | `InstallEngineLogSinksImpl` | function | SparkEngine | [GameplayLifecycleShared.cpp:L198](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L198) |  |
 | `InstallEngineLogSinksImpl` | function | SparkEngine | [GameplayLifecycleShared.h:L22](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.h#L22) |  |
@@ -22935,7 +22935,7 @@
 | `main` | function | Tests | [weapons.cpp:L87](../../Tests/PackageSmoke/FPSProgression/weapons.cpp#L87) |  |
 | `main` | function | Tests | [main.cpp:L30](../../Tests/PackageSmoke/main.cpp#L30) |  |
 | `main` | function | Tests | [DebugHookTeardownProbe.cpp:L8](../../Tests/Teardown/DebugHookTeardownProbe.cpp#L8) | Process-boundary regression probe for debug-hook static lifetime. |
-| `main` | function | Tests | [TestMain.cpp:L570](../../Tests/TestMain.cpp#L570) |  |
+| `main` | function | Tests | [TestMain.cpp:L596](../../Tests/TestMain.cpp#L596) |  |
 | `main` | function | Tests | [RemoteDebugSecurityBoundaryProbe.cpp:L314](../../Tests/Tools/RemoteDebugSecurityBoundaryProbe.cpp#L314) |  |
 | `mainFile` | function | Tests | [TestEngineSettingsReal.cpp:L258](../../Tests/TestEngineSettingsReal.cpp#L258) |  |
 | `Make` | function | SparkEngine | [RHIHandlePool.h:L73](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L73) |  |
@@ -25284,7 +25284,7 @@
 | `OnHit` | function | SparkEngine | [SphereObject.h:L95](../../SparkEngine/Source/Game/SphereObject.h#L95) | Collision callback when hit by another game object (no-op) |
 | `OnHit` | function | SparkEngine | [WallObject.h:L89](../../SparkEngine/Source/Game/WallObject.h#L89) | Collision callback when hit by another game object (no-op) |
 | `OnHit` | function | Tests | [TestGraphicsEngineLinuxPassTruthReal.cpp:L85](../../Tests/TestGraphicsEngineLinuxPassTruthReal.cpp#L85) |  |
-| `OnHit` | function | Tests | [TestShadowPassReal.cpp:L52](../../Tests/TestShadowPassReal.cpp#L52) |  |
+| `OnHit` | function | Tests | [TestShadowPassReal.cpp:L68](../../Tests/TestShadowPassReal.cpp#L68) |  |
 | `OnHitConfirm` | function | GameModules | [TFClientNet.h:L214](../../GameModules/SparkGameMMOFPS/Source/Net/TFClientNet.h#L214) |  |
 | `OnHitWorld` | function | GameModules | [Enemy.h:L78](../../GameModules/SparkGameFPS/Source/Game/Enemy.h#L78) |  |
 | `OnHitWorld` | function | GameModules | [InteractiveObject.h:L57](../../GameModules/SparkGameFPS/Source/Game/InteractiveObject.h#L57) |  |
@@ -25302,7 +25302,7 @@
 | `OnHitWorld` | function | SparkEngine | [SphereObject.h:L102](../../SparkEngine/Source/Game/SphereObject.h#L102) | Collision callback when hitting world geometry (no-op) |
 | `OnHitWorld` | function | SparkEngine | [WallObject.h:L96](../../SparkEngine/Source/Game/WallObject.h#L96) | Collision callback when hitting world geometry (no-op) |
 | `OnHitWorld` | function | Tests | [TestGraphicsEngineLinuxPassTruthReal.cpp:L86](../../Tests/TestGraphicsEngineLinuxPassTruthReal.cpp#L86) |  |
-| `OnHitWorld` | function | Tests | [TestShadowPassReal.cpp:L53](../../Tests/TestShadowPassReal.cpp#L53) |  |
+| `OnHitWorld` | function | Tests | [TestShadowPassReal.cpp:L69](../../Tests/TestShadowPassReal.cpp#L69) |  |
 | `OnImGui` | function | GameModules | [SparkGame.h:L48](../../GameModules/SparkGame/Source/Core/SparkGame.h#L48) |  |
 | `OnImGui` | function | GameModules | [SparkGameARPG.h:L65](../../GameModules/SparkGameARPG/Source/Core/SparkGameARPG.h#L65) |  |
 | `OnImGui` | function | GameModules | [SparkGameFPS.h:L63](../../GameModules/SparkGameFPS/Source/Core/SparkGameFPS.h#L63) |  |
@@ -25633,7 +25633,7 @@
 | `Open` | function | Tests | [SecureTestPeer.h:L176](../../Tests/Fixtures/SecureTestPeer.h#L176) |  |
 | `Open` | function | Tests | [SecureTestPeer.h:L229](../../Tests/Fixtures/SecureTestPeer.h#L229) |  |
 | `Open` | function | Tests | [SecureTestPeer.h:L257](../../Tests/Fixtures/SecureTestPeer.h#L257) |  |
-| `Open` | function | Tests | [TestMain.cpp:L344](../../Tests/TestMain.cpp#L344) |  |
+| `Open` | function | Tests | [TestMain.cpp:L370](../../Tests/TestMain.cpp#L370) |  |
 | `Open` | function | Tests | [TestNetworkMMOIntegration.cpp:L47](../../Tests/TestNetworkMMOIntegration.cpp#L47) |  |
 | `Open` | function | Tests | [TestNetworkStress.cpp:L44](../../Tests/TestNetworkStress.cpp#L44) |  |
 | `Open` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L129](../../Tests/TestRHI225D3D12ParityReal.cpp#L129) |  |
@@ -28065,7 +28065,7 @@
 | `Print` | function | SparkSDK | [IConsole.h:L103](../../SparkSDK/Include/Spark/IConsole.h#L103) | Print a line to the host's in-game console (and the SparkConsole.exe window it mirrors to) |
 | `Print` | function | SparkSDK | [ModuleLog.h:L148](../../SparkSDK/Include/Spark/ModuleLog.h#L148) | Print a line to the host's in-game console through the bound context |
 | `Print` | function | Tests | [module_logging_context.h:L20](../../Tests/PackageSmoke/FPSProgression/module_logging_context.h#L20) |  |
-| `Print` | function | Tests | [TestMain.cpp:L352](../../Tests/TestMain.cpp#L352) |  |
+| `Print` | function | Tests | [TestMain.cpp:L378](../../Tests/TestMain.cpp#L378) |  |
 | `PrintBanner` | function | SparkConsole | [ConsoleApp.h:L76](../../SparkConsole/src/ConsoleApp.h#L76) |  |
 | `PrintBottleneckReport` | function | SparkEngine | [IODebugger.h:L287](../../SparkEngine/Source/Utils/IODebugger.h#L287) |  |
 | `PrintCacheReport` | function | SparkEngine | [CacheDebugger.h:L293](../../SparkEngine/Source/Utils/CacheDebugger.h#L293) | Print detailed report of all caches to stderr |
@@ -28086,7 +28086,7 @@
 | `PrintLog` | function | SparkConsole | [ConsoleApp.h:L99](../../SparkConsole/src/ConsoleApp.h#L99) |  |
 | `PrintProgress` | function | SparkBuild | [Terminal.cpp:L172](../../SparkBuild/src/Terminal.cpp#L172) |  |
 | `PrintProgress` | function | SparkBuild | [Terminal.h:L50](../../SparkBuild/src/Terminal.h#L50) |  |
-| `PrintProgress` | function | Tests | [TestMain.cpp:L374](../../Tests/TestMain.cpp#L374) |  |
+| `PrintProgress` | function | Tests | [TestMain.cpp:L400](../../Tests/TestMain.cpp#L400) |  |
 | `PrintReport` | function | Tests | [FPSLANLoopbackPeer.cpp:L300](../../Tests/Fixtures/FPSLANLoopbackPeer.cpp#L300) |  |
 | `PrintResult` | function | SparkConsole | [ConsoleApp.h:L102](../../SparkConsole/src/ConsoleApp.h#L102) |  |
 | `PrintSectionHeader` | function | SparkBuild | [Terminal.cpp:L129](../../SparkBuild/src/Terminal.cpp#L129) |  |
@@ -28100,14 +28100,14 @@
 | `PrintSummary` | function | SparkEngine | [IODebugger.h:L301](../../SparkEngine/Source/Utils/IODebugger.h#L301) |  |
 | `PrintSummary` | function | SparkEngine | [MemoryDebugger.h:L330](../../SparkEngine/Source/Utils/MemoryDebugger.h#L330) | Print a summary of memory usage statistics |
 | `PrintSummary` | function | SparkEngine | [ThreadDebugger.h:L383](../../SparkEngine/Source/Utils/ThreadDebugger.h#L383) |  |
-| `PrintSummary` | function | Tests | [TestMain.cpp:L365](../../Tests/TestMain.cpp#L365) |  |
+| `PrintSummary` | function | Tests | [TestMain.cpp:L391](../../Tests/TestMain.cpp#L391) |  |
 | `PrintThreadReport` | function | SparkEngine | [ThreadDebugger.h:L350](../../SparkEngine/Source/Utils/ThreadDebugger.h#L350) |  |
 | `PrintUsage` | function | SparkBuild | [main.cpp:L29](../../SparkBuild/src/main.cpp#L29) |  |
 | `PrintUsage` | function | SparkCooker | [main.cpp:L58](../../SparkCooker/src/main.cpp#L58) |  |
 | `PrintUsage` | function | SparkCrashReporter | [main.cpp:L30](../../SparkCrashReporter/src/main.cpp#L30) |  |
 | `PrintUsage` | function | SparkDaemon | [OrchestratorMain.cpp:L42](../../SparkDaemon/src/OrchestratorMain.cpp#L42) |  |
 | `PrintUsage` | function | SparkShaderCompiler | [main.cpp:L84](../../SparkShaderCompiler/src/main.cpp#L84) |  |
-| `PrintUsage` | function | Tests | [TestMain.cpp:L541](../../Tests/TestMain.cpp#L541) |  |
+| `PrintUsage` | function | Tests | [TestMain.cpp:L567](../../Tests/TestMain.cpp#L567) |  |
 | `PrintWarning` | function | SparkEngine | [InGameConsole.h:L183](../../SparkEngine/Source/Utils/InGameConsole.h#L183) | Print a warning message |
 | `PrintWelcome` | function | SparkInstaller | [WizardTui.cpp:L20](../../SparkInstaller/src/tui/WizardTui.cpp#L20) |  |
 | `PrintWindowsStackTrace` | function | Tests | [TestMain.cpp:L117](../../Tests/TestMain.cpp#L117) |  |
@@ -32639,7 +32639,7 @@
 | `rng` | function | Tests | [TestCpuNeuralTraining.cpp:L210](../../Tests/TestCpuNeuralTraining.cpp#L210) |  |
 | `rng` | function | Tests | [TestCpuNeuralTraining.cpp:L235](../../Tests/TestCpuNeuralTraining.cpp#L235) |  |
 | `rng` | function | Tests | [TestInventorySystem.cpp:L356](../../Tests/TestInventorySystem.cpp#L356) |  |
-| `rng` | function | Tests | [TestMain.cpp:L694](../../Tests/TestMain.cpp#L694) |  |
+| `rng` | function | Tests | [TestMain.cpp:L720](../../Tests/TestMain.cpp#L720) |  |
 | `rng` | function | Tests | [TestNET100TransportReal.cpp:L365](../../Tests/TestNET100TransportReal.cpp#L365) |  |
 | `rng` | function | Tests | [TestNetworkEncryption.cpp:L32](../../Tests/TestNetworkEncryption.cpp#L32) |  |
 | `rng` | function | Tests | [TestNetworkStress.cpp:L228](../../Tests/TestNetworkStress.cpp#L228) |  |
@@ -39244,7 +39244,7 @@
 | `std::to_string` | method | Tests | [TestConsoleVariables.cpp:L146](../../Tests/TestConsoleVariables.cpp#L146) |  |
 | `std::to_string` | method | Tests | [TestEditorAutomation.cpp:L178](../../Tests/TestEditorAutomation.cpp#L178) |  |
 | `std::to_string` | method | Tests | [TestInGameConsole.cpp:L69](../../Tests/TestInGameConsole.cpp#L69) |  |
-| `std::to_string` | method | Tests | [TestMain.cpp:L525](../../Tests/TestMain.cpp#L525) |  |
+| `std::to_string` | method | Tests | [TestMain.cpp:L551](../../Tests/TestMain.cpp#L551) |  |
 | `std::to_string` | method | Tests | [TestReflection.cpp:L391](../../Tests/TestReflection.cpp#L391) |  |
 | `std::to_string` | method | Tests | [TestReflection.cpp:L397](../../Tests/TestReflection.cpp#L397) |  |
 | `std::u8string` | method | SparkEditor | [PrefabAsset.cpp:L31](../../SparkEditor/Source/Prefabs/PrefabAsset.cpp#L31) |  |
@@ -39684,7 +39684,7 @@
 | `stream` | function | Tests | [TestMOD350RPGQuestSliceReal.cpp:L278](../../Tests/TestMOD350RPGQuestSliceReal.cpp#L278) |  |
 | `stream` | function | Tests | [TestMOD370SkirmishDeterminismReal.cpp:L328](../../Tests/TestMOD370SkirmishDeterminismReal.cpp#L328) |  |
 | `stream` | function | Tests | [TestMOD390VisualScriptGraphsReal.cpp:L62](../../Tests/TestMOD390VisualScriptGraphsReal.cpp#L62) |  |
-| `stream` | function | Tests | [TestMain.cpp:L750](../../Tests/TestMain.cpp#L750) |  |
+| `stream` | function | Tests | [TestMain.cpp:L776](../../Tests/TestMain.cpp#L776) |  |
 | `stream` | function | Tests | [TestModuleABI.cpp:L712](../../Tests/TestModuleABI.cpp#L712) |  |
 | `stream` | function | Tests | [TestNET100TrustStore.cpp:L54](../../Tests/TestNET100TrustStore.cpp#L54) |  |
 | `stream` | function | Tests | [TestNET100TrustStore.cpp:L68](../../Tests/TestNET100TrustStore.cpp#L68) |  |
@@ -39871,7 +39871,7 @@
 | `SUCCEEDED` | function | Tests | [TestRHI210D3D11PassGoldenReal.cpp:L408](../../Tests/TestRHI210D3D11PassGoldenReal.cpp#L408) |  |
 | `SUCCEEDED` | function | Tests | [TestRHI210D3D11PassGoldenReal.cpp:L458](../../Tests/TestRHI210D3D11PassGoldenReal.cpp#L458) |  |
 | `SUCCEEDED` | function | Tests | [TestRHI210D3D11WorldGoldenReal.cpp:L108](../../Tests/TestRHI210D3D11WorldGoldenReal.cpp#L108) |  |
-| `SUCCEEDED` | function | Tests | [TestShadowPassReal.cpp:L42](../../Tests/TestShadowPassReal.cpp#L42) |  |
+| `SUCCEEDED` | function | Tests | [TestShadowPassReal.cpp:L59](../../Tests/TestShadowPassReal.cpp#L59) |  |
 | `SuccessCallback` | function | Tests | [TestScriptHotReload.cpp:L158](../../Tests/TestScriptHotReload.cpp#L158) |  |
 | `suffix` | function | SparkEditor | [ProjectManager.cpp:L531](../../SparkEditor/Source/Core/ProjectManager.cpp#L531) |  |
 | `Suffix` | function | Tests | [TestCrashArtifactRetention.cpp:L63](../../Tests/TestCrashArtifactRetention.cpp#L63) |  |
@@ -45577,7 +45577,7 @@
 | `WriteJson` | function | GameModules | [TFWorldSave.h:L295](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFWorldSave.h#L295) |  |
 | `WriteJsonNumber` | function | SparkEngine | [EventResponseRules.cpp:L206](../../SparkEngine/Source/Engine/Gameplay/EventResponseRules.cpp#L206) |  |
 | `WriteJsonString` | function | SparkEngine | [EventResponseRules.cpp:L156](../../SparkEngine/Source/Engine/Gameplay/EventResponseRules.cpp#L156) |  |
-| `WriteJUnitXml` | function | Tests | [TestMain.cpp:L417](../../Tests/TestMain.cpp#L417) |  |
+| `WriteJUnitXml` | function | Tests | [TestMain.cpp:L443](../../Tests/TestMain.cpp#L443) |  |
 | `WriteLayoutFile` | function | SparkEditor | [EditorLayoutManager.h:L238](../../SparkEditor/Source/Core/EditorLayoutManager.h#L238) | Describe the manager for console output. |
 | `WriteLE32` | function | Tests | [TestSAVE230NewerFormatSlotReal.cpp:L74](../../Tests/TestSAVE230NewerFormatSlotReal.cpp#L74) |  |
 | `WriteLittleEndian32` | function | Tests | [Test_persistence_SaveSystem.cpp:L210](../../Tests/harden/Test_persistence_SaveSystem.cpp#L210) |  |
@@ -45881,13 +45881,13 @@
 | `XMFLOAT4` | function | SparkEngine | [PlatformDirectXMathStubs.h:L42](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L42) |  |
 | `XMFLOAT4` | function | SparkEngine | [CharacterController.cpp:L149](../../SparkEngine/Source/Physics/CharacterController.cpp#L149) |  |
 | `XMFLOAT4` | function | SparkEngine | [MathUtils.cpp:L245](../../SparkEngine/Source/Utils/MathUtils.cpp#L245) |  |
-| `xml` | function | Tests | [TestMain.cpp:L419](../../Tests/TestMain.cpp#L419) |  |
-| `XmlEscape` | function | Tests | [TestMain.cpp:L387](../../Tests/TestMain.cpp#L387) |  |
-| `XmlEscape` | function | Tests | [TestMain.cpp:L455](../../Tests/TestMain.cpp#L455) |  |
-| `XmlEscape` | function | Tests | [TestMain.cpp:L459](../../Tests/TestMain.cpp#L459) |  |
-| `XmlEscape` | function | Tests | [TestMain.cpp:L469](../../Tests/TestMain.cpp#L469) |  |
-| `XmlEscape` | function | Tests | [TestMain.cpp:L474](../../Tests/TestMain.cpp#L474) |  |
-| `XmlEscape` | function | Tests | [TestMain.cpp:L508](../../Tests/TestMain.cpp#L508) |  |
+| `xml` | function | Tests | [TestMain.cpp:L445](../../Tests/TestMain.cpp#L445) |  |
+| `XmlEscape` | function | Tests | [TestMain.cpp:L413](../../Tests/TestMain.cpp#L413) |  |
+| `XmlEscape` | function | Tests | [TestMain.cpp:L481](../../Tests/TestMain.cpp#L481) |  |
+| `XmlEscape` | function | Tests | [TestMain.cpp:L485](../../Tests/TestMain.cpp#L485) |  |
+| `XmlEscape` | function | Tests | [TestMain.cpp:L495](../../Tests/TestMain.cpp#L495) |  |
+| `XmlEscape` | function | Tests | [TestMain.cpp:L500](../../Tests/TestMain.cpp#L500) |  |
+| `XmlEscape` | function | Tests | [TestMain.cpp:L534](../../Tests/TestMain.cpp#L534) |  |
 | `XMLoadFloat3` | function | SparkEngine | [PlatformDirectXMathStubs.h:L283](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L283) |  |
 | `XMLoadFloat4` | function | SparkEngine | [PlatformDirectXMathStubs.h:L288](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L288) |  |
 | `XMLoadFloat4x4` | function | SparkEngine | [PlatformDirectXMathStubs.h:L544](../../SparkEngine/Source/Core/PlatformDirectXMathStubs.h#L544) |  |

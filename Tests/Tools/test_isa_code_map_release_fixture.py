@@ -81,4 +81,24 @@ class RetainedReleaseTests(unittest.TestCase):
         self.assertEqual(len(mapped.tables),2)
         self.assertTrue(any(checker.classify(r.mnemonic,r.operands,r.evex) for r in mapped.records))
 
+    def test_dead_bad_base_predecessor_rechecked_after_bootstrap(self):
+        # Replace the three-byte post-return NOP with a dead pop-rbp/jmp block.
+        # Its branch targets live loop code, not table data: only the final
+        # unfiltered base proof can reject this incoming bad-base path.
+        records=[]
+        for record in self.records:
+            if record.address==0x1800c8611:
+                records.extend([replace(record,size=1,mnemonic='popq',operands='%rbp'),
+                    replace(record,address=record.address+1,size=2,mnemonic='jmp',operands='0x1800c85e1')])
+            else:
+                records.append(record)
+        image=RetainedImage(self.region,records)
+        offset=0x1800c8611-self.region['start']
+        image.raw=image.raw[:offset]+bytes.fromhex('5d eb cd')+image.raw[offset+3:]
+        self.assertEqual(len(cm.find_switch_tables(records,self.region['start'],self.region['end'],
+                                                   image,reachable_only=True)),2)
+        mapped=cm.map_procedure(records,self.region['start'],self.region['end'],image)
+        self.assertEqual(mapped.tables,[])
+        self.assertEqual(sum(r.mnemonic=='<undecodable>' for r in mapped.records),74)
+
 if __name__=='__main__':unittest.main()

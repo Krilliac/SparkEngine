@@ -14,6 +14,8 @@
 #include "Graphics/UpscalingSystem.h"
 
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 
 #ifdef _WIN32
@@ -39,8 +41,22 @@ namespace
     bool CreateWarpDevice(ComPtr<ID3D11Device>& device, ComPtr<ID3D11DeviceContext>& context)
     {
         D3D_FEATURE_LEVEL featureLevel{};
-        return SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
-                                           device.GetAddressOf(), &featureLevel, context.GetAddressOf()));
+        const bool trace = std::getenv("SPARK_SHADOW_DEVICE_TRACE") != nullptr;
+        if (trace)
+        {
+            std::fprintf(stderr, "[shadow-probe] entering D3D11CreateDevice, driver=WARP\n");
+            std::fflush(stderr);
+        }
+        const HRESULT result =
+            D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
+                              device.GetAddressOf(), &featureLevel, context.GetAddressOf());
+        if (trace)
+        {
+            std::fprintf(stderr, "[shadow-probe] returned hr=0x%08lx devicePresent=%d contextPresent=%d\n",
+                         static_cast<unsigned long>(result), device.Get() != nullptr, context.Get() != nullptr);
+            std::fflush(stderr);
+        }
+        return SUCCEEDED(result);
     }
 
     /// Minimal concrete GameObject whose mesh is a sphere — deliberately not a
@@ -91,9 +107,19 @@ TEST(ShadowPass_OnlyShadowCastersAreDrawn)
     ComPtr<ID3D11DeviceContext> context;
     if (!CreateWarpDevice(device, context))
     {
+        if (std::getenv("SPARK_SHADOW_DEVICE_TRACE"))
+        {
+            std::fprintf(stderr, "[shadow-probe] entering TestSkip throw\n");
+            std::fflush(stderr);
+        }
         SKIP_TEST("No D3D11 device available (hardware or WARP)");
     }
 
+    if (std::getenv("SPARK_SHADOW_DEVICE_TRACE"))
+    {
+        std::fprintf(stderr, "[shadow-probe] constructing GraphicsEngine after device success\n");
+        std::fflush(stderr);
+    }
     GraphicsEngine engine;
     ASSERT_TRUE(SUCCEEDED(engine.InitializeFromDevice(device.Get(), context.Get())));
 
