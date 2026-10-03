@@ -95,7 +95,7 @@ def configure_command(source, build, sha):
         '-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl', '-DBUILD_TESTS=ON',
         '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded', '-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON',
         '-DCMAKE_CXX_SCAN_FOR_MODULES=OFF', '-DGENERATE_DEBUG_SYMBOLS=OFF',
-        '-DSPARK_EXPECTED_SOURCE_SHA=' + sha, '-DPython3_EXECUTABLE='+sys.executable]
+        '-DPython3_EXECUTABLE='+sys.executable]
 
 
 def cache_contract(source, build, source_sha):
@@ -108,7 +108,7 @@ def cache_contract(source, build, source_sha):
     expected = dict(preset['cacheVariables'], BUILD_TESTS='ON', CMAKE_CONFIGURATION_TYPES=CONFIG,
                     CMAKE_GENERATOR='Ninja Multi-Config', CMAKE_MSVC_DEBUG_INFORMATION_FORMAT='Embedded',
                     CMAKE_DISABLE_PRECOMPILE_HEADERS='ON', CMAKE_CXX_SCAN_FOR_MODULES='OFF',
-                    GENERATE_DEBUG_SYMBOLS='OFF', SPARK_EXPECTED_SOURCE_SHA=source_sha,
+                    GENERATE_DEBUG_SYMBOLS='OFF',
                     Python3_EXECUTABLE=sys.executable)
     if any(values.get(key) != str(value) for key, value in expected.items()):
         raise ValueError('Shipping preset/cache contract changed')

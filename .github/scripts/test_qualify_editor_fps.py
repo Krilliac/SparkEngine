@@ -1,4 +1,4 @@
-"""Compiler-free orchestration contracts; subprocess execution is always mocked."""
+"""Compiler-free contracts; real CMake checks use LANGUAGES NONE, native execution stays mocked."""
 import argparse
 import importlib.util
 import json
@@ -247,6 +247,56 @@ class Contracts(unittest.TestCase):
             if change=='timeout': value['tests'][0]['properties'][0]['value']=901
             if change=='extra': value['tests'].append(value['tests'][0])
             with self.assertRaises(ValueError): Q.discovery(value)
+
+
+class ConfigureOptionGuardContracts(unittest.TestCase):
+    def test_real_guard_accepts_helper_options_and_rejects_old_sha_cache_option(self):
+        guard = Path(__file__).resolve().parents[2]/'cmake/SparkOptionGuard.cmake'
+        self.assertTrue(guard.is_file(), 'Missing real product option guard')
+        with tempfile.TemporaryDirectory(prefix='editor-fps-options-') as temporary:
+            root = Path(temporary)
+            source = root/'source'
+            source.mkdir()
+            (source/'CMakeLists.txt').write_text(
+                'cmake_minimum_required(VERSION 3.25)\n'
+                'project(EditorFPSOptionContract LANGUAGES NONE)\n'
+                'include("'+guard.as_posix()+'")\n'
+                'spark_capture_cli_options()\n'
+                'option(BUILD_TESTS "Real declared test option" OFF)\n'
+                'option(GENERATE_DEBUG_SYMBOLS "Real declared symbol option" ON)\n'
+                'spark_reject_undeclared_options()\n', encoding='utf-8')
+            command = Q.configure_command(source, root/'unused', PINS['source_sha'])
+            defines = [part for part in command if part.startswith('-D')]
+            # Execute the actual guard over actual helper options. LANGUAGES NONE
+            # never runs the supplied compiler paths or links any product code.
+            def configure(extra, name):
+                return subprocess.run([Q.shutil.which('cmake'), '-S', str(source), '-B', str(root/name),
+                    '-G', 'Ninja', *defines, *extra], text=True, capture_output=True, timeout=30)
+            good = configure([], 'good')
+            self.assertEqual(good.returncode, 0, (good.stdout+good.stderr)[-4000:])
+            self.assertNotIn('SPARK_EXPECTED_SOURCE_SHA:', (root/'good/CMakeCache.txt').read_text())
+            for spelling in ('SPARK_EXPECTED_SOURCE_SHA', 'SPARK_EXPECTED_SOURCE_SHA:STRING'):
+                with self.subTest(spelling=spelling):
+                    bad = configure(['-D'+spelling+'='+PINS['source_sha']], 'bad-'+str(len(spelling)))
+                    self.assertNotEqual(bad.returncode, 0)
+                    self.assertIn('SparkOptionGuard: undeclared build option', bad.stdout+bad.stderr)
+                    self.assertIn('SPARK_EXPECTED_SOURCE_SHA='+PINS['source_sha'], bad.stdout+bad.stderr)
+
+    def test_source_sha_still_required_in_exact_ctest_command(self):
+        with tempfile.TemporaryDirectory(prefix='editor-fps-source-pin-') as temporary:
+            source = Path(temporary)/'source'
+            build = source/'build/windows-shipping'
+            row = selected()
+            row['tests'][0]['command'] = [Q.shutil.which('cmake'),
+                '-DSPARK_ENGINE_BUILD_DIR='+build.as_posix(), '-DSPARK_SOURCE_ROOT='+source.as_posix(),
+                '-DSPARK_CONFIG=MinSizeRel', '-DSPARK_TESTS_EXECUTABLE='+(build/'bin/MinSizeRel/SparkTests.exe').as_posix(),
+                '-DSPARK_ENGINE_EXECUTABLE_NAME=SparkEngine.exe', '-DSPARK_EXPECTED_SOURCE_SHA='+PINS['source_sha'],
+                '-DSPARK_PYTHON_EXECUTABLE='+Q.sys.executable.replace('\\', '/'),
+                '-P', (source/'cmake/RunEditorFPSInstalledLineage.cmake').as_posix()]
+            Q.discovery(row, True, source, build, PINS['source_sha'])
+            row['tests'][0]['command'][6] = '-DSPARK_EXPECTED_SOURCE_SHA='+'c'*40
+            with self.assertRaisesRegex(ValueError, 'exact command binding'):
+                Q.discovery(row, True, source, build, PINS['source_sha'])
 
 if __name__ == '__main__':
     unittest.main()
