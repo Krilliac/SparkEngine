@@ -161,3 +161,14 @@ job retry. JUnit assertion details, pixel verdicts and native identity are retai
 This diagnostic route does not run or replace the full CTest, SDK or stable-v1
 certification gates. No baseline/tolerance, renderer, compiler version, dependency
 version or release readiness claim changes.
+
+### Diagnostic compiler-cache key contract
+
+Combined/Primary diagnostics save the exact cache action primary-key output and
+restore their own combined key family before the existing fallbacks. Configuration,
+toolset and build-input hash scopes are retained; existing caches are not deleted.
+The source-only workflow exercises reachability, duplicate-prefix rejection and
+cross-configuration/toolset rejection. This corrects the observed doubled-prefix
+save key but does not solve the previous run's 2,390 multiple-input non-cacheable
+compiler calls. Actual invocation/response-file evidence is needed before any
+compiler flag change. The active pinned native run is not modified or retried.

@@ -495,6 +495,8 @@ jobs:
         path: ${{ runner.temp }}\sccache
         key: combined-sccache-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
         restore-keys: |
+          combined-sccache-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          combined-sccache-windows-vs2026-${{ matrix.config }}-
           sccache-windows-vs2026-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           sccache-windows-vs2026-${{ matrix.config }}-
     - name: Scrub restored test evidence
@@ -587,7 +589,7 @@ jobs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
       with:
         path: ${{ runner.temp }}\sccache
-        key: combined-${{ steps.sccache-restore.outputs.cache-primary-key }}
+        key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
     - name: Install D3D12 debug layer
       if: matrix.config == 'Release'
       shell: pwsh
