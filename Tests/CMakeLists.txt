@@ -2045,6 +2045,11 @@ set_tests_properties(SparkSaveInterruptionTests PROPERTIES
     LABELS "compatibility;save;process"
     RUN_SERIAL TRUE
     TIMEOUT 300)
+# The exact-count lane above owns this expensive process family. Only hand it
+# over when that lane exists, preserving main-suite coverage otherwise.
+if(TEST SparkSaveInterruptionTests)
+    spark_exclude_from_main_suite(AtomicWrite_)
+endif()
 
 # SEC-assets: untrusted asset-parser regressions (SparkPak TOC binding and bounds,
 # the repo-authored stb_image stub BMP/TGA decoders, OBJ face-index validation,
