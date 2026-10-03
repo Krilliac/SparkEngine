@@ -148,3 +148,16 @@ approved image hashes, zero tolerance and unchanged scenes remain required.
 Source tests do not qualify native rendering. All four normal/control invocations
 still need exact-binary native evidence; no earlier result is retroactively accepted.
 This workflow installs no dependencies and starts no native build.
+
+## Bounded Primary native qualification
+
+The isolated Primary native workflow builds Windows Release once on the existing
+standard VS2026 runner/cache setup, pinned to product source
+`858978d87d72388578f89aa5b56fa65bd25a12a9`. It records separate workflow/source
+identities and the executable SHA256, then runs normal capture and the three
+disabled-pass controls. Per-capture 120-second limits and the 120-minute job limit
+are unchanged. A failed capture stops subsequent controls; there is no automatic
+job retry. JUnit assertion details, pixel verdicts and native identity are retained.
+This diagnostic route does not run or replace the full CTest, SDK or stable-v1
+certification gates. No baseline/tolerance, renderer, compiler version, dependency
+version or release readiness claim changes.
