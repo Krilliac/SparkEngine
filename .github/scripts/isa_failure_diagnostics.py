@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -28,6 +29,16 @@ def encoded(record):
     if len(data) > CAP:
         raise ValueError('Complete diagnostic JSON exceeds 1 MiB')
     return data
+
+
+def verify_checkout(root, expected_sha):
+    if not re.fullmatch(r'[0-9a-f]{40}', expected_sha):
+        raise ValueError('Expected full lowercase checker/source commit SHA')
+    def git(*cmd):
+        return subprocess.check_output(['git', '-C', str(root), *cmd], text=True, timeout=30).strip()
+    if git('rev-parse', 'HEAD') != expected_sha or git('status', '--porcelain', '--untracked-files=no'):
+        raise ValueError('Expected clean exact checkout: ' + expected_sha)
+    return git('rev-parse', 'HEAD^{tree}')
 
 
 def region_plan(findings, procedures, image_base=0, sections=()):
@@ -106,10 +117,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('source', 'image', 'pdb', 'objdump', 'pdbutil', 'output'):
         parser.add_argument('--'+name, type=Path, required=True)
+    parser.add_argument('--checker-source', type=Path, required=True)
+    parser.add_argument('--checker-sha', required=True)
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError('Diagnostic output already exists')
     record = {'diagnosticComplete': False, 'scanExitCode': None, 'sourceSha': SOURCE,
+              'checkerSha': args.checker_sha, 'checkerSource': str(args.checker_source.resolve()),
               'workflowSha': os.environ.get('GITHUB_SHA'), 'run': os.environ.get('GITHUB_RUN_ID'),
               'attempt': os.environ.get('GITHUB_RUN_ATTEMPT'), 'originalImageSha256': ORIGINAL_IMAGE,
               'scope': 'Target-only static diagnostic; not full-suite qualification. Original PDB was not retained.'}
@@ -121,18 +135,16 @@ def main():
         temporary.replace(args.output)
     save()
     try:
-        def git(*cmd):
-            return subprocess.check_output(['git','-C',str(args.source),*cmd],text=True,timeout=30).strip()
-        if git('rev-parse','HEAD') != SOURCE or git('status','--porcelain','--untracked-files=no'):
-            raise ValueError('Expected clean exact d90 product')
-        source_file = args.source / 'tools/check_isa_baseline.py'
+        record['sourceTree'] = verify_checkout(args.source, SOURCE)
+        record['checkerTree'] = verify_checkout(args.checker_source, args.checker_sha)
+        source_file = args.checker_source / 'tools/check_isa_baseline.py'
         spec = importlib.util.spec_from_file_location('diagnostic_exact_isa', source_file)
         scanner = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = scanner
         spec.loader.exec_module(scanner)
         paths = {'image': args.image, 'pdb': args.pdb, 'objdump': args.objdump, 'pdbutil': args.pdbutil,
-                 'scanner': source_file, 'codeMap': args.source/'tools/isa_code_map.py',
-                 'symbolIdentityParser': args.source/'tools/shipping_symbol_manifest.py'}
+                 'scanner': source_file, 'codeMap': args.checker_source/'tools/isa_code_map.py',
+                 'symbolIdentityParser': args.checker_source/'tools/shipping_symbol_manifest.py'}
         hashes = {name: sha(path) for name,path in paths.items()}
         record.update(hashes=hashes, paths={n:str(p.resolve()) for n,p in paths.items()},
                       originalImageMatch=hashes['image']==ORIGINAL_IMAGE)
@@ -173,6 +185,9 @@ def main():
         regions = collect_regions(findings, pdb.procedures, image_base, sections, read_at, disassemble)
         if hashes != {name:sha(path) for name,path in paths.items()}:
             raise ValueError('Image/PDB/tool/source changed during diagnostic')
+        if (verify_checkout(args.source, SOURCE) != record['sourceTree']
+                or verify_checkout(args.checker_source, args.checker_sha) != record['checkerTree']):
+            raise ValueError('Checkout identity changed during diagnostic')
         code = finish_diagnostics(record, regions, commands)
         save()
         return code

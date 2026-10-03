@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 script=Path(__file__).with_name('isa_failure_diagnostics.py')
 if not script.is_file():
@@ -19,6 +20,24 @@ class Procedure:
 def findings(*addresses):return [{'address':hex(a)[2:],'feature':'undecodable','symbol':'f','text':'<unknown>'} for a in addresses]
 
 class ContractTests(unittest.TestCase):
+    def test_wrong_checker_revision_fails_closed(self):
+        with patch.object(m.subprocess, 'check_output', return_value='b' * 40):
+            with self.assertRaisesRegex(ValueError, 'Expected clean exact checkout'):
+                m.verify_checkout(Path('checker'), 'a' * 40)
+
+    def test_dirty_checker_fails_closed(self):
+        with patch.object(m.subprocess, 'check_output', side_effect=['a' * 40, ' M tools/isa_code_map.py']):
+            with self.assertRaisesRegex(ValueError, 'Expected clean exact checkout'):
+                m.verify_checkout(Path('checker'), 'a' * 40)
+
+    def test_clean_exact_checker_records_tree(self):
+        with patch.object(m.subprocess, 'check_output', side_effect=['a' * 40, '', 'tree']):
+            self.assertEqual(m.verify_checkout(Path('checker'), 'a' * 40), 'tree')
+
+    def test_checker_revision_requires_full_commit(self):
+        with self.assertRaisesRegex(ValueError, 'full lowercase'):
+            m.verify_checkout(Path('checker'), 'HEAD')
+
     def test_all_74_findings_share_one_complete_region(self):
         f=findings(*range(0x1010,0x1010+74))
         regions=m.collect_regions(f,[Procedure(0x1000,0x1080,'f')],0x1000,

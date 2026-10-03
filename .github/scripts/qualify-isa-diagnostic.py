@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -48,6 +49,36 @@ def terminal(code, report):
             'scope': 'target-only new measurement; not full CPU-floor qualification'}
 
 
+def scan_matches(code, report, checker_sha, image_record, expected_findings):
+    expected_exit = 1 if expected_findings else 0
+    return (type(code) is int and code == expected_exit
+            and type(report.get('scanExitCode')) is int and report['scanExitCode'] == expected_exit
+            and report.get('diagnosticComplete') is True
+            and report.get('sourceSha') == SOURCE and report.get('checkerSha') == checker_sha
+            and report.get('originalImageMatch') is True
+            and report.get('hashes', {}).get('image') == image_record['image_sha256'] == ORIGINAL_IMAGE
+            and report.get('hashes', {}).get('pdb') == image_record['pdb_sha256']
+            and type(report.get('findingCount')) is int and report['findingCount'] == expected_findings
+            and isinstance(report.get('findings'), list) and len(report['findings']) == expected_findings)
+
+
+def ab_verdict(baseline_code, baseline, fixed_code, fixed, checker_sha, image_record):
+    baseline_expected = scan_matches(baseline_code, baseline, SOURCE, image_record, 74)
+    fixed_passed = scan_matches(fixed_code, fixed, checker_sha, image_record, 0)
+    tools_match = all(isinstance(baseline.get('hashes', {}).get(name), str)
+                      and baseline['hashes'][name]
+                      and baseline['hashes'][name] == fixed.get('hashes', {}).get(name)
+                      for name in ('objdump', 'pdbutil'))
+    return {'baselineExpectedFailureReproduced': baseline_expected,
+            'baselineScanExitCode': baseline.get('scanExitCode'),
+            'baselineCollectorExitCode': baseline_code,
+            'fixedScanExitCode': fixed.get('scanExitCode'), 'fixedCollectorExitCode': fixed_code,
+            'fixedCheckerPassed': fixed_passed,
+            'toolsMatch': bool(tools_match),
+            'targetedCorrectionVerified': baseline_expected and fixed_passed and bool(tools_match),
+            'scope': 'same-image targeted checker A/B; not full CPU-floor or release qualification'}
+
+
 def payloads(root, digest):
     result, manifest = {}, []
     # Explicit text extensions only; no DLL/PDB or other binary is packaged.
@@ -88,7 +119,11 @@ def main():
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--source-sha', choices=(SOURCE,), required=True)
+    parser.add_argument('--checker-source', type=Path, required=True)
+    parser.add_argument('--checker-sha', required=True)
     args = parser.parse_args()
+    if not re.fullmatch(r'[0-9a-f]{40}', args.checker_sha):
+        raise ValueError('Expected full lowercase checker SHA')
     source, root = args.source.resolve(), args.root.resolve()
     temp = Path(os.environ['RUNNER_TEMP']).resolve()
     if root == temp or not root.is_relative_to(temp) or root.is_relative_to(source) or source.is_relative_to(root):
@@ -117,6 +152,12 @@ def main():
             run('target-clean', ['git', '-C', source, 'status', '--porcelain', '--untracked-files=no'])
             if (root / 'target-clean.log').read_text().strip():
                 raise ValueError('Product source modified')
+            run('checker-source', ['git', '-C', args.checker_source.resolve(), 'rev-parse', 'HEAD'])
+            if (root / 'checker-source.log').read_text().strip() != args.checker_sha:
+                raise ValueError('Checker revision changed')
+            run('checker-clean', ['git', '-C', args.checker_source.resolve(), 'status', '--porcelain', '--untracked-files=no'])
+            if (root / 'checker-clean.log').read_text().strip():
+                raise ValueError('Checker source modified')
             for tool in identity['tools'].values():
                 if full.digest(Path(tool['path'])) != tool['sha256']:
                     raise ValueError('Configured tool changed')
@@ -145,32 +186,51 @@ def main():
                         raise ValueError('Diagnostic input changed: ' + name)
             immutable()
             collector = Path(__file__).with_name('isa_failure_diagnostics.py')
-            output = root / 'isa-diagnostics.json'
-            if output.exists():
-                raise ValueError('Diagnostic output must be fresh')
-            command = [sys.executable, collector, '--source', source,
-                       '--image', record['image'], '--pdb', record['pdb'],
-                       '--objdump', identity['tools']['llvm-objdump']['path'],
-                       '--pdbutil', identity['tools']['llvm-pdbutil']['path'], '--output', output]
-            full.save(root / 'diagnostic-command.json', {'argv': [str(x) for x in command],
-                       'collector_sha256': full.digest(collector), 'timeout_ceiling_seconds': 570})
+            baseline_code = fixed_code = None
+            baseline, fixed = {}, {}
+
+            def collect(label, checker_source, checker_sha):
+                output = root / (label + '-isa-diagnostics.json')
+                if output.exists():
+                    raise ValueError('Diagnostic output must be fresh')
+                command = [sys.executable, collector, '--source', source,
+                           '--checker-source', checker_source, '--checker-sha', checker_sha,
+                           '--image', record['image'], '--pdb', record['pdb'],
+                           '--objdump', identity['tools']['llvm-objdump']['path'],
+                           '--pdbutil', identity['tools']['llvm-pdbutil']['path'], '--output', output]
+                full.save(root / (label + '-diagnostic-command.json'), {
+                    'argv': [str(x) for x in command], 'collector_sha256': full.digest(collector),
+                    'shared_deadline': deadline, 'combined_timeout_ceiling_seconds': 570})
+                try:
+                    code = run(label + '-isa-collector', command, check=False)
+                except Exception:
+                    if output.is_file() and output.stat().st_size <= MIB:
+                        result = terminal(None, full.read_json(output))
+                        result['diagnosticComplete'] = False
+                        full.save(root / (label + '-terminal.json'), result)
+                    raise
+                immutable()
+                if output.stat().st_size > MIB:
+                    raise ValueError('Collector proof exceeds 1 MiB')
+                report = full.read_json(output)
+                full.save(root / (label + '-terminal.json'), terminal(code, report))
+                return code, report
+
             try:
-                code = run('isa-collector', command, check=False)
-            except Exception:
-                # The collector checkpoints the strict scan before expensive
-                # diagnostics. Preserve that failure even if its job times out.
-                if output.is_file() and output.stat().st_size <= MIB:
-                    result = terminal(None, full.read_json(output))
-                    result['diagnosticComplete'] = False
-                    full.save(root / 'target-terminal.json', result)
-                raise
-            immutable()
-            if output.stat().st_size > MIB:
-                raise ValueError('Collector proof exceeds 1 MiB')
-            result = terminal(code, full.read_json(output))
-            full.save(root / 'target-terminal.json', result)
-            if not result['passed']:
-                raise ValueError('Strict scan failed or diagnostic collection incomplete')
+                baseline_code, baseline = collect('baseline', source, SOURCE)
+                if not scan_matches(baseline_code, baseline, SOURCE, record, 74):
+                    raise ValueError('Baseline must reproduce original-image strict failure with 74 findings')
+                fixed_code, fixed = collect('fixed', args.checker_source.resolve(), args.checker_sha)
+            finally:
+                # Retain both checkpoints even when a later owned process times out.
+                for label, report in (('baseline', baseline), ('fixed', fixed)):
+                    path = root / (label + '-isa-diagnostics.json')
+                    if not report and path.is_file() and path.stat().st_size <= MIB:
+                        report.update(full.read_json(path))
+                result = ab_verdict(baseline_code, baseline, fixed_code, fixed, args.checker_sha, record)
+                full.save(root / 'target-terminal.json', result)
+            if not result['targetedCorrectionVerified']:
+                raise ValueError('Targeted checker A/B failed; baseline failure remains retained')
         else:
             life.remaining(deadline, phase_seconds)
             frozen = root / 'qualification-text'
