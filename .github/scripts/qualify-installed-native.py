@@ -1,16 +1,84 @@
 """Bounded diagnostic orchestration; never certifies Windows 11 or installs MSI."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 import zipfile
 
 SOURCE = "f92d28016fc74e5076591173b4ac5518415fed2f"
 TARGETS = "SparkEngine SparkGameFPS SparkEditor SparkConsole SparkShaderCompiler SparkCrashReporter SparkCooker SparkWorker SparkAutomation SparkLauncher SparkBuild SparkInstaller SparkMismatchedModuleFixture SparkPreviousSdkModuleFixture".split()
+
+
+# Keep cleanup inside each existing workflow step ceiling.
+PHASE_SECONDS = {"build": 185 * 60 - 30, "sdk": 30 * 60 - 30,
+                 "abi": 5 * 60 - 30, "closure": 15 * 60 - 30}
+CLEANUP_SECONDS = 10
+WRAPPER = (
+    "import subprocess,sys; "
+    "token=sys.stdin.buffer.readline(); "
+    "sys.exit(subprocess.call(sys.argv[1:]) if token == b'GO\\n' else 125)"
+)
+
+
+def job_for(source):
+    # Reuse the pinned product implementation; do not duplicate Windows ABI structs.
+    name = "_spark_qualification_docs_contract"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, source / "tools/docs_contract.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            del sys.modules[name]
+            raise
+    return sys.modules[name]._WindowsProcessJob()
+
+
+def owned_run(command, *, cwd, stdout, stderr, timeout, check=True):
+    """Release work only after the waiting wrapper belongs to a kill-on-close job."""
+    job = job_for(cwd)
+    process = None
+    assigned = False
+    try:
+        process = subprocess.Popen([sys.executable, "-c", WRAPPER, *command],
+                                   cwd=cwd, stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
+        assigned = job.assign(process)
+        if not assigned:
+            raise RuntimeError("Windows process job assignment unavailable; command not released")
+        process.stdin.write(b"GO\n")
+        process.stdin.flush()
+        process.stdin.close()
+        code = process.wait(timeout=timeout)
+        if check and code:
+            raise subprocess.CalledProcessError(code, command)
+        return subprocess.CompletedProcess(command, code)
+    finally:
+        # Close on success too: a command must not leave detached compiler children.
+        job.close()
+        if process is not None:
+            if not assigned:
+                process.kill()  # The unassigned wrapper is still waiting, with no children.
+            try:
+                if process.stdin is not None and not process.stdin.closed:
+                    process.stdin.close()
+            except OSError:
+                pass
+            process.wait(timeout=CLEANUP_SECONDS)
+
+
+def remaining(deadline, ceiling):
+    budget = min(ceiling, deadline - time.monotonic())
+    if budget <= 0:
+        raise TimeoutError("Qualification phase deadline exhausted")
+    return budget
 
 
 def digest(path):
@@ -78,6 +146,7 @@ def compact(root):
 
 
 def run_phase(phase, source, root):
+    deadline = time.monotonic() + PHASE_SECONDS[phase]
     build = source / "build/windows-shipping"
     binary = build / "bin/MinSizeRel"
     installed = root / "sdk/prefix/bin/SparkEngine.exe"
@@ -86,11 +155,15 @@ def run_phase(phase, source, root):
 
     def run(label, command, timeout):
         with (root / (label + ".log")).open("wb") as log:
-            subprocess.run([str(x) for x in command], cwd=source, stdout=log,
-                           stderr=subprocess.STDOUT, timeout=timeout, check=True)
+            owned_run([str(x) for x in command], cwd=source, stdout=log,
+                      stderr=subprocess.STDOUT, timeout=remaining(deadline, timeout), check=True)
 
     def git(*args):
-        return subprocess.check_output(["git", "-C", str(source), *args], text=True).strip()
+        with tempfile.TemporaryFile() as output:
+            owned_run(["git", "-C", str(source), *args], cwd=source, stdout=output,
+                      stderr=subprocess.STDOUT, timeout=remaining(deadline, 30), check=True)
+            output.seek(0)
+            return output.read().decode("utf-8").strip()
 
     def cmake_script(name, extra):
         return ["cmake", f"-DSPARK_ENGINE_BUILD_DIR={build}", f"-DSPARK_SOURCE_ROOT={source}",

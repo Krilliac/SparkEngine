@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import zipfile
 
 SCRIPT = Path(__file__).resolve().parents[2] / '.github/scripts/qualify-installed-native.py'
@@ -32,7 +32,8 @@ class Contracts(unittest.TestCase):
         installed = self.root / 'sdk/prefix/bin/SparkEngine.exe'
         def simulated(command, **kwargs):
             self.assertEqual(kwargs['cwd'], self.source)
-            self.assertEqual(kwargs['timeout'], 1780)
+            self.assertGreater(kwargs['timeout'], 1760)
+            self.assertLessEqual(kwargs['timeout'], 1770)
             self.assertTrue(kwargs['check'])
             self.assertIn('-DSPARK_CONSUMER_GENERATOR=Ninja Multi-Config', command)
             self.assertIn('-DSPARK_CONSUMER_COMPILER=C:/tool/cl', command)
@@ -40,14 +41,14 @@ class Contracts(unittest.TestCase):
             self.assertTrue(command[-1].endswith('RunInstalledSDKTemplate.cmake'))
             installed.parent.mkdir(parents=True)
             installed.write_bytes(self.built.read_bytes())
-        with patch.object(runner.shutil, 'which', side_effect=lambda name: 'C:/tool/' + name), patch.object(runner.subprocess, 'run', side_effect=simulated) as process:
+        with patch.object(runner.shutil, 'which', side_effect=lambda name: 'C:/tool/' + name), patch.object(runner, 'owned_run', side_effect=simulated) as process:
             runner.run_phase('sdk', self.source, self.root)
         self.assertEqual(process.call_count, 1)
         self.assertTrue(json.loads((self.root / 'sdk-binding.json').read_text())['passed'])
 
     def test_modified_build_prevents_any_subprocess(self):
         self.built.write_bytes(b'changed')
-        with patch.object(runner.subprocess, 'run') as process:
+        with patch.object(runner, 'owned_run') as process:
             with self.assertRaisesRegex(ValueError, 'Build input changed'):
                 runner.run_phase('sdk', self.source, self.root)
         process.assert_not_called()
@@ -57,7 +58,7 @@ class Contracts(unittest.TestCase):
             target = self.root / 'sdk/prefix/bin/SparkEngine.exe'
             target.parent.mkdir(parents=True)
             target.write_bytes(b'wrong host')
-        with patch.object(runner.subprocess, 'run', side_effect=simulated):
+        with patch.object(runner, 'owned_run', side_effect=simulated):
             with self.assertRaisesRegex(ValueError, 'host identity changed'):
                 runner.run_phase('sdk', self.source, self.root)
         self.assertFalse((self.root / 'sdk-binding.json').exists())
@@ -94,18 +95,19 @@ class Contracts(unittest.TestCase):
             report = self.root / 'abi/installed-abi-test/report.json'
             report.parent.mkdir(parents=True)
             runner.save(report, {'passed': True, 'inputs': {str(installed.resolve()): self.expected}})
-        with patch.object(runner.subprocess, 'run', side_effect=simulated):
+        with patch.object(runner, 'owned_run', side_effect=simulated):
             runner.run_phase('abi', self.source, self.root)
         self.assertEqual(len(commands), 3)
         self.assertTrue((self.root / 'abi-binding.json').exists())
 
     def test_closure_missing_second_graph_is_failure(self):
         def simulated(command, **kwargs):
-            self.assertEqual(kwargs['timeout'], 880)
+            self.assertGreater(kwargs['timeout'], 860)
+            self.assertLessEqual(kwargs['timeout'], 870)
             graph = self.root / 'closure/run-test/one.import-graph.json'
             graph.parent.mkdir(parents=True)
             runner.save(graph, {'images': [{'path': 'SparkEngine.exe', 'sha256': self.expected}]})
-        with patch.object(runner.subprocess, 'run', side_effect=simulated):
+        with patch.object(runner, 'owned_run', side_effect=simulated):
             with self.assertRaisesRegex(ValueError, 'both closure graphs'):
                 runner.run_phase('closure', self.source, self.root)
         self.assertFalse((self.root / 'closure-binding.json').exists())
@@ -132,10 +134,81 @@ class Contracts(unittest.TestCase):
         self.assertFalse((self.root / 'diagnostics-size-check.zip').exists())
 
     def test_subprocess_failure_propagates_without_binding(self):
-        with patch.object(runner.subprocess, 'run', side_effect=runner.subprocess.TimeoutExpired('cmake', 1780)):
+        with patch.object(runner, 'owned_run', side_effect=runner.subprocess.TimeoutExpired('cmake', 1780)):
             with self.assertRaises(runner.subprocess.TimeoutExpired):
                 runner.run_phase('sdk', self.source, self.root)
         self.assertFalse((self.root / 'sdk-binding.json').exists())
+
+
+class OwnedProcessContracts(unittest.TestCase):
+    def invoke(self, assigned=True, failure=None):
+        events = []
+        job = Mock()
+        job.assign.side_effect = lambda p: events.append('assign') or assigned
+        job.close.side_effect = lambda: events.append('close-job')
+        process = Mock()
+        process.stdin.closed = False
+        process.stdin.write.side_effect = lambda data: events.append(('release', data))
+        process.stdin.close.side_effect = lambda: events.append('close-stdin')
+        process.kill.side_effect = lambda: events.append('kill-wrapper')
+        process.wait.side_effect = [failure or 0, 0] if assigned else [0]
+        caught = None
+        with patch.object(runner, 'job_for', return_value=job), patch.object(runner.subprocess, 'Popen', return_value=process):
+            try:
+                runner.owned_run(['cmake', '--build', 'build'], cwd=Path('source'),
+                                 stdout=Mock(), stderr=-2, timeout=17)
+            except (RuntimeError, runner.subprocess.TimeoutExpired, runner.subprocess.CalledProcessError) as error:
+                caught = error
+        if not assigned:
+            self.assertIsInstance(caught, RuntimeError)
+        elif isinstance(failure, Exception):
+            self.assertIs(caught, failure)
+        elif failure:
+            self.assertIsInstance(caught, runner.subprocess.CalledProcessError)
+        else:
+            self.assertIsNone(caught)
+        return events, process
+
+    def test_success_assigns_before_release_and_closes_job(self):
+        events, process = self.invoke()
+        self.assertLess(events.index('assign'), events.index(('release', b'GO\n')))
+        self.assertIn('close-job', events)
+        self.assertEqual(process.wait.call_args_list[-1].kwargs['timeout'], 10)
+
+    def test_assignment_failure_never_releases_work(self):
+        events, process = self.invoke(assigned=False)
+        self.assertNotIn(('release', b'GO\n'), events)
+        self.assertIn('kill-wrapper', events)
+        self.assertIn('close-job', events)
+        self.assertEqual(process.wait.call_args.kwargs['timeout'], 10)
+
+    def test_timeout_and_command_failure_close_owned_job(self):
+        for failure in (runner.subprocess.TimeoutExpired('wrapper', 17), 2):
+            with self.subTest(failure=failure):
+                events, process = self.invoke(failure=failure)
+                self.assertIn('close-job', events)
+                self.assertEqual(process.wait.call_args_list[-1].kwargs['timeout'], 10)
+
+    def test_shared_deadline_caps_later_commands_and_reserves_cleanup(self):
+        self.assertEqual(runner.PHASE_SECONDS['build'], 11070)
+        with patch.object(runner.time, 'monotonic', side_effect=[100, 10900, 11070]):
+            self.assertEqual(runner.remaining(11070, 900), 900)
+            self.assertEqual(runner.remaining(11070, 10800), 170)
+            with self.assertRaises(TimeoutError):
+                runner.remaining(11070, 15)
+
+    def test_wrapper_requires_go_before_command(self):
+        # Execute only Python text with a mocked subprocess; no native child.
+        import io
+        for token, expected in ((b'', 125), (b'NO\n', 125), (b'GO\n', 7)):
+            fake_sys = Mock(argv=['wrapper', 'cmake'])
+            fake_sys.stdin.buffer = io.BytesIO(token)
+            fake_subprocess = Mock()
+            fake_subprocess.call.return_value = 7
+            with patch.dict('sys.modules', {'sys': fake_sys, 'subprocess': fake_subprocess}):
+                exec(runner.WRAPPER, {})
+            fake_sys.exit.assert_called_once_with(expected)
+            self.assertEqual(fake_subprocess.call.call_count, int(token == b'GO\n'))
 
 
 if __name__ == '__main__':
