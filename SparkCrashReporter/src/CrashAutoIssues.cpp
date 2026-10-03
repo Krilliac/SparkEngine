@@ -71,10 +71,14 @@ namespace SparkCrashReporter
 #ifdef _WIN32
             const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
             if (length < 2 || length > 32768)
+            {
                 return {};
+            }
             std::wstring value(length, L'\0');
             if (GetEnvironmentVariableW(L"LOCALAPPDATA", value.data(), length) != length - 1)
+            {
                 return {};
+            }
             value.resize(length - 1);
             const fs::path base(value);
 #else
@@ -85,7 +89,9 @@ namespace SparkCrashReporter
                                                             : fs::path{};
 #endif
             if (base.empty() || !base.is_absolute())
+            {
                 return {};
+            }
             return base / "SparkEngine" / "CrashReporter";
         }
 
@@ -93,20 +99,28 @@ namespace SparkCrashReporter
         {
             fs::path current = root.root_path();
             if (current.empty())
+            {
                 return false;
+            }
             for (const fs::path& part : root.relative_path())
             {
                 current /= part;
                 std::error_code error;
                 const fs::file_status status = fs::symlink_status(current, error);
                 if (error == std::errc::no_such_file_or_directory && allowMissing)
+                {
                     continue;
+                }
                 if (error || fs::is_symlink(status))
+                {
                     return false;
+                }
 #ifdef _WIN32
                 const DWORD attributes = GetFileAttributesW(current.c_str());
                 if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+                {
                     return false;
+                }
 #endif
             }
             return true;
@@ -115,12 +129,18 @@ namespace SparkCrashReporter
         bool SafeConfigRoot(const fs::path& root, bool create)
         {
             if (root.empty() || !HasUnredirectedAncestors(root, create))
+            {
                 return false;
+            }
             std::error_code error;
             if (create)
+            {
                 fs::create_directories(root, error);
+            }
             if (error || !fs::is_directory(root, error) || error)
+            {
                 return false;
+            }
             // Recheck after creation so a redirected ancestor cannot move the
             // opt-in into the manifest/artifact tree.
             return HasUnredirectedAncestors(root, false);
@@ -129,9 +149,13 @@ namespace SparkCrashReporter
         bool IsIssueUrl(std::string_view output)
         {
             while (!output.empty() && (output.back() == '\n' || output.back() == '\r'))
+            {
                 output.remove_suffix(1);
+            }
             if (!output.starts_with(kIssuePrefix))
+            {
                 return false;
+            }
             const std::string_view number = output.substr(kIssuePrefix.size());
             return !number.empty() && number.front() != '0' &&
                    std::all_of(number.begin(), number.end(), [](char c) { return c >= '0' && c <= '9'; });
@@ -144,7 +168,9 @@ namespace SparkCrashReporter
             for (; left != parent.end(); ++left, ++right)
             {
                 if (right == child.end() || *left != *right)
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -154,17 +180,23 @@ namespace SparkCrashReporter
 #ifdef _WIN32
             const DWORD length = GetEnvironmentVariableW(L"PATH", nullptr, 0);
             if (length < 2 || length > 32768)
+            {
                 return {};
+            }
             std::wstring pathValue(length, L'\0');
             if (GetEnvironmentVariableW(L"PATH", pathValue.data(), length) != length - 1)
+            {
                 return {};
+            }
             pathValue.resize(length - 1);
             constexpr wchar_t separator = L';';
             const fs::path executable = L"gh.exe";
 #else
             const char* pathEnvironment = std::getenv("PATH");
             if (!pathEnvironment)
+            {
                 return {};
+            }
             const std::string pathValue(pathEnvironment);
             constexpr char separator = ':';
             const fs::path executable = "gh";
@@ -172,7 +204,9 @@ namespace SparkCrashReporter
             std::error_code error;
             const fs::path artifactRoot = fs::weakly_canonical(fs::path(manifest.artifactRoot), error);
             if (error)
+            {
                 return {};
+            }
             size_t start = 0;
             while (start <= pathValue.size())
             {
@@ -188,7 +222,9 @@ namespace SparkCrashReporter
                         if (access(candidate.c_str(), X_OK) != 0)
                         {
                             if (end == std::string::npos)
+                            {
                                 break;
+                            }
                             start = end + 1;
                             continue;
                         }
@@ -198,7 +234,9 @@ namespace SparkCrashReporter
                     error.clear();
                 }
                 if (end == std::string::npos)
+                {
                     break;
+                }
                 start = end + 1;
             }
             return {};
@@ -268,7 +306,9 @@ namespace SparkCrashReporter
                 result.failureClass = "handle-allowlist-failed";
                 result.systemError = GetLastError();
                 if (initialized)
+                {
                     DeleteProcThreadAttributeList(attributesList);
+                }
                 CloseHandle(readPipe);
                 CloseHandle(writePipe);
                 CloseHandle(nullHandle);
@@ -285,7 +325,9 @@ namespace SparkCrashReporter
             // All variable text is generated from fixed literals and a hexadecimal ID.
             std::wstring command = L"\"" + executable.wstring() + L"\"";
             if (versionProbe)
+            {
                 command += L" --version";
+            }
             else
             {
                 command += L" issue create --repo github.com/Krilliac/SparkEngine --title "
@@ -374,13 +416,19 @@ namespace SparkCrashReporter
         {
 #if defined(__linux__) && defined(SYS_close_range)
             if (syscall(SYS_close_range, 3U, ~0U, 0U) == 0)
+            {
                 return true;
+            }
 #endif
             const long maximum = sysconf(_SC_OPEN_MAX);
             if (maximum < 3 || maximum > 1048576)
+            {
                 return false; // Fail closed rather than inherit an unknown descriptor set.
+            }
             for (int descriptor = 3; descriptor < maximum; ++descriptor)
+            {
                 close(descriptor);
+            }
             return true;
         }
 
@@ -413,9 +461,13 @@ namespace SparkCrashReporter
                 const int nullHandle = open("/dev/null", O_RDWR);
                 if (nullHandle < 0 || chdir(cwd.c_str()) != 0 || dup2(nullHandle, STDIN_FILENO) < 0 ||
                     dup2(pipeEnds[1], STDOUT_FILENO) < 0 || dup2(nullHandle, STDERR_FILENO) < 0)
+                {
                     _exit(127);
+                }
                 if (!CloseNonStandardDescriptors())
+                {
                     _exit(127);
+                }
                 char* const issueArguments[] = {const_cast<char*>(path.c_str()),
                                                 const_cast<char*>("issue"),
                                                 const_cast<char*>("create"),
@@ -443,9 +495,13 @@ namespace SparkCrashReporter
                 if (count > 0)
                 {
                     if (result.output.size() + static_cast<size_t>(count) > kMaxOutput)
+                    {
                         overflow = true;
+                    }
                     else
+                    {
                         result.output.append(buffer.data(), static_cast<size_t>(count));
+                    }
                 }
                 const pid_t finished = waitpid(child, &status, WNOHANG);
                 if (finished == child)
@@ -457,11 +513,17 @@ namespace SparkCrashReporter
                     {
                         const ssize_t extra = read(pipeEnds[0], buffer.data(), buffer.size());
                         if (extra <= 0)
+                        {
                             break;
+                        }
                         if (result.output.size() + static_cast<size_t>(extra) > kMaxOutput)
+                        {
                             overflow = true;
+                        }
                         else
+                        {
                             result.output.append(buffer.data(), static_cast<size_t>(extra));
+                        }
                     }
                     break;
                 }
@@ -479,7 +541,9 @@ namespace SparkCrashReporter
             }
             close(pipeEnds[0]);
             if (overflow)
+            {
                 result.finished = false;
+            }
             return result;
         }
 #endif
@@ -489,12 +553,16 @@ namespace SparkCrashReporter
     {
         const fs::path root = ConfigRoot();
         if (!SafeConfigRoot(root, false))
+        {
             return false;
+        }
         const fs::path marker = root / "auto-issues-v1.enabled";
         std::error_code error;
         if (!fs::is_regular_file(marker, error) || error || fs::is_symlink(fs::symlink_status(marker, error)) ||
             error || fs::file_size(marker, error) != 11 || error)
+        {
             return false;
+        }
         std::ifstream input(marker, std::ios::binary);
         std::string value;
         std::getline(input, value);
@@ -505,28 +573,42 @@ namespace SparkCrashReporter
     {
         const fs::path root = ConfigRoot();
         if (!enabled && !fs::exists(root))
+        {
             return !root.empty();
+        }
         if (!SafeConfigRoot(root, enabled))
+        {
             return false;
+        }
         const fs::path marker = root / "auto-issues-v1.enabled";
         std::error_code error;
         if (!enabled)
         {
             if (!fs::exists(marker, error))
+            {
                 return !error;
+            }
             if (error || fs::is_symlink(fs::symlink_status(marker, error)) || error)
+            {
                 return false;
+            }
             return fs::remove(marker, error) && !error;
         }
         if (fs::exists(marker, error))
+        {
             return !error && AutoIssuesEnabled();
+        }
         if (error)
+        {
             return false;
+        }
 #ifdef _WIN32
         HANDLE handle = CreateFileW(marker.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW,
                                     FILE_ATTRIBUTE_NORMAL, nullptr);
         if (handle == INVALID_HANDLE_VALUE)
+        {
             return false;
+        }
         constexpr char content[] = "enabled-v1\n";
         DWORD written = 0;
         const bool okay =
@@ -536,7 +618,9 @@ namespace SparkCrashReporter
 #else
         const int handle = open(marker.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, S_IRUSR | S_IWUSR);
         if (handle < 0)
+        {
             return false;
+        }
         constexpr char content[] = "enabled-v1\n";
         const bool okay = write(handle, content, sizeof(content) - 1) == sizeof(content) - 1;
         close(handle);
@@ -550,11 +634,15 @@ namespace SparkCrashReporter
         std::uint64_t hash = 14695981039346656037ull;
         const auto add = [&hash](unsigned char byte) { hash = (hash ^ byte) * 1099511628211ull; };
         for (const unsigned char byte : leaf)
+        {
             add(byte);
+        }
         for (const std::uint64_t number : {manifest.logIdentity.device, manifest.logIdentity.file})
         {
             for (unsigned int index = 0; index < 8; ++index)
+            {
                 add(static_cast<unsigned char>(number >> (index * 8)));
+            }
         }
         std::ostringstream text;
         text << std::hex << std::setfill('0') << std::setw(16) << hash;
@@ -567,17 +655,23 @@ namespace SparkCrashReporter
 #ifdef _WIN32
         if (BCryptGenRandom(nullptr, bytes.data(), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG) !=
             0)
+        {
             return {};
+        }
 #else
         const int handle = open("/dev/urandom", O_RDONLY);
         if (handle < 0)
+        {
             return {};
+        }
         size_t offset = 0;
         while (offset < bytes.size())
         {
             const ssize_t count = read(handle, bytes.data() + offset, bytes.size() - offset);
             if (count < 0 && errno == EINTR)
+            {
                 continue;
+            }
             if (count <= 0)
             {
                 close(handle);
@@ -601,16 +695,24 @@ namespace SparkCrashReporter
     PreparedAutoIssue PrepareAutoIssue(const CrashManifest& manifest, const std::string& incidentId)
     {
         if (!AutoIssuesEnabled())
+        {
             return {false, {}, {}, {}, "automatic GitHub Issues are disabled"};
+        }
         if (incidentId.size() != 32 || !std::all_of(incidentId.begin(), incidentId.end(), [](char c)
                                                     { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+        {
             return {false, {}, {}, {}, "invalid incident identifier"};
+        }
         const fs::path gh = FindGh(manifest);
         if (gh.empty())
+        {
             return {false, {}, {}, {}, "GitHub CLI not found on an absolute PATH entry"};
+        }
         const fs::path cwd = ConfigRoot();
         if (!SafeConfigRoot(cwd, false))
+        {
             return {false, {}, {}, {}, "user-local configuration directory unavailable"};
+        }
 #ifdef _WIN32
         constexpr std::string_view platform = "Windows";
 #else
@@ -629,17 +731,27 @@ namespace SparkCrashReporter
     AutoIssueResult SubmitPreparedAutoIssue(const PreparedAutoIssue& prepared)
     {
         if (!prepared.ready)
+        {
             return {false, {}, "automatic issue preflight did not complete"};
+        }
         const CommandResult command = RunGh(prepared.ghExecutable, prepared.workingDirectory, prepared.body);
         if (!command.finished)
+        {
             return {false, {}, CommandFailureReason(command)};
+        }
         if (command.exitCode != 0)
+        {
             return {false, {}, "GitHub CLI could not create an issue; check authentication and network access"};
+        }
         if (!IsIssueUrl(command.output))
+        {
             return {false, {}, "GitHub CLI did not confirm an issue URL; delivery is uncertain"};
+        }
         std::string url = command.output;
         while (!url.empty() && (url.back() == '\n' || url.back() == '\r'))
+        {
             url.pop_back();
+        }
         return {true, std::move(url), {}};
     }
 
@@ -647,12 +759,18 @@ namespace SparkCrashReporter
     {
         std::error_code error;
         if (!ghExecutable.is_absolute() || !std::filesystem::is_regular_file(ghExecutable, error) || error)
+        {
             return "invalid executable path";
+        }
         const CommandResult command = RunGh(ghExecutable, std::filesystem::temp_directory_path(), {}, true);
         if (!command.finished)
+        {
             return CommandFailureReason(command);
+        }
         if (command.exitCode != 0)
+        {
             return "GitHub CLI version probe exited " + std::to_string(command.exitCode);
+        }
         return "ok";
     }
 } // namespace SparkCrashReporter

@@ -12,7 +12,7 @@ import tempfile
 import time
 import zipfile
 
-SOURCE = "2b14035640e9e1ee00967dd60905d56eb7000adf"
+SOURCE = "d90b86e42fd586a56d53f077bbca6a457200d9bd"
 TARGETS = "SparkEngine SparkGameFPS SparkEditor SparkConsole SparkShaderCompiler SparkCrashReporter SparkCooker SparkWorker SparkAutomation SparkLauncher SparkBuild SparkInstaller SparkMismatchedModuleFixture SparkPreviousSdkModuleFixture".split()
 
 
@@ -114,16 +114,24 @@ def compact(root):
     inventory = []
     for path in sorted(set(files)):
         name = path.relative_to(root).as_posix()
+        parts = path.relative_to(root).parts
+        runtime_proof = (name in ("sdk/runtime-stdout.log", "sdk/runtime-stderr.log") or
+                         (len(parts) == 4 and parts[0] == "abi" and parts[2] in ("newer", "previous")
+                          and parts[3] in ("stdout.log", "stderr.log")))
         size = path.stat().st_size
-        with path.open("rb") as stream:
-            stream.seek(max(0, size - 16384))
-            data = stream.read()
-        # Preserve structured reports completely, fail instead of truncating proof.
-        if path.suffix == ".json":
+        # Complete proof must remain replayable and byte-identical to its hash.
+        # Both structured reports and native stdout/stderr share a 128 KiB cap.
+        if path.suffix == ".json" or runtime_proof:
             if size > 131072:
-                raise ValueError("Structured evidence exceeds compact budget: " + name)
+                kind = "Runtime proof" if runtime_proof else "Structured evidence"
+                raise ValueError(kind + " exceeds compact budget: " + name)
             data = path.read_bytes()
-        data = data.decode("utf-8", errors="replace").encode("utf-8")
+            data.decode("utf-8")  # Fail on invalid proof text; never rewrite its bytes.
+        else:
+            with path.open("rb") as stream:
+                stream.seek(max(0, size - 16384))
+                data = stream.read()
+            data = data.decode("utf-8", errors="replace").encode("utf-8")
         payloads[name] = data
         inventory.append({"path": name, "bytes": size, "sha256": digest(path),
                           "tail_only": len(data) != size})

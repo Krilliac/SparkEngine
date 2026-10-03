@@ -139,6 +139,52 @@ class Contracts(unittest.TestCase):
                 runner.run_phase('sdk', self.source, self.root)
         self.assertFalse((self.root / 'sdk-binding.json').exists())
 
+    def runtime_proof_paths(self):
+        return ['sdk/runtime-stdout.log', 'sdk/runtime-stderr.log'] + [
+            f'abi/installed-abi-test/{case}/{stream}.log'
+            for case in ('newer', 'previous') for stream in ('stdout', 'stderr')]
+
+    def write_proof(self, name, data):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def test_complete_runtime_proof_over_16k_preserves_prefix_and_hash(self):
+        data = b'PROOF_PREFIX\n' + b'x' * 20000 + b'\nPROOF_END\n'
+        for name in self.runtime_proof_paths():
+            self.write_proof(name, data)
+        runner.compact(self.root)
+        inventory = json.loads((self.root / 'diagnostics-text/inventory.json').read_text())
+        for name in self.runtime_proof_paths():
+            with self.subTest(name=name):
+                self.assertEqual((self.root / 'diagnostics-text' / name).read_bytes(), data)
+                row = next(row for row in inventory if row['path'] == name)
+                self.assertFalse(row['tail_only'])
+                self.assertEqual(row['bytes'], len(data))
+                self.assertEqual(row['sha256'], runner.digest(self.root / 'diagnostics-text' / name))
+
+    def test_oversized_runtime_proof_fails_instead_of_truncating(self):
+        self.write_proof('abi/installed-abi-test/newer/stderr.log', b'x' * 131073)
+        with self.assertRaisesRegex(ValueError, 'Runtime proof exceeds compact budget'):
+            runner.compact(self.root)
+        self.assertFalse((self.root / 'diagnostics-text').exists())
+        self.assertFalse((self.root / 'diagnostics-size-check.zip').exists())
+
+    def test_complete_proofs_still_obey_total_budget(self):
+        for name in self.runtime_proof_paths():
+            self.write_proof(name, b'x' * 131072)
+        (self.root / 'extra.json').write_text('{}' + ' ' * 119998)
+        with self.assertRaisesRegex(ValueError, '900000-byte budget'):
+            runner.compact(self.root)
+        self.assertFalse((self.root / 'diagnostics-text').exists())
+        self.assertFalse((self.root / 'diagnostics-size-check.zip').exists())
+
+    def test_invalid_utf8_proof_fails_without_changing_hashed_bytes(self):
+        self.write_proof('sdk/runtime-stderr.log', b'prefix\xffsuffix')
+        with self.assertRaises(UnicodeDecodeError):
+            runner.compact(self.root)
+        self.assertFalse((self.root / 'diagnostics-text').exists())
+
 
 class OwnedProcessContracts(unittest.TestCase):
     def invoke(self, assigned=True, failure=None):

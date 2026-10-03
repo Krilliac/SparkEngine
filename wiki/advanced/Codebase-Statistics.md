@@ -15,11 +15,11 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 | **SparkEditor/Source** | 106228 |
 | **GameModules** | 163546 |
 | **External services** | 12922 |
-| **Asset pipeline** | 3136 |
+| **Asset pipeline** | 3188 |
 | **Tests** | 276119 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~932265** |
+| **Total C++ (excl. ThirdParty)** | **~932745** |
 
 ### File Counts
 
