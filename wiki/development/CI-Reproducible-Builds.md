@@ -64,6 +64,43 @@ while CMake reports `cmake.exe`. Source pins, configuration, argument order and
 flag spelling remain exact; different or unresolvable tools must fail binding.
 Verify the complete configured command before compiling as well as afterward,
 so a binding mismatch fails before the expensive native build.
+Installed reflected-scene failures retain their specific reason on stderr when
+static engine code has an uninitialized module-local logger. An initialized
+logger still uses its configured structured sinks and filtering. Runtime camera
+FOV checks allow the existing `1e-6` relative numeric tolerance for the float
+degrees/radians round trip; authored scene fields remain exact, and missing,
+duplicate, non-finite or materially changed runtime values still fail.
+`SparkFPSGameCameraReloadReal` separately loads two authored legacy scenes through
+the exported FPS DLL `Game`, checks the live camera's changed FOV and other state,
+and verifies that a malformed reload retains the committed state. Its isolated
+staged assets and CPU initialization require no graphics device. Required Windows
+CTest executes it; compiling it in native qualification alone is not runtime proof.
+Documentation health allocates its results file with Python under the safe job
+`TMPDIR`; Apple's bare `mktemp` can choose `/var/folders` across a symlink and
+make every generator result unreadable under the strict no-reparse contract.
+The asset cooker fixture verifies invalid native filename bytes before claiming
+its UTF-8 rejection was exercised. Apple filesystems that refuse creation with
+an encoding error report that case as unexercised; unexpected I/O errors fail.
+Held-fire network tests wait for each input's applied sequence without advancing
+simulation time during socket dispatch, retaining the separate flood-limit test.
+`ModuleLifecycleRecordHost` selects all six production lifecycle-record cases.
+The Linux symbolication probe uses `-O0 -fno-omit-frame-pointer` so the actual
+signal-safe frame-chain walker can retain its caller. The canary still requires
+the exact fault location and a return frame in `main`; this is a fixture option,
+not a change to production crash capture or optimization.
+Fatal stderr diagnostics are best effort so an unread or closed pipe cannot
+block the crash report or its watchdog. Linux prepares a separate nonblocking
+open-file description during handler installation, preserving inherited flags.
+Other POSIX hosts emit these optional diagnostics only when stderr is already
+nonblocking. The private report and original fatal termination remain canonical;
+ordinary nonfatal diagnostics keep their existing behavior. The Linux canary
+checks full and closed stderr pipes, including the stalled-report timeout.
+Non-MSVC Debug builds optimize the pinned crypto dependency with `-O2` while
+retaining symbols, security flags and the ISA floor. The password verifier keeps
+its 600,000 rounds and the authenticator keeps its two-second guard. The Linux
+component regression checks actual compile commands and runs the existing hash
+cases. ASan explicitly uses `-g -Og` for Debug C/C++ code while keeping assertions,
+sanitizer instrumentation and the full-suite 1,800-second limit.
 
 Qualification workflows also participate in readiness ownership validation.
 The stdlib-only workflow parser accepts literal blocks (`|` / `|-`) for multiline
@@ -760,6 +797,13 @@ The comparator cleans up the actual `a`/`b` layout for permitted COFF build-root
 normalization and `a`/`tree-b` in ordinary mode only after an equivalent result.
 Failed comparisons retain both trees. This corrects successful cleanup without
 changing byte comparison, OD-24 normalization or unresolved archive differences.
+
+Windows Shipping also retains `coff-diagnostics.json`, capped at 1 MiB, alongside
+the unchanged comparison report. It inspects one differing ordinary member per
+static library and reports section hashes, header hashes and remaining bytes.
+Unavailable inspection is explicit and preserves the comparison result. These
+hashes locate differences; they do not prove their cause or permit additional
+normalization. The cap applies to this JSON, not the complete hosted artifact.
 
 Shipping retains a separate diagnostic-only JSON bundle for parity findings,
 inventory and the pending receipt when present. Its provenance records missing

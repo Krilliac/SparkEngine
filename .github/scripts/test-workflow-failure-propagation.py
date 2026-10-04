@@ -589,6 +589,42 @@ def normalized_run_lines(run: object) -> list[str] | None:
     return [" ".join(line.split()) for line in run.replace("\\\n", " ").splitlines() if line.strip()]
 
 
+def asan_configure_errors(document: dict) -> list[str]:
+    """Keep Debug optimization explicit without losing sanitizer instrumentation."""
+
+    steps = document.get("jobs", {}).get("build-linux-asan", {}).get("steps", [])
+    configure = [step for step in steps if step.get("name") == "Configure CMake (ASan + UBSan + LSan)"]
+    if len(configure) != 1:
+        return ["ASan must have exactly one configure step"]
+    commands = normalized_run_lines(configure[0].get("run")) or []
+    cmake = [command for command in commands if command.startswith("cmake ")]
+    if len(cmake) != 1:
+        return ["ASan must have exactly one CMake configure command"]
+    try:
+        argv = shlex.split(cmake[0])
+    except ValueError as error:
+        return [f"ASan configure arguments are invalid: {error}"]
+    definitions: dict[str, list[str]] = {}
+    for argument in argv:
+        match = re.fullmatch(r"-D([^:=]+)(?::[^=]+)?=(.*)", argument)
+        if match:
+            definitions.setdefault(match[1], []).append(match[2])
+    instrumentation = "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
+    expected = {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTS": "ON",
+        "SPARK_LIFECYCLE_TEST_HOOKS": "ON",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g -Og",
+        "CMAKE_C_FLAGS_DEBUG": "-g -Og",
+        "CMAKE_CXX_FLAGS": instrumentation,
+        "CMAKE_C_FLAGS": instrumentation,
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
+    }
+    return [f"ASan configure must define {name}={value!r} exactly once"
+            for name, value in expected.items() if definitions.get(name) != [value]]
+
+
 PROFILE_GATES_JOB = "profile-required-gates"
 PROFILE_GATES_CHECKOUT_STEP = "Checkout exact candidate source"
 PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
@@ -1901,6 +1937,7 @@ def experimental_mingw_lane_errors(document: dict) -> list[str]:
 
 REPRODUCIBILITY_JOB = "reproducibility-windows"
 REPRODUCIBILITY_TOOL = "tools/compare_build_outputs.py"
+REPRODUCIBILITY_DIAGNOSTICS = ".github/scripts/compare_windows_shipping_repro.py"
 
 
 def reproducibility_windows_errors(document: dict) -> list[str]:
@@ -1975,10 +2012,10 @@ def reproducibility_windows_errors(document: dict) -> list[str]:
         manifests = re.findall(rf"{re.escape(REPRODUCIBILITY_TOOL)} manifest (\S+) --output (\S+)", run)
         if len(stages) == 2 and sorted(root for root, _ in manifests) != sorted(stages):
             errors.append(f"{REPRODUCIBILITY_JOB} does not write a manifest of each staged tree")
-        compare = re.search(
-            rf"{re.escape(REPRODUCIBILITY_TOOL)} compare\s*\\?\s*(\S+) (\S+)", run
-        )
-        if compare is None or sorted(compare.groups()) != sorted(output for _, output in manifests):
+        compare = re.search(rf"(?m)^python \S*{re.escape(REPRODUCIBILITY_DIAGNOSTICS)}\s", run)
+        comparison_manifests = re.findall(r"--(first|second)-manifest (\S+)", run)
+        if (compare is None or sorted(side for side, _ in comparison_manifests) != ["first", "second"]
+                or sorted(path for _, path in comparison_manifests) != sorted(output for _, output in manifests)):
             errors.append(f"{REPRODUCIBILITY_JOB} does not compare the two manifests")
         if re.search(r"\|\|\s*(true|:)\b|\bset \+e\b", run):
             errors.append(f"{REPRODUCIBILITY_JOB} compare step suppresses a failure")
@@ -3962,8 +3999,17 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "manifest of each staged tree",
             ),
             (
-                edit_run("Compare the two Shipping builds", "reproducibility/manifest-a.json reproducibility/manifest-b",
-                         "reproducibility/manifest-a.json reproducibility/manifest-a"),
+                edit_run("Compare the two Shipping builds", "--second-manifest reproducibility/manifest-b.json",
+                         "--second-manifest reproducibility/manifest-a.json"),
+                "does not compare the two manifests",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", REPRODUCIBILITY_DIAGNOSTICS,
+                         ".github/scripts/unrelated.py"),
+                "does not compare the two manifests",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "--second-manifest", "--first-manifest"),
                 "does not compare the two manifests",
             ),
             (
@@ -4349,6 +4395,34 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             self.assertIn('--run-id "${{ github.run_id }}"', block)
             self.assertIn('--run-attempt "${{ github.run_attempt }}"', block)
             self.assertIn('--job "${{ github.job }}"', block)
+
+    def test_asan_debug_optimization_preserves_instrumentation(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        self.assertEqual(asan_configure_errors(document), [])
+        for step in document["jobs"]["build-linux-asan"]["steps"]:
+            if step.get("name") == "Configure CMake (ASan + UBSan + LSan)":
+                step["run"] = step["run"].replace("-DCMAKE_CXX_FLAGS_DEBUG=", "-DCMAKE_CXX_FLAGS_DEBUG:STRING=")
+        self.assertEqual(asan_configure_errors(document), [])
+
+    def test_asan_configure_rejects_missing_or_overridden_checks(self) -> None:
+        mutations = (
+            ('-DCMAKE_CXX_FLAGS_DEBUG="-g -Og"', ''),
+            ('-DCMAKE_C_FLAGS_DEBUG="-g -Og"', '-DCMAKE_C_FLAGS_DEBUG="-g -Og -DNDEBUG"'),
+            ('-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_BUILD_TYPE=Release'),
+            ('-DSPARK_LIFECYCLE_TEST_HOOKS=ON', '-DSPARK_LIFECYCLE_TEST_HOOKS=OFF'),
+            ('-fno-sanitize-recover=undefined', ''),
+            ('-fno-omit-frame-pointer', ''),
+            ('-DCMAKE_CXX_FLAGS_DEBUG="-g -Og"',
+             '-DCMAKE_CXX_FLAGS_DEBUG="-g -Og" -DCMAKE_CXX_FLAGS_DEBUG="-g"'),
+        )
+        for old, new in mutations:
+            with self.subTest(mutation=old):
+                document = parse_workflow_yaml(self.build)
+                for step in document["jobs"]["build-linux-asan"]["steps"]:
+                    if step.get("name") == "Configure CMake (ASan + UBSan + LSan)":
+                        self.assertIn(old, step["run"])
+                        step["run"] = step["run"].replace(old, new)
+                self.assertTrue(asan_configure_errors(document))
 
     def test_exact_commit_aggregation_requires_asan_and_tsan(self) -> None:
         aggregate = self.build[self.build.index("aggregate-test-stats:") :]

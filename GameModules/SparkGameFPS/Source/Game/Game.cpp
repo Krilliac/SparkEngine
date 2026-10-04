@@ -52,7 +52,9 @@ bool Game::ParseAuthoredFiniteFloat(const std::string& text, float& value)
     // Keep the old from_chars contract without relying on the floating-point
     // overload, which is unavailable on some libc++ toolchains.
     if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
+    {
         return false;
+    }
     std::istringstream stream(text);
     stream.imbue(std::locale::classic());
     stream >> std::noskipws >> value;
@@ -125,7 +127,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     // filesystem root. Keep the UTF-8 conversion explicit for installed paths
     // containing non-ASCII characters.
     if (sceneLoaded)
+    {
         BindSceneMaterialRoots();
+    }
 
     /* Camera ------------------------------------------------*/
     m_camera = std::make_unique<SparkEngineCamera>();
@@ -144,7 +148,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         {
             const SceneNode* node = m_sceneManager->GetNode(i);
             if (!node || node->type != "Camera")
+            {
                 continue;
+            }
             const auto projection = node->properties.find("projection");
             if (projection != node->properties.end() && projection->second != "perspective")
             {
@@ -152,7 +158,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
                 continue;
             }
             if (!authoredCamera)
+            {
                 authoredCamera = node;
+            }
             const auto main = node->properties.find("isMain");
             if (main != node->properties.end() && (main->second == "true" || main->second == "1"))
             {
@@ -169,7 +177,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
         float authoredFov = 0.0f;
         if (fovProperty != authoredCamera->properties.end() &&
             ParseAuthoredFiniteFloat(fovProperty->second, authoredFov) && authoredFov >= 10.0f && authoredFov <= 170.0f)
+        {
             m_camera->Console_SetFOV(authoredFov);
+        }
         m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
                                       authoredCamera->rotation.z);
 
@@ -258,13 +268,17 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     if (m_renderingEnabled)
     {
         if (!packagedStartup)
+        {
             CreateCombatArena();
+        }
 
         // Wire up graphics engine on all ModelObjects so they don't need the global
         for (auto& obj : m_gameObjects)
         {
             if (auto* mo = dynamic_cast<ModelObject*>(obj.get()))
+            {
                 mo->SetGraphicsEngine(m_graphics);
+            }
         }
         BindSceneMaterialRoots();
     }
@@ -275,7 +289,9 @@ HRESULT Game::Initialize(GraphicsEngine* graphics, InputManager* input)
     m_vehicleSystem = std::make_unique<Spark::VehicleSystem>();
     m_vehicleSystem->Initialize();
     if (m_projectilePool)
+    {
         m_vehicleSystem->SetProjectilePool(m_projectilePool.get());
+    }
     FPS_CONSOLE("Vehicle system initialized (9 vehicle types, weapons armed)", "SUCCESS");
 
     /* Gravity System -----------------------------------*/
@@ -381,7 +397,9 @@ void Game::LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) con
 void Game::BindSceneMaterialRoots()
 {
     if (!m_sceneManager)
+    {
         return;
+    }
 
     const std::filesystem::path projectRoot = Spark::FPSAssets::Root().parent_path();
     const std::u8string projectRootU8 = projectRoot.u8string();
@@ -392,12 +410,16 @@ void Game::BindSceneMaterialRoots()
         for (auto& object : m_sceneManager->GetObjects())
         {
             if (object && object->SetMaterialProjectRoot(projectRootUtf8))
+            {
                 ++materialRootsBound;
+            }
         }
         for (auto& object : m_gameObjects)
         {
             if (object && object->SetMaterialProjectRoot(projectRootUtf8))
+            {
                 ++materialRootsBound;
+            }
         }
     }
     FPS_CONSOLE("Scene and procedural material roots bound for " + std::to_string(materialRootsBound) +
@@ -408,28 +430,38 @@ void Game::BindSceneMaterialRoots()
 void Game::InvalidateSceneBasicMaterials()
 {
     if (!m_graphics || !m_sceneManager)
+    {
         return;
+    }
 
     const std::filesystem::path projectRoot = Spark::FPSAssets::Root().parent_path();
     const std::u8string projectRootU8 = projectRoot.u8string();
     const std::string projectRootUtf8(reinterpret_cast<const char*>(projectRootU8.data()), projectRootU8.size());
     if (projectRootUtf8.empty())
+    {
         return;
+    }
 
     std::unordered_set<std::string> materialPaths;
     for (const auto& object : m_sceneManager->GetObjects())
     {
         if (object && !object->GetMaterialPath().empty())
+        {
             materialPaths.insert(object->GetMaterialPath());
+        }
     }
     for (const auto& object : m_gameObjects)
     {
         if (object && !object->GetMaterialPath().empty())
+        {
             materialPaths.insert(object->GetMaterialPath());
+        }
     }
 
     for (const auto& materialPath : materialPaths)
+    {
         m_graphics->InvalidateBasicMaterial(materialPath, projectRootUtf8);
+    }
 }
 
 /*-------------------------------------------------------------
@@ -439,7 +471,9 @@ void Game::Shutdown()
 {
     EndInputObservation();
     if (m_isShutDown)
+    {
         return;
+    }
     m_isShutDown = true;
 
     FPS_CONSOLE("Game::Shutdown called.", "INFO");
@@ -493,10 +527,14 @@ void Game::Shutdown()
 void Game::SetPhysicsSystem(PhysicsSystem* ps)
 {
     if (m_projectilePool)
+    {
         m_projectilePool->SetPhysicsSystem(ps);
+    }
     // Player may own a separate projectile pool
     if (m_player && m_player->GetProjectilePool())
+    {
         m_player->GetProjectilePool()->SetPhysicsSystem(ps);
+    }
 }
 
 /*-------------------------------------------------------------
@@ -511,23 +549,31 @@ void Game::SetEventBus(Spark::EventBus* bus)
 
     // The respawn system publishes PlayerRespawnEvent, so it needs the same bus.
     if (m_respawnSystem)
+    {
         m_respawnSystem->SetEventBus(bus);
+    }
 
     if (!bus)
+    {
         return;
+    }
 
     // Entity killed → update gamemode scoring, quest progress, and HUD kill feed
     m_eventSubscriptions.emplace_back(bus->Subscribe<Spark::EntityKilledEvent>(
         [this](const Spark::EntityKilledEvent& e)
         {
             if (m_gameMode)
+            {
                 m_gameMode->RecordKill("Player1", "Enemy");
+            }
 
             if (m_progression)
             {
                 int xp = Spark::ProgressionSystem::XP_PER_KILL;
                 if (m_lootSystem && m_lootSystem->HasBuff(Spark::PowerUpType::DoubleXP))
+                {
                     xp *= 2;
+                }
                 m_progression->AwardXP(xp, "kill");
             }
 
@@ -585,7 +631,9 @@ void Game::SetEventBus(Spark::EventBus* bus)
                 {
                     const Spark::RespawnPoint& spawn = m_respawnSystem->GetLastRespawnPoint();
                     if (spawn.position.x == e.spawnX && spawn.position.y == e.spawnY && spawn.position.z == e.spawnZ)
+                    {
                         m_camera->Console_SetRotation(spawn.rotation.x, spawn.rotation.y, spawn.rotation.z);
+                    }
                 }
             }
             if (m_player)
@@ -654,15 +702,21 @@ void Game::Update(float dt)
         inputUpdateCompleted = true;
     });
     if (m_inputObservationEnabled && !inputUpdateCompleted)
+    {
         m_inputObservationFailed = true;
+    }
 
     SPARK_GUARDED_UPDATE("Game:ClassSystem", "Game", {
         if (m_classSystem)
+        {
             m_classSystem->Update(dt);
+        }
     });
     SPARK_GUARDED_UPDATE("Game:Player", "Game", {
         if (m_player)
+        {
             m_player->Update(dt);
+        }
     });
     SPARK_GUARDED_UPDATE("Game:Projectiles", "Game", {
         if (m_projectilePool)
@@ -676,27 +730,41 @@ void Game::Update(float dt)
     // deterministic and is not advanced twice by variable + fixed ticks.
     SPARK_GUARDED_UPDATE("Game:Interaction", "Game", {
         if (m_interactionSystem)
+        {
             m_interactionSystem->Update(dt, m_player.get());
+        }
         if (m_damageZoneSystem)
+        {
             m_damageZoneSystem->Update(dt, m_player.get());
+        }
         if (m_respawnSystem)
+        {
             m_respawnSystem->Update(dt);
+        }
     });
 
     // Gameplay systems
     SPARK_GUARDED_UPDATE("Game:WaveSpawner", "Game", {
         if (m_waveSpawner)
+        {
             m_waveSpawner->Update(dt, GetAliveEnemyCount(), this);
+        }
         if (m_lootSystem)
+        {
             m_lootSystem->Update(dt, m_player.get());
+        }
     });
 
     // Integrated systems
     SPARK_GUARDED_UPDATE("Game:GameMode", "Game", {
         if (m_gameMode)
+        {
             m_gameMode->Update(dt);
+        }
         if (m_hudSystem)
+        {
             m_hudSystem->Update(dt);
+        }
         Spark::QuestOps::UpdateTimers(m_playerQuests, m_questRegistry, dt);
     });
 
@@ -747,7 +815,9 @@ void Game::Update(float dt)
     // Update networking - process incoming messages, send outgoing state
     SPARK_GUARDED_UPDATE("Game:Networking", "Game", {
         if (m_networkInitialized)
+        {
             UpdateMultiplayer(dt);
+        }
     });
 #endif
 
@@ -756,9 +826,13 @@ void Game::Update(float dt)
         if (m_graphics)
         {
             if (auto textureSystem = m_graphics->GetTextureSystem())
+            {
                 textureSystem->Update(dt);
+            }
             if (auto assetPipeline = m_graphics->GetAssetPipeline())
+            {
                 assetPipeline->Update(dt);
+            }
         }
     });
 
@@ -767,7 +841,9 @@ void Game::Update(float dt)
         if (m_engineContext)
         {
             if (auto* physics = m_engineContext->GetPhysics())
+            {
                 physics->Update(dt);
+            }
         }
     });
     RecordInputObservation("complete");
@@ -785,7 +861,9 @@ void Game::Render()
         return;
     }
     if (!m_renderingEnabled)
+    {
         return; // Device-less host: nothing to draw, and BeginFrame would fail.
+    }
 
     // **CRITICAL: This is the ONLY place BeginFrame/EndFrame should be called**
     bool frameStarted = false;
@@ -882,7 +960,9 @@ void Game::UpdateCamera(float dt)
     // No logging for per-frame operations
     FPS_ASSERT(dt >= 0.0f);
     if (m_camera)
+    {
         m_camera->Update(dt);
+    }
 }
 
 /*-------------------------------------------------------------*/
@@ -891,8 +971,12 @@ void Game::UpdateGameObjects(float dt)
     // No logging for per-frame operations
     FPS_ASSERT(dt >= 0.0f);
     for (auto& obj : m_gameObjects)
+    {
         if (obj && obj->IsActive())
+        {
             obj->Update(dt);
+        }
+    }
 }
 
 /*-------------------------------------------------------------
@@ -946,9 +1030,13 @@ void Game::HandleInput(float)
             RecordInputObservation("operation");
         }
         if (succeeded)
+        {
             FPS_LOG_INFO("{}", message);
+        }
         else
+        {
             FPS_LOG_WARN("{}", message);
+        }
     }
 
     if (m_inputObservationEnabled && savePressed && loadPressed)
@@ -959,27 +1047,45 @@ void Game::HandleInput(float)
 
     // Class switching with F5-F10 keys
     if (m_input->WasKeyPressed(VK_F5))
+    {
         SetPlayerClass(PlayerClass::SCOUT);
+    }
     if (m_input->WasKeyPressed(VK_F6))
+    {
         SetPlayerClass(PlayerClass::MEDIC);
+    }
     if (m_input->WasKeyPressed(VK_F7))
+    {
         SetPlayerClass(PlayerClass::ENGINEER);
+    }
     if (m_input->WasKeyPressed(VK_F8))
+    {
         SetPlayerClass(PlayerClass::RECON);
+    }
     if (m_input->WasKeyPressed(VK_F9))
+    {
         SetPlayerClass(PlayerClass::VANGUARD);
+    }
     if (m_input->WasKeyPressed(VK_F10))
+    {
         SetPlayerClass(PlayerClass::TITAN);
+    }
 
     // F11 starts or restarts the complete survival loop used by UI and console.
     if (m_input->WasKeyPressed(VK_F11))
+    {
         StartWaves();
+    }
 
     // Cycle classes with [ and ]
     if (m_input->WasKeyPressed(VK_OEM_4))
+    {
         CyclePrevClass(); // [ key
+    }
     if (m_input->WasKeyPressed(VK_OEM_6))
+    {
         CycleNextClass(); // ] key
+    }
 
     // Vehicle enter/exit with V key
     if (m_input->WasKeyPressed('V'))

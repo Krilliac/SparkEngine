@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -1927,13 +1928,14 @@ namespace
 #endif
             // Read only two frame-chain words from this process. No stack payload
             // is persisted, and invalid/omitted frame pointers stop at the exact PC.
-            constexpr std::uintptr_t kMaxStackWalkBytes = 8 * 1024 * 1024;
+            constexpr std::uintptr_t kMaxStackWalkBytes = std::uintptr_t{8} * 1024 * 1024;
             while (stack && frame >= stack && frame - stack < kMaxStackWalkBytes &&
                    frame % alignof(std::uintptr_t) == 0 && count < kMaxFrames)
             {
                 std::uintptr_t words[2]{};
                 iovec local{words, sizeof(words)};
-                iovec remote{reinterpret_cast<void*>(frame), sizeof(words)};
+                // The kernel consumes the captured register's address bits, not a C++ dereference.
+                iovec remote{std::bit_cast<void*>(frame), sizeof(words)};
                 if (syscall(SYS_process_vm_readv, getpid(), &local, 1UL, &remote, 1UL, 0UL) !=
                     static_cast<long>(sizeof(words)))
                 {
@@ -2056,6 +2058,10 @@ namespace
 
     /// The fatal signal being reported; read by the watchdog.
     volatile sig_atomic_t g_fatalSignal = 0;
+#ifdef SPARK_PLATFORM_LINUX
+    /// Own nonblocking open-file description; never changes the launcher's stderr flags.
+    int g_signalStderrHandle = -1;
+#endif
 
     /// Test seam (CrashSymbolicationProbe --stall-report): block the
     /// best-effort stage as a crash under a held malloc lock would.
@@ -2100,6 +2106,31 @@ namespace
     void SignalSafeWrite(int fd, const char* text)
     {
         SignalSafeWrite(fd, text, SignalSafeLength(text));
+    }
+
+    /// Fatal diagnostics must not wait for an unread pipe, including in the watchdog.
+    void WriteFatalStderr(const char* text)
+    {
+#ifdef SPARK_PLATFORM_LINUX
+        const int descriptor = g_signalStderrHandle;
+#else
+        // Reopening /dev/fd on other POSIX hosts may duplicate the shared description.
+        // Drop optional stderr diagnostics unless its existing mode is nonblocking.
+        const int flags = fcntl(STDERR_FILENO, F_GETFL, 0);
+        const int descriptor = flags >= 0 && (flags & O_NONBLOCK) != 0 ? STDERR_FILENO : -1;
+#endif
+        if (!text || descriptor < 0)
+        {
+            return;
+        }
+        // One attempt only: EINTR, EAGAIN and partial writes may drop a diagnostic.
+        constexpr size_t kMaxFatalDiagnosticBytes = 1024;
+        size_t length = 0;
+        while (length < kMaxFatalDiagnosticBytes && text[length] != '\0')
+        {
+            ++length;
+        }
+        (void)write(descriptor, text, length);
     }
 
     /// Append @p value in @p base (10 or 16, lowercase) without allocating.
@@ -2175,7 +2206,7 @@ namespace
     /// lock the crashed thread holds. Finish the crash without the rest.
     void OnSignalReportTimeout(int)
     {
-        WriteStderr("[SPARK ENGINE] Crash report timed out; terminating without the remaining sections.\n");
+        WriteFatalStderr("[SPARK ENGINE] Crash report timed out; terminating without the remaining sections.\n");
         const int sig = g_fatalSignal != 0 ? static_cast<int>(g_fatalSignal) : SIGABRT;
         TerminateWithFatalSignal(sig);
     }
@@ -2183,10 +2214,17 @@ namespace
     void ArmSignalReportWatchdog(int sig)
     {
         g_fatalSignal = sig;
+        // A closed stderr pipe must not replace the original fatal signal with SIGPIPE.
+        sigset_t brokenPipe;
+        sigemptyset(&brokenPipe);
+        sigaddset(&brokenPipe, SIGPIPE);
+        sigprocmask(SIG_BLOCK, &brokenPipe, nullptr);
         struct sigaction timeoutAction;
         memset(&timeoutAction, 0, sizeof(timeoutAction));
         timeoutAction.sa_handler = OnSignalReportTimeout;
         sigemptyset(&timeoutAction.sa_mask);
+        // SIGALRM can run on another thread, whose SIGPIPE mask differs.
+        sigaddset(&timeoutAction.sa_mask, SIGPIPE);
         timeoutAction.sa_flags = SA_ONSTACK;
         sigaction(SIGALRM, &timeoutAction, nullptr);
 
@@ -2349,7 +2387,7 @@ namespace
         const bool logReady = FinishSignalArtifact(fd, !g_signalWriteFailed);
         if (!logReady || !prepared.ready)
         {
-            WriteStderr("[SPARK ENGINE] Incomplete signal log; manifest not published.\n");
+            WriteFatalStderr("[SPARK ENGINE] Incomplete signal log; manifest not published.\n");
             return;
         }
 
@@ -2433,11 +2471,11 @@ namespace
                                  kRenameNoReplace) != 0)
         {
             unlinkat(g_artifactRootHandle, temporaryName, 0);
-            WriteStderr("[SPARK ENGINE] Signal manifest publication failed.\n");
+            WriteFatalStderr("[SPARK ENGINE] Signal manifest publication failed.\n");
         }
-        WriteStderr("Log file (private artifact directory): ");
-        WriteStderr(g_signalLogName);
-        WriteStderr("\n");
+        WriteFatalStderr("Log file (private artifact directory): ");
+        WriteFatalStderr(g_signalLogName);
+        WriteFatalStderr("\n");
     }
 #endif
 
@@ -2490,9 +2528,9 @@ namespace
         if (logProbe.stream)
             WriteCrashManifest(reportId, coreProbe.stream ? coreFile : std::string{}, logFile, "", "", crashTitle);
 
-        WriteStderr("Log file: ");
-        WriteStderr(logFile.c_str());
-        WriteStderr("\n");
+        WriteFatalStderr("Log file: ");
+        WriteFatalStderr(logFile.c_str());
+        WriteFatalStderr("\n");
     }
 
 #endif
@@ -2508,6 +2546,14 @@ namespace
         g_signalLogPrefix[length] = '\0';
 #ifdef SPARK_PLATFORM_LINUX
         // Install/reinstall is a quiescent lifecycle operation, as for the pinned root.
+        if (g_signalStderrHandle >= 0)
+        {
+            close(g_signalStderrHandle);
+            g_signalStderrHandle = -1;
+        }
+        // A fresh /proc open has its own status flags; dup() would share O_NONBLOCK.
+        // Append preserves existing regular-file stderr contents and its shared offset.
+        g_signalStderrHandle = open("/proc/self/fd/2", O_WRONLY | O_NONBLOCK | O_APPEND | O_CLOEXEC);
         // Snapshot optional sections now; never enumerate threads or use stdio in a signal.
         g_preparedSignalArtifacts = {};
         auto& manifest = g_preparedSignalArtifacts.manifest;
@@ -2601,16 +2647,16 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         sigName = "SIGTRAP (Trace/breakpoint trap)";
         break;
     }
-    WriteStderr("\n[SPARK ENGINE] CRASH: ");
-    WriteStderr(sigName);
-    WriteStderr("\n");
+    WriteFatalStderr("\n[SPARK ENGINE] CRASH: ");
+    WriteFatalStderr(sigName);
+    WriteFatalStderr("\n");
 
     // One report per process; the sequence is shared with nonfatal reports.
     const std::uint64_t reportSequence = g_reportSequence.fetch_add(1, std::memory_order_relaxed) + 1;
     const int fd = OpenSignalReportLog(reportSequence);
     if (fd < 0)
     {
-        WriteStderr("[SPARK ENGINE] Private crash-artifact directory unavailable; report not written.\n");
+        WriteFatalStderr("[SPARK ENGINE] Private crash-artifact directory unavailable; report not written.\n");
         TerminateWithFatalSignal(sig);
     }
 #ifdef SPARK_PLATFORM_LINUX
@@ -2628,13 +2674,13 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
     }
     catch (const std::exception& e)
     {
-        WriteStderr("[SPARK ENGINE] Exception: ");
-        WriteStderr(e.what());
-        WriteStderr("\n");
+        WriteFatalStderr("[SPARK ENGINE] Exception: ");
+        WriteFatalStderr(e.what());
+        WriteFatalStderr("\n");
     }
     catch (...)
     {
-        WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
+        WriteFatalStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
 #endif

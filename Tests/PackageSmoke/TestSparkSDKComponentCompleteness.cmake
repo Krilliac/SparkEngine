@@ -1,6 +1,6 @@
-# The SDK install component must be self-contained for a consumer that selects
-# only the public SDK: headers, exported targets, compatibility helpers, legal
-# notices, documentation, and one buildable example must travel together.
+# Install the SDK's declared runtime dependency before checking its public
+# package: headers, exported targets, compatibility helpers, legal notices,
+# documentation, and one buildable example must travel together.
 foreach(_required IN ITEMS SPARK_ENGINE_BUILD_DIR SPARK_CONFIG SPARK_TEST_ROOT)
     if(NOT DEFINED ${_required} OR "${${_required}}" STREQUAL "")
         message(FATAL_ERROR "${_required} is required for the SDK component completeness test")
@@ -9,20 +9,22 @@ endforeach()
 
 file(REMOVE_RECURSE "${SPARK_TEST_ROOT}")
 set(_prefix "${SPARK_TEST_ROOT}/prefix")
-set(_install_command
-    "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
-    --config "${SPARK_CONFIG}" --prefix "${_prefix}" --component sdk)
-execute_process(
-    COMMAND ${_install_command}
-    RESULT_VARIABLE _install_result
-    OUTPUT_VARIABLE _install_output
-    ERROR_VARIABLE _install_error
-    TIMEOUT 600)
-if(NOT "${_install_result}" STREQUAL "0")
-    message(FATAL_ERROR
-        "Installing the SDK component failed (${_install_result}):\n"
-        "${_install_output}\n${_install_error}")
-endif()
+foreach(_component IN ITEMS runtime sdk)
+    set(_install_command
+        "${CMAKE_COMMAND}" --install "${SPARK_ENGINE_BUILD_DIR}"
+        --config "${SPARK_CONFIG}" --prefix "${_prefix}" --component "${_component}")
+    execute_process(
+        COMMAND ${_install_command}
+        RESULT_VARIABLE _install_result
+        OUTPUT_VARIABLE _install_output
+        ERROR_VARIABLE _install_error
+        TIMEOUT 600)
+    if(NOT "${_install_result}" STREQUAL "0")
+        message(FATAL_ERROR
+            "Installing the ${_component} component failed (${_install_result}):\n"
+            "${_install_output}\n${_install_error}")
+    endif()
+endforeach()
 
 set(_required_sdk_files
     include/Spark/SparkSDK.h

@@ -7,10 +7,13 @@ against an installed engine package.
 
 ## Consume an installed SDK
 
-Install the `sdk` component from a configured engine build, then point a
-standalone project at its CMake package directory:
+Install the `sdk` component together with its declared `runtime` dependency
+from a configured engine build, then point a standalone project at its CMake
+package directory. CPack resolves component dependencies; direct CMake installs
+must select each component explicitly:
 
 ```powershell
+cmake --install <engine-build> --prefix <spark-sdk> --config Release --component runtime
 cmake --install <engine-build> --prefix <spark-sdk> --config Release --component sdk
 cmake -S <my-game> -B <my-game>/build `
     -DSparkEngine_DIR="<spark-sdk>/lib/cmake/SparkEngine"
@@ -92,7 +95,7 @@ values are derived from `Spark/Version.h` and `Spark/ModuleABI.h` by
 
 ## Package contents
 
-The SDK component is self-contained and includes:
+The SDK component includes:
 
 - public headers under `include/Spark/`;
 - exported CMake targets and `spark_add_game_module` under
@@ -103,9 +106,14 @@ The SDK component is self-contained and includes:
 - a buildable `EmptyProject` example under
   `share/SparkEngine/sdk/examples/EmptyProject/`.
 
+The `runtime` dependency provides the host and shared runtime libraries. In
+SDL2 builds, the SDK exports its CMake target while the runtime supplies its
+shared library, so installing `sdk` alone cannot provide a usable package.
+Install `tools` as well when generating a project with the installed spark-cli.
+
 On Windows and Linux, the `SDKConsumer_InstalledEmptyProjectTemplate` CTest
-installs the `sdk` and `tools` components and builds that example from the
-installed copy, in the engine's configuration. The test fails if any header,
+installs the `runtime`, `sdk`, and `tools` components and builds that example
+from the installed copy, in the engine's configuration. The test fails if any header,
 library or flag path the build resolves points into the engine source or build
 tree. It also fails if the module's `.sparkabi` sidecar would be rejected by
 the host's pre-load check. This test is registered only when

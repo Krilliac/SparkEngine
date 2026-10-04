@@ -19,11 +19,15 @@ faults inside SparkSymbolicationCanaryCrashSite(). The canary then:
    watchdog still ends the probe by SIGSEGV within the budget and the
    async-signal-safe log already holds the symbolic frames; and a stack
    overflow (``--stack-overflow``) is still reported from the alternate stack.
+6. requires full or closed stderr pipes to retain the report and original
+   fatal signal, including the stalled-report watchdog, without changing the
+   launcher's shared stderr descriptor flags.
 """
 
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import signal
@@ -114,6 +118,81 @@ def check_stack_overflow_report(probe: Path, temp_root: Path) -> None:
     text = log.read_text(errors="replace")
     require("Signal     : 11 - SIGSEGV" in text, "stack-overflow report does not name SIGSEGV")
     require("*** SYMBOLIC FRAMES ***" in text, "stack-overflow report has no symbolic-frame section")
+
+
+def check_unavailable_stderr_report(probe: Path, temp_root: Path, *, closed: bool, stalled: bool) -> None:
+    """Real fatal reporting cannot depend on a supervisor draining stderr."""
+    read_fd, write_fd = os.pipe()
+    process = None
+    try:
+        original_flags = fcntl.fcntl(write_fd, fcntl.F_GETFL)
+        if closed:
+            os.close(read_fd)
+            read_fd = -1
+        else:
+            fcntl.fcntl(write_fd, fcntl.F_SETFL, original_flags | os.O_NONBLOCK)
+            while True:
+                try:
+                    os.write(write_fd, b"x" * 4096)
+                except BlockingIOError:
+                    break
+            fcntl.fcntl(write_fd, fcntl.F_SETFL, original_flags)
+        mode = ["--stall-report"] if stalled else []
+        started = time.monotonic()
+        process = subprocess.Popen(
+            [str(probe), *mode], env=dict(os.environ, TMPDIR=str(temp_root)), cwd=temp_root,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=write_fd,
+        )
+        try:
+            process.wait(timeout=STALLED_REPORT_DEADLINE_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            raise CanaryFailure("unavailable stderr hung fatal reporting past its watchdog budget") from exc
+        elapsed = time.monotonic() - started
+        require(process.returncode == -signal.SIGSEGV,
+                f"unavailable stderr changed fatal termination to {process.returncode} after {elapsed:.1f}s")
+        require(fcntl.fcntl(write_fd, fcntl.F_GETFL) == original_flags,
+                "fatal diagnostics changed the launcher's shared stderr descriptor flags")
+        logs = [path for path in temp_root.glob("spark_crash_*/SymbolicationCanary_*.log") if path.is_file()]
+        require(len(logs) == 1, f"unavailable stderr left {logs}, expected exactly one report")
+        text = logs[0].read_text(errors="replace")
+        for marker in ("Signal     : 11 - SIGSEGV", "*** STACK TRACE ***", "*** SYMBOLIC FRAMES ***"):
+            require(marker in text, f"unavailable stderr prevented the report's {marker!r}")
+        if stalled:
+            require(not list(temp_root.glob("spark_crash_*/crash_manifest_*.json")),
+                    "stalled stderr report unexpectedly published its incomplete manifest")
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired as exc:
+                raise CanaryFailure("unavailable-stderr probe could not be reaped after termination") from exc
+        if read_fd >= 0:
+            os.close(read_fd)
+        os.close(write_fd)
+
+
+def check_file_stderr_report(probe: Path, temp_root: Path) -> None:
+    """The independent diagnostic description appends without moving shared stderr."""
+    stderr_path = temp_root / "stderr.log"
+    sentinel = b"existing stderr contents\n"
+    with stderr_path.open("w+b") as stderr:
+        stderr.write(sentinel)
+        stderr.flush()
+        stderr.seek(0)
+        original_flags = fcntl.fcntl(stderr.fileno(), fcntl.F_GETFL)
+        completed = subprocess.run(
+            [str(probe)], env=dict(os.environ, TMPDIR=str(temp_root)), cwd=temp_root,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=stderr,
+            timeout=PROBE_TIMEOUT_SECONDS,
+        )
+        require(completed.returncode == -signal.SIGSEGV, "file stderr changed the original fatal signal")
+        require(stderr.tell() == 0, "fatal diagnostics moved the launcher's shared stderr offset")
+        require(fcntl.fcntl(stderr.fileno(), fcntl.F_GETFL) == original_flags,
+                "fatal diagnostics changed the launcher's file stderr flags")
+        output = stderr.read()
+        require(output.startswith(sentinel) and b"[SPARK ENGINE] CRASH:" in output[len(sentinel):],
+                "fatal diagnostics failed to append after the existing stderr contents")
 
 
 def symbolicate(*arguments: str) -> subprocess.CompletedProcess[str]:
@@ -208,11 +287,20 @@ def main() -> int:
             overflow_root = scratch_root / "tmp-overflow"
             overflow_root.mkdir()
             check_stack_overflow_report(args.probe, overflow_root)
+            for closed in (False, True):
+                for stalled in (False, True):
+                    stderr_root = scratch_root / f"tmp-stderr-{closed}-{stalled}"
+                    stderr_root.mkdir()
+                    check_unavailable_stderr_report(args.probe, stderr_root, closed=closed, stalled=stalled)
+            file_stderr_root = scratch_root / "tmp-file-stderr"
+            file_stderr_root.mkdir()
+            check_file_stderr_report(args.probe, file_stderr_root)
 
         print(
             f"symbolication canary passed: {CRASH_SITE} at {args.probe_source.name}:{expected_line} "
             f"(build-id {build_id}); wrong build-id and symlinked entry refused; "
-            "stalled report terminated by its watchdog; stack overflow reported"
+            "stalled report terminated by its watchdog; stack overflow reported; "
+            "full and closed stderr pipes preserve reports, fatal signals and descriptor flags"
         )
         return 0
     except (CanaryFailure, subprocess.TimeoutExpired, OSError, ValueError, KeyError) as exc:

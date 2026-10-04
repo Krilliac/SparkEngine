@@ -11,22 +11,22 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 347065 |
-| **SparkEditor/Source** | 106228 |
-| **GameModules** | 163864 |
+| **SparkEngine/Source** | 347305 |
+| **SparkEditor/Source** | 106229 |
+| **GameModules** | 164025 |
 | **External services** | 12922 |
-| **Asset pipeline** | 3188 |
-| **Tests** | 276928 |
+| **Asset pipeline** | 3231 |
+| **Tests** | 277115 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~934185** |
+| **Total C++ (excl. ThirdParty)** | **~934831** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
 | Header files (.h/.hh/.hpp/.hxx/.inl) | 1249 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1991 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1992 |
 | HLSL shader files | 44 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
@@ -44,13 +44,13 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 125930 | 36.2% |
-| Engine (all subsystems) | 100706 | 29.0% |
-| Utils | 49354 | 14.2% |
+| Engine (all subsystems) | 100708 | 28.9% |
+| Utils | 49400 | 14.2% |
 | Core | 33578 | 9.6% |
 | Physics | 11142 | 3.2% |
 | Audio | 6961 | 2.0% |
 | Input | 3951 | 1.1% |
-| SceneManager | 4650 | 1.3% |
+| SceneManager | 4842 | 1.3% |
 | Enums | 1025 | 0.2% |
 | Game | 2950 | 0.8% |
 | Camera | 999 | 0.2% |
@@ -66,7 +66,7 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | Scripting | 8148 |
 | Animation | 6959 |
 | SaveSystem | 4348 |
-| UI | 2709 |
+| UI | 2711 |
 | Modding | 2654 |
 | Streaming | 2236 |
 | Editor | 1737 |
@@ -104,7 +104,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 106228 |
+| Total editor lines | 106229 |
 
 ## Testing Metrics
 
@@ -157,7 +157,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `CrashHandler.cpp` | 2859 |
+| `CrashHandler.cpp` | 2905 |
 | `OpenGLDevice.cpp` | 2588 |
 | `NetworkConnection.cpp` | 2500 |
 | `ModuleManager.cpp` | 2223 |

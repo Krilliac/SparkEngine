@@ -1242,9 +1242,20 @@ TEST(FPSMultiplayerProduction_NetworkPathServerAdmitsInputAndBroadcastsSnapshots
         held.sequenceNumber = kFirstFireSequence + index;
         ASSERT_TRUE(remote.Send(FPSMessageType::PlayerInput, held.Serialize()));
         server.Update(kFrame);
+        // Dispatch this input before sending the next, without advancing the
+        // simulation while waiting for the receive thread. A tight send loop
+        // can arrive as a burst and correctly exhaust the input budget; extra
+        // simulated frames can instead expire the projectiles being measured.
+        const auto inputDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (Access::LastAppliedSequence(server, remoteId) != held.sequenceNumber &&
+               std::chrono::steady_clock::now() < inputDeadline)
+        {
+            Spark::Net::NetworkManager::GetInstance().Update(0.0f);
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        ASSERT_EQ(Access::LastAppliedSequence(server, remoteId), held.sequenceNumber);
     }
-    ASSERT_TRUE(PumpUntil(
-        server, [&] { return Access::LastAppliedSequence(server, remoteId) == kFirstFireSequence + kFireInputs - 1; }));
+    ASSERT_EQ(Access::LastAppliedSequence(server, remoteId), kFirstFireSequence + kFireInputs - 1);
     EXPECT_EQ(Access::ActiveProjectiles(server), static_cast<size_t>(10));
 
     // Disconnect through NetworkManager removes the player and its score row.

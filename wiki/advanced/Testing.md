@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*740 test-bearing `.cpp`/`.mm` files, 8543 source-level test definitions*
+*741 test-bearing `.cpp`/`.mm` files, 8543 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1283,6 +1283,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
 | `TestFPSComponentsReal` | 11 |
+| `TestFPSGameCameraReloadReal` | 0 |
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSLANLoopback` | 2 |
 | `TestFPSMultiplayer` | 19 |

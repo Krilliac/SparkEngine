@@ -3403,6 +3403,83 @@ class CodemodelProvenanceTests(unittest.TestCase):
             set(),
         )
 
+    def test_reviewed_isa_target_requires_exact_source_record_and_windows_floor(self) -> None:
+        declarations = inventory.extract_cmake_targets()
+        cache = {
+            "SPARK_NATIVE_ARCH": "OFF",
+            "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
+            "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "x64",
+        }
+        for profile in ("windows-shipping", "windows-validation"):
+            with self.subTest(profile=profile):
+                self.assertEqual(
+                    inventory.reviewed_configured_function_targets(declarations, profile, cache),
+                    {"CpuFloor_IsaBaseline"},
+                )
+        for key, changed in (
+            ("SPARK_NATIVE_ARCH", "ON"),
+            ("SPARK_TOOLCHAIN_CXX_COMPILER_ID", "Clang"),
+            ("SPARK_TOOLCHAIN_CXX_ARCHITECTURE", "ARM64"),
+        ):
+            for value in (None, changed):
+                with self.subTest(key=key, value=value):
+                    altered = dict(cache)
+                    if value is None:
+                        altered.pop(key)
+                    else:
+                        altered[key] = value
+                    self.assertEqual(
+                        inventory.reviewed_configured_function_targets(declarations, "windows-shipping", altered),
+                        set(),
+                    )
+        self.assertEqual(
+            inventory.reviewed_configured_function_targets(declarations, "installed-sdk-consumer", cache), set()
+        )
+        for key, value in (("line", 50), ("file", "cmake/Invented.cmake"),
+                           ("definitionScope", ["unused_function"]), ("target", "Invented")):
+            with self.subTest(record_key=key):
+                altered = copy.deepcopy(declarations)
+                next(item for item in altered if item["target"] == "CpuFloor_IsaBaseline")[key] = value
+                self.assertEqual(
+                    inventory.reviewed_configured_function_targets(altered, "windows-shipping", cache), set()
+                )
+
+    def test_reviewed_isa_target_requires_real_unconditional_root_call(self) -> None:
+        declarations = inventory.extract_cmake_targets()
+        cache = {
+            "SPARK_NATIVE_ARCH": "OFF",
+            "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
+            "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "x64",
+        }
+        source = inventory.CMAKE_ROOT.read_text(encoding="utf-8")
+        call = "spark_register_isa_baseline_scan(${SPARK_SHIPPED_IMAGE_TARGETS})"
+        self.assertEqual(source.count(call), 1)
+        mutations = (
+            "", "spark_register_isa_baseline_scan(SparkEngine)",
+            f"if(UNKNOWN_GUARD)\n{call}\nendif()",
+            f"function(unused)\n{call}\nendfunction()", f"{call}\n{call}",
+            "spark_register_isa_baseline_scan(",
+        )
+        for replacement in mutations:
+            with self.subTest(replacement=replacement):
+                with mock.patch.object(Path, "read_text", return_value=source.replace(call, replacement)):
+                    self.assertEqual(
+                        inventory.reviewed_configured_function_targets(declarations, "windows-shipping", cache),
+                        set(),
+                    )
+
+    def test_real_isa_utility_is_corroborated_without_granting_producer_authority(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            cache = dict(self.shipping_cache)
+            cache["SPARK_NATIVE_ARCH"] = "OFF"
+            evidence = self.shipping_evidence(
+                Path(raw), cache=cache,
+                targets=(("SparkEngine", "EXECUTABLE"), ("CpuFloor_IsaBaseline", "UTILITY")),
+            )
+        findings = check_parity.check_codemodel_provenance(self.bound_data(evidence))
+        self.assertNotIn("configured-target-undeclared", finding_categories(findings))
+        self.assertIn("codemodel-producer-authority-unavailable", finding_categories(findings))
+
     def test_caller_asserted_commit_cannot_replace_producer_provenance(self) -> None:
         with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
             write_codemodel_reply(

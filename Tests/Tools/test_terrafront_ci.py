@@ -51,7 +51,7 @@ class SelectionTests(unittest.TestCase):
             check_selection.check({"tests": []}, "terrafront-multiclient")
 
     def test_workflow_is_advisory_but_steps_fail_closed(self):
-        jobs = yaml.safe_load((ROOT / ".github/workflows/build.yml").read_text())["jobs"]
+        jobs = yaml.safe_load((ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8"))["jobs"]
         job = jobs["terrafront-multiclient"]
         self.assertEqual(job["runs-on"], "ubuntu-24.04")
         self.assertIs(job["continue-on-error"], True)
@@ -77,7 +77,7 @@ class SelectionTests(unittest.TestCase):
         self.assertNotIn("**/userdata", upload["with"]["path"])
 
     def test_all_six_impaired_scenarios_are_registered_separately(self):
-        cmake = (ROOT / "Tests/CMakeLists.txt").read_text()
+        cmake = (ROOT / "Tests/CMakeLists.txt").read_text(encoding="utf-8")
         start = cmake.index("# Separate entries preserve bounded execution")
         block = cmake[start:cmake.index("endforeach()", start)]
         for suffix, name in zip(check_selection.SCENARIOS, mc.SCENARIOS):

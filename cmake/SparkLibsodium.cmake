@@ -246,9 +246,13 @@ else()
 
     # Upstream's recommended code-generation flags; warnings are upstream's to
     # fix, so the vendored target is compiled silently.
+    # Keep the cryptographic dependency optimized in Debug, as upstream's
+    # configure.ac does by default. At -O0 the 600,000-round password verifier
+    # exceeds the production authenticator's 2 s deadline on CI runners.
+    # Debug symbols and the engine's own Debug code remain enabled.
     target_compile_options(spark_sodium PRIVATE
         -w -fvisibility=hidden -fno-strict-aliasing -fno-strict-overflow -fwrapv
-        -flax-vector-conversions)
+        -flax-vector-conversions $<$<CONFIG:Debug>:-O2>)
     set_property(TARGET spark_sodium PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif()
 

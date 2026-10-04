@@ -746,7 +746,7 @@
       "wave": 4,
       "area": "networking",
       "owner": "unassigned",
-      "rationale": "SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice. Owner decision OD-14 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): FPS multiplayer consolidates onto the multiplayer primitives used by SparkGameMMOFPS instead of keeping a separate FPSMultiplayerSystem implementation; the duplicate is removed only after parity is proven.",
+      "rationale": "SparkGameFPS multiplayer uses the production encrypted UDP transport with loopback handshake, input and snapshot tests; rendered-player integration, constrained LAN acceptance and exact-commit qualification remain open. Optional LAN work must remain experimental and independent of the stable single-player slice. Owner decision OD-14 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): FPS multiplayer consolidates onto the multiplayer primitives used by SparkGameMMOFPS instead of keeping a separate FPSMultiplayerSystem implementation; the duplicate is removed only after parity is proven.",
       "dependencies": [
         "MOD-310",
         "NET-100"
@@ -783,7 +783,7 @@
             "Tests/Fixtures/FPSLANLoopbackScenario.h",
             "Tests/CMakeLists.txt"
           ],
-          "note": "FPSLAN_ThreeProcessLoopbackConvergence runs one server and two client processes over loopback UDP through a spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with server, and quitting clients leave. Converged state is FPSMultiplayerSystem's; the rendered game reads none of it back (see risks). Local pass only; no constrained LAN or encrypted transport."
+          "note": "FPSLAN_ThreeProcessLoopbackConvergence runs one server and two clients over loopback UDP through spawn-move-kill-respawn-score. Spawns, positions, health, respawn and scores converge, and quitting clients leave. This is FPSMultiplayerSystem state; the rendered game does not consume it (see risks). Local pass only; constrained LAN and exact-commit qualification remain open."
         },
         {
           "criterionDigest": "sha256:5bc1ee8cc5b7",

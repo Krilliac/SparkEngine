@@ -50,7 +50,9 @@
 #include "Utils/Process.h"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -499,7 +501,20 @@ TEST(EditorFPSLineage_AuthoredSceneLoadedByInstalledFPS)
     EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP scene=Startup.sparkscene nodes=2 rendering=1\n");
     EXPECT_STR_CONTAINS(run.output, "type=model position=3,2,5 rotation=0,0,0 scale=1,1,1\n");
     EXPECT_STR_CONTAINS(run.output, "type=Camera position=7,11,-13 rotation=0,0,0 scale=1,1,1\n");
-    EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP_CAMERA position=7,11,-13 fov=70 ");
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP_CAMERA "), static_cast<size_t>(1));
+    const std::string cameraPrefix = "SPARK_FPS_STARTUP_CAMERA position=7,11,-13 fov=";
+    const auto cameraAt = run.output.find(cameraPrefix);
+    ASSERT_NE(cameraAt, std::string::npos);
+    const char* begin = run.output.data() + cameraAt + cameraPrefix.size();
+    const char* end = std::find(begin, run.output.data() + run.output.size(), ' ');
+    ASSERT_NE(end, run.output.data() + run.output.size());
+    float fov = 0;
+    const auto parsed = std::from_chars(begin, end, fov);
+    EXPECT_TRUE(parsed.ec == std::errc{} && parsed.ptr == end && end != begin);
+    EXPECT_TRUE(std::isfinite(fov));
+    // Match the runtime proof's 1e-6 relative tolerance after the camera's
+    // float degrees/radians round trip. The authored document stays exact.
+    EXPECT_NEAR(fov, 70.0f, 7e-5f);
     EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP_PLAYER position=7,11,-13\n");
     // The installed wrapper additionally validates the full WARP/FPS lifecycle and
     // committed authored scene state from the preserved runtime.log.

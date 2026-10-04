@@ -353,13 +353,17 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
         m_player->SetActive(profile.health > 0.0f);
     }
     if (m_hudSystem)
+    {
         m_hudSystem->SetCurrentClass(static_cast<PlayerClass>(profile.playerClass));
+    }
 
     // The scoreboard lives outside the ECS, so a loaded save has to put it back
     // explicitly. Capturing kills/deaths/score and then not restoring them is what made
     // a quickload silently reset the match score.
     if (m_gameMode)
+    {
         m_gameMode->RestorePlayerScore("Player1", profile.kills, profile.deaths, profile.score);
+    }
 
     // A profile captured while dead restores an inactive player. Player::Update()
     // early-returns while dead and only a PlayerRespawnEvent revives it, so the respawn
@@ -440,7 +444,9 @@ bool Game::QuickLoadProfile(std::string& outMessage)
     if (!saveSystem->SaveExists(kQuickSaveSlot))
     {
         if (m_inputObservationEnabled)
+        {
             m_inputObservationReason = 1;
+        }
         outMessage = std::string("No quicksave found in slot '") + kQuickSaveSlot + "'";
         return false;
     }
@@ -494,13 +500,20 @@ namespace
     std::string ObservationProfile(const Spark::FPSLocalProfile& profile)
     {
         if (!std::isfinite(profile.health) || !std::isfinite(profile.armor) || !std::isfinite(profile.playTimeSeconds))
+        {
             throw std::runtime_error("nonfinite profile observation");
+        }
         std::unordered_map<std::string, std::string> fields;
         profile.WriteTo(fields); // Same production profile serializer used by QuickSaveProfile.
         std::map<std::string, std::string> ordered(fields.begin(), fields.end());
         std::string serialized;
         for (const auto& [key, value] : ordered)
-            serialized += key + "=" + value + "\n";
+        {
+            serialized.append(key);
+            serialized.push_back('=');
+            serialized.append(value);
+            serialized.push_back('\n');
+        }
         return ObservationHex(serialized);
     }
 } // namespace
@@ -517,7 +530,9 @@ void Game::BeginInputObservation() noexcept
 #endif
     }
     if (!m_inputObservationEnabled || m_inputObservationFailed || !m_input)
+    {
         return;
+    }
     ++m_inputObservationUpdate;
     m_inputObservationMask = m_inputObservationPressed = m_inputObservationReleased = 0;
     constexpr int keys[] = {VK_F2, VK_F3, VK_F5, VK_F9};
@@ -528,12 +543,16 @@ void Game::BeginInputObservation() noexcept
         m_inputObservationReleased |= static_cast<unsigned int>(m_input->WasKeyReleased(keys[i])) << i;
     }
     if (m_inputObservationMask != m_inputObservationPreviousMask)
+    {
         m_inputObservationStableFrames = 0;
+    }
     m_inputObservationPreviousMask = m_inputObservationMask;
     m_inputObservationWanted =
         m_inputObservationStableFrames < 3 || m_inputObservationPressed != 0 || m_inputObservationReleased != 0;
     if (m_inputObservationStableFrames < 3)
+    {
         ++m_inputObservationStableFrames;
+    }
     m_inputObservationAction = 0;
     m_inputObservationResult = -1;
     m_inputObservationReason = 0;
@@ -544,13 +563,17 @@ void Game::BeginInputObservation() noexcept
 void Game::RecordInputObservation(const char* phase) noexcept
 {
     if (!m_inputObservationEnabled || m_inputObservationFailed || !m_inputObservationWanted || !m_input)
+    {
         return;
+    }
     try
     {
         auto* save = m_engineContext ? m_engineContext->GetSaveSystem() : nullptr;
         unsigned long long faults = 0;
         for (const auto& [name, record] : Spark::SubsystemFaultIsolator::GetInstance().GetRecordsSnapshot())
+        {
             faults += record.faultCount;
+        }
         std::ostringstream line;
         line << "SPARK_FPS_INPUT v=1 phase=" << phase << " input=" << m_input->GetInputFrameSequence()
              << " update=" << m_inputObservationUpdate << " mask=" << m_inputObservationMask
@@ -574,7 +597,9 @@ void Game::RecordInputObservation(const char* phase) noexcept
         ++m_inputObservationRecords;
         m_inputObservationBytes += text.size();
         if (std::fwrite(text.data(), 1, text.size(), stdout) != text.size() || std::fflush(stdout) != 0)
+        {
             m_inputObservationFailed = true;
+        }
     }
     catch (...)
     {
@@ -585,11 +610,15 @@ void Game::RecordInputObservation(const char* phase) noexcept
 void Game::EndInputObservation() noexcept
 {
     if (!m_inputObservationEnabled)
+    {
         return;
+    }
     try
     {
         for (const auto& [name, record] : Spark::SubsystemFaultIsolator::GetInstance().GetRecordsSnapshot())
+        {
             m_inputObservationFailed = m_inputObservationFailed || record.faultCount != 0;
+        }
     }
     catch (...)
     {

@@ -803,8 +803,8 @@
 | `NotifyCallback` | alias | SparkEngine | [AnimNotify.h:L142](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L142) | Manages animation notifies across all clips |
 | `NotifyReboundFn` | alias | SparkEngine | [Reflection.h:L300](../../SparkEngine/Source/Core/Reflection.h#L300) |  |
 | `NS` | alias | SparkEngine | [EngineSettings.cpp:L214](../../SparkEngine/Source/Core/EngineSettings.cpp#L214) |  |
-| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L232](../../SparkEngine/Source/Utils/CrashHandler.cpp#L232) |  |
-| `NtSetInformationFileFn` | alias | SparkEngine | [CrashHandler.cpp:L648](../../SparkEngine/Source/Utils/CrashHandler.cpp#L648) |  |
+| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L233](../../SparkEngine/Source/Utils/CrashHandler.cpp#L233) |  |
+| `NtSetInformationFileFn` | alias | SparkEngine | [CrashHandler.cpp:L649](../../SparkEngine/Source/Utils/CrashHandler.cpp#L649) |  |
 | `ObjectID` | alias | SparkEditor | [SceneFileTypes.h:L38](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L38) | Unique identifier for scene objects |
 | `ObjectKeys` | alias | GameModules | [TFSocialSystemStore.cpp:L43](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L43) |  |
 | `ObjectType` | alias | SparkEngine | [JsonUtils.h:L103](../../SparkEngine/Source/Utils/JsonUtils.h#L103) | A JSON value that can be null, bool, number, string, array, or object. |
@@ -935,7 +935,7 @@
 | `RHIShaderHandle` | alias | SparkEngine | [RHITypes.h:L452](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L452) |  |
 | `RHITextureHandle` | alias | SparkEngine | [RHITypes.h:L451](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L451) |  |
 | `RS` | alias | SparkEngine | [EngineSettings.cpp:L105](../../SparkEngine/Source/Core/EngineSettings.cpp#L105) |  |
-| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L849](../../SparkEngine/Source/Utils/CrashHandler.cpp#L849) |  |
+| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L850](../../SparkEngine/Source/Utils/CrashHandler.cpp#L850) |  |
 | `S_FALSE` | macro | SparkEngine | [PlatformTypes.h:L62](../../SparkEngine/Source/Core/PlatformTypes.h#L62) |  |
 | `S_OK` | macro | SparkEngine | [PlatformTypes.h:L59](../../SparkEngine/Source/Core/PlatformTypes.h#L59) |  |
 | `SamplerHandle` | alias | SparkEngine | [RHIHandlePool.h:L100](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L100) |  |
@@ -1463,7 +1463,7 @@
 | `ULONG` | alias | SparkEngine | [PlatformTypes.h:L38](../../SparkEngine/Source/Core/PlatformTypes.h#L38) |  |
 | `Underlying` | alias | SparkEngine | [BitFlags.h:L100](../../SparkEngine/Source/Utils/BitFlags.h#L100) |  |
 | `UnderlyingType` | alias | SparkEngine | [EnumUtils.h:L206](../../SparkEngine/Source/Enums/EnumUtils.h#L206) | Type-safe enum flag operations |
-| `UniqueHandle` | alias | SparkEngine | [SceneManager.cpp:L235](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L235) |  |
+| `UniqueHandle` | alias | SparkEngine | [SceneManager.cpp:L255](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L255) |  |
 | `UnloadCallback` | alias | SparkEngine | [ModuleHotReload.h:L84](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L84) | Callback signature for module lifecycle during hot-reload |
 | `UnlockLoaderLock` | alias | Tests | [TestEditorCrashHandlerFilterReal.cpp:L506](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L506) |  |
 | `Unsigned` | alias | SparkDaemon | [BoundedWireCodec.h:L34](../../SparkDaemon/src/BoundedWireCodec.h#L34) |  |
@@ -1580,7 +1580,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkInstaller | [main.cpp:L16](../../SparkInstaller/src/main.cpp#L16) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [LauncherPaths.cpp:L10](../../SparkLauncher/src/LauncherPaths.cpp#L10) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [LauncherProcess.cpp:L21](../../SparkLauncher/src/LauncherProcess.cpp#L21) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [main.cpp:L50](../../SparkLauncher/src/main.cpp#L50) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkLauncher | [main.cpp:L52](../../SparkLauncher/src/main.cpp#L52) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkSDK | [ModuleDllMain.h:L35](../../SparkSDK/Include/Spark/ModuleDllMain.h#L35) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkServer | [ServerHealth.cpp:L21](../../SparkServer/src/ServerHealth.cpp#L21) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | Tests | [LifecycleLoopGuards.h:L29](../../Tests/LifecycleLoopGuards.h#L29) |  |

@@ -2545,7 +2545,7 @@ Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** External consumer needs no source-tree include/lib
    - Evidence: `cmake/RunInstalledPackageConsumer.cmake`, `cmake/TestPackageConsumerBoundary.cmake`, `Tests/CMakeLists.txt`, `Tests/PackageSmoke/FPSProgression/CMakeLists.txt`, `Tests/PackageSmoke/RunInstalledSDKTemplate.cmake`, `cmake/SparkPackageConsumerBoundary.cmake`
-   - Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs only the sdk component, builds the shipped EmptyProject, and boundary-scans ninja -t deps/commands dumps, failing if they are unscanned or never mention the prefix. SDKConsumer_TemplateRunnerContract passes locally; the Windows GREEN run is not independently verified.
+   - Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs runtime, sdk, and tools (sdk/tools depend on runtime), builds EmptyProject, and scans ninja -t deps/commands; unscanned dumps or missing prefix fail. SDKConsumer_TemplateRunnerContract passes locally; Windows GREEN is not independently verified.
 2. **[implemented]** Any module whose ABI descriptor differs from the host, including an N-1 module, is rejected before OS load with a diagnostic naming the field and both versions (OD-02)
    - Evidence: `Tests/TestModuleABIDiagnostics.cpp`, `Tests/TestModuleVersion.cpp`, `SparkEngine/Source/Core/ModuleManager.cpp`
    - ModuleABI_ tests drive production LoadModule with sidecars for all ten fields plus struct_size and N-1 sdk_version, asserting exact 'rejected before OS load' messages that name the field and both values. ModuleVersion_ tests load real N-1 and N+1 SDK module images and assert the same named-field, both-versions rejection before any module code runs.
@@ -4406,7 +4406,7 @@ ctest --test-dir build/linux-gcc-release -L prototype-module-kit --output-on-fai
 **Priority:** P1 · **Status:** in-progress · **Wave:** 4 · **Area:** networking · **Owner:** unassigned · **Release-blocking:** yes
 **Profile applicability:** `stable-v1`=outside
 
-SparkGameFPS multiplayer currently ignores address and port and fabricates connection state; optional LAN work must remain experimental and independent of the stable single-player slice. Owner decision OD-14 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): FPS multiplayer consolidates onto the multiplayer primitives used by SparkGameMMOFPS instead of keeping a separate FPSMultiplayerSystem implementation; the duplicate is removed only after parity is proven.
+SparkGameFPS multiplayer uses the production encrypted UDP transport with loopback handshake, input and snapshot tests; rendered-player integration, constrained LAN acceptance and exact-commit qualification remain open. Optional LAN work must remain experimental and independent of the stable single-player slice. Owner decision OD-14 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): FPS multiplayer consolidates onto the multiplayer primitives used by SparkGameMMOFPS instead of keeping a separate FPSMultiplayerSystem implementation; the duplicate is removed only after parity is proven.
 
 **Dependency contract**
 
@@ -4435,7 +4435,7 @@ Progress: 4 of 4 implemented, 0 evidenced at an exact commit.
 
 1. **[implemented]** Two clients converge on authoritative spawn-move-kill-respawn-score
    - Evidence: `Tests/TestFPSLANLoopback.cpp`, `Tests/Fixtures/FPSLANLoopbackPeer.cpp`, `Tests/Fixtures/FPSLANLoopbackScenario.h`, `Tests/CMakeLists.txt`
-   - FPSLAN_ThreeProcessLoopbackConvergence runs one server and two client processes over loopback UDP through a spawn-move-kill-respawn-score round; spawns, respawn, positions, health and scores converge with server, and quitting clients leave. Converged state is FPSMultiplayerSystem's; the rendered game reads none of it back (see risks). Local pass only; no constrained LAN or encrypted transport.
+   - FPSLAN_ThreeProcessLoopbackConvergence runs one server and two clients over loopback UDP through spawn-move-kill-respawn-score. Spawns, positions, health, respawn and scores converge, and quitting clients leave. This is FPSMultiplayerSystem state; the rendered game does not consume it (see risks). Local pass only; constrained LAN and exact-commit qualification remain open.
 2. **[implemented]** No fake connection state remains
    - Evidence: `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp`, `GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h`, `GameModules/SparkGameFPS/Source/Game/MultiplayerNetFlow.cpp`, `GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp`, `Tests/TestFPSMultiplayer.cpp`, `GameModules/SparkGameFPS/module.json`
    - Pending the central MSVC build and a FPSMultiplayerProduction_ run.

@@ -58,7 +58,9 @@ case "$MODE" in
     *) echo "Unknown command: $MODE" >&2; exit 1 ;;
 esac
 
-RESULTS_FILE="$(mktemp)"
+# Apple mktemp can prefer /var/folders over TMPDIR. Python honors the safe
+# job-owned TMPDIR needed by the health reader's no-reparse path contract.
+RESULTS_FILE="$("$PYTHON_BIN" -c 'import os,tempfile; fd,path=tempfile.mkstemp(prefix="spark-doc-results-"); os.close(fd); print(path)')" || exit 1
 HEALTH_OUTPUT="${SPARK_DOC_HEALTH_OUTPUT:-$SCRIPT_DIR/.health.json}"
 STARTED_AT="$("$PYTHON_BIN" -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).isoformat().replace('+00:00','Z'))")"
 FINAL_EXIT=1

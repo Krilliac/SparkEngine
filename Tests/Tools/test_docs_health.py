@@ -935,6 +935,48 @@ class DocsLinksHostileTests(unittest.TestCase):
 
 
 class RepositoryEvidenceTests(unittest.TestCase):
+    def test_master_results_honor_safe_tmpdir_when_mktemp_uses_a_symlink(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-master-temp-") as directory:
+            root = Path(directory).resolve()
+            checkout = root / "checkout"
+            safe_temp = root / "safe-temp"
+            unsafe_link = root / "unsafe-link"
+            safe_temp.mkdir()
+            try:
+                unsafe_link.symlink_to(safe_temp, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"directory symlinks unavailable: {error}")
+            for name in ("docs_currentness.py", "docs_contract.py"):
+                write(checkout / "tools" / name, (REPO_ROOT / "tools" / name).read_text(encoding="utf-8"))
+            write(checkout / "docs" / "update-all-docs.sh",
+                  (REPO_ROOT / "docs" / "update-all-docs.sh").read_text(encoding="utf-8"))
+            contract = docs_currentness.load_contract()
+            write(checkout / "docs" / "generated-docs-manifest.json", json.dumps(contract))
+            for generator in contract["generators"]:
+                write(checkout / "docs" / generator["script"], "#!/bin/bash\nexit 0\n")
+            fake_bin = root / "bin"
+            fake_mktemp = fake_bin / "mktemp"
+            write(fake_mktemp, '#!/bin/bash\n: > "$UNSAFE_RESULTS"\nprintf "%s\\n" "$UNSAFE_RESULTS"\n')
+            fake_mktemp.chmod(0o755)
+            health = root / "health.json"
+            result = subprocess.run(
+                ["bash", str(checkout / "docs" / "update-all-docs.sh"), "update"],
+                cwd=checkout,
+                env={**os.environ, "PATH": str(fake_bin)+os.pathsep+os.environ["PATH"],
+                     "PYTHON": sys.executable, "TMPDIR": str(safe_temp),
+                     "UNSAFE_RESULTS": str(unsafe_link / "results.tsv"),
+                     "SPARK_DOC_HEALTH_OUTPUT": str(health),
+                     "SPARKENGINE_DOC_SOURCE_SHA": EXACT_SHA,
+                     "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": COMMITTED_AT},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout+result.stderr)
+            evidence = json.loads(health.read_text(encoding="utf-8"))
+            self.assertEqual("pass", evidence["overall"])
+            self.assertEqual(9, evidence["successes"])
+            self.assertEqual(0, evidence["failures"])
+            self.assertFalse((safe_temp / "results.tsv").exists(), "bare mktemp was called")
+
     def test_manifest_declares_every_generator_exactly_once(self) -> None:
         contract = docs_currentness.load_contract()
         ids = tuple(row["id"] for row in contract["generators"])

@@ -821,6 +821,44 @@ add_dependencies(SparkTests SparkDebugHookTeardownProbe)
 target_compile_definitions(SparkTests PRIVATE
     SPARK_TEST_DEBUG_HOOK_TEARDOWN_PROBE_PATH="$<TARGET_FILE:SparkDebugHookTeardownProbe>")
 
+# Exercise the exported Game class in the actual FPS DLL, in a fresh process.
+# Isolated staged assets keep the module's cached asset root independent of
+# SparkTests and prevent the owned reload fixtures from touching source assets.
+if(WIN32 AND TARGET SparkGameFPS)
+    add_executable(SparkFPSCameraReloadTests TestFPSGameCameraReloadReal.cpp)
+    target_compile_features(SparkFPSCameraReloadTests PRIVATE cxx_std_23)
+    target_include_directories(SparkFPSCameraReloadTests PRIVATE
+        "${CMAKE_SOURCE_DIR}/GameModules/SparkGameFPS/Source")
+    # SPARK_GAME_DLL stays private to SparkGameFPS: this consumer imports Game.
+    target_link_libraries(SparkFPSCameraReloadTests PRIVATE SparkGameFPS SparkEngineLib)
+    set_target_properties(SparkFPSCameraReloadTests PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/fps-camera-reload/$<CONFIG>")
+    foreach(_fps_reload_config IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+        string(TOUPPER "${_fps_reload_config}" _fps_reload_config_upper)
+        set_target_properties(SparkFPSCameraReloadTests PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY_${_fps_reload_config_upper}
+                "${CMAKE_CURRENT_BINARY_DIR}/fps-camera-reload/${_fps_reload_config}")
+    endforeach()
+    # Implementation-only DLL edits can leave its import library unchanged.
+    # Refresh every build instead of relying on the probe executable relinking.
+    add_custom_target(SparkFPSCameraReloadRuntime ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:SparkFPSCameraReloadTests> "$<TARGET_FILE_DIR:SparkFPSCameraReloadTests>"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/Assets/Models"
+            "$<TARGET_FILE_DIR:SparkFPSCameraReloadTests>/Assets/Models"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/Assets/Scenes"
+            "$<TARGET_FILE_DIR:SparkFPSCameraReloadTests>/Assets/Scenes"
+        COMMAND_EXPAND_LISTS VERBATIM)
+    add_dependencies(SparkFPSCameraReloadRuntime SparkFPSCameraReloadTests SparkGameFPS)
+    add_dependencies(SparkTests SparkFPSCameraReloadRuntime)
+    add_test(NAME SparkFPSGameCameraReloadReal
+        COMMAND SparkFPSCameraReloadTests "$<TARGET_FILE_DIR:SparkFPSCameraReloadTests>")
+    set_tests_properties(SparkFPSGameCameraReloadReal PROPERTIES
+        LABELS "fps;scene;integration;dll"
+        TIMEOUT 60
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:SparkFPSCameraReloadTests>")
+endif()
+
 # The stable-v1 Windows shipping profile deliberately disables networking.
 # Keep this public-header include contract independently buildable so a
 # networking-only type cannot leak into that profile through an unguarded
@@ -3295,7 +3333,7 @@ endif()
 # after the loaded library. Host evidence only; it promotes no module profile.
 add_test(NAME ModuleLifecycleRecordHost COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(ModuleLifecycleRecordHost PROPERTIES
-    ENVIRONMENT "SPARK_TEST_NAME=ModuleLifecycleRecord_;SPARK_TEST_EXPECT_COUNT=5"
+    ENVIRONMENT "SPARK_TEST_NAME=ModuleLifecycleRecord_;SPARK_TEST_EXPECT_COUNT=6"
     LABELS "lifecycle;module;unit"
     RUN_SERIAL TRUE
     TIMEOUT 60)
@@ -5725,6 +5763,20 @@ if(NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND AND TARGET SparkCrashReporter)
         TIMEOUT 180)
 endif()
 
+# Check the actual vendored Debug flags and production password-hash cases.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND NOT MSVC
+   AND Python3_Interpreter_FOUND)
+    add_test(NAME LibsodiumDebugBuildContract
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_libsodium_debug_build.py
+            --cmake ${CMAKE_COMMAND}
+            --c-compiler ${CMAKE_C_COMPILER}
+            --cxx-compiler ${CMAKE_CXX_COMPILER})
+    set_tests_properties(LibsodiumDebugBuildContract PROPERTIES
+        LABELS "network-security;build;integration"
+        TIMEOUT 180)
+endif()
+
 # OPS-100: build-id symbolication canary (Linux, local symbol store, no relay).
 # The probe crashes through the production signal handler; it is compiled with
 # -g (RelWithDebInfo-style) and an explicit GNU build-id so its split debug
@@ -5733,8 +5785,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOU
    AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE)
     add_executable(SparkCrashSymbolicationProbe Fixtures/CrashSymbolicationProbe.cpp)
     target_compile_features(SparkCrashSymbolicationProbe PRIVATE cxx_std_23)
+    # The signal-safe walker requires frame pointers; -O0 also retains the
+    # crash site's leaf frame so its return address resolves to main.
     # -fno-lto: an LTO-compiled unit reports its DWARF file as <artificial>.
-    target_compile_options(SparkCrashSymbolicationProbe PRIVATE -g -O2 -fno-lto)
+    target_compile_options(SparkCrashSymbolicationProbe PRIVATE -g -O0 -fno-omit-frame-pointer -fno-lto)
     target_link_options(SparkCrashSymbolicationProbe PRIVATE -Wl,--build-id=sha1)
     # Shipping presets strip every link (-s); the probe must keep its DWARF so
     # the canary can split it into the symbol store.

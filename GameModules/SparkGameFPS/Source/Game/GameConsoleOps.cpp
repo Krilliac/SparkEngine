@@ -425,6 +425,14 @@ void Game::RefreshAuthoredSceneRuntimeState()
         m_camera->SetPosition(authoredCamera ? authoredCamera->position : DirectX::XMFLOAT3{0.0f, 2.0f, -20.0f});
         if (authoredCamera)
         {
+            const auto fovProperty = authoredCamera->properties.find("fov");
+            float authoredFov = 0.0f;
+            if (fovProperty != authoredCamera->properties.end() &&
+                ParseAuthoredFiniteFloat(fovProperty->second, authoredFov) && authoredFov >= 10.0f &&
+                authoredFov <= 170.0f)
+            {
+                m_camera->Console_SetFOV(authoredFov);
+            }
             m_camera->Console_SetRotation(authoredCamera->rotation.x, authoredCamera->rotation.y,
                                           authoredCamera->rotation.z);
             const auto nearProperty = authoredCamera->properties.find("nearPlane");

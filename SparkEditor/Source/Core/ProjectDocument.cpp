@@ -279,7 +279,8 @@ namespace SparkEditor
                     }
                     if (c == '\\')
                     {
-                        if (++i >= json.size() || !DecodeJsonEscape(json, i, value))
+                        ++i;
+                        if (i >= json.size() || !DecodeJsonEscape(json, i, value))
                         {
                             return {};
                         }
@@ -483,16 +484,16 @@ namespace SparkEditor
         std::ostringstream file;
         file << "{\n";
         file << "  \"projectFileVersion\": " << ProjectManager::kProjectFileVersion << ",\n";
-        file << "  \"name\": \"" << EscapeProjectJsonString(fields.name) << "\",\n";
-        file << "  \"version\": \"" << EscapeProjectJsonString(fields.version) << "\",\n";
-        file << "  \"description\": \"" << EscapeProjectJsonString(fields.description) << "\",\n";
-        file << "  \"engineVersion\": \"" << EscapeProjectJsonString(fields.engineVersion) << "\",\n";
+        file << R"(  "name": ")" << EscapeProjectJsonString(fields.name) << "\",\n";
+        file << R"(  "version": ")" << EscapeProjectJsonString(fields.version) << "\",\n";
+        file << R"(  "description": ")" << EscapeProjectJsonString(fields.description) << "\",\n";
+        file << R"(  "engineVersion": ")" << EscapeProjectJsonString(fields.engineVersion) << "\",\n";
         if (!fields.templateId.empty())
         {
-            file << "  \"template\": \"" << EscapeProjectJsonString(fields.templateId) << "\",\n";
+            file << R"(  "template": ")" << EscapeProjectJsonString(fields.templateId) << "\",\n";
         }
-        file << "  \"defaultScene\": \"" << EscapeProjectJsonString(fields.defaultScene) << "\",\n";
-        file << "  \"lastOpenedScene\": \"" << EscapeProjectJsonString(fields.lastOpenedScene) << "\",\n";
+        file << R"(  "defaultScene": ")" << EscapeProjectJsonString(fields.defaultScene) << "\",\n";
+        file << R"(  "lastOpenedScene": ")" << EscapeProjectJsonString(fields.lastOpenedScene) << "\",\n";
         file << "  \"createdTime\": " << fields.createdTime << ",\n";
         file << "  \"lastModified\": " << fields.lastModified << ",\n";
 
@@ -562,9 +563,9 @@ namespace SparkEditor
         {
             const auto& rp = projects[i];
             file << "    {\n";
-            file << "      \"name\": \"" << EscapeProjectJsonString(rp.name) << "\",\n";
-            file << "      \"path\": \"" << EscapeProjectJsonString(rp.path) << "\",\n";
-            file << "      \"engineVersion\": \"" << EscapeProjectJsonString(rp.engineVersion) << "\",\n";
+            file << R"(      "name": ")" << EscapeProjectJsonString(rp.name) << "\",\n";
+            file << R"(      "path": ")" << EscapeProjectJsonString(rp.path) << "\",\n";
+            file << R"(      "engineVersion": ")" << EscapeProjectJsonString(rp.engineVersion) << "\",\n";
             file << "      \"lastOpened\": " << rp.lastOpened << "\n";
             file << "    }";
             if (i + 1 < count)

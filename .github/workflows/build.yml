@@ -323,7 +323,9 @@ jobs:
       run: python3 -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
 
     - name: Test the build-output reproducibility comparator (BLD-100)
-      run: python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
+      run: |
+        python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
+        python3 -B Tests/Tools/test_compare_windows_shipping_repro.py
 
     - name: Generate and compare the deterministic build-matrix inventory
       id: build-matrix-inventory
@@ -499,6 +501,7 @@ jobs:
         # test_ops100_crash_security.py, test_ops100_telemetry_spool.py,
         # test_ops100_adversarial.py, test_crash_capture_security.py,
         # test_sdk_component_completeness.py (compiler-free CMake install fixtures),
+        # test_sdl_component_archives.py (native CMake/CPack component archives),
         # and test_ops100_symbolication.py (which
         # compiles a small ELF with the runner's cc/objcopy/addr2line);
         # unittest runs their native test classes without requiring an
@@ -509,6 +512,7 @@ jobs:
           test_ops100_crash_security \
           test_crash_capture_security \
           test_sdk_component_completeness \
+          test_sdl_component_archives \
           test_ops100_telemetry_spool \
           test_ops100_adversarial \
           test_ops100_symbolication \
@@ -736,6 +740,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_FLAGS_DEBUG="-g -Og" \
+          -DCMAKE_C_FLAGS_DEBUG="-g -Og" \
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -no-pie" \
@@ -2566,9 +2572,13 @@ jobs:
         root_b=$(cygpath -w "$build_b")
         python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json --build-root "$root_a"
         python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json --build-root "$root_b"
-        python tree-a/tools/compare_build_outputs.py compare \
-          reproducibility/manifest-a.json reproducibility/manifest-b.json \
-          --report reproducibility/report.json
+        python tree-a/.github/scripts/compare_windows_shipping_repro.py \
+          --first-manifest reproducibility/manifest-a.json \
+          --second-manifest reproducibility/manifest-b.json \
+          --first-root reproducibility-stage-a --second-root reproducibility-stage-b \
+          --first-build-root "$root_a" --second-build-root "$root_b" \
+          --report reproducibility/report.json \
+          --diagnostics reproducibility/coff-diagnostics.json
 
     - name: Upload reproducibility evidence
       if: always()

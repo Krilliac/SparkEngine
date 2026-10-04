@@ -114,9 +114,9 @@ namespace SparkEditor
     {
         std::ostringstream file;
         file << "{\n";
-        file << "  \"name\": \"" << theme.name << "\",\n";
-        file << "  \"description\": \"" << theme.description << "\",\n";
-        file << "  \"author\": \"" << theme.author << "\",\n";
+        file << R"(  "name": ")" << theme.name << "\",\n";
+        file << R"(  "description": ")" << theme.description << "\",\n";
+        file << R"(  "author": ")" << theme.author << "\",\n";
         file << "  \"colors\": {\n";
         for (size_t index = 0; index < kThemeColors.size(); ++index)
         {

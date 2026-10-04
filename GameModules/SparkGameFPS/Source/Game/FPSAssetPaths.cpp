@@ -25,13 +25,17 @@ namespace Spark
                 wchar_t buffer[MAX_PATH] = {};
                 const DWORD length = ::GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(MAX_PATH));
                 if (length == 0 || length >= static_cast<DWORD>(MAX_PATH))
+                {
                     return {};
+                }
                 return std::filesystem::path(buffer, buffer + length).parent_path();
 #else
                 std::error_code error;
                 const std::filesystem::path exePath = std::filesystem::read_symlink("/proc/self/exe", error);
                 if (error)
+                {
                     return {};
+                }
                 return exePath.parent_path();
 #endif // _WIN32
             }
@@ -43,10 +47,14 @@ namespace Spark
             for (const auto& base : searchBases)
             {
                 if (base.empty())
+                {
                     continue;
+                }
                 const std::filesystem::path candidate = base / "Assets";
                 if (std::filesystem::is_directory(candidate / "Models", error))
+                {
                     return candidate;
+                }
             }
             return {};
         }
@@ -81,10 +89,14 @@ namespace Spark
                 std::string startupError;
                 ResolveStartupScene(startup, present, startupError);
                 if (present)
+                {
                     return startup.parent_path() / "Assets";
+                }
                 std::filesystem::path found = FindAssetRoot(DefaultSearchBases());
                 if (!found.empty())
+                {
                     return found;
+                }
 
                 std::error_code error;
                 const std::filesystem::path workingDir = std::filesystem::current_path(error);
@@ -121,7 +133,9 @@ namespace Spark
             const auto status = std::filesystem::symlink_status(resolved, ec);
             if (status.type() == std::filesystem::file_type::not_found &&
                 (!ec || ec == std::errc::no_such_file_or_directory))
+            {
                 return true;
+            }
             present = true;
             if (ec || !std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status))
             {
@@ -198,9 +212,13 @@ namespace Spark
             constexpr std::string_view kAssetsScenes = "Assets/Scenes/";
             constexpr std::string_view kScenes = "Scenes/";
             if (normalized.starts_with(kAssetsScenes))
+            {
                 normalized.erase(0, kAssetsScenes.size());
+            }
             else if (normalized.starts_with(kScenes))
+            {
                 normalized.erase(0, kScenes.size());
+            }
 
             const std::u8string relativeU8(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size());
             const std::filesystem::path relative = std::filesystem::u8path(relativeU8);

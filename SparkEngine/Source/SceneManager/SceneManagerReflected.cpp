@@ -10,35 +10,55 @@
 #include "Utils/LogMacros.h"
 
 #include <nlohmann_json.h>
+#include <cstdio>
 #include <fstream>
+#include <numbers>
 #include <set>
 
 bool SceneManager::LoadReflected(const std::wstring& filepath)
 {
     const auto reject = [](const char* reason)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Scene, "Reflected gameplay scene rejected: %s", reason);
+        if (Spark::Logger::Get().IsInitialized())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Scene, "Reflected gameplay scene rejected: %s", reason);
+        }
+        else
+        {
+            // Static engine code in a module can have an uninitialized local
+            // logger. Preserve the bounded failure reason without owning one.
+            std::fprintf(stderr, "Reflected gameplay scene rejected: %s\n", reason);
+            std::fflush(stderr);
+        }
         return false;
     };
     const std::filesystem::path path(filepath);
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input)
+    {
         return reject("primary scene is unreadable");
+    }
     const auto size = input.tellg();
     if (size <= 0 || static_cast<uint64_t>(size) > Spark::kMaxSceneDocumentBytes)
+    {
         return reject("primary scene size is invalid");
+    }
     std::string text(static_cast<size_t>(size), '\0');
     input.seekg(0);
     input.read(text.data(), static_cast<std::streamsize>(text.size()));
     if (!input || input.peek() != std::char_traits<char>::eof())
+    {
         return reject("primary scene changed while reading");
+    }
 
     // Deliberately read only the primary bytes: LoadWorld's .bak recovery is
     // useful to an editor, but cannot stand in for a selected packaged scene.
     World world(World::EntityEventCleanupMode::Suppressed);
     std::string error;
     if (!Spark::DeserializeInto(world, text, Spark::SceneDeserializeMode::StrictRecovery, &error))
+    {
         return reject("primary scene is invalid or has unsupported reflected fields");
+    }
     const auto document = nlohmann::json::parse(text);
     for (const auto& entity : document.at("entities"))
     {
@@ -46,13 +66,17 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         {
             const auto type = component.at("type").get<std::string>();
             if (type != "Transform" && type != "MeshRenderer" && type != "Camera" && type != "SpawnPointComponent")
+            {
                 return reject("unsupported component");
+            }
         }
     }
 
     auto project = path.parent_path();
     if (project.filename() == "Scenes")
+    {
         project = project.parent_path();
+    }
     const auto projectU8 = project.u8string();
     const std::string projectRoot(projectU8.begin(), projectU8.end());
     std::vector<SceneNode> nodes;
@@ -69,13 +93,19 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         const auto* camera = world.GetComponent<Camera>(entity);
         const auto* spawn = world.GetComponent<SpawnPointComponent>(entity);
         if (!name || name->name.empty() || !names.insert(name->name).second)
+        {
             return reject("entity names must be nonempty and unique");
+        }
         if (transform->parent != entt::null || !transform->children.empty())
+        {
             return reject("hierarchy is not supported by the gameplay adapter");
+        }
         if (static_cast<int>(mesh != nullptr) + static_cast<int>(camera != nullptr) +
                 static_cast<int>(spawn != nullptr) !=
             1)
+        {
             return reject("each entity needs exactly one mesh, camera or supported spawn point");
+        }
         SceneNode node;
         node.name = name->name;
         node.position = transform->position;
@@ -85,12 +115,16 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         {
             if (!mesh->materialPath.empty() || !mesh->visible || !mesh->castShadows || !mesh->receiveShadows ||
                 mesh->emissive != 0.0f)
+            {
                 return reject("only default mesh material and rendering flags are supported");
+            }
             const auto resolved = Spark::ResolveProjectAssetPath(projectRoot, mesh->meshPath);
             std::error_code ec;
             if (!resolved || resolved->nativePath.extension() != ".obj" ||
                 !std::filesystem::is_regular_file(resolved->nativePath, ec) || ec)
+            {
                 return reject("mesh must be an existing project-confined OBJ");
+            }
             node.type = "model";
             node.modelPath = resolved->cacheKey;
             meshes.push_back(resolved->nativePath);
@@ -102,7 +136,9 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
                 camera->nearPlane < 0.01f || camera->nearPlane > 10.0f || camera->farPlane < 100.0f ||
                 camera->farPlane > 10000.0f || camera->nearPlane >= camera->farPlane || node.rotation.x < -89.0f ||
                 node.rotation.x > 89.0f || node.scale.x != 1.0f || node.scale.y != 1.0f || node.scale.z != 1.0f)
+            {
                 return reject("requires one main perspective camera with supported clipping, pitch and unit scale");
+            }
             node.type = "Camera";
             node.properties = {{"projection", "perspective"},
                                {"isMain", "true"},
@@ -122,8 +158,10 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
                 spawn->respawnDelay != 0.0f || spawn->maxConcurrent != -1 || node.scale.x != 1.0f ||
                 node.scale.y != 1.0f || node.scale.z != 1.0f || node.rotation.x < -89.0f || node.rotation.x > 89.0f ||
                 ++spawnCount > 32)
+            {
                 return reject("spawn requires neutral enabled default-tag exact-point semantics, no reuse "
                               "cooldown/concurrency limit, unit scale, supported pitch and at most 32 points");
+            }
             node.type = "SpawnPoint";
             node.properties = {{"tag", spawn->spawnTag}, {"priority", std::to_string(spawn->priority)}};
             meshes.emplace_back();
@@ -131,7 +169,9 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         nodes.push_back(std::move(node));
     }
     if (nodes.size() != world.GetEntityCount() || cameras != 1 || meshCount == 0)
+    {
         return reject("requires a main camera and at least one mesh, all with transforms");
+    }
 
     std::vector<std::unique_ptr<GameObject>> objects;
     const bool rendering = m_graphics && m_graphics->GetDevice() && m_graphics->GetContext();
@@ -144,9 +184,11 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         }
         auto object = std::make_unique<CubeObject>(1.0f);
         if (FAILED(object->Initialize(m_graphics->GetDevice(), m_graphics->GetContext())))
+        {
             return reject("mesh object initialization failed");
-            // Never use LoadOrPlaceholderMesh: a missing or malformed authored OBJ
-            // must not be replaced by a plausible cube and reported as consumed.
+        }
+        // Never use LoadOrPlaceholderMesh: a missing or malformed authored OBJ
+        // must not be replaced by a plausible cube and reported as consumed.
 #ifdef _WIN32
         const auto meshPath = meshes[i].wstring();
 #else
@@ -154,10 +196,12 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
         const std::wstring meshPath(meshU8.begin(), meshU8.end());
 #endif
         if (!object->GetMesh()->LoadFromFile(meshPath))
+        {
             return reject("authored OBJ could not be loaded");
+        }
         object->SetName(nodes[i].name);
         object->SetPosition(nodes[i].position);
-        constexpr float degreesToRadians = 3.14159265358979323846f / 180.0f;
+        constexpr float degreesToRadians = std::numbers::pi_v<float> / 180.0f;
         const auto rotation = nodes[i].rotation;
         object->SetRotation(
             {rotation.x * degreesToRadians, rotation.y * degreesToRadians, rotation.z * degreesToRadians});
@@ -172,6 +216,8 @@ bool SceneManager::LoadReflected(const std::wstring& filepath)
     m_objects = std::move(objects);
     m_nodeNameIndex.clear();
     for (size_t i = 0; i < m_sceneNodes.size(); ++i)
+    {
         m_nodeNameIndex[m_sceneNodes[i].name] = static_cast<int>(i);
+    }
     return true;
 }
