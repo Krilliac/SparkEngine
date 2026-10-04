@@ -9,6 +9,7 @@
 #include <sodium.h>
 #include <array>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -105,8 +106,9 @@ TEST(FPSInputDispatch_DecodeOwnedPrimary)
     auto canonicalJson = nlohmann::json::object();
     for (const auto& [key, value] : canonical)
         canonicalJson[key] = value;
-    nlohmann::json receipt = {
-        {"inputSha256", digest.data()}, {"inputBytes", before.size()}, {"canonicalProfile", canonicalJson}};
+    nlohmann::json receipt = {{"inputSha256", digest.data()},
+                              {"inputBytes", static_cast<std::uint64_t>(before.size())},
+                              {"canonicalProfile", canonicalJson}};
     const auto text = receipt.dump();
     ASSERT_TRUE(!text.empty() && text.size() <= 16384);
     ASSERT_TRUE(std::printf("SPARK_FPS_SAVE_DECODE %s\n", text.c_str()) > 0);

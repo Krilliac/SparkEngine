@@ -54,6 +54,8 @@ requires a real copied primary and rejects skipped decoding as evidence.
 The native decoder builds its canonical profile JSON object one string entry at
 a time. The vendored JSON API does not support implicit `std::unordered_map`
 conversion; keep the persisted profile keys and values as strings in the receipt.
+Cast its byte count to `std::uint64_t` explicitly: on macOS, `size_t` does not
+select the vendored JSON integer constructor unambiguously.
 Reflected scene rejection fixtures rebuild filtered objects and arrays instead
 of calling unsupported JSON `erase` overloads; retain every other field/entity.
 

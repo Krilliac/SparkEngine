@@ -2922,7 +2922,7 @@
 | `bytes` | function | SparkLauncher | [LauncherProcess.cpp:L535](../../SparkLauncher/src/LauncherProcess.cpp#L535) |  |
 | `bytes` | function | Tests | [TestAssetMigration.cpp:L325](../../Tests/TestAssetMigration.cpp#L325) |  |
 | `bytes` | function | Tests | [TestFBXImporter.cpp:L28](../../Tests/TestFBXImporter.cpp#L28) |  |
-| `bytes` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L60](../../Tests/TestFPSOwnedSaveDecode.cpp#L60) |  |
+| `bytes` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L61](../../Tests/TestFPSOwnedSaveDecode.cpp#L61) |  |
 | `Bytes` | function | Tests | [TestNET100TransportReal.cpp:L40](../../Tests/TestNET100TransportReal.cpp#L40) |  |
 | `Bytes` | function | Tests | [TestSecureTransportWired.cpp:L53](../../Tests/TestSecureTransportWired.cpp#L53) |  |
 | `bytes` | function | Tests | [TestSecureTransportWired.cpp:L701](../../Tests/TestSecureTransportWired.cpp#L701) |  |
@@ -7459,12 +7459,12 @@
 | `directory` | function | SparkCrashReporter | [CrashAutoIssues.cpp:L215](../../SparkCrashReporter/src/CrashAutoIssues.cpp#L215) |  |
 | `directory` | function | SparkEngine | [ModSystem.cpp:L199](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L199) |  |
 | `Directory` | function | Tests | [TestEditorStateCompatibility.cpp:L128](../../Tests/TestEditorStateCompatibility.cpp#L128) |  |
-| `directory` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L79](../../Tests/TestFPSOwnedSaveDecode.cpp#L79) |  |
+| `directory` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L80](../../Tests/TestFPSOwnedSaveDecode.cpp#L80) |  |
 | `Directory` | function | Tests | [TestMOD380RacingCompleteRaceReal.cpp:L518](../../Tests/TestMOD380RacingCompleteRaceReal.cpp#L518) |  |
 | `DirectoryNames` | function | SparkBuild | [DownloaderTests.cpp:L266](../../SparkBuild/tests/DownloaderTests.cpp#L266) |  |
 | `DirectoryNames` | function | SparkBuild | [DownloaderTests.cpp:L507](../../SparkBuild/tests/DownloaderTests.cpp#L507) |  |
 | `DirectoryNames` | function | SparkBuild | [DownloaderTests.cpp:L737](../../SparkBuild/tests/DownloaderTests.cpp#L737) |  |
-| `directoryText` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L75](../../Tests/TestFPSOwnedSaveDecode.cpp#L75) |  |
+| `directoryText` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L76](../../Tests/TestFPSOwnedSaveDecode.cpp#L76) |  |
 | `DirectStorageLoader::Cancel` | method | SparkEngine | [DirectStorageLoader.cpp:L161](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L161) |  |
 | `DirectStorageLoader::Console_GetStatus` | method | SparkEngine | [DirectStorageLoader.cpp:L394](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L394) |  |
 | `DirectStorageLoader::ExecuteLoad` | method | SparkEngine | [DirectStorageLoader.cpp:L309](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.cpp#L309) |  |
@@ -18808,7 +18808,7 @@
 | `input` | function | Tests | [TestEditorSubsystems.cpp:L1334](../../Tests/TestEditorSubsystems.cpp#L1334) |  |
 | `input` | function | Tests | [TestEditorSubsystems.cpp:L1357](../../Tests/TestEditorSubsystems.cpp#L1357) |  |
 | `input` | function | Tests | [TestExecScript.cpp:L56](../../Tests/TestExecScript.cpp#L56) |  |
-| `input` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L61](../../Tests/TestFPSOwnedSaveDecode.cpp#L61) |  |
+| `input` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L62](../../Tests/TestFPSOwnedSaveDecode.cpp#L62) |  |
 | `input` | function | Tests | [TestFileUtils.cpp:L531](../../Tests/TestFileUtils.cpp#L531) |  |
 | `input` | function | Tests | [TestGamePackager.cpp:L242](../../Tests/TestGamePackager.cpp#L242) |  |
 | `input` | function | Tests | [TestLIFE200ModuleReloadReal.cpp:L272](../../Tests/TestLIFE200ModuleReloadReal.cpp#L272) |  |
@@ -29516,7 +29516,7 @@
 | `ReadPixelRGBA8` | function | Tests | [TestRHI240OpenGLReal.cpp:L44](../../Tests/TestRHI240OpenGLReal.cpp#L44) |  |
 | `ReadPositiveId` | function | GameModules | [TFSocialSystemStore.cpp:L128](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L128) |  |
 | `ReadPrefabFile` | function | SparkEditor | [PrefabAsset.cpp:L34](../../SparkEditor/Source/Prefabs/PrefabAsset.cpp#L34) |  |
-| `ReadPrimary` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L56](../../Tests/TestFPSOwnedSaveDecode.cpp#L56) |  |
+| `ReadPrimary` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L57](../../Tests/TestFPSOwnedSaveDecode.cpp#L57) |  |
 | `ReadProjectDocumentFields` | function | SparkEditor | [ProjectDocument.cpp:L452](../../SparkEditor/Source/Core/ProjectDocument.cpp#L452) |  |
 | `ReadProjectDocumentFields` | function | SparkEditor | [ProjectDocument.h:L80](../../SparkEditor/Source/Core/ProjectDocument.h#L80) | Extract the project fields from a document CheckProjectDocument accepted. |
 | `ReadProjectDocumentFields` | function | SparkEditor | [ProjectManager.cpp:L1789](../../SparkEditor/Source/Core/ProjectManager.cpp#L1789) |  |
@@ -31914,8 +31914,8 @@
 | `RequireKeys` | function | SparkEngine | [VisualScriptGraphIO.cpp:L55](../../SparkEngine/Source/Engine/Scripting/VisualScriptGraphIO.cpp#L55) |  |
 | `RequireLavapipe` | function | Tests | [TestRHI230VulkanGoldenReal.cpp:L93](../../Tests/TestRHI230VulkanGoldenReal.cpp#L93) |  |
 | `RequireLlvmpipe` | function | Tests | [TestRHI240OpenGLGoldenReal.cpp:L96](../../Tests/TestRHI240OpenGLGoldenReal.cpp#L96) |  |
-| `RequirePlainPath` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L27](../../Tests/TestFPSOwnedSaveDecode.cpp#L27) |  |
-| `RequirePrimaryOnly` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L43](../../Tests/TestFPSOwnedSaveDecode.cpp#L43) |  |
+| `RequirePlainPath` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L28](../../Tests/TestFPSOwnedSaveDecode.cpp#L28) |  |
+| `RequirePrimaryOnly` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L44](../../Tests/TestFPSOwnedSaveDecode.cpp#L44) |  |
 | `RequiresConfirmation` | function | SparkEditor | [EditorWorkflow.h:L101](../../SparkEditor/Source/Workflow/EditorWorkflow.h#L101) | True when the workflow performs destructive work (deleting directories). |
 | `RequireSodium` | function | GameModules | [TFCrypto.cpp:L66](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L66) |  |
 | `RequireSodium` | function | SparkEngine | [PasswordHash.cpp:L41](../../SparkEngine/Source/Utils/PasswordHash.cpp#L41) |  |
@@ -34009,7 +34009,7 @@
 | `scratch` | function | Tests | [TestEditorUntrustedProject.cpp:L177](../../Tests/TestEditorUntrustedProject.cpp#L177) |  |
 | `scratch` | function | Tests | [TestEditorUntrustedProject.cpp:L200](../../Tests/TestEditorUntrustedProject.cpp#L200) |  |
 | `scratch` | function | Tests | [TestEditorUntrustedProject.cpp:L231](../../Tests/TestEditorUntrustedProject.cpp#L231) |  |
-| `scratch` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L96](../../Tests/TestFPSOwnedSaveDecode.cpp#L96) |  |
+| `scratch` | function | Tests | [TestFPSOwnedSaveDecode.cpp:L97](../../Tests/TestFPSOwnedSaveDecode.cpp#L97) |  |
 | `scratch` | function | Tests | [TestFilesystemLinks.cpp:L193](../../Tests/TestFilesystemLinks.cpp#L193) |  |
 | `scratch` | function | Tests | [TestFilesystemLinks.cpp:L229](../../Tests/TestFilesystemLinks.cpp#L229) |  |
 | `scratch` | function | Tests | [TestGoldenImageTest.cpp:L381](../../Tests/TestGoldenImageTest.cpp#L381) |  |
