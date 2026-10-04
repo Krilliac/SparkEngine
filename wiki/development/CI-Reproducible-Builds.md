@@ -51,6 +51,9 @@ game-thread state, and must leave the bound port and activation state unchanged.
 The owned save decoder's missing-fixture skip is classified in
 `Tests/test-warning-waivers.json`; its dedicated qualification runner still
 requires a real copied primary and rejects skipped decoding as evidence.
+The native decoder builds its canonical profile JSON object one string entry at
+a time. The vendored JSON API does not support implicit `std::unordered_map`
+conversion; keep the persisted profile keys and values as strings in the receipt.
 
 Qualification workflows also participate in readiness ownership validation.
 The stdlib-only workflow parser accepts literal blocks (`|` / `|-`) for multiline

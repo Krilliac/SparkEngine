@@ -102,8 +102,11 @@ TEST(FPSInputDispatch_DecodeOwnedPrimary)
     profile.WriteTo(canonical); // Existing persisted-profile schema and float precision.
     RequirePrimaryOnly(directory);
     ASSERT_TRUE(ReadPrimary(primary) == before);
+    auto canonicalJson = nlohmann::json::object();
+    for (const auto& [key, value] : canonical)
+        canonicalJson[key] = value;
     nlohmann::json receipt = {
-        {"inputSha256", digest.data()}, {"inputBytes", before.size()}, {"canonicalProfile", canonical}};
+        {"inputSha256", digest.data()}, {"inputBytes", before.size()}, {"canonicalProfile", canonicalJson}};
     const auto text = receipt.dump();
     ASSERT_TRUE(!text.empty() && text.size() <= 16384);
     ASSERT_TRUE(std::printf("SPARK_FPS_SAVE_DECODE %s\n", text.c_str()) > 0);
