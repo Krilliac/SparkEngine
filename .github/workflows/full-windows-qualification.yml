@@ -129,28 +129,28 @@ jobs:
       timeout-minutes: 5
     - name: sde
       timeout-minutes: 5
-      run: python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha
-        d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: graphics
       timeout-minutes: 10
-      run: python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT"
-        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: configure
       timeout-minutes: 15
-      run: python harness/.github/scripts/qualify-full-windows.py configure --source product --root "$env:QUAL_ROOT"
-        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py configure --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: build
       timeout-minutes: 120
-      run: python harness/.github/scripts/qualify-full-windows.py build --source product --root "$env:QUAL_ROOT"
-        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py build --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: test
       timeout-minutes: 80
-      run: python harness/.github/scripts/qualify-full-windows.py test --source product --root "$env:QUAL_ROOT"
-        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py test --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: pack
       timeout-minutes: 10
-      run: python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT"
-        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
       if: ${{ always() && env.QUAL_ROOT != '' }}
     - name: Retain bounded text proof
       if: ${{ always() && env.QUAL_ROOT != '' }}

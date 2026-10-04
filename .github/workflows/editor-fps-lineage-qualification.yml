@@ -150,8 +150,8 @@ jobs:
       timeout-minutes: 5
     - name: graphics
       timeout-minutes: 10
-      run: python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT"
-        --source-sha 56afb9d3c6f0cd73fea1db9933fe80ab44af070e
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT" --source-sha 56afb9d3c6f0cd73fea1db9933fe80ab44af070e
     - name: configure
       timeout-minutes: 15
       run: |

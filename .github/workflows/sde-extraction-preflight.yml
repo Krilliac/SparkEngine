@@ -107,8 +107,8 @@ jobs:
         @{ sourceSha=$actual.Trim(); workflowSha=$env:GITHUB_SHA; runId=$env:GITHUB_RUN_ID; runAttempt=$env:GITHUB_RUN_ATTEMPT; os=$os.Caption; osVersion=$os.Version; pythonPath=$python; pythonSha256=(Get-FileHash -LiteralPath $python -Algorithm SHA256).Hash.ToLowerInvariant(); scope='SDE setup only; no engine compilation or CPU-floor test' } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:QUAL_ROOT/host.json" -Encoding utf8
     - name: sde
       timeout-minutes: 5
-      run: python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha
-        d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
     - name: Require extracted executable and metadata
       timeout-minutes: 1
       run: |
@@ -127,8 +127,8 @@ jobs:
         @{ passed=$true; sourceSha='d90b86e42fd586a56d53f077bbca6a457200d9bd'; workflowSha=$env:GITHUB_SHA; runId=$env:GITHUB_RUN_ID; runAttempt=$env:GITHUB_RUN_ATTEMPT; sdePath=$exe.FullName; sdeBytes=$exe.Length; sdeSha256=$imageHash; verifiedArchiveSha256='74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651'; scope='setup only' } | ConvertTo-Json | Set-Content -LiteralPath "$env:QUAL_ROOT/sde-probe-result.json" -Encoding utf8
     - name: pack
       timeout-minutes: 10
-      run: python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT"
-        --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
       if: ${{ always() && env.QUAL_ROOT != '' }}
     - name: Retain bounded text proof
       if: ${{ always() && env.QUAL_ROOT != '' }}

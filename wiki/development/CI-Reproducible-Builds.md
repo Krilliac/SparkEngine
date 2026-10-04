@@ -20,6 +20,38 @@ The Windows Shipping producer and the Linux trusted verifier must compute the sa
 
 `Build Matrix Verifier` accepts only `push` and `workflow_dispatch` builds on `Working`. Its workflow trigger filters the branch and its job conditions filter those event types. Pull-request and scheduled builds remain ordinary CI evidence and must not invoke the publication verifier as if they were accepted release sources. The verifier still independently checks repository, workflow, commit, run attempt, artifact, and receipt identity before publishing a status.
 
+### Installed native qualification fixtures
+
+`.github/scripts/qualify-installed-native.py` captures `source_sha` in
+`identity.json` during its build phase. Later SDK, ABI and dependency-closure
+phases require that same source identity, qualification mode and image hashes
+before starting a process. Compiler-free fixtures in
+`Tests/Tools/test_installed_native_runner.py` must include the captured source
+identity to reach the intended host-binding, timeout and closure checks. Missing
+or changed identities remain failures; do not relax the runner to accommodate
+an incomplete fixture.
+
+Reproduce the fixture checks with:
+
+```bash
+python3 -B Tests/Tools/test_installed_native_runner.py
+```
+
+The ABI10 weather workflow's source-contract job gates its Windows native job.
+Run every source-contract step in
+`.github/workflows/installed-weather-qualification.yml` before requesting native
+evidence; CMake, Ninja and PyYAML are required for those source checks. Passing
+them qualifies the orchestration checks only. Native product results must retain
+their separately pinned product and workflow commits, and do not certify Windows
+11, physical graphics, installer signing or release readiness.
+
+Qualification workflows also participate in readiness ownership validation.
+The stdlib-only workflow parser accepts literal blocks (`|` / `|-`) for multiline
+strings; use those instead of wrapped plain or quoted scalars. When converting
+existing workflows, compare the complete parsed YAML values before and after,
+including command newlines, then check the strict parser against those values.
+Source pins, permissions, deadlines and triggers must retain their meanings.
+
 ## clang-format check (runs on every PR — job `check-format`)
 
 ```bash

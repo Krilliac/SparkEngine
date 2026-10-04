@@ -38,8 +38,8 @@ requires all authored fields and rejects unknown or runtime-only fields.
 
 The existing FPS selector uses highest priority and first-stored ties for F11
 match start and respawn. The component's reuse cooldown is distinct from the
-player's independent death timer, which remains unchanged. Radius 1 and cooldown 5
-are the component defaults and must be changed explicitly for this exact-point
+player's independent death timer, which remains unchanged. The component defaults
+`spawnRadius=1` and `respawnDelay=5` must be changed explicitly for this exact-point
 subset. Disabled/team-specific/radius/cooldown/concurrency-limited points and
 `wave_spawn` are rejected. WaveSpawner's separate jittered placement does not
 implement these component semantics. No SpawnPoint-aware cook transformation is
