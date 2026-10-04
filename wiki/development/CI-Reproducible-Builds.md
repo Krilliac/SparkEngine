@@ -59,6 +59,13 @@ existing workflows, compare the complete parsed YAML values before and after,
 including command newlines, then check the strict parser against those values.
 Source pins, permissions, deadlines and triggers must retain their meanings.
 
+The mainline Windows Release CPU-floor gate uses
+`.github/scripts/extract_sde_archive.py` after verifying the pinned Intel SDE
+archive hash. Its single streaming XZ pass avoids the native Windows tar
+extraction timeout observed in Build run `37196542008`. Keep the five-minute
+setup limit and propagate extractor failures; the below-floor process test
+remains required. Extraction measurements are printed into the job log.
+
 ## clang-format check (runs on every PR — job `check-format`)
 
 ```bash

@@ -1780,10 +1780,12 @@ jobs:
         $actualSha256 = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
         if ($actualSha256 -ne $expectedSha256) { throw "Intel SDE archive hash mismatch: $actualSha256" }
         Write-Host "Intel SDE: digest verified; extracting archive"
-        & (Join-Path $env:SystemRoot 'System32\tar.exe') -xf $archive -C $dest
+        $unpacked = Join-Path $dest 'unpacked'
+        $metadata = Join-Path $dest 'sde-extraction.json'
+        python .github/scripts/extract_sde_archive.py --archive $archive --destination $unpacked --metadata $metadata
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host "Intel SDE: extraction completed; locating executable"
-        $executables = @(Get-ChildItem -LiteralPath $dest -Recurse -File -Filter 'sde.exe')
+        $executables = @(Get-ChildItem -LiteralPath $unpacked -Recurse -File -Filter 'sde.exe')
         if ($executables.Count -ne 1) { throw "Expected one sde.exe, found $($executables.Count)" }
         Add-Content -Path $env:GITHUB_ENV -Value "SPARK_SDE_EXECUTABLE=$($executables[0].FullName.Replace('\', '/'))" -Encoding utf8
 

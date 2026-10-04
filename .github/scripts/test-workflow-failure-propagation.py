@@ -1242,13 +1242,21 @@ def sde_cpu_floor_contract_errors(workflow: str) -> list[str]:
         url = f"https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-{platform}.tar.xz"
         if url not in install_script or sha256 not in install_script:
             errors.append(f"{job_name} SDE URL or archive hash changed")
-        extraction = "tar.exe" if platform == "win" else "tar -xf"
+        extraction = "python .github/scripts/extract_sde_archive.py" if platform == "win" else "tar -xf"
         if (
             hash_command not in install_script
             or extraction not in install_script
             or install_script.index(hash_command) > install_script.index(extraction)
         ):
             errors.append(f"{job_name} does not verify SDE before extraction")
+        if platform == "win":
+            extraction_index = install_script.find(extraction)
+            if (
+                extraction_index < 0
+                or "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }" not in install_script[extraction_index:]
+                or "Get-ChildItem -LiteralPath $unpacked" not in install_script[extraction_index:]
+            ):
+                errors.append(f"{job_name} does not propagate streaming SDE extraction failure")
         if "-DSPARK_SDE_EXECUTABLE=" not in configure_script:
             errors.append(f"{job_name} does not register the SDE CTest")
         if (
@@ -2484,6 +2492,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "hash drift": job.replace(install_step, install_step.replace(archive_hash, "0" * 64), 1),
                 "disabled test": job.replace(test_step, test_step.replace("matrix.config == 'Release'", "false"), 1),
             }
+            if job_name == "build-windows-vs2022":
+                for label, original, changed in (
+                    ("extractor failure ignored", "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", ""),
+                    ("nonstreaming extractor", "python .github/scripts/extract_sde_archive.py", "tar.exe"),
+                    ("ambiguous executable search", "Get-ChildItem -LiteralPath $unpacked", "Get-ChildItem -LiteralPath $dest"),
+                ):
+                    mutations[label] = job.replace(install_step, install_step.replace(original, changed, 1), 1)
             for label, changed_job in mutations.items():
                 with self.subTest(job=job_name, mutation=label):
                     self.assertNotEqual(changed_job, job)
