@@ -3264,7 +3264,7 @@
 | `bottomUp` | function | Tests | [TestRHI240LinuxForwardPassReal.cpp:L320](../../Tests/TestRHI240LinuxForwardPassReal.cpp#L320) |  |
 | `bottomUp` | function | Tests | [TestRHI240OpenGLGoldenReal.cpp:L186](../../Tests/TestRHI240OpenGLGoldenReal.cpp#L186) |  |
 | `bound` | function | GameModules | [VisualScriptDemoRuntime.h:L154](../../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h#L154) |  |
-| `boundary` | function | Tests | [TestSceneManagerReflectedReal.cpp:L233](../../Tests/TestSceneManagerReflectedReal.cpp#L233) |  |
+| `boundary` | function | Tests | [TestSceneManagerReflectedReal.cpp:L239](../../Tests/TestSceneManagerReflectedReal.cpp#L239) |  |
 | `BoundaryHandling` | enum | SparkEditor | [LevelStreamingEnums.h:L127](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L127) | Tile boundary handling |
 | `BoundChar` | struct | GameModules | [TFOutfitSystem.h:L189](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L189) |  |
 | `BoundCharOf` | function | GameModules | [TFOutfitSystem.h:L209](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L209) |  |

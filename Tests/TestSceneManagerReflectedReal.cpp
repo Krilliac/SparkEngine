@@ -222,7 +222,13 @@ TEST(SceneManager_ReflectedGameplayRejectsUnsupportedSpawnSemantics)
     for (auto& entity : omitted["entities"])
         for (auto& component : entity["components"])
             if (component["type"] == "SpawnPointComponent")
-                component["fields"].erase("spawnRadius");
+            {
+                auto fields = nlohmann::json::object();
+                for (const auto& [key, value] : component["fields"].items())
+                    if (key != "spawnRadius")
+                        fields[key] = value;
+                component["fields"] = fields;
+            }
     fixture.ExpectRejectedWithRollback(omitted.dump());
 }
 
@@ -239,17 +245,17 @@ TEST(SceneManager_ReflectedGameplayRejectsSpawnTruncationAndMeshlessScene)
     fixture.ExpectRejectedWithRollback(fixture.WithSpawns(33));
     fixture.Write(fixture.original);
     auto document = nlohmann::json::parse(fixture.WithSpawns(1));
-    auto& entities = document["entities"];
-    for (auto it = entities.begin(); it != entities.end();)
+    auto meshlessEntities = nlohmann::json::array();
+    for (const auto& entity : document["entities"])
     {
         bool mesh = false;
-        for (const auto& component : (*it)["components"])
+        for (const auto& component : entity["components"])
             mesh = mesh || component["type"] == "MeshRenderer";
-        if (mesh)
-            it = entities.erase(it);
-        else
-            ++it;
+        if (!mesh)
+            meshlessEntities.push_back(entity);
     }
+    ASSERT_TRUE(meshlessEntities.size() < document["entities"].size());
+    document["entities"] = meshlessEntities;
     fixture.ExpectRejectedWithRollback(document.dump());
 }
 
