@@ -21,7 +21,9 @@ namespace SparkGameFPS
 
         bool Initialize()
         {
-            if (!OnGameThread() || m_initialized)
+            if (!OnGameThread())
+                return false;
+            if (m_initialized)
                 return m_active;
 
             m_initialized = true;
@@ -45,7 +47,7 @@ namespace SparkGameFPS
             m_initialized = false;
         }
 
-        bool IsActive() const { return m_active; }
+        bool IsActive() const { return OnGameThread() && m_active; }
 
       private:
         bool OnGameThread() const { return std::this_thread::get_id() == m_gameThread; }

@@ -45,6 +45,13 @@ them qualifies the orchestration checks only. Native product results must retain
 their separately pinned product and workflow commits, and do not certify Windows
 11, physical graphics, installer signing or release readiness.
 
+`FPSWeatherIntegration_RejectsWrongThreadWithoutMutation` covers both inactive
+and active weather integration. Worker calls must return refusal before reading
+game-thread state, and must leave the bound port and activation state unchanged.
+The owned save decoder's missing-fixture skip is classified in
+`Tests/test-warning-waivers.json`; its dedicated qualification runner still
+requires a real copied primary and rejects skipped decoding as evidence.
+
 Qualification workflows also participate in readiness ownership validation.
 The stdlib-only workflow parser accepts literal blocks (`|` / `|-`) for multiline
 strings; use those instead of wrapped plain or quoted scalars. When converting

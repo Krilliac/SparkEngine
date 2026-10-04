@@ -138,4 +138,28 @@ TEST(FPSWeatherIntegration_RejectsWrongThreadWithoutMutation)
 
     EXPECT_FALSE(initializedOnWorker);
     EXPECT_EQ(port.calls, 0);
+
+    ASSERT_TRUE(integration.Initialize());
+    FakeWeatherPort replacement;
+    bool activeOnWorker = true;
+    bool weatherSetOnWorker = true;
+    std::thread activeWorker(
+        [&]
+        {
+            initializedOnWorker = integration.Initialize();
+            activeOnWorker = integration.IsActive();
+            weatherSetOnWorker = integration.SetWeather(SparkGameFPS::WeatherPreset::Rain, 0.5f, 1.0f);
+            integration.Bind(&replacement);
+            integration.Clear();
+        });
+    activeWorker.join();
+
+    EXPECT_FALSE(initializedOnWorker);
+    EXPECT_FALSE(activeOnWorker);
+    EXPECT_FALSE(weatherSetOnWorker);
+    EXPECT_TRUE(integration.IsActive());
+    EXPECT_EQ(port.calls, 1);
+    EXPECT_TRUE(integration.SetWeather(SparkGameFPS::WeatherPreset::Rain, 0.5f, 1.0f));
+    EXPECT_EQ(port.calls, 2);
+    EXPECT_EQ(replacement.calls, 0);
 }
