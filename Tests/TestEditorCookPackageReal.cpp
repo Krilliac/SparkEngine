@@ -194,17 +194,26 @@ namespace
         HostRun RunPackagedScene() const
         {
             HostRun run;
-            Spark::Process::Builder builder(Utf8(m_realFPS ? m_package / "Crate Game.exe" :
-                                                           m_package / "ScenePreview" / kScenePreviewHost));
+            Spark::Process::Builder builder(
+                Utf8(m_realFPS ? m_package / "Crate Game.exe" : m_package / "ScenePreview" / kScenePreviewHost));
             if (m_realFPS)
-                builder.Arg("-game").Arg(Utf8(m_package / m_module.filename())).Arg("-require-game")
-                    .Arg("-threads").Arg("2").Arg("-window-size").Arg("640x360");
+                builder.Arg("-game")
+                    .Arg(Utf8(m_package / m_module.filename()))
+                    .Arg("-require-game")
+                    .Arg("-threads")
+                    .Arg("2")
+                    .Arg("-window-size")
+                    .Arg("640x360");
             else
                 builder.Arg("-headless").Arg("-scene").Arg("Scenes/Startup.sparkscene");
-            auto launched = builder.Arg("-test-frames").Arg(std::to_string(m_realFPS ? 30 : kTestFrames))
+            auto launched = builder.Arg("-test-frames")
+                                .Arg(std::to_string(m_realFPS ? 30 : kTestFrames))
                                 .Arg("-no-subprocess")
                                 .WorkingDirectory(Utf8(m_package))
-                                .CaptureStdout().MergeStderrIntoStdout().NoWindow().Launch();
+                                .CaptureStdout()
+                                .MergeStderrIntoStdout()
+                                .NoWindow()
+                                .Launch();
             const auto finish = [&](HostRun result)
             {
                 if (m_realFPS)
@@ -506,7 +515,8 @@ TEST(EditorFPSLineage_MalformedStartupFailsClosed)
     const HostRun run = scenario.RunPackagedScene();
     EXPECT_TRUE(run.exitCode > 0);
     EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(0));
-    EXPECT_STR_CONTAINS(run.output, "Reflected gameplay scene rejected: primary scene is invalid or has unsupported reflected fields");
+    EXPECT_STR_CONTAINS(
+        run.output, "Reflected gameplay scene rejected: primary scene is invalid or has unsupported reflected fields");
     EXPECT_STR_CONTAINS(run.output, "FPS packaged startup rejected: selected reflected scene failed to load");
 }
 

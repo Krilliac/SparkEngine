@@ -1534,7 +1534,7 @@
 | `ASPlaySound` | function | SparkEngine | [AngelScriptEngine.h:L872](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L872) |  |
 | `ASPrint` | function | SparkEngine | [AngelScriptEngine.cpp:L63](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp#L63) |  |
 | `ASPrint` | function | SparkEngine | [AngelScriptEngine.h:L738](../../SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h#L738) | Print a message to the debug console (callable from AngelScript as `print()`) |
-| `Assemble` | function | Tests | [TestEditorCookPackageReal.cpp:L396](../../Tests/TestEditorCookPackageReal.cpp#L396) |  |
+| `Assemble` | function | Tests | [TestEditorCookPackageReal.cpp:L405](../../Tests/TestEditorCookPackageReal.cpp#L405) |  |
 | `Assemble` | function | Tests | [TestEditorSubsystems.cpp:L2460](../../Tests/TestEditorSubsystems.cpp#L2460) |  |
 | `AssembleNativePackage` | function | SparkEditor | [BuildPipeline.h:L145](../../SparkEditor/Source/Panels/BuildPipeline.h#L145) |  |
 | `AssembleNativePackageContents` | function | SparkEditor | [BuildPipeline.h:L153](../../SparkEditor/Source/Panels/BuildPipeline.h#L153) |  |
@@ -2036,7 +2036,7 @@
 | `authenticator` | function | Tests | [TestGatewaySecurity.cpp:L333](../../Tests/TestGatewaySecurity.cpp#L333) |  |
 | `authenticator` | function | Tests | [TestGatewaySecurity.cpp:L358](../../Tests/TestGatewaySecurity.cpp#L358) |  |
 | `AuthErrText` | function | GameModules | [TFLoginFlow.cpp:L31](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoginFlow.cpp#L31) |  |
-| `Author` | function | Tests | [TestEditorCookPackageReal.cpp:L283](../../Tests/TestEditorCookPackageReal.cpp#L283) |  |
+| `Author` | function | Tests | [TestEditorCookPackageReal.cpp:L292](../../Tests/TestEditorCookPackageReal.cpp#L292) |  |
 | `AuthorCookAndPackage` | function | Tests | [TestEditorCookPackageReal.cpp:L165](../../Tests/TestEditorCookPackageReal.cpp#L165) |  |
 | `authority` | function | Tests | [TestTF120Travel.cpp:L362](../../Tests/TestTF120Travel.cpp#L362) |  |
 | `authority` | function | Tests | [TestTF120Travel.cpp:L430](../../Tests/TestTF120Travel.cpp#L430) |  |
@@ -5510,7 +5510,7 @@
 | `ConvertVertexFormat` | function | SparkEngine | [D3D12Device.h:L224](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h#L224) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [MetalDevice.h:L525](../../SparkEngine/Source/Graphics/RHI/Metal/MetalDevice.h#L525) |  |
 | `ConvertVertexFormat` | function | SparkEngine | [VulkanDevice.h:L528](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.h#L528) |  |
-| `Cook` | function | Tests | [TestEditorCookPackageReal.cpp:L372](../../Tests/TestEditorCookPackageReal.cpp#L372) |  |
+| `Cook` | function | Tests | [TestEditorCookPackageReal.cpp:L381](../../Tests/TestEditorCookPackageReal.cpp#L381) |  |
 | `Cook` | function | Tests | [TestEditorUntrustedProject.cpp:L91](../../Tests/TestEditorUntrustedProject.cpp#L91) |  |
 | `CookAssets` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L1309](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1309) |  |
 | `cookColor` | function | SparkEditor | [DedicatedServerPanel.cpp:L486](../../SparkEditor/Source/Panels/DedicatedServerPanel.cpp#L486) |  |
@@ -9227,7 +9227,7 @@
 | `ExpectFailureReported` | function | Tests | [TestOnlineServices.cpp:L226](../../Tests/TestOnlineServices.cpp#L226) |  |
 | `ExpectFixtureRegistrations` | function | Tests | [TestLIFE200ModuleReloadLoopReal.cpp:L142](../../Tests/TestLIFE200ModuleReloadLoopReal.cpp#L142) |  |
 | `ExpectIndexedInstanced` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L889](../../Tests/TestRHI225D3D12ParityReal.cpp#L889) |  |
-| `ExpectInstalledHost` | function | Tests | [TestEditorCookPackageReal.cpp:L256](../../Tests/TestEditorCookPackageReal.cpp#L256) |  |
+| `ExpectInstalledHost` | function | Tests | [TestEditorCookPackageReal.cpp:L265](../../Tests/TestEditorCookPackageReal.cpp#L265) |  |
 | `ExpectLatchedFailure` | function | Tests | [TestLifecycleCompositionRootFailure.cpp:L156](../../Tests/TestLifecycleCompositionRootFailure.cpp#L156) |  |
 | `ExpectMatricesNear` | function | Tests | [TestQuaternionStubsReal.cpp:L67](../../Tests/TestQuaternionStubsReal.cpp#L67) |  |
 | `ExpectMonsterActorsMatch` | function | Tests | [TestMOD330ARPGWorldActors.cpp:L147](../../Tests/TestMOD330ARPGWorldActors.cpp#L147) |  |
@@ -9249,7 +9249,7 @@
 | `ExpectSameItem` | function | Tests | [TestMOD330ARPGDungeonReal.cpp:L131](../../Tests/TestMOD330ARPGDungeonReal.cpp#L131) |  |
 | `ExpectSameMonster` | function | Tests | [TestMOD330ARPGDungeonReal.cpp:L116](../../Tests/TestMOD330ARPGDungeonReal.cpp#L116) |  |
 | `ExpectSameView` | function | Tests | [TestFPSLANLoopback.cpp:L289](../../Tests/TestFPSLANLoopback.cpp#L289) |  |
-| `ExpectSceneRecords` | function | Tests | [TestEditorCookPackageReal.cpp:L441](../../Tests/TestEditorCookPackageReal.cpp#L441) |  |
+| `ExpectSceneRecords` | function | Tests | [TestEditorCookPackageReal.cpp:L450](../../Tests/TestEditorCookPackageReal.cpp#L450) |  |
 | `ExpectShippedBloomExtract` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L1044](../../Tests/TestRHI225D3D12ParityReal.cpp#L1044) |  |
 | `ExpectSolidTriangle` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L683](../../Tests/TestRHI225D3D12ParityReal.cpp#L683) |  |
 | `ExpectStderrRestored` | function | Tests | [TestSparkError.cpp:L150](../../Tests/TestSparkError.cpp#L150) |  |
@@ -10368,10 +10368,10 @@
 | `Finish` | function | SparkCrashReporter | [CrashReporterApp.cpp:L151](../../SparkCrashReporter/src/CrashReporterApp.cpp#L151) |  |
 | `Finish` | function | SparkCrashReporter | [CrashReporterApp.cpp:L163](../../SparkCrashReporter/src/CrashReporterApp.cpp#L163) |  |
 | `Finish` | function | Tests | [GLTFSkinningReference.h:L103](../../Tests/GLTFSkinningReference.h#L103) |  |
-| `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L220](../../Tests/TestEditorCookPackageReal.cpp#L220) |  |
-| `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L234](../../Tests/TestEditorCookPackageReal.cpp#L234) |  |
+| `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L229](../../Tests/TestEditorCookPackageReal.cpp#L229) |  |
 | `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L243](../../Tests/TestEditorCookPackageReal.cpp#L243) |  |
-| `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L250](../../Tests/TestEditorCookPackageReal.cpp#L250) |  |
+| `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L252](../../Tests/TestEditorCookPackageReal.cpp#L252) |  |
+| `finish` | function | Tests | [TestEditorCookPackageReal.cpp:L259](../../Tests/TestEditorCookPackageReal.cpp#L259) |  |
 | `FinishAclFixtureSetup` | function | Tests | [TestGatewaySecurity.cpp:L61](../../Tests/TestGatewaySecurity.cpp#L61) |  |
 | `FinishAndPark` | function | Tests | [TestMOD380RacingCompleteRaceReal.cpp:L588](../../Tests/TestMOD380RacingCompleteRaceReal.cpp#L588) |  |
 | `FinishConvergedRound` | function | Tests | [TestFPSLANLoopback.cpp:L351](../../Tests/TestFPSLANLoopback.cpp#L351) |  |
@@ -26302,7 +26302,7 @@
 | `PackageCompiledGraphs` | function | Tests | [TestENG200VisualScriptRuntimeReal.cpp:L128](../../Tests/TestENG200VisualScriptRuntimeReal.cpp#L128) |  |
 | `packageContext` | function | SparkLauncher | [LauncherProcess.cpp:L343](../../SparkLauncher/src/LauncherProcess.cpp#L343) |  |
 | `PackageLegacy` | function | SparkEngine | [GamePackager.h:L308](../../SparkEngine/Source/Engine/Build/GamePackager.h#L308) | Package the legacy build-tree layout through this canonical owner. |
-| `PackageSettings` | function | Tests | [TestEditorCookPackageReal.cpp:L422](../../Tests/TestEditorCookPackageReal.cpp#L422) |  |
+| `PackageSettings` | function | Tests | [TestEditorCookPackageReal.cpp:L431](../../Tests/TestEditorCookPackageReal.cpp#L431) |  |
 | `PackageSupportsConfiguration` | function | SparkEditor | [BuildPipeline.cpp:L137](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L137) |  |
 | `PackageTestReadText` | function | Tests | [TestEditorSubsystems.cpp:L2397](../../Tests/TestEditorSubsystems.cpp#L2397) |  |
 | `PackageTestUtf8` | function | Tests | [TestEditorSubsystems.cpp:L2391](../../Tests/TestEditorSubsystems.cpp#L2391) |  |
@@ -33728,12 +33728,12 @@
 | `ScanWithinLimits` | function | SparkEngine | [JsonUtils.h:L387](../../SparkEngine/Source/Utils/JsonUtils.h#L387) |  |
 | `ScatterLight` | function | SparkEngine | [FroxelVolumetricFog.h:L154](../../SparkEngine/Source/Graphics/FroxelVolumetricFog.h#L154) | Pass 2: Evaluate light scattering per froxel |
 | `scenario` | function | Tests | [assets.cpp:L14](../../Tests/PackageSmoke/FPSProgression/assets.cpp#L14) |  |
-| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L467](../../Tests/TestEditorCookPackageReal.cpp#L467) |  |
-| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L474](../../Tests/TestEditorCookPackageReal.cpp#L474) |  |
-| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L484](../../Tests/TestEditorCookPackageReal.cpp#L484) |  |
-| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L501](../../Tests/TestEditorCookPackageReal.cpp#L501) |  |
-| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L515](../../Tests/TestEditorCookPackageReal.cpp#L515) |  |
-| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L527](../../Tests/TestEditorCookPackageReal.cpp#L527) |  |
+| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L476](../../Tests/TestEditorCookPackageReal.cpp#L476) |  |
+| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L483](../../Tests/TestEditorCookPackageReal.cpp#L483) |  |
+| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L493](../../Tests/TestEditorCookPackageReal.cpp#L493) |  |
+| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L510](../../Tests/TestEditorCookPackageReal.cpp#L510) |  |
+| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L525](../../Tests/TestEditorCookPackageReal.cpp#L525) |  |
+| `scenario` | function | Tests | [TestEditorCookPackageReal.cpp:L537](../../Tests/TestEditorCookPackageReal.cpp#L537) |  |
 | `scene` | function | GameModules | [HeadlessArena.cpp:L39](../../GameModules/SparkGameFPS/Source/Core/HeadlessArena.cpp#L39) |  |
 | `scene` | function | Tests | [TestAssetManifestReal.cpp:L259](../../Tests/TestAssetManifestReal.cpp#L259) |  |
 | `scene` | function | Tests | [TestMOD310FPSSceneReloadRespawnReal.cpp:L73](../../Tests/TestMOD310FPSSceneReloadRespawnReal.cpp#L73) |  |
@@ -44217,8 +44217,8 @@
 | `Utf8` | function | Tests | [TF120PeerProcess.h:L123](../../Tests/TF120PeerProcess.h#L123) |  |
 | `Utf8` | function | Tests | [TestDocumentInterruptionReal.cpp:L114](../../Tests/TestDocumentInterruptionReal.cpp#L114) |  |
 | `Utf8` | function | Tests | [TestEditorCookPackageReal.cpp:L102](../../Tests/TestEditorCookPackageReal.cpp#L102) |  |
-| `Utf8` | function | Tests | [TestEditorCookPackageReal.cpp:L269](../../Tests/TestEditorCookPackageReal.cpp#L269) |  |
-| `Utf8` | function | Tests | [TestEditorCookPackageReal.cpp:L276](../../Tests/TestEditorCookPackageReal.cpp#L276) |  |
+| `Utf8` | function | Tests | [TestEditorCookPackageReal.cpp:L278](../../Tests/TestEditorCookPackageReal.cpp#L278) |  |
+| `Utf8` | function | Tests | [TestEditorCookPackageReal.cpp:L285](../../Tests/TestEditorCookPackageReal.cpp#L285) |  |
 | `Utf8` | function | Tests | [TestEditorStateCompatibility.cpp:L48](../../Tests/TestEditorStateCompatibility.cpp#L48) |  |
 | `Utf8` | function | Tests | [TestEditorUntrustedProject.cpp:L67](../../Tests/TestEditorUntrustedProject.cpp#L67) |  |
 | `Utf8` | function | Tests | [TestModuleDiscovery.cpp:L84](../../Tests/TestModuleDiscovery.cpp#L84) |  |
