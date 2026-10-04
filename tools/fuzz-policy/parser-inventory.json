@@ -325,6 +325,22 @@
       }
     },
     {
+      "id": "reflected-gameplay-scene",
+      "description": "Reflected editor scene primary-byte reader and transactional gameplay scene adapter.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEngine/Source/SceneManager/SceneManagerReflected.cpp"
+      ],
+      "formats": [
+        ".sparkscene"
+      ],
+      "status": "blocked",
+      "blocker": {
+        "reason": "No production-entry-point fuzz harness and bounded corpus exercise SceneManager::LoadReflected, including its second JSON parse, component restrictions, confined assets, and gameplay adaptation. Existing scene-serializer and scene-manager-text targets do not execute this adapter.",
+        "ticket": "SEC-120"
+      }
+    },
+    {
       "id": "scene-manager-text",
       "description": "SceneManager versioned text, INI and legacy object-line scene readers.",
       "trust_boundary": "untrusted-file",

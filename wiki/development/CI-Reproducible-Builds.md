@@ -66,6 +66,13 @@ extraction timeout observed in Build run `37196542008`. Keep the five-minute
 setup limit and propagate extractor failures; the below-floor process test
 remains required. Extraction measurements are printed into the job log.
 
+The fuzz-policy structural gate requires every detected parser to have an
+accurate classification. `SceneManagerReflected.cpp` owns a second JSON read
+and gameplay adaptation beyond `DeserializeInto`; neither the reflected-world
+nor text-reader harness executes it. Its `reflected-gameplay-scene` inventory
+entry therefore remains blocked under SEC-120. A structural pass does not
+prove this adapter is fuzz covered or close the release gate.
+
 ## clang-format check (runs on every PR — job `check-format`)
 
 ```bash

@@ -9,11 +9,18 @@
 SEC-120 remains open and release-blocking. Production fuzz targets and bounded seed
 corpora cover some inventoried parsers. The current target and corpus set is recorded in
 `tools/fuzz-policy/parser-inventory.json` and `tools/fuzz-policy/corpus-manifest.json`.
-The current structural snapshot has 137 inventoried parsers: 58 fuzzed, 79 blocked,
+The current structural snapshot has 138 inventoried parsers: 74 fuzzed, 64 blocked,
 zero deferred candidates and 120 OD-21 exemptions. These counts are generated in
-`docs/sec120-fuzz-policy-check.json`; 79 missing harnesses keep closure open.
+`docs/sec120-fuzz-policy-check.json`; 64 missing harnesses keep closure open.
 Exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
 crash-free-duration evidence remain absent.
+
+The reflected gameplay adapter (`SceneManagerReflected.cpp`) is a separate
+untrusted-file parser owned by SEC-120. It reparses validated scene bytes and
+applies gameplay component, asset, camera and spawn restrictions. Existing
+reflected-world and text-reader fuzz targets do not execute `LoadReflected`,
+so this parser remains blocked until its own production-bound harness and
+bounded corpus exist.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
 Read its generated inventory, corpus, exemption, and blocker metrics for the current

@@ -385,7 +385,7 @@
         "Required fuzz smoke is deterministic and blocking"
       ],
       "acceptanceStatus": [
-        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "74 of 137 inventoried parsers have libFuzzer targets with seed corpora; 63 remain blocked. All registered targets require fatal UBSan at compile and link. Batch 3 adds eight editor and eight engine/tool targets; editor layout and window-layout substitute for binary-scene and crash-state. Linux sanitizer smoke, campaigns and exact-commit CI remain unverified.", "evidence": ["docs/sec120-fuzz-policy-check.json", "tools/fuzz-policy/build_binding.py", "FuzzerTests/CMakeLists.txt"]},
+        {"criterionDigest": "sha256:cd03931e2734", "state": "unmet", "note": "74 of 138 parsers have libFuzzer targets and bounded corpora; 64 remain blocked. The reflected gameplay adapter has no harness for its second JSON parse and component/asset checks; DeserializeInto and text-reader harnesses do not execute LoadReflected. All targets require fatal UBSan. Hosted sanitizer evidence, campaigns, and closure remain unverified.", "evidence": ["docs/sec120-fuzz-policy-check.json", "tools/fuzz-policy/build_binding.py", "FuzzerTests/CMakeLists.txt"]},
         {
           "criterionDigest": "sha256:f3d43da4661a",
           "state": "implemented",

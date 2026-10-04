@@ -1649,7 +1649,7 @@ Progress: 2 of 3 implemented, 0 evidenced at an exact commit.
 
 1. **[unmet]** Malformed input cannot cause crash, OOB, path escape, integer overflow, or unbounded allocation/time
    - Evidence: `docs/sec120-fuzz-policy-check.json`, `tools/fuzz-policy/build_binding.py`, `FuzzerTests/CMakeLists.txt`
-   - 74 of 137 inventoried parsers have libFuzzer targets with seed corpora; 63 remain blocked. All registered targets require fatal UBSan at compile and link. Batch 3 adds eight editor and eight engine/tool targets; editor layout and window-layout substitute for binary-scene and crash-state. Linux sanitizer smoke, campaigns and exact-commit CI remain unverified.
+   - 74 of 138 parsers have libFuzzer targets and bounded corpora; 64 remain blocked. The reflected gameplay adapter has no harness for its second JSON parse and component/asset checks; DeserializeInto and text-reader harnesses do not execute LoadReflected. All targets require fatal UBSan. Hosted sanitizer evidence, campaigns, and closure remain unverified.
 2. **[implemented]** Every found issue lands with a minimized regression fixture
    - Evidence: `tools/fuzz-policy/corpus_manifest.py`, `tools/fuzz-policy/check_fuzz_policy.py`, `tools/fuzz-policy/import_regression.py`, `tools/fuzz-policy/run_campaign.py`, `FuzzerTests/policy/test_fuzz_policy.py`, `FuzzerTests/policy/test_fuzz_campaign.py`, `.github/workflows/fuzz-scheduled.yml`
    - The gate requires each regression seed, guard and source-touching fixed_commit. Scheduled default time now scales with target count. Imports are not the only intake path; review and smoke records can be added manually. Historical minimization and guard RED proof remain unverified. Empty input lacks an approved regression record type.
