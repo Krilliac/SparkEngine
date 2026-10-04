@@ -97,7 +97,7 @@ static bool LoadGameModulesLinux(ModuleManager& manager, int argc, char* argv[])
         std::error_code error;
         if (!std::filesystem::is_regular_file(std::filesystem::u8path(*module), error) || error)
         {
-            console.LogError("Explicit game module not found: " + *module);
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Explicit game module not found: %s", module->c_str());
             return false;
         }
         return manager.LoadModule(*module);

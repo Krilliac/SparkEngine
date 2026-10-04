@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 347305 |
+| **SparkEngine/Source** | 347347 |
 | **SparkEditor/Source** | 106229 |
-| **GameModules** | 164025 |
+| **GameModules** | 164092 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3231 |
-| **Tests** | 277115 |
+| **Tests** | 277301 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~934831** |
+| **Total C++ (excl. ThirdParty)** | **~935117** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1249 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1992 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1250 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1993 |
 | HLSL shader files | 44 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 740 |
+| Test-bearing implementation files (.cpp/.mm) | 741 |
 | Wiki pages (.md) | 206 |
 
 ### Largest Top-Level Source Section
@@ -44,9 +44,9 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 125930 | 36.2% |
-| Engine (all subsystems) | 100708 | 28.9% |
+| Engine (all subsystems) | 100749 | 29.0% |
 | Utils | 49400 | 14.2% |
-| Core | 33578 | 9.6% |
+| Core | 33579 | 9.6% |
 | Physics | 11142 | 3.2% |
 | Audio | 6961 | 2.0% |
 | Input | 3951 | 1.1% |
@@ -63,7 +63,7 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | AI | 13692 |
 | ECS | 8814 |
 | Gameplay | 8285 |
-| Scripting | 8148 |
+| Scripting | 8189 |
 | Animation | 6959 |
 | SaveSystem | 4348 |
 | UI | 2711 |
@@ -110,8 +110,8 @@ It does not measure registration, runtime use, support, or readiness.
 
 | Metric | Count |
 |--------|------:|
-| Test files | 740 |
-| TEST() definitions | 8543 |
+| Test files | 741 |
+| TEST() definitions | 8551 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

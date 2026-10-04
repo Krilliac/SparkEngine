@@ -146,12 +146,25 @@ namespace Spark::Scripting::Detail
 
         bool m_debugMode;
         std::vector<std::string>& m_errors;
-        std::unordered_map<uint32_t, const ScriptNode*> m_nodes;
+        struct IndexedNode
+        {
+            const ScriptNode* node;
+            bool onPath = false;
+        };
+        struct NodeTopology
+        {
+            std::vector<uint32_t> execPins;
+            bool hasDataInputs = false;
+        };
+        std::unordered_map<uint32_t, IndexedNode> m_nodes;
+        /// Immutable per-node metadata; exact pointers preserve duplicate-ID pin semantics.
+        std::unordered_map<const ScriptNode*, NodeTopology> m_topology;
         std::unordered_map<uint32_t, std::vector<const ScriptConnection*>> m_outgoing;
         std::unordered_map<uint32_t, std::vector<const ScriptConnection*>> m_incoming;
         EmitBudget& m_budget;
-        std::unordered_set<uint32_t> m_onPath; ///< Nodes on the chain being emitted (cycle guard)
-        size_t m_chainDepth = 0;               ///< Execution chains currently being emitted (nesting depth)
+        /// One reusable active path, with a suffix owned by each nested chain.
+        std::vector<uint32_t> m_activePath;
+        size_t m_chainDepth = 0; ///< Execution chains currently being emitted (nesting depth)
     };
 
 } // namespace Spark::Scripting::Detail

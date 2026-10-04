@@ -96,11 +96,11 @@ SparkEngine is licensed under the [Spark Open License](https://github.com/Krilli
 <!-- AUTO:stats -->
 | Metric | Count |
 |--------|-------|
-| Header files | 1098 |
+| Header files | 1099 |
 | Struct declarations in 17 component headers | 81 |
 | Engine System Classes | 76 |
 | `*Panel.h` class inventory | 64 |
-| Test-bearing `.cpp`/`.mm` files | 741 |
-| Source-level test definitions | 8543 |
+| Test-bearing `.cpp`/`.mm` files | 742 |
+| Source-level test definitions | 8551 |
 | Wiki pages | 206 |
 <!-- /AUTO:stats -->

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -182,7 +183,8 @@ def parsed(role: str, self_id: int, pawns: dict, **kwargs) -> multiclient.Observ
 
 
 def scripted_run(scenario: multiclient.Scenario, states: list[dict], client_ids: list[tuple[int | None, ...]],
-                 server_extra: list[str] | None = None) -> tuple[multiclient.RoleLog, list[multiclient.RoleLog]]:
+                 server_extra: list[str] | None = None, server_runtime: str = "",
+                 client_runtime: tuple[str, ...] = ()) -> tuple[multiclient.RoleLog, list[multiclient.RoleLog]]:
     """Audits for @p scenario where the server shows states[i] around checkpoint i.
 
     states[i]: keyword arguments for observation() (pawns, regions, vehicles,
@@ -204,7 +206,8 @@ def scripted_run(scenario: multiclient.Scenario, states: list[dict], client_ids:
         at += multiclient.SERVER_OBSERVE_INTERVAL_S
         frame += 15
     lines += server_extra or []
-    server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"))
+    server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"),
+                                 runtime_text=server_runtime)
 
     clients = []
     for number, faction in enumerate(scenario.client_factions):
@@ -214,7 +217,7 @@ def scripted_run(scenario: multiclient.Scenario, states: list[dict], client_ids:
             views.append(None if self_id is None else observation("client", self_id, **state))
         text = client_audit(0, views, scenario=scenario)
         clients.append(multiclient.RoleLog(f"client{number + 1}", 0, CLIENT_ANCHOR, multiclient.parse_audit(text),
-                                           faction))
+                                           faction, client_runtime[number] if number < len(client_runtime) else ""))
     return server, clients
 
 
@@ -242,19 +245,26 @@ COMBAT_IDS = [(2, 1), (2, 1), (2, 1), (2, 1)]
 
 
 def forged_lines(kinds: tuple[str, ...], forged: int, player: int = 2) -> list[str]:
-    lines = entry(2000, 40.0, "tf_cheat_stats",
-                  ["    > [TF] anti-cheat violations (1 player):", f"  p{player}  moveClamps=0 (spikes=0)  "
-                   f"fireRateRejects=0  fireOriginRejects=0  inputRateRejects=0  forged={forged}"])
-    for index, kind in enumerate(kinds):
-        lines += entry(1000 + index, 30.0 + index, "tf_observe",
-                       [f"    > [Game] [TF-AUDIT] forged-state kind={kind} player={player} total={index + 1}"])
-    return lines
+    # Real command output after session cleanup contains the durable summary,
+    # not asynchronous Logger messages or the removed player's live stats.
+    return entry(2000, 52.0, "tf_cheat_stats", ["    > [TF] anti-cheat violations (0 players):",
+                 f"    >   forged-state audit: {forged} records, latest kind={kinds[-1]} player={player}"])
+
+
+def forged_runtime(kinds: tuple[str, ...], player: int = 2) -> str:
+    return "\n".join([*(f"[Game] [TF-AUDIT] forged-state kind={kind} player={player} total={index + 1}"
+                         for index, kind in enumerate(kinds)),
+                      f"[Game] [TF-anticheat] player {player} crossed the kick threshold (violation score 12) -- disconnecting"])
 
 
 def forged_states(saved: str = multiclient.FORGED_LEGAL_PRIMARY) -> list[dict]:
     world = {2: pawn(1, 450, SANCTUARY_PAD), 1: pawn(2, 450, (344.0, 24.0, 3744.0))}
     return [{"pawns": world, "players": {2: (multiclient.FORGED_LEGAL_PRIMARY, 0, 1, 0)}},
-            {"pawns": world, "players": {2: (saved, 0, 1, 0)}}]
+            {"pawns": world, "players": {2: (saved, 0, 1, 0)}},
+            {"pawns": {1: world[1]}}]
+
+
+FORGED_IDS = [(2, 1), (2, 1), (None, 1)]
 
 
 def reconnect_states(before: tuple = (multiclient.RECONNECT_LEGAL_PRIMARY, 12, 1, 0),
@@ -298,9 +308,10 @@ def territory_states(owners: tuple[int, ...] = multiclient.TERRITORY_OWNERS) -> 
     return [{"pawns": world, "regions": {**DEFAULT_REGIONS, multiclient.TERRITORY_REGION: owner}} for owner in owners]
 
 
-def run_scenario(name: str, states: list[dict], ids: list[tuple], server_extra: list[str] | None = None) -> dict:
+def run_scenario(name: str, states: list[dict], ids: list[tuple], server_extra: list[str] | None = None,
+                 server_runtime: str = "", client_runtime: tuple[str, ...] = ()) -> dict:
     scenario = multiclient.SCENARIOS[name]
-    server, clients = scripted_run(scenario, states, ids, server_extra)
+    server, clients = scripted_run(scenario, states, ids, server_extra, server_runtime, client_runtime)
     return multiclient.evaluate(scenario, server, clients)
 
 
@@ -370,8 +381,10 @@ class ParserTests(unittest.TestCase):
 
     def test_cheat_stats_and_audit_lines_parse(self) -> None:
         entries = multiclient.parse_audit("\n".join(forged_lines(("loadout-ineligible",), 1)) + "\n")
-        self.assertEqual(multiclient.cheat_stats_snapshots(entries), [{2: 1}])
-        self.assertEqual(multiclient.forged_audit_records(entries), {("loadout-ineligible", 2)})
+        self.assertEqual(multiclient.cheat_stats_snapshots(entries), [{}])
+        self.assertEqual(multiclient.forged_audit_records(entries), set())
+        self.assertEqual(multiclient.forged_audit_records(entries, forged_runtime(("loadout-ineligible",))),
+                         {("loadout-ineligible", 2)})
 
 
 class ComparatorTests(unittest.TestCase):
@@ -483,6 +496,19 @@ class ComparatorTests(unittest.TestCase):
 
 
 class ScheduleTests(unittest.TestCase):
+    def test_forged_audit_is_after_final_probe_at_both_admitted_lag_extremes(self) -> None:
+        base = multiclient.SCENARIOS["forged_state"]
+        impairment = multiclient.Impairment.parse("80,20,0.03,2,3", 17)
+        for scenario in (base, multiclient.impaired(base, impairment)):
+            self.assertEqual(multiclient.schedule_violations(scenario), [])
+            last_probe = max(at for at, _ in multiclient.timed_client_steps(scenario, 0))
+            events = multiclient.server_step_times(scenario.server_steps[0])
+            self.assertTrue(events)
+            for lag in (multiclient.CLIENT_LAG_MIN_S, multiclient.CLIENT_LAG_MAX_S):
+                with self.subTest(impaired=scenario is not base, lag=lag):
+                    self.assertTrue(all(at - lag > last_probe + scenario.event_settle_s for at in events))
+                    self.assertLessEqual(events[-1] - lag, scenario.client_seconds)
+
     # The schedule this harness first shipped: checkpoint 0 one second before a walk.
     TIGHT = replace(SCENARIO, name="tight", client_steps=(*SCENARIO.client_steps[:-2], (18.0, "tf_walk 1 0 2"),
                                                           (28.0, "tf_walk 0 1 2")),
@@ -546,6 +572,11 @@ FORGED_KINDS = ("loadout-ineligible", "loadout-unknown-weapon",
 
 
 class ScenarioVerdictTests(unittest.TestCase):
+    def forged_run(self, states=None, kinds=FORGED_KINDS, total=4, runtime=None, client_runtime=None):
+        return run_scenario("forged_state", states or forged_states(), FORGED_IDS, forged_lines(kinds, total),
+                            forged_runtime(kinds) if runtime is None else runtime,
+                            ("[TF] client link down", "") if client_runtime is None else client_runtime)
+
     def assert_passes(self, summary: dict) -> None:
         self.assertTrue(summary["passed"], summary["problems"])
 
@@ -577,38 +608,75 @@ class ScenarioVerdictTests(unittest.TestCase):
         self.assert_fails_with(run_scenario("combat_kill_respawn", states, COMBAT_IDS), "sanctuary")
 
     def test_forged_state_rejected_and_audited_passes(self) -> None:
-        extra = forged_lines(FORGED_KINDS, 4)
-        self.assert_passes(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra))
+        self.assert_passes(self.forged_run())
 
     def test_forged_state_rejected_but_not_audited_fails(self) -> None:
         # RED proof: an unchanged loadout alone is "rejected", not "rejected and audited".
-        extra = forged_lines(("loadout-ineligible",), 2)
-        self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
+        self.assert_fails_with(self.forged_run(kinds=("loadout-ineligible",), total=2),
                                "kind=loadout-unknown-weapon")
 
     def test_forged_state_audited_but_applied_fails(self) -> None:
-        extra = forged_lines(FORGED_KINDS, 4)
-        self.assert_fails_with(run_scenario("forged_state", forged_states(saved="auc_rifle"), [(2, 1)] * 2, extra),
+        self.assert_fails_with(self.forged_run(states=forged_states(saved="auc_rifle")),
                                "expected mra_rifle")
 
     def test_forged_state_without_counters_fails(self) -> None:
-        extra = forged_lines(("loadout-ineligible", "loadout-unknown-weapon"), 1)
-        self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
+        self.assert_fails_with(self.forged_run(kinds=("loadout-ineligible", "loadout-unknown-weapon"), total=1),
                                "forged-state counters")
 
     def test_each_fire_rejection_needs_its_own_audit_kind(self) -> None:
         for missing in FORGED_KINDS[2:]:
-            extra = forged_lines(tuple(kind for kind in FORGED_KINDS if kind != missing), 4)
-            self.assert_fails_with(run_scenario("forged_state", forged_states(), [(2, 1)] * 2, extra),
+            self.assert_fails_with(self.forged_run(kinds=tuple(kind for kind in FORGED_KINDS if kind != missing)),
                                    f"kind={missing}")
 
     def test_audited_fire_that_still_damages_a_player_fails(self) -> None:
         states = forged_states()
-        states[1] = {**states[1], "pawns": dict(states[1]["pawns"])}
-        faction, cls, health, pos = states[1]["pawns"][1]
-        states[1]["pawns"][1] = (faction, cls, health - 1, pos)
-        self.assert_fails_with(run_scenario("forged_state", states, [(2, 1)] * 2,
-                                           forged_lines(FORGED_KINDS, 4)), "health changed")
+        states[2] = {**states[2], "pawns": dict(states[2]["pawns"])}
+        faction, cls, health, pos = states[2]["pawns"][1]
+        states[2]["pawns"][1] = (faction, cls, health - 1, pos)
+        self.assert_fails_with(self.forged_run(states=states), "health changed")
+
+    def test_forged_audit_requires_real_runtime_output(self) -> None:
+        self.assert_fails_with(self.forged_run(runtime=""), "kind=loadout-ineligible")
+
+    def test_forged_audit_preserves_all_four_counter_values(self) -> None:
+        text = forged_runtime(FORGED_KINDS).replace("total=3", "total=2")
+        self.assert_fails_with(self.forged_run(runtime=text), "forged-state counters")
+
+    def test_forged_audit_rejects_reordered_duplicate_and_extra_events(self) -> None:
+        lines = forged_runtime(FORGED_KINDS).splitlines()
+        for events in (list(reversed(lines[:-1])), [lines[0], *lines[:-1]],
+                       [*lines[:-1], lines[-2].replace("total=4", "total=5")],
+                       [*lines[:-1], lines[0].replace("player=2", "player=3")]):
+            with self.subTest(events=events):
+                self.assert_fails_with(self.forged_run(runtime="\n".join([*events, lines[-1]])),
+                                       "forged-state counters")
+
+    def test_forged_durable_summary_before_the_final_probe_fails(self) -> None:
+        server, clients = scripted_run(multiclient.SCENARIOS["forged_state"], forged_states(), FORGED_IDS,
+                                      forged_lines(FORGED_KINDS, 4), forged_runtime(FORGED_KINDS),
+                                      ("[TF] client link down", ""))
+        server.entries[-1].seconds = 1.0
+        self.assert_fails_with(multiclient.evaluate(multiclient.SCENARIOS["forged_state"], server, clients),
+                               "before the final rejection settled")
+
+    def test_forged_rejection_requires_actual_kick_and_link_down(self) -> None:
+        text = forged_runtime(FORGED_KINDS).split("[Game] [TF-anticheat]")[0]
+        self.assert_fails_with(self.forged_run(runtime=text), "no anti-cheat kick evidence")
+        self.assert_fails_with(self.forged_run(client_runtime=("", "")), "never observed its link down")
+
+    def test_forged_kick_requires_authoritative_cleanup(self) -> None:
+        states = forged_states()
+        states[2] = states[1]
+        self.assert_fails_with(self.forged_run(states=states), "still has authoritative pawn")
+
+    def test_forged_kick_requires_durable_audit_after_live_stats_cleanup(self) -> None:
+        self.assert_fails_with(self.forged_run(total=3), "post-kick durable audit")
+        server, clients = scripted_run(multiclient.SCENARIOS["forged_state"], forged_states(), FORGED_IDS,
+                                      forged_lines(FORGED_KINDS, 4), forged_runtime(FORGED_KINDS),
+                                      ("[TF] client link down", ""))
+        server.entries[-1].output.append("  p2  moveClamps=0 (spikes=0) forged=4")
+        self.assert_fails_with(multiclient.evaluate(multiclient.SCENARIOS["forged_state"], server, clients),
+                               "post-kick live violation stats")
 
     def test_reconnect_restoring_saved_state_passes(self) -> None:
         self.assert_passes(run_scenario("reconnect", reconnect_states(), RECONNECT_IDS))
@@ -706,6 +774,23 @@ class ScriptTests(unittest.TestCase):
 
 
 class ProcessTests(unittest.TestCase):
+    def test_child_reads_async_runtime_logs_without_inventing_audit_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as workdir:
+            role = Path(workdir) / "server"
+            role.mkdir()
+            audit = role / "exec_audit.log"
+            audit.write_text("\n".join(forged_lines(FORGED_KINDS, 4)) + "\n", encoding="utf-8")
+            trace = forged_runtime(FORGED_KINDS)
+            (role / "stderr.log").write_text(trace, encoding="utf-8")
+            (role / "stdout.log").write_text("ordinary stdout", encoding="utf-8")
+            child = multiclient.Child("server", mock.Mock(returncode=0), audit, anchor=SERVER_ANCHOR)
+            log = child.log()
+        self.assertEqual(multiclient.forged_audit_records(log.entries), set())
+        self.assertEqual(multiclient.forged_audit_records(log.entries, log.runtime_text),
+                         {(kind, 2) for kind in FORGED_KINDS})
+        self.assertIn("ordinary stdout", log.runtime_text)
+        self.assertEqual(len(log.entries), 1)
+
     def test_engine_that_exits_early_fails_the_run(self) -> None:
         # A stand-in "engine" (the interpreter) exits without ever writing an
         # audit: the run must fail, not report zero divergences.
@@ -762,6 +847,29 @@ def impaired_logs(module_on: bool = True, engine_probes: tuple[bool, ...] = (Tru
 
 
 class ImpairmentTests(unittest.TestCase):
+    def test_loss_settle_budget_covers_production_periodic_refresh_and_one_tick(self) -> None:
+        source = REPO_ROOT / "GameModules/SparkGameMMOFPS/Source"
+        types = (source / "Core/TFTypes.h").read_text(encoding="utf-8")
+        refresh = (source / "Net/TFReplicationRefresh.h").read_text(encoding="utf-8")
+        hz = float(re.search(r"kReplicationHz\s*=\s*([\d.]+)f", types).group(1))
+        ticks = int(re.search(r"kRefreshTicks\s*=\s*(\d+)", refresh).group(1))
+        self.assertEqual(hz, multiclient.REPLICATION_HZ)
+        self.assertEqual(ticks, multiclient.PAWN_REFRESH_TICKS)
+        self.assertIn("kRefreshTicks / static_cast<double>(kReplicationHz)", refresh)
+        self.assertGreaterEqual(multiclient.RESEND_ALLOWANCE_S, (ticks + 1) / hz)
+        profile = multiclient.Impairment.parse("80,20,0.03,2,3", 17)
+        self.assertAlmostEqual(profile.settle_s(),
+                               2 * (0.100 + multiclient.REORDER_HOLD_S) + (ticks + 1) / hz)
+
+    def test_all_hosted_impaired_schedules_remain_quiet_with_loss_recovery_budget(self) -> None:
+        profile = multiclient.Impairment.parse("80,20,0.03,2,3", 17)
+        for name, base in multiclient.SCENARIOS.items():
+            with self.subTest(scenario=name):
+                scheduled = multiclient.impaired(base, profile)
+                self.assertEqual(multiclient.schedule_violations(scheduled), [])
+                self.assertGreaterEqual(scheduled.client_seconds,
+                                        scheduled.checkpoints[-1] + multiclient.CLIENT_TAIL_S)
+
     def evaluate(self, **kwargs) -> dict:
         server, clients = impaired_logs(**kwargs)
         return multiclient.evaluate(multiclient.impaired(SCENARIO, IMPAIRMENT), server, clients, IMPAIRMENT)

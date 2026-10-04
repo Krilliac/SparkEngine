@@ -895,7 +895,7 @@
 | `ProfilingDataCallback` | alias | SparkEditor | [SparkEngineIntegration.h:L171](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L171) | Callback function types |
 | `ProjectCallback` | alias | SparkEditor | [ProjectManager.h:L193](../../SparkEditor/Source/Core/ProjectManager.h#L193) |  |
 | `ProjectileExpiredCallback` | alias | SparkEngine | [ECSystems.h:L600](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.h#L600) | Callback invoked when a projectile expires or impacts. |
-| `Properties` | alias | Tests | [TestMOD390VisualScriptGraphsReal.cpp:L507](../../Tests/TestMOD390VisualScriptGraphsReal.cpp#L507) |  |
+| `Properties` | alias | Tests | [TestMOD390VisualScriptGraphsReal.cpp:L550](../../Tests/TestMOD390VisualScriptGraphsReal.cpp#L550) |  |
 | `PropertyValue` | alias | SparkEditor | [EditorCommand.h:L73](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L73) | Property value variant type for generic property changes |
 | `PropertyValue` | alias | Tests | [TestEditorCommands.cpp:L23](../../Tests/TestEditorCommands.cpp#L23) |  |
 | `PS` | alias | SparkEngine | [EngineSettings.cpp:L66](../../SparkEngine/Source/Core/EngineSettings.cpp#L66) |  |

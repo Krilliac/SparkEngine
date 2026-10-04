@@ -19,6 +19,7 @@
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
 #include "Utils/SparkConsole.h"
+#include "Utils/LogMacros.h"
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h> // bare-launch project selector panel
 #endif
@@ -91,7 +92,7 @@ bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
         std::error_code moduleError;
         if (!std::filesystem::is_regular_file(requestedModule, moduleError) || moduleError)
         {
-            console.LogError("Explicit game module not found: " + *cmdLineModule);
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "Explicit game module not found: %s", cmdLineModule->c_str());
             return false;
         }
         return manager.LoadModule(*cmdLineModule);

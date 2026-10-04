@@ -130,4 +130,11 @@ function(spark_attach_shipped_windows_version_info)
             spark_target_windows_version_info("${_spark_executable}")
         endif()
     endforeach()
+    # The discovered module list also drives installation. Stamp those shipped
+    # DLLs before their post-build ABI sidecars hash the final linked image.
+    foreach(_spark_game_module IN LISTS _SPARK_GAME_MODULE_NAMES)
+        if(TARGET "${_spark_game_module}")
+            spark_target_windows_version_info("${_spark_game_module}")
+        endif()
+    endforeach()
 endfunction()

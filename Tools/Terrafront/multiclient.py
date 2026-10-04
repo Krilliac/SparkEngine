@@ -125,10 +125,13 @@ SERVER_STEP_PERIOD_S = 1.0
 FLUX_INCOME_SLACK = 8
 FACTION_IDS = {"mra": 1, "auc": 2, "hlx": 3}
 # Impaired runs (--impair): the reorder hold is InstabilitySettings::reorderHoldMs,
-# the resend allowance covers one reliable retransmit after a dropped packet, and
+# the resend allowance covers a quiet pawn's periodic full-state refresh plus
+# one replication tick (also covering the shorter reliable retransmit), and
 # the sprint speed (classes.json sprintSpeed) turns a delay into a position slack.
 REORDER_HOLD_S = 0.04
-RESEND_ALLOWANCE_S = 0.5
+REPLICATION_HZ = 20.0
+PAWN_REFRESH_TICKS = 20
+RESEND_ALLOWANCE_S = (PAWN_REFRESH_TICKS + 1) / REPLICATION_HZ
 MAX_PAWN_SPEED_MPS = 7.2
 CHECKPOINT_PAD_S = 0.5
 CLIENT_TAIL_S = 2.5
@@ -144,6 +147,8 @@ OBSERVE_TAG = "[TF-OBSERVE] "
 AUDIT_HEADER = re.compile(r"^frame (\d+) t=(\d+(?:\.\d+)?)s \| (ok |ERR) \| (.*)$")
 KEY_VALUE = re.compile(r"(\w+)=(\S*)")
 FORGED_AUDIT = re.compile(r"\[TF-AUDIT\] forged-state kind=(\S+) player=(\d+)")
+FORGED_AUDIT_EVENT = re.compile(r"\[TF-AUDIT\] forged-state kind=(\S+) player=(\d+) total=(\d+)")
+FORGED_AUDIT_SUMMARY = re.compile(r"forged-state audit: (\d+) records?, latest kind=(\S+) player=(\d+)")
 CHEAT_STATS_ROW = re.compile(r"\bp(\d+)\s+moveClamps=.*\bforged=(\d+)")
 
 
@@ -326,22 +331,23 @@ SCENARIOS = {
         client_factions=("mra", "auc"),
         client_steps=ONBOARDING,
         solo_steps=(
-            (0, 31.5, "tf_aim_at enemy"),
-            *_volley(0, 32.0, 0.3, 6),
-            (0, 41.0, "tf_aim_at enemy"),
-            *_volley(0, 41.5, 0.2, 25),
-            (1, 56.0, "tf_spawn"),
+            (0, 32.5, "tf_aim_at enemy"),
+            *_volley(0, 33.0, 0.3, 6),
+            (0, 43.0, "tf_aim_at enemy"),
+            *_volley(0, 43.5, 0.2, 25),
+            (1, 59.0, "tf_spawn"),
         ),
         server_steps=(
             ServerStep(13.0, 24.0, "tf_place_faction mra {:.0f} {:.0f}".format(*ARENA_MRA)),
             ServerStep(13.0, 24.0, "tf_place_faction auc {:.0f} {:.0f}".format(*ARENA_AUC)),
-            ServerStep(58.0, 69.0, "tf_place_faction auc {:.0f} {:.0f}".format(*ARENA_AUC)),
+            ServerStep(61.0, 72.0, "tf_place_faction auc {:.0f} {:.0f}".format(*ARENA_AUC)),
         ),
-        checkpoints=(28.0, 37.5, 50.0, 73.0),
+        checkpoints=(28.0, 38.5, 52.0, 76.0),
         absent=((2, 1),),
-        client_seconds=76.0,
+        client_seconds=79.0,
     ),
-    # A saves a legal primary, then sends a foreign-faction and an unknown weapon.
+    # Prove rejection before escalation, then prove the fourth rejection kicks A
+    # and leaves the durable audit intact. The remaining client must stay healthy.
     "forged_state": Scenario(
         name="forged_state",
         client_factions=("mra", "auc"),
@@ -350,12 +356,13 @@ SCENARIOS = {
             (0, 14.0, f"tf_give {FORGED_LEGAL_PRIMARY}"),
             (0, 22.0, "tf_give auc_rifle"),
             (0, 24.0, "tf_give_raw 32766"),
-            (0, 25.0, "tf_fire_raw auc_rifle"),
-            (0, 26.0, "tf_fire_raw np_shotgun"),
+            (0, 34.0, "tf_fire_raw auc_rifle"),
+            (0, 36.0, "tf_fire_raw np_shotgun"),
         ),
-        server_steps=(ServerStep(30.5, 41.0, "tf_cheat_stats", changes_world=False),),
-        checkpoints=(18.5, 31.0),
-        client_seconds=43.0,
+        server_steps=(ServerStep(39.5, 49.5, "tf_cheat_stats", changes_world=False),),
+        checkpoints=(18.5, 28.5, 41.0),
+        offline=((2, 0),),
+        client_seconds=50.0,
     ),
     # B saves a legal primary, tries a forged one, leaves, and comes back in the
     # new process through tf_connect / tf_login / tf_enter (run() splits the script).
@@ -397,20 +404,20 @@ SCENARIOS = {
         client_factions=("mra", "auc"),
         client_steps=ONBOARDING,
         solo_steps=(
-            (0, 31.5, "tf_vehicle_buy drifter"),
-            (0, 39.5, "tf_vehicle_seat enter"),
-            (0, 47.5, "tf_walk 1 0 2"),
-            (0, 61.5, "tf_vehicle_seat exit"),
+            (0, 32.5, "tf_vehicle_buy drifter"),
+            (0, 40.5, "tf_vehicle_seat enter"),
+            (0, 48.5, "tf_walk 1 0 2"),
+            (0, 62.5, "tf_vehicle_seat exit"),
         ),
         server_steps=(
             ServerStep(13.0, 24.0, "tf_place_faction mra {:.0f} {:.0f}".format(*VEHICLE_TERMINAL_MRA)),
             ServerStep(13.0, 24.0, "tf_place_faction auc {:.0f} {:.0f}".format(*VEHICLE_WATCHER_AUC)),
             ServerStep(13.0, 24.0, f"tf_flux_floor mra {VEHICLE_FLUX_FLOOR}"),
-            ServerStep(69.5, 80.5, "tf_damage_vehicles 5000"),
+            ServerStep(70.5, 81.5, "tf_damage_vehicles 5000"),
         ),
-        checkpoints=(28.0, 36.0, 44.0, 57.5, 66.0, 85.0),
+        checkpoints=(28.0, 37.0, 45.0, 58.5, 67.0, 86.0),
         walk_settle_s=4.0,  # a driven hull coasts after the throttle is released
-        client_seconds=88.0,
+        client_seconds=89.0,
     ),
 }
 
@@ -508,7 +515,7 @@ class Impairment:
     def settle_s(self) -> float:
         """Extra settle time after any change: a round trip at the worst delay, the reorder hold, a resend."""
         resend = RESEND_ALLOWANCE_S if self.loss > 0 else 0.0
-        return 2.0 * (self.lag_ms + self.jitter_ms) / 1000.0 + REORDER_HOLD_S + resend
+        return 2.0 * ((self.lag_ms + self.jitter_ms) / 1000.0 + REORDER_HOLD_S) + resend
 
     def position_slack_m(self) -> float:
         """How far a sprinting pawn moves during one worst-case one-way delay."""
@@ -724,13 +731,14 @@ def observe_samples(entries: list[AuditEntry]) -> list[Sample]:
     return samples
 
 
-def forged_audit_records(entries: list[AuditEntry]) -> set[tuple[str, int]]:
+def forged_audit_records(entries: list[AuditEntry], runtime_text: str = "") -> set[tuple[str, int]]:
     """Every (kind, player) the server's "[TF-AUDIT] forged-state" log lines named."""
     records = set()
     for entry in entries:
         for line in entry.output:
             for match in FORGED_AUDIT.finditer(line):
                 records.add((match.group(1), int(match.group(2))))
+    records.update((match.group(1), int(match.group(2))) for match in FORGED_AUDIT.finditer(runtime_text))
     return records
 
 
@@ -757,6 +765,7 @@ class RoleLog:
     anchor: float | None  # wall-clock (monotonic) seconds at which the -exec clock started
     entries: list[AuditEntry]
     faction: str | None = None
+    runtime_text: str = ""  # real retained role output, including asynchronous Logger messages
 
 
 @dataclass
@@ -766,6 +775,10 @@ class RunViews:
     server: list[Observation | None]
     clients: list[list[Observation | None]]  # [client][checkpoint]
     server_entries: list[AuditEntry]
+    server_runtime_text: str = ""
+    client_runtime_text: list[str] = field(default_factory=list)
+    scenario: Scenario | None = None
+    client_lags: list[float | None] = field(default_factory=list)
 
     def self_id(self, client: int, checkpoint: int) -> int | None:
         view = self.clients[client][checkpoint]
@@ -931,7 +944,10 @@ def evaluate_views(scenario: Scenario, server: RoleLog, clients: list[RoleLog],
     server_samples = [s for s in observe_samples(server.entries) if s.observation is not None]
     client_samples = [observe_samples(c.entries) for c in clients]
     checkpoints: list[dict] = []
-    views = RunViews([], [[] for _ in clients], server.entries)
+    views = RunViews([], [[] for _ in clients], server.entries, server.runtime_text,
+                     [client.runtime_text for client in clients], scenario,
+                     [client.anchor - server.anchor if client.anchor is not None and server.anchor is not None
+                      else None for client in clients])
     known_ids: list[int | None] = [None] * len(clients)
 
     for index in range(len(scenario.checkpoints)):
@@ -1044,14 +1060,18 @@ def combat_verdict(views: RunViews) -> list[str]:
 
 
 def forged_verdict(views: RunViews) -> list[str]:
-    """client1's forged loadouts are rejected (saved primary unchanged) AND audited (log line plus counter)."""
-    missing = _require_views(views, (0, 1), "forged")
+    """Rejection preserves state; escalation removes the offender and preserves all audit evidence."""
+    missing = _require_views(views, (1,), "forged")
+    missing += [f"forged: client1 checkpoint {i} is missing" for i in (0, 1)
+                if i >= len(views.clients[0]) or views.clients[0][i] is None]
+    if len(views.server) != 3:
+        missing.append("forged: expected before-rejection, rejected-loadout and post-kick checkpoints")
     if missing:
         return missing
     problems = []
     a = views.self_id(0, 0)
     b = views.self_id(1, 0)
-    for index, view in enumerate(views.server):
+    for index, view in enumerate(views.server[:2]):
         for player in (a, b):
             before, after = views.server[0].pawns.get(player), view.pawns.get(player)
             if before is None or after is None or before.health != after.health:
@@ -1063,17 +1083,47 @@ def forged_verdict(views: RunViews) -> list[str]:
         other = view.players.get(b)
         if other is None or other.loadout != "default":
             problems.append(f"forged: player {b} was affected (loadout {other.loadout if other else 'missing'})")
-    audited = forged_audit_records(views.server_entries)
+    after = views.server[2]
+    if a in after.pawns or a in after.players:
+        problems.append(f"forged: kicked player {a} still has authoritative pawn or progression state")
+    survivor = after.pawns.get(b)
+    before = views.server[0].pawns.get(b)
+    if survivor is None or before is None or survivor.health != before.health:
+        problems.append(f"forged: player {b} health changed after rejected fire")
+    saved_other = after.players.get(b)
+    if saved_other is None or saved_other.loadout != "default":
+        problems.append(f"forged: player {b} was affected after the kick")
+    kick = re.search(rf"\[TF-anticheat\] player {a} crossed the kick threshold \(violation score 12\)",
+                     views.server_runtime_text)
+    if kick is None:
+        problems.append(f"forged: no anti-cheat kick evidence for player {a}")
+    if not views.client_runtime_text or "[TF] client link down" not in views.client_runtime_text[0]:
+        problems.append("forged: client1 never observed its link down")
+    audited = forged_audit_records(views.server_entries, views.server_runtime_text)
     for kind in ("loadout-ineligible", "loadout-unknown-weapon", "fire-weapon-not-in-loadout", "fire-weapon-locked"):
         if (kind, a) not in audited:
             problems.append(f"forged: no [TF-AUDIT] forged-state kind={kind} line for player {a}")
     if any(player == b for _, player in audited):
         problems.append(f"forged: player {b} was audited without forging anything")
-    snapshots = [rows for rows in cheat_stats_snapshots(views.server_entries) if a in rows]
-    if not snapshots:
-        problems.append(f"forged: no tf_cheat_stats run listed player {a}")
-    elif snapshots[-1][a] != 4 or snapshots[-1].get(b, 0) != 0:
-        problems.append(f"forged: forged-state counters {snapshots[-1]} (expected {a}: 4, {b}: 0)")
+    events = [(m.group(1), int(m.group(2)), int(m.group(3)))
+              for m in FORGED_AUDIT_EVENT.finditer(views.server_runtime_text)]
+    expected_kinds = ("loadout-ineligible", "loadout-unknown-weapon", "fire-weapon-not-in-loadout", "fire-weapon-locked")
+    if events != [(kind, a, count) for kind, count in zip(expected_kinds, range(1, 5))]:
+        problems.append(f"forged: forged-state counters for player {a} do not prove all four ordered rejections")
+    snapshots = cheat_stats_snapshots(views.server_entries)
+    if not snapshots or a in snapshots[-1] or snapshots[-1].get(b, 0) != 0:
+        problems.append("forged: post-kick live violation stats were not cleaned up or survivor was affected")
+    outputs = command_outputs(views.server_entries, "tf_cheat_stats")
+    lag = views.client_lags[0] if views.client_lags else None
+    if views.scenario is None or lag is None:
+        problems.append("forged: no measured clock binding for the post-kick audit")
+    else:
+        last_probe = max(at for at, _ in timed_client_steps(views.scenario, 0))
+        if not outputs or outputs[-1][0] <= lag + last_probe + views.scenario.event_settle_s:
+            problems.append("forged: durable audit command ran before the final rejection settled")
+    summaries = list(FORGED_AUDIT_SUMMARY.finditer("\n".join(outputs[-1][1]))) if outputs else []
+    if not summaries or summaries[-1].groups() != ("4", "fire-weapon-locked", str(a)):
+        problems.append("forged: post-kick durable audit does not retain all four rejections")
     return problems
 
 
@@ -1626,7 +1676,10 @@ class Child:
         text = self.audit.read_text(encoding="utf-8", errors="replace") if self.audit.exists() else ""
         # A deliberate kill is the scenario, not a crash; every other exit status counts.
         returncode = 0 if self.killed else self.process.returncode
-        return RoleLog(self.role, returncode, self.anchor if text else None, parse_audit(text))
+        return RoleLog(self.role, returncode, self.anchor if text else None, parse_audit(text),
+                       runtime_text="\n".join(path.read_text(encoding="utf-8", errors="replace")
+                                              for name in ("stdout.log", "stderr.log")
+                                              if (path := self.audit.parent / name).exists()))
 
 
 def launch(role: str, args: argparse.Namespace, workdir: Path, script: str, seconds: float,
@@ -1714,7 +1767,8 @@ def join_reconnected_client(first: RoleLog, second: RoleLog, impairment: Impairm
     if offset <= 0:
         raise HarnessError("reconnect: returning process clock did not start after original process")
     entries = [*first.entries, *(replace(entry, seconds=entry.seconds + offset) for entry in second.entries)]
-    return RoleLog(first.role, 0, first.anchor, entries, first.faction)
+    return RoleLog(first.role, 0, first.anchor, entries, first.faction,
+                   first.runtime_text + "\n" + second.runtime_text)
 
 
 def run(args: argparse.Namespace, name: str, workdir: Path) -> dict:

@@ -669,6 +669,9 @@ add_executable(SparkTests
     TestTFLoadoutWire.cpp
     # TF-110 tf_observe text form + tf_aim_at angles (header-only)
     TestTFObservation.cpp
+    # TFReplication's actual sender cache: dirty sends stay immediate while
+    # periodic quiet-state refreshes repair a dropped unreliable update.
+    TestTFReplicationRefresh.cpp
     # Security review: TERRAFRONT server trust-boundary regressions (header-only
     # rules + the TFAccountSystem/TFDatabase sources listed below)
     TestTFServerSecurity.cpp
@@ -6541,6 +6544,10 @@ if(Python3_Interpreter_FOUND)
             set_tests_properties(runtime-bundle-validation PROPERTIES
                 LABELS "readiness;site-data;unit;node"
                 ENVIRONMENT "PYTHON=${Python3_EXECUTABLE}"
+                # Bundle generation takes about three minutes. Use its bounded
+                # runtime as the scheduling cost so it starts before learned
+                # shorter tests and overlaps work on the second CTest worker.
+                COST 600
                 # verifyBundle.test.mjs runs generate.py in the source tree, which
                 # republishes docs/api through a docs/.api.staging-* directory.
                 RESOURCE_LOCK "${SPARK_SITE_DATA_TREE_LOCK}"

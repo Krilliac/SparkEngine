@@ -243,7 +243,7 @@ namespace Terrafront
             {
                 ImGui::Separator();
                 ImGui::Text("clients      : %zu", m_knownClients.size());
-                ImGui::Text("pawns cached : %zu   unchanged skips: %u", m_lastSent.size(), m_skippedUnchanged);
+                ImGui::Text("pawns cached : %zu   unchanged skips: %u", m_lastSent.Size(), m_skippedUnchanged);
             }
             else
             {

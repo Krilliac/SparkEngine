@@ -63,7 +63,11 @@ update_auto_section() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    awk -v start="$start_marker" -v end="$end_marker" -v body="$content" '
+    # BSD awk rejects literal newlines in -v assignments. Read the complete
+    # body from the environment so multiline sections also retain literal
+    # backslashes instead of being interpreted as awk string escapes.
+    SPARK_WIKI_SECTION_BODY="$content" awk -v start="$start_marker" -v end="$end_marker" '
+        BEGIN { body=ENVIRON["SPARK_WIKI_SECTION_BODY"] }
         $0 ~ start { print; print body; skip=1; next }
         $0 ~ end   { skip=0 }
         !skip       { print }

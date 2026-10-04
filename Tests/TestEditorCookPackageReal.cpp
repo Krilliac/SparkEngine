@@ -554,6 +554,8 @@ TEST(EditorFPSLineage_MissingRealModuleFailsClosed)
     ASSERT_TRUE(fs::remove(scenario.Package() / "SparkGameFPS.dll"));
     const HostRun run = scenario.RunPackagedScene();
     EXPECT_TRUE(run.exitCode > 0);
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(run.output, "Explicit game module not found: " + Utf8(scenario.Package() / "SparkGameFPS.dll"));
 }
 #endif // SPARK_EDITOR_FPS_LINEAGE_TESTS
 

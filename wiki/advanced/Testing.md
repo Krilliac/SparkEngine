@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*741 test-bearing `.cpp`/`.mm` files, 8543 source-level test definitions*
+*742 test-bearing `.cpp`/`.mm` files, 8551 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1417,7 +1417,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestMOD380VehiclePhysicsReal` | 5 |
 | `TestMOD390VisualScriptDiagnosticsReal` | 7 |
 | `TestMOD390VisualScriptGameplayReal` | 4 |
-| `TestMOD390VisualScriptGraphsReal` | 14 |
+| `TestMOD390VisualScriptGraphsReal` | 15 |
 | `TestMOD390VisualScriptHotReloadReal` | 4 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
@@ -1702,6 +1702,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestTFOutfitStore` | 18 |
 | `TestTFRedeployRules` | 7 |
 | `TestTFRegionLattice` | 11 |
+| `TestTFReplicationRefresh` | 7 |
 | `TestTFScramAuth` | 11 |
 | `TestTFSecondaryMotion` | 7 |
 | `TestTFServerSecurity` | 9 |

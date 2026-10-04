@@ -37,6 +37,25 @@ def archive(member: bytes, timestamp: int = 0) -> bytes:
     return b"!<arch>\n" + header + member + (b"\n" if len(member) & 1 else b"")
 
 
+def bigobj(sections: list[tuple[bytes, bytes]], timestamp: int = 0) -> bytes:
+    ordinary = coff(sections)
+    header = struct.pack("<HHHHI", 0, 0xFFFF, 2, 0x8664, timestamp)
+    header += bytes.fromhex("c7a1bad1eebaa94baf20faf66aa4dcb8") + bytes(16)
+    header += struct.pack("<III", len(sections), 0, 0)
+    table_end = 20 + 40 * len(sections)
+    table = bytearray(ordinary[20:table_end])
+    for index in range(len(sections)):
+        offset = struct.unpack_from("<I", table, 40 * index + 20)[0]
+        struct.pack_into("<I", table, 40 * index + 20, offset + 36)
+    return header + bytes(table) + ordinary[table_end:]
+
+
+def type_record(kind: int, payload: bytes) -> bytes:
+    count = (-len(payload) - 4) % 4
+    padding = bytes(0xF0 + value for value in range(count, 0, -1))
+    return struct.pack("<HH", len(payload) + len(padding) + 2, kind) + payload + padding
+
+
 class ShippingReproDiagnosticTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -227,6 +246,152 @@ class ShippingReproDiagnosticTests(unittest.TestCase):
         self.assertFalse(report["equivalent"])
         self.assertEqual(detail["status"], "inspection-unavailable")
         self.assertEqual(detail["error"], "fixture unavailable")
+
+    def test_v2_header_fields_checksum_bytes_and_directive_strings_retain_strict_failure(self) -> None:
+        members = [archive(bigobj([(b".chks64", struct.pack("<QQ", 7, value)),
+                                  (b".drectve", b'/FAILIFMISMATCH:"pch=tree-' + suffix + b'"')],
+                                 timestamp=value))
+                   for value, suffix in ((3, b"a"), (4, b"b"))]
+        code, report, detail = self.run_pair(*members)
+        self.assertEqual(code, 1)
+        self.assertFalse(report["equivalent"])
+        self.assertEqual(detail["schema"], "spark.windows-shipping-repro-diagnostics/2")
+        regions = detail["libraries"][0]["differingRegions"]
+        header, checksum, directive = [region["details"] for region in regions]
+        self.assertEqual(header["headers"]["first"]["format"], "coff-bigobj")
+        self.assertEqual(header["fieldDifferences"], [{"field": "timeDateStamp", "first": 3, "second": 4}])
+        self.assertEqual(header["byteDifferences"]["samples"], [{"offset": 8, "firstHex": "03", "secondHex": "04"}])
+        self.assertEqual(checksum["byteDifferences"]["samples"], [{"offset": 8, "firstHex": "03", "secondHex": "04"}])
+        self.assertEqual(checksum["byteDifferences"]["omittedDifferingBytes"], 0)
+        self.assertEqual(directive["stringWindows"]["first"]["windows"][0]["text"], '/FAILIFMISMATCH:"pch=tree-a"')
+        self.assertEqual(directive["stringWindows"]["second"]["windows"][0]["text"], '/FAILIFMISMATCH:"pch=tree-b"')
+        self.assertEqual(detail["limits"]["bytesPerSample"], 16)
+        self.assertEqual(detail["limits"]["codeViewRecordsPerRegion"], 65536)
+
+    def test_ordinary_header_decoder_identifies_timestamp_without_discarding_bytes(self) -> None:
+        code, _, detail = self.run_pair(archive(coff([(b".text", b"same")], timestamp=9)),
+                                       archive(coff([(b".text", b"same")], timestamp=10)))
+        self.assertEqual(code, 1)
+        decoded = detail["libraries"][0]["differingRegions"][0]["details"]
+        self.assertEqual(decoded["headers"]["first"]["format"], "coff")
+        self.assertEqual(decoded["fieldDifferences"], [{"field": "timeDateStamp", "first": 9, "second": 10}])
+
+    def test_residual_codeview_records_and_source_strings_are_identified(self) -> None:
+        pair = []
+        for suffix in (b"a", b"b"):
+            types = struct.pack("<I", 4) + type_record(0x1605, bytes(4) + b"C:\\source-" + suffix + b"\\file.cpp\0")
+            symbols = struct.pack("<III", 4, 0xF3, 4) + b"x" + suffix + b"\0\0"
+            pair.append(archive(coff([(b".debug$T", types), (b".debug$S", symbols)])))
+        code, _, detail = self.run_pair(*pair)
+        self.assertEqual(code, 1)
+        types, symbols = [region["details"] for region in detail["libraries"][0]["differingRegions"]]
+        record = types["codeView"]["first"]["sampledChangeRecords"][0]
+        self.assertEqual((record["offset"], record["typeIndex"], record["kindName"]), (4, 0x1000, "LF_STRING_ID"))
+        self.assertEqual(types["stringWindows"]["first"]["windows"][0]["text"], "C:\\source-a\\file.cpp")
+        self.assertEqual(symbols["codeView"]["second"]["sampledChangeRecords"][0]["kindName"], "string-table")
+
+    def test_unknown_and_truncated_codeview_are_advisory_with_exact_sample_values(self) -> None:
+        for data in (b"not-c13", struct.pack("<IHH", 4, 100, 0x1605),
+                     struct.pack("<I", 4) + type_record(0x9999, b"value")):
+            with self.subTest(data=data):
+                first, second = bytearray(data), bytearray(data)
+                second[-1] ^= 1
+                code, _, detail = self.run_pair(archive(coff([(b".debug$T", bytes(first))])),
+                                               archive(coff([(b".debug$T", bytes(second))])))
+                self.assertEqual(code, 1)
+                decoded = detail["libraries"][0]["differingRegions"][0]["details"]
+                self.assertEqual(decoded["byteDifferences"]["differingByteCount"], 1)
+                if data[:4] != struct.pack("<I", 4) or len(data) == 8:
+                    self.assertEqual(decoded["codeView"]["first"]["status"], "inspection-unavailable")
+                else:
+                    self.assertEqual(decoded["codeView"]["first"]["sampledChangeRecords"][0]["kindName"], "unrecognized")
+                    self.assertEqual(decoded["codeView"]["first"]["sampledChangeRecords"][0]["status"],
+                                     "inspection-unavailable")
+
+    def test_byte_string_and_codeview_work_limits_are_explicit(self) -> None:
+        delta = helper._byte_differences(b"a" * 2048, b"b" * 2048)
+        self.assertEqual(delta["differingByteCount"], 2048)
+        self.assertEqual(len(delta["samples"]), helper.MAX_BYTE_SAMPLES)
+        self.assertEqual(delta["omittedDifferingBytes"], 2048 - helper.MAX_BYTE_SAMPLES * helper.MAX_SAMPLE_BYTES)
+        self.assertTrue(all(len(sample["firstHex"]) <= helper.MAX_SAMPLE_BYTES * 2 for sample in delta["samples"]))
+        text = b"\0".join(b"a" * 400 for _ in range(12))
+        strings = helper._string_windows(text, [{"offset": 401 * index + 200} for index in range(12)])
+        windows = strings["windows"]
+        self.assertEqual(len(windows), helper.MAX_STRING_SAMPLES)
+        self.assertEqual(strings["omittedWindows"], 4)
+        self.assertTrue(all(len(window["text"]) <= helper.MAX_STRING_BYTES for window in windows))
+        self.assertTrue(all(window["truncatedBefore"] and window["truncatedAfter"] for window in windows))
+        data = struct.pack("<I", 4) + type_record(0x1605, b"a\0") + type_record(0x1605, b"b\0")
+        with mock.patch.object(helper, "MAX_CODEVIEW_RECORDS", 1):
+            decoded = helper._region_details(".debug$T (#0)", data, data[:-1] + b"x")
+        self.assertEqual(decoded["codeView"]["first"]["status"], "inspection-unavailable")
+        self.assertIn("limit", decoded["codeView"]["first"]["error"])
+
+    def test_library_cap_reports_omitted_libraries_without_changing_comparison(self) -> None:
+        self.run_pair(*self.pair())
+        for root in self.roots:
+            content = (root / "lib/core.lib").read_bytes()
+            for name in ("extra-a.lib", "extra-b.lib"):
+                (root / "lib" / name).write_bytes(content)
+        manifests = [helper.comparator.build_manifest(root, build_root)
+                     for root, build_root in zip(self.roots, self.build_roots)]
+        report = helper.comparator.compare_manifests(*manifests)
+        with mock.patch.object(helper, "MAX_LIBRARIES", 1):
+            detail = helper.diagnostics(*manifests, *self.roots, *self.build_roots, report)
+        self.assertFalse(report["equivalent"])
+        self.assertEqual(len(report["differing"]), 3)
+        self.assertEqual(len(detail["libraries"]), 1)
+        self.assertEqual(detail["omittedLibraries"], 2)
+
+    def test_invalid_codeview_symbol_subsections_do_not_hide_precise_byte_deltas(self) -> None:
+        for data in (struct.pack("<III", 4, 0xF3, 100) + b"a",
+                     struct.pack("<III", 4, 0xF3, 1) + b"a"):
+            with self.subTest(data=data):
+                detail = helper._region_details(".debug$S (#0)", data, data[:-1] + b"b")
+                self.assertEqual(detail["byteDifferences"]["samples"],
+                                 [{"offset": 12, "firstHex": "61", "secondHex": "62"}])
+                self.assertEqual(detail["codeView"]["first"]["status"], "inspection-unavailable")
+
+    def test_new_decode_errors_and_output_cap_preserve_authoritative_failure(self) -> None:
+        members = [archive(coff([(b".text", b"same")], timestamp=index)) for index in (1, 2)]
+        with mock.patch.object(helper, "_header_fields", side_effect=struct.error("fixture undecodable")):
+            code, report, detail = self.run_pair(*members)
+        self.assertEqual(code, 1)
+        self.assertFalse(report["equivalent"])
+        self.assertEqual(detail["libraries"][0]["differingRegions"][0]["details"]["status"], "inspection-unavailable")
+        for pair, expected in ((members, 1), ((members[0], members[0]), 0)):
+            with self.subTest(expected=expected), mock.patch.object(helper, "MAX_DIAGNOSTIC_BYTES", 400):
+                code, report, detail = self.run_pair(*pair)
+            self.assertEqual(code, expected)
+            self.assertEqual(report["equivalent"], expected == 0)
+            self.assertLessEqual((self.directory / "diagnostics.json").stat().st_size, 400)
+            self.assertEqual(detail["schema"], "spark.windows-shipping-repro-diagnostics/2")
+            self.assertEqual(detail["status"], "inspection-unavailable")
+            self.assertEqual(detail["error"], "diagnostic output exceeds its byte limit")
+
+    def test_sampled_byte_runs_map_across_codeview_record_boundaries_with_record_cap(self) -> None:
+        first = struct.pack("<I", 4) + b"".join(type_record(0x1605, bytes([index]) * 4) for index in range(20))
+        second = struct.pack("<I", 4) + b"".join(type_record(0x1605, bytes([index + 1]) * 4) for index in range(20))
+        with mock.patch.object(helper, "MAX_BYTE_SAMPLES", 1), mock.patch.object(helper, "MAX_SAMPLE_BYTES", 128):
+            details = helper._region_details(".debug$T (#0)", first, second)
+        # A byte-run sample crosses a record boundary only if the surrounding
+        # record-header bytes differ too; explicitly sample the two headers.
+        samples = [{"offset": 4, "firstHex": first[4:20].hex(), "secondHex": second[4:20].hex()}]
+        with mock.patch.object(helper, "MAX_BYTE_SAMPLES", 1):
+            records = helper._codeview_records(first, ".debug$T", samples)
+        self.assertEqual(records["recordCount"], 20)
+        self.assertEqual(len(records["sampledChangeRecords"]), 1)
+        self.assertEqual(records["omittedSampledChangeRecords"], 1)
+        self.assertEqual(details["byteDifferences"]["omittedDifferingBytes"], 76)
+
+    def test_missing_bytes_are_counted_and_region_layout_changes_never_decode_unrelated_bytes(self) -> None:
+        delta = helper._byte_differences(b"abcd", b"a")
+        self.assertEqual(delta["differingByteCount"], 3)
+        self.assertEqual(delta["samples"], [{"offset": 1, "firstHex": "626364", "secondHex": ""}])
+        details = helper._diagnose_member((bytes(60), coff([(b".debug$T", b"first")])),
+                                         (bytes(60), coff([(b".drectve", b"other")])), b"root-a", b"root-b")
+        self.assertEqual(details["differingRegions"][1]["details"]["status"], "inspection-unavailable")
+        self.assertEqual(details["differingRegions"][1]["details"]["error"], "region layout differs")
 
 
 if __name__ == "__main__":

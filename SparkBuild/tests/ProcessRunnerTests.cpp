@@ -380,12 +380,10 @@ namespace
             BuildRunnerCommand(executable, descendantPidFile), {}, [](const std::string&) {},
             [&](int exitCode, bool success)
             {
-                {
-                    std::lock_guard<std::mutex> lock(completionMutex);
-                    ++completionCount;
-                    completionExitCode = exitCode;
-                    completionSuccess = success;
-                }
+                std::lock_guard<std::mutex> lock(completionMutex);
+                ++completionCount;
+                completionExitCode = exitCode;
+                completionSuccess = success;
                 completionCondition.notify_all();
             });
         check(launched, "ProcessRunner rejected the async launch");
@@ -438,22 +436,19 @@ namespace
         SparkBuild::CompletionCallback completion;
         completion = [&](int exitCode, bool success)
         {
-            bool startAgain = false;
-            {
-                std::lock_guard<std::mutex> lock(completionMutex);
-                ++completionCount;
-                allSuccessful = allSuccessful && success && exitCode == 0;
-                startAgain = completionCount == 1;
-            }
+            // A fast replacement can finish before its launcher's callback.
+            // Publish both callbacks' state and notification before teardown
+            // can acquire the mutex and destroy their captured objects.
+            std::lock_guard<std::mutex> lock(completionMutex);
+            ++completionCount;
+            allSuccessful = allSuccessful && success && exitCode == 0;
+            const bool startAgain = completionCount == 1;
 
             if (startAgain)
             {
                 const bool accepted = runner.RunAsync(command, {}, [](const std::string&) {}, completion);
-                {
-                    std::lock_guard<std::mutex> lock(completionMutex);
-                    rerunAttempted = true;
-                    rerunAccepted = accepted;
-                }
+                rerunAttempted = true;
+                rerunAccepted = accepted;
             }
             completionCondition.notify_all();
         };
@@ -502,12 +497,10 @@ namespace
             BuildSuccessCommand(executable), {}, [](const std::string&) {},
             [&](int exitCode, bool success)
             {
+                std::lock_guard<std::mutex> lock(completionMutex);
                 successful = success && exitCode == 0;
                 runner.reset();
-                {
-                    std::lock_guard<std::mutex> lock(completionMutex);
-                    destroyed = true;
-                }
+                destroyed = true;
                 completionCondition.notify_all();
             });
         if (!accepted)
@@ -687,11 +680,9 @@ namespace
                 command, plantDirectory.string(), [](const std::string&) {},
                 [&](int exitCode, bool success)
                 {
-                    {
-                        std::lock_guard<std::mutex> lock(completionMutex);
-                        completed = true;
-                        succeeded = success && exitCode == 0;
-                    }
+                    std::lock_guard<std::mutex> lock(completionMutex);
+                    completed = true;
+                    succeeded = success && exitCode == 0;
                     completionCondition.notify_all();
                 });
             check(launched, "RunAsync rejected the planted-tool launch");
