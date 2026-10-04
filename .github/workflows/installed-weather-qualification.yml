@@ -120,7 +120,7 @@ jobs:
     - name: Checkout exact ABI10 weather product
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
-        ref: 89e1910e70278494bd4537009008cb454f17a09b
+        ref: 356401e9e1807dda3b4ff449730a1ba442b4940b
         path: product
         submodules: recursive
         persist-credentials: false
@@ -160,31 +160,31 @@ jobs:
     - name: graphics
       timeout-minutes: 10
       run: |-
-        python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT" --source-sha 89e1910e70278494bd4537009008cb454f17a09b
+        python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT" --source-sha 356401e9e1807dda3b4ff449730a1ba442b4940b
     - name: Build MinSizeRel product and run focused native families
       timeout-minutes: 185
       run: |
-        python harness/.github/scripts/qualify-installed-native.py build --source product --root "$env:QUAL_ROOT" --source-sha 89e1910e70278494bd4537009008cb454f17a09b --weather-consumer --input-dispatch --editor-lineage
+        python harness/.github/scripts/qualify-installed-native.py build --source product --root "$env:QUAL_ROOT" --source-sha 356401e9e1807dda3b4ff449730a1ba442b4940b --weather-consumer --input-dispatch --editor-lineage
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Installed SDK weather acceptance on same host
       timeout-minutes: 30
       run: |
-        python harness/.github/scripts/qualify-installed-native.py sdk --source product --root "$env:QUAL_ROOT" --source-sha 89e1910e70278494bd4537009008cb454f17a09b --weather-consumer --input-dispatch --editor-lineage
+        python harness/.github/scripts/qualify-installed-native.py sdk --source product --root "$env:QUAL_ROOT" --source-sha 356401e9e1807dda3b4ff449730a1ba442b4940b --weather-consumer --input-dispatch --editor-lineage
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Same installed host SDK9 and SDK11 rejection
       timeout-minutes: 5
       run: |
-        python harness/.github/scripts/qualify-installed-native.py abi --source product --root "$env:QUAL_ROOT" --source-sha 89e1910e70278494bd4537009008cb454f17a09b --weather-consumer --input-dispatch --editor-lineage
+        python harness/.github/scripts/qualify-installed-native.py abi --source product --root "$env:QUAL_ROOT" --source-sha 356401e9e1807dda3b4ff449730a1ba442b4940b --weather-consumer --input-dispatch --editor-lineage
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Package closure and same-host graph binding
       timeout-minutes: 15
       run: |
-        python harness/.github/scripts/qualify-installed-native.py closure --source product --root "$env:QUAL_ROOT" --source-sha 89e1910e70278494bd4537009008cb454f17a09b --weather-consumer --input-dispatch --editor-lineage
+        python harness/.github/scripts/qualify-installed-native.py closure --source product --root "$env:QUAL_ROOT" --source-sha 356401e9e1807dda3b4ff449730a1ba442b4940b --weather-consumer --input-dispatch --editor-lineage
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Retain complete bounded weather evidence
       timeout-minutes: 5
       run: |
-        python harness/.github/scripts/qualify-installed-native.py pack --source product --root "$env:QUAL_ROOT" --source-sha 89e1910e70278494bd4537009008cb454f17a09b --weather-consumer --input-dispatch --editor-lineage
+        python harness/.github/scripts/qualify-installed-native.py pack --source product --root "$env:QUAL_ROOT" --source-sha 356401e9e1807dda3b4ff449730a1ba442b4940b --weather-consumer --input-dispatch --editor-lineage
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       if: ${{ always() && env.QUAL_ROOT != '' }}
     - name: Retain installed weather qualification text
