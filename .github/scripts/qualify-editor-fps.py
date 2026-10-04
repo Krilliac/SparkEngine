@@ -155,6 +155,20 @@ def discovery(document, require_command=False, source=None, build=None, source_s
                     '-DSPARK_ENGINE_EXECUTABLE_NAME=SparkEngine.exe', '-DSPARK_EXPECTED_SOURCE_SHA='+source_sha,
                     '-DSPARK_PYTHON_EXECUTABLE='+sys.executable.replace('\\', '/'),
                     '-P', (source/'cmake/RunEditorFPSInstalledLineage.cmake').as_posix()]
+        if sys.platform == 'win32' and len(normalized) == len(expected):
+            # PATHEXT lookup can report .EXE while CMake reports .exe. Accept
+            # only case aliases of the same physical tool, never changed flags.
+            for index, prefix in ((0, ''), (7, '-DSPARK_PYTHON_EXECUTABLE=')):
+                if not normalized[index].startswith(prefix):
+                    continue
+                actual_path = normalized[index][len(prefix):]
+                expected_path = expected[index][len(prefix):]
+                if actual_path != expected_path and actual_path.casefold() == expected_path.casefold():
+                    try:
+                        if os.path.samefile(actual_path, expected_path):
+                            normalized[index] = expected[index]
+                    except OSError:
+                        pass
         if normalized != expected:
             raise ValueError('Dedicated CTest exact command binding changed')
     return props

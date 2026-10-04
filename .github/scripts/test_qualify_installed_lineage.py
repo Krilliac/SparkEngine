@@ -107,6 +107,7 @@ class LineageContracts(unittest.TestCase):
 
     def test_sole_build_reserves_300_plus_970_without_new_budget(self):
         clock=[1000.0];builds=[]
+        cmake=shutil.which('cmake')
         H.save(self.root/'clock.json',{'deadline':15400})
         for name in ('SparkMismatchedModuleFixture.dll','SparkMismatchedModuleFixture.dll.sparkabi','SparkPreviousSdkModuleFixture.dll','SparkPreviousSdkModuleFixture.dll.sparkabi'):
             (self.build/'bin/MinSizeRel'/name).write_bytes(name.encode())
@@ -128,9 +129,27 @@ class LineageContracts(unittest.TestCase):
         def lineage(host,root,source,identity,deadline):
             self.assertEqual(deadline-clock[0],970)
             return 'c'*64
-        with patch.object(H.time,'monotonic',side_effect=lambda:clock[0]),patch.object(H,'owned_run',side_effect=child),patch.object(H,'focused_native',side_effect=focused),patch.object(H,'lineage_adapter',return_value=L),patch.object(L,'run',side_effect=lineage),patch.object(H.shutil,'which',return_value=sys.executable),patch.dict(os.environ,{'GITHUB_SHA':'b'*40,'GITHUB_RUN_ID':'1','GITHUB_RUN_ATTEMPT':'1'}):
+        with patch.object(H.time,'monotonic',side_effect=lambda:clock[0]),patch.object(H,'owned_run',side_effect=child),patch.object(H,'focused_native',side_effect=focused),patch.object(H,'lineage_adapter',return_value=L),patch.object(L,'run',side_effect=lineage),patch.object(H.shutil,'which',side_effect=lambda tool:cmake if tool=='cmake' else sys.executable),patch.dict(os.environ,{'GITHUB_SHA':'b'*40,'GITHUB_RUN_ID':'1','GITHUB_RUN_ATTEMPT':'1'}):
             H.run_phase('build',self.source,self.root,True,'a'*40,False,True)
         self.assertEqual(len(builds),1)
+
+    def test_changed_prebuild_command_launches_no_build(self):
+        H.save(self.root/'clock.json',{'deadline':15400})
+        self.discovery['tests'][0]['command'][6]='-DSPARK_EXPECTED_SOURCE_SHA='+'c'*40
+        launched=[]
+        cmake=shutil.which('cmake')
+        def child(command,**kw):
+            launched.append(command)
+            if command[0]=='git':
+                text='a'*40 if command[3:]==['rev-parse','HEAD'] else 'b'*40 if command[3:]==['rev-parse','HEAD^{tree}'] else ''
+                kw['stdout'].write((text+'\n').encode())
+            if '--show-only=json-v1' in command:
+                kw['stdout'].write(json.dumps(self.discovery).encode())
+            return subprocess.CompletedProcess(command,0)
+        with patch.object(H.time,'monotonic',return_value=1000),patch.object(H,'owned_run',side_effect=child),patch.object(H,'lineage_adapter',return_value=L),patch.object(H.shutil,'which',side_effect=lambda tool:cmake if tool=='cmake' else sys.executable),patch.dict(os.environ,{'GITHUB_SHA':'b'*40,'GITHUB_RUN_ID':'1','GITHUB_RUN_ATTEMPT':'1'}):
+            with self.assertRaisesRegex(ValueError,'exact command binding'):
+                H.run_phase('build',self.source,self.root,True,'a'*40,False,True)
+        self.assertFalse(any('--build' in command for command in launched))
 
     def test_oversized_complete_proof_rejected(self):
         path=self.root/'large.log';path.write_bytes(b'x'*(L.CAP+1))

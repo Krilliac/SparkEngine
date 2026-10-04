@@ -58,6 +58,12 @@ Cast its byte count to `std::uint64_t` explicitly: on macOS, `size_t` does not
 select the vendored JSON integer constructor unambiguously.
 Reflected scene rejection fixtures rebuild filtered objects and arrays instead
 of calling unsupported JSON `erase` overloads; retain every other field/entity.
+Installed lineage command binding accepts Windows executable path case aliases
+only when they identify the same physical file. `PATHEXT` can return `cmake.EXE`
+while CMake reports `cmake.exe`. Source pins, configuration, argument order and
+flag spelling remain exact; different or unresolvable tools must fail binding.
+Verify the complete configured command before compiling as well as afterward,
+so a binding mismatch fails before the expensive native build.
 
 Qualification workflows also participate in readiness ownership validation.
 The stdlib-only workflow parser accepts literal blocks (`|` / `|-`) for multiline

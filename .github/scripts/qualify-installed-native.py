@@ -751,7 +751,7 @@ def run_phase(phase, source, root, weather_consumer=False, source_sha=SOURCE, in
         if editor_lineage:
             run('lineage-prebuild', ['ctest','--test-dir',build,'-C','MinSizeRel','-R','^EditorFPSLineage_InstalledRuntime$','--show-only=json-v1'],30)
             configured = proof_json(root/'lineage-prebuild.log')
-            lineage_adapter().validators().discovery(configured)
+            lineage_adapter().validators().discovery(configured, True, source, build, source_sha)
             save(root/'lineage-prebuild.json', configured)
         targets = [*TARGETS, "SparkTests"] if weather_consumer else TARGETS
         build_seconds = remaining(deadline, 10800)
