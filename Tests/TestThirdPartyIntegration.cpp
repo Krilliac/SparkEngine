@@ -11,6 +11,12 @@
 #include <system_error>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 // ============================================================================
 // stb_image integration tests
 // ============================================================================
@@ -54,6 +60,16 @@ TEST(StbImage_IsHdr_NonExistent)
 // boundary for texture content.
 namespace
 {
+    std::filesystem::path AssetSecTempPath(const char* name)
+    {
+#if defined(_WIN32)
+        const auto processId = static_cast<unsigned long>(::_getpid());
+#else
+        const auto processId = static_cast<unsigned long>(::getpid());
+#endif
+        return std::filesystem::temp_directory_path() / ("spark_assetsec_" + std::to_string(processId) + "_" + name);
+    }
+
     void PutLE32(std::vector<unsigned char>& bytes, size_t offset, uint32_t value)
     {
         for (int i = 0; i < 4; ++i)
@@ -78,7 +94,7 @@ namespace
 
     stbi_uc* LoadViaFile(const std::vector<unsigned char>& bytes, const char* name, int& w, int& h, int& comp)
     {
-        const auto path = (std::filesystem::temp_directory_path() / name).string();
+        const auto path = AssetSecTempPath(name).string();
         {
             std::ofstream out(path, std::ios::binary | std::ios::trunc);
             out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
