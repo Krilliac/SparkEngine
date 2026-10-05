@@ -73,8 +73,8 @@ class ConsoleApp
     void ReadEngineInput(); ///< Background thread: reads log messages from engine pipe.
 
     // --- Run() helpers ---
-    void PrintBanner();    ///< Clear screen and print the startup banner.
-    bool DetectPipeMode(); ///< Detect if stdin is a pipe; print connection status. Returns true if pipe mode.
+    void PrintBanner();     ///< Clear screen and print the startup banner.
+    bool DetectPipeMode();  ///< Detect if stdin is a pipe; print connection status. Returns true if pipe mode.
     void PrintPipePrompt(); ///< Human-facing prompt when ready for another command, never during idle polling.
     void PipeKeyboardThreadFunc(std::string& input,
                                 std::atomic<bool>& keyboardThreadRunning); ///< Keyboard input loop for pipe mode.
