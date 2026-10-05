@@ -10001,9 +10001,9 @@
 | `EditorPanel` | class | SparkEditor | [EditorPanel.h:L44](../../SparkEditor/Source/Core/EditorPanel.h#L44) | Base class for all editor panels |
 | `EditorPanel` | class | SparkEditor | [EditorUI.h:L109](../../SparkEditor/Source/Core/EditorUI.h#L109) |  |
 | `EditorPanel::BeginPanel` | method | SparkEditor | [EditorPanel.cpp:L22](../../SparkEditor/Source/Core/EditorPanel.cpp#L22) |  |
-| `EditorPanel::EndPanel` | method | SparkEditor | [EditorPanel.cpp:L73](../../SparkEditor/Source/Core/EditorPanel.cpp#L73) |  |
+| `EditorPanel::EndPanel` | method | SparkEditor | [EditorPanel.cpp:L74](../../SparkEditor/Source/Core/EditorPanel.cpp#L74) |  |
 | `EditorPanel::HandleEvent` | method | SparkEditor | [ConsolePanel.cpp:L235](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L235) |  |
-| `EditorPanel::NotifyStateChange` | method | SparkEditor | [EditorPanel.cpp:L78](../../SparkEditor/Source/Core/EditorPanel.cpp#L78) |  |
+| `EditorPanel::NotifyStateChange` | method | SparkEditor | [EditorPanel.cpp:L79](../../SparkEditor/Source/Core/EditorPanel.cpp#L79) |  |
 | `EditorPeer` | struct | SparkEditor | [CollaborativeEditSession.h:L121](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L121) | Information about a connected editor peer |
 | `EditorPluginManager` | class | SparkEditor | [EditorPluginManager.h:L59](../../SparkEditor/Source/Core/EditorPluginManager.h#L59) | Manages editor plugin lifecycle |
 | `EditorPluginManager` | class | SparkEditor | [EditorUI.h:L110](../../SparkEditor/Source/Core/EditorUI.h#L110) |  |

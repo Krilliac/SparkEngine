@@ -8155,9 +8155,9 @@
 | `EditorNotificationManager::Show` | method | SparkEditor | [EditorNotificationManager.cpp:L18](../../SparkEditor/Source/Core/EditorNotificationManager.cpp#L18) |  |
 | `EditorNotificationManager::Update` | method | SparkEditor | [EditorNotificationManager.cpp:L30](../../SparkEditor/Source/Core/EditorNotificationManager.cpp#L30) |  |
 | `EditorPanel::BeginPanel` | method | SparkEditor | [EditorPanel.cpp:L22](../../SparkEditor/Source/Core/EditorPanel.cpp#L22) |  |
-| `EditorPanel::EndPanel` | method | SparkEditor | [EditorPanel.cpp:L73](../../SparkEditor/Source/Core/EditorPanel.cpp#L73) |  |
+| `EditorPanel::EndPanel` | method | SparkEditor | [EditorPanel.cpp:L74](../../SparkEditor/Source/Core/EditorPanel.cpp#L74) |  |
 | `EditorPanel::HandleEvent` | method | SparkEditor | [ConsolePanel.cpp:L235](../../SparkEditor/Source/Panels/ConsolePanel.cpp#L235) |  |
-| `EditorPanel::NotifyStateChange` | method | SparkEditor | [EditorPanel.cpp:L78](../../SparkEditor/Source/Core/EditorPanel.cpp#L78) |  |
+| `EditorPanel::NotifyStateChange` | method | SparkEditor | [EditorPanel.cpp:L79](../../SparkEditor/Source/Core/EditorPanel.cpp#L79) |  |
 | `EditorPluginManager::Console_ListPlugins` | method | SparkEditor | [EditorPluginManager.cpp:L444](../../SparkEditor/Source/Core/EditorPluginManager.cpp#L444) |  |
 | `EditorPluginManager::FindDynamicPlugin` | method | SparkEditor | [EditorPluginManager.cpp:L483](../../SparkEditor/Source/Core/EditorPluginManager.cpp#L483) |  |
 | `EditorPluginManager::FindDynamicPlugin` | method | SparkEditor | [EditorPluginManager.cpp:L490](../../SparkEditor/Source/Core/EditorPluginManager.cpp#L490) |  |
