@@ -166,7 +166,7 @@
 | `ComponentType` | enum | SparkEditor | [SceneSystemEnums.h:L21](../../SparkEditor/Source/Enums/SceneSystemEnums.h#L21) | Component type enumeration |
 | `CompositeOp` | enum | SparkEngine | [UICompositor.h:L42](../../SparkEngine/Source/Graphics/UICompositor.h#L42) |  |
 | `CompositionMode` | enum | SparkEditor | [LevelStreamingEnums.h:L94](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L94) | World composition modes |
-| `Compression` | enum | Tests | [TestSparkPak.cpp:L29](../../Tests/TestSparkPak.cpp#L29) |  |
+| `Compression` | enum | Tests | [TestSparkPak.cpp:L35](../../Tests/TestSparkPak.cpp#L35) |  |
 | `CompressionMethod` | enum | SparkEngine | [CompressionUtils.h:L19](../../SparkEngine/Source/Utils/CompressionUtils.h#L19) | Compression algorithm selection. |
 | `ComputePriority` | enum | Tests | [TestAsyncComputeScheduler.cpp:L15](../../Tests/TestAsyncComputeScheduler.cpp#L15) |  |
 | `ConditionGroupLogic` | enum | SparkEngine | [ConditionSystem.h:L81](../../SparkEngine/Source/Engine/Gameplay/ConditionSystem.h#L81) |  |

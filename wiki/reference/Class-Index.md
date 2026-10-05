@@ -1401,7 +1401,7 @@
 | `Entry` | struct | SparkEngine | [ScheduledCallback.h:L176](../../SparkEngine/Source/Utils/ScheduledCallback.h#L176) | Cancel all pending callbacks. |
 | `Entry` | struct | Tests | [TestAdversarialEngine.cpp:L1246](../../Tests/TestAdversarialEngine.cpp#L1246) |  |
 | `Entry` | struct | Tests | [TestScheduledCallback.cpp:L74](../../Tests/TestScheduledCallback.cpp#L74) |  |
-| `Entry` | struct | Tests | [TestSparkPak.cpp:L142](../../Tests/TestSparkPak.cpp#L142) |  |
+| `Entry` | struct | Tests | [TestSparkPak.cpp:L148](../../Tests/TestSparkPak.cpp#L148) |  |
 | `EntryView` | struct | GameModules | [TFSocialSystem.h:L51](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L51) |  |
 | `EnvironmentLighting` | struct | SparkEngine | [LightingSystem.h:L194](../../SparkEngine/Source/Graphics/LightingSystem.h#L194) | Environment lighting settings |
 | `EnvironmentSettings` | struct | SparkEditor | [SceneFileTypes.h:L1087](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1087) | Environment and scene settings |
@@ -1902,7 +1902,7 @@
 | `HandoffRequest` | struct | SparkEngine | [AreaHandoffParticipant.h:L41](../../SparkEngine/Source/Engine/Networking/AreaHandoffParticipant.h#L41) | Immutable input delivered to a game-owned handoff participant. |
 | `HashGridLevelStats` | struct | SparkEngine | [NeuralRadianceCache.h:L77](../../SparkEngine/Source/Graphics/Neural/NeuralRadianceCache.h#L77) | Per-level hash grid statistics. |
 | `HazardInstance` | struct | GameModules | [PlatformerHazardSystem.h:L31](../../GameModules/SparkGamePlatformer/Source/Hazard/PlatformerHazardSystem.h#L31) | A single hazard instance placed in a level |
-| `Header` | struct | Tests | [TestSparkPak.cpp:L36](../../Tests/TestSparkPak.cpp#L36) |  |
+| `Header` | struct | Tests | [TestSparkPak.cpp:L42](../../Tests/TestSparkPak.cpp#L42) |  |
 | `HeadlessBridge` | struct | Tests | [TestProcessDrawListLinux.cpp:L45](../../Tests/TestProcessDrawListLinux.cpp#L45) |  |
 | `HeadlessTickStats` | class | SparkEngine | [HeadlessTickStats.h:L35](../../SparkEngine/Source/Core/HeadlessTickStats.h#L35) | Fixed-size tick work-time histogram with nearest-rank percentiles. |
 | `HealEvent` | struct | Tests | [TestEntityEventBus.cpp:L14](../../Tests/TestEntityEventBus.cpp#L14) |  |
@@ -3648,7 +3648,7 @@
 | `RawCollabPeer` | struct | Tests | [TestCollaborativeEditing.cpp:L96](../../Tests/TestCollaborativeEditing.cpp#L96) |  |
 | `RawHandshakeResult` | struct | Tests | [SecureTestPeer.h:L100](../../Tests/Fixtures/SecureTestPeer.h#L100) | A completed client-side raw handshake. |
 | `RawPeer` | class | Tests | [TestNetTransportSecurity.cpp:L105](../../Tests/TestNetTransportSecurity.cpp#L105) |  |
-| `RawTocEntry` | struct | Tests | [TestSparkPak.cpp:L817](../../Tests/TestSparkPak.cpp#L817) |  |
+| `RawTocEntry` | struct | Tests | [TestSparkPak.cpp:L833](../../Tests/TestSparkPak.cpp#L833) |  |
 | `RawUdpClient` | class | Tests | [TestReliableChannel.cpp:L441](../../Tests/TestReliableChannel.cpp#L441) |  |
 | `RawUDPSender` | class | Tests | [TestNetworkStress.cpp:L41](../../Tests/TestNetworkStress.cpp#L41) |  |
 | `Ray` | struct | SparkEngine | [CollisionSystem.h:L106](../../SparkEngine/Source/Physics/CollisionSystem.h#L106) | 3D ray for raycasting operations |
@@ -4825,8 +4825,8 @@
 | `TestObject` | struct | Tests | [TestObjectPoolReal.cpp:L11](../../Tests/TestObjectPoolReal.cpp#L11) | Real-class tests for Spark::ObjectPool<T, ThreadSafe> |
 | `TestOutcomeInputs` | struct | Tests | [TestFramework.h:L122](../../Tests/TestFramework.h#L122) |  |
 | `TestOutput` | struct | Tests | [TestMain.cpp:L363](../../Tests/TestMain.cpp#L363) |  |
-| `TestPakReader` | class | Tests | [TestSparkPak.cpp:L151](../../Tests/TestSparkPak.cpp#L151) |  |
-| `TestPakWriter` | class | Tests | [TestSparkPak.cpp:L62](../../Tests/TestSparkPak.cpp#L62) |  |
+| `TestPakReader` | class | Tests | [TestSparkPak.cpp:L157](../../Tests/TestSparkPak.cpp#L157) |  |
+| `TestPakWriter` | class | Tests | [TestSparkPak.cpp:L68](../../Tests/TestSparkPak.cpp#L68) |  |
 | `TestParallaxLayer` | struct | Tests | [TestSprite2DComponents.cpp:L617](../../Tests/TestSprite2DComponents.cpp#L617) |  |
 | `TestPhysicsBody` | class | Tests | [TestPhysicsInterpolation.cpp:L92](../../Tests/TestPhysicsInterpolation.cpp#L92) |  |
 | `TestPhysicsSystem` | class | Tests | [TestPhysicsInterpolation.cpp:L125](../../Tests/TestPhysicsInterpolation.cpp#L125) |  |
@@ -5239,8 +5239,8 @@
 | `TimerState` | struct | SparkEngine | [EventResponseSystem.h:L311](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L311) |  |
 | `TLASInstance` | struct | SparkEngine | [MetalRayTracing.h:L73](../../SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.h#L73) | Per-instance TLAS entry (row-major 3x4 affine transform). |
 | `Toast` | struct | GameModules | [TFMedalSystem.h:L235](../../GameModules/SparkGameMMOFPS/Source/Game/TFMedalSystem.h#L235) |  |
-| `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L80](../../Tests/TestSparkPak.cpp#L80) |  |
-| `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L154](../../Tests/TestSparkPak.cpp#L154) |  |
+| `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L86](../../Tests/TestSparkPak.cpp#L86) |  |
+| `TOCEntry` | struct | Tests | [TestSparkPak.cpp:L160](../../Tests/TestSparkPak.cpp#L160) |  |
 | `TokenCursor` | class | SparkEditor | [PrefabTextFormat.cpp:L104](../../SparkEditor/Source/Prefabs/PrefabTextFormat.cpp#L104) |  |
 | `TokenEntry` | struct | SparkEngine | [NetworkSecurity.h:L91](../../SparkEngine/Source/Engine/Networking/NetworkSecurity.h#L91) |  |
 | `TokenFacts` | struct | Tests | [CrashArtifactSandboxProbe.cpp:L67](../../Tests/Fixtures/CrashArtifactSandboxProbe.cpp#L67) |  |
