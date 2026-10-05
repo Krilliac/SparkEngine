@@ -960,7 +960,7 @@ class RepositoryEvidenceTests(unittest.TestCase):
             fake_mktemp.chmod(0o755)
             health = root / "health.json"
             result = subprocess.run(
-                ["bash", str(checkout / "docs" / "update-all-docs.sh"), "update"],
+                [docs_currentness.find_bash(allow_override=False), str(checkout / "docs" / "update-all-docs.sh"), "update"],
                 cwd=checkout,
                 env={**os.environ, "PATH": str(fake_bin)+os.pathsep+os.environ["PATH"],
                      "PYTHON": sys.executable, "TMPDIR": str(safe_temp),
