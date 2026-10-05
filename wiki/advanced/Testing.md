@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*742 test-bearing `.cpp`/`.mm` files, 8553 source-level test definitions*
+*742 test-bearing `.cpp`/`.mm` files, 8557 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1253,7 +1253,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestEditorRecovery` | 18 |
 | `TestEditorStateCompatibility` | 8 |
 | `TestEditorSubsystems` | 138 |
-| `TestEditorSubsystemsReal` | 16 |
+| `TestEditorSubsystemsReal` | 20 |
 | `TestEditorUndoHierarchyReal` | 9 |
 | `TestEditorUndoWorldMatrixReal` | 2 |
 | `TestEditorUntrustedProject` | 5 |

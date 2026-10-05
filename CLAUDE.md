@@ -163,7 +163,7 @@ SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
 FuzzerTests/                             — libFuzzer harnesses, corpora, fuzz policy (separate from Tests/)
-Tests/                                   — 8553 test definitions across 741 files, CTest
+Tests/                                   — 8557 test definitions across 741 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.

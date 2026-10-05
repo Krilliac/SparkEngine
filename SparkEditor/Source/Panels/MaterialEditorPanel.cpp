@@ -333,8 +333,26 @@ namespace SparkEditor
             return false;
         }
 
-        // Serialize material to .spkmat file (simplified text format)
-        std::ofstream file(selected->filePath);
+        const auto materialPath = Spark::FileUtils::PathFromUtf8(selected->filePath);
+        if (materialPath.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: cannot save to an empty file path");
+            return false;
+        }
+        std::error_code directoryError;
+        if (!materialPath.parent_path().empty())
+        {
+            std::filesystem::create_directories(materialPath.parent_path(), directoryError);
+        }
+        if (directoryError)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: cannot create parent directory for '%s': %s",
+                            selected->filePath.c_str(), directoryError.message().c_str());
+            return false;
+        }
+
+        // Serialize the existing .spkmat format through its native path on Windows.
+        std::ofstream file(materialPath);
         if (!file.is_open())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: failed to open file '%s' for writing",
@@ -417,7 +435,20 @@ namespace SparkEditor
         file << "alpha_clip " << selected->renderState.alphaClipThreshold << "\n";
         file << "render_queue " << selected->renderState.renderQueue << "\n";
 
+        file.flush();
+        if (!file.good())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: failed to write material '%s'",
+                            selected->filePath.c_str());
+            return false;
+        }
         file.close();
+        if (file.fail())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: failed to close material '%s'",
+                            selected->filePath.c_str());
+            return false;
+        }
 
         selected->isModified = false;
         SetModified(false);

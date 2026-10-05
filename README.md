@@ -226,7 +226,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 8,553 test definitions across 741 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
+**Tests:** 8,557 test definitions across 741 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -394,7 +394,7 @@ SparkEngine/
 ├── SparkEditor/Source/    64 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 8,553 test definitions, 741 files
+├── Tests/                 8,557 test definitions, 741 files
 ├── wiki/                  206 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```

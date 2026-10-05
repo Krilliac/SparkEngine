@@ -15,8 +15,10 @@
 
 #include "Prefabs/PrefabManager.h"
 #include "Profiler/PerformanceProfiler.h"
+#include "Panels/MaterialEditorPanel.h"
 #include "SceneSystem/SceneFile.h"
 #include "Terrain/TerrainEditor.h"
+#include "Utils/FileUtils.h"
 
 #include "Core/EngineContext.h"
 #include "Engine/ECS/Components.h"
@@ -63,6 +65,26 @@ namespace
 
       private:
         std::filesystem::path m_path;
+    };
+
+    class MaterialWorkingDirectoryGuard
+    {
+      public:
+        explicit MaterialWorkingDirectoryGuard(const std::filesystem::path& next)
+            : m_previous(std::filesystem::current_path())
+        {
+            std::filesystem::current_path(next);
+        }
+        ~MaterialWorkingDirectoryGuard()
+        {
+            std::error_code error;
+            std::filesystem::current_path(m_previous, error);
+        }
+        MaterialWorkingDirectoryGuard(const MaterialWorkingDirectoryGuard&) = delete;
+        MaterialWorkingDirectoryGuard& operator=(const MaterialWorkingDirectoryGuard&) = delete;
+
+      private:
+        std::filesystem::path m_previous;
     };
 
     /// @brief Build a small authored terrain in the editor: heights, a bound texture layer, a detail mesh.
@@ -605,4 +627,59 @@ TEST(EditorSubsystemsReal_ProfilerFrameTimeTracksTheRealDelta)
     EXPECT_NEAR(profiler.GetP99FrameTimeMs(), 20.0f, 0.01f);
 
     profiler.Shutdown();
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_CreatesMissingParent)
+{
+    ScratchDir scratch("material_first_save");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("FirstMaterial", "Shaders/QA.hlsl");
+    const auto destination = scratch.Path() / "Assets" / "Materials" / "FirstMaterial.spkmat";
+    EXPECT_FALSE(std::filesystem::exists(destination.parent_path()));
+    ASSERT_TRUE(panel.SaveMaterial());
+    EXPECT_TRUE(std::filesystem::is_regular_file(destination));
+    EXPECT_TRUE(std::filesystem::file_size(destination) > 0);
+    EXPECT_FALSE(panel.HasUnsavedChanges());
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_ParentFileFailureRetainsDirtyState)
+{
+    ScratchDir scratch("material_parent_file");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const auto blocker = scratch.Path() / "Assets";
+    ASSERT_TRUE(Spark::FileUtils::WriteTextFile(blocker.string(), "existing user asset"));
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("FirstMaterial", "Shaders/QA.hlsl");
+    EXPECT_FALSE(panel.SaveMaterial());
+    EXPECT_TRUE(panel.HasUnsavedChanges());
+    EXPECT_EQ(Spark::FileUtils::ReadTextFile(blocker.string()).value_or(""), std::string("existing user asset"));
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_DestinationDirectoryFailureRetainsDirtyState)
+{
+    ScratchDir scratch("material_destination_directory");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const auto destination = scratch.Path() / "Assets" / "Materials" / "FirstMaterial.spkmat";
+    ASSERT_TRUE(std::filesystem::create_directories(destination));
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("FirstMaterial", "Shaders/QA.hlsl");
+    EXPECT_FALSE(panel.SaveMaterial());
+    EXPECT_TRUE(panel.HasUnsavedChanges());
+    EXPECT_TRUE(std::filesystem::is_directory(destination));
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_UsesNativeUtf8Path)
+{
+    ScratchDir scratch("material_utf8");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const auto filename = std::filesystem::path(u8"塗料");
+    const auto utf8Name = Spark::FileUtils::TryPathToUtf8(filename);
+    ASSERT_TRUE(utf8Name.has_value());
+    const auto destination = scratch.Path() / "Assets" / "Materials" / std::filesystem::path(u8"塗料.spkmat");
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial(*utf8Name, "Shaders/QA.hlsl");
+    ASSERT_TRUE(panel.SaveMaterial());
+    EXPECT_TRUE(std::filesystem::is_regular_file(destination));
+    EXPECT_FALSE(panel.HasUnsavedChanges());
 }

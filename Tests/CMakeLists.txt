@@ -1457,6 +1457,9 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorNotificationManager.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorParameters.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorPreview.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/GameViewPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/InspectorVectorControl.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Search/CommandPalette.cpp"
@@ -1498,6 +1501,12 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Profiler/PerformanceProfiler.cpp"
     )
 
+    add_test(NAME EditorMaterialSave COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
+    set_tests_properties(EditorMaterialSave PROPERTIES
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorSubsystemsReal_MaterialSave_;SPARK_TEST_EXPECT_COUNT=4"
+        LABELS "editor;editor-integration;unit"
+        RUN_SERIAL TRUE
+        TIMEOUT 60)
     message(STATUS "[Tests] ImGui available â€” gated editor + 6 game module tests enabled")
 else()
     message(STATUS "[Tests] ImGui not available â€” gated editor & OpenWorld tests disabled")
@@ -1865,6 +1874,10 @@ function(spark_exclude_from_main_suite family_prefix)
     set_tests_properties(SparkEngineTests PROPERTIES ENVIRONMENT "${_environment}")
     set_property(DIRECTORY APPEND PROPERTY SPARK_MAIN_SUITE_EXCLUDED_FAMILIES "${family_prefix}")
 endfunction()
+
+if(TARGET imgui)
+    spark_exclude_from_main_suite(EditorSubsystemsReal_MaterialSave_)
+endif()
 
 # TestMain matches SPARK_TEST_EXCLUDE anywhere in a name, while the dedicated
 # lanes select by name prefix. A test that contains an excluded family prefix
