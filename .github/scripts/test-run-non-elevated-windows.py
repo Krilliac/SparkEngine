@@ -53,7 +53,20 @@ class NonElevatedLauncherTests(unittest.TestCase):
     def test_safe_caller_uses_normal_subprocess_without_msvcrt_import_at_module_load(self) -> None:
         source = MODULE_PATH.read_text(encoding="utf-8")
         self.assertNotIn("import msvcrt\n", source.split("def run", 1)[0])
-        self.assertIn("subprocess.run(argv", source)
+        self.assertIn("subprocess.run(_windows_command_line(argv)", source)
+
+    def test_msi_empty_scope_property_cannot_consume_the_next_property(self) -> None:
+        command = MODULE._windows_command_line([
+            r"C:\Windows\System32\msiexec.exe", "/i", r"D:\owned package\engine.msi",
+            "ALLUSERS=", "MSIINSTALLPERUSER=1", "INSTALL_ROOT=D:\\owned root",
+        ])
+        self.assertIn('ALLUSERS="" MSIINSTALLPERUSER=1', command)
+        self.assertIn('"D:\\owned package\\engine.msi"', command)
+        self.assertIn('"INSTALL_ROOT=D:\\owned root"', command)
+
+    def test_non_msi_arguments_keep_standard_windows_encoding(self) -> None:
+        argv = ["probe.exe", "ALLUSERS=", "argument with spaces", 'quoted "value"']
+        self.assertEqual(MODULE._windows_command_line(argv), subprocess.list2cmdline(argv))
 
     def test_mandatory_label_size_matches_documented_formula(self) -> None:
         sid_length = 28
