@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*742 test-bearing `.cpp`/`.mm` files, 8551 source-level test definitions*
+*742 test-bearing `.cpp`/`.mm` files, 8553 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1364,7 +1364,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestInGameConsole` | 12 |
 | `TestInputActionSystem` | 12 |
 | `TestInputBindings` | 5 |
-| `TestInputFrameEdgesReal` | 6 |
+| `TestInputFrameEdgesReal` | 8 |
 | `TestInputSystem` | 11 |
 | `TestInstanceManager` | 14 |
 | `TestInventorySystem` | 11 |

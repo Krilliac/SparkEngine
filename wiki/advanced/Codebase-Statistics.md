@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 347347 |
-| **SparkEditor/Source** | 106229 |
+| **SparkEngine/Source** | 347396 |
+| **SparkEditor/Source** | 106210 |
 | **GameModules** | 164092 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3231 |
-| **Tests** | 277349 |
+| **Tests** | 277427 |
 | **SparkConsole/src** | 1861 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~935165** |
+| **Total C++ (excl. ThirdParty)** | **~935273** |
 
 ### File Counts
 
@@ -44,12 +44,12 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
 | Graphics | 125930 | 36.2% |
-| Engine (all subsystems) | 100749 | 29.0% |
+| Engine (all subsystems) | 100750 | 29.0% |
 | Utils | 49400 | 14.2% |
-| Core | 33579 | 9.6% |
+| Core | 33610 | 9.6% |
 | Physics | 11142 | 3.2% |
 | Audio | 6961 | 2.0% |
-| Input | 3951 | 1.1% |
+| Input | 3968 | 1.1% |
 | SceneManager | 4842 | 1.3% |
 | Enums | 1025 | 0.2% |
 | Game | 2950 | 0.8% |
@@ -60,7 +60,7 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines |
 |-----------|------:|
 | Networking | 18859 |
-| AI | 13692 |
+| AI | 13693 |
 | ECS | 8814 |
 | Gameplay | 8285 |
 | Scripting | 8189 |
@@ -104,14 +104,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 106229 |
+| Total editor lines | 106210 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 741 |
-| TEST() definitions | 8551 |
+| TEST() definitions | 8553 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -187,7 +187,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2723 |
+| `EditorUI.cpp` | 2705 |
 | `ProjectManager.cpp` | 2362 |
 | `BuildPipeline.cpp` | 1881 |
 | `CollaborativeEditSession.cpp` | 1773 |

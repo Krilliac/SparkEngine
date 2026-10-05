@@ -700,7 +700,7 @@
 | `LoadCompletionCallback` | alias | SparkEngine | [DirectStorageLoader.h:L69](../../SparkEngine/Source/Engine/Streaming/DirectStorageLoader.h#L69) | Callback invoked when a load completes |
 | `LocalShotHook` | alias | GameModules | [TFWeaponSystem.h:L104](../../GameModules/SparkGameMMOFPS/Source/Game/TFWeaponSystem.h#L104) |  |
 | `LockChangedCallback` | alias | SparkEditor | [CollaborativeEditSession.h:L198](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L198) |  |
-| `LockLoaderLock` | alias | Tests | [TestEditorCrashHandlerFilterReal.cpp:L505](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L505) |  |
+| `LockLoaderLock` | alias | Tests | [TestEditorCrashHandlerFilterReal.cpp:L507](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L507) |  |
 | `LocS` | alias | SparkEngine | [EngineSettings.cpp:L531](../../SparkEngine/Source/Core/EngineSettings.cpp#L531) |  |
 | `LOG_ERROR` | macro | SparkEngine | [D3D12Device.cpp:L43](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp#L43) |  |
 | `LOG_INFO` | macro | SparkEngine | [D3D12Device.cpp:L45](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp#L45) |  |
@@ -1465,7 +1465,7 @@
 | `UnderlyingType` | alias | SparkEngine | [EnumUtils.h:L206](../../SparkEngine/Source/Enums/EnumUtils.h#L206) | Type-safe enum flag operations |
 | `UniqueHandle` | alias | SparkEngine | [SceneManager.cpp:L255](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L255) |  |
 | `UnloadCallback` | alias | SparkEngine | [ModuleHotReload.h:L84](../../SparkEngine/Source/Engine/HotReload/ModuleHotReload.h#L84) | Callback signature for module lifecycle during hot-reload |
-| `UnlockLoaderLock` | alias | Tests | [TestEditorCrashHandlerFilterReal.cpp:L506](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L506) |  |
+| `UnlockLoaderLock` | alias | Tests | [TestEditorCrashHandlerFilterReal.cpp:L508](../../Tests/TestEditorCrashHandlerFilterReal.cpp#L508) |  |
 | `Unsigned` | alias | SparkDaemon | [BoundedWireCodec.h:L34](../../SparkDaemon/src/BoundedWireCodec.h#L34) |  |
 | `Unsigned` | alias | SparkDaemon | [BoundedWireCodec.h:L73](../../SparkDaemon/src/BoundedWireCodec.h#L73) |  |
 | `UnsubscribeFn` | alias | SparkEngine | [EntityEventBus.h:L99](../../SparkEngine/Source/Utils/EntityEventBus.h#L99) |  |

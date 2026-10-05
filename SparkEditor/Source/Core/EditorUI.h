@@ -468,12 +468,10 @@ namespace SparkEditor
         void ClearMatchingRecoveryAfterSuccessfulSave();
         void RenderRecoveryModal();
 
-        /// @brief Re-point the panels that cache a raw ::World* (SceneView,
-        /// Hierarchy) at the current document World and clear selection. Must be
-        /// called any time that World is (re)assigned — both the initial seed
-        /// wiring in SetGraphicsDevice() and OpenScene() share this path so
-        /// the caching panels never dangle a pointer to a freed World.
-        /// InspectorPanel needs no re-wire — it reads GetWorld() live.
+        /// @brief Wire document-backed panels to the current World and EditorUI.
+        /// Re-points cached World pointers, clears stale selection, and gives
+        /// selection consumers their platform-neutral EditorUI owner. Must be
+        /// called any time the World is (re)assigned.
         void RewirePanelsToWorld();
         void RenderMainMenuBar();
         void RenderFileMenu();

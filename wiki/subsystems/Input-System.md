@@ -84,6 +84,12 @@ if (input.WasKeyPressed('W')) { /* W was pressed this frame */ }
 if (input.WasKeyReleased(VK_SHIFT)) { /* Shift was released this frame */ }
 ```
 
+Generic modifier queries (`VK_SHIFT`, `VK_CONTROL`, `VK_MENU`) include either physical side as well as
+console-injected generic state. Side-specific queries retain their identity. The generic press edge occurs when
+the first side goes down; releasing one side while the other remains held does not produce a generic release.
+The Win32 host resolves left/right modifiers from scan-code and extended-key metadata and forwards Alt's
+system-key messages through the same frame-latched input path. SDL retains its side-specific key translation.
+
 ### Mouse Input
 
 ```cpp

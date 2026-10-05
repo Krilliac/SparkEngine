@@ -1,6 +1,10 @@
-"""Pure parser/source regressions. Synthetic records are not native evidence."""
+"""Parser/source and normal capture regressions. Synthetic records are not native evidence."""
 import copy
+import io
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -11,6 +15,41 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('fps_input_dispatch', ROOT/'Tests/PackageSmoke/RunFPSInputDispatch.py')
 driver = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(driver)
+
+
+class WrapperCaptureTests(unittest.TestCase):
+    def test_normal_child_stdout_stderr_and_stdin_are_captured(self):
+        child = Path(sys.executable)
+        if os.name == 'nt':
+            child = child.with_name('pythonw.exe')
+            self.assertTrue(child.is_file(), 'Windows GUI Python child is required')
+        payload = ("import sys; print('CAPTURE_STDOUT',flush=True); "
+                   "print('CAPTURE_STDERR',file=sys.stderr,flush=True); "
+                   "print('CAPTURE_STDIN_EOF='+str(sys.stdin.buffer.read()==b''),flush=True)")
+        flags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        result = subprocess.run([sys.executable, '-c', driver.WRAPPER, str(child), '-c', payload],
+                                input=b'GO\n', stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                creationflags=flags, timeout=10, check=True)
+        lines = result.stdout.decode('utf-8').splitlines()
+        self.assertEqual(len([line for line in lines if line.startswith('SPARK_INPUT_CHILD ')]), 1)
+        self.assertEqual(sorted(line for line in lines if not line.startswith('SPARK_INPUT_CHILD ')),
+                         ['CAPTURE_STDERR', 'CAPTURE_STDIN_EOF=True', 'CAPTURE_STDOUT'])
+
+    def test_inner_launch_explicitly_routes_existing_binary_capture_streams(self):
+        captured_out, captured_err = io.BytesIO(), io.BytesIO()
+        child = SimpleNamespace(pid=1234, wait=mock.Mock(return_value=0))
+        process_module = SimpleNamespace(Popen=mock.Mock(return_value=child), DEVNULL=subprocess.DEVNULL)
+        system_module = SimpleNamespace(argv=['wrapper', 'normal-child'],
+            stdin=SimpleNamespace(buffer=io.BytesIO(b'GO\n')),
+            stdout=SimpleNamespace(buffer=captured_out), stderr=SimpleNamespace(buffer=captured_err),
+            exit=mock.Mock(side_effect=SystemExit(0)))
+        with mock.patch.dict(sys.modules, subprocess=process_module, sys=system_module), mock.patch('builtins.print'):
+            with self.assertRaises(SystemExit) as exit_result:
+                exec(driver.WRAPPER, {})
+        self.assertEqual(exit_result.exception.code, 0)
+        process_module.Popen.assert_called_once_with(['normal-child'], stdin=subprocess.DEVNULL,
+                                                     stdout=captured_out, stderr=captured_err)
+        child.wait.assert_called_once_with()
 
 
 class ReceiptTests(unittest.TestCase):

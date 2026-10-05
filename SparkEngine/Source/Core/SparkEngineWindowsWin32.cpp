@@ -411,6 +411,29 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
 // ===================================================================================
 //                          Window procedure
 // ===================================================================================
+static WPARAM NormalizeWin32ModifierVirtualKey(WPARAM virtualKey, LPARAM lParam)
+{
+    if (virtualKey != VK_SHIFT && virtualKey != VK_CONTROL && virtualKey != VK_MENU)
+        return virtualKey;
+
+    UINT scanCode = (static_cast<ULONG_PTR>(lParam) >> 16u) & 0xFFu;
+    if ((static_cast<ULONG_PTR>(lParam) & 0x01000000u) != 0)
+        scanCode |= 0xE000u;
+
+    const UINT mappedKey = MapVirtualKeyW(scanCode, MAPVK_VSC_TO_VK_EX);
+    switch (virtualKey)
+    {
+    case VK_SHIFT:
+        return (mappedKey == VK_LSHIFT || mappedKey == VK_RSHIFT) ? mappedKey : virtualKey;
+    case VK_CONTROL:
+        return (mappedKey == VK_LCONTROL || mappedKey == VK_RCONTROL) ? mappedKey : virtualKey;
+    case VK_MENU:
+        return (mappedKey == VK_LMENU || mappedKey == VK_RMENU) ? mappedKey : virtualKey;
+    default:
+        return virtualKey;
+    }
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Game-mode ImGui overlay gets first look at input so HUD menus
@@ -421,13 +444,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg)
     {
     case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
     case WM_KEYUP:
+    case WM_SYSKEYUP:
         if (GetEngineRuntime().input)
         {
             // While gameplay owns the mouse (FPS look mode) it keeps the
             // keyboard too; otherwise a focused ImGui text field eats keys.
             if (GetEngineRuntime().input->IsMouseCaptured() || !Spark::GameImGui::WantsKeyboard())
-                GetEngineRuntime().input->HandleMessage(msg, wParam, lParam);
+            {
+                const UINT keyMessage = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) ? WM_KEYDOWN : WM_KEYUP;
+                GetEngineRuntime().input->HandleMessage(keyMessage, NormalizeWin32ModifierVirtualKey(wParam, lParam),
+                                                        lParam);
+            }
         }
         break;
 

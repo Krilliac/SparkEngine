@@ -1,4 +1,4 @@
-"""Isolated proposal: actual owned-window dispatch. Import/tests never launch a process."""
+"""Owned-window dispatch. Import never launches a process."""
 import argparse
 from collections import deque
 import ctypes
@@ -23,7 +23,9 @@ SCOUT, VANGUARD = '0', '4' # SparkSDK/Include/Spark/GameTypes.h:224-231.
 TRACE_FIELDS = 'v phase input update mask pressed released paused action result reason operation faults profile transfer saves'.split()
 WRAPPER = """import subprocess,sys
 if sys.stdin.buffer.readline()!=b'GO\\n': sys.exit(125)
-p=subprocess.Popen(sys.argv[1:])
+# Windows GUI children require explicit inherited capture handles.
+p=subprocess.Popen(sys.argv[1:],stdin=subprocess.DEVNULL,
+                   stdout=sys.stdout.buffer,stderr=sys.stderr.buffer)
 print('SPARK_INPUT_CHILD '+str(p.pid),flush=True)
 sys.exit(p.wait())
 """
