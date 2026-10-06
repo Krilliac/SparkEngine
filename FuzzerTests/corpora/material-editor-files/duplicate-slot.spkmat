@@ -1,0 +1,4 @@
+name: Invalid
+shader: Shaders/QA.hlsl
+texture_slot Ambient Occlusion 4 none 1 1 0 0
+texture_slot Ambient Occlusion 4 none 1 1 0 0

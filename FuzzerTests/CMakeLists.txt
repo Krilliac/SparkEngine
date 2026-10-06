@@ -2906,6 +2906,55 @@ set_tests_properties(FuzzMaterialLoaderSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# The editor .spkmat format uses its UI-free production decoder and shared PBR schema.
+add_executable(SparkFuzzMaterialEditorFiles
+    FuzzMaterialEditorFiles.cpp
+    FuzzMaterialEditorFilesProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Panels/MaterialEditorMaterialParser.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Panels/MaterialEditorDefaults.cpp"
+)
+set_source_files_properties(
+    FuzzMaterialEditorFilesProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Panels/MaterialEditorMaterialParser.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Panels/MaterialEditorDefaults.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzMaterialEditorFiles PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+)
+target_compile_features(SparkFuzzMaterialEditorFiles PRIVATE cxx_std_23)
+target_compile_definitions(SparkFuzzMaterialEditorFiles PRIVATE SPARK_SHIPPING=1)
+target_compile_options(SparkFuzzMaterialEditorFiles PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzMaterialEditorFiles PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzMaterialEditorFiles PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzMaterialEditorFilesSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzMaterialEditorFiles>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/material-editor-files"
+)
+set_tests_properties(FuzzMaterialEditorFilesSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # EngineSettings::Load runs on settings.ini and its settings.local.ini override at
 # every engine start. ConfigParser.cpp is the INI reader it stages through; the
 # settings_* console commands live in EngineSettingsConsole.cpp, which is not linked,

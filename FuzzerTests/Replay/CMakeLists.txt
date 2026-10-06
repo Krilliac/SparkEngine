@@ -44,6 +44,19 @@ add_executable(SparkFuzzReplayArchive FuzzReplayMain.cpp
     "${_spark_fuzz_dir}/FuzzArchive.cpp" "${_spark_fuzz_dir}/FuzzArchiveProduction.cpp")
 spark_fuzz_replay_test(SparkFuzzReplayArchive sparkpak-reader LIBRARIES SparkEngineLib)
 
+# The editor material parser is UI-free but lives outside SparkEngineLib. Compile
+# the shipped parser and shared PBR schema directly so every committed .spkmat
+# seed also runs in normal MSVC/GCC/Clang builds.
+add_executable(SparkFuzzReplayMaterialEditorFiles FuzzReplayMain.cpp
+    "${_spark_fuzz_dir}/FuzzMaterialEditorFiles.cpp"
+    "${_spark_fuzz_dir}/FuzzMaterialEditorFilesProduction.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorMaterialParser.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorDefaults.cpp")
+target_include_directories(SparkFuzzReplayMaterialEditorFiles PRIVATE
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source")
+target_compile_definitions(SparkFuzzReplayMaterialEditorFiles PRIVATE SPARK_SHIPPING=1)
+spark_fuzz_replay_test(SparkFuzzReplayMaterialEditorFiles material-editor-files)
+
 # The crash reporter is its own executable, so its manifest parser is compiled
 # in exactly as SparkCrashReporterManifestTests compiles it.
 set(_spark_crash_reporter_src "${CMAKE_SOURCE_DIR}/SparkCrashReporter/src")

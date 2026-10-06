@@ -98,7 +98,7 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Build production fuzz smoke target
-      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest
 
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
@@ -2833,6 +2833,7 @@ jobs:
         "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
 
     - name: Run Tests
+      id: vs2026-release-tests
       if: matrix.config == 'Release'
       run: >-
         ctest --test-dir build -C ${{ matrix.config }}
@@ -2875,6 +2876,25 @@ jobs:
           build/*-process-smoke.xml
           test-stats-windows-vs2026-release.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
+    # VS 18 ships an independent MSVC toolset. When its fail-closed ISA scan
+    # rejects unreviewed CRT/STL ranges, retain one broad and one small image
+    # with their build PDBs so the guard-dominance review can be performed
+    # without weakening the x86-64-v2 floor or guessing from truncated logs.
+    - name: Upload bounded VS2026 CPU-floor review inputs
+      if: always() && matrix.config == 'Release' && steps.vs2026-release-tests.outcome == 'failure'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: vs2026-cpu-floor-review-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          build/bin/Release/SparkEngine.exe
+          build/bin/Release/SparkEngine.pdb
+          build/bin/Release/SparkConsole.exe
+          build/bin/Release/SparkConsole.pdb
+          build/CMakeCache.txt
+          build/ctest-junit.xml
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
 
     - name: Upload Build Artifacts

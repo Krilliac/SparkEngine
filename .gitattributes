@@ -34,6 +34,7 @@ docs/site/readiness.json text eol=lf
 # Fuzz corpus manifests hash seed bytes exactly. Keep JSON seeds LF-stable so
 # Windows autocrlf cannot invalidate the cross-platform content digest.
 FuzzerTests/corpora/json-utils/*.json text eol=lf
+FuzzerTests/corpora/material-editor-files/** -text
 FuzzerTests/corpora/crash-manifest/*.json text eol=lf
 # .sparkscene seeds deliberately carry CRLF, lone CR, NUL and non-UTF-8 bytes;
 # store them verbatim so neither normalization nor autocrlf rewrites a seed.

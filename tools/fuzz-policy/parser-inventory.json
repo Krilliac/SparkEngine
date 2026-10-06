@@ -543,7 +543,9 @@
       "source_files": [
         "SparkEngine/Source/Engine/Gameplay/AchievementSystem.h"
       ],
-      "formats": [".bin"],
+      "formats": [
+        ".bin"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzAchievementProgress.cpp",
@@ -565,7 +567,9 @@
         "SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h",
         "SparkEngine/Source/Engine/Gameplay/EventResponseRules.cpp"
       ],
-      "formats": [".json"],
+      "formats": [
+        ".json"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzEventResponse.cpp",
@@ -656,7 +660,9 @@
       "source_files": [
         "SparkEngine/Source/Engine/ECS/RuntimePrefab.h"
       ],
-      "formats": [".prefab"],
+      "formats": [
+        ".prefab"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzRuntimePrefab.cpp",
@@ -743,7 +749,9 @@
       "source_files": [
         "SparkEngine/Source/Core/AssetMigration.h"
       ],
-      "formats": [".bin"],
+      "formats": [
+        ".bin"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzAssetMigration.cpp",
@@ -791,7 +799,11 @@
         "SparkEngine/Source/Engine/UI/UIFactory.cpp",
         "SparkEngine/Source/Engine/UI/UIFactory.h"
       ],
-      "formats": [".uilayout", ".json", ".uicfg"],
+      "formats": [
+        ".uilayout",
+        ".json",
+        ".uicfg"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzUILayout.cpp",
@@ -942,7 +954,10 @@
       "source_files": [
         "SparkAssetPipelineCore/src/AssetCooker.cpp"
       ],
-      "formats": ["asset-source", ".json"],
+      "formats": [
+        "asset-source",
+        ".json"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzAssetCooker.cpp",
@@ -1472,7 +1487,9 @@
         "SparkLauncher/src/LauncherApp.cpp",
         "SparkLauncher/src/LauncherTemplates.cpp"
       ],
-      "formats": ["template.json"],
+      "formats": [
+        "template.json"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzLauncherTemplate.cpp",
@@ -1492,7 +1509,9 @@
       "source_files": [
         "SparkLauncher/src/LauncherProcess.cpp"
       ],
-      "formats": ["spark.modules.json"],
+      "formats": [
+        "spark.modules.json"
+      ],
       "status": "fuzzed",
       "target": {
         "harness": "FuzzerTests/FuzzLauncherModuleManifest.cpp",
@@ -2862,6 +2881,31 @@
         "test_selector": "FuzzSessionGateProtocolSmoke",
         "corpus_id": "mmo-session-gate-protocol-corpus",
         "entry_symbol": "MMO::SessionGateWire::Decode"
+      }
+    },
+    {
+      "id": "material-editor-spkmat-parser",
+      "description": "Legacy .spkmat material decoder used by MaterialEditorPanel::OpenMaterial.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Panels/MaterialEditorFiles.cpp",
+        "SparkEditor/Source/Panels/MaterialEditorMaterialParser.cpp",
+        "SparkEditor/Source/Panels/MaterialEditorMaterialParser.h",
+        "SparkEditor/Source/Panels/MaterialEditorDefaults.cpp"
+      ],
+      "formats": [
+        ".spkmat"
+      ],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzMaterialEditorFiles.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzMaterialEditorFiles",
+        "test_selector": "FuzzMaterialEditorFilesSmoke",
+        "corpus_id": "material-editor-spkmat-corpus",
+        "entry_symbol": "SparkEditor::ParseMaterialText",
+        "binding_source": "FuzzerTests/FuzzMaterialEditorFilesProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseMaterialEditorFiles"
       }
     }
   ],

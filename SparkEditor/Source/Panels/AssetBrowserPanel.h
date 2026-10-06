@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <utility>
 
 class GraphicsEngine;
 
@@ -92,6 +93,15 @@ namespace SparkEditor
          */
         bool ImportAsset(const std::string& filePath);
 
+        /// @brief Request the editor for a .spkmat file inside the active asset root.
+        bool OpenAsset(const std::string& filePath);
+
+        /// @brief Connect material activation to the persistent material editor panel.
+        void SetOnMaterialOpened(std::function<void(const std::string&)> callback)
+        {
+            m_onMaterialOpened = std::move(callback);
+        }
+
         /// @brief Wire live basic-path cache invalidation after an import.
         void SetGraphics(GraphicsEngine* graphics) { m_graphics = graphics; }
 
@@ -122,6 +132,7 @@ namespace SparkEditor
         bool m_lastOperationSucceeded = false;
         float m_thumbnailSize = 64.0f;
         GraphicsEngine* m_graphics = nullptr; ///< Non-owning; owned by EditorUI.
+        std::function<void(const std::string&)> m_onMaterialOpened;
     };
 
 } // namespace SparkEditor

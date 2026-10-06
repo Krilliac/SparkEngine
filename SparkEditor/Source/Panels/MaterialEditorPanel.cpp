@@ -34,7 +34,10 @@ namespace SparkEditor
     // Construction / Lifecycle
     // ========================================================================
 
-    MaterialEditorPanel::MaterialEditorPanel() : EditorPanel("Material Editor", "material_editor_panel") {}
+    MaterialEditorPanel::MaterialEditorPanel() : EditorPanel("Material Editor", "material_editor_panel")
+    {
+        SetSize(900.0f, 650.0f);
+    }
 
     bool MaterialEditorPanel::Initialize()
     {

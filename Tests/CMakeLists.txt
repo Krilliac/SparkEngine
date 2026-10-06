@@ -1457,8 +1457,11 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorNotificationManager.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserPanel.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserGrid.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorPanel.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorFiles.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorDefaults.cpp"
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorMaterialParser.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorParameters.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/MaterialEditorPreview.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/GameViewPanel.cpp"
@@ -1504,7 +1507,7 @@ if(TARGET imgui)
 
     add_test(NAME EditorMaterialSave COMMAND $<TARGET_FILE:SparkTests> --warn-is-error --empty-is-error)
     set_tests_properties(EditorMaterialSave PROPERTIES
-        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorSubsystemsReal_MaterialSave_;SPARK_TEST_EXPECT_COUNT=7"
+        ENVIRONMENT "SPARK_TEST_NAME_PREFIX=EditorSubsystemsReal_MaterialSave_;SPARK_TEST_EXPECT_COUNT=10"
         LABELS "editor;editor-integration;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)

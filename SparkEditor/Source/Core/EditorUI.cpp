@@ -414,6 +414,26 @@ namespace SparkEditor
             return;
         }
 
+        // Material activation keeps the browser independent of panel ownership.
+        auto browserIt = m_panels.find("AssetBrowser");
+        auto materialIt = m_panels.find("MaterialEditor");
+        if (browserIt != m_panels.end() && materialIt != m_panels.end())
+        {
+            auto browser = std::dynamic_pointer_cast<AssetBrowserPanel>(browserIt->second);
+            auto material = std::dynamic_pointer_cast<MaterialEditorPanel>(materialIt->second);
+            if (browser && material)
+            {
+                browser->SetOnMaterialOpened(
+                    [weakMaterial = std::weak_ptr<MaterialEditorPanel>(material)](const std::string& path)
+                    {
+                        if (auto panel = weakMaterial.lock())
+                        {
+                            panel->OpenMaterial(path);
+                        }
+                    });
+            }
+        }
+
         m_projectManager->SetOnProjectOpened(
             [this](const ProjectInfo& project)
             {
