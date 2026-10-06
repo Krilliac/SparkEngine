@@ -2571,7 +2571,8 @@ jobs:
         # separate and the comparator still receives their real roots.
         physical_parent=$(cd .. && pwd)
         physical_source=$(cygpath -w "$PWD")
-        cleanup_alias() { subst R: /d >/dev/null 2>&1 || true; }
+        # Prevent Git Bash from converting subst's /d switch into a path.
+        cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }
         trap cleanup_alias EXIT
         subst R: "$physical_source"
         cd /r
@@ -2589,7 +2590,7 @@ jobs:
         set -euo pipefail
         physical_parent=$(cd .. && pwd)
         physical_source=$(cygpath -w "$PWD")
-        cleanup_alias() { subst R: /d >/dev/null 2>&1 || true; }
+        cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }
         trap cleanup_alias EXIT
         subst R: "$physical_source"
         cd /r

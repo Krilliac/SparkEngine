@@ -1991,6 +1991,7 @@ def reproducibility_windows_errors(document: dict) -> list[str]:
             'physical_source=$(cygpath -w "$PWD")',
             'subst R: "$physical_source"',
             "cd /r",
+            'cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }',
             "trap cleanup_alias EXIT",
             "cmake --preset windows-shipping",
             "cmake --build --preset windows-shipping --config MinSizeRel",
@@ -4003,6 +4004,17 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             (
                 edit_run("Build and stage Shipping in the first tree", "trap cleanup_alias EXIT", "true"),
                 "'trap cleanup_alias EXIT'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree",
+                         'cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }',
+                         'cleanup_alias() { subst R: /d; }'),
+                "'cleanup_alias()",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree",
+                         'MSYS_NO_PATHCONV=1 subst R: /d', 'subst R: /d'),
+                "'cleanup_alias()",
             ),
             (
                 edit_run("Build and stage Shipping in the second tree", "reproducibility-stage-b",
