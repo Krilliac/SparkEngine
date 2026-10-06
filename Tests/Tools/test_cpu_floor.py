@@ -132,6 +132,10 @@ def configure_probe(body: str, *extra: str, languages: str = "NONE") -> subproce
         (source / "CMakeLists.txt").write_text(
             "cmake_minimum_required(VERSION 3.25)\n"
             f"project(CpuFloorProbe LANGUAGES {languages})\n"
+            # LANGUAGES NONE has no compiler target identity. Give its synthetic
+            # x86 test target an explicit architecture rather than rely on host env.
+            + ('set(CMAKE_SYSTEM_PROCESSOR "x86_64")\n' if languages == "NONE" else "")
+            +
             f'include("{_cmake_path(FLOOR_MODULE)}")\n' + textwrap.dedent(body) + "spark_assert_cpu_floor()\n",
             encoding="utf-8",
         )
@@ -292,6 +296,11 @@ class VendoredJoltFloorTests(unittest.TestCase):
         set(JPH_USE_DX12 OFF CACHE BOOL "" FORCE)
         set(JPH_USE_VK OFF CACHE BOOL "" FORCE)
         set(JPH_USE_MTL OFF CACHE BOOL "" FORCE)
+        # Upstream Jolt keys its MSVC ISA controls on the VS platform even with
+        # Ninja. Give this control fixture the detected compiler target identity.
+        if(MSVC AND "${{CMAKE_VS_PLATFORM_NAME}}" STREQUAL "")
+            set(CMAKE_VS_PLATFORM_NAME "${{CMAKE_CXX_COMPILER_ARCHITECTURE_ID}}")
+        endif()
         {floor}
         add_subdirectory("{jolt}" "${{CMAKE_BINARY_DIR}}/Jolt")
         get_target_property(_opts Jolt INTERFACE_COMPILE_OPTIONS)
@@ -345,6 +354,45 @@ class RootWiringTests(unittest.TestCase):
             with self.subTest(preset=name):
                 self.assertIn(name, presets)
                 self.assertEqual(presets[name].get("cacheVariables", {}).get("SPARK_NATIVE_ARCH"), "OFF")
+
+
+@unittest.skipUnless(CMAKE and platform.system() == "Windows", "MSVC Windows probe is required")
+class LibsodiumMsvcArchitectureProbeTests(unittest.TestCase):
+    """The real libsodium wrapper must use MSVC's compiler architecture identity."""
+
+    def test_empty_system_processor_x64_architecture_keeps_variants_disabled(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="spark-sodium-arch-probe-") as temporary:
+            root = Path(temporary)
+            source = root / "src"
+            build = root / "build"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text(
+                "cmake_minimum_required(VERSION 3.25)\n"
+                "project(SparkSodiumArchitectureProbe LANGUAGES C)\n"
+                'set(CMAKE_SYSTEM_PROCESSOR "")\n'
+                f'include("{FLOOR_MODULE.as_posix()}")\n'
+                'spark_cpu_floor_enforced(_enforced)\n'
+                'if(NOT _enforced)\n  message(FATAL_ERROR "MSVC target CPU floor was bypassed")\nendif()\n'
+                f'include("{(REPO_ROOT / "cmake" / "SparkLibsodium.cmake").as_posix()}")\n'
+                'get_target_property(_options spark_sodium COMPILE_OPTIONS)\n'
+                'file(WRITE "${CMAKE_BINARY_DIR}/architecture-probe.txt"\n'
+                '  "MSVC=${MSVC}\\nSYSTEM=${CMAKE_SYSTEM_PROCESSOR}\\nARCH=${CMAKE_C_COMPILER_ARCHITECTURE_ID}\\nOPTIONS=${_options}\\n")\n',
+                encoding="utf-8",
+            )
+            result = _run([CMAKE, "-S", str(source), "-B", str(build), "-G", "Ninja"], root)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            probe = (build / "architecture-probe.txt").read_text(encoding="utf-8")
+            if "MSVC=1" not in probe:
+                self.skipTest("CMake selected a non-MSVC compiler")
+            self.assertIn("MSVC=1", probe)
+            self.assertIn("\nSYSTEM=\n", probe)
+            self.assertIn("ARCH=x64\n", probe)
+            self.assertRegex(probe, r"OPTIONS=.*?/FI[^;\n]*spark_sodium_cpu_floor\.h")
+            headers = list(build.rglob("spark_sodium_cpu_floor.h"))
+            self.assertEqual(1, len(headers), headers)
+            header = headers[0].read_text(encoding="utf-8")
+            for feature in ("HAVE_AVXINTRIN_H", "HAVE_WMMINTRIN_H", "HAVE_AVX2INTRIN_H", "HAVE_AVX512FINTRIN_H"):
+                self.assertIn("#undef " + feature, header)
 
 
 if __name__ == "__main__":

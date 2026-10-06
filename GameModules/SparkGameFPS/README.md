@@ -68,13 +68,24 @@ the working directory does not select a different startup scene. The host's `-sc
 preview mode is separate and does not run the FPS module.
 
 The current adapter supports root entities with unique nonempty names, each containing
-a Transform and either an OBJ MeshRenderer or the single main perspective Camera.
+a Transform and exactly one OBJ MeshRenderer, the single main perspective Camera,
+or a supported SpawnPointComponent. At least one mesh and one main camera remain required.
 Meshes must use the default material and default rendering flags, with OBJ references
 inside the packaged project. Transforms, camera FOV and supported clipping values are
 preserved. Hierarchy, other components, explicit materials, unsupported settings and
 missing or invalid meshes are rejected rather than silently replaced. See
 [the reflected startup contract](../../wiki/subsystems/Scene-Management.md#reflected-startup-scenes-in-fps)
 for the exact camera limits and loading behavior.
+
+Player spawn points support `spawnTag="default"`, `enabled=true`, `teamID=0`,
+`spawnRadius=0`, `respawnDelay=0`, and `maxConcurrent=-1`. Their priority, position
+and facing are preserved; they require root transforms, unit scale, supported pitch
+[-89,89], and at most 32 points. F11 match start and player respawn use the existing
+highest-priority selector, keeping its first-stored tie behavior. The component
+delay is a point-reuse cooldown; it does not replace the player's death-to-respawn
+timer. Other spawn settings, including `wave_spawn`, reject the scene. In particular,
+the component's default radius 1 and cooldown 5 need explicit authoring changes.
+This support does not establish a playable arena, collision fidelity or a completed match.
 
 Only an absent `Startup.sparkscene` permits the legacy `Assets/Scenes/level1.scene`
 startup. A present unreadable, malformed or unsupported scene fails module initialization;

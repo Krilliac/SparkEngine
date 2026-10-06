@@ -1803,6 +1803,23 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "material-editor-spkmat-corpus",
+      "parser_id": "material-editor-spkmat-parser",
+      "corpus_dir": "FuzzerTests/corpora/material-editor-files",
+      "last_verified": "2026-10-06",
+      "content_digest": "d5e7a50b854ec91df80254ad564135ce3922d4f5c4e95657d6753cbff709be40",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

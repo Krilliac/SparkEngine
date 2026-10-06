@@ -647,7 +647,8 @@ TEST(ReliablePerPeer_TwoClientsSameSequences_BothDispatched)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28451, 8));
+    EXPECT_TRUE(nm.StartServer(0, 8));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     std::unordered_map<Net::ClientID, int> receivedBySender;
     nm.RegisterHandler(Net::MessageType::ChatMessage,
@@ -655,8 +656,8 @@ TEST(ReliablePerPeer_TwoClientsSameSequences_BothDispatched)
 
     RawUdpClient clientA;
     RawUdpClient clientB;
-    EXPECT_TRUE(clientA.Open(28451));
-    EXPECT_TRUE(clientB.Open(28451));
+    EXPECT_TRUE(clientA.Open(nm.GetBoundPort()));
+    EXPECT_TRUE(clientB.Open(nm.GetBoundPort()));
     EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
     EXPECT_NE(clientA.GetClientID(), clientB.GetClientID());
@@ -684,7 +685,8 @@ TEST(ReliablePerPeer_OrderedChannelIndependentPerPeer)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28452, 8));
+    EXPECT_TRUE(nm.StartServer(0, 8));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     std::unordered_map<Net::ClientID, std::vector<uint8_t>> deliveredBySender;
     nm.RegisterHandler(Net::MessageType::UserDefined, [&deliveredBySender](const Net::NetworkMessage& msg)
@@ -692,8 +694,8 @@ TEST(ReliablePerPeer_OrderedChannelIndependentPerPeer)
 
     RawUdpClient clientA;
     RawUdpClient clientB;
-    EXPECT_TRUE(clientA.Open(28452));
-    EXPECT_TRUE(clientB.Open(28452));
+    EXPECT_TRUE(clientA.Open(nm.GetBoundPort()));
+    EXPECT_TRUE(clientB.Open(nm.GetBoundPort()));
     EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
 
@@ -730,12 +732,13 @@ TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28453, 8));
+    EXPECT_TRUE(nm.StartServer(0, 8));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient clientA;
     RawUdpClient clientB;
-    EXPECT_TRUE(clientA.Open(28453));
-    EXPECT_TRUE(clientB.Open(28453));
+    EXPECT_TRUE(clientA.Open(nm.GetBoundPort()));
+    EXPECT_TRUE(clientB.Open(nm.GetBoundPort()));
     EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
 
@@ -784,10 +787,11 @@ TEST(NetworkWire_MaxPayload_LoopbackSendPreservesWholeDatagram)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28454, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28454));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "MaxPayloadClient"));
 
     Net::NetworkMessage outbound;
@@ -826,10 +830,11 @@ TEST(NetworkWire_MaxPlusOneReliableRejectedBeforeSequenceAllocation)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28455, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28455));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "OversizeClient"));
 
     const uint64_t droppedBefore = nm.GetStats().packetsDropped;
@@ -874,10 +879,11 @@ TEST(NetworkWire_5KiBReliableLoopbackReceiveIsNotTruncated)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28456, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28456));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "FiveKiBClient"));
 
     std::vector<uint8_t> expected(5 * 1024);
@@ -900,10 +906,11 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28457, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28457));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "SensitiveOwnershipClient"));
 
     bool serverSawSensitive = false;

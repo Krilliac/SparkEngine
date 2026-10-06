@@ -851,6 +851,21 @@
       "sha256": "caf1932d76a909c909b7a2e41443cdfe3c79a49a380da1a22fa422e1d00d3ca7",
       "output": "archive",
       "verification": "get-file-hash"
+    },
+    {
+      "name": "CMake 4.4.1 Windows Shipping CI archive",
+      "class": "downloads",
+      "license_spdx": "BSD-3-Clause",
+      "owner": "Krilliac",
+      "justification": "Shipping CI requires CMake/CPack 4.3 or newer for per-user MSI authoring. This fixed 4.4.1 tool archive is hash-checked before extraction and never enters engine packages.",
+      "path": ".github/workflows/build.yml",
+      "pin_path": ".github/workflows/build.yml",
+      "command": "Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip' -OutFile $archive",
+      "source_url": "https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip",
+      "url": "https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip",
+      "sha256": "091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19",
+      "output": "archive",
+      "verification": "get-file-hash"
     }
   ]
 }

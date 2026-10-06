@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cerrno>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -10,6 +11,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 
 #if defined(_WIN32)
@@ -217,6 +219,7 @@ int main(int argc, char** argv)
     bool swapRefused = true;
     bool parentSwapRefused = true;
     bool nonUtf8Refused = true;
+    bool nonUtf8FixtureUnavailable = false;
     std::string swapError;
     std::string parentSwapError;
     std::string nonUtf8Error;
@@ -269,11 +272,50 @@ int main(int argc, char** argv)
     const auto badNameSource = root / "bad-name-source";
     const auto badNameOutput = root / "bad-name-output";
     std::filesystem::create_directories(badNameSource);
-    std::ofstream(badNameSource / std::string("bad-\xFF\xFE.bin"), std::ios::binary) << "bytes";
-    const auto badName = Spark::AssetPipeline::CookAssets({badNameSource, badNameOutput, {}, false});
-    nonUtf8Error = badName.error;
-    nonUtf8Refused = !badName.Succeeded() && badName.error.find("UTF-8") != std::string::npos &&
-                     !std::filesystem::exists(badNameOutput);
+    const auto controlPath = badNameSource / "valid-name.bin";
+    bool controlWritten = false;
+    {
+        std::ofstream control(controlPath, std::ios::binary);
+        control << "bytes";
+        control.flush();
+        controlWritten = control.good();
+    }
+    controlWritten = controlWritten && ReadFile(controlPath) == "bytes" && std::filesystem::remove(controlPath);
+    const std::string invalidName = "bad-\xFF\xFE.bin";
+    errno = 0;
+    std::ofstream invalidFile(badNameSource / invalidName, std::ios::binary);
+    const int creationError = errno;
+    nonUtf8Error = "fixture creation errno=" + std::to_string(creationError) + ": " +
+                   std::generic_category().message(creationError);
+    nonUtf8Refused = false;
+    if (invalidFile.is_open())
+    {
+        invalidFile << "bytes";
+        invalidFile.flush();
+        const bool written = invalidFile.good();
+        invalidFile.close();
+        const auto entry = std::filesystem::directory_iterator(badNameSource);
+        if (controlWritten && written && entry != std::filesystem::directory_iterator{} &&
+            entry->path().filename().native() == invalidName)
+        {
+            const auto badName = Spark::AssetPipeline::CookAssets({badNameSource, badNameOutput, {}, false});
+            nonUtf8Error = badName.error;
+            nonUtf8Refused = !badName.Succeeded() && badName.error.find("UTF-8") != std::string::npos &&
+                             !std::filesystem::exists(badNameOutput);
+        }
+    }
+#if defined(__APPLE__)
+    else if (controlWritten && (creationError == EILSEQ || creationError == EINVAL) &&
+             std::filesystem::is_empty(badNameSource))
+    {
+        // APFS can refuse invalid UTF-8 before the cooker can read the entry.
+        // Report that limitation rather than claiming the cooker rejected it.
+        nonUtf8FixtureUnavailable = true;
+        std::cout << "Asset cooker invalid-UTF-8 filesystem case not exercised: filename creation refused\n";
+    }
+#else
+    (void)creationError;
+#endif
 #endif
 
     const auto concurrentSourceA = root / "concurrent-source-a";
@@ -370,14 +412,15 @@ int main(int argc, char** argv)
          (!throughHardLinkedManifest.Succeeded() && internalManifestBytes == "preserve-internal")) &&
         !wrongDigestAccepted && directBytes == "old bytes" && unicodePassed && controlFilenamePassed &&
         aliasedOutputPassed && concurrentPassed && escapeRejected && insideAccepted && containmentPassed &&
-        swapRefused && parentSwapRefused && nonUtf8Refused &&
+        swapRefused && parentSwapRefused && (nonUtf8Refused || nonUtf8FixtureUnavailable) &&
         std::filesystem::is_regular_file(output / "nested" / "asset.txt");
     if (!passed)
     {
         std::cerr << "Asset cooker deterministic/incremental contract failed\n"
                   << "swapRefused=" << swapRefused << " error='" << swapError
                   << "' parentSwapRefused=" << parentSwapRefused << " error='" << parentSwapError
-                  << "' nonUtf8Refused=" << nonUtf8Refused << " error='" << nonUtf8Error << "'\n"
+                  << "' nonUtf8Refused=" << nonUtf8Refused << " fixtureUnavailable=" << nonUtf8FixtureUnavailable
+                  << " error='" << nonUtf8Error << "'\n"
                   << "first=" << first.Succeeded() << " error='" << first.error << "' updated=" << first.updatedCount
                   << " unchanged=" << first.unchangedCount << "\n"
                   << "second=" << second.Succeeded() << " error='" << second.error

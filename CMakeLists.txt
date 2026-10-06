@@ -2998,11 +2998,16 @@ include(CMakePackageConfigHelpers)
 # Export it once, split by artifact kind, rather than layering duplicate install
 # rules over SDL's upstream no-component installation.
 if(TARGET SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/include")
+    if(UNIX)
+        # The SDK's regular developer-name copy must match the runtime image
+        # byte for byte, including the installed shared-library search path.
+        set_property(TARGET SDL2 PROPERTY BUILD_WITH_INSTALL_RPATH ON)
+    endif()
     install(TARGETS SDL2
         EXPORT SparkSDL2Targets
         RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
         LIBRARY DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
-                NAMELINK_COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
+                NAMELINK_SKIP
         ARCHIVE DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_SDK}
         FRAMEWORK DESTINATION lib COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
         INCLUDES DESTINATION include include/SDL2
@@ -3035,6 +3040,30 @@ if(TARGET SDL2 AND EXISTS "${SDL2_SUBMODULE_DIR}/include")
             endif()
         ]]
             COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME})
+
+        # CPack stages components separately. Its SDK staging root cannot
+        # dereference a namelink whose concrete library belongs to runtime.
+        # Install the same built image under only its developer name instead.
+        # Remove a legacy in-prefix namelink before copying, refusing escapes.
+        install(CODE "
+            set(_spark_sdl2_libdir \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/lib\")
+            set(_spark_sdl2_sdk_entry \"\${_spark_sdl2_libdir}/$<TARGET_LINKER_FILE_NAME:SDL2>\")
+            if(IS_SYMLINK \"\${_spark_sdl2_sdk_entry}\")
+                file(REAL_PATH \"\${_spark_sdl2_libdir}\" _spark_sdl2_real_libdir)
+                file(REAL_PATH \"\${_spark_sdl2_sdk_entry}\" _spark_sdl2_resolved)
+                file(RELATIVE_PATH _spark_sdl2_relative
+                    \"\${_spark_sdl2_real_libdir}\" \"\${_spark_sdl2_resolved}\")
+                if(_spark_sdl2_relative MATCHES \"^\\\\.\\\\.(/|$)\")
+                    message(FATAL_ERROR
+                        \"SDL2 install link escapes its library directory: \${_spark_sdl2_sdk_entry}\")
+                endif()
+                file(REMOVE \"\${_spark_sdl2_sdk_entry}\")
+            endif()
+        " COMPONENT ${SPARK_INSTALL_COMPONENT_SDK})
+        install(FILES "$<TARGET_FILE:SDL2>"
+            DESTINATION lib
+            RENAME "$<TARGET_LINKER_FILE_NAME:SDL2>"
+            COMPONENT ${SPARK_INSTALL_COMPONENT_SDK})
     endif()
     install(EXPORT SparkSDL2Targets
         FILE SDL2Targets.cmake

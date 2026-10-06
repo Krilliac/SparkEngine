@@ -45,6 +45,7 @@ namespace SparkEditor
         }
 
         bool visible = m_isVisible;
+        ImGui::SetNextWindowSize(ImVec2(m_width, m_height), ImGuiCond_FirstUseEver);
         bool result = ImGui::Begin(displayTitle.c_str(), m_isClosable ? &visible : nullptr, flags);
 
         if (visible != m_isVisible)

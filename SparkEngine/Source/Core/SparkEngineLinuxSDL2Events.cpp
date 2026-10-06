@@ -69,6 +69,8 @@ static int TranslateSDLKeyToVK(SDL_Keycode sym)
         return VK_LEFT;
     case SDLK_RIGHT:
         return VK_RIGHT;
+    // Keep side identity for side-specific consumers. InputManager folds both
+    // sides into the generic Shift/Ctrl/Alt queries.
     case SDLK_LSHIFT:
         return VK_LSHIFT;
     case SDLK_RSHIFT:

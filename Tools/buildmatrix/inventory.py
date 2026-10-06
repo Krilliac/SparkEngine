@@ -1078,6 +1078,29 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
 # absent from the top-level static target set even though the configured File
 # API reports them. Admit only this reviewed declaration in its active profile.
 _REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS = {
+    "CpuFloor_IsaBaseline": {
+        "profiles": frozenset({"windows-shipping", "windows-validation"}),
+        "requiredCache": {
+            "SPARK_NATIVE_ARCH": "OFF",
+            "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
+            "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "X64",
+        },
+        "requiredCall": {
+            "file": "CMakeLists.txt",
+            "name": "spark_register_isa_baseline_scan",
+            "arguments": ["${SPARK_SHIPPED_IMAGE_TARGETS}"],
+        },
+        "record": {
+            "target": "CpuFloor_IsaBaseline",
+            "kind": "utility",
+            "file": "cmake/SparkIsaBaseline.cmake",
+            "line": 49,
+            "conditionFrames": [],
+            "definitionScope": ["spark_register_isa_baseline_scan"],
+            "origin": "function-template",
+            "resolved": True,
+        },
+    },
     "check-fuzz-policy": {
         "profiles": frozenset({"windows-validation"}),
         "requiredCache": {"SPARK_ENABLE_FUZZ_POLICY_CHECKS": "ON"},
@@ -1270,6 +1293,26 @@ def reviewed_configured_function_targets(
             for name, required in contract["requiredCache"].items()
         ):
             continue
+        call = contract.get("requiredCall")
+        if call is not None:
+            # A literal target in an unused function is not a configured target.
+            # Require the real, unconditional root invocation; unknown guards,
+            # nested definitions, changed arguments, or duplicate calls fail closed.
+            try:
+                source = (REPO_ROOT / call["file"]).read_text(encoding="utf-8", errors="strict")
+                commands = list(_commands_with_conditions(source, call["file"]))
+            except (OSError, UnicodeError, InventoryError):
+                continue
+            calls = [command for command in commands if command["name"] == call["name"]]
+            if len(calls) != 1:
+                continue
+            invocation = calls[0]
+            if (
+                invocation.get("definitionScope")
+                or invocation.get("conditionFrames")
+                or _tokenize_cmake_arguments(invocation["body"]) != call["arguments"]
+            ):
+                continue
         if declaration == contract["record"]:
             reviewed.add(str(target))
     return reviewed

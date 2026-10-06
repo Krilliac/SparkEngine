@@ -115,7 +115,8 @@ TEST(PLT210_SparkConsole_EnginePipeStdoutCarriesOnlyCommands)
     for (int i = 0; i < 5; ++i)
         launched->WriteStdin("[INFO] [Core] PLT210 engine log line " + std::to_string(i) + "\n");
 
-    // Let the console render several prompt cycles (it redraws every 100 ms).
+    // Leave the console idle across several 100 ms polls: those polls must not
+    // redraw the prompt or contaminate the command channel.
     std::this_thread::sleep_for(std::chrono::milliseconds(600));
     launched->CloseStdin();
     if (!launched->WaitForExit(std::chrono::milliseconds(2000)))
@@ -133,6 +134,12 @@ TEST(PLT210_SparkConsole_EnginePipeStdoutCarriesOnlyCommands)
     EXPECT_EQ(stdoutText, std::string());
     // The logs were received and displayed on the human-facing stream instead.
     EXPECT_STR_CONTAINS(stderrText, "PLT210 engine log line 4");
+    size_t promptCount = 0;
+    for (size_t position = 0; (position = stderrText.find("> ", position)) != std::string::npos; position += 2)
+    {
+        ++promptCount;
+    }
+    EXPECT_EQ(promptCount, size_t{1});
 }
 
 #endif // __linux__

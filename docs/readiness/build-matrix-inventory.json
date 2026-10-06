@@ -625,7 +625,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3722,
+      "line": 3751,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1378,7 +1378,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4541,
+      "line": 4606,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1387,10 +1387,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3952,
+      "line": 4017,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3947",
+          "id": "Tests/CMakeLists.txt:4012",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1404,7 +1404,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4579,
+      "line": 4644,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1413,7 +1413,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4755,
+      "line": 4820,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1422,10 +1422,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3895,
+      "line": 3960,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3823",
+          "id": "Tests/CMakeLists.txt:3888",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1439,7 +1439,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 5019,
+      "line": 5084,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1448,7 +1448,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1900,
+      "line": 1960,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1508,7 +1508,7 @@
       "description": "Fail configuration when the NSIS or WiX toolchain is missing",
       "default": "OFF",
       "file": "CMakeLists.txt",
-      "line": 3722,
+      "line": 3751,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1535,7 +1535,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1762,
+      "line": 1818,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2601,7 +2601,7 @@
       "target": "SparkCompatibleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 853,
+      "line": 895,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2651,10 +2651,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2258,
+      "line": 2318,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2257",
+          "id": "Tests/CMakeLists.txt:2317",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2787,10 +2787,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5732,
+      "line": 5811,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5730",
+          "id": "Tests/CMakeLists.txt:5809",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -2833,7 +2833,7 @@
       "target": "SparkDebugHookTeardownProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 815,
+      "line": 819,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -2954,13 +2954,49 @@
       "resolved": true
     },
     {
+      "target": "SparkFPSCameraReloadRuntime",
+      "kind": "utility",
+      "file": "Tests/CMakeLists.txt",
+      "line": 847,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:830",
+          "branch": 0,
+          "branches": [
+            "WIN32 AND TARGET SparkGameFPS"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "SparkFPSCameraReloadTests",
+      "kind": "executable",
+      "file": "Tests/CMakeLists.txt",
+      "line": 831,
+      "conditionFrames": [
+        {
+          "id": "Tests/CMakeLists.txt:830",
+          "branch": 0,
+          "branches": [
+            "WIN32 AND TARGET SparkGameFPS"
+          ]
+        }
+      ],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1502,
+      "line": 1558,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1464",
+          "id": "Tests/CMakeLists.txt:1520",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -2975,7 +3011,7 @@
       "target": "SparkForwardMinorPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 969,
+      "line": 1011,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -2985,7 +3021,7 @@
       "target": "SparkFuzzAchievement",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3713,
+      "line": 3762,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3015,7 +3051,7 @@
       "target": "SparkFuzzAssetCooker",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3725,
+      "line": 3774,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3025,7 +3061,7 @@
       "target": "SparkFuzzAssetMigration",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3711,
+      "line": 3760,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3135,7 +3171,7 @@
       "target": "SparkFuzzEditorLayout",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3661,
+      "line": 3710,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3155,7 +3191,7 @@
       "target": "SparkFuzzEditorProjectFile",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3404,
+      "line": 3453,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3165,7 +3201,7 @@
       "target": "SparkFuzzEditorRecovery",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3453,
+      "line": 3502,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3175,7 +3211,7 @@
       "target": "SparkFuzzEditorSceneImport",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3515,
+      "line": 3564,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3185,7 +3221,7 @@
       "target": "SparkFuzzEditorSceneJson",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3288,
+      "line": 3337,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3195,7 +3231,7 @@
       "target": "SparkFuzzEditorSceneLoad",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3343,
+      "line": 3392,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3205,7 +3241,7 @@
       "target": "SparkFuzzEditorThemeImport",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3566,
+      "line": 3615,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3215,7 +3251,7 @@
       "target": "SparkFuzzEditorWindowLayout",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3613,
+      "line": 3662,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3225,7 +3261,7 @@
       "target": "SparkFuzzEngineSettings",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2914,
+      "line": 2963,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3235,7 +3271,7 @@
       "target": "SparkFuzzEntityArchetype",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3021,
+      "line": 3070,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3245,7 +3281,7 @@
       "target": "SparkFuzzEventResponse",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3715,
+      "line": 3764,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3335,7 +3371,7 @@
       "target": "SparkFuzzLauncherModuleManifest",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3735,
+      "line": 3784,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3345,7 +3381,7 @@
       "target": "SparkFuzzLauncherTemplate",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3730,
+      "line": 3779,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3402,6 +3438,16 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzMaterialEditorFiles",
+      "kind": "executable",
+      "file": "FuzzerTests/CMakeLists.txt",
+      "line": 2910,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzMaterialLoader",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
@@ -3435,7 +3481,7 @@
       "target": "SparkFuzzModuleSidecar",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3069,
+      "line": 3118,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3495,7 +3541,7 @@
       "target": "SparkFuzzPluginMetadata",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3120,
+      "line": 3169,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3525,7 +3571,7 @@
       "target": "SparkFuzzReflectionBinary",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3174,
+      "line": 3223,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3555,7 +3601,7 @@
       "target": "SparkFuzzReplayCrashManifest",
       "kind": "executable",
       "file": "FuzzerTests/Replay/CMakeLists.txt",
-      "line": 54,
+      "line": 67,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3572,13 +3618,23 @@
       "resolved": true
     },
     {
+      "target": "SparkFuzzReplayMaterialEditorFiles",
+      "kind": "executable",
+      "file": "FuzzerTests/Replay/CMakeLists.txt",
+      "line": 50,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "SparkFuzzReplayNeuralWeights",
       "kind": "executable",
       "file": "FuzzerTests/Replay/CMakeLists.txt",
-      "line": 70,
+      "line": 83,
       "conditionFrames": [
         {
-          "id": "FuzzerTests/Replay/CMakeLists.txt:69",
+          "id": "FuzzerTests/Replay/CMakeLists.txt:82",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -3603,10 +3659,10 @@
       "target": "SparkFuzzReplayTextureStex",
       "kind": "executable",
       "file": "FuzzerTests/Replay/CMakeLists.txt",
-      "line": 72,
+      "line": 85,
       "conditionFrames": [
         {
-          "id": "FuzzerTests/Replay/CMakeLists.txt:69",
+          "id": "FuzzerTests/Replay/CMakeLists.txt:82",
           "branch": 0,
           "branches": [
             "NOT WIN32"
@@ -3621,7 +3677,7 @@
       "target": "SparkFuzzRuntimePrefab",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3709,
+      "line": 3758,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3681,7 +3737,7 @@
       "target": "SparkFuzzShaderDiskCache",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3223,
+      "line": 3272,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3771,7 +3827,7 @@
       "target": "SparkFuzzUILayout",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3719,
+      "line": 3768,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3781,7 +3837,7 @@
       "target": "SparkFuzzVirtualFileSystem",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2968,
+      "line": 3017,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3951,10 +4007,10 @@
       "target": "SparkGatewayTopologyProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 837,
+      "line": 879,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:836",
+          "id": "Tests/CMakeLists.txt:878",
           "branch": 0,
           "branches": [
             "TARGET SparkGatewayCore"
@@ -4082,7 +4138,7 @@
       "target": "SparkLegacyModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 857,
+      "line": 899,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4092,10 +4148,10 @@
       "target": "SparkMMOSessionGatePeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1471,
+      "line": 1527,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1464",
+          "id": "Tests/CMakeLists.txt:1520",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -4110,7 +4166,7 @@
       "target": "SparkMismatchedModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 848,
+      "line": 890,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4120,7 +4176,7 @@
       "target": "SparkModuleSiblingDependency",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 859,
+      "line": 901,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4150,10 +4206,10 @@
       "target": "SparkNetworkingDisabledCompileContract",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 828,
+      "line": 870,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:827",
+          "id": "Tests/CMakeLists.txt:869",
           "branch": 0,
           "branches": [
             "NOT ENABLE_NETWORKING"
@@ -4190,7 +4246,7 @@
       "target": "SparkPreviousSdkModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 851,
+      "line": 893,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4200,7 +4256,7 @@
       "target": "SparkRegistryLifecycleModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 855,
+      "line": 897,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4210,7 +4266,7 @@
       "target": "SparkRollbackRefusingPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 974,
+      "line": 1016,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -4270,7 +4326,7 @@
       "target": "SparkSiblingDependentModuleFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 861,
+      "line": 903,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -4320,7 +4376,7 @@
       "target": "SparkValidPluginFixture",
       "kind": "shared_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 964,
+      "line": 1006,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "wrapper-call",
@@ -4330,7 +4386,7 @@
       "target": "SparkWeaponEnumCompatibility",
       "kind": "object_library",
       "file": "Tests/CMakeLists.txt",
-      "line": 804,
+      "line": 808,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5298,7 +5354,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 853,
+          "line": 895,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -5372,7 +5428,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2258,
+          "line": 2318,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5480,7 +5536,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5732,
+          "line": 5811,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5534,7 +5590,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 815,
+          "line": 819,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5651,6 +5707,42 @@
       ]
     },
     {
+      "target": "SparkFPSCameraReloadRuntime",
+      "kind": "utility",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 847,
+          "kind": "utility",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "SparkFPSCameraReloadTests",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/CMakeLists.txt",
+          "line": 831,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "buildable": true,
@@ -5660,7 +5752,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1502,
+          "line": 1558,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5678,7 +5770,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 969,
+          "line": 1011,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -5696,7 +5788,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3713,
+          "line": 3762,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5750,7 +5842,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3725,
+          "line": 3774,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5768,7 +5860,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3711,
+          "line": 3760,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5966,7 +6058,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3661,
+          "line": 3710,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6002,7 +6094,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3404,
+          "line": 3453,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6020,7 +6112,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3453,
+          "line": 3502,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6038,7 +6130,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3515,
+          "line": 3564,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6056,7 +6148,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3288,
+          "line": 3337,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6074,7 +6166,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3343,
+          "line": 3392,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6092,7 +6184,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3566,
+          "line": 3615,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6110,7 +6202,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3613,
+          "line": 3662,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6128,7 +6220,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2914,
+          "line": 2963,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6146,7 +6238,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3021,
+          "line": 3070,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6164,7 +6256,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3715,
+          "line": 3764,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6326,7 +6418,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3735,
+          "line": 3784,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6344,7 +6436,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3730,
+          "line": 3779,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6443,6 +6535,24 @@
       ]
     },
     {
+      "target": "SparkFuzzMaterialEditorFiles",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/CMakeLists.txt",
+          "line": 2910,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzMaterialLoader",
       "kind": "executable",
       "buildable": true,
@@ -6506,7 +6616,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3069,
+          "line": 3118,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6614,7 +6724,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3120,
+          "line": 3169,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6668,7 +6778,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3174,
+          "line": 3223,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6722,7 +6832,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/Replay/CMakeLists.txt",
-          "line": 54,
+          "line": 67,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6749,6 +6859,24 @@
       ]
     },
     {
+      "target": "SparkFuzzReplayMaterialEditorFiles",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "FuzzerTests/Replay/CMakeLists.txt",
+          "line": 50,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
       "target": "SparkFuzzReplayNeuralWeights",
       "kind": "executable",
       "buildable": true,
@@ -6758,7 +6886,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/Replay/CMakeLists.txt",
-          "line": 70,
+          "line": 83,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6794,7 +6922,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/Replay/CMakeLists.txt",
-          "line": 72,
+          "line": 85,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6812,7 +6940,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3709,
+          "line": 3758,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6920,7 +7048,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3223,
+          "line": 3272,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7082,7 +7210,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3719,
+          "line": 3768,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7100,7 +7228,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2968,
+          "line": 3017,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7406,7 +7534,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 837,
+          "line": 879,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7542,7 +7670,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 857,
+          "line": 899,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7560,7 +7688,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1471,
+          "line": 1527,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7578,7 +7706,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 848,
+          "line": 890,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7596,7 +7724,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 859,
+          "line": 901,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7634,7 +7762,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 828,
+          "line": 870,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7690,7 +7818,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 851,
+          "line": 893,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7708,7 +7836,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 855,
+          "line": 897,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7726,7 +7854,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 974,
+          "line": 1016,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7834,7 +7962,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 861,
+          "line": 903,
           "kind": "shared_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -7908,7 +8036,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 964,
+          "line": 1006,
           "kind": "shared_library",
           "origin": "wrapper-call",
           "definitionScope": [],
@@ -7926,7 +8054,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 804,
+          "line": 808,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],
@@ -8988,7 +9116,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "20f965da492c2364"
+            "runDigest": "7d25a12d2aa62ec9"
           },
           {
             "index": 6,
@@ -9740,7 +9868,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "b744945108bec918"
+            "runDigest": "92640a898da166e7"
           },
           {
             "index": 58,
@@ -10022,7 +10150,7 @@
             "env": [
               "PYTHONDONTWRITEBYTECODE"
             ],
-            "runDigest": "ad53f5196b1ed61e"
+            "runDigest": "9591bb3af678e3a6"
           },
           {
             "index": 2,
@@ -10484,7 +10612,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e7c18f841a5908dc"
+            "runDigest": "43c5269e530b006e"
           },
           {
             "index": 3,
@@ -10520,7 +10648,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "d59b40acd7d50e4e"
+            "runDigest": "1890bf10fe1ebdb6"
           },
           {
             "index": 6,
@@ -10695,7 +10823,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "e7c18f841a5908dc"
+            "runDigest": "43c5269e530b006e"
           },
           {
             "index": 3,
@@ -11833,7 +11961,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "aa854d3d7363656e"
+            "runDigest": "3e408f8b06dc265e"
           },
           {
             "index": 5,
@@ -11869,7 +11997,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "9913a9200b579ce7"
+            "runDigest": "cfd446a36d42390c"
           },
           {
             "index": 8,
@@ -12039,7 +12167,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "04d1482b4a194b41"
+            "runDigest": "dbb9ecbe0a6517f6"
           },
           {
             "index": 22,
@@ -12167,7 +12295,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 27,
+        "stepCount": 28,
         "steps": [
           {
             "index": 0,
@@ -12183,6 +12311,18 @@
           },
           {
             "index": 1,
+            "name": "Pin CMake and CPack for per-user Shipping MSI",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "537cbd62c5c47296"
+          },
+          {
+            "index": 2,
             "name": "Setup MSVC",
             "id": "",
             "uses": "microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57",
@@ -12194,7 +12334,7 @@
             "runDigest": ""
           },
           {
-            "index": 2,
+            "index": 3,
             "name": "Configure and build the Windows Shipping lane",
             "id": "",
             "uses": "",
@@ -12206,7 +12346,7 @@
             "runDigest": "ea9a46d2c01da324"
           },
           {
-            "index": 3,
+            "index": 4,
             "name": "Check Windows Shipping PE ISA floor (BLD-100)",
             "id": "",
             "uses": "",
@@ -12218,7 +12358,7 @@
             "runDigest": "073e3fb984aa18fe"
           },
           {
-            "index": 4,
+            "index": 5,
             "name": "Verify stable Shipping product versions",
             "id": "",
             "uses": "",
@@ -12230,7 +12370,7 @@
             "runDigest": "1b4a50ff47db6a1d"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Stage and map Shipping private symbols",
             "id": "",
             "uses": "",
@@ -12242,7 +12382,7 @@
             "runDigest": "f65bb54896bb762c"
           },
           {
-            "index": 6,
+            "index": 7,
             "name": "Verify Shipping runtime dependency closure (PLT-200)",
             "id": "",
             "uses": "",
@@ -12254,7 +12394,7 @@
             "runDigest": "b9e48a9367a24c28"
           },
           {
-            "index": 7,
+            "index": 8,
             "name": "Upload Windows Shipping dependency closure",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12266,7 +12406,7 @@
             "runDigest": ""
           },
           {
-            "index": 8,
+            "index": 9,
             "name": "Upload Windows Shipping private symbols",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12278,7 +12418,7 @@
             "runDigest": ""
           },
           {
-            "index": 9,
+            "index": 10,
             "name": "Capture Windows Shipping provenance",
             "id": "",
             "uses": "",
@@ -12290,7 +12430,7 @@
             "runDigest": "eaaff83d3b3b01dd"
           },
           {
-            "index": 10,
+            "index": 11,
             "name": "Verify Shipping is a distinct configuration (BLD-100)",
             "id": "",
             "uses": "",
@@ -12302,7 +12442,7 @@
             "runDigest": "8963db5f9c2a7690"
           },
           {
-            "index": 11,
+            "index": 12,
             "name": "Install the Windows Shipping SDK for the consumer profile",
             "id": "",
             "uses": "",
@@ -12314,7 +12454,7 @@
             "runDigest": "36f226b69437d456"
           },
           {
-            "index": 12,
+            "index": 13,
             "name": "Configure and build the Windows validation lane",
             "id": "",
             "uses": "",
@@ -12326,7 +12466,7 @@
             "runDigest": "5605dbef17f25623"
           },
           {
-            "index": 13,
+            "index": 14,
             "name": "Capture Windows validation provenance",
             "id": "",
             "uses": "",
@@ -12338,7 +12478,7 @@
             "runDigest": "3460874c75995c44"
           },
           {
-            "index": 14,
+            "index": 15,
             "name": "Configure and build the installed SDK consumer lane",
             "id": "",
             "uses": "",
@@ -12350,7 +12490,7 @@
             "runDigest": "9cd61c1b24e1a4ef"
           },
           {
-            "index": 15,
+            "index": 16,
             "name": "Capture installed SDK consumer provenance",
             "id": "",
             "uses": "",
@@ -12362,7 +12502,7 @@
             "runDigest": "22ba85fa35d4e34d"
           },
           {
-            "index": 16,
+            "index": 17,
             "name": "Generate the configured build-matrix inventory",
             "id": "",
             "uses": "",
@@ -12374,7 +12514,7 @@
             "runDigest": "e3982ce2ce04dc8f"
           },
           {
-            "index": 17,
+            "index": 18,
             "name": "Check the configured build matrix",
             "id": "build-matrix-parity",
             "uses": "",
@@ -12386,7 +12526,7 @@
             "runDigest": "847469c7e07435aa"
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Package Windows Shipping MSI for package-smoke consumer",
             "id": "",
             "uses": "",
@@ -12398,7 +12538,7 @@
             "runDigest": "9d7b1cdb557b7c1f"
           },
           {
-            "index": 19,
+            "index": 20,
             "name": "Package and verify Windows Shipping ZIP and NSIS artifacts",
             "id": "",
             "uses": "",
@@ -12410,7 +12550,7 @@
             "runDigest": "740efca49939e821"
           },
           {
-            "index": 20,
+            "index": 21,
             "name": "Upload Windows Shipping package reconciliation and provenance",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12422,7 +12562,7 @@
             "runDigest": ""
           },
           {
-            "index": 21,
+            "index": 22,
             "name": "Upload exact Windows Shipping MSI for package smoke",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12434,7 +12574,7 @@
             "runDigest": ""
           },
           {
-            "index": 22,
+            "index": 23,
             "name": "Upload Windows Shipping MSI packaging diagnostics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12446,7 +12586,7 @@
             "runDigest": ""
           },
           {
-            "index": 23,
+            "index": 24,
             "name": "Bundle bounded build-matrix diagnostics",
             "id": "",
             "uses": "",
@@ -12458,7 +12598,7 @@
             "runDigest": "2c87576df40aa153"
           },
           {
-            "index": 24,
+            "index": 25,
             "name": "Upload build-matrix report diagnostics",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12470,7 +12610,7 @@
             "runDigest": ""
           },
           {
-            "index": 25,
+            "index": 26,
             "name": "Upload build-matrix evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12482,7 +12622,7 @@
             "runDigest": ""
           },
           {
-            "index": 26,
+            "index": 27,
             "name": "Record build-matrix evidence",
             "id": "",
             "uses": "",
@@ -12568,7 +12708,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "97d1eea19530a6b3"
+            "runDigest": "b38e4495e94f9241"
           },
           {
             "index": 4,
@@ -12580,7 +12720,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "c02983c50229d1a6"
+            "runDigest": "44c47d5667d5f433"
           },
           {
             "index": 5,
@@ -12592,7 +12732,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "8134113ebecd66de"
+            "runDigest": "23a0655ae1cbf746"
           },
           {
             "index": 6,
@@ -12640,7 +12780,7 @@
         "matrixResolved": true,
         "defaultShell": "",
         "permissions": {},
-        "stepCount": 19,
+        "stepCount": 20,
         "steps": [
           {
             "index": 0,
@@ -12703,7 +12843,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "aa854d3d7363656e"
+            "runDigest": "3e408f8b06dc265e"
           },
           {
             "index": 5,
@@ -12818,7 +12958,7 @@
           {
             "index": 14,
             "name": "Run Tests",
-            "id": "",
+            "id": "vs2026-release-tests",
             "uses": "",
             "shell": "",
             "if": "matrix.config == 'Release'",
@@ -12837,7 +12977,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "ccfea9cd882fe6e7"
+            "runDigest": "26b4929ab923832e"
           },
           {
             "index": 16,
@@ -12853,6 +12993,18 @@
           },
           {
             "index": 17,
+            "name": "Upload bounded VS2026 CPU-floor review inputs",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always() && matrix.config == 'Release' && steps.vs2026-release-tests.outcome == 'failure'",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 18,
             "name": "Upload Build Artifacts",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -12864,7 +13016,7 @@
             "runDigest": ""
           },
           {
-            "index": 18,
+            "index": 19,
             "name": "Upload sccache server log",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -16088,7 +16240,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzAchievement",
@@ -16133,6 +16285,7 @@
           "SparkFuzzMMOChatWire",
           "SparkFuzzMMOClientState",
           "SparkFuzzMMOEntityEvents",
+          "SparkFuzzMaterialEditorFiles",
           "SparkFuzzMaterialLoader",
           "SparkFuzzModManifest",
           "SparkFuzzModuleSidecar",
@@ -16272,7 +16425,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS_DEBUG=\"-g -Og\"  -DCMAKE_C_FLAGS_DEBUG=\"-g -Og\"  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -16283,6 +16436,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+          "CMAKE_CXX_FLAGS_DEBUG": "-g -Og",
+          "CMAKE_C_FLAGS_DEBUG": "-g -Og",
           "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
@@ -17445,7 +17600,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows Shipping lane",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17466,7 +17621,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows Shipping lane",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17493,7 +17648,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check Windows Shipping PE ISA floor (BLD-100)",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17520,7 +17675,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Stage and map Shipping private symbols",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17542,7 +17697,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Stage and map Shipping private symbols",
-        "stepIndex": 5,
+        "stepIndex": 6,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17564,7 +17719,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Verify Shipping runtime dependency closure (PLT-200)",
-        "stepIndex": 6,
+        "stepIndex": 7,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17583,7 +17738,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Install the Windows Shipping SDK for the consumer profile",
-        "stepIndex": 11,
+        "stepIndex": 12,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17605,7 +17760,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17626,7 +17781,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17653,7 +17808,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17681,7 +17836,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17708,7 +17863,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17731,7 +17886,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Package Windows Shipping MSI for package-smoke consumer",
-        "stepIndex": 18,
+        "stepIndex": 19,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17750,7 +17905,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Package and verify Windows Shipping ZIP and NSIS artifacts",
-        "stepIndex": 19,
+        "stepIndex": 20,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17769,7 +17924,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Package and verify Windows Shipping ZIP and NSIS artifacts",
-        "stepIndex": 19,
+        "stepIndex": 20,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -17800,7 +17955,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-a-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -17821,7 +17976,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-a-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -17848,10 +18003,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "install",
-        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-a",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix \"$physical_parent/reproducibility-stage-a\"",
         "commandProvenance": "literal",
         "configuration": "MinSizeRel",
-        "prefix": "../reproducibility-stage-a",
+        "prefix": "$physical_parent/reproducibility-stage-a",
         "component": "",
         "commandIndex": 2
       },
@@ -17870,7 +18025,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-b-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -17891,7 +18046,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-b-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -17918,10 +18073,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "install",
-        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix \"$physical_parent/reproducibility-stage-b\"",
         "commandProvenance": "literal",
         "configuration": "MinSizeRel",
-        "prefix": "../reproducibility-stage-b",
+        "prefix": "$physical_parent/reproducibility-stage-b",
         "component": "",
         "commandIndex": 2
       },
@@ -19795,7 +19950,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+        "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS_DEBUG=\"-g -Og\"  -DCMAKE_C_FLAGS_DEBUG=\"-g -Og\"  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
         "commandProvenance": "literal",
         "options": {
           "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -19806,6 +19961,8 @@
           "CMAKE_CXX_COMPILER": "g++-14",
           "CMAKE_C_COMPILER_LAUNCHER": "ccache",
           "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+          "CMAKE_CXX_FLAGS_DEBUG": "-g -Og",
+          "CMAKE_C_FLAGS_DEBUG": "-g -Og",
           "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
           "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
@@ -20105,7 +20262,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows Shipping lane",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20126,7 +20283,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20147,7 +20304,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -20187,7 +20344,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-a-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -20208,7 +20365,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-b-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -20896,7 +21053,7 @@
         "gating": "blocking",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest",
+        "command": "cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest",
         "commandProvenance": "literal",
         "targets": [
           "SparkFuzzAchievement",
@@ -20941,6 +21098,7 @@
           "SparkFuzzMMOChatWire",
           "SparkFuzzMMOClientState",
           "SparkFuzzMMOEntityEvents",
+          "SparkFuzzMaterialEditorFiles",
           "SparkFuzzMaterialLoader",
           "SparkFuzzModManifest",
           "SparkFuzzModuleSidecar",
@@ -21329,7 +21487,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows Shipping lane",
-        "stepIndex": 2,
+        "stepIndex": 3,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -21356,7 +21514,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check Windows Shipping PE ISA floor (BLD-100)",
-        "stepIndex": 3,
+        "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -21383,7 +21541,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the Windows validation lane",
-        "stepIndex": 12,
+        "stepIndex": 13,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -21410,7 +21568,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -21449,7 +21607,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-a-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -21476,7 +21634,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-b-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -22639,7 +22797,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Configure and build the installed SDK consumer lane",
-        "stepIndex": 14,
+        "stepIndex": 15,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23224,7 +23382,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows Shipping provenance",
-        "stepIndex": 9,
+        "stepIndex": 10,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23252,7 +23410,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture Windows validation provenance",
-        "stepIndex": 13,
+        "stepIndex": 14,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23280,7 +23438,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Capture installed SDK consumer provenance",
-        "stepIndex": 15,
+        "stepIndex": 16,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23308,7 +23466,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Generate the configured build-matrix inventory",
-        "stepIndex": 16,
+        "stepIndex": 17,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23340,7 +23498,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 17,
+        "stepIndex": 18,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23368,7 +23526,7 @@
       {
         "job": "build-windows-shipping",
         "step": "Check the configured build matrix",
-        "stepIndex": 17,
+        "stepIndex": 18,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -23473,7 +23631,7 @@
       "gating": "blocking",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
+      "command": "cmake -B build  -DSPARK_ENGINE_VERSION=\"$spark_engine_version\"  -DCMAKE_BUILD_TYPE=Debug  -DBUILD_TESTS=ON  -DSPARK_LIFECYCLE_TEST_HOOKS=ON  -DCMAKE_C_COMPILER=gcc-14  -DCMAKE_CXX_COMPILER=g++-14  -DCMAKE_C_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache  -DCMAKE_CXX_FLAGS_DEBUG=\"-g -Og\"  -DCMAKE_C_FLAGS_DEBUG=\"-g -Og\"  -DCMAKE_CXX_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_C_FLAGS=\"-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer\"  -DCMAKE_EXE_LINKER_FLAGS=\"-fsanitize=address,undefined -no-pie\"  -DCMAKE_SHARED_LINKER_FLAGS=\"-fsanitize=address,undefined\"",
       "commandProvenance": "literal",
       "options": {
         "SPARK_ENGINE_VERSION": "$spark_engine_version",
@@ -23484,6 +23642,8 @@
         "CMAKE_CXX_COMPILER": "g++-14",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g -Og",
+        "CMAKE_C_FLAGS_DEBUG": "-g -Og",
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
         "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
@@ -23783,7 +23943,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the Windows Shipping lane",
-      "stepIndex": 2,
+      "stepIndex": 3,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -23804,7 +23964,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the Windows validation lane",
-      "stepIndex": 12,
+      "stepIndex": 13,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -23825,7 +23985,7 @@
     {
       "job": "build-windows-shipping",
       "step": "Configure and build the installed SDK consumer lane",
-      "stepIndex": 14,
+      "stepIndex": 15,
       "matrix": {},
       "matrixResolved": true,
       "runnerOs": "windows",
@@ -23865,7 +24025,7 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log",
+      "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-a-configure.log\"",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-shipping",
@@ -23886,7 +24046,7 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
+      "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-b-configure.log\"",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-shipping",

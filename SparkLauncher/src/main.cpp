@@ -10,7 +10,9 @@
 #include "LauncherPaths.h"
 #include "LauncherProcess.h"
 
+#include <cstdio>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <string_view>
@@ -51,6 +53,7 @@ namespace
 #include <windows.h>
 #include <shellapi.h>
 int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR cmdLine, _In_ int)
+try
 {
     (void)cmdLine;
     int argumentCount = 0;
@@ -102,6 +105,7 @@ int WINAPI WinMain(_In_ HINSTANCE, _In_opt_ HINSTANCE, _In_ LPSTR cmdLine, _In_ 
         LocalFree(arguments);
 #else
 int main(int argc, char** argv)
+try
 {
     for (int i = 1; i < argc; ++i)
     {
@@ -161,4 +165,14 @@ int main(int argc, char** argv)
 
     SparkLauncher::Backend_Shutdown();
     return 0;
+}
+catch (const std::exception& error)
+{
+    std::fprintf(stderr, "SparkLauncher failed: %.512s\n", error.what());
+    return 1;
+}
+catch (...)
+{
+    std::fputs("SparkLauncher failed: unexpected exception\n", stderr);
+    return 1;
 }

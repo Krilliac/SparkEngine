@@ -2391,7 +2391,7 @@
             "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
             "cmake/SparkPackageConsumerBoundary.cmake"
           ],
-          "note": "Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs only the sdk component, builds the shipped EmptyProject, and boundary-scans ninja -t deps/commands dumps, failing if they are unscanned or never mention the prefix. SDKConsumer_TemplateRunnerContract passes locally; the Windows GREEN run is not independently verified."
+          "note": "Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs runtime, sdk, and tools (sdk/tools depend on runtime), builds EmptyProject, and scans ninja -t deps/commands; unscanned dumps or missing prefix fail. SDKConsumer_TemplateRunnerContract passes locally; Windows GREEN is not independently verified."
         },
         {
           "criterionDigest": "sha256:3e936e0f4337",

@@ -98,7 +98,7 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Build production fuzz smoke target
-      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest
 
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
@@ -323,7 +323,9 @@ jobs:
       run: python3 -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
 
     - name: Test the build-output reproducibility comparator (BLD-100)
-      run: python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
+      run: |
+        python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
+        python3 -B Tests/Tools/test_compare_windows_shipping_repro.py
 
     - name: Generate and compare the deterministic build-matrix inventory
       id: build-matrix-inventory
@@ -499,6 +501,7 @@ jobs:
         # test_ops100_crash_security.py, test_ops100_telemetry_spool.py,
         # test_ops100_adversarial.py, test_crash_capture_security.py,
         # test_sdk_component_completeness.py (compiler-free CMake install fixtures),
+        # test_sdl_component_archives.py (native CMake/CPack component archives),
         # and test_ops100_symbolication.py (which
         # compiles a small ELF with the runner's cc/objcopy/addr2line);
         # unittest runs their native test classes without requiring an
@@ -509,6 +512,7 @@ jobs:
           test_ops100_crash_security \
           test_crash_capture_security \
           test_sdk_component_completeness \
+          test_sdl_component_archives \
           test_ops100_telemetry_spool \
           test_ops100_adversarial \
           test_ops100_symbolication \
@@ -698,7 +702,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -736,6 +740,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_FLAGS_DEBUG="-g -Og" \
+          -DCMAKE_C_FLAGS_DEBUG="-g -Og" \
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -no-pie" \
@@ -856,7 +862,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -1723,6 +1729,7 @@ jobs:
           build/SparkTests-load-junit.xml \
           build/SparkTests-load.log \
           build/SparkTests-load-output.log \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1780,10 +1787,12 @@ jobs:
         $actualSha256 = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
         if ($actualSha256 -ne $expectedSha256) { throw "Intel SDE archive hash mismatch: $actualSha256" }
         Write-Host "Intel SDE: digest verified; extracting archive"
-        & (Join-Path $env:SystemRoot 'System32\tar.exe') -xf $archive -C $dest
+        $unpacked = Join-Path $dest 'unpacked'
+        $metadata = Join-Path $dest 'sde-extraction.json'
+        python .github/scripts/extract_sde_archive.py --archive $archive --destination $unpacked --metadata $metadata
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Write-Host "Intel SDE: extraction completed; locating executable"
-        $executables = @(Get-ChildItem -LiteralPath $dest -Recurse -File -Filter 'sde.exe')
+        $executables = @(Get-ChildItem -LiteralPath $unpacked -Recurse -File -Filter 'sde.exe')
         if ($executables.Count -ne 1) { throw "Expected one sde.exe, found $($executables.Count)" }
         Add-Content -Path $env:GITHUB_ENV -Value "SPARK_SDE_EXECUTABLE=$($executables[0].FullName.Replace('\', '/'))" -Encoding utf8
 
@@ -1970,16 +1979,17 @@ jobs:
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
         test -s build/test-registration-count.json
-        # Both ctest lanes are summarized: SparkEngineTests excludes the
-        # load/stress family and SparkEngineLoadTests runs it, so summarizing
-        # only the first would shrink the population the floors measure without
-        # lowering the floors. --registration-count compares the executed total
+        # All three granular ctest lanes are summarized: the main suite excludes
+        # load/stress and D3D11 device-loss families, which retain their own
+        # lanes. --registration-count compares the executed total
         # against the TEST macros this build actually compiled, which is the one
         # comparison a hand-written --min-tests literal cannot make.
         test -s build/SparkTests-load-junit.xml
+        test -s build/SparkTests-d3d11-device-loss-junit.xml
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           build/SparkTests-load-junit.xml \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           --min-tests 6800 \
           --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2022 Release" \
@@ -2030,6 +2040,7 @@ jobs:
           build/SparkTests-load-junit.xml
           build/SparkTests-load.log
           build/SparkTests-load-output.log
+          build/SparkTests-d3d11-device-loss-junit.xml
           build/ctest-junit.xml
           build/test-registration-count.json
           build/*-process-smoke.log
@@ -2138,6 +2149,25 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+
+    - name: Pin CMake and CPack for per-user Shipping MSI
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP 'cmake-4.4.1-windows-x86_64.zip'
+        $root = Join-Path $env:RUNNER_TEMP 'spark-cmake-4.4.1'
+        $cmakeSha256 = '091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19'
+        if (Test-Path -LiteralPath $root) { throw 'Pinned CMake directory must be fresh' }
+        Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip' -OutFile $archive
+        $cmakeActual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash
+        if ($cmakeActual -ne $cmakeSha256) { throw 'Pinned CMake archive checksum mismatch' }
+        Expand-Archive -LiteralPath $archive -DestinationPath $root
+        $bin = Join-Path $root 'cmake-4.4.1-windows-x86_64/bin'
+        $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & (Join-Path $bin 'cmake.exe') --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & (Join-Path $bin 'cpack.exe') --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
@@ -2500,8 +2530,8 @@ jobs:
         echo "Build-matrix evidence recorded for ${{ github.sha }}; the Build Matrix Verifier attests it from the Working checkout."
 
   # BLD-100: two clean windows-shipping builds of this commit, from two
-  # checkouts at different paths (so different source and build directories),
-  # must install equivalent outputs. tools/compare_build_outputs.py records
+  # independent checkouts staged sequentially at the same compiler-visible
+  # path, must install equivalent outputs. tools/compare_build_outputs.py records
   # size, SHA-256, COFF timestamp, RSDS GUID/age/PDB name and per-section
   # hashes of every installed EXE, DLL and static library, and fails on any
   # missing, extra or differing output. Nothing is cached between the builds.
@@ -2534,22 +2564,43 @@ jobs:
 
     - name: Build and stage Shipping in the first tree
       shell: bash
-      working-directory: tree-a
       run: |
         set -euo pipefail
-        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log
+        # MSVC records the object-output path in CodeView and BigObj metadata.
+        # Move each separate checkout to one real path for its build, then
+        # restore it so checkout cleanup and the comparator see both trees.
+        physical_parent=$PWD
+        source_tree="$physical_parent/tree-a"
+        canonical_tree="$physical_parent/reproducibility-source"
+        test ! -e "$canonical_tree"
+        mv "$source_tree" "$canonical_tree"
+        restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }
+        trap restore_tree EXIT
+        cd "$canonical_tree"
+        cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-a-configure.log"
         # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
-        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log
-        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-a
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-a-build.log"
+        cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-a"
+        restore_tree
+        trap - EXIT
 
     - name: Build and stage Shipping in the second tree
       shell: bash
-      working-directory: tree-b
       run: |
         set -euo pipefail
-        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log
-        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log
-        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b
+        physical_parent=$PWD
+        source_tree="$physical_parent/tree-b"
+        canonical_tree="$physical_parent/reproducibility-source"
+        test ! -e "$canonical_tree"
+        mv "$source_tree" "$canonical_tree"
+        restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }
+        trap restore_tree EXIT
+        cd "$canonical_tree"
+        cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-b-configure.log"
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-b-build.log"
+        cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-b"
+        restore_tree
+        trap - EXIT
 
     - name: Compare the two Shipping builds
       shell: bash
@@ -2564,9 +2615,13 @@ jobs:
         root_b=$(cygpath -w "$build_b")
         python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json --build-root "$root_a"
         python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json --build-root "$root_b"
-        python tree-a/tools/compare_build_outputs.py compare \
-          reproducibility/manifest-a.json reproducibility/manifest-b.json \
-          --report reproducibility/report.json
+        python tree-a/.github/scripts/compare_windows_shipping_repro.py \
+          --first-manifest reproducibility/manifest-a.json \
+          --second-manifest reproducibility/manifest-b.json \
+          --first-root reproducibility-stage-a --second-root reproducibility-stage-b \
+          --first-build-root "$root_a" --second-build-root "$root_b" \
+          --report reproducibility/report.json \
+          --diagnostics reproducibility/coff-diagnostics.json
 
     - name: Upload reproducibility evidence
       if: always()
@@ -2669,6 +2724,7 @@ jobs:
           build/SparkTests-load-junit.xml \
           build/SparkTests-load.log \
           build/SparkTests-load-output.log \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -2802,6 +2858,7 @@ jobs:
         "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
 
     - name: Run Tests
+      id: vs2026-release-tests
       if: matrix.config == 'Release'
       run: >-
         ctest --test-dir build -C ${{ matrix.config }}
@@ -2817,10 +2874,12 @@ jobs:
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
         test -s build/SparkTests-load-junit.xml
+        test -s build/SparkTests-d3d11-device-loss-junit.xml
         test -s build/test-registration-count.json
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           build/SparkTests-load-junit.xml \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           --min-tests 6800 \
           --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2026 Release" \
@@ -2838,12 +2897,32 @@ jobs:
           build/SparkTests-load-junit.xml
           build/SparkTests-load.log
           build/SparkTests-load-output.log
+          build/SparkTests-d3d11-device-loss-junit.xml
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
           build/*-process-smoke.xml
           test-stats-windows-vs2026-release.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
+    # VS 18 ships an independent MSVC toolset. When its fail-closed ISA scan
+    # rejects unreviewed CRT/STL ranges, retain one broad and one small image
+    # with their build PDBs so the guard-dominance review can be performed
+    # without weakening the x86-64-v2 floor or guessing from truncated logs.
+    - name: Upload bounded VS2026 CPU-floor review inputs
+      if: always() && matrix.config == 'Release' && steps.vs2026-release-tests.outcome == 'failure'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: vs2026-cpu-floor-review-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          build/bin/Release/SparkEngine.exe
+          build/bin/Release/SparkEngine.pdb
+          build/bin/Release/SparkConsole.exe
+          build/bin/Release/SparkConsole.pdb
+          build/CMakeCache.txt
+          build/ctest-junit.xml
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
 
     - name: Upload Build Artifacts

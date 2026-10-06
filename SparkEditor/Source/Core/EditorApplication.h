@@ -85,16 +85,16 @@ namespace SparkEditor
         void RequestExit();
 
         PerformanceMetrics GetPerformanceMetrics() const;
-        /** @brief Number of main-loop frames whose swap-chain Present returned S_OK. */
+        /** @brief Number of completed frame presentation calls (D3D11 success or OpenGL swap completion). */
         uint64_t GetRenderedFrameCount() const { return m_renderedFrameCount; }
-        /** @brief Number of main-loop Present calls that did not return S_OK. */
+        /** @brief Number of frame presentation failures reported by the active graphics backend. */
         uint64_t GetPresentFailureCount() const { return m_presentFailureCount; }
         std::string GetGraphicsBackend() const
         {
 #ifdef _WIN32
             return "d3d11";
 #else
-            return "unknown";
+            return "opengl";
 #endif
         }
         EditorPluginManager& GetPluginManager() { return m_pluginManager; }

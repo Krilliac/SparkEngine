@@ -132,7 +132,7 @@ namespace Terrafront
     /// One pawn state record inside a RepUpdate message. Wire layout of the
     /// message is TF_RepUpdateHeader followed by exactly entityCount of these.
     /// Only pawns whose quantized state changed since the last broadcast are
-    /// included (server-side dirty check), so idle pawns cost zero bandwidth.
+    /// included by the dirty check, with a bounded full-state refresh for idle pawns.
     struct TF_RepPawnUpdate
     {
         uint32_t entityId;

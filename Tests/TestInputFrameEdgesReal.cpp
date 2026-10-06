@@ -21,7 +21,11 @@
 
 #include "Input/InputManager.h"
 
+#include <array>
 #include <chrono>
+#include <fstream>
+#include <iterator>
+#include <string>
 #include <thread>
 
 namespace
@@ -31,6 +35,14 @@ namespace
     void RunFrameInputStep(InputManager& input)
     {
         input.Update();
+    }
+
+    std::string ReadWin32InputHostSource()
+    {
+        const std::string path =
+            std::string(SPARK_TEST_SOURCE_DIR) + "/SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp";
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
     }
 } // namespace
 
@@ -135,4 +147,90 @@ TEST(InputFrameEdgesReal_TimedReleaseIsAReleaseEdgeOnTheFrameThatAppliesIt)
 
     RunFrameInputStep(input);
     EXPECT_FALSE(input.WasKeyReleased(VK_SPACE));
+}
+
+TEST(InputFrameEdgesReal_ObservationIsLatchedAndSequenceAdvancesOnlyOnUpdate)
+{
+    InputManager input;
+    const auto initial = input.GetInputFrameSequence();
+    input.HandleMessage(WM_KEYDOWN, VK_F2, 0);
+    EXPECT_FALSE(input.IsFrameKeyDown(VK_F2));
+    EXPECT_EQ(input.GetInputFrameSequence(), initial);
+    input.Update();
+    EXPECT_EQ(input.GetInputFrameSequence(), initial + 1);
+    EXPECT_TRUE(input.IsFrameKeyDown(VK_F2));
+    input.HandleMessage(WM_KEYUP, VK_F2, 0);
+    EXPECT_TRUE(input.IsFrameKeyDown(VK_F2));
+    EXPECT_EQ(input.GetInputFrameSequence(), initial + 1);
+    input.Update();
+    EXPECT_FALSE(input.IsFrameKeyDown(VK_F2));
+    EXPECT_TRUE(input.WasKeyReleased(VK_F2));
+    EXPECT_EQ(input.GetInputFrameSequence(), initial + 2);
+}
+
+TEST(InputFrameEdgesReal_GenericModifiersAliasEitherSideWithoutLosingSideState)
+{
+    struct ModifierKeys
+    {
+        int generic;
+        int left;
+        int right;
+    };
+
+    constexpr std::array<ModifierKeys, 3> modifiers = {
+        {{VK_SHIFT, VK_LSHIFT, VK_RSHIFT}, {VK_CONTROL, VK_LCONTROL, VK_RCONTROL}, {VK_MENU, VK_LMENU, VK_RMENU}}};
+
+    for (const auto& keys : modifiers)
+    {
+        InputManager input;
+        RunFrameInputStep(input);
+
+        input.HandleMessage(WM_KEYDOWN, keys.left, 0);
+        EXPECT_TRUE(input.IsKeyDown(keys.generic));
+        EXPECT_TRUE(input.IsKeyDown(keys.left));
+        EXPECT_FALSE(input.IsKeyDown(keys.right));
+        RunFrameInputStep(input);
+        EXPECT_TRUE(input.IsFrameKeyDown(keys.generic));
+        EXPECT_TRUE(input.WasKeyPressed(keys.generic));
+        EXPECT_TRUE(input.WasKeyPressed(keys.left));
+
+        input.HandleMessage(WM_KEYDOWN, keys.right, 0);
+        RunFrameInputStep(input);
+        EXPECT_TRUE(input.IsKeyDown(keys.generic));
+        EXPECT_FALSE(input.WasKeyPressed(keys.generic));
+        EXPECT_TRUE(input.WasKeyPressed(keys.right));
+
+        input.HandleMessage(WM_KEYUP, keys.left, 0);
+        EXPECT_TRUE(input.IsKeyDown(keys.generic));
+        RunFrameInputStep(input);
+        EXPECT_TRUE(input.IsFrameKeyDown(keys.generic));
+        EXPECT_FALSE(input.WasKeyReleased(keys.generic));
+        EXPECT_TRUE(input.WasKeyReleased(keys.left));
+        EXPECT_TRUE(input.IsKeyDown(keys.right));
+
+        input.HandleMessage(WM_KEYUP, keys.right, 0);
+        EXPECT_FALSE(input.IsKeyDown(keys.generic));
+        RunFrameInputStep(input);
+        EXPECT_FALSE(input.IsFrameKeyDown(keys.generic));
+        EXPECT_TRUE(input.WasKeyReleased(keys.generic));
+        EXPECT_TRUE(input.WasKeyReleased(keys.right));
+    }
+}
+
+TEST(InputFrameEdgesReal_Win32HostNormalizesModifierSidesAndSystemKeys)
+{
+    const std::string source = ReadWin32InputHostSource();
+    ASSERT_FALSE(source.empty());
+
+    EXPECT_TRUE(source.find("case WM_SYSKEYDOWN:") != std::string::npos);
+    EXPECT_TRUE(source.find("case WM_SYSKEYUP:") != std::string::npos);
+    EXPECT_TRUE(source.find("MapVirtualKeyW(scanCode, MAPVK_VSC_TO_VK_EX)") != std::string::npos);
+    EXPECT_TRUE(source.find("(static_cast<ULONG_PTR>(lParam) & 0x01000000u) != 0") != std::string::npos);
+    EXPECT_TRUE(source.find("scanCode |= 0xE000u;") != std::string::npos);
+    EXPECT_TRUE(source.find("mappedKey == VK_LSHIFT || mappedKey == VK_RSHIFT") != std::string::npos);
+    EXPECT_TRUE(source.find("mappedKey == VK_LCONTROL || mappedKey == VK_RCONTROL") != std::string::npos);
+    EXPECT_TRUE(source.find("mappedKey == VK_LMENU || mappedKey == VK_RMENU") != std::string::npos);
+    EXPECT_TRUE(source.find("(msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) ? WM_KEYDOWN : WM_KEYUP") !=
+                std::string::npos);
+    EXPECT_TRUE(source.find("NormalizeWin32ModifierVirtualKey(wParam, lParam)") != std::string::npos);
 }

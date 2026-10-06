@@ -31,11 +31,30 @@
 
 include_guard(GLOBAL)
 
+# Compiler identities describe the target even when a Windows launcher omits
+# PROCESSOR_ARCHITECTURE. Keep non-MSVC toolchain/system identities authoritative.
+function(spark_cpu_floor_target_is_x86 out_var)
+    set(_arch "${CMAKE_SYSTEM_PROCESSOR}")
+    if(MSVC)
+        if(NOT "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}" STREQUAL "")
+            set(_arch "${CMAKE_CXX_COMPILER_ARCHITECTURE_ID}")
+        elseif(NOT "${CMAKE_C_COMPILER_ARCHITECTURE_ID}" STREQUAL "")
+            set(_arch "${CMAKE_C_COMPILER_ARCHITECTURE_ID}")
+        endif()
+    endif()
+    set(_x86 FALSE)
+    if(_arch MATCHES "^(x64|X64|x86_64|AMD64|amd64|x86|X86|i[3-6]86)$")
+        set(_x86 TRUE)
+    endif()
+    set(${out_var} ${_x86} PARENT_SCOPE)
+endfunction()
+
 # True when the configured target is x86/x86-64 and the build is not tuned for
 # the build host, i.e. when the stable-v1 CPU floor applies.
 function(spark_cpu_floor_enforced out_var)
     set(_enforced FALSE)
-    if(NOT SPARK_NATIVE_ARCH AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|x86|X86|i[3-6]86)$")
+    spark_cpu_floor_target_is_x86(_x86)
+    if(NOT SPARK_NATIVE_ARCH AND _x86)
         set(_enforced TRUE)
     endif()
     set(${out_var} ${_enforced} PARENT_SCOPE)
@@ -88,7 +107,8 @@ endfunction()
 # keep whatever a previous configuration chose.
 function(spark_configure_jolt_cpu_floor)
     spark_cpu_floor_enforced(_enforced)
-    if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|x86|X86|i[3-6]86)$")
+    spark_cpu_floor_target_is_x86(_x86)
+    if(NOT _x86)
         return()
     endif()
     if(_enforced)

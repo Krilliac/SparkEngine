@@ -50,7 +50,7 @@ DEFAULT_GOLDEN = SDK_ROOT / "ABI" / "sdk-abi-surface.json"
 EXCLUDED_HEADERS = {"PluginABI.h"}
 
 ABI_STRUCTS = ("Spark::ModuleInfo", "SparkModuleCompatibilityDescriptor")
-ABI_ENUMS = ("Spark::ModuleKind",)
+ABI_ENUMS = ("Spark::ModuleKind", "Spark::WeatherPreset")
 ABI_MACROS = (
     "SPARK_MODULE_ABI_MAGIC",
     "SPARK_MODULE_ABI_DESCRIPTOR_SIZE",

@@ -339,8 +339,10 @@ TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
             Spark::StackTrace::SymbolLockLease symbolLock(true);
             if (symbolLock.owns_lock())
             {
-                // The raw control only proves the scan can see the canary; like the product writer it
-                // retries once when DbgHelp races a transiently unreadable page.
+                // The raw control only proves the scan can see the canary, so it does not need an
+                // exception stream. Passing the test's plain CONTEXT makes some DbgHelp builds reject
+                // the control before stack capture. Like the product writer, retry once when DbgHelp
+                // races a transiently unreadable page.
                 for (int attempt = 0; attempt != 2; ++attempt)
                 {
                     LARGE_INTEGER start{};
@@ -349,7 +351,7 @@ TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
                     SetLastError(ERROR_SUCCESS);
                     written = removeStacks ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, &error)
                                            : MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), handle,
-                                                               dumpType, &exception, nullptr, nullptr);
+                                                               dumpType, nullptr, nullptr, nullptr);
                     if (!removeStacks)
                         error = written ? ERROR_SUCCESS : GetLastError();
                     if (written || removeStacks || !IsPartialCopy(error))

@@ -10,6 +10,8 @@
 #include "UISystem.h"
 
 #include <algorithm>
+#include <ranges>
+#include <utility>
 
 namespace Spark::UI
 {
@@ -18,7 +20,7 @@ namespace Spark::UI
     // UIWidget
     // =============================================================================
 
-    UIWidget::UIWidget(const std::string& name) : m_name(name) {}
+    UIWidget::UIWidget(std::string name) : m_name(std::move(name)) {}
 
     void UIWidget::Update(float deltaTime)
     {
@@ -41,7 +43,7 @@ namespace Spark::UI
     // UILabel
     // =============================================================================
 
-    UILabel::UILabel(const std::string& name, const std::string& text) : UIWidget(name), m_text(text) {}
+    UILabel::UILabel(const std::string& name, std::string text) : UIWidget(name), m_text(std::move(text)) {}
 
     void UILabel::Render() const
     {
@@ -57,7 +59,7 @@ namespace Spark::UI
     // UIButton
     // =============================================================================
 
-    UIButton::UIButton(const std::string& name, const std::string& label) : UIWidget(name), m_label(label) {}
+    UIButton::UIButton(const std::string& name, std::string label) : UIWidget(name), m_label(std::move(label)) {}
 
     bool UIButton::HandleClick(float x, float y)
     {
@@ -105,8 +107,8 @@ namespace Spark::UI
     // UIImageWidget
     // =============================================================================
 
-    UIImageWidget::UIImageWidget(const std::string& name, const std::string& texturePath)
-        : UIWidget(name), m_texturePath(texturePath)
+    UIImageWidget::UIImageWidget(const std::string& name, std::string texturePath)
+        : UIWidget(name), m_texturePath(std::move(texturePath))
     {
     }
 
@@ -255,9 +257,9 @@ namespace Spark::UI
         }
 
         // Check children in reverse order (top-most first)
-        for (auto it = m_children.rbegin(); it != m_children.rend(); ++it)
+        for (const auto& child : std::views::reverse(m_children))
         {
-            if ((*it)->HandleClick(x, y))
+            if (child->HandleClick(x, y))
             {
                 return true;
             }

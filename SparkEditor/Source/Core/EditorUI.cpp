@@ -414,6 +414,26 @@ namespace SparkEditor
             return;
         }
 
+        // Material activation keeps the browser independent of panel ownership.
+        auto browserIt = m_panels.find("AssetBrowser");
+        auto materialIt = m_panels.find("MaterialEditor");
+        if (browserIt != m_panels.end() && materialIt != m_panels.end())
+        {
+            auto browser = std::dynamic_pointer_cast<AssetBrowserPanel>(browserIt->second);
+            auto material = std::dynamic_pointer_cast<MaterialEditorPanel>(materialIt->second);
+            if (browser && material)
+            {
+                browser->SetOnMaterialOpened(
+                    [weakMaterial = std::weak_ptr<MaterialEditorPanel>(material)](const std::string& path)
+                    {
+                        if (auto panel = weakMaterial.lock())
+                        {
+                            panel->OpenMaterial(path);
+                        }
+                    });
+            }
+        }
+
         m_projectManager->SetOnProjectOpened(
             [this](const ProjectInfo& project)
             {
@@ -2343,6 +2363,18 @@ namespace SparkEditor
             }
         }
 
+        // Inspector reads the current World and selection through EditorUI.
+        // Keep this document wiring platform-neutral: it does not depend on a
+        // graphics device and must also work in the Linux/OpenGL editor.
+        auto inspectorIt = m_panels.find("Inspector");
+        if (inspectorIt != m_panels.end())
+        {
+            if (auto* inspector = dynamic_cast<InspectorPanel*>(inspectorIt->second.get()))
+            {
+                inspector->SetEditorUI(this);
+            }
+        }
+
         auto gameViewIt = m_panels.find("GameView");
         if (gameViewIt != m_panels.end())
         {
@@ -2626,39 +2658,9 @@ namespace SparkEditor
                 assetBrowser->SetGraphics(m_graphics.get());
         }
 
-        // Wire the Hierarchy panel's selection sink (one-time; the panel
-        // object persists across future World swaps, so this doesn't need
-        // to be repeated by RewirePanelsToWorld()). List/create/delete/select
-        // real ECS entities instead of the legacy (dormant) SceneFile tree.
-        auto hierarchyIt = m_panels.find("Hierarchy");
-        if (hierarchyIt != m_panels.end())
-        {
-            auto* hierarchy = dynamic_cast<HierarchyPanel*>(hierarchyIt->second.get());
-            if (hierarchy)
-            {
-                hierarchy->SetSelectionSink(this);
-            }
-        }
-
-        // Seed both panels' cached ::World* (this call also handles the
-        // SceneView/Hierarchy SetWorld() previously done inline here) and
-        // any subsequent OpenScene() reuses the same path.
+        // Wire document-backed panels. Any subsequent OpenScene() reuses the
+        // same path.
         RewirePanelsToWorld();
-
-        // Wire the Inspector panel to EditorUI (Unit C3) so it can read the
-        // live World + selected entity each frame and render/edit the
-        // entity's real engine components via reflection, instead of the
-        // legacy (dormant) SceneFile-backed inspector.
-        auto inspectorIt = m_panels.find("Inspector");
-        if (inspectorIt != m_panels.end())
-        {
-            auto* inspector = dynamic_cast<InspectorPanel*>(inspectorIt->second.get());
-            if (inspector)
-            {
-                inspector->SetEditorUI(this);
-                console.LogSuccess("EditorUI wired to Inspector panel (World-backed ECS inspector)");
-            }
-        }
     }
 #endif
     void EditorUI::HandleKeyboardShortcuts()

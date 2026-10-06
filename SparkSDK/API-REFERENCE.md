@@ -28,13 +28,22 @@ check before use. Use the public service interfaces in the SDK for logging,
 console commands, state validation, networking, and telemetry. The context is
 borrowed and does not transfer ownership to the module.
 
+## Weather commands (`Spark/IWeatherService.h`)
+
+`GetWeatherService()` returns a borrowed optional `IWeatherService`. Call
+`SetWeather(WeatherPreset, intensity, transitionSeconds)` on the game thread.
+Presets are Clear=0, Rain=1, Snow=2, Fog=3 and Storm=4. Invalid presets,
+nonfinite arguments or unavailable weather return false without mutation.
+Finite negative intensity selects the preset default; other intensities clamp
+to [0,1], and transitions have a0.01-second minimum. Success means accepted.
+
 ## Compatibility descriptor (`Spark/ModuleABI.h`)
 
 `SparkModuleCompatibilityDescriptor` is a fixed C-layout descriptor read before
 the C++ factory is called. The host checks the magic, descriptor format, SDK
 and runtime ABI versions, compiler family and version, C++ language level,
 runtime library, iterator debug level, and pointer size. The descriptor is
-64 bytes for descriptor version 1 and `SPARK_SDK_VERSION` 9.
+64 bytes for descriptor version 1 and `SPARK_SDK_VERSION` 10.
 
 `Spark::CheckModuleCompatibility()` returns the status. For a diagnostic,
 `Spark::GetModuleCompatibilityMismatch()` identifies the sidecar field and

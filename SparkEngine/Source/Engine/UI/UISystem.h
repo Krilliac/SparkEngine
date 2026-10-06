@@ -124,7 +124,7 @@ namespace Spark::UI
     class UIWidget
     {
       public:
-        UIWidget(const std::string& name);
+        UIWidget(std::string name);
         virtual ~UIWidget() = default;
 
         /** @brief Get the widget name. */
@@ -193,7 +193,7 @@ namespace Spark::UI
     class UILabel : public UIWidget
     {
       public:
-        UILabel(const std::string& name, const std::string& text);
+        UILabel(const std::string& name, std::string text);
 
         void SetText(const std::string& text) { m_text = text; }
         const std::string& GetText() const { return m_text; }
@@ -219,7 +219,7 @@ namespace Spark::UI
     class UIButton : public UIWidget
     {
       public:
-        UIButton(const std::string& name, const std::string& label);
+        UIButton(const std::string& name, std::string label);
 
         void SetLabel(const std::string& label) { m_label = label; }
         const std::string& GetLabel() const { return m_label; }
@@ -279,7 +279,7 @@ namespace Spark::UI
     class UIImageWidget : public UIWidget
     {
       public:
-        UIImageWidget(const std::string& name, const std::string& texturePath = "");
+        UIImageWidget(const std::string& name, std::string texturePath = "");
 
         void SetTexturePath(const std::string& path) { m_texturePath = path; }
         const std::string& GetTexturePath() const { return m_texturePath; }

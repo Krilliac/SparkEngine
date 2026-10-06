@@ -190,6 +190,13 @@ def _reap_child(handle, terminate=None, wait=None):
     _require(wait(handle, 5000) == WAIT_OBJECT_0, "child did not terminate during cleanup")
 
 
+def _windows_command_line(argv):
+    """Keep MSI's empty ALLUSERS value explicit instead of consuming the next token."""
+    is_msi = str(argv[0]).replace("\\", "/").rsplit("/", 1)[-1].casefold() == "msiexec.exe"
+    return " ".join('ALLUSERS=""' if is_msi and str(value) == "ALLUSERS="
+                    else subprocess.list2cmdline([str(value)]) for value in argv)
+
+
 def run(argv, log, timeout, env=None, cwd=None):
     """Run argv with a verified same-user medium token and return its exit code."""
     if os.name != "nt":
@@ -210,7 +217,8 @@ def run(argv, log, timeout, env=None, cwd=None):
         # An already-safe caller still gets token validation and normal process
         # semantics; an elevated caller must use the restricted token path.
         if _token_is_medium_non_elevated(source):
-            completed = subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT, timeout=timeout, env=env, cwd=cwd)
+            completed = subprocess.run(_windows_command_line(argv), stdout=output, stderr=subprocess.STDOUT,
+                                       timeout=timeout, env=env, cwd=cwd)
             return completed.returncode
         if not _token_is_elevated(source) and _token_integrity_rid(source) < MEDIUM_INTEGRITY_RID:
             raise PermissionError("current token is below medium integrity; refusing to raise it")
@@ -233,7 +241,7 @@ def run(argv, log, timeout, env=None, cwd=None):
                           input_handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT),
                  "SetHandleInformation(stdin) failed")
         startup.hStdInput = input_handle
-        command = ctypes.create_unicode_buffer(subprocess.list2cmdline([str(value) for value in argv]))
+        command = ctypes.create_unicode_buffer(_windows_command_line(argv))
         environment = os.environ if env is None else env
         environment_block = ctypes.create_unicode_buffer(
             "\0".join(f"{key}={value}" for key, value in sorted(environment.items(), key=lambda item: item[0].upper()))

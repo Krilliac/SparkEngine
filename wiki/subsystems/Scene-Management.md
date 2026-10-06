@@ -16,8 +16,9 @@ not the working directory. Only a genuinely absent startup file permits the lega
 initialization. The host's separate `-scene` preview mode is unchanged.
 
 This is a deliberately bounded adapter, not complete ECS-to-FPS scene support.
-It accepts root entities with unique nonempty names and Transform plus either an
-OBJ MeshRenderer or one main Camera. Position/rotation/scale, camera FOV and clipping
+It accepts root entities with unique nonempty names and Transform plus exactly one
+OBJ MeshRenderer, the main Camera, or a supported SpawnPointComponent. A main Camera
+and at least one mesh are required even when spawn points are present. Position/rotation/scale, camera FOV and clipping
 are transferred to gameplay state. Camera scale must be one, pitch must be within
 [-89,89] degrees, FOV within [10,170], near within [0.01,10], and far within [100,10000]
 with near below far. Hierarchy, other components, explicit materials, nondefault
@@ -25,6 +26,31 @@ visibility/shadow/emissive settings, missing meshes and unsupported camera value
 fail rather than silently lose authored state. Unicode and quoted names are accepted;
 the legacy node lookup requires unique names. Mesh references must resolve beneath
 the scene's project root and load as actual OBJ geometry, without placeholder fallback.
+
+SpawnPointComponent support is limited to enabled neutral player points with
+`spawnTag="default"`, `teamID=0`, `spawnRadius=0`, `respawnDelay=0`, and
+`maxConcurrent=-1`. The adapter preserves priority, position and facing as an
+existing FPS SpawnPoint node. Spawn transforms must have unit scale and pitch in
+[-89,89]; hierarchy remains unsupported. More than 32 points rejects the whole
+scene instead of silently truncating the FPS table. Mixed mesh/camera/spawn
+components on one entity also reject the scene. The strict reflected schema
+requires all authored fields and rejects unknown or runtime-only fields.
+
+The existing FPS selector uses highest priority and first-stored ties for F11
+match start and respawn. The component's reuse cooldown is distinct from the
+player's independent death timer, which remains unchanged. The component defaults
+`spawnRadius=1` and `respawnDelay=5` must be changed explicitly for this exact-point
+subset. Disabled/team-specific/radius/cooldown/concurrency-limited points and
+`wave_spawn` are rejected. WaveSpawner's separate jittered placement does not
+implement these component semantics. No SpawnPoint-aware cook transformation is
+needed: the existing cooker preserves the selected scene bytes.
+
+The direct reflected SceneManager family now contains ten source cases (six
+existing plus four spawn regressions). Its real RespawnSystem/event test covers
+selection and the death timer, not physical F11 input or a rendered match. The
+installed two-entity camera/mesh lineage fixture remains separate and does not
+prove packaged spawn consumption; that requires an explicit fixture/validator
+extension and fresh native evidence.
 
 The primary reflected document is read with the existing strict deserializer and
 size bound, without automatic `.bak` recovery. The existing LoadScene transaction

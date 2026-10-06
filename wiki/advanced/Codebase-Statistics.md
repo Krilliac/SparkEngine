@@ -11,26 +11,26 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 346913 |
-| **SparkEditor/Source** | 106228 |
-| **GameModules** | 163669 |
+| **SparkEngine/Source** | 347396 |
+| **SparkEditor/Source** | 106742 |
+| **GameModules** | 164092 |
 | **External services** | 12922 |
-| **Asset pipeline** | 3188 |
-| **Tests** | 276437 |
-| **SparkConsole/src** | 1861 |
+| **Asset pipeline** | 3231 |
+| **Tests** | 277774 |
+| **SparkConsole/src** | 1866 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~933347** |
+| **Total C++ (excl. ThirdParty)** | **~936157** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1247 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1988 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1253 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1999 |
 | HLSL shader files | 44 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 738 |
+| Test-bearing implementation files (.cpp/.mm) | 741 |
 | Wiki pages (.md) | 206 |
 
 ### Largest Top-Level Source Section
@@ -43,14 +43,14 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 125930 | 36.3% |
-| Engine (all subsystems) | 100706 | 29.0% |
-| Utils | 49354 | 14.2% |
-| Core | 33513 | 9.6% |
+| Graphics | 125930 | 36.2% |
+| Engine (all subsystems) | 100750 | 29.0% |
+| Utils | 49400 | 14.2% |
+| Core | 33610 | 9.6% |
 | Physics | 11142 | 3.2% |
 | Audio | 6961 | 2.0% |
-| Input | 3938 | 1.1% |
-| SceneManager | 4625 | 1.3% |
+| Input | 3968 | 1.1% |
+| SceneManager | 4842 | 1.3% |
 | Enums | 1025 | 0.2% |
 | Game | 2950 | 0.8% |
 | Camera | 999 | 0.2% |
@@ -60,13 +60,13 @@ Graphics contains 125930 lines, or 36% of `SparkEngine/Source`. This is a source
 | Subsystem | Lines |
 |-----------|------:|
 | Networking | 18859 |
-| AI | 13692 |
+| AI | 13693 |
 | ECS | 8814 |
 | Gameplay | 8285 |
-| Scripting | 8148 |
+| Scripting | 8189 |
 | Animation | 6959 |
 | SaveSystem | 4348 |
-| UI | 2709 |
+| UI | 2711 |
 | Modding | 2654 |
 | Streaming | 2236 |
 | Editor | 1737 |
@@ -104,14 +104,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 106228 |
+| Total editor lines | 106742 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 738 |
-| TEST() definitions | 8530 |
+| Test files | 741 |
+| TEST() definitions | 8563 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -121,7 +121,7 @@ It does not measure registration, runtime use, support, or readiness.
 | CMake option() declarations | 34 |
 | ENABLE_* feature toggles | 24 |
 | Game modules | 11 |
-| SDK public headers | 23 |
+| SDK public headers | 24 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
@@ -157,7 +157,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `CrashHandler.cpp` | 2859 |
+| `CrashHandler.cpp` | 2905 |
 | `OpenGLDevice.cpp` | 2588 |
 | `NetworkConnection.cpp` | 2500 |
 | `ModuleManager.cpp` | 2223 |
@@ -187,7 +187,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2723 |
+| `EditorUI.cpp` | 2725 |
 | `ProjectManager.cpp` | 2362 |
 | `BuildPipeline.cpp` | 1881 |
 | `CollaborativeEditSession.cpp` | 1773 |

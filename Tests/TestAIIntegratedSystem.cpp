@@ -17,8 +17,15 @@
 
 #include "TestFramework.h"
 
+#include "Engine/AI/AIBudgetTypes.h"
 #include "Engine/AI/AIIntegration.h"
 #include "Engine/ECS/Components.h"
+
+#include <type_traits>
+
+// AIBudgetTypes intentionally introduces Spark::AI::EntityID before AISystem.h.
+// The core AI component must still use the ECS entity type regardless of include order.
+static_assert(std::is_same_v<decltype(Spark::AI::AIComponent::targetEntity), ::EntityID>);
 
 using namespace Spark::AI;
 

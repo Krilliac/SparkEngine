@@ -22,6 +22,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 from common import SITE_CONTRACT_ROOT, github_heading_slug, load_json
+import docs_contract
 from docs_contract import validate_api_manifest
 
 MAX_DOCUMENTS = 1500
@@ -321,32 +322,72 @@ class TrackedTree:
 
 
 def load_tracked_tree(repo_root: Path) -> TrackedTree | None:
-    """Return the index paths of *repo_root*, or None when it is not a git work tree root."""
+    """Return exact tracked paths, using the isolated snapshot manifest when supplied.
+
+    The isolated documentation snapshot has no Git metadata. Its NUL-delimited
+    inventory is authoritative and retains logical path casing even when the
+    checkout filesystem merges ``Tools/`` and ``tools/``.
+    """
     try:
         top = subprocess.run(
             ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
             check=False, capture_output=True, timeout=60,
         )
-        if top.returncode or not top.stdout.strip():
-            return None
-        if Path(os.fsdecode(top.stdout.strip())).resolve() != repo_root.resolve():
-            return None
+        git_available = not top.returncode and bool(top.stdout.strip()) and Path(
+            os.fsdecode(top.stdout.strip())
+        ).resolve() == repo_root.resolve()
         listed = subprocess.run(
             ["git", "-C", str(repo_root), "ls-files", "-z", "--cached"],
             check=False, capture_output=True, timeout=120,
-        )
+        ) if git_available else None
     except (OSError, subprocess.TimeoutExpired):
+        listed = None
+    if listed is not None and listed.returncode == 0:
+        entries: set[str] = set()
+        for raw in listed.stdout.split(b"\x00"):
+            if not raw:
+                continue
+            logical = raw.decode("utf-8", errors="surrogateescape")
+            parts = logical.split("/")
+            for index in range(1, len(parts) + 1):
+                entries.add("/".join(parts[:index]))
+        return TrackedTree(frozenset(entries), frozenset(entry.casefold() for entry in entries))
+
+    external = os.environ.get("SPARK_DOC_TRACKED_PATHS")
+    if not external:
         return None
-    if listed.returncode:
-        return None
-    entries: set[str] = set()
-    for raw in listed.stdout.split(b"\x00"):
-        if not raw:
-            continue
-        logical = raw.decode("utf-8", errors="surrogateescape")
+    manifest = Path(external)
+    try:
+        docs_contract.assert_contained(manifest, repo_root, label="tracked-path manifest")
+        raw = docs_contract.read_regular_bytes(
+            manifest, label="tracked-path manifest", maximum=docs_contract.MAX_JSON_BYTES
+        )
+        if not raw or not raw.endswith(b"\0"):
+            raise LinkContractError("tracked-path manifest must be NUL terminated")
+        leaves: set[str] = set()
+        folded_leaves: set[str] = set()
+        for item in raw[:-1].split(b"\0"):
+            if not item:
+                raise LinkContractError("tracked-path manifest contains an empty path")
+            try:
+                value = item.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise LinkContractError("tracked-path manifest has a non-UTF-8 path") from exc
+            logical = docs_contract.safe_relative(value).as_posix()
+            if logical in leaves or logical.casefold() in folded_leaves:
+                raise LinkContractError(f"tracked-path manifest contains duplicate path: {logical}")
+            leaves.add(logical)
+            folded_leaves.add(logical.casefold())
+        if not leaves:
+            raise LinkContractError("tracked-path manifest is empty")
+    except (docs_contract.ContractError, OSError) as exc:
+        if isinstance(exc, LinkContractError):
+            raise
+        raise LinkContractError(f"cannot read tracked-path manifest: {exc}") from exc
+    entries = set(leaves)
+    for logical in tuple(leaves):
         parts = logical.split("/")
-        for index in range(1, len(parts) + 1):
-            entries.add("/".join(parts[:index]))
+        entries.update("/".join(parts[:index]) for index in range(1, len(parts)))
     return TrackedTree(frozenset(entries), frozenset(entry.casefold() for entry in entries))
 
 
@@ -537,7 +578,15 @@ def validate_docs_links(
     path_cache: dict[tuple[str, str], tuple[Path | None, str | None]] = {}
     filesystem_cache: dict[str, str | None] = {}
     line_count_cache: dict[str, int] = {}
-    tracked = load_tracked_tree(REPO_ROOT)
+    try:
+        tracked = load_tracked_tree(REPO_ROOT)
+    except LinkContractError as exc:
+        return errors + [{
+            "source": "SPARK_DOC_TRACKED_PATHS",
+            "line": 0,
+            "target": os.environ.get("SPARK_DOC_TRACKED_PATHS", ""),
+            "error": str(exc),
+        }]
     total_links = 0
     for document in documents:
         try:

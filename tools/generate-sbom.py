@@ -754,6 +754,45 @@ def reconcile(
             errors.append(f"locked dependency '{name}' has install payload rules but ships no file in this package")
 
     listed = _notice_inventory(notice_path)
+    # System runtimes are owned by the package notice rule set, not
+    # dependencies.lock.  Parse the same generated inventory that GOV-400
+    # validates so this reconciliation accepts only an authoritative runtime
+    # entry carrying redistribution terms and the shipped DLL names.
+    try:
+        notice_text = notice_path.read_bytes().decode("utf-8", errors="strict")
+        notice_entries = notices.parse_package_notice(notice_text, rules, str(notice_path))
+    except (OSError, UnicodeDecodeError, notices.NoticeInputError) as error:
+        raise InputError(f"{notice_path}: cannot parse generated package inventory: {error}") from error
+    runtime_names = {rule.system_runtime for rule in rules.payload if rule.system_runtime is not None}
+    runtime_entries = {entry.name: entry for entry in notice_entries if entry.name in runtime_names}
+    runtime_files: dict[str, set[str]] = {name: set() for name in runtime_names}
+    for rel in files:
+        rule = next((r for r in rules.payload if r.pattern.search(rel)), None)
+        if rule is not None and rule.system_runtime in runtime_files:
+            runtime_files[rule.system_runtime].add(PurePosixPath(rel).name)
+    invalid_runtime_entries: set[str] = set()
+    for name in sorted(runtime_names):
+        if runtime_files[name] and name not in listed:
+            errors.append(f"{NOTICE_NAME} has no authoritative system runtime entry '{name}'")
+            invalid_runtime_entries.add(name)
+            continue
+        if not runtime_files[name] and name in listed:
+            errors.append(f"{NOTICE_NAME} lists system runtime '{name}' but ships no runtime files")
+            invalid_runtime_entries.add(name)
+            continue
+        if name not in listed:
+            continue
+        entry = runtime_entries.get(name)
+        if entry is None or not entry.terms:
+            errors.append(f"{NOTICE_NAME} system runtime '{name}' has no authoritative Terms line")
+            invalid_runtime_entries.add(name)
+            continue
+        missing = sorted(runtime_files[name] - {PurePosixPath(path).name for path in entry.files})
+        if missing:
+            errors.append(
+                f"{NOTICE_NAME} system runtime '{name}' does not list shipped file(s): {', '.join(missing)}"
+            )
+            invalid_runtime_entries.add(name)
     for name, dep in dependencies.items():
         if name not in listed:
             errors.append(f"{NOTICE_NAME} does not list locked dependency '{name}'")
@@ -762,7 +801,8 @@ def reconcile(
                 f"{NOTICE_NAME} lists '{name}' at version {listed[name]!r}; the lock pins {dep.version!r}"
             )
     font_entries = sorted(name for name in set(listed) - set(dependencies) if FONT_ENTRY_PATTERN.match(name))
-    for name in sorted(set(listed) - set(dependencies) - set(font_entries)):
+    valid_runtime_entries = (runtime_names & set(listed)) - invalid_runtime_entries
+    for name in sorted(set(listed) - set(dependencies) - set(font_entries) - valid_runtime_entries):
         errors.append(f"{NOTICE_NAME} lists '{name}', which dependencies.lock does not lock")
 
     return {

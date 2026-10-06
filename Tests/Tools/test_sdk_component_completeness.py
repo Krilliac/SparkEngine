@@ -18,6 +18,7 @@ REQUIRED_FILES = (
     "include/Spark/GeneratedVersion.h",
     "include/Spark/IModule.h",
     "include/Spark/ModuleABI.h",
+    "include/Spark/IWeatherService.h",
     "lib/cmake/SparkEngine/SparkEngineConfig.cmake",
     "lib/cmake/SparkEngine/SparkEngineConfigVersion.cmake",
     "lib/cmake/SparkEngine/SparkEngineTargets.cmake",
@@ -32,7 +33,7 @@ REQUIRED_FILES = (
 
 
 class SdkComponentCompletenessTests(unittest.TestCase):
-    def _write_fixture(self, root: Path) -> tuple[Path, Path]:
+    def _write_fixture(self, root: Path, *, fail_runtime: bool = False) -> tuple[Path, Path]:
         source = root / "source"
         build = root / "build"
         for relative in REQUIRED_FILES:
@@ -54,14 +55,27 @@ class SdkComponentCompletenessTests(unittest.TestCase):
                 )
             elif relative.endswith("MIGRATION.md"):
                 path.write_text(
-                    "## Current version: SDK ABI v9\nThere is no N-1 module load\n",
+                    "## Current version: SDK ABI v10\nThere is no N-1 module load\n",
                     encoding="utf-8",
                 )
             else:
                 path.write_text("fixture\n", encoding="utf-8")
 
         cmake = source / "CMakeLists.txt"
-        install_lines = []
+        runtime_code = (
+            'message(FATAL_ERROR "fixture runtime install failed")'
+            if fail_runtime
+            else 'file(WRITE "${CMAKE_INSTALL_PREFIX}/runtime-installed" "runtime\\n")'
+        )
+        install_lines = [
+            f'install(CODE [[{runtime_code}]] COMPONENT runtime)',
+            'install(CODE [[\n'
+            'file(WRITE "${CMAKE_INSTALL_PREFIX}/sdk-started" "sdk\\n")\n'
+            'if(NOT EXISTS "${CMAKE_INSTALL_PREFIX}/runtime-installed")\n'
+            '  message(FATAL_ERROR "SDK fixture requires runtime to be installed first")\n'
+            'endif()\n'
+            ']] COMPONENT sdk)',
+        ]
         for relative in REQUIRED_FILES:
             install_lines.append(
                 f'install(FILES "${{CMAKE_CURRENT_SOURCE_DIR}}/{relative}" OPTIONAL '
@@ -143,7 +157,7 @@ class SdkComponentCompletenessTests(unittest.TestCase):
 
             for relative, token in (
                 ("share/SparkEngine/sdk/API-REFERENCE.md", "## Module lifecycle"),
-                ("share/SparkEngine/sdk/MIGRATION.md", "## Current version: SDK ABI v9"),
+                ("share/SparkEngine/sdk/MIGRATION.md", "## Current version: SDK ABI v10"),
             ):
                 with self.subTest(missing_documentation=relative):
                     path = source / relative
@@ -155,6 +169,18 @@ class SdkComponentCompletenessTests(unittest.TestCase):
                     self.assertIn("SDK documentation is missing required API/migration guidance", output)
                     self.assertIn(token, output)
                     path.write_text(original, encoding="utf-8")
+
+    def test_failed_runtime_dependency_stops_before_sdk_install(self) -> None:
+        temp_parent = os.environ.get("TMP") or os.environ.get("TEMP")
+        with tempfile.TemporaryDirectory(prefix="spark-sdk-dependency-", dir=temp_parent) as temporary:
+            root = Path(temporary)
+            build, _ = self._write_fixture(root, fail_runtime=True)
+            test_root = root / "failed-runtime"
+            result = self._run_check(build, test_root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Installing the runtime component failed", result.stdout + result.stderr)
+            self.assertIn("fixture runtime install failed", result.stdout + result.stderr)
+            self.assertFalse((test_root / "prefix/sdk-started").exists())
 
 
 if __name__ == "__main__":

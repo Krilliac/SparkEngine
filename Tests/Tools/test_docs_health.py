@@ -935,6 +935,48 @@ class DocsLinksHostileTests(unittest.TestCase):
 
 
 class RepositoryEvidenceTests(unittest.TestCase):
+    def test_master_results_honor_safe_tmpdir_when_mktemp_uses_a_symlink(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-master-temp-") as directory:
+            root = Path(directory).resolve()
+            checkout = root / "checkout"
+            safe_temp = root / "safe-temp"
+            unsafe_link = root / "unsafe-link"
+            safe_temp.mkdir()
+            try:
+                unsafe_link.symlink_to(safe_temp, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"directory symlinks unavailable: {error}")
+            for name in ("docs_currentness.py", "docs_contract.py"):
+                write(checkout / "tools" / name, (REPO_ROOT / "tools" / name).read_text(encoding="utf-8"))
+            write(checkout / "docs" / "update-all-docs.sh",
+                  (REPO_ROOT / "docs" / "update-all-docs.sh").read_text(encoding="utf-8"))
+            contract = docs_currentness.load_contract()
+            write(checkout / "docs" / "generated-docs-manifest.json", json.dumps(contract))
+            for generator in contract["generators"]:
+                write(checkout / "docs" / generator["script"], "#!/bin/bash\nexit 0\n")
+            fake_bin = root / "bin"
+            fake_mktemp = fake_bin / "mktemp"
+            write(fake_mktemp, '#!/bin/bash\n: > "$UNSAFE_RESULTS"\nprintf "%s\\n" "$UNSAFE_RESULTS"\n')
+            fake_mktemp.chmod(0o755)
+            health = root / "health.json"
+            result = subprocess.run(
+                [docs_currentness.find_bash(allow_override=False), str(checkout / "docs" / "update-all-docs.sh"), "update"],
+                cwd=checkout,
+                env={**os.environ, "PATH": str(fake_bin)+os.pathsep+os.environ["PATH"],
+                     "PYTHON": sys.executable, "TMPDIR": str(safe_temp),
+                     "UNSAFE_RESULTS": str(unsafe_link / "results.tsv"),
+                     "SPARK_DOC_HEALTH_OUTPUT": str(health),
+                     "SPARKENGINE_DOC_SOURCE_SHA": EXACT_SHA,
+                     "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": COMMITTED_AT},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout+result.stderr)
+            evidence = json.loads(health.read_text(encoding="utf-8"))
+            self.assertEqual("pass", evidence["overall"])
+            self.assertEqual(9, evidence["successes"])
+            self.assertEqual(0, evidence["failures"])
+            self.assertFalse((safe_temp / "results.tsv").exists(), "bare mktemp was called")
+
     def test_manifest_declares_every_generator_exactly_once(self) -> None:
         contract = docs_currentness.load_contract()
         ids = tuple(row["id"] for row in contract["generators"])
@@ -988,6 +1030,83 @@ class RepositoryEvidenceTests(unittest.TestCase):
                     )
                     self.assertNotIn(b"\r", published)
             self.assertEqual(generated[0], generated[1])
+
+    def test_wiki_multiline_sections_work_with_bsd_awk_argument_rules(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-bsd-awk-") as directory:
+            root = Path(directory)
+            write(root / "docs" / "sync-wiki.sh", (REPO_ROOT / "docs" / "sync-wiki.sh").read_text(encoding="utf-8"))
+            for relative in ("SparkEditor/Source/Panels", "Tests", "GameModules"):
+                (root / relative).mkdir(parents=True)
+            write(root / "SparkEngine/Source/Engine/ECS/Components/FixtureComponents.h",
+                  "struct FirstComponent {};\nstruct SecondComponent {};\n")
+            write(root / "SparkEngine/Source/Engine/ECS/Systems/FixtureSystems.h",
+                  "class FixtureSystem {};\n")
+            page = root / "wiki/subsystems/Entity-Component-System.md"
+            write(page, "# ECS\nAuthored text stays.\n")
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            shell = str(git_bash if git_bash.is_file() else "bash")
+            actual_awk = subprocess.run([shell, "-c", "command -v awk"],
+                                        capture_output=True, text=True, check=True).stdout.strip()
+            wrapper = root / "bin/awk"
+            write(wrapper, '''#!/bin/bash
+# BSD awk rejects embedded newlines in -v string assignments.
+assignment=false
+for argument in "$@"; do
+    if $assignment && [[ "$argument" == *$'\\n'* ]]; then
+        echo "awk: newline in string" >&2
+        exit 2
+    fi
+    assignment=false
+    [ "$argument" != "-v" ] || assignment=true
+done
+exec "$SPARK_TEST_REAL_AWK" "$@"
+''')
+            wrapper.chmod(0o755)
+            result = subprocess.run(
+                [shell, "docs/sync-wiki.sh", "sync"], cwd=root,
+                env={**os.environ, "PATH": str(wrapper.parent) + os.pathsep + os.environ["PATH"],
+                     "SPARK_TEST_REAL_AWK": actual_awk, "SPARK_WIKI_DIR": str(root / "wiki")},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(
+                ["FirstComponent", "SecondComponent", "FixtureSystem"],
+                [line.split("`")[1] for line in page.read_text(encoding="utf-8").splitlines()
+                 if line.startswith("| `")],
+            )
+            self.assertIn("Authored text stays.", page.read_text(encoding="utf-8"))
+
+    def test_codebase_statistics_retains_named_subsystem_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="stats-subsystem-counts-") as directory:
+            root = Path(directory)
+            for name in ("update-codebase-stats.sh", "codebase-metrics.py", "generated-docs-manifest.json"):
+                write(root / "docs" / name, (REPO_ROOT / "docs" / name).read_text(encoding="utf-8"))
+            for relative in ("wiki/advanced", "SparkEditor/Source", "SparkEngine/Source/Engine/ECS/Components",
+                             "Tests", "Shaders", "Assets", "GameModules", "SparkSDK", "cmake"):
+                (root / relative).mkdir(parents=True)
+            sources = {
+                "SparkEngine/Source/Graphics/Fixture.cpp": "// graphics\n" * 8,
+                "SparkEngine/Source/Engine/AI/Fixture.cpp": "// ai\n" * 3,
+                "SparkEngine/Source/Engine/2D/Fixture.cpp": "// 2d\n" * 4,
+                "SparkEngine/Source/Engine/Physics/Fixture.cpp": "// physics\n" * 5,
+                "SparkEngine/Source/Engine/ECS/Systems/ECSystems.h": "class FixtureSystem {};\n",
+            }
+            for relative, content in sources.items():
+                write(root / relative, content)
+            write(root / "CMakeLists.txt", "option(ENABLE_FIXTURE \"Fixture\" ON)\n")
+            manifest = root / "tracked-paths"
+            manifest.write_bytes(b"\0".join(path.encode("utf-8") for path in sources) + b"\0")
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            result = subprocess.run(
+                [str(git_bash if git_bash.is_file() else "bash"), "docs/update-codebase-stats.sh", "generate"],
+                cwd=root, env={**os.environ, "SPARK_DOC_TRACKED_PATHS": str(manifest)},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            page = (root / "wiki/advanced/Codebase-Statistics.md").read_text(encoding="utf-8")
+            for subsystem, lines in (("AI", 3), ("2D", 4), ("Physics", 5), ("ECS", 1)):
+                self.assertIn(f"| {subsystem} | {lines} |", page)
+            self.assertNotIn("| Networking |", page)
 
     def test_wiki_test_inventory_includes_all_registered_test_sources(self) -> None:
         with tempfile.TemporaryDirectory(prefix="wiki-test-inventory-") as directory:

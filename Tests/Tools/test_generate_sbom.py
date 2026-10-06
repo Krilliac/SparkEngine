@@ -113,6 +113,16 @@ def notice_text(entries: dict[str, str]) -> str:
 
 GOOD_NOTICE = {"Alpha": "v1.0.0", "Beta": "b" * 40, "Gamma": "snapshot"}
 
+RUNTIME_RULES_TEXT = json.dumps(
+    {
+        **json.loads(RULES_TEXT),
+        "payloadRules": [
+            *json.loads(RULES_TEXT)["payloadRules"],
+            {"pattern": "^bin/(vcruntime140|msvcp140)\\.dll$", "systemRuntime": "Microsoft Visual C++ Runtime"},
+        ],
+    }
+)
+
 
 class ReconcileCase(unittest.TestCase):
     """A synthetic package that reconciles; each test changes one thing."""
@@ -234,6 +244,71 @@ class TestReconcileNoticeInventory(ReconcileCase):
         self.notice.write_text("hand-written notices\n", encoding="utf-8")
         with self.assertRaises(sbom.InputError):
             self.run_reconcile()
+
+    def test_authoritative_system_runtime_notice_is_not_lock_dependency(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        runtime_notice = (
+            notice_text(GOOD_NOTICE).replace("Complete license and notice texts\n=================================\n\n", "")
+            + "Microsoft Visual C++ Runtime\n"
+            "  Source: Microsoft Visual C++ Redistributable\n"
+            "  Version: MSVC 14.44\n"
+            "  License: Microsoft Software License Terms\n"
+            "  Terms: Redistributed unmodified under the Microsoft Software License Terms\n"
+            "  Files: vcruntime140.dll\n\n"
+            "Complete license and notice texts\n=================================\n\n"
+        )
+        self.notice.write_text(runtime_notice, encoding="utf-8")
+        files = GOOD_FILES + ["bin/vcruntime140.dll"]
+        report = sbom.reconcile(INVENTORY, rules, sorted(files), self.notice, [])
+        self.assertEqual(report["errors"], [])
+
+    def test_runtime_notice_without_terms_remains_fail_closed(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        self.notice.write_text(
+            notice_text(GOOD_NOTICE).replace("Complete license and notice texts\n=================================\n\n", "")
+            + "Microsoft Visual C++ Runtime\n"
+            "  Source: Microsoft Visual C++ Redistributable\n"
+            "  Version: MSVC 14.44\n"
+            "  Files: vcruntime140.dll\n\n"
+            "Complete license and notice texts\n=================================\n\n",
+            encoding="utf-8",
+        )
+        report = sbom.reconcile(INVENTORY, rules, sorted(GOOD_FILES + ["bin/vcruntime140.dll"]), self.notice, [])
+        self.assertIn("authoritative Terms line", "\n".join(report["errors"]))
+
+    def test_shipped_runtime_requires_an_inventory_entry(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        report = sbom.reconcile(
+            INVENTORY,
+            rules,
+            sorted(GOOD_FILES + ["bin/vcruntime140.dll"]),
+            self.notice,
+            [],
+        )
+        self.assertIn("no authoritative system runtime entry", "\n".join(report["errors"]))
+
+    def test_runtime_entry_without_payload_is_not_an_authorization(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        notice = notice_text(GOOD_NOTICE).replace(
+            "Complete license and notice texts\n=================================\n\n", ""
+        ) + (
+            "Microsoft Visual C++ Runtime\n"
+            "  Source: Microsoft Visual C++ Redistributable\n"
+            "  Version: MSVC 14.44\n"
+            "  Terms: Redistributed unmodified under the Microsoft Software License Terms\n"
+            "  Files: vcruntime140.dll\n\n"
+            "Complete license and notice texts\n=================================\n\n"
+        )
+        self.notice.write_text(notice, encoding="utf-8")
+        report = sbom.reconcile(INVENTORY, rules, sorted(GOOD_FILES), self.notice, [])
+        self.assertIn("ships no runtime files", "\n".join(report["errors"]))
+
+    def test_unreviewed_runtime_looking_notice_stays_unknown(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        notice = notice_text({**GOOD_NOTICE, "Microsoft Visual C++ Runtime (unreviewed)": "MSVC 14.44"})
+        self.notice.write_text(notice, encoding="utf-8")
+        report = sbom.reconcile(INVENTORY, rules, sorted(GOOD_FILES), self.notice, [])
+        self.assertIn("Microsoft Visual C++ Runtime (unreviewed)", "\n".join(report["errors"]))
 
 
 class TestInstallManifestAndTree(unittest.TestCase):

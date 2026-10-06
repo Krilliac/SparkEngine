@@ -215,13 +215,11 @@ bool ConsoleApp::DetectPipeMode()
     return pipeMode;
 }
 
-void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
-                                   std::atomic<bool>& keyboardThreadRunning)
+void ConsoleApp::PrintPipePrompt()
 {
+    std::lock_guard<std::mutex> lock(m_outputMutex);
 #ifdef SPARK_PLATFORM_WINDOWS
     HANDLE hConsoleOut = DisplayHandle();
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(hConsoleOut, &csbi);
 
     SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
     WriteConsoleW(hConsoleOut, L"> ", 2, NULL, NULL);
@@ -230,7 +228,11 @@ void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool
     // stderr: a prompt on stdout would prefix the next forwarded command with "> ".
     std::cerr << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
 #endif
+}
 
+void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
+                                   std::atomic<bool>& keyboardThreadRunning)
+{
     // Just sleep and let the keyboard thread and ReadEngineInput thread do their work
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -337,6 +339,7 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
 #else
                 std::cerr << std::endl;
 #endif
+                PrintPipePrompt();
             }
             else if (ch == '\b' || ch == 127)
             {
@@ -367,6 +370,7 @@ void ConsoleApp::Run()
 
     if (pipeMode)
     {
+        PrintPipePrompt();
         keyboardThreadRunning = true;
         keyboardThread =
             std::thread(&ConsoleApp::PipeKeyboardThreadFunc, this, std::ref(input), std::ref(keyboardThreadRunning));

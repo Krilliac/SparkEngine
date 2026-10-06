@@ -14,6 +14,14 @@
 #include <windows.h>
 #endif
 #include <cstdint>
+#include <cmath>
+#include <cstdio>
+#include <map>
+#include <sstream>
+#include <stdexcept>
+#include <string_view>
+#include "Input/InputManager.h"
+#include "Core/FaultIsolation.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif
@@ -345,13 +353,17 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
         m_player->SetActive(profile.health > 0.0f);
     }
     if (m_hudSystem)
+    {
         m_hudSystem->SetCurrentClass(static_cast<PlayerClass>(profile.playerClass));
+    }
 
     // The scoreboard lives outside the ECS, so a loaded save has to put it back
     // explicitly. Capturing kills/deaths/score and then not restoring them is what made
     // a quickload silently reset the match score.
     if (m_gameMode)
+    {
         m_gameMode->RestorePlayerScore("Player1", profile.kills, profile.deaths, profile.score);
+    }
 
     // A profile captured while dead restores an inactive player. Player::Update()
     // early-returns while dead and only a PlayerRespawnEvent revives it, so the respawn
@@ -393,6 +405,11 @@ bool Game::QuickSaveProfile(std::string& outMessage)
     }
 
     const Spark::FPSLocalProfile profile = CaptureLocalProfile();
+    if (m_inputObservationEnabled)
+    {
+        m_inputObservationTransfer = profile;
+        m_inputObservationTransferred = true;
+    }
     metadata.playerKills = profile.kills;
     metadata.playerDeaths = profile.deaths;
 
@@ -426,6 +443,10 @@ bool Game::QuickLoadProfile(std::string& outMessage)
     }
     if (!saveSystem->SaveExists(kQuickSaveSlot))
     {
+        if (m_inputObservationEnabled)
+        {
+            m_inputObservationReason = 1;
+        }
         outMessage = std::string("No quicksave found in slot '") + kQuickSaveSlot + "'";
         return false;
     }
@@ -446,6 +467,11 @@ bool Game::QuickLoadProfile(std::string& outMessage)
         return false;
     }
 
+    if (m_inputObservationEnabled)
+    {
+        m_inputObservationTransfer = profile;
+        m_inputObservationTransferred = true;
+    }
     ApplyLocalProfile(profile);
 
     // Report the level the session is actually at: ApplyLocalProfile re-derives it from
@@ -455,4 +481,151 @@ bool Game::QuickLoadProfile(std::string& outMessage)
     outMessage = "Quick load restored level " + std::to_string(restoredLevel) + " (" +
                  std::to_string(profile.progressionXP) + " XP)";
     return true;
+}
+
+namespace
+{
+    std::string ObservationHex(const std::string& value)
+    {
+        constexpr char digits[] = "0123456789abcdef";
+        std::string result;
+        for (unsigned char c : value)
+        {
+            result += digits[c >> 4];
+            result += digits[c & 15];
+        }
+        return result.empty() ? "-" : result;
+    }
+
+    std::string ObservationProfile(const Spark::FPSLocalProfile& profile)
+    {
+        if (!std::isfinite(profile.health) || !std::isfinite(profile.armor) || !std::isfinite(profile.playTimeSeconds))
+        {
+            throw std::runtime_error("nonfinite profile observation");
+        }
+        std::unordered_map<std::string, std::string> fields;
+        profile.WriteTo(fields); // Same production profile serializer used by QuickSaveProfile.
+        std::map<std::string, std::string> ordered(fields.begin(), fields.end());
+        std::string serialized;
+        for (const auto& [key, value] : ordered)
+        {
+            serialized.append(key);
+            serialized.push_back('=');
+            serialized.append(value);
+            serialized.push_back('\n');
+        }
+        return ObservationHex(serialized);
+    }
+} // namespace
+
+void Game::BeginInputObservation() noexcept
+{
+    if (!m_inputObservationChecked)
+    {
+        m_inputObservationChecked = true;
+#ifdef SPARK_PLATFORM_WINDOWS
+        wchar_t setting[2]{};
+        m_inputObservationEnabled =
+            GetEnvironmentVariableW(L"SPARK_FPS_INPUT_TRACE", setting, 2) == 1 && setting[0] == L'1';
+#endif
+    }
+    if (!m_inputObservationEnabled || m_inputObservationFailed || !m_input)
+    {
+        return;
+    }
+    ++m_inputObservationUpdate;
+    m_inputObservationMask = m_inputObservationPressed = m_inputObservationReleased = 0;
+    constexpr int keys[] = {VK_F2, VK_F3, VK_F5, VK_F9};
+    for (unsigned int i = 0; i < 4; ++i)
+    {
+        m_inputObservationMask |= static_cast<unsigned int>(m_input->IsFrameKeyDown(keys[i])) << i;
+        m_inputObservationPressed |= static_cast<unsigned int>(m_input->WasKeyPressed(keys[i])) << i;
+        m_inputObservationReleased |= static_cast<unsigned int>(m_input->WasKeyReleased(keys[i])) << i;
+    }
+    if (m_inputObservationMask != m_inputObservationPreviousMask)
+    {
+        m_inputObservationStableFrames = 0;
+    }
+    m_inputObservationPreviousMask = m_inputObservationMask;
+    m_inputObservationWanted =
+        m_inputObservationStableFrames < 3 || m_inputObservationPressed != 0 || m_inputObservationReleased != 0;
+    if (m_inputObservationStableFrames < 3)
+    {
+        ++m_inputObservationStableFrames;
+    }
+    m_inputObservationAction = 0;
+    m_inputObservationResult = -1;
+    m_inputObservationReason = 0;
+    m_inputObservationTransferred = false;
+    RecordInputObservation("before");
+}
+
+void Game::RecordInputObservation(const char* phase) noexcept
+{
+    if (!m_inputObservationEnabled || m_inputObservationFailed || !m_inputObservationWanted || !m_input)
+    {
+        return;
+    }
+    try
+    {
+        auto* save = m_engineContext ? m_engineContext->GetSaveSystem() : nullptr;
+        unsigned long long faults = 0;
+        for (const auto& [name, record] : Spark::SubsystemFaultIsolator::GetInstance().GetRecordsSnapshot())
+        {
+            faults += record.faultCount;
+        }
+        std::ostringstream line;
+        line << "SPARK_FPS_INPUT v=1 phase=" << phase << " input=" << m_input->GetInputFrameSequence()
+             << " update=" << m_inputObservationUpdate << " mask=" << m_inputObservationMask
+             << " pressed=" << m_inputObservationPressed << " released=" << m_inputObservationReleased
+             << " paused=" << static_cast<int>(m_isPaused) << " action=" << m_inputObservationAction
+             << " result=" << m_inputObservationResult << " reason=" << m_inputObservationReason
+             << " operation=" << m_inputObservationOperation << " faults=" << faults
+             << " profile=" << ObservationProfile(CaptureLocalProfile())
+             << " transfer=" << (m_inputObservationTransferred ? ObservationProfile(m_inputObservationTransfer) : "-")
+             << " saves="
+             << ((m_inputObservationUpdate == 1 || std::string_view(phase) == "operation")
+                     ? ObservationHex(save ? save->GetSaveDirectory() : "")
+                     : "-")
+             << '\n';
+        const std::string text = line.str();
+        if (text.size() > 8192 || m_inputObservationRecords >= 256 || m_inputObservationBytes + text.size() > 98304)
+        {
+            m_inputObservationFailed = true;
+            return;
+        }
+        ++m_inputObservationRecords;
+        m_inputObservationBytes += text.size();
+        if (std::fwrite(text.data(), 1, text.size(), stdout) != text.size() || std::fflush(stdout) != 0)
+        {
+            m_inputObservationFailed = true;
+        }
+    }
+    catch (...)
+    {
+        m_inputObservationFailed = true; // Observations must never alter gameplay control flow.
+    }
+}
+
+void Game::EndInputObservation() noexcept
+{
+    if (!m_inputObservationEnabled)
+    {
+        return;
+    }
+    try
+    {
+        for (const auto& [name, record] : Spark::SubsystemFaultIsolator::GetInstance().GetRecordsSnapshot())
+        {
+            m_inputObservationFailed = m_inputObservationFailed || record.faultCount != 0;
+        }
+    }
+    catch (...)
+    {
+        m_inputObservationFailed = true;
+    }
+    std::printf("SPARK_FPS_INPUT_END v=1 records=%u bytes=%zu failed=%d\n", m_inputObservationRecords,
+                m_inputObservationBytes, static_cast<int>(m_inputObservationFailed));
+    std::fflush(stdout);
+    m_inputObservationEnabled = false;
 }

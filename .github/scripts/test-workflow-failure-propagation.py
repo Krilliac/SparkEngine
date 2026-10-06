@@ -589,6 +589,42 @@ def normalized_run_lines(run: object) -> list[str] | None:
     return [" ".join(line.split()) for line in run.replace("\\\n", " ").splitlines() if line.strip()]
 
 
+def asan_configure_errors(document: dict) -> list[str]:
+    """Keep Debug optimization explicit without losing sanitizer instrumentation."""
+
+    steps = document.get("jobs", {}).get("build-linux-asan", {}).get("steps", [])
+    configure = [step for step in steps if step.get("name") == "Configure CMake (ASan + UBSan + LSan)"]
+    if len(configure) != 1:
+        return ["ASan must have exactly one configure step"]
+    commands = normalized_run_lines(configure[0].get("run")) or []
+    cmake = [command for command in commands if command.startswith("cmake ")]
+    if len(cmake) != 1:
+        return ["ASan must have exactly one CMake configure command"]
+    try:
+        argv = shlex.split(cmake[0])
+    except ValueError as error:
+        return [f"ASan configure arguments are invalid: {error}"]
+    definitions: dict[str, list[str]] = {}
+    for argument in argv:
+        match = re.fullmatch(r"-D([^:=]+)(?::[^=]+)?=(.*)", argument)
+        if match:
+            definitions.setdefault(match[1], []).append(match[2])
+    instrumentation = "-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
+    expected = {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTS": "ON",
+        "SPARK_LIFECYCLE_TEST_HOOKS": "ON",
+        "CMAKE_CXX_FLAGS_DEBUG": "-g -Og",
+        "CMAKE_C_FLAGS_DEBUG": "-g -Og",
+        "CMAKE_CXX_FLAGS": instrumentation,
+        "CMAKE_C_FLAGS": instrumentation,
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined -no-pie",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
+    }
+    return [f"ASan configure must define {name}={value!r} exactly once"
+            for name, value in expected.items() if definitions.get(name) != [value]]
+
+
 PROFILE_GATES_JOB = "profile-required-gates"
 PROFILE_GATES_CHECKOUT_STEP = "Checkout exact candidate source"
 PROFILE_GATES_REQUIRED_CI_STEP = "Verify candidate commit passed Required CI Gate"
@@ -1242,13 +1278,21 @@ def sde_cpu_floor_contract_errors(workflow: str) -> list[str]:
         url = f"https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-{platform}.tar.xz"
         if url not in install_script or sha256 not in install_script:
             errors.append(f"{job_name} SDE URL or archive hash changed")
-        extraction = "tar.exe" if platform == "win" else "tar -xf"
+        extraction = "python .github/scripts/extract_sde_archive.py" if platform == "win" else "tar -xf"
         if (
             hash_command not in install_script
             or extraction not in install_script
             or install_script.index(hash_command) > install_script.index(extraction)
         ):
             errors.append(f"{job_name} does not verify SDE before extraction")
+        if platform == "win":
+            extraction_index = install_script.find(extraction)
+            if (
+                extraction_index < 0
+                or "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }" not in install_script[extraction_index:]
+                or "Get-ChildItem -LiteralPath $unpacked" not in install_script[extraction_index:]
+            ):
+                errors.append(f"{job_name} does not propagate streaming SDE extraction failure")
         if "-DSPARK_SDE_EXECUTABLE=" not in configure_script:
             errors.append(f"{job_name} does not register the SDE CTest")
         if (
@@ -1893,6 +1937,7 @@ def experimental_mingw_lane_errors(document: dict) -> list[str]:
 
 REPRODUCIBILITY_JOB = "reproducibility-windows"
 REPRODUCIBILITY_TOOL = "tools/compare_build_outputs.py"
+REPRODUCIBILITY_DIAGNOSTICS = ".github/scripts/compare_windows_shipping_repro.py"
 
 
 def reproducibility_windows_errors(document: dict) -> list[str]:
@@ -1935,25 +1980,56 @@ def reproducibility_windows_errors(document: dict) -> list[str]:
         errors.append(f"{REPRODUCIBILITY_JOB} checkouts must include submodules recursively")
 
     stages: list[str] = []
-    for tree in paths:
-        builds = [step for step in steps if step.get("working-directory") == tree]
+    for tree, label in zip(paths, ("first", "second")):
+        builds = [step for step in steps if step.get("name") == f"Build and stage Shipping in the {label} tree"]
         if len(builds) != 1:
             errors.append(f"{REPRODUCIBILITY_JOB} must build the {tree!r} tree in exactly one step")
             continue
+        if "working-directory" in builds[0]:
+            errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build must start at the workspace root")
         run = str(builds[0].get("run", ""))
         required = (
             "set -euo pipefail",
+            "physical_parent=$PWD",
+            f'source_tree="$physical_parent/{tree}"',
+            'canonical_tree="$physical_parent/reproducibility-source"',
+            'test ! -e "$canonical_tree"',
+            'mv "$source_tree" "$canonical_tree"',
+            'restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }',
+            "trap restore_tree EXIT",
+            'cd "$canonical_tree"',
             "cmake --preset windows-shipping",
             "cmake --build --preset windows-shipping --config MinSizeRel",
+            "\nrestore_tree\n",
+            "trap - EXIT",
         )
         for fragment in required:
             if run.count(fragment) != 1:
                 errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build is missing {fragment!r}")
-        install = re.search(r"(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix (\S+)$", run)
+        if all(fragment in run for fragment in (
+            'mv "$source_tree" "$canonical_tree"', "trap restore_tree EXIT",
+            'cd "$canonical_tree"', "cmake --preset windows-shipping", "\nrestore_tree\n", "trap - EXIT",
+        )) and not (
+            run.index('mv "$source_tree" "$canonical_tree"')
+            < run.index("trap restore_tree EXIT")
+            < run.index('cd "$canonical_tree"')
+            < run.index("cmake --preset windows-shipping")
+            < run.index("\nrestore_tree\n")
+            < run.index("trap - EXIT")
+        ):
+            errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build does not restore the canonical path in order")
+        install = re.search(
+            r'(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix '
+            r'(?:(?:"\$physical_parent/([^"\r\n]+)")|(\S+))$',
+            run,
+        )
         if install is None:
             errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build does not install the Shipping tree")
         else:
-            stages.append(os.path.normpath(os.path.join(tree, install.group(1))).replace("\\", "/"))
+            if install.group(1) is not None:
+                stages.append(install.group(1))
+            else:
+                stages.append(os.path.normpath(os.path.join(tree, install.group(2))).replace("\\", "/"))
     if len(stages) == 2 and len(set(stages)) != 2:
         errors.append(f"{REPRODUCIBILITY_JOB} stages both trees to the same prefix")
 
@@ -1967,10 +2043,10 @@ def reproducibility_windows_errors(document: dict) -> list[str]:
         manifests = re.findall(rf"{re.escape(REPRODUCIBILITY_TOOL)} manifest (\S+) --output (\S+)", run)
         if len(stages) == 2 and sorted(root for root, _ in manifests) != sorted(stages):
             errors.append(f"{REPRODUCIBILITY_JOB} does not write a manifest of each staged tree")
-        compare = re.search(
-            rf"{re.escape(REPRODUCIBILITY_TOOL)} compare\s*\\?\s*(\S+) (\S+)", run
-        )
-        if compare is None or sorted(compare.groups()) != sorted(output for _, output in manifests):
+        compare = re.search(rf"(?m)^python \S*{re.escape(REPRODUCIBILITY_DIAGNOSTICS)}\s", run)
+        comparison_manifests = re.findall(r"--(first|second)-manifest (\S+)", run)
+        if (compare is None or sorted(side for side, _ in comparison_manifests) != ["first", "second"]
+                or sorted(path for _, path in comparison_manifests) != sorted(output for _, output in manifests)):
             errors.append(f"{REPRODUCIBILITY_JOB} does not compare the two manifests")
         if re.search(r"\|\|\s*(true|:)\b|\bset \+e\b", run):
             errors.append(f"{REPRODUCIBILITY_JOB} compare step suppresses a failure")
@@ -2484,6 +2560,13 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "hash drift": job.replace(install_step, install_step.replace(archive_hash, "0" * 64), 1),
                 "disabled test": job.replace(test_step, test_step.replace("matrix.config == 'Release'", "false"), 1),
             }
+            if job_name == "build-windows-vs2022":
+                for label, original, changed in (
+                    ("extractor failure ignored", "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", ""),
+                    ("nonstreaming extractor", "python .github/scripts/extract_sde_archive.py", "tar.exe"),
+                    ("ambiguous executable search", "Get-ChildItem -LiteralPath $unpacked", "Get-ChildItem -LiteralPath $dest"),
+                ):
+                    mutations[label] = job.replace(install_step, install_step.replace(original, changed, 1), 1)
             for label, changed_job in mutations.items():
                 with self.subTest(job=job_name, mutation=label):
                     self.assertNotEqual(changed_job, job)
@@ -3928,6 +4011,31 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "'set -euo pipefail'",
             ),
             (
+                edit_run("Build and stage Shipping in the first tree", 'mv "$source_tree" "$canonical_tree"',
+                         'cp -r "$source_tree" "$canonical_tree"'),
+                "'mv \"$source_tree\"",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree", 'cd "$canonical_tree"',
+                         'cd "$source_tree"'),
+                "'cd \"$canonical_tree\"'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "trap restore_tree EXIT", "true"),
+                "'trap restore_tree EXIT'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree",
+                         'restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }',
+                         'restore_tree() { true; }'),
+                "'restore_tree()",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree",
+                         '\nrestore_tree\n', '\ntrue\n'),
+                "'\\nrestore_tree\\n'",
+            ),
+            (
                 edit_run("Build and stage Shipping in the second tree", "reproducibility-stage-b",
                          "reproducibility-stage-a"),
                 "same prefix",
@@ -3947,8 +4055,17 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "manifest of each staged tree",
             ),
             (
-                edit_run("Compare the two Shipping builds", "reproducibility/manifest-a.json reproducibility/manifest-b",
-                         "reproducibility/manifest-a.json reproducibility/manifest-a"),
+                edit_run("Compare the two Shipping builds", "--second-manifest reproducibility/manifest-b.json",
+                         "--second-manifest reproducibility/manifest-a.json"),
+                "does not compare the two manifests",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", REPRODUCIBILITY_DIAGNOSTICS,
+                         ".github/scripts/unrelated.py"),
+                "does not compare the two manifests",
+            ),
+            (
+                edit_run("Compare the two Shipping builds", "--second-manifest", "--first-manifest"),
                 "does not compare the two manifests",
             ),
             (
@@ -4334,6 +4451,34 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             self.assertIn('--run-id "${{ github.run_id }}"', block)
             self.assertIn('--run-attempt "${{ github.run_attempt }}"', block)
             self.assertIn('--job "${{ github.job }}"', block)
+
+    def test_asan_debug_optimization_preserves_instrumentation(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        self.assertEqual(asan_configure_errors(document), [])
+        for step in document["jobs"]["build-linux-asan"]["steps"]:
+            if step.get("name") == "Configure CMake (ASan + UBSan + LSan)":
+                step["run"] = step["run"].replace("-DCMAKE_CXX_FLAGS_DEBUG=", "-DCMAKE_CXX_FLAGS_DEBUG:STRING=")
+        self.assertEqual(asan_configure_errors(document), [])
+
+    def test_asan_configure_rejects_missing_or_overridden_checks(self) -> None:
+        mutations = (
+            ('-DCMAKE_CXX_FLAGS_DEBUG="-g -Og"', ''),
+            ('-DCMAKE_C_FLAGS_DEBUG="-g -Og"', '-DCMAKE_C_FLAGS_DEBUG="-g -Og -DNDEBUG"'),
+            ('-DCMAKE_BUILD_TYPE=Debug', '-DCMAKE_BUILD_TYPE=Release'),
+            ('-DSPARK_LIFECYCLE_TEST_HOOKS=ON', '-DSPARK_LIFECYCLE_TEST_HOOKS=OFF'),
+            ('-fno-sanitize-recover=undefined', ''),
+            ('-fno-omit-frame-pointer', ''),
+            ('-DCMAKE_CXX_FLAGS_DEBUG="-g -Og"',
+             '-DCMAKE_CXX_FLAGS_DEBUG="-g -Og" -DCMAKE_CXX_FLAGS_DEBUG="-g"'),
+        )
+        for old, new in mutations:
+            with self.subTest(mutation=old):
+                document = parse_workflow_yaml(self.build)
+                for step in document["jobs"]["build-linux-asan"]["steps"]:
+                    if step.get("name") == "Configure CMake (ASan + UBSan + LSan)":
+                        self.assertIn(old, step["run"])
+                        step["run"] = step["run"].replace(old, new)
+                self.assertTrue(asan_configure_errors(document))
 
     def test_exact_commit_aggregation_requires_asan_and_tsan(self) -> None:
         aggregate = self.build[self.build.index("aggregate-test-stats:") :]

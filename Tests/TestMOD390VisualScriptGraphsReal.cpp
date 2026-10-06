@@ -27,6 +27,7 @@
 #include "../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoRuntime.h"
 #include "Engine/Scripting/VisualScriptCompiler.h"
 #include "Engine/Scripting/VisualScriptGraphIO.h"
+#include "Engine/Scripting/VisualScriptEmitter.h"
 
 #ifdef SPARK_ANGELSCRIPT_SUPPORT
 #include "Engine/ECS/Components.h"
@@ -386,6 +387,16 @@ TEST(VisualScriptGraphs_CompilerRejectsCyclesAndNonLiteralDefaults)
     ASSERT_FALSE(result.errors.empty());
     EXPECT_STR_CONTAINS(result.errors.front(), "Data cycle");
 
+    // Sequence ignores data values, but reachable malformed dependencies still
+    // diagnose their cycle. Unreachable dependencies must remain unvalidated.
+    dataCycle.nodes[1].type = ScriptNodeType::Sequence;
+    result = VisualScriptCompiler::Compile(dataCycle);
+    EXPECT_FALSE(result.success);
+    ASSERT_FALSE(result.errors.empty());
+    EXPECT_STR_CONTAINS(result.errors.front(), "Data cycle");
+    dataCycle.connections.erase(dataCycle.connections.begin());
+    EXPECT_TRUE(VisualScriptCompiler::Compile(dataCycle).success);
+
     // A variable default is spliced after '=', so anything but a literal of its type is refused.
     VisualScriptGraph injected;
     injected.className = "Injected";
@@ -448,6 +459,38 @@ TEST(VisualScriptGraphs_FunctionBodyEmitsEachStatementOnce)
     EXPECT_FALSE(result.success);
     ASSERT_FALSE(result.errors.empty());
     EXPECT_STR_CONTAINS(result.errors.front(), "no entry statement");
+}
+
+TEST(VisualScriptGraphs_IndexedTopologyPreservesRepeatedChains)
+{
+    using Spark::Scripting::Detail::EmitBudget;
+    using Spark::Scripting::Detail::VisualScriptEmitter;
+    const auto exec = [] { return Pin(PinKind::Execution); };
+    VisualScriptGraph graph;
+    graph.nodes = {Node(1, ScriptNodeType::OnStart, {}, {exec()}),
+                   Node(2, ScriptNodeType::Sequence, {exec()}, {exec(), exec()}),
+                   Node(3, ScriptNodeType::PrintMessage, {exec(), Pin(PinKind::String, 0, "A")}, {exec()}),
+                   Node(4, ScriptNodeType::PrintMessage, {exec(), Pin(PinKind::String, 0, "B")}, {exec()}),
+                   Node(1, ScriptNodeType::OnStart, {}, {Pin(PinKind::Float), exec()})};
+    graph.connections = {{1, 0, 2, 0}, {2, 0, 3, 0}, {3, 0, 4, 0}, {2, 1, 3, 0}};
+    std::vector<std::string> errors;
+    EmitBudget budget;
+    VisualScriptEmitter emitter(graph, false, errors, budget);
+    // Node lookup remains ID-first, while pin metadata belongs to the exact
+    // borrowed node, including hand-built duplicate-ID event declarations.
+    EXPECT_TRUE(emitter.FindNode(1) == &graph.nodes.front());
+    EXPECT_TRUE(emitter.ExecOutputPins(graph.nodes.back()) == std::vector<uint32_t>{1});
+    std::string code;
+    emitter.EmitPinChains(graph.nodes.front(), 0, "", code);
+    const std::string expected = "print(\"A\");\nprint(\"B\");\nprint(\"A\");\nprint(\"B\");\n";
+    EXPECT_EQ(code, expected);
+    EXPECT_TRUE(errors.empty());
+    EXPECT_EQ(budget.steps, size_t{5});
+    // Every completed nested chain releases only its own active path suffix.
+    emitter.EmitPinChains(graph.nodes.front(), 0, "", code);
+    EXPECT_EQ(code, expected + expected);
+    EXPECT_TRUE(errors.empty());
+    EXPECT_EQ(budget.steps, size_t{10});
 }
 
 TEST(VisualScriptGraphs_HostileDiamondFailsInBoundedTime)

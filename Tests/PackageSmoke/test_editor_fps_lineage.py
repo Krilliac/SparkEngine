@@ -228,7 +228,8 @@ class LineageTests(unittest.TestCase):
         old = path.read_bytes()
         for mutation in (old.replace(b'position=3,2,5', b'position=0,0,0'),
                          old.replace(b'scene=Startup.sparkscene', b'scene=Scenes/Startup.sparkscene'),
-                         old.replace(b'fov=70', b'fov=nan'), old + old.splitlines()[0] + b'\n',
+                         old.replace(b'fov=70', b'fov=nan'), old.replace(b'fov=70', b'fov=69.99'),
+                         old + old.splitlines()[0] + b'\n',
                          old.replace(b'rendering=1', b'rendering=1 rendering=1'),
                          old.replace(b'STARTUP_MESH index=0', b'STARTUP_MESH index=1'),
                          old + b'Warning: Failed to load pistol model\n'):
@@ -236,6 +237,14 @@ class LineageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.validate()
         self.write(path, old)
+
+    def test_runtime_fov_accepts_float_projection_round_trip(self):
+        path = self.root/'positive/runtime.log'
+        original = path.read_bytes()
+        for fov in (b'69.9999924', b'70.0000076'):
+            with self.subTest(fov=fov):
+                self.write(path, original.replace(b'fov=70', b'fov='+fov))
+                self.validate()
 
     def test_installed_weapon_asset_binding(self):
         self.write(self.host.parent/'Assets/Models/pistol.obj', b'wrong installed source')

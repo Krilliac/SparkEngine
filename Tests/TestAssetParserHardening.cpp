@@ -34,11 +34,27 @@
 #include <system_error>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace
 {
+    std::filesystem::path AssetSecRoot()
+    {
+#if defined(_WIN32)
+        const auto processId = static_cast<unsigned long>(::_getpid());
+#else
+        const auto processId = static_cast<unsigned long>(::getpid());
+#endif
+        return std::filesystem::temp_directory_path() / ("spark_assetsec_tests_" + std::to_string(processId));
+    }
+
     std::filesystem::path AssetSecDir()
     {
-        const auto dir = std::filesystem::temp_directory_path() / "spark_assetsec_tests";
+        const auto dir = AssetSecRoot();
         std::error_code ec;
         std::filesystem::create_directories(dir, ec);
         return dir;
@@ -60,7 +76,7 @@ namespace
     void RemoveAssetSecDir()
     {
         std::error_code ec;
-        std::filesystem::remove_all(std::filesystem::temp_directory_path() / "spark_assetsec_tests", ec);
+        std::filesystem::remove_all(AssetSecRoot(), ec);
     }
 
 #ifdef SPARK_PLATFORM_WINDOWS

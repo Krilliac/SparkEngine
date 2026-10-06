@@ -90,12 +90,16 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # The GOV-400 font-notice test reads the embedding source in the ImGui
-      # submodule and fails closed when it is absent; only that one is needed.
-      - name: Initialise the font-embedding submodule
-        run: git submodule update --init --depth 1 ThirdParty/UI/imgui
+      # The font-notice and real crypto-build tests require the pinned ImGui
+      # and libsodium sources and fail closed when either is absent.
+      - name: Initialise the font-embedding and crypto submodules
+        run: git submodule update --init --depth 1 ThirdParty/UI/imgui ThirdParty/Security/libsodium
 
       - name: Generate exact-commit API documentation
+        # Shard 0's complete determinism test regenerates API documentation in
+        # each invocation itself. Avoid a third redundant generation while
+        # retaining both sequential health checks and the 10-minute budget.
+        if: matrix.shard != 0
         env:
           SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
         run: |

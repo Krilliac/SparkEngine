@@ -159,6 +159,11 @@
       "kind": "environment"
     },
     {
+      "prefix": "Requires a copied primary in an explicitly owned decoder directory",
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
       "prefix": "SPARK_TESTS_EXPECTED_VERSION was not injected by the build system",
       "owner": "build",
       "kind": "environment"

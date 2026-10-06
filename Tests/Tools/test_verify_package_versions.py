@@ -12,6 +12,7 @@ import io
 from pathlib import Path
 import shutil
 import struct
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -170,6 +171,72 @@ class PackagedVersionTests(unittest.TestCase):
         installer.write_bytes(b"MZ" + b"x" * 32)
         with mock.patch.object(vpv, "MAX_MEMBER_BYTES", 1):
             self.assertEqual(self.errors(installer), [f"{installer.name}: {installer.name} is too large to inspect"])
+
+    def test_cpack_nsis_stamps_fixed_and_string_versions_from_package_version(self) -> None:
+        cmake = shutil.which("cmake")
+        self.assertIsNotNone(cmake, "CMake is required to validate the actual package producer")
+        script = self.temp / "nsis-options.cmake"
+        definitions = self.temp / "nsis-definitions.txt"
+        raw_template = self.temp / "raw-template.txt"
+        stock_template = self.temp / "stock-template.txt"
+        preserved = self.temp / "preserved-options.txt"
+        options = (ROOT / "cmake/SparkCPackOptions.cmake").as_posix()
+        for generator in ("NSIS", "ZIP", "WIX"):
+            for version in (VERSION, "7.8.9"):
+                with self.subTest(generator=generator, version=version):
+                    script.write_text(
+                        f'set(CPACK_GENERATOR "{generator}")\n'
+                        f'set(CPACK_PACKAGE_VERSION "{version}")\n'
+                        'set(CPACK_PACKAGE_FILE_NAME "SparkEngine")\n'
+                        'set(CPACK_NSIS_EXECUTABLE_PRE_ARGUMENTS "V4")\n'
+                        'set(CMAKE_MODULE_PATH "preserved-module-path")\n'
+                        f'set(CPACK_PACKAGE_DIRECTORY "{(self.temp / generator).as_posix()}")\n'
+                        f'include("{options}")\n'
+                        f'include("{options}")\n'
+                        'set(_template "${CPACK_PACKAGE_DIRECTORY}/spark-nsis-template/NSIS.template.in")\n'
+                        'set(_raw "")\n'
+                        'if(EXISTS "${_template}")\n'
+                        '  file(READ "${_template}" _raw)\n'
+                        'endif()\n'
+                        'string(CONFIGURE "${_raw}" _configured @ONLY)\n'
+                        'file(READ "${CMAKE_ROOT}/Modules/Internal/CPack/NSIS.template.in" _stock)\n'
+                        f'file(WRITE "{stock_template.as_posix()}" "${{_stock}}")\n'
+                        f'file(WRITE "{raw_template.as_posix()}" "${{_raw}}")\n'
+                        f'file(WRITE "{definitions.as_posix()}" "${{_configured}}")\n'
+                        f'file(WRITE "{preserved.as_posix()}" '
+                        '"${CPACK_NSIS_EXECUTABLE_PRE_ARGUMENTS}\\n${CMAKE_MODULE_PATH}")\n',
+                        encoding="utf-8",
+                    )
+                    result = subprocess.run([cmake, "-P", str(script)],
+                                            capture_output=True, text=True, check=False, timeout=30)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    directives = definitions.read_text(encoding="utf-8")
+                    pre_arguments, module_path = preserved.read_text(encoding="utf-8").split("\n")
+                    self.assertEqual("V4", pre_arguments)
+                    self.assertTrue(module_path.endswith("preserved-module-path"))
+                    if generator != "NSIS":
+                        self.assertEqual("", directives)
+                        self.assertEqual("preserved-module-path", module_path)
+                        continue
+                    for fixed in ("VIProductVersion", "VIFileVersion"):
+                        self.assertEqual(1, directives.count(f'{fixed} "{version}.0"'))
+                    for key in ("FileVersion", "ProductVersion"):
+                        self.assertEqual(1, directives.count(
+                            f'VIAddVersionKey /LANG=1033 "{key}" "{version}.0"'))
+                    raw = raw_template.read_text(encoding="utf-8")
+                    start = raw.index("\nVIProductVersion")
+                    final_directive = 'VIAddVersionKey /LANG=1033 "ProductVersion" "@CPACK_PACKAGE_VERSION@.0"\n'
+                    end = raw.index(final_directive, start) + len(final_directive)
+                    self.assertEqual(stock_template.read_text(encoding="utf-8"), raw[:start] + raw[end:])
+
+        for missing_directory in ('unset(CPACK_PACKAGE_DIRECTORY)', 'set(CPACK_PACKAGE_DIRECTORY "")'):
+            with self.subTest(missing_directory=missing_directory):
+                script.write_text(f'set(CPACK_GENERATOR NSIS)\n{missing_directory}\n'
+                                  f'include("{options}")\n', encoding="utf-8")
+                result = subprocess.run([cmake, "-P", str(script)], cwd=self.temp,
+                                        capture_output=True, text=True, check=False, timeout=30)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("NSIS version metadata requires CPACK_PACKAGE_DIRECTORY", result.stderr)
 
     def test_first_party_game_dll_version_resource_is_checked(self) -> None:
         members = self.members(**{"bin/SparkGameFPS.dll": pe_image(None)})

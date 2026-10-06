@@ -50,7 +50,9 @@
 #include "Utils/Process.h"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -194,17 +196,26 @@ namespace
         HostRun RunPackagedScene() const
         {
             HostRun run;
-            Spark::Process::Builder builder(Utf8(m_realFPS ? m_package / "Crate Game.exe" :
-                                                           m_package / "ScenePreview" / kScenePreviewHost));
+            Spark::Process::Builder builder(
+                Utf8(m_realFPS ? m_package / "Crate Game.exe" : m_package / "ScenePreview" / kScenePreviewHost));
             if (m_realFPS)
-                builder.Arg("-game").Arg(Utf8(m_package / m_module.filename())).Arg("-require-game")
-                    .Arg("-threads").Arg("2").Arg("-window-size").Arg("640x360");
+                builder.Arg("-game")
+                    .Arg(Utf8(m_package / m_module.filename()))
+                    .Arg("-require-game")
+                    .Arg("-threads")
+                    .Arg("2")
+                    .Arg("-window-size")
+                    .Arg("640x360");
             else
                 builder.Arg("-headless").Arg("-scene").Arg("Scenes/Startup.sparkscene");
-            auto launched = builder.Arg("-test-frames").Arg(std::to_string(m_realFPS ? 30 : kTestFrames))
+            auto launched = builder.Arg("-test-frames")
+                                .Arg(std::to_string(m_realFPS ? 30 : kTestFrames))
                                 .Arg("-no-subprocess")
                                 .WorkingDirectory(Utf8(m_package))
-                                .CaptureStdout().MergeStderrIntoStdout().NoWindow().Launch();
+                                .CaptureStdout()
+                                .MergeStderrIntoStdout()
+                                .NoWindow()
+                                .Launch();
             const auto finish = [&](HostRun result)
             {
                 if (m_realFPS)
@@ -490,7 +501,20 @@ TEST(EditorFPSLineage_AuthoredSceneLoadedByInstalledFPS)
     EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP scene=Startup.sparkscene nodes=2 rendering=1\n");
     EXPECT_STR_CONTAINS(run.output, "type=model position=3,2,5 rotation=0,0,0 scale=1,1,1\n");
     EXPECT_STR_CONTAINS(run.output, "type=Camera position=7,11,-13 rotation=0,0,0 scale=1,1,1\n");
-    EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP_CAMERA position=7,11,-13 fov=70 ");
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP_CAMERA "), static_cast<size_t>(1));
+    const std::string cameraPrefix = "SPARK_FPS_STARTUP_CAMERA position=7,11,-13 fov=";
+    const auto cameraAt = run.output.find(cameraPrefix);
+    ASSERT_NE(cameraAt, std::string::npos);
+    const char* begin = run.output.data() + cameraAt + cameraPrefix.size();
+    const char* end = std::find(begin, run.output.data() + run.output.size(), ' ');
+    ASSERT_NE(end, run.output.data() + run.output.size());
+    float fov = 0;
+    const auto parsed = std::from_chars(begin, end, fov);
+    EXPECT_TRUE(parsed.ec == std::errc{} && parsed.ptr == end && end != begin);
+    EXPECT_TRUE(std::isfinite(fov));
+    // Match the runtime proof's 1e-6 relative tolerance after the camera's
+    // float degrees/radians round trip. The authored document stays exact.
+    EXPECT_NEAR(fov, 70.0f, 7e-5f);
     EXPECT_STR_CONTAINS(run.output, "SPARK_FPS_STARTUP_PLAYER position=7,11,-13\n");
     // The installed wrapper additionally validates the full WARP/FPS lifecycle and
     // committed authored scene state from the preserved runtime.log.
@@ -506,7 +530,8 @@ TEST(EditorFPSLineage_MalformedStartupFailsClosed)
     const HostRun run = scenario.RunPackagedScene();
     EXPECT_TRUE(run.exitCode > 0);
     EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(0));
-    EXPECT_STR_CONTAINS(run.output, "Reflected gameplay scene rejected: primary scene is invalid or has unsupported reflected fields");
+    EXPECT_STR_CONTAINS(
+        run.output, "Reflected gameplay scene rejected: primary scene is invalid or has unsupported reflected fields");
     EXPECT_STR_CONTAINS(run.output, "FPS packaged startup rejected: selected reflected scene failed to load");
 }
 
@@ -529,6 +554,8 @@ TEST(EditorFPSLineage_MissingRealModuleFailsClosed)
     ASSERT_TRUE(fs::remove(scenario.Package() / "SparkGameFPS.dll"));
     const HostRun run = scenario.RunPackagedScene();
     EXPECT_TRUE(run.exitCode > 0);
+    EXPECT_EQ(CountOccurrences(run.output, "SPARK_FPS_STARTUP "), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(run.output, "Explicit game module not found: " + Utf8(scenario.Package() / "SparkGameFPS.dll"));
 }
 #endif // SPARK_EDITOR_FPS_LINEAGE_TESTS
 

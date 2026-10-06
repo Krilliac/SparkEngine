@@ -16,6 +16,12 @@
 #include <thread>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 // ============================================================================
 // Standalone reimplementation of SparkPak core types for test isolation
 // ============================================================================
@@ -255,9 +261,19 @@ namespace
         std::unordered_map<uint64_t, TOCEntry> m_entries;
     };
 
+    std::filesystem::path TempRoot()
+    {
+#if defined(_WIN32)
+        const auto processId = static_cast<unsigned long>(::_getpid());
+#else
+        const auto processId = static_cast<unsigned long>(::getpid());
+#endif
+        return std::filesystem::temp_directory_path() / ("sparkpak_tests_" + std::to_string(processId));
+    }
+
     std::string TempPath(const std::string& name)
     {
-        auto dir = std::filesystem::temp_directory_path() / "sparkpak_tests";
+        const auto dir = TempRoot();
         std::filesystem::create_directories(dir);
         return (dir / name).string();
     }
@@ -265,7 +281,7 @@ namespace
     void Cleanup()
     {
         std::error_code ec;
-        std::filesystem::remove_all(std::filesystem::temp_directory_path() / "sparkpak_tests", ec);
+        std::filesystem::remove_all(TempRoot(), ec);
     }
 
 } // anonymous namespace

@@ -121,7 +121,14 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         # Declaration order is vtable order; the destructor is declared first.
         self.assertTrue(slots[0].startswith("~IEngineContext"), slots[0])
         self.assertEqual(slots[1], "GraphicsEngine* GetGraphics()")
-        self.assertEqual(slots[-1], "IStateValidation* GetStateValidation()")
+        self.assertEqual(slots[-2], "IStateValidation* GetStateValidation()")
+        self.assertEqual(slots[-1], "IWeatherService* GetWeatherService()")
+        weather = golden["surface"]["enums"]["Spark::WeatherPreset"]
+        self.assertEqual(weather, {"underlying": "uint32_t", "values": [
+            "Clear = 0", "Rain = 1", "Snow = 2", "Fog = 3", "Storm = 4"]})
+        self.assertEqual(golden["surface"]["interfaces"]["Spark::IWeatherService"]["virtuals"],
+                         ["~IWeatherService()",
+                          "bool SetWeather(WeatherPreset preset, float intensity, float transitionSeconds)"])
         header = (INCLUDE / "IEngineContext.h").read_text(encoding="utf-8")
         pinned = int(re.search(r"EngineContextVirtualCount = (\d+);", header).group(1))
         self.assertEqual(len(slots), pinned)
@@ -145,6 +152,14 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         self.sdk.append_engine_context_virtual()
         self.sdk.set_engine_context_count(GROWN_COUNT)
         self.assertFails(self.sdk.run("update"), "without a SPARK_SDK_VERSION bump")
+
+    def test_weather_enum_change_requires_version_bump(self) -> None:
+        self.sdk.edit("IWeatherService.h", "Rain = 1", "Rain = 5")
+        self.assertFails(self.sdk.run(), "Spark::WeatherPreset")
+
+    def test_weather_signature_change_requires_version_bump(self) -> None:
+        self.sdk.edit("IWeatherService.h", "float intensity", "double intensity")
+        self.assertFails(self.sdk.run(), "Spark::IWeatherService")
 
     def test_reordered_virtuals_fail(self) -> None:
         self.sdk.edit("IModule.h", "virtual void OnPause() {}", "virtual void OnPauseTmp() {}")

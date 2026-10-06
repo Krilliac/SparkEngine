@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -45,6 +47,62 @@ pathlib.Path(sys.argv[sys.argv.index('--output') + 1]).mkdir(parents=True)
 
 
 class SiteRuntimeRunnerTests(unittest.TestCase):
+    def test_ctest_prioritizes_the_complete_bundle_with_unchanged_safety_bounds(self) -> None:
+        source = (ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        source = re.sub(r"#[^\n]*", "", source)
+        registrations = re.findall(
+            r"add_test\(\s*NAME\s+runtime-bundle-validation\s+(.*?)\)", source, re.DOTALL
+        )
+        self.assertEqual(1, len(registrations))
+        properties = re.findall(
+            r"set_tests_properties\(runtime-bundle-validation\s+PROPERTIES\s+(.*?)\)",
+            source,
+            re.DOTALL,
+        )
+        self.assertEqual(1, len(properties))
+        python = Path(sys.executable).as_posix()
+        registration = "add_test(NAME runtime-bundle-validation " + registrations[0] + ")"
+        registration = registration.replace("${CMAKE_SOURCE_DIR}", ROOT.as_posix())
+        fixture = (
+            "cmake_minimum_required(VERSION 3.25)\n"
+            "project(RuntimeRegistration LANGUAGES NONE)\nenable_testing()\n"
+            f'set(Python3_EXECUTABLE "{python}")\n'
+            'set(SPARK_NODE_EXECUTABLE node)\n'
+            'set(SPARK_SITE_DATA_TREE_LOCK "site-data-source-tree")\n'
+            + registration + "\n"
+            + "set_tests_properties(runtime-bundle-validation PROPERTIES " + properties[0] + ")\n"
+        )
+        (self.root / "CMakeLists.txt").write_text(fixture, encoding="utf-8")
+        build = self.root / "build"
+        result = subprocess.run(
+            ["cmake", "-S", str(self.root), "-B", str(build)],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        result = subprocess.run(
+            ["ctest", "--test-dir", str(build), "-L", "unit", "--show-only=json-v1"],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        tests = json.loads(result.stdout)["tests"]
+        self.assertEqual(1, len(tests))
+        self.assertEqual("runtime-bundle-validation", tests[0]["name"])
+        self.assertEqual(
+            [python, WRAPPER.as_posix(), "node", "test/verifyBundle.test.mjs", "test/freshness.test.mjs",
+             "test/siteDataRuntime.test.mjs", "test/browserRuntime.test.mjs", "test/bootstrap.test.mjs",
+             "test/siteDataRuntime.fixture.test.mjs"],
+            tests[0]["command"],
+        )
+        actual = {value["name"]: value["value"] for value in tests[0]["properties"]}
+        self.assertEqual(600, actual["COST"])
+        self.assertEqual(600, actual["TIMEOUT"])
+        self.assertFalse(actual.get("RUN_SERIAL", False))
+        self.assertEqual(1, actual.get("PROCESSORS", 1))
+        self.assertEqual(["node", "readiness", "site-data", "unit"], actual["LABELS"])
+        self.assertEqual(["site-data-source-tree"], actual["RESOURCE_LOCK"])
+        self.assertEqual([f"PYTHON={python}"], actual["ENVIRONMENT"])
+        self.assertEqual((ROOT / "tools/site-data/runtime").as_posix(), actual["WORKING_DIRECTORY"])
+
     def setUp(self) -> None:
         self._directory = tempfile.TemporaryDirectory(prefix="site-runtime-runner-")
         self.root = Path(self._directory.name)

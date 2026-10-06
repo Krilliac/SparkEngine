@@ -25,8 +25,38 @@ class Contracts(unittest.TestCase):
         self.built = self.binary / 'SparkEngine.exe'
         self.built.write_bytes(b'benign identity fixture')
         self.expected = runner.digest(self.built)
-        runner.save(self.root / 'identity.json', {'host_sha256': self.expected,
+        runner.save(self.root / 'identity.json', {'source_sha': runner.SOURCE,
+                    'host_sha256': self.expected,
                     'images': {str(self.built): self.expected}})
+
+    def test_missing_or_changed_source_identity_prevents_any_subprocess(self):
+        path = self.root / 'identity.json'
+        captured = json.loads(path.read_text())
+        for source_sha in (None, '0' * 40):
+            identity = dict(captured)
+            if source_sha is None:
+                del identity['source_sha']
+            else:
+                identity['source_sha'] = source_sha
+            runner.save(path, identity)
+            for phase in ('sdk', 'abi', 'closure'):
+                with self.subTest(source_sha=source_sha, phase=phase), patch.object(runner, 'owned_run') as process:
+                    with self.assertRaisesRegex(ValueError, 'Weather mode changed across phases'):
+                        runner.run_phase(phase, self.source, self.root)
+                    process.assert_not_called()
+                    self.assertFalse((self.root / (phase + '-binding.json')).exists())
+
+    def test_changed_weather_mode_prevents_any_subprocess(self):
+        path = self.root / 'identity.json'
+        identity = json.loads(path.read_text())
+        identity['weather_consumer'] = True
+        runner.save(path, identity)
+        for phase in ('sdk', 'abi', 'closure'):
+            with self.subTest(phase=phase), patch.object(runner, 'owned_run') as process:
+                with self.assertRaisesRegex(ValueError, 'Weather mode changed across phases'):
+                    runner.run_phase(phase, self.source, self.root)
+                process.assert_not_called()
+                self.assertFalse((self.root / (phase + '-binding.json')).exists())
 
     def test_sdk_uses_installed_runner_reference_compiler_and_bound(self):
         installed = self.root / 'sdk/prefix/bin/SparkEngine.exe'

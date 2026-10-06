@@ -50,7 +50,9 @@ static std::string WideToNarrow(const std::wstring& wide)
     std::string narrow;
     narrow.reserve(wide.size());
     for (wchar_t wc : wide)
+    {
         narrow.push_back(static_cast<char>(wc));
+    }
     return narrow;
 }
 
@@ -63,7 +65,9 @@ static std::optional<std::string> NarrowPathIfRoundTrips(const std::wstring& wid
     try
     {
         if (std::filesystem::path(narrow) == std::filesystem::path(wide))
+        {
             return narrow;
+        }
     }
     catch (const std::exception&)
     {
@@ -116,13 +120,17 @@ namespace
     {
 #if defined(_WIN32)
         if (::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        {
             return true;
+        }
         error = std::error_code(static_cast<int>(::GetLastError()), std::system_category());
         return false;
 #else
         std::filesystem::rename(temporary, destination, error);
         if (error)
+        {
             return false;
+        }
         const auto directory = destination.has_parent_path() ? destination.parent_path() : std::filesystem::path(".");
 #if defined(O_DIRECTORY)
         const int directoryFile = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
@@ -166,7 +174,9 @@ namespace
             candidate += ".tmp." + std::to_string(threadHash) + "." + std::to_string(serial);
             std::error_code existsError;
             if (!std::filesystem::exists(candidate, existsError) && !existsError)
+            {
                 return candidate;
+            }
         }
         return {};
     }
@@ -175,12 +185,16 @@ namespace
     {
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         if (!output.is_open())
+        {
             return false;
+        }
         output.write(text.data(), static_cast<std::streamsize>(text.size()));
         output.flush();
         output.close();
         if (output.fail())
+        {
             return false;
+        }
         return FlushFileDurably(path, error);
     }
 
@@ -205,11 +219,15 @@ namespace
     bool IsConfinedRelativeScenePath(const std::filesystem::path& relative)
     {
         if (relative.empty() || relative.has_root_name() || relative.has_root_directory())
+        {
             return false;
+        }
         for (const auto& component : relative)
         {
             if (component.empty() || component == "." || component == "..")
+            {
                 return false;
+            }
         }
         const auto extension = relative.extension();
         return (extension == ".scene" || extension == ".json") && !relative.stem().empty();
@@ -229,7 +247,9 @@ namespace
         void operator()(HANDLE handle) const
         {
             if (handle && handle != INVALID_HANDLE_VALUE)
+            {
                 ::CloseHandle(handle);
+            }
         }
     };
     using UniqueHandle = std::unique_ptr<void, HandleCloser>;
@@ -243,11 +263,15 @@ namespace
         UniqueHandle handle(::CreateFileW(path.c_str(), FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
                                           FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, flags, nullptr));
         if (handle.get() == INVALID_HANDLE_VALUE)
+        {
             return UniqueHandle(nullptr);
+        }
         BY_HANDLE_FILE_INFORMATION info{};
         if (!::GetFileInformationByHandle(handle.get(), &info) || !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ||
             (!allowReparse && (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)))
+        {
             return UniqueHandle(nullptr);
+        }
         return handle;
     }
 
@@ -259,7 +283,9 @@ namespace
             const DWORD length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
                                                              FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
             if (length == 0)
+            {
                 return {};
+            }
             if (length < buffer.size())
             {
                 buffer.resize(length);
@@ -283,7 +309,9 @@ namespace
         std::vector<UniqueHandle> pins;
         pins.push_back(OpenPinnedDirectory(root, /*allowReparse=*/true));
         if (!pins.back())
+        {
             return false;
+        }
         const std::wstring rootFinal = FinalPath(pins.back().get());
 
         std::filesystem::path directory = root;
@@ -293,19 +321,25 @@ namespace
             directory /= component;
             pins.push_back(OpenPinnedDirectory(directory, /*allowReparse=*/false));
             if (!pins.back())
+            {
                 return false;
+            }
         }
         const std::wstring directoryFinal = FinalPath(pins.back().get());
         if (rootFinal.empty() || directoryFinal.empty() ||
             (directoryFinal != rootFinal && directoryFinal.rfind(rootFinal + L"\\", 0) != 0))
+        {
             return false;
+        }
 
         // An existing destination must be a plain file, not a link or directory.
         const std::filesystem::path destination = directory / leaf;
         const DWORD existing = ::GetFileAttributesW(destination.c_str());
         if (existing != INVALID_FILE_ATTRIBUTES &&
             (existing & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)))
+        {
             return false;
+        }
 
         static std::atomic<uint64_t> sequence{0};
         UniqueHandle file(nullptr);
@@ -315,12 +349,18 @@ namespace
             HANDLE created = ::CreateFileW(temporary.c_str(), GENERIC_WRITE | DELETE, 0, nullptr, CREATE_NEW,
                                            FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
             if (created != INVALID_HANDLE_VALUE)
+            {
                 file.reset(created);
+            }
             else if (::GetLastError() != ERROR_FILE_EXISTS)
+            {
                 return false;
+            }
         }
         if (!file)
+        {
             return false;
+        }
 
         const auto discard = [&file]
         {
@@ -379,7 +419,9 @@ namespace
         ~FdCloser()
         {
             if (fd >= 0)
+            {
                 ::close(fd);
+            }
         }
     };
 
@@ -391,7 +433,9 @@ namespace
         for (const auto& component : relativeDirectory)
         {
             if (current < 0)
+            {
                 return -1;
+            }
             const int next = ::openat(current, component.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
             ::close(current);
             current = next;
@@ -413,16 +457,22 @@ namespace
         // reached only through held directory fds with O_NOFOLLOW.
         FdCloser rootFd{::open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
         if (rootFd.fd < 0)
+        {
             return false;
+        }
         FdCloser directory{OpenDirectoryBelow(rootFd.fd, relative.parent_path())};
         if (directory.fd < 0)
+        {
             return false;
+        }
 
         // An existing destination must be a plain file, not a link or directory.
         const std::string leaf = relative.filename().string();
         struct stat existing = {};
         if (::fstatat(directory.fd, leaf.c_str(), &existing, AT_SYMLINK_NOFOLLOW) == 0 && !S_ISREG(existing.st_mode))
+        {
             return false;
+        }
 
         static std::atomic<uint64_t> sequence{0};
         std::string temporary;
@@ -433,17 +483,23 @@ namespace
             file.fd =
                 ::openat(directory.fd, temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
             if (file.fd < 0 && errno != EEXIST)
+            {
                 return false;
+            }
         }
         if (file.fd < 0)
+        {
             return false;
+        }
 
         size_t written = 0;
         while (written < text.size())
         {
             const ssize_t chunk = ::write(file.fd, text.data() + written, text.size() - written);
             if (chunk < 0 && errno == EINTR)
+            {
                 continue;
+            }
             if (chunk <= 0)
             {
                 ::unlinkat(directory.fd, temporary.c_str(), 0);
@@ -469,7 +525,9 @@ namespace
         if (!inPlace || recheck.fd < 0 || !SameInode(recheck.fd, directory.fd))
         {
             if (inPlace)
+            {
                 ::unlinkat(directory.fd, leaf.c_str(), 0);
+            }
             return false;
         }
         return true;
@@ -552,7 +610,9 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
         for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
         {
             if (!m_sceneNodes[i].name.empty())
+            {
                 m_nodeNameIndex[m_sceneNodes[i].name] = i;
+            }
         }
         m_objects = std::move(previousObjects);
     };
@@ -565,11 +625,17 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
     try
     {
         if (ext == L".sparkscene")
+        {
             loaded = LoadReflected(filepath);
+        }
         else if (ext == L".scene")
+        {
             loaded = LoadCustom(filepath);
+        }
         else if (ext == L".json")
+        {
             loaded = LoadJSON(filepath);
+        }
         else
         {
             LOG_TO_CONSOLE_IMMEDIATE(L"Scene file extension not recognized: " + filepath, L"WARNING");
@@ -590,9 +656,11 @@ bool SceneManager::LoadScene(const std::wstring& filepath)
         restorePrevious();
     }
     else
+    {
         // The replacement is now committed; release the old graph only after
         // all parsing and instantiation succeeded.
         previousObjects.clear();
+    }
 
     m_suppressSceneEvents = previousEventSuppression;
 
@@ -649,7 +717,9 @@ bool SceneManager::SaveSceneWithinRoot(const std::filesystem::path& root,
 
     std::string text;
     if (!SerializeSceneText(text, destination.wstring()))
+    {
         return false;
+    }
 
     bool saved = false;
     try
@@ -672,7 +742,9 @@ bool SceneManager::SaveSceneWithinRoot(const std::filesystem::path& root,
     if (m_fileCache)
     {
         if (const auto narrowPath = NarrowPathIfRoundTrips(destination.wstring()))
+        {
             m_fileCache->Invalidate(*narrowPath);
+        }
     }
     m_currentFilePath = destination.wstring();
     m_dirty = false;
@@ -703,7 +775,9 @@ void SceneManager::LoadSceneAsync(const std::wstring& filepath, SceneLoadCallbac
             }
             m_asyncLoading = false;
             if (callback)
+            {
                 callback(success, std::string(filepath.begin(), filepath.end()));
+            }
         });
 }
 
@@ -737,12 +811,16 @@ int SceneManager::AddNode(const SceneNode& node)
 void SceneManager::RemoveNode(int index)
 {
     if (index < 0 || index >= static_cast<int>(m_sceneNodes.size()))
+    {
         return;
+    }
 
     // Recursively remove children first
     auto& node = m_sceneNodes[index];
     for (int childIdx : node.childIndices)
+    {
         RemoveNode(childIdx);
+    }
 
     // Remove from parent's child list
     if (node.parentIndex >= 0 && node.parentIndex < static_cast<int>(m_sceneNodes.size()))
@@ -766,7 +844,9 @@ void SceneManager::RemoveNode(int index)
 void SceneManager::SetParent(int childIndex, int parentIndex)
 {
     if (childIndex < 0 || childIndex >= static_cast<int>(m_sceneNodes.size()))
+    {
         return;
+    }
 
     auto& child = m_sceneNodes[childIndex];
 
@@ -794,7 +874,9 @@ std::vector<int> SceneManager::GetRootNodes() const
     for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
     {
         if (m_sceneNodes[i].parentIndex < 0 && !m_sceneNodes[i].type.empty())
+        {
             roots.push_back(i);
+        }
     }
     return roots;
 }
@@ -802,14 +884,18 @@ std::vector<int> SceneManager::GetRootNodes() const
 const SceneNode* SceneManager::GetNode(int index) const
 {
     if (index < 0 || index >= static_cast<int>(m_sceneNodes.size()))
+    {
         return nullptr;
+    }
     return &m_sceneNodes[index];
 }
 
 SceneNode* SceneManager::GetNode(int index)
 {
     if (index < 0 || index >= static_cast<int>(m_sceneNodes.size()))
+    {
         return nullptr;
+    }
     return &m_sceneNodes[index];
 }
 
@@ -818,7 +904,9 @@ int SceneManager::FindNode(const std::string& name) const
     // O(1) lookup via name cache instead of O(n) linear scan
     auto it = m_nodeNameIndex.find(name);
     if (it != m_nodeNameIndex.end())
+    {
         return it->second;
+    }
     return -1;
 }
 
@@ -859,7 +947,9 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
 {
     std::vector<std::string> scenes;
     if (!std::filesystem::exists(directory))
+    {
         return scenes;
+    }
 
     std::error_code ec;
     for (const auto& entry : std::filesystem::directory_iterator(directory, ec))
@@ -870,7 +960,9 @@ std::vector<std::string> SceneManager::GetAvailableScenes(const std::wstring& di
             // UTF-8, never the ANSI code page: path::string() throws on Windows for a
             // scene name that code page cannot spell, which ended the whole listing.
             if (auto name = Spark::FileUtils::TryPathToUtf8(entry.path().filename()))
+            {
                 scenes.push_back(std::move(*name));
+            }
         }
     }
     std::sort(scenes.begin(), scenes.end());
@@ -892,7 +984,9 @@ bool SceneManager::LoadJSON(const std::wstring& path)
         {
             auto result = m_fileCache->ReadText(*narrowPath);
             if (result.IsOk())
+            {
                 content = result.Value();
+            }
         }
     }
 
@@ -914,14 +1008,18 @@ bool SceneManager::LoadJSON(const std::wstring& path)
     SceneMetadata stagedMetadata = m_metadata;
     std::vector<SceneNode> stagedNodes;
     if (!Spark::ParseVersionedSceneText(content, stagedMetadata, stagedNodes))
+    {
         return false;
+    }
 
     Clear();
     m_metadata = std::move(stagedMetadata);
     m_sceneNodes = std::move(stagedNodes);
     m_nodeNameIndex.clear();
     for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+    {
         m_nodeNameIndex[m_sceneNodes[static_cast<size_t>(i)].name] = i;
+    }
     InstantiateNodes();
     return true;
 }
@@ -940,7 +1038,9 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
 {
     std::string text;
     if (!SerializeSceneText(text, path))
+    {
         return false;
+    }
 
     const std::filesystem::path destination(path);
     const std::filesystem::path temporary = MakeUniqueTemporaryPath(destination);
@@ -960,7 +1060,9 @@ bool SceneManager::SaveJSON(const std::wstring& path) const
     if (m_fileCache)
     {
         if (const auto narrowPath = NarrowPathIfRoundTrips(path))
+        {
             m_fileCache->Invalidate(*narrowPath);
+        }
     }
 
     LOG_TO_CONSOLE_IMMEDIATE(L"Scene saved: " + std::to_wstring(m_sceneNodes.size()) + L" nodes", L"SUCCESS");
@@ -1010,17 +1112,29 @@ void SceneManager::InstantiateNodes()
         // scene terrain plane silently rendered as a 1 m cube.
         bool isPrimitive = true;
         if (node.type == "Cube" || node.type == "cube")
+        {
             obj = std::make_unique<CubeObject>(1.0f);
+        }
         else if (node.type == "Plane" || node.type == "plane")
+        {
             obj = std::make_unique<PlaneObject>(1.0f, 1.0f);
+        }
         else if (node.type == "Sphere" || node.type == "sphere")
+        {
             obj = std::make_unique<SphereObject>(0.5f, 16, 16);
+        }
         else if (node.type == "Pyramid" || node.type == "pyramid")
+        {
             obj = std::make_unique<PyramidObject>(1.0f);
+        }
         else if (node.type == "Ramp" || node.type == "ramp")
+        {
             obj = std::make_unique<RampObject>(1.0f, 1.0f);
+        }
         else if (node.type == "Wall" || node.type == "wall")
+        {
             obj = std::make_unique<WallObject>(1.0f, 1.0f);
+        }
         else if (node.type == "model" || node.type == "Model")
         {
             // Model type: create a cube as placeholder geometry, then load the actual mesh
@@ -1049,7 +1163,9 @@ void SceneManager::InstantiateNodes()
             if (SUCCEEDED(hr))
             {
                 if (!isPrimitive)
+                {
                     LoadOrPlaceholderMesh(*obj->GetMesh(), m_graphics->GetDevice(), m_graphics->GetContext(), meshPath);
+                }
                 obj->SetPosition(node.position);
                 // SceneNode rotations are authored in degrees; GameObject
                 // stores radians (XMMatrixRotationRollPitchYaw input).
@@ -1097,13 +1213,17 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         SceneMetadata metadata;
         std::vector<SceneNode> nodes;
         if (!Spark::ParseIniSceneText(content, metadata, nodes))
+        {
             return false;
+        }
         Clear();
         m_metadata = std::move(metadata);
         m_sceneNodes = std::move(nodes);
         m_nodeNameIndex.clear();
         for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+        {
             m_nodeNameIndex.emplace(m_sceneNodes[static_cast<size_t>(i)].name, i);
+        }
         InstantiateNodes();
         break;
     }
@@ -1119,7 +1239,9 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         }
         std::vector<Spark::LegacyObjectRow> rows;
         if (!Spark::ParseLegacyObjectLines(content, rows))
+        {
             return false;
+        }
 
         std::vector<SceneNode> stagedNodes;
         std::vector<std::unique_ptr<GameObject>> stagedObjects;
@@ -1129,17 +1251,29 @@ bool SceneManager::LoadCustom(const std::wstring& path)
             // primitive constructors require.
             std::unique_ptr<GameObject> obj;
             if (row.type == "Cube")
+            {
                 obj = std::make_unique<CubeObject>(row.primary);
+            }
             else if (row.type == "Plane")
+            {
                 obj = std::make_unique<PlaneObject>(row.primary, row.secondary);
+            }
             else if (row.type == "Sphere")
+            {
                 obj = std::make_unique<SphereObject>(row.primary, row.slices, row.stacks);
+            }
             else if (row.type == "Pyramid")
+            {
                 obj = std::make_unique<PyramidObject>(row.primary);
+            }
             else if (row.type == "Ramp")
+            {
                 obj = std::make_unique<RampObject>(row.primary, row.secondary);
+            }
             else
+            {
                 obj = std::make_unique<WallObject>(row.primary, row.secondary);
+            }
 
             HRESULT hr = obj->Initialize(m_graphics->GetDevice(), m_graphics->GetContext());
             if (FAILED(hr))
@@ -1166,7 +1300,9 @@ bool SceneManager::LoadCustom(const std::wstring& path)
         m_objects = std::move(stagedObjects);
         m_nodeNameIndex.clear();
         for (int i = 0; i < static_cast<int>(m_sceneNodes.size()); ++i)
+        {
             m_nodeNameIndex.emplace(m_sceneNodes[static_cast<size_t>(i)].name, i);
+        }
         break;
     }
     }
@@ -1189,7 +1325,9 @@ std::string SceneManager::Console_ListNodes() const
     {
         const auto& node = m_sceneNodes[i];
         if (node.type.empty())
+        {
             continue;
+        }
 
         std::string indent(node.parentIndex >= 0 ? 4 : 2, ' ');
         ss << indent << "[" << i << "] " << node.name << " (" << node.type << ") " << "pos=(" << node.position.x << ","
@@ -1202,7 +1340,9 @@ std::string SceneManager::Console_GetNodeInfo(int index) const
 {
     const auto* node = GetNode(index);
     if (!node)
+    {
         return "Node not found: " + std::to_string(index);
+    }
 
     std::ostringstream ss;
     ss << "=== Node [" << index << "] ===\n"
@@ -1220,7 +1360,9 @@ bool SceneManager::Console_MoveNode(int index, float x, float y, float z)
 {
     auto* node = GetNode(index);
     if (!node)
+    {
         return false;
+    }
     node->position = {x, y, z};
     m_dirty = true;
     return true;
@@ -1232,12 +1374,16 @@ bool SceneManager::Console_RenameNode(int index, const std::string& newName)
                       "SceneManager::Console_RenameNode — newName must not be empty");
     auto* node = GetNode(index);
     if (!node)
+    {
         return false;
+    }
 
     // Reject if another node already has this name (per documentation contract)
     int existing = FindNode(newName);
     if (existing >= 0 && existing != index)
+    {
         return false;
+    }
 
     node->name = newName;
     m_dirty = true;

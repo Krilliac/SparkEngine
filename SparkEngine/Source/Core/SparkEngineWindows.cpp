@@ -535,16 +535,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPWSTR 
     if (requireGame)
     {
         const ModuleManager::LifecycleEvidence evidence = ModuleManager::GetLastTeardownLifecycleEvidence();
-        // Task 1 records the module's exact ModuleInfo name. The stable-v1
-        // wire contract instead identifies the shipped DLL target so it stays
-        // independent of display-name wording.
-        if (const auto* record = evidence.FindModule("Spark Arena - Engine Showcase"))
+        // Reuse the target-name formatter and unambiguous Game-kind selection
+        // shared with the other host. This covers installed SDK consumers while
+        // preserving the shipped FPS record and all successful-callback counts.
+        if (const auto* record = evidence.FindGameModule())
         {
-            WriteCommandOutput(std::format("SPARK_MODULE_LIFECYCLE module=SparkGameFPS create={} load={} update={} "
-                                           "fixed={} render={} unload={} destroy={} faults={}\n",
-                                           record->createModule, record->onLoad, record->onUpdate,
-                                           record->onFixedUpdate, record->onRender, record->onUnload,
-                                           record->destroyModule, record->faults));
+            WriteCommandOutput(ModuleManager::FormatLifecycleRecord(*record) + "\n");
         }
     }
 

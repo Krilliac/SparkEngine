@@ -250,6 +250,18 @@ class Contracts(unittest.TestCase):
 
 
 class ConfigureOptionGuardContracts(unittest.TestCase):
+    @staticmethod
+    def pinned_discovery(source):
+        build = source/'build/windows-shipping'
+        row = selected()
+        row['tests'][0]['command'] = [Q.shutil.which('cmake'),
+            '-DSPARK_ENGINE_BUILD_DIR='+build.as_posix(), '-DSPARK_SOURCE_ROOT='+source.as_posix(),
+            '-DSPARK_CONFIG=MinSizeRel', '-DSPARK_TESTS_EXECUTABLE='+(build/'bin/MinSizeRel/SparkTests.exe').as_posix(),
+            '-DSPARK_ENGINE_EXECUTABLE_NAME=SparkEngine.exe', '-DSPARK_EXPECTED_SOURCE_SHA='+PINS['source_sha'],
+            '-DSPARK_PYTHON_EXECUTABLE='+Q.sys.executable.replace('\\', '/'),
+            '-P', (source/'cmake/RunEditorFPSInstalledLineage.cmake').as_posix()]
+        return row, build
+
     def test_real_guard_accepts_helper_options_and_rejects_old_sha_cache_option(self):
         guard = Path(__file__).resolve().parents[2]/'cmake/SparkOptionGuard.cmake'
         self.assertTrue(guard.is_file(), 'Missing real product option guard')
@@ -285,18 +297,59 @@ class ConfigureOptionGuardContracts(unittest.TestCase):
     def test_source_sha_still_required_in_exact_ctest_command(self):
         with tempfile.TemporaryDirectory(prefix='editor-fps-source-pin-') as temporary:
             source = Path(temporary)/'source'
-            build = source/'build/windows-shipping'
-            row = selected()
-            row['tests'][0]['command'] = [Q.shutil.which('cmake'),
-                '-DSPARK_ENGINE_BUILD_DIR='+build.as_posix(), '-DSPARK_SOURCE_ROOT='+source.as_posix(),
-                '-DSPARK_CONFIG=MinSizeRel', '-DSPARK_TESTS_EXECUTABLE='+(build/'bin/MinSizeRel/SparkTests.exe').as_posix(),
-                '-DSPARK_ENGINE_EXECUTABLE_NAME=SparkEngine.exe', '-DSPARK_EXPECTED_SOURCE_SHA='+PINS['source_sha'],
-                '-DSPARK_PYTHON_EXECUTABLE='+Q.sys.executable.replace('\\', '/'),
-                '-P', (source/'cmake/RunEditorFPSInstalledLineage.cmake').as_posix()]
+            row, build = self.pinned_discovery(source)
             Q.discovery(row, True, source, build, PINS['source_sha'])
             row['tests'][0]['command'][6] = '-DSPARK_EXPECTED_SOURCE_SHA='+'c'*40
             with self.assertRaisesRegex(ValueError, 'exact command binding'):
                 Q.discovery(row, True, source, build, PINS['source_sha'])
+
+    def test_windows_case_aliases_require_same_physical_tools(self):
+        source = Path('C:/owned/source')
+        with patch.object(Q.sys, 'platform', 'win32'), \
+             patch.object(Q.shutil, 'which', return_value='C:/Tools/cmake.EXE'), \
+             patch.object(Q.sys, 'executable', 'C:/Tools/python.EXE'):
+            row, build = self.pinned_discovery(source)
+            row['tests'][0]['command'][0] = 'C:/Tools/cmake.exe'
+            row['tests'][0]['command'][7] = '-DSPARK_PYTHON_EXECUTABLE=C:/Tools/python.exe'
+            with patch.object(Q.os.path, 'samefile', return_value=True) as same:
+                Q.discovery(row, True, source, build, PINS['source_sha'])
+                self.assertEqual(same.call_count, 2)
+            for result in (False, OSError('missing tool')):
+                with self.subTest(result=result), \
+                     patch.object(Q.os.path, 'samefile', side_effect=result if isinstance(result, OSError) else None,
+                                  return_value=result), \
+                     self.assertRaisesRegex(ValueError, 'exact command binding'):
+                    Q.discovery(row, True, source, build, PINS['source_sha'])
+
+    def test_windows_case_aliases_do_not_relax_command_fields(self):
+        source = Path('C:/owned/source')
+        with patch.object(Q.sys, 'platform', 'win32'), \
+             patch.object(Q.shutil, 'which', return_value='C:/Tools/cmake.EXE'), \
+             patch.object(Q.sys, 'executable', 'C:/Tools/python.EXE'), \
+             patch.object(Q.os.path, 'samefile', return_value=True):
+            original, build = self.pinned_discovery(source)
+            for index, value in ((0, 'C:/Other/cmake.exe'), (3, '-DSPARK_CONFIG=Release'),
+                                 (6, '-DSPARK_EXPECTED_SOURCE_SHA='+'c'*40),
+                                 (7, '-Dspark_python_executable=C:/Tools/python.exe'),
+                                 (9, 'C:/Other/RunEditorFPSInstalledLineage.cmake')):
+                row = json.loads(json.dumps(original))
+                row['tests'][0]['command'][index] = value
+                with self.subTest(index=index), self.assertRaisesRegex(ValueError, 'exact command binding'):
+                    Q.discovery(row, True, source, build, PINS['source_sha'])
+            original['tests'][0]['command'].append('-DUNEXPECTED=1')
+            with self.assertRaisesRegex(ValueError, 'exact command binding'):
+                Q.discovery(original, True, source, build, PINS['source_sha'])
+
+    def test_unix_command_binding_remains_case_sensitive(self):
+        source = Path('/owned/source')
+        with patch.object(Q.sys, 'platform', 'linux'), \
+             patch.object(Q.shutil, 'which', return_value='/tools/cmake'), \
+             patch.object(Q.os.path, 'samefile', return_value=True) as same:
+            row, build = self.pinned_discovery(source)
+            row['tests'][0]['command'][0] = '/tools/CMAKE'
+            with self.assertRaisesRegex(ValueError, 'exact command binding'):
+                Q.discovery(row, True, source, build, PINS['source_sha'])
+            same.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

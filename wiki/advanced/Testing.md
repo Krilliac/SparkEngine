@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*738 test-bearing `.cpp`/`.mm` files, 8530 source-level test definitions*
+*742 test-bearing `.cpp`/`.mm` files, 8563 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1253,7 +1253,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestEditorRecovery` | 18 |
 | `TestEditorStateCompatibility` | 8 |
 | `TestEditorSubsystems` | 138 |
-| `TestEditorSubsystemsReal` | 16 |
+| `TestEditorSubsystemsReal` | 26 |
 | `TestEditorUndoHierarchyReal` | 9 |
 | `TestEditorUndoWorldMatrixReal` | 2 |
 | `TestEditorUntrustedProject` | 5 |
@@ -1283,10 +1283,12 @@ extents; this does not change plane order or clip-space calculations.
 | `TestFBXImportValidation` | 3 |
 | `TestFBXImporter` | 17 |
 | `TestFPSComponentsReal` | 11 |
+| `TestFPSGameCameraReloadReal` | 0 |
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSLANLoopback` | 2 |
 | `TestFPSMultiplayer` | 19 |
-| `TestFPSWeatherPort` | 6 |
+| `TestFPSOwnedSaveDecode` | 1 |
+| `TestFPSWeatherPort` | 8 |
 | `TestFastNoise2SIMD` | 32 |
 | `TestFaultIsolation` | 14 |
 | `TestFaultIsolationReal` | 8 |
@@ -1362,7 +1364,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestInGameConsole` | 12 |
 | `TestInputActionSystem` | 12 |
 | `TestInputBindings` | 5 |
-| `TestInputFrameEdgesReal` | 5 |
+| `TestInputFrameEdgesReal` | 8 |
 | `TestInputSystem` | 11 |
 | `TestInstanceManager` | 14 |
 | `TestInventorySystem` | 11 |
@@ -1415,7 +1417,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestMOD380VehiclePhysicsReal` | 5 |
 | `TestMOD390VisualScriptDiagnosticsReal` | 7 |
 | `TestMOD390VisualScriptGameplayReal` | 4 |
-| `TestMOD390VisualScriptGraphsReal` | 14 |
+| `TestMOD390VisualScriptGraphsReal` | 15 |
 | `TestMOD390VisualScriptHotReloadReal` | 4 |
 | `TestMSanCanary` | 2 |
 | `TestMacOSPlatform` | 6 |
@@ -1443,7 +1445,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestModuleDependency` | 5 |
 | `TestModuleDiscovery` | 7 |
 | `TestModuleHotReload` | 12 |
-| `TestModuleLifecycleReal` | 16 |
+| `TestModuleLifecycleReal` | 17 |
 | `TestModuleVersion` | 6 |
 | `TestMovementSystem` | 18 |
 | `TestMovieRenderPipeline` | 11 |
@@ -1599,7 +1601,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestSceneConfigDatabaseReal` | 9 |
 | `TestSceneGraph2D` | 14 |
 | `TestSceneManager` | 21 |
-| `TestSceneManagerReflectedReal` | 6 |
+| `TestSceneManagerReflectedReal` | 10 |
 | `TestSceneManagerUnicodeReal` | 1 |
 | `TestSceneRoundtrip` | 8 |
 | `TestSceneSaveConfinedReal` | 5 |
@@ -1615,6 +1617,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestScriptHookManagerPhaseBB` | 14 |
 | `TestScriptHotReload` | 16 |
 | `TestScriptSandbox` | 7 |
+| `TestSdkWeatherService` | 4 |
 | `TestSeamlessAreaManager` | 14 |
 | `TestSecDaemonCacheHardening` | 8 |
 | `TestSecDaemonPipeIdentity` | 5 |
@@ -1699,6 +1702,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestTFOutfitStore` | 18 |
 | `TestTFRedeployRules` | 7 |
 | `TestTFRegionLattice` | 11 |
+| `TestTFReplicationRefresh` | 7 |
 | `TestTFScramAuth` | 11 |
 | `TestTFSecondaryMotion` | 7 |
 | `TestTFServerSecurity` | 9 |

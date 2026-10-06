@@ -195,11 +195,34 @@ std::string InputManager::VirtualKeyToKeyName(int virtualKey) const
     return (it != map.end()) ? it->second : "Unknown(" + std::to_string(virtualKey) + ")";
 }
 
+static bool LookupExactKeyState(const std::unordered_map<int, bool>& states, int key)
+{
+    auto it = states.find(key);
+    return it != states.end() && it->second;
+}
+
+static bool LookupKeyState(const std::unordered_map<int, bool>& states, int key)
+{
+    switch (key)
+    {
+    case VK_SHIFT:
+        return LookupExactKeyState(states, VK_SHIFT) || LookupExactKeyState(states, VK_LSHIFT) ||
+               LookupExactKeyState(states, VK_RSHIFT);
+    case VK_CONTROL:
+        return LookupExactKeyState(states, VK_CONTROL) || LookupExactKeyState(states, VK_LCONTROL) ||
+               LookupExactKeyState(states, VK_RCONTROL);
+    case VK_MENU:
+        return LookupExactKeyState(states, VK_MENU) || LookupExactKeyState(states, VK_LMENU) ||
+               LookupExactKeyState(states, VK_RMENU);
+    default:
+        return LookupExactKeyState(states, key);
+    }
+}
+
 bool InputManager::IsKeyDown(int key) const
 {
     SPARK_REQUIRE_MSG(Spark::LogCategory::Input, key >= 0, "IsKeyDown - invalid key code");
-    auto it = m_keyStates.find(key);
-    return it != m_keyStates.end() && it->second;
+    return LookupKeyState(m_keyStates, key);
 }
 
 bool InputManager::IsKeyUp(int key) const
@@ -207,10 +230,9 @@ bool InputManager::IsKeyUp(int key) const
     return !IsKeyDown(key);
 }
 
-static bool LookupKeyState(const std::unordered_map<int, bool>& states, int key)
+bool InputManager::IsFrameKeyDown(int key) const
 {
-    auto it = states.find(key);
-    return it != states.end() && it->second;
+    return LookupKeyState(m_frameKeyStates, key);
 }
 
 bool InputManager::WasKeyPressed(int key) const
@@ -245,6 +267,7 @@ bool InputManager::WasMouseButtonReleased(int button) const
 
 void InputManager::LatchFrameEdges()
 {
+    ++m_inputFrameSequence;
     // Hosts deliver this frame's input messages BEFORE calling Update(), so the
     // "previous" snapshot must be the one taken by the previous Update(), not a
     // copy of the live state taken now: that copy already holds this frame's

@@ -81,5 +81,21 @@ class EditorPlayTruthTests(unittest.TestCase):
             has_copy(self, f"SparkEditor/Source/Panels/{panel}", truth)
 
 
+class EditorDocumentWiringTests(unittest.TestCase):
+    def test_hierarchy_and_inspector_wiring_is_platform_neutral(self) -> None:
+        ui = source("SparkEditor/Source/Core/EditorUI.cpp")
+        rewire = ui.split("void EditorUI::RewirePanelsToWorld()", 1)[1].split(
+            "bool EditorUI::SaveCurrentScene", 1)[0]
+
+        self.assertIn('m_panels.find("Hierarchy")', rewire)
+        self.assertIn("hierarchy->SetSelectionSink(this)", rewire)
+        self.assertIn('m_panels.find("Inspector")', rewire)
+        self.assertIn("inspector->SetEditorUI(this)", rewire)
+
+        windows_graphics = ui.split("void EditorUI::SetGraphicsDevice", 1)[1].split(
+            "void EditorUI::HandleKeyboardShortcuts", 1)[0]
+        self.assertNotIn("SetEditorUI", windows_graphics)
+
+
 if __name__ == "__main__":
     unittest.main()

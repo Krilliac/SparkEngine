@@ -36,27 +36,41 @@ namespace Spark::Scripting::Detail
                                              std::vector<std::string>& errors, EmitBudget& budget)
         : m_debugMode(debugMode), m_errors(errors), m_budget(budget)
     {
+        m_nodes.reserve(graph.nodes.size());
+        m_topology.reserve(graph.nodes.size());
+        m_activePath.reserve(graph.nodes.size());
         for (const auto& node : graph.nodes)
         {
-            m_nodes.emplace(node.id, &node); // first definition wins
+            m_nodes.emplace(node.id, IndexedNode{&node}); // first definition wins
         }
         for (const auto& conn : graph.connections)
         {
             m_outgoing[conn.fromNode].push_back(&conn);
             m_incoming[conn.toNode].push_back(&conn);
         }
+        for (const auto& node : graph.nodes)
+        {
+            const auto& incoming = Incoming(node.id);
+            const bool hasDataInputs = std::any_of(incoming.begin(), incoming.end(), [&](const ScriptConnection* conn)
+                                                   { return !IsExecConnection(*conn); });
+            m_topology.emplace(&node, NodeTopology{ExecOutputPins(node), hasDataInputs});
+        }
     }
 
     const ScriptNode* VisualScriptEmitter::FindNode(uint32_t id) const
     {
         const auto it = m_nodes.find(id);
-        return it != m_nodes.end() ? it->second : nullptr;
+        return it != m_nodes.end() ? it->second.node : nullptr;
     }
 
     /// Execution outputs of a node, in pin order. Without pin metadata the
     /// pins that carry execution wires are used.
     std::vector<uint32_t> VisualScriptEmitter::ExecOutputPins(const ScriptNode& node) const
     {
+        if (const auto cached = m_topology.find(&node); cached != m_topology.end())
+        {
+            return cached->second.execPins;
+        }
         std::vector<uint32_t> pins;
         if (!node.outputs.empty())
         {
@@ -182,6 +196,11 @@ namespace Spark::Scripting::Detail
         }
 
         const auto dependencies = PureDependencies(node);
+        if (node.type == ScriptNodeType::Sequence)
+        {
+            EmitControlFlow(node, {}, indent, code);
+            return;
+        }
         const std::string inner = indent + std::string(kIndent);
 
         if (node.type == ScriptNodeType::Branch || node.type == ScriptNodeType::ForLoop)
@@ -223,12 +242,6 @@ namespace Spark::Scripting::Detail
             code += inner + "}\n";
             EmitControlFlow(node, temporaries, inner, code);
             code += indent + "}\n";
-            return;
-        }
-
-        if (node.type == ScriptNodeType::Sequence)
-        {
-            EmitControlFlow(node, {}, indent, code);
             return;
         }
 
@@ -335,6 +348,10 @@ namespace Spark::Scripting::Detail
     /// Pure producers feeding @p node (transitively), producers first.
     std::vector<const ScriptNode*> VisualScriptEmitter::PureDependencies(const ScriptNode& node)
     {
+        if (const auto cached = m_topology.find(&node); cached != m_topology.end() && !cached->second.hasDataInputs)
+        {
+            return {};
+        }
         std::vector<const ScriptNode*> order;
         std::unordered_set<uint32_t> done;
         std::unordered_set<uint32_t> visiting{node.id};
@@ -392,6 +409,20 @@ namespace Spark::Scripting::Detail
     void VisualScriptEmitter::EmitControlFlow(const ScriptNode& node, const std::vector<std::string>& inputs,
                                               const std::string& indent, std::string& code)
     {
+        if (node.type == ScriptNodeType::Sequence)
+        {
+            // Borrow immutable pin order instead of allocating it for every shared-chain visit.
+            // The fallback retains the internal EmitStep API's behavior for an unlisted node.
+            const auto cached = m_topology.find(&node);
+            std::vector<uint32_t> uncachedPins;
+            const auto& pins =
+                cached != m_topology.end() ? cached->second.execPins : (uncachedPins = ExecOutputPins(node));
+            for (uint32_t pin : pins)
+            {
+                EmitPinChains(node, pin, indent, code);
+            }
+            return;
+        }
         const std::string inner = indent + std::string(kIndent);
         switch (node.type)
         {
@@ -423,12 +454,6 @@ namespace Spark::Scripting::Detail
             code += indent + "}\n";
             break;
         }
-        case ScriptNodeType::Sequence:
-            for (uint32_t pin : ExecOutputPins(node))
-            {
-                EmitPinChains(node, pin, indent, code);
-            }
-            break;
         default:
             break;
         }
@@ -452,26 +477,28 @@ namespace Spark::Scripting::Detail
         // Balanced on every return path: the loop below only breaks, never returns.
         ++m_chainDepth;
 
-        std::vector<uint32_t> entered;
+        const size_t pathStart = m_activePath.size();
         uint32_t current = startNode;
         while (!StepLimitReached())
         {
-            const auto* node = FindNode(current);
-            if (!node)
+            const auto found = m_nodes.find(current);
+            if (found == m_nodes.end())
             {
                 m_errors.push_back("Execution wire targets missing node " + std::to_string(current));
                 break;
             }
+            const auto* node = found->second.node;
             if (IsEventNode(node->type))
             {
                 break;
             }
-            if (!m_onPath.insert(current).second)
+            if (found->second.onPath)
             {
                 m_errors.push_back("Execution cycle through node " + std::to_string(current));
                 break;
             }
-            entered.push_back(current);
+            found->second.onPath = true;
+            m_activePath.push_back(current);
 
             EmitStep(*node, indent, code);
 
@@ -482,7 +509,7 @@ namespace Spark::Scripting::Detail
             }
 
             std::vector<uint32_t> next;
-            for (uint32_t pin : ExecOutputPins(*node))
+            for (uint32_t pin : m_topology.at(node).execPins)
             {
                 if (node->type == ScriptNodeType::ForLoop && pin == 0)
                 {
@@ -511,9 +538,10 @@ namespace Spark::Scripting::Detail
             current = next.front();
         }
 
-        for (uint32_t id : entered)
+        while (m_activePath.size() > pathStart)
         {
-            m_onPath.erase(id);
+            m_nodes.at(m_activePath.back()).onPath = false;
+            m_activePath.pop_back();
         }
         --m_chainDepth;
     }
