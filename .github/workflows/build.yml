@@ -2564,19 +2564,40 @@ jobs:
       working-directory: tree-a
       run: |
         set -euo pipefail
-        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log
+        # MSVC records its object-output path in CodeView and derives exact
+        # BigObj checksum metadata from those bytes. Build each independent
+        # checkout sequentially through the same drive alias so the compiler
+        # sees one canonical source/build path; the physical trees stay
+        # separate and the comparator still receives their real roots.
+        physical_parent=$(cd .. && pwd)
+        physical_source=$(cygpath -w "$PWD")
+        cleanup_alias() { subst R: /d >/dev/null 2>&1 || true; }
+        trap cleanup_alias EXIT
+        subst R: "$physical_source"
+        cd /r
+        cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-a-configure.log"
         # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
-        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log
-        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-a
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-a-build.log"
+        cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-a"
+        cleanup_alias
+        trap - EXIT
 
     - name: Build and stage Shipping in the second tree
       shell: bash
       working-directory: tree-b
       run: |
         set -euo pipefail
-        cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log
-        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log
-        cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b
+        physical_parent=$(cd .. && pwd)
+        physical_source=$(cygpath -w "$PWD")
+        cleanup_alias() { subst R: /d >/dev/null 2>&1 || true; }
+        trap cleanup_alias EXIT
+        subst R: "$physical_source"
+        cd /r
+        cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-b-configure.log"
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-b-build.log"
+        cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-b"
+        cleanup_alias
+        trap - EXIT
 
     - name: Compare the two Shipping builds
       shell: bash

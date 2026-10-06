@@ -1988,17 +1988,29 @@ def reproducibility_windows_errors(document: dict) -> list[str]:
         run = str(builds[0].get("run", ""))
         required = (
             "set -euo pipefail",
+            'physical_source=$(cygpath -w "$PWD")',
+            'subst R: "$physical_source"',
+            "cd /r",
+            "trap cleanup_alias EXIT",
             "cmake --preset windows-shipping",
             "cmake --build --preset windows-shipping --config MinSizeRel",
+            "trap - EXIT",
         )
         for fragment in required:
             if run.count(fragment) != 1:
                 errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build is missing {fragment!r}")
-        install = re.search(r"(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix (\S+)$", run)
+        install = re.search(
+            r'(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix '
+            r'(?:(?:"\$physical_parent/([^"\r\n]+)")|(\S+))$',
+            run,
+        )
         if install is None:
             errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build does not install the Shipping tree")
         else:
-            stages.append(os.path.normpath(os.path.join(tree, install.group(1))).replace("\\", "/"))
+            if install.group(1) is not None:
+                stages.append(install.group(1))
+            else:
+                stages.append(os.path.normpath(os.path.join(tree, install.group(2))).replace("\\", "/"))
     if len(stages) == 2 and len(set(stages)) != 2:
         errors.append(f"{REPRODUCIBILITY_JOB} stages both trees to the same prefix")
 
@@ -3978,6 +3990,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             (
                 edit_run("Build and stage Shipping in the first tree", "set -euo pipefail", "set -uo pipefail"),
                 "'set -euo pipefail'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", 'subst R: "$physical_source"',
+                         'subst S: "$physical_source"'),
+                "'subst R:",
+            ),
+            (
+                edit_run("Build and stage Shipping in the second tree", "cd /r", "cd /s"),
+                "'cd /r'",
+            ),
+            (
+                edit_run("Build and stage Shipping in the first tree", "trap cleanup_alias EXIT", "true"),
+                "'trap cleanup_alias EXIT'",
             ),
             (
                 edit_run("Build and stage Shipping in the second tree", "reproducibility-stage-b",

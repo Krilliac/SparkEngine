@@ -12708,7 +12708,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "97d1eea19530a6b3"
+            "runDigest": "c6f6dc1e2e511152"
           },
           {
             "index": 4,
@@ -12720,7 +12720,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "c02983c50229d1a6"
+            "runDigest": "016fcb92581e8d92"
           },
           {
             "index": 5,
@@ -17955,7 +17955,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-a-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -17976,7 +17976,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-a-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -18003,10 +18003,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "install",
-        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-a",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix \"$physical_parent/reproducibility-stage-a\"",
         "commandProvenance": "literal",
         "configuration": "MinSizeRel",
-        "prefix": "../reproducibility-stage-a",
+        "prefix": "$physical_parent/reproducibility-stage-a",
         "component": "",
         "commandIndex": 2
       },
@@ -18025,7 +18025,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-b-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -18046,7 +18046,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-b-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -18073,10 +18073,10 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "install",
-        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix ../reproducibility-stage-b",
+        "command": "cmake --install build/windows-shipping --config MinSizeRel --prefix \"$physical_parent/reproducibility-stage-b\"",
         "commandProvenance": "literal",
         "configuration": "MinSizeRel",
-        "prefix": "../reproducibility-stage-b",
+        "prefix": "$physical_parent/reproducibility-stage-b",
         "component": "",
         "commandIndex": 2
       },
@@ -20344,7 +20344,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-a-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -20365,7 +20365,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "configure",
-        "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
+        "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-b-configure.log\"",
         "commandProvenance": "literal",
         "options": {},
         "preset": "windows-shipping",
@@ -21607,7 +21607,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-a-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-a-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -21634,7 +21634,7 @@
         "gating": "advisory",
         "tool": "cmake",
         "kind": "build",
-        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee ../reproducibility-b-build.log",
+        "command": "cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee \"$physical_parent/reproducibility-b-build.log\"",
         "commandProvenance": "literal",
         "targets": [
           "all"
@@ -24025,7 +24025,7 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-a-configure.log",
+      "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-a-configure.log\"",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-shipping",
@@ -24046,7 +24046,7 @@
       "gating": "advisory",
       "tool": "cmake",
       "kind": "configure",
-      "command": "cmake --preset windows-shipping 2>&1 | tee ../reproducibility-b-configure.log",
+      "command": "cmake --preset windows-shipping 2>&1 | tee \"$physical_parent/reproducibility-b-configure.log\"",
       "commandProvenance": "literal",
       "options": {},
       "preset": "windows-shipping",
