@@ -2527,8 +2527,8 @@ jobs:
         echo "Build-matrix evidence recorded for ${{ github.sha }}; the Build Matrix Verifier attests it from the Working checkout."
 
   # BLD-100: two clean windows-shipping builds of this commit, from two
-  # checkouts at different paths (so different source and build directories),
-  # must install equivalent outputs. tools/compare_build_outputs.py records
+  # independent checkouts staged sequentially at the same compiler-visible
+  # path, must install equivalent outputs. tools/compare_build_outputs.py records
   # size, SHA-256, COFF timestamp, RSDS GUID/age/PDB name and per-section
   # hashes of every installed EXE, DLL and static library, and fails on any
   # missing, extra or differing output. Nothing is cached between the builds.
@@ -2561,43 +2561,42 @@ jobs:
 
     - name: Build and stage Shipping in the first tree
       shell: bash
-      working-directory: tree-a
       run: |
         set -euo pipefail
-        # MSVC records its object-output path in CodeView and derives exact
-        # BigObj checksum metadata from those bytes. Build each independent
-        # checkout sequentially through the same drive alias so the compiler
-        # sees one canonical source/build path; the physical trees stay
-        # separate and the comparator still receives their real roots.
-        physical_parent=$(cd .. && pwd)
-        physical_source=$(cygpath -w "$PWD")
-        # Prevent Git Bash from converting subst's /d switch into a path.
-        cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }
-        trap cleanup_alias EXIT
-        subst R: "$physical_source"
-        cd /r
+        # MSVC records the object-output path in CodeView and BigObj metadata.
+        # Move each separate checkout to one real path for its build, then
+        # restore it so checkout cleanup and the comparator see both trees.
+        physical_parent=$PWD
+        source_tree="$physical_parent/tree-a"
+        canonical_tree="$physical_parent/reproducibility-source"
+        test ! -e "$canonical_tree"
+        mv "$source_tree" "$canonical_tree"
+        restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }
+        trap restore_tree EXIT
+        cd "$canonical_tree"
         cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-a-configure.log"
         # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
         cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-a-build.log"
         cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-a"
-        cleanup_alias
+        restore_tree
         trap - EXIT
 
     - name: Build and stage Shipping in the second tree
       shell: bash
-      working-directory: tree-b
       run: |
         set -euo pipefail
-        physical_parent=$(cd .. && pwd)
-        physical_source=$(cygpath -w "$PWD")
-        cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }
-        trap cleanup_alias EXIT
-        subst R: "$physical_source"
-        cd /r
+        physical_parent=$PWD
+        source_tree="$physical_parent/tree-b"
+        canonical_tree="$physical_parent/reproducibility-source"
+        test ! -e "$canonical_tree"
+        mv "$source_tree" "$canonical_tree"
+        restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }
+        trap restore_tree EXIT
+        cd "$canonical_tree"
         cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-b-configure.log"
         cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-b-build.log"
         cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-b"
-        cleanup_alias
+        restore_tree
         trap - EXIT
 
     - name: Compare the two Shipping builds

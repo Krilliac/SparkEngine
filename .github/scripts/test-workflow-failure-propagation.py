@@ -1980,26 +1980,44 @@ def reproducibility_windows_errors(document: dict) -> list[str]:
         errors.append(f"{REPRODUCIBILITY_JOB} checkouts must include submodules recursively")
 
     stages: list[str] = []
-    for tree in paths:
-        builds = [step for step in steps if step.get("working-directory") == tree]
+    for tree, label in zip(paths, ("first", "second")):
+        builds = [step for step in steps if step.get("name") == f"Build and stage Shipping in the {label} tree"]
         if len(builds) != 1:
             errors.append(f"{REPRODUCIBILITY_JOB} must build the {tree!r} tree in exactly one step")
             continue
+        if "working-directory" in builds[0]:
+            errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build must start at the workspace root")
         run = str(builds[0].get("run", ""))
         required = (
             "set -euo pipefail",
-            'physical_source=$(cygpath -w "$PWD")',
-            'subst R: "$physical_source"',
-            "cd /r",
-            'cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }',
-            "trap cleanup_alias EXIT",
+            "physical_parent=$PWD",
+            f'source_tree="$physical_parent/{tree}"',
+            'canonical_tree="$physical_parent/reproducibility-source"',
+            'test ! -e "$canonical_tree"',
+            'mv "$source_tree" "$canonical_tree"',
+            'restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }',
+            "trap restore_tree EXIT",
+            'cd "$canonical_tree"',
             "cmake --preset windows-shipping",
             "cmake --build --preset windows-shipping --config MinSizeRel",
+            "\nrestore_tree\n",
             "trap - EXIT",
         )
         for fragment in required:
             if run.count(fragment) != 1:
                 errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build is missing {fragment!r}")
+        if all(fragment in run for fragment in (
+            'mv "$source_tree" "$canonical_tree"', "trap restore_tree EXIT",
+            'cd "$canonical_tree"', "cmake --preset windows-shipping", "\nrestore_tree\n", "trap - EXIT",
+        )) and not (
+            run.index('mv "$source_tree" "$canonical_tree"')
+            < run.index("trap restore_tree EXIT")
+            < run.index('cd "$canonical_tree"')
+            < run.index("cmake --preset windows-shipping")
+            < run.index("\nrestore_tree\n")
+            < run.index("trap - EXIT")
+        ):
+            errors.append(f"{REPRODUCIBILITY_JOB} {tree!r} build does not restore the canonical path in order")
         install = re.search(
             r'(?m)^cmake --install build/windows-shipping --config MinSizeRel --prefix '
             r'(?:(?:"\$physical_parent/([^"\r\n]+)")|(\S+))$',
@@ -3993,28 +4011,29 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                 "'set -euo pipefail'",
             ),
             (
-                edit_run("Build and stage Shipping in the first tree", 'subst R: "$physical_source"',
-                         'subst S: "$physical_source"'),
-                "'subst R:",
+                edit_run("Build and stage Shipping in the first tree", 'mv "$source_tree" "$canonical_tree"',
+                         'cp -r "$source_tree" "$canonical_tree"'),
+                "'mv \"$source_tree\"",
             ),
             (
-                edit_run("Build and stage Shipping in the second tree", "cd /r", "cd /s"),
-                "'cd /r'",
+                edit_run("Build and stage Shipping in the second tree", 'cd "$canonical_tree"',
+                         'cd "$source_tree"'),
+                "'cd \"$canonical_tree\"'",
             ),
             (
-                edit_run("Build and stage Shipping in the first tree", "trap cleanup_alias EXIT", "true"),
-                "'trap cleanup_alias EXIT'",
+                edit_run("Build and stage Shipping in the first tree", "trap restore_tree EXIT", "true"),
+                "'trap restore_tree EXIT'",
             ),
             (
                 edit_run("Build and stage Shipping in the first tree",
-                         'cleanup_alias() { cd "$physical_parent" && MSYS_NO_PATHCONV=1 subst R: /d; }',
-                         'cleanup_alias() { subst R: /d; }'),
-                "'cleanup_alias()",
+                         'restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }',
+                         'restore_tree() { true; }'),
+                "'restore_tree()",
             ),
             (
                 edit_run("Build and stage Shipping in the second tree",
-                         'MSYS_NO_PATHCONV=1 subst R: /d', 'subst R: /d'),
-                "'cleanup_alias()",
+                         '\nrestore_tree\n', '\ntrue\n'),
+                "'\\nrestore_tree\\n'",
             ),
             (
                 edit_run("Build and stage Shipping in the second tree", "reproducibility-stage-b",
