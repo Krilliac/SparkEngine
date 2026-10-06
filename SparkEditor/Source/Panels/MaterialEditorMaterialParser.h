@@ -8,7 +8,7 @@
 namespace SparkEditor
 {
     struct MaterialDefinition;
-    inline constexpr std::size_t kMaxMaterialTextBytes = 16u * 1024u * 1024u;
+    inline constexpr std::size_t kMaxMaterialTextBytes = std::size_t{16} * 1024u * 1024u;
     /// @brief Append the editor's standard PBR parameters and texture slots.
     void InitializeStandardPBRParameters(MaterialDefinition& material);
     /// @brief Parse into a temporary definition; rejection preserves output, acceptance preserves filePath.

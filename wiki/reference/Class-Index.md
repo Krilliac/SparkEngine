@@ -912,7 +912,7 @@
 | `ContextEventBusScope` | struct | Tests | [TestENG200ScriptBindingsReal.cpp:L93](../../Tests/TestENG200ScriptBindingsReal.cpp#L93) |  |
 | `Continent` | struct | SparkEditor | [RegionMapEditorPanel.h:L60](../../SparkEditor/Source/Panels/RegionMapEditorPanel.h#L60) |  |
 | `ContinentDef` | struct | GameModules | [TFDataTables.h:L131](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.h#L131) |  |
-| `ContinentGround` | struct | Tests | [TestTF120Travel.cpp:L101](../../Tests/TestTF120Travel.cpp#L101) |  |
+| `ContinentGround` | struct | Tests | [TestTF120Travel.cpp:L88](../../Tests/TestTF120Travel.cpp#L88) |  |
 | `ContinentMeta` | struct | GameModules | [TFTravelSystem.h:L73](../../GameModules/SparkGameMMOFPS/Source/World/TFTravelSystem.h#L73) |  |
 | `ContinentSelection` | struct | GameModules | [TFDataTables.cpp:L95](../../GameModules/SparkGameMMOFPS/Source/Data/TFDataTables.cpp#L95) |  |
 | `ControlPoint` | struct | SparkEditor | [SplineEditorPanel.h:L39](../../SparkEditor/Source/Panels/SplineEditorPanel.h#L39) |  |
@@ -1149,7 +1149,7 @@
 | `DesignerScreen` | struct | SparkEditor | [UIDesignerSystem.h:L100](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L100) | A complete UI screen/layout |
 | `DesignerStyle` | struct | SparkEditor | [UIDesignerSystem.h:L87](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L87) | A UI style definition |
 | `DesignerWidget` | struct | SparkEditor | [UIDesignerSystem.h:L69](../../SparkEditor/Source/UIDesigner/UIDesignerSystem.h#L69) | A widget instance in the UI tree |
-| `DestinationAuthority` | struct | Tests | [TestTF120Travel.cpp:L244](../../Tests/TestTF120Travel.cpp#L244) |  |
+| `DestinationAuthority` | struct | Tests | [TestTF120Travel.cpp:L231](../../Tests/TestTF120Travel.cpp#L231) |  |
 | `DestinationLock` | class | SparkInstaller | [Installer.cpp:L51](../../SparkInstaller/src/Installer.cpp#L51) |  |
 | `DestructibleComponent` | struct | SparkEngine | [DestructionSystem.h:L109](../../SparkEngine/Source/Engine/Destruction/DestructionSystem.h#L109) | ECS component for destructible entities. |
 | `DestructibleComponent` | struct | SparkEngine | [PlacementComponents.h:L208](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L208) | Marks an entity as destructible with fracture on damage. |
@@ -4024,7 +4024,7 @@
 | `Sample` | struct | SparkEngine | [InterpolationBuffer.h:L192](../../SparkEngine/Source/Engine/Networking/InterpolationBuffer.h#L192) |  |
 | `Sample` | struct | SparkEngine | [PCSSshadows.h:L58](../../SparkEngine/Source/Graphics/PCSSshadows.h#L58) | Pre-computed Poisson disk sample points for PCSS filtering |
 | `Sample` | struct | Tests | [TestExtendedSystems.cpp:L191](../../Tests/TestExtendedSystems.cpp#L191) |  |
-| `Sample` | struct | Tests | [TestTF120Travel.cpp:L309](../../Tests/TestTF120Travel.cpp#L309) |  |
+| `Sample` | struct | Tests | [TestTF120Travel.cpp:L296](../../Tests/TestTF120Travel.cpp#L296) |  |
 | `SamplePoint` | struct | SparkEngine | [ScreenSpaceEffects.h:L161](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h#L161) |  |
 | `Sampler` | struct | Tests | [GLTFSkinningReference.h:L34](../../Tests/GLTFSkinningReference.h#L34) |  |
 | `SamplerTag` | struct | SparkEngine | [RHIHandlePool.h:L90](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L90) |  |
@@ -4514,7 +4514,7 @@
 | `SoundEffectFactory` | class | SparkEngine | [SoundEffect.h:L213](../../SparkEngine/Source/Audio/SoundEffect.h#L213) |  |
 | `SoundEntry` | struct | Tests | [TestAudioEngine.cpp:L37](../../Tests/TestAudioEngine.cpp#L37) |  |
 | `SoundPlayedEvent` | struct | SparkEngine | [EventSystem.h:L270](../../SparkEngine/Source/Engine/Events/EventSystem.h#L270) | Fired when a sound begins playing. |
-| `SourceAuthority` | struct | Tests | [TestTF120Travel.cpp:L200](../../Tests/TestTF120Travel.cpp#L200) |  |
+| `SourceAuthority` | struct | Tests | [TestTF120Travel.cpp:L187](../../Tests/TestTF120Travel.cpp#L187) |  |
 | `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1396](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1396) |  |
 | `SourceReference` | struct | Tests | [TestAssetManifestReal.cpp:L226](../../Tests/TestAssetManifestReal.cpp#L226) |  |
 | `SparkBodyActivationListener` | class | SparkEngine | [PhysicsSystem.cpp:L282](../../SparkEngine/Source/Physics/PhysicsSystem.cpp#L282) |  |
