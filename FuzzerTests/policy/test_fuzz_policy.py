@@ -150,6 +150,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzRTSPersistence",
     "SparkFuzzOrchestratorIdentity",
     "SparkFuzzMaterialLoader",
+    "SparkFuzzMaterialEditorFiles",
     "SparkFuzzEngineSettings",
     "SparkFuzzVirtualFileSystem",
     "SparkFuzzEntityArchetype",
