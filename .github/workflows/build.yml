@@ -2153,11 +2153,11 @@ jobs:
         $ErrorActionPreference = 'Stop'
         $archive = Join-Path $env:RUNNER_TEMP 'cmake-4.4.1-windows-x86_64.zip'
         $root = Join-Path $env:RUNNER_TEMP 'spark-cmake-4.4.1'
+        $cmakeSha256 = '091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19'
         if (Test-Path -LiteralPath $root) { throw 'Pinned CMake directory must be fresh' }
         Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip' -OutFile $archive
-        if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19') {
-          throw 'Pinned CMake archive checksum mismatch'
-        }
+        $cmakeActual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash
+        if ($cmakeActual -ne $cmakeSha256) { throw 'Pinned CMake archive checksum mismatch' }
         Expand-Archive -LiteralPath $archive -DestinationPath $root
         $bin = Join-Path $root 'cmake-4.4.1-windows-x86_64/bin'
         $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
