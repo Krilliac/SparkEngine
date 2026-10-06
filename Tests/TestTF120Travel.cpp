@@ -78,21 +78,8 @@ namespace
     {
         static const fs::path root = []() -> fs::path
         {
-            fs::path p = fs::current_path();
-            for (int i = 0; i < 10; ++i)
-            {
-                if (fs::exists(p / "Assets" / "MMOFPS" / "Data" / "continents.json"))
-                {
-                    return p;
-                }
-                const fs::path parent = p.parent_path();
-                if (parent.empty() || parent == p)
-                {
-                    break;
-                }
-                p = parent;
-            }
-            return {};
+            const fs::path source(SPARK_TEST_SOURCE_DIR);
+            return fs::exists(source / "Assets" / "MMOFPS" / "Data" / "continents.json") ? source : fs::path{};
         }();
         return root;
     }

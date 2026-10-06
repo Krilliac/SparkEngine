@@ -136,11 +136,11 @@ TEST(LegacyGameObject_AuthoredMaterialChangesBasicDrawBinding)
                 }
             }
 
-            std::error_code relativeError;
-            const auto relativeRoot = std::filesystem::relative(std::filesystem::path(projectRoot),
-                                                                std::filesystem::current_path(), relativeError);
-            EXPECT_TRUE(!relativeError && !relativeRoot.empty() && !relativeRoot.is_absolute());
-            if (!relativeError && !relativeRoot.empty() && !relativeRoot.is_absolute())
+            // A relative project root must be rejected even when the test build and
+            // source trees reside on different Windows drives.
+            const std::filesystem::path relativeRoot("Tests/Fixtures/LegacyBasicMaterial");
+            EXPECT_TRUE(!relativeRoot.empty() && !relativeRoot.is_absolute());
+            if (!relativeRoot.empty() && !relativeRoot.is_absolute())
             {
                 const std::u8string relativeUtf8 = relativeRoot.generic_u8string();
                 const std::string relativeBytes(reinterpret_cast<const char*>(relativeUtf8.data()),
