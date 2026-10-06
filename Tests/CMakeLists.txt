@@ -3195,12 +3195,17 @@ if(WIN32)
         LABELS "d3d11-validation;d3d11-debug-layer;d3d11;stable-v1"
         RUN_SERIAL TRUE
         TIMEOUT 180)
-    add_test(NAME D3D11_DeviceLoss COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
+    add_test(NAME D3D11_DeviceLoss COMMAND $<TARGET_FILE:SparkTests> --warn-is-error
+        --junit-xml "${CMAKE_BINARY_DIR}/SparkTests-d3d11-device-loss-junit.xml")
     set_tests_properties(D3D11_DeviceLoss PROPERTIES
         ENVIRONMENT "SPARK_TEST_NAME=D3D11_DeviceLoss_;SPARK_TEST_EXPECT_COUNT=4"
-        LABELS "d3d11-stress;d3d11;stable-v1"
+        LABELS "d3d11-stress;d3d11;stable-v1;sparktests;unit;integration"
         RUN_SERIAL TRUE
         TIMEOUT 120)
+    # This family already has its own CTest lane. Keep every case and its
+    # existing timeout, but count it once in the granular JUnit aggregation so
+    # slower VS2026 Release runs do not time out the monolithic main suite.
+    spark_exclude_from_main_suite(D3D11_DeviceLoss_)
     # CreateShader must compile source with no debugName (D3DCompile rejects an empty source
     # name with the standard include handler), name the source by filePath so relative
     # includes resolve, and log the HRESULT on failure (TestD3D11DeviceContractsReal.cpp).

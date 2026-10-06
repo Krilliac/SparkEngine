@@ -1729,6 +1729,7 @@ jobs:
           build/SparkTests-load-junit.xml \
           build/SparkTests-load.log \
           build/SparkTests-load-output.log \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1978,16 +1979,17 @@ jobs:
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
         test -s build/test-registration-count.json
-        # Both ctest lanes are summarized: SparkEngineTests excludes the
-        # load/stress family and SparkEngineLoadTests runs it, so summarizing
-        # only the first would shrink the population the floors measure without
-        # lowering the floors. --registration-count compares the executed total
+        # All three granular ctest lanes are summarized: the main suite excludes
+        # load/stress and D3D11 device-loss families, which retain their own
+        # lanes. --registration-count compares the executed total
         # against the TEST macros this build actually compiled, which is the one
         # comparison a hand-written --min-tests literal cannot make.
         test -s build/SparkTests-load-junit.xml
+        test -s build/SparkTests-d3d11-device-loss-junit.xml
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           build/SparkTests-load-junit.xml \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           --min-tests 6800 \
           --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2022 Release" \
@@ -2038,6 +2040,7 @@ jobs:
           build/SparkTests-load-junit.xml
           build/SparkTests-load.log
           build/SparkTests-load-output.log
+          build/SparkTests-d3d11-device-loss-junit.xml
           build/ctest-junit.xml
           build/test-registration-count.json
           build/*-process-smoke.log
@@ -2721,6 +2724,7 @@ jobs:
           build/SparkTests-load-junit.xml \
           build/SparkTests-load.log \
           build/SparkTests-load-output.log \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -2870,10 +2874,12 @@ jobs:
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
         test -s build/SparkTests-load-junit.xml
+        test -s build/SparkTests-d3d11-device-loss-junit.xml
         test -s build/test-registration-count.json
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           build/SparkTests-load-junit.xml \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           --min-tests 6800 \
           --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2026 Release" \
@@ -2891,6 +2897,7 @@ jobs:
           build/SparkTests-load-junit.xml
           build/SparkTests-load.log
           build/SparkTests-load-output.log
+          build/SparkTests-d3d11-device-loss-junit.xml
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json

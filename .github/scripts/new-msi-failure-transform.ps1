@@ -41,6 +41,10 @@ Require (-not $cmd.Contains("'")) 'System cmd.exe path cannot be embedded in MSI
 
 $work = Join-Path ([IO.Path]::GetDirectoryName($output)) ('.spark-qual-fail-' + [Guid]::NewGuid().ToString('N') + '.msi')
 Copy-Item -LiteralPath $source -Destination $work
+# Artifact downloads can mark the verified MSI read-only. Copy-Item preserves
+# that attribute, but the temporary database must be writable in transact mode.
+# Change only the disposable copy; the input package remains untouched.
+(Get-Item -LiteralPath $work -ErrorAction Stop).IsReadOnly = $false
 $installer = $null
 $original = $null
 $modified = $null
