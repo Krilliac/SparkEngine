@@ -3,14 +3,14 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 70,
+    "total": 72,
     "installerTotal": 41,
     "assets": [
         {
             "id": 530455809,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Release.zip",
-            "downloadCount": 3,
+            "downloadCount": 4,
             "digest": "sha256:16a1ea8c8b44837f933b52bde9356fb610d578f89c563d5a6da4cc5f5d4b57f3",
             "state": "uploaded"
         },
@@ -122,7 +122,7 @@
             "id": 538827113,
             "releaseId": 376952823,
             "name": "SparkEngine-Windows-x64-Release.zip",
-            "downloadCount": 12,
+            "downloadCount": 13,
             "digest": "sha256:16a1ea8c8b44837f933b52bde9356fb610d578f89c563d5a6da4cc5f5d4b57f3",
             "state": "uploaded"
         },
@@ -163,5 +163,5 @@
         538847551
     ],
     "pending": null,
-    "updated": "2026-10-06T05:19:15Z"
+    "updated": "2026-10-06T12:55:08Z"
 }
