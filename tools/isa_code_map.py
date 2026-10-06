@@ -370,7 +370,7 @@ def _bound(records: list[Record], before: int, index: str, leaders: set[int]) ->
         if insn.mnemonic == "cltq" and index == "a":
             j -= 1
             continue
-        if (insn.mnemonic in ("movslq", "movl") and len(operands) == 2 and family(operands[1]) == index
+        if (insn.mnemonic in ("movslq", "movl", "movzbl") and len(operands) == 2 and family(operands[1]) == index
                 and family(operands[0])):
             index = family(operands[0])
             j -= 1
@@ -412,7 +412,7 @@ def _bound_all_paths(records: list[Record], preds: list[list[int]], before: int,
         for p in preds[node]:
             insn = records[p]
             operands = split_operands(insn.operands)
-            if insn.mnemonic in ("ja", "jnbe", "jae", "jnb"):
+            if insn.mnemonic in ("ja", "jnbe", "jae", "jnb", "jne", "jnz"):
                 if p + 1 != node or direct_target(insn.mnemonic, insn.operands) == records[node].address:
                     return None  # the above edge carries no bound
                 compare = records[p - 1] if p > 0 and preds[p] == [p - 1] else None
@@ -423,7 +423,10 @@ def _bound_all_paths(records: list[Record], preds: list[list[int]], before: int,
                     limit = int(compare_ops[0][1:], 0)
                     if limit < 0:
                         return None
-                    best = max(best, limit + 1 if insn.mnemonic in ("ja", "jnbe") else limit)
+                    # A fall-through from jne/jnz proves equality to the
+                    # immediate. MSVC 14.51 tail-merges that path with a ja-
+                    # bounded path before a byte-indexed switch table.
+                    best = max(best, limit + 1 if insn.mnemonic in ("ja", "jnbe", "jne", "jnz") else limit)
                     continue
                 stack.append((p, tracked, offset))
                 continue
@@ -433,7 +436,7 @@ def _bound_all_paths(records: list[Record], preds: list[list[int]], before: int,
             if tracked not in written or (insn.mnemonic == "cltq" and tracked == "a"):
                 stack.append((p, tracked, offset))
                 continue
-            if insn.mnemonic in ("movslq", "movl") and len(operands) == 2 and family(operands[1]) == tracked:
+            if insn.mnemonic in ("movslq", "movl", "movzbl") and len(operands) == 2 and family(operands[1]) == tracked:
                 if family(operands[0]):
                     stack.append((p, family(operands[0]), offset))
                     continue
@@ -443,6 +446,14 @@ def _bound_all_paths(records: list[Record], preds: list[list[int]], before: int,
                         return None
                     best = max(best, value + 1)
                     continue
+            if (insn.mnemonic in ("xorl", "xorq") and len(operands) == 2
+                    and operands[0] == operands[1] and family(operands[0]) == tracked):
+                # MSVC materializes case zero with xor r32,r32. A byte-sized
+                # xor would leave upper index bits unknown and grants nothing.
+                if not 0 <= offset < MAX_TABLE_ENTRIES:
+                    return None
+                best = max(best, offset + 1)
+                continue
             memory = MEMORY_RE.match(operands[0]) if insn.mnemonic == "leal" and len(operands) == 2 else None
             if (memory is not None and memory.group(2) is not None and memory.group(3) is None
                     and family(operands[1]) == tracked and family(memory.group(2))):

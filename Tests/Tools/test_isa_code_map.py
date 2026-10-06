@@ -110,6 +110,48 @@ def mapped(records, data, end=END, **image_options):
     return cm.map_procedure(records, P, end, image), image
 
 
+class BoundProofTests(unittest.TestCase):
+    def test_zero_extended_byte_index_preserves_a_proven_bound(self):
+        # MSVC 14.51 uses this form for __GSHandlerCheckCommon: the byte
+        # compared by the ja is copied into the table index register.
+        records = [
+            rec(0, 3, "cmpb", "$0x20, %cl"),
+            rec(3, 2, "ja", f"{P + 0x30:#x} <.text+0x30>"),
+            rec(5, 3, "movzbl", "%cl, %eax"),
+            rec(8, 9, "movzbl", f"{rva(0x40):#x}(%r13,%rax), %eax"),
+        ]
+        preds = [[], [0], [1], [2]]
+        self.assertEqual(cm._bound(records, 3, "a", set()), 33)
+        self.assertEqual(cm._bound_all_paths(records, preds, 3, "a"), 33)
+
+        # A bound on a different byte cannot prove the table's extent.
+        records[2] = rec(5, 3, "movzbl", "%dl, %eax")
+        self.assertIsNone(cm._bound(records, 3, "a", set()))
+        self.assertIsNone(cm._bound_all_paths(records, preds, 3, "a"))
+
+    def test_inequality_branch_fallthrough_proves_one_index_value(self):
+        records = [
+            rec(0, 3, "cmpb", "$0x20, %cl"),
+            rec(3, 2, "jne", f"{P + 0x30:#x} <.text+0x30>"),
+            rec(5, 3, "movzbl", "%cl, %eax"),
+            rec(8, 9, "movzbl", f"{rva(0x40):#x}(%r13,%rax), %eax"),
+        ]
+        preds = [[], [0], [1], [2]]
+        self.assertEqual(cm._bound_all_paths(records, preds, 3, "a"), 33)
+
+        # The opposite fall-through means the index is anything except 32.
+        records[1] = rec(3, 2, "je", f"{P + 0x30:#x} <.text+0x30>")
+        self.assertIsNone(cm._bound_all_paths(records, preds, 3, "a"))
+
+    def test_full_register_xor_proves_zero_but_byte_xor_does_not(self):
+        records = [rec(0, 2, "xorl", "%eax, %eax"),
+                   rec(2, 9, "movzbl", f"{rva(0x40):#x}(%r13,%rax), %eax")]
+        preds = [[], [0]]
+        self.assertEqual(cm._bound_all_paths(records, preds, 1, "a"), 1)
+        records[0] = rec(0, 2, "xorb", "%al, %al")
+        self.assertIsNone(cm._bound_all_paths(records, preds, 1, "a"))
+
+
 class SwitchTableTests(unittest.TestCase):
     def assertTableBytesAreData(self, result):
         self.assertEqual([(t.start - P, t.end - P, t.kind) for t in result.tables],
