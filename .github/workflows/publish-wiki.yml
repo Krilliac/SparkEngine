@@ -96,6 +96,10 @@ jobs:
         run: git submodule update --init --depth 1 ThirdParty/UI/imgui ThirdParty/Security/libsodium
 
       - name: Generate exact-commit API documentation
+        # Shard 0's complete determinism test regenerates API documentation in
+        # each invocation itself. Avoid a third redundant generation while
+        # retaining both sequential health checks and the 10-minute budget.
+        if: matrix.shard != 0
         env:
           SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
         run: |

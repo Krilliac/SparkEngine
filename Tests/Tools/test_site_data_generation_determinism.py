@@ -9,7 +9,6 @@ difference anywhere, including a file that exists in only one tree, fails.
 from __future__ import annotations
 
 import filecmp
-from concurrent.futures import ThreadPoolExecutor
 import os
 import subprocess
 import sys
@@ -126,12 +125,8 @@ class GenerationDeterminismTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
             first_root = Path(first) / "bundle"
             second_root = Path(second) / "bundle"
-            # Each generation owns an isolated worktree and health output.
-            # Run both complete checks within the existing dedicated-shard budget.
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                generations = [executor.submit(generate, root) for root in (first_root, second_root)]
-                for generation in generations:
-                    generation.result()
+            generate(first_root)
+            generate(second_root)
             files = tree_files(first_root)
             self.assertIn(BUNDLE_INDEX, files)
             self.assertGreaterEqual(len(files), MINIMUM_FILES, "an empty or truncated bundle proves nothing")
