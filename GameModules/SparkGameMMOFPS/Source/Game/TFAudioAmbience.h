@@ -107,8 +107,8 @@ namespace Terrafront
         void UpdateCaptureAlarm(::AudioEngine& audio, float dt);
 
         // W9 remote-fire-events: 0x54F4 handler lifecycle (TFSocialSystem
-        // pattern — pure-client only, polled from Update, released with a
-        // no-op handler on Shutdown so no dangling `this` survives the module
+        // pattern — pure-client only, polled from Update, removed with
+        // UnregisterHandler on Shutdown so no callback survives the module
         // DLL). W11 impact-broadcast: the 0x54F5 TF_ImpactFx handler rides the
         // same lifecycle (inline lambda -> TFImpactFx::OnServerImpact).
         // Definitions live under ENABLE_NETWORKING in the .cpp.

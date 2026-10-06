@@ -52,6 +52,11 @@ log_info()    { echo -e "${BLUE}[STATS]${NC} $1"; }
 log_success() { echo -e "${GREEN}[STATS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[STATS]${NC} $1"; }
 
+# Indexed arrays work with the Bash 3.2 shipped by macOS. Keep names and counts
+# in matching order instead of requiring Bash 4 associative/global declarations.
+SUBSYSTEM_NAMES=("AI" "Networking" "ECS" "Animation" "Gameplay" "Scripting" "SaveSystem" "UI" "World" "Dialogue" "Cinematic" "Modding" "2D" "Coroutine" "Replay" "Streaming" "Tween" "Destruction" "Localization" "Mobile" "Events" "Loading" "VR" "Persistence" "Physics" "Editor")
+SUBSYSTEM_LINES=()
+
 # ============================================================================
 # Counting functions — single source of truth
 # ============================================================================
@@ -145,10 +150,9 @@ collect_metrics() {
     LINES_CAMERA=$(engine_subsystem_lines "Camera")
 
     # Engine/... subsystems
-    local subsystems=("AI" "Networking" "ECS" "Animation" "Gameplay" "Scripting" "SaveSystem" "UI" "World" "Dialogue" "Cinematic" "Modding" "2D" "Coroutine" "Replay" "Streaming" "Tween" "Destruction" "Localization" "Mobile" "Events" "Loading" "VR" "Persistence" "Physics" "Editor")
-    declare -g -A SUBSYSTEM_LINES
-    for sub in "${subsystems[@]}"; do
-        SUBSYSTEM_LINES[$sub]=$(engine_subsystem_lines "Engine/$sub")
+    SUBSYSTEM_LINES=()
+    for sub in "${SUBSYSTEM_NAMES[@]}"; do
+        SUBSYSTEM_LINES[${#SUBSYSTEM_LINES[@]}]=$(engine_subsystem_lines "Engine/$sub")
     done
 
     # ECS metrics
@@ -176,13 +180,11 @@ collect_metrics() {
 # Generate the markdown page
 # ============================================================================
 generate_page() {
-    local today
-    today="${GENERATED_DATE:-$(date -u +%Y-%m-%d)}"
-
     cat << HEREDOC
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated ${today}.
+Comprehensive metrics and analysis of the SparkEngine codebase, generated from
+the exact tracked source tree.
 This source inventory is not readiness evidence. The \`stable-v1\` Windows 11
 x64 profile remains blocked and uncertified in \`docs/site/readiness.json\`.
 
@@ -243,8 +245,10 @@ HEREDOC
     # Generate engine subsystem table dynamically
     echo "| Subsystem | Lines |"
     echo "|-----------|------:|"
-    for sub in AI Networking ECS Animation Gameplay Scripting SaveSystem UI World Dialogue Cinematic Modding 2D Coroutine Replay Streaming Tween Destruction Localization Mobile Events Loading VR Persistence Physics Editor; do
-        local lines="${SUBSYSTEM_LINES[$sub]}"
+    local index=0
+    for sub in "${SUBSYSTEM_NAMES[@]}"; do
+        local lines="${SUBSYSTEM_LINES[$index]}"
+        index=$((index + 1))
         if [ "$lines" -gt 0 ] 2>/dev/null; then
             echo "| $sub | $(format_number "$lines") |"
         fi
@@ -387,9 +391,7 @@ check_mode() {
     collect_metrics
     local tmpout
     tmpout=$(mktemp)
-    local existing_date
-    existing_date=$(sed -n 's/^Comprehensive metrics and analysis of the SparkEngine codebase\. Updated \([0-9-]*\)\.$/\1/p' "$OUTPUT" | head -n 1)
-    GENERATED_DATE="${existing_date:-$(date -u +%Y-%m-%d)}" generate_page > "$tmpout"
+    generate_page > "$tmpout"
     local new_hash
     new_hash=$(md5sum "$tmpout" | awk '{ print $1 }')
     rm -f "$tmpout"

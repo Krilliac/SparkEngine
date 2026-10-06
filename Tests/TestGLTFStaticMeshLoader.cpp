@@ -241,6 +241,21 @@ TEST(GLTFStaticMesh_RejectsOverflowingAccessorRangeBeforeCgltfValidation)
     EXPECT_TRUE(meshData.vertices.empty());
 }
 
+TEST(GLTFStaticMesh_RejectsUnalignedBufferViewStride)
+{
+    TemporaryDirectory temp("spark_gltf_static_mesh_stride");
+    std::string json = MakeTriangleJson("\"byteLength\":102,\"uri\":\"triangle.bin\"");
+    ReplaceOnce(json, "\"buffer\":0,\"byteOffset\":0,\"byteLength\":36",
+                "\"buffer\":0,\"byteOffset\":0,\"byteLength\":38,\"byteStride\":13");
+
+    GLTFStaticMeshData meshData;
+    std::string error;
+    EXPECT_FALSE(LoadExternalTriangle(temp.path, json, meshData, error));
+    EXPECT_TRUE(error.find("stride") != std::string::npos);
+    EXPECT_TRUE(meshData.vertices.empty());
+    EXPECT_TRUE(meshData.indices.empty());
+}
+
 TEST(GLTFStaticMesh_RejectsRequiredExtensions)
 {
     TemporaryDirectory temp("spark_gltf_static_mesh_extensions");

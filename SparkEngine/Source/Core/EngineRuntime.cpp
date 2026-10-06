@@ -29,6 +29,14 @@
 EngineRuntime::EngineRuntime() = default;
 EngineRuntime::~EngineRuntime() = default;
 
+std::vector<ModuleManager*>& EngineRuntime::ResidentModuleManagers()
+{
+    // Process-lifetime by design (see the header): never destroyed, so the managers
+    // stay reachable from static storage through process exit.
+    static auto* const managers = new std::vector<ModuleManager*>();
+    return *managers;
+}
+
 void EngineRuntime::InitializeHeadlessAssetServices(EngineContext& context)
 {
     if (!fileCache)
@@ -44,6 +52,36 @@ void EngineRuntime::ShutdownHeadlessAssetServices()
 {
     assetRegistry.reset();
     fileCache.reset();
+}
+
+bool EngineRuntime::InitializeHeadlessRhi()
+{
+    // A new headless RHI lifetime starts; never report an earlier run's count.
+    headlessRhiLiveResourcesAtShutdown.reset();
+    if (headlessRhiBridge)
+        return headlessRhiBridge->IsHeadless() && headlessRhiBridge->GetDevice() != nullptr;
+
+    auto bridge = std::make_unique<Spark::RHI::RHIBridge>();
+    if (!bridge->Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false) || !bridge->IsHeadless() ||
+        bridge->GetActiveBackend() != Spark::RHI::GraphicsBackend::None || bridge->GetDevice() == nullptr)
+    {
+        bridge->Shutdown();
+        return false;
+    }
+
+    headlessRhiBridge = std::move(bridge);
+    CheckInitializationPointForTesting("headless-rhi-ready");
+    return true;
+}
+
+void EngineRuntime::ShutdownHeadlessRhi() noexcept
+{
+    if (!headlessRhiBridge)
+        return;
+
+    headlessRhiBridge->Shutdown();
+    headlessRhiLiveResourcesAtShutdown = headlessRhiBridge->GetNullResourcesLiveAtShutdown();
+    headlessRhiBridge.reset();
 }
 
 EngineRuntime& GetEngineRuntime()

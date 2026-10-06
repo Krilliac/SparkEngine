@@ -4,6 +4,7 @@
  *        delay, friendly-fire policy, kill credit + client feedback messages.
  */
 #include "Game/TFDamageSystem.h"
+#include "Game/TFDamageRules.h"
 #include "Game/TFPlayerSystem.h"
 #include "Data/TFDataTables.h"
 #include "Net/TFNetProtocol.h"
@@ -24,12 +25,6 @@
 
 namespace Terrafront
 {
-
-    namespace
-    {
-        constexpr float kFriendlyFireMult = 0.5f; // DESIGN §4
-        constexpr float kShieldRegenPerSec = 80.0f;
-    } // namespace
 
     TFDamageSystem::TFDamageSystem() = default;
     TFDamageSystem::~TFDamageSystem()
@@ -60,11 +55,9 @@ namespace Terrafront
         // Shield regen after the faction's regen delay without damage.
         for (auto& [pawn, rec] : m_pools)
         {
-            if (rec.noRegen || rec.shield >= rec.maxShield || rec.health <= 0.0f)
+            if (!DamageRules::TickShieldRegen(rec.shield, rec.maxShield, rec.health, rec.noRegen, m_clock,
+                                              rec.lastDamageAt, rec.regenDelaySec, fixedDeltaTime))
                 continue;
-            if (m_clock - rec.lastDamageAt < rec.regenDelaySec)
-                continue;
-            rec.shield = std::min(rec.maxShield, rec.shield + kShieldRegenPerSec * fixedDeltaTime);
             if (m_ctx->players)
                 m_ctx->players->ServerSetPawnHealth(pawn, rec.health, rec.shield);
         }
@@ -165,10 +158,9 @@ namespace Terrafront
         const FactionId attackerFaction = (m_ctx->players && attackerPlayer != kInvalidPlayer)
                                               ? m_ctx->players->FactionOf(attackerPlayer)
                                               : FactionId::None;
-        const bool friendly =
-            attackerFaction != FactionId::None && attackerFaction == rec.faction && attackerPawn != victim;
-        if (friendly)
-            amount *= kFriendlyFireMult;
+        const bool friendly = DamageRules::IsFriendlyFire(
+            attackerFaction != FactionId::None && attackerFaction == rec.faction, attackerPawn == victim);
+        amount = DamageRules::ScaleFriendlyFire(amount, friendly);
 
         // class-abilities lane (W9): ability damage seam (Bulwark Field absorb).
         // The installed filter can only REDUCE the hit (clamped); a fully
@@ -186,10 +178,7 @@ namespace Terrafront
         }
 
         // Shield absorbs first.
-        const float toShield = std::min(rec.shield, amount);
-        rec.shield -= toShield;
-        float remaining = amount - toShield;
-        rec.health = std::max(0.0f, rec.health - remaining);
+        const bool killed = DamageRules::ApplyShieldFirst(rec.shield, rec.health, amount);
         rec.lastDamageAt = m_clock;
 
         // death-recap lane (W11): per-pawn rolling damage log. Recorded BEFORE
@@ -207,8 +196,6 @@ namespace Terrafront
 
         if (m_ctx->players)
             m_ctx->players->ServerSetPawnHealth(victim, rec.health, rec.shield);
-
-        const bool killed = rec.health <= 0.0f;
 
         // Attacker feedback (hitmarker).
         if (attackerPlayer != kInvalidPlayer)

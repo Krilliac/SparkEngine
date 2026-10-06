@@ -1,0 +1,13 @@
+diff --git a/docs/readiness/work-items/40-installer-governance-docs.json b/docs/readiness/work-items/40-installer-governance-docs.json
+index 75dc461b7..0f32ba88a 100644
+--- a/docs/readiness/work-items/40-installer-governance-docs.json
++++ b/docs/readiness/work-items/40-installer-governance-docs.json
+@@ -22,7 +22,7 @@
+       ],
+       "sourceContext": [
+         "SparkInstaller/README.md",
+-        "SparkInstaller/src/Installer.cpp",
++        "SparkInstaller/src/CI100_CONTROLLED_FAILURE_NONEXISTENT.cpp",
+         "SparkInstaller/src/GitBootstrap.cpp",
+         "SparkBuild/src/Downloader.cpp",
+         ".github/workflows/release.yml"

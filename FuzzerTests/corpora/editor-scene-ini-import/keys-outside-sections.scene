@@ -1,0 +1,6 @@
+type=cube
+name=orphan
+position=1,2,3
+=
+[Object
+no equals sign

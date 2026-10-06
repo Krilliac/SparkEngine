@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cerrno>
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <string>
 #include <type_traits>
@@ -29,15 +30,16 @@ namespace Spark
                 // libc++ (Clang on Linux and macOS) still has no floating-point
                 // std::from_chars -- the overload is deleted -- so parse through
                 // strtod with the same strictness: the entire string, no leading
-                // whitespace (strtod would skip it), and no range error. The
-                // writer uses std::to_string, which formats under the same C
-                // locale strtod reads, so the decimal separator agrees.
+                // whitespace (strtod would skip it), no range error, and no
+                // non-finite result. The writer uses std::to_string, which
+                // formats under the same C locale strtod reads, so the decimal
+                // separator agrees.
                 if (text.empty() || std::isspace(static_cast<unsigned char>(text.front())) != 0)
                     return false;
                 errno = 0;
                 char* end = nullptr;
                 const double value = std::strtod(text.c_str(), &end);
-                if (end != text.c_str() + text.size() || errno == ERANGE)
+                if (end != text.c_str() + text.size() || errno == ERANGE || !std::isfinite(value))
                     return false;
                 outValue = static_cast<T>(value);
                 return true;
@@ -80,7 +82,7 @@ namespace Spark
 
     void FPSLocalProfile::WriteTo(std::unordered_map<std::string, std::string>& customState) const
     {
-        customState[Key("version")] = std::to_string(kVersion);
+        WriteModuleSchemaVersion(kSchema, customState);
         customState[Key("level")] = std::to_string(progressionLevel);
         customState[Key("xp")] = std::to_string(progressionXP);
         customState[Key("class")] = std::to_string(playerClass);
@@ -97,14 +99,12 @@ namespace Spark
                                    std::string& outError)
     {
         FPSLocalProfile parsed;
-        if (!ReadField(customState, "version", parsed.version, outError))
+        uint32_t storedVersion = 0;
+        if (!CheckModuleSchemaVersion(kSchema, customState, storedVersion, outError))
             return false;
-        if (parsed.version > kVersion)
-        {
-            outError = "profile was written by a newer module (version " + std::to_string(parsed.version) +
-                       ", this build reads up to " + std::to_string(kVersion) + ")";
-            return false;
-        }
+        // Schema 1 is the first profile schema, so there is no earlier version to
+        // migrate yet; a future schema 2 converts a version-1 block here.
+        parsed.version = static_cast<int>(storedVersion);
 
         if (!ReadField(customState, "level", parsed.progressionLevel, outError) ||
             !ReadField(customState, "xp", parsed.progressionXP, outError) ||

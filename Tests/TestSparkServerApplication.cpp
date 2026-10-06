@@ -4,7 +4,11 @@
  */
 
 #include "TestFramework.h"
+#include "Core/EngineRuntime.h"
+#include "Graphics/RHI/RHIBridge.h"
 #include "ServerApplication.h"
+#include "ScopedLoggerBaseline.h"
+#include "Utils/Logger.h"
 
 #include <array>
 #include <cstdlib>
@@ -13,11 +17,43 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 using namespace Spark::Server;
 
 namespace
 {
+    class ScopedEnvironmentVariable
+    {
+      public:
+        ScopedEnvironmentVariable(const char* name, const char* value) : m_name(name)
+        {
+            if (const char* previous = std::getenv(name))
+                m_previous = previous;
+#ifdef SPARK_PLATFORM_WINDOWS
+            _putenv_s(name, value);
+#else
+            setenv(name, value, 1);
+#endif
+        }
+
+        ~ScopedEnvironmentVariable()
+        {
+#ifdef SPARK_PLATFORM_WINDOWS
+            _putenv_s(m_name.c_str(), m_previous ? m_previous->c_str() : "");
+#else
+            if (m_previous)
+                setenv(m_name.c_str(), m_previous->c_str(), 1);
+            else
+                unsetenv(m_name.c_str());
+#endif
+        }
+
+      private:
+        std::string m_name;
+        std::optional<std::string> m_previous;
+    };
+
     class ScopedNetworkBindMode
     {
       public:
@@ -58,6 +94,94 @@ namespace
         std::optional<std::string> m_previousAddress;
     };
 } // namespace
+
+TEST(EngineRuntime_HeadlessRhiOwnsRealNullDevice)
+{
+    EngineRuntime runtime;
+    ASSERT_TRUE(runtime.InitializeHeadlessRhi());
+    ASSERT_TRUE(runtime.headlessRhiBridge != nullptr);
+    EXPECT_TRUE(runtime.headlessRhiBridge->IsHeadless());
+    EXPECT_TRUE(runtime.headlessRhiBridge->GetActiveBackend() == Spark::RHI::GraphicsBackend::None);
+    EXPECT_TRUE(runtime.headlessRhiBridge->GetDevice() != nullptr);
+
+    Spark::RHI::RHIBridge* const originalBridge = runtime.headlessRhiBridge.get();
+    EXPECT_TRUE(runtime.InitializeHeadlessRhi());
+    EXPECT_TRUE(runtime.headlessRhiBridge.get() == originalBridge);
+
+    runtime.ShutdownHeadlessRhi();
+    EXPECT_TRUE(runtime.headlessRhiBridge == nullptr);
+    runtime.ShutdownHeadlessRhi();
+    EXPECT_TRUE(runtime.InitializeHeadlessRhi());
+    runtime.ShutdownHeadlessRhi();
+}
+
+TEST(SparkServerApplication_LiveLifecycleOwnsRealNullRhi)
+{
+    const ScopedEnvironmentVariable gameKind("SPARK_MODULE_ABI_KIND_GAME", "1");
+    ServerOptions options;
+    options.modulePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
+    options.server.port = 0;
+    options.server.endpointPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+    options.server.enableLogging = false;
+
+    ServerApplication application(std::move(options));
+    ASSERT_TRUE(application.Start());
+
+    EngineRuntime& runtime = GetEngineRuntime();
+    ASSERT_TRUE(runtime.headlessRhiBridge != nullptr);
+    EXPECT_TRUE(runtime.headlessRhiBridge->IsHeadless());
+    EXPECT_TRUE(runtime.headlessRhiBridge->GetActiveBackend() == Spark::RHI::GraphicsBackend::None);
+    EXPECT_TRUE(runtime.headlessRhiBridge->GetDevice() != nullptr);
+
+    EXPECT_TRUE(application.Stop());
+    EXPECT_TRUE(runtime.headlessRhiBridge == nullptr);
+}
+
+TEST(SparkServerApplication_StartInstallsLogSinkWhenHostHasNone)
+{
+    // The SparkServer executable never runs the gameplay lifecycle, so without
+    // Start() configuring the logger every SPARK_LOG_* record, including the
+    // gateway area-control audit trail, is silently dropped.
+    ScopedLoggerBaseline loggerBaseline;
+    auto& logger = Spark::Logger::Get();
+    logger.ClearSinks();
+    logger.Shutdown();
+    ASSERT_FALSE(logger.IsInitialized());
+
+    const ScopedEnvironmentVariable gameKind("SPARK_MODULE_ABI_KIND_GAME", "1");
+    ServerOptions options;
+    options.modulePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
+    options.server.port = 0;
+    options.server.endpointPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+    options.server.enableLogging = false;
+
+    ServerApplication application(std::move(options));
+    ASSERT_TRUE(application.Start());
+    EXPECT_TRUE(logger.IsInitialized());
+    EXPECT_EQ(logger.GetSinkCount(), size_t{1});
+    EXPECT_TRUE(logger.GetInstalledLogFilePath().empty());
+    EXPECT_TRUE(application.Stop());
+}
+
+TEST(SparkServerApplication_StartKeepsHostConfiguredLogSinks)
+{
+    ScopedLoggerBaseline loggerBaseline;
+    auto& logger = Spark::Logger::Get();
+    ASSERT_TRUE(logger.IsInitialized());
+    const size_t sinksBefore = logger.GetSinkCount();
+
+    const ScopedEnvironmentVariable gameKind("SPARK_MODULE_ABI_KIND_GAME", "1");
+    ServerOptions options;
+    options.modulePath = SPARK_TEST_COMPATIBLE_MODULE_PATH;
+    options.server.port = 0;
+    options.server.endpointPolicy = Spark::Net::NetworkEndpointPolicy::Loopback();
+    options.server.enableLogging = false;
+
+    ServerApplication application(std::move(options));
+    ASSERT_TRUE(application.Start());
+    EXPECT_EQ(logger.GetSinkCount(), sinksBefore);
+    EXPECT_TRUE(application.Stop());
+}
 
 TEST(SparkServerOptions_RequiresDynamicGameSelection)
 {
@@ -143,11 +267,10 @@ TEST(SparkServerOptions_RejectsConfigCliLanBroadcastContradiction)
 
 TEST(SparkServerOptions_GatewayManagedRejectsCliLanBroadcastEnable)
 {
-    const std::array arguments = {
-        std::string_view{"--module"},           std::string_view{"Game.dll"},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
-        std::string_view{"--lan-broadcast"}};
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
+                                  std::string_view{"--lan-broadcast"}};
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("cannot enable LAN broadcast") != std::string::npos);
@@ -162,10 +285,9 @@ TEST(SparkServerOptions_GatewayManagedRejectsConfigLanBroadcastEnable)
     }
 
     const std::string configPathText = configPath.string();
-    const std::array arguments = {
-        std::string_view{"--config"},           std::string_view{configPathText},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+    const std::array arguments = {std::string_view{"--config"},           std::string_view{configPathText},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("cannot enable LAN broadcast") != std::string::npos);
@@ -176,11 +298,10 @@ TEST(SparkServerOptions_GatewayManagedRejectsConfigLanBroadcastEnable)
 
 TEST(SparkServerOptions_GatewayManagedAcceptsExplicitLanBroadcastDisable)
 {
-    const std::array arguments = {
-        std::string_view{"--module"},           std::string_view{"Game.dll"},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
-        std::string_view{"--no-lan-broadcast"}};
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"},
+                                  std::string_view{"--no-lan-broadcast"}};
     const ParseResult result = ParseServerOptions(arguments);
     ASSERT_TRUE(result.options.has_value());
     EXPECT_FALSE(result.options->server.enableLanBroadcast);
@@ -259,6 +380,37 @@ TEST(SparkServerOptions_RejectsOutOfRangePort)
     EXPECT_TRUE(result.error.find("65535") != std::string::npos);
 }
 
+TEST(SparkServerOptions_MaxClientsBoundedByNetworkLimit)
+{
+    // Values the network layer cannot host must be a configuration error at parse
+    // time, not an always-on assertion that aborts the process at startup.
+    const std::array accepted = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                 std::string_view{"--max-clients"}, std::string_view{"256"}};
+    const ParseResult atLimit = ParseServerOptions(accepted);
+    ASSERT_TRUE(atLimit.options.has_value());
+    EXPECT_EQ(atLimit.options->server.maxClients, Spark::Net::MAX_SERVER_CLIENTS);
+
+    const std::array rejected = {std::string_view{"--module"}, std::string_view{"Game.dll"},
+                                 std::string_view{"--max-clients"}, std::string_view{"257"}};
+    const ParseResult overLimit = ParseServerOptions(rejected);
+    EXPECT_FALSE(overLimit.options.has_value());
+    EXPECT_TRUE(overLimit.error.find("256") != std::string::npos);
+
+    const auto configPath = std::filesystem::temp_directory_path() / "spark-sec-max-clients.ini";
+    {
+        std::ofstream config(configPath, std::ios::binary | std::ios::trunc);
+        config << "[Network]\nmax_clients = 257\n[Modules]\nmodule = Game.dll\n";
+    }
+    const std::string configPathText = configPath.string();
+    const std::array fromConfig = {std::string_view{"--config"}, std::string_view{configPathText}};
+    const ParseResult configResult = ParseServerOptions(fromConfig);
+    EXPECT_FALSE(configResult.options.has_value());
+    EXPECT_TRUE(configResult.error.find("max_clients") != std::string::npos);
+
+    std::error_code error;
+    std::filesystem::remove(configPath, error);
+}
+
 TEST(SparkServerOptions_ParsesEditorStopSentinel)
 {
     const std::array arguments = {std::string_view{"--module"}, std::string_view{"Game.dll"},
@@ -334,11 +486,10 @@ TEST(SparkServerOptions_PrivateBindRequiresCanonicalPrefix)
 
 TEST(SparkServerOptions_GatewayControlRejectsConflictingPrivateBind)
 {
-    const std::array arguments = {
-        std::string_view{"--module"},           std::string_view{"Game.dll"},
-        std::string_view{"--bind-address"},     std::string_view{"192.168.42.9/24"},
-        std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
-        std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
+    const std::array arguments = {std::string_view{"--module"},           std::string_view{"Game.dll"},
+                                  std::string_view{"--bind-address"},     std::string_view{"192.168.42.9/24"},
+                                  std::string_view{"--control-endpoint"}, std::string_view{"spark-area-control-test"},
+                                  std::string_view{"--gateway-key-file"}, std::string_view{"Config/gateway.key"}};
     const ParseResult result = ParseServerOptions(arguments);
     EXPECT_FALSE(result.options.has_value());
     EXPECT_TRUE(result.error.find("cannot combine") != std::string::npos);

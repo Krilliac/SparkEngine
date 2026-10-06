@@ -65,6 +65,16 @@ Each package has a project file used by project/editor tooling. Module selection
 
 The older `spark.project.json` name is a compatibility path, not the package layout used by the current templates.
 
+The editor reads and writes `projectFileVersion` 1 (`ProjectManager::kProjectFileVersion`).
+A document without the field is the legacy dialect and loads as version 1. A newer
+version fails closed: the project does not open, and the error names the file, the
+version and the supported window. Every project save stages the document, flushes it
+and renames it into place, keeping the previous document as `<Project>.sparkproject.bak`.
+If the document is later damaged (for example, truncated), opening the project loads
+that backup and reports why the primary was rejected. The next save does not copy the
+damaged document over the backup, so a save that fails at that point still leaves the
+good copy on disk. See `Tests/Fixtures/Compatibility/EditorState/README.md`.
+
 ### spark.modules.json
 
 Module loading configuration:

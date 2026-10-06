@@ -185,7 +185,8 @@ namespace Spark
     {
         const std::string sub = "Debug";
 
-        // DebugHookManager
+#if SPARK_DEBUG_HOOKS_ENABLED
+        // DebugHookManager (compiled out of Shipping; see DebugHookManager.h)
         auto& hooks = DebugHookManager::GetInstance();
         hooks.SetEnabled(true);
         report.Add(sub, "DebugHookManager enabled", hooks.IsEnabled());
@@ -197,6 +198,7 @@ namespace Spark
         hooks.Dispatch(DebugHookPoint::FrameBegin, 1, 0.016f);
         report.Add(sub, "Hook dispatch", hookFired);
         handle.Unregister();
+#endif
 
         // ChromeTracing
         auto& tracing = ChromeTracing::GetInstance();

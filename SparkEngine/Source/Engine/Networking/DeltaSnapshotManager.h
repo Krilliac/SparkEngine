@@ -93,7 +93,8 @@ namespace Spark::Net
 
         // ----- Connection lifecycle -----
 
-        /// @brief Register a new connection for delta tracking
+        /// @brief Register a connection for delta tracking, resetting any state an
+        ///        earlier connection with the same ID left behind
         /// @param connectionId  Unique identifier for the connection
         void RegisterConnection(uint32_t connectionId);
 
@@ -143,6 +144,10 @@ namespace Spark::Net
         void AcknowledgeSequence(uint32_t connectionId, uint32_t sequence);
 
         // ----- Queries -----
+
+        /// @brief Whether a connection currently has delta-tracking state
+        /// @param connectionId  Connection to query
+        [[nodiscard]] bool HasConnection(uint32_t connectionId) const;
 
         /// @brief Get the number of unacknowledged delta packets for a connection
         /// @param connectionId  Connection to query

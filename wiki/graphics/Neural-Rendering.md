@@ -145,7 +145,7 @@ engine.DestroyNetwork(handle);
 
 ### Hash Grid Encoding
 
-The cache uses **16 resolution levels** (`kHashGridLevels`), each with **64K entries** (`kDefaultHashTableSize`). Each entry stores a 2-float feature vector (`kFeaturesPerEntry`). A 3D position is hashed at each level, yielding a concatenated feature vector of 32 floats (16 levels x 2 features) that is fed through a small MLP decoder.
+The cache uses **16 resolution levels** (`kHashGridLevels`), each with **64K entries** (`kDefaultHashTableSize`). Each entry stores a 2-float feature vector (`kFeaturesPerEntry`). A 3D position is hashed at each level, yielding a concatenated feature vector assembled from the configured levels and per-entry features that is fed through a small MLP decoder.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|

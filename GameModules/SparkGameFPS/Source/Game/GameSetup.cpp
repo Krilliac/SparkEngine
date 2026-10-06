@@ -7,6 +7,7 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -21,7 +22,6 @@
 #include "WaveSpawner.h"
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
-#include "Utils/SparkConsole.h"
 
 #include "Graphics/GraphicsEngine.h"
 #include "Game/CubeObject.h"
@@ -32,9 +32,9 @@
 #include "Player.h"
 #include "Engine/Events/EventSystem.h"
 
-#include "Utils/LogMacros.h"
 
 #include <algorithm>
+#include <charconv>
 
 using namespace DirectX;
 
@@ -44,7 +44,7 @@ using namespace DirectX;
 
 void Game::InitializeInteractionObjects()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing interaction objects and damage zones");
+    FPS_LOG_INFO("Initializing interaction objects and damage zones");
     m_interactionSystem = std::make_unique<Spark::InteractionSystem>();
     m_interactionSystem->Initialize();
     m_player->SetInteractionSystem(m_interactionSystem.get());
@@ -92,7 +92,7 @@ void Game::InitializeInteractionObjects()
     // m_interactionSystem->SpawnDestructible({8.0f, 0.5f, -5.0f}, 50.0f, dev, ctx);
     // m_interactionSystem->SpawnDestructible({7.5f, 1.3f, -5.0f}, 30.0f, dev, ctx);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Interaction objects loaded from scene file", L"SUCCESS");
+    FPS_CONSOLE("Interaction objects loaded from scene file", "SUCCESS");
 
     // Damage zone system still needs runtime initialization for callbacks
     m_damageZoneSystem = std::make_unique<Spark::DamageZoneSystem>();
@@ -104,13 +104,21 @@ void Game::InitializeInteractionObjects()
     // m_damageZoneSystem->CreateVoidZone("Arena_Boundary", {0.0f, -20.0f, 0.0f}, {100.0f, 5.0f, 100.0f});
     // m_damageZoneSystem->CreateElectricZone("Electric_Trap", {15.0f, 0.5f, -15.0f}, {3.0f, 2.0f, 3.0f});
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Damage zones loaded from scene file", L"SUCCESS");
+    FPS_CONSOLE("Damage zones loaded from scene file", "SUCCESS");
 }
 
 void Game::InitializeRespawnAndVehicles()
 {
-    m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
-    m_respawnSystem->Initialize();
+    // scene_load re-enters here through RefreshAuthoredSceneRuntimeState. The
+    // respawn system owns live match state (score, kill history, and a pending
+    // death with its countdown), so it is created once and only its spawn table
+    // is rebound. Recreating it dropped a pending death, leaving a player who
+    // died before scene_load dead forever, and zeroed the scoreboard.
+    if (!m_respawnSystem)
+    {
+        m_respawnSystem = std::make_unique<Spark::RespawnSystem>();
+        m_respawnSystem->Initialize();
+    }
     m_respawnSystem->SetEventBus(m_eventBus);
 
     // Close the death -> respawn -> score loop: without this callback a death
@@ -127,34 +135,17 @@ void Game::InitializeRespawnAndVehicles()
             });
     }
 
-    // NOTE: Spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
-    // as [SpawnPoint] entries with position, tag, and priority. They can be placed and
-    // edited in the SparkEditor without recompiling.
-    // The code below shows the equivalent C++ approach for reference.
-    //
-    // Spark::RespawnPoint spawn1;
-    // spawn1.name = "North Spawn";
-    // spawn1.position = {0.0f, 2.0f, -20.0f};
-    // spawn1.priority = 1;
-    // m_respawnSystem->AddSpawnPoint(spawn1);
-    //
-    // Spark::RespawnPoint spawn2;
-    // spawn2.name = "South Spawn";
-    // spawn2.position = {0.0f, 2.0f, 20.0f};
-    // spawn2.priority = 1;
-    // m_respawnSystem->AddSpawnPoint(spawn2);
-    //
-    // Spark::RespawnPoint spawn3;
-    // spawn3.name = "East Spawn";
-    // spawn3.position = {20.0f, 2.0f, 0.0f};
-    // m_respawnSystem->AddSpawnPoint(spawn3);
-    //
-    // Spark::RespawnPoint spawn4;
-    // spawn4.name = "West Spawn";
-    // spawn4.position = {-20.0f, 2.0f, 0.0f};
-    // m_respawnSystem->AddSpawnPoint(spawn4);
-
-    LOG_TO_CONSOLE_IMMEDIATE(L"Spawn points loaded from scene file", L"SUCCESS");
+    // BindSpawnPoints keeps the built-in fallback when no valid authored point
+    // exists, so absent/invalid scenes still remain playable.
+    std::vector<Spark::RespawnPoint> authoredSpawns;
+    if (m_sceneManager)
+        authoredSpawns = Spark::RespawnSystem::CollectAuthoredSpawnPoints(*m_sceneManager);
+    const int authoredRespawns = m_respawnSystem->BindSpawnPoints(authoredSpawns);
+    const Spark::RespawnPoint preferred = m_respawnSystem->GetBestSpawnPoint(-1);
+    FPS_CONSOLE("Scene-authored respawn points: " + std::to_string(authoredRespawns) + "; preferred at (" +
+                    std::to_string(preferred.position.x) + ", " + std::to_string(preferred.position.y) + ", " +
+                    std::to_string(preferred.position.z) + ")",
+                "SUCCESS");
 
     // NOTE: Vehicles are now defined in the scene file as [Vehicle] entries.
     // The code below shows the equivalent C++ approach for reference.
@@ -166,24 +157,24 @@ void Game::InitializeRespawnAndVehicles()
     // m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::TANK, {0.0f, 0.5f, 25.0f}, dev, ctx);
     // m_vehicleSystem->SpawnVehicle(SparkEditor::VehicleType::HELICOPTER, {0.0f, 5.0f, -25.0f}, dev, ctx);
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Vehicles loaded from scene file", L"SUCCESS");
+    FPS_CONSOLE("Vehicles loaded from scene file", "SUCCESS");
 }
 
 void Game::InitializeGameModeAndHUD()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing game mode and HUD systems");
+    FPS_LOG_INFO("Initializing game mode and HUD systems");
     m_gameMode = std::make_unique<Spark::GameMode>();
     Spark::GameModeRules rules = Spark::GameMode::GetPreset(Spark::GameModeType::Deathmatch);
     m_gameMode->Initialize(rules);
     m_gameMode->AddPlayer("Player1");
     m_gameMode->StartMatch();
-    LOG_TO_CONSOLE_IMMEDIATE(L"GameMode initialized (Deathmatch)", L"SUCCESS");
+    FPS_CONSOLE("GameMode initialized (Deathmatch)", "SUCCESS");
 
     m_hudSystem = std::make_unique<Spark::HUDSystem>();
     m_hudSystem->Initialize();
     m_hudSystem->SetPlayer(m_player.get());
     m_hudSystem->SetCurrentClass(GetPlayerClass());
-    LOG_TO_CONSOLE_IMMEDIATE(L"HUD system initialized", L"SUCCESS");
+    FPS_CONSOLE("HUD system initialized", "SUCCESS");
 
     // Wire GameMode event callbacks to HUD system
     auto& events = m_gameMode->GetEvents();
@@ -202,15 +193,15 @@ void Game::InitializeGameModeAndHUD()
 
     events.onRoundStart = [this](int roundNum)
     {
-        std::wstring msg = L"Round " + std::to_wstring(roundNum) + L" started";
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        std::string msg = "Round " + std::to_string(roundNum) + " started";
+        FPS_CONSOLE(msg, "INFO");
     };
 
     events.onRoundEnd = [this](const Spark::RoundResult& result)
     {
-        std::wstring msg = L"Round " + std::to_wstring(result.roundNumber) + L" ended - MVP: " +
-                           std::wstring(result.mvpPlayer.begin(), result.mvpPlayer.end());
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        std::string msg = "Round " + std::to_string(result.roundNumber) +
+                          " ended - MVP: " + std::string(result.mvpPlayer.begin(), result.mvpPlayer.end());
+        FPS_CONSOLE(msg, "INFO");
     };
 
     events.onMatchEnd = [this](Spark::Team winner)
@@ -219,8 +210,8 @@ void Game::InitializeGameModeAndHUD()
                                : (winner == Spark::Team::Bravo) ? "Bravo"
                                                                 : "None";
         std::string tn(teamName);
-        std::wstring msg = L"Match ended - Winner: " + std::wstring(tn.begin(), tn.end());
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        std::string msg = "Match ended - Winner: " + std::string(tn.begin(), tn.end());
+        FPS_CONSOLE(msg, "INFO");
     };
 
     events.onKillStreak = [this](const std::string& player, int streak)
@@ -260,12 +251,12 @@ void Game::InitializeGameModeAndHUD()
         }
     };
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"GameMode events wired to HUD", L"SUCCESS");
+    FPS_CONSOLE("GameMode events wired to HUD", "SUCCESS");
 }
 
 void Game::InitializeInventorySystem()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing inventory system with item registry");
+    FPS_LOG_INFO("Initializing inventory system with item registry");
     Spark::ItemDef healthPotion;
     healthPotion.id = 1;
     healthPotion.name = "Health Potion";
@@ -308,7 +299,7 @@ void Game::InitializeInventorySystem()
 
     m_playerInventory.maxSlots = 20;
     m_playerInventory.maxWeight = 50.0f;
-    LOG_TO_CONSOLE_IMMEDIATE(L"Inventory system initialized (4 item types)", L"SUCCESS");
+    FPS_CONSOLE("Inventory system initialized (4 item types)", "SUCCESS");
 }
 
 void Game::InitializeQuestSystem()
@@ -344,7 +335,7 @@ void Game::InitializeQuestSystem()
 
     // Auto-start the first quest
     Spark::QuestOps::StartQuest(m_playerQuests, m_questRegistry, 1);
-    LOG_TO_CONSOLE_IMMEDIATE(L"Quest system initialized (3 quests, 1 active)", L"SUCCESS");
+    FPS_CONSOLE("Quest system initialized (3 quests, 1 active)", "SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -360,7 +351,7 @@ Enemy* Game::SpawnEnemy(EnemyType type, float x, float y, float z)
     HRESULT hr = enemy->Initialize(dev, ctx, type, m_player.get());
     if (FAILED(hr))
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Game, "Failed to initialize enemy at (%.1f, %.1f, %.1f)", x, y, z);
+        FPS_LOG_ERROR("Failed to initialize enemy at ({:.1f}, {:.1f}, {:.1f})", x, y, z);
         return nullptr;
     }
 
@@ -387,7 +378,7 @@ size_t Game::GetAliveEnemyCount() const
 
 void Game::InitializeEnemies()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Spawning initial AI enemies for combat arena");
+    FPS_LOG_INFO("Spawning initial AI enemies for combat arena");
     // Spawn AI enemies with patrol routes for the combat arena.
     // Grunts patrol cardinal positions around the arena perimeter.
     auto* g1 = SpawnEnemy(EnemyType::Grunt, 15.0f, 1.0f, 15.0f);
@@ -421,9 +412,9 @@ void Game::InitializeEnemies()
     // Medic — stays near the guard, heals allies
     SpawnEnemy(EnemyType::Medic, 2.0f, 1.0f, -8.0f);
 
-    std::wstring msg = L"AI enemies spawned: " + std::to_wstring(m_enemies.size()) +
-                       L" (4 grunts, 2 scouts, 1 guard, 1 heavy, 2 snipers, 1 medic)";
-    LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
+    std::string msg = "AI enemies spawned: " + std::to_string(m_enemies.size()) +
+                      " (4 grunts, 2 scouts, 1 guard, 1 heavy, 2 snipers, 1 medic)";
+    FPS_CONSOLE(msg, "SUCCESS");
 }
 
 /*-------------------------------------------------------------
@@ -432,38 +423,37 @@ void Game::InitializeEnemies()
 
 void Game::InitializeGameplaySystems()
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing gameplay systems (waves, progression, loot)");
+    FPS_LOG_INFO("Initializing gameplay systems (waves, progression, loot)");
     // --- Wave Spawner ---
     m_waveSpawner = std::make_unique<Spark::WaveSpawner>();
 
-    // NOTE: Wave spawn points are now defined in the scene file (Assets/Scenes/level1.scene)
-    // as [SpawnPoint] entries with tag=wave_spawn. They can be placed and edited in the
-    // SparkEditor without recompiling.
-    // The code below shows the equivalent C++ approach for reference.
-    //
-    // std::vector<XMFLOAT3> enemySpawnPoints = {
-    //     {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f},  {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
-    //     {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},   {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
-    //     {15.0f, 1.0f, 10.0f}, {-15.0f, 1.0f, -10.0f},
-    // };
-
-    // Initialize with empty points — scene loader will populate from [SpawnPoint] tag=wave_spawn
     std::vector<XMFLOAT3> enemySpawnPoints;
+    if (m_sceneManager)
+    {
+        for (int i = 0; i < m_sceneManager->GetNodeCount(); ++i)
+        {
+            const SceneNode* node = m_sceneManager->GetNode(i);
+            if (!node || node->type != "SpawnPoint")
+                continue;
+            const auto tag = node->properties.find("tag");
+            if (tag != node->properties.end() && tag->second == "wave_spawn")
+                enemySpawnPoints.push_back(node->position);
+        }
+    }
     m_waveSpawner->Initialize(enemySpawnPoints);
 
     // --- Progression ---
     m_progression = std::make_unique<Spark::ProgressionSystem>();
     m_progression->Initialize();
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression system initialized (level 1, max %d)",
-                   m_progression->GetMaxLevel());
-    LOG_TO_CONSOLE_IMMEDIATE(L"Progression system initialized (level 1, 50 max)", L"SUCCESS");
+    FPS_LOG_INFO("Progression system initialized (level 1, max {})", m_progression->GetMaxLevel());
+    FPS_CONSOLE("Progression system initialized (level 1, 50 max)", "SUCCESS");
 
     // Wire progression callbacks to HUD
     m_progression->GetCallbacks().onLevelUp = [this](int newLevel, const Spark::LevelBonuses& bonuses)
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Level up! Now level %d", newLevel);
-        std::wstring message = L"LEVEL UP! Now level " + std::to_wstring(newLevel);
-        LOG_TO_CONSOLE_IMMEDIATE(message, L"SUCCESS");
+        FPS_LOG_INFO("Level up! Now level {}", newLevel);
+        std::string message = "LEVEL UP! Now level " + std::to_string(newLevel);
+        FPS_CONSOLE(message, "SUCCESS");
         if (m_hudSystem)
             m_hudSystem->AddKillFeedEntry("", "Player1", "LEVEL UP: " + std::to_string(newLevel));
 
@@ -482,10 +472,7 @@ void Game::InitializeGameplaySystems()
     };
 
     m_progression->GetCallbacks().onXPAwarded = [](int base, const std::string& source, int modified)
-    {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "XP awarded: %d (source: %s, modified: %d)", base, source.c_str(),
-                        modified);
-    };
+    { FPS_LOG_DEBUG("XP awarded: {} (source: {}, modified: {})", base, source.c_str(), modified); };
 
     // --- Loot System ---
     m_lootSystem = std::make_unique<Spark::LootSystem>();
@@ -507,7 +494,7 @@ void Game::InitializeGameplaySystems()
     {
         if (m_hudSystem)
             m_hudSystem->AddKillFeedEntry("", "WAVE", announcement);
-        LOG_TO_CONSOLE_IMMEDIATE(std::wstring(announcement.begin(), announcement.end()) + L" starting!", L"INFO");
+        FPS_CONSOLE(std::string(announcement.begin(), announcement.end()) + " starting!", "INFO");
     };
 
     m_waveSpawner->GetCallbacks().onWaveComplete = [this](int waveNum, int killed)
@@ -532,21 +519,21 @@ void Game::InitializeGameplaySystems()
             m_gameMode->EndRound(Spark::Team::None);
     };
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Gameplay systems initialized (waves, progression, loot)", L"SUCCESS");
+    FPS_CONSOLE("Gameplay systems initialized (waves, progression, loot)", "SUCCESS");
 }
 
 bool Game::StartWaves()
 {
     if (!m_waveSpawner || !m_gameMode)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Wave mode unavailable - gameplay systems are not initialized", L"ERROR");
+        FPS_CONSOLE("Wave mode unavailable - gameplay systems are not initialized", "ERROR");
         return false;
     }
 
     auto rules = Spark::GameMode::GetPreset(Spark::GameModeType::Survival);
     if (!m_gameMode->Initialize(rules))
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Wave mode unavailable - survival rules are invalid", L"ERROR");
+        FPS_CONSOLE("Wave mode unavailable - survival rules are invalid", "ERROR");
         return false;
     }
 
@@ -572,6 +559,11 @@ bool Game::StartWaves()
         m_player->Console_SetArmor(0.0f);
         m_player->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
         m_player->SetActive(true);
+        if (m_camera)
+        {
+            m_camera->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
+            m_camera->Console_SetRotation(spawn.rotation.x, spawn.rotation.y, spawn.rotation.z);
+        }
     }
 
     if (m_hudSystem)
@@ -579,6 +571,6 @@ bool Game::StartWaves()
         m_hudSystem->AddKillFeedEntry("", "SURVIVAL", "Hold the arena and clear every wave");
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Survival match started - clear every wave!", L"SUCCESS");
+    FPS_CONSOLE("Survival match started - clear every wave!", "SUCCESS");
     return true;
 }

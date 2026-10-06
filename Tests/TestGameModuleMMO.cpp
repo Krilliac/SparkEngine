@@ -13,6 +13,7 @@
 #include "../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Chat/MMOChatSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Crafting/MMOCraftingSystem.h"
+#include "../GameModules/SparkGameMMO/Source/Dungeon/MMODungeonSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Guild/MMOGuildSystem.h"
 #include "../GameModules/SparkGameMMO/Source/Inventory/MMOInventorySystem.h"
 #include "../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h"
@@ -23,8 +24,28 @@
 
 #include "../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h"
 
+#ifdef ENABLE_NETWORKING
+#include "../GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.h"
+#include "../GameModules/SparkGameMMO/Source/World/MMOClientStateCodec.h"
+#include "Engine/Networking/WorldServer.h"
+#include "Fixtures/NetworkTestSecurity.h"
+#include "Fixtures/SecureTestPeer.h"
+#endif
+
+#include <nlohmann_json.h>
+
+#include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <optional>
+#include <thread>
+#include <filesystem>
+#include <exception>
+#include <fstream>
+#include <iterator>
 #include <limits>
+#include <string>
+#include <vector>
 
 // Later game-module headers can include Windows.h after MMOChatSystem has
 // declared its SendMessage overloads. Keep the Win32 alias out of the calls
@@ -55,6 +76,58 @@ namespace
         uint32_t GetEngineVersion() const override { return 0; }
         uint32_t GetSDKVersion() const override { return 0; }
     };
+
+    /// True when every component of relativePath names a directory entry with exactly that spelling.
+    /// std::filesystem::exists() is case-insensitive on Windows/macOS, so walk the directory listings instead.
+    bool ExistsWithExactCase(const std::filesystem::path& root, const std::string& relativePath)
+    {
+        const std::filesystem::path relative(relativePath);
+        if (relativePath.empty() || relative.is_absolute() || relativePath.find('\\') != std::string::npos)
+            return false;
+
+        std::filesystem::path current = root;
+        for (const auto& component : relative)
+        {
+            const std::string name = component.string();
+            if (name.empty() || name == "." || name == "..")
+                return false;
+
+            std::error_code ec;
+            bool found = false;
+            for (const auto& entry : std::filesystem::directory_iterator(current, ec))
+            {
+                if (entry.path().filename().string() == name)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (ec || !found)
+                return false;
+            current /= component;
+        }
+        return std::filesystem::is_regular_file(current);
+    }
+
+    /// Reads the scene's JSON "areaId" header; returns -1 when the file is missing, malformed or lacks it.
+    long long ReadSceneAreaId(const std::filesystem::path& scenePath)
+    {
+        std::ifstream in(scenePath, std::ios::binary);
+        if (!in)
+            return -1;
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        try
+        {
+            const nlohmann::json scene = nlohmann::json::parse(text);
+            if (!scene.is_object() || !scene.contains("areaId") || !scene["areaId"].is_number_integer())
+                return -1;
+            return scene["areaId"].get<int>();
+        }
+        catch (const std::exception&)
+        {
+            return -1;
+        }
+    }
 } // namespace
 
 // ============================================================================
@@ -406,6 +479,383 @@ TEST(MMO_PlayerMovement_RejectsNonFiniteInput)
     EXPECT_TRUE(std::isfinite(player.posZ));
     EXPECT_NEAR(player.posX, 0.0f, 0.0001f);
     EXPECT_NEAR(player.posZ, 0.6f, 0.0001f);
+}
+
+#ifdef ENABLE_NETWORKING
+// ============================================================================
+// Client-authored player state (finding 35): the server used to relay every
+// client EntityStateUpdate verbatim to all other clients, so any peer could
+// forge state for entities it did not own under a network ID it chose.
+// ============================================================================
+
+namespace
+{
+    Spark::Net::NetworkMessage MMOStateRequest(Spark::Net::ClientID sender, uint32_t claimedNetworkId,
+                                               const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity,
+                                               uint16_t propertyCount = 0, bool trailingByte = false,
+                                               const DirectX::XMFLOAT3& rotation = DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f})
+    {
+        Spark::Net::NetBuffer buffer;
+        buffer.WriteUint32(claimedNetworkId);
+        buffer.WriteVector3(position);
+        buffer.WriteVector3(rotation);
+        buffer.WriteVector3(velocity);
+        buffer.WriteUint16(propertyCount);
+        if (trailingByte)
+            buffer.WriteUint8(0x7F);
+
+        Spark::Net::NetworkMessage message;
+        message.type = Spark::Net::MessageType::EntityStateUpdate;
+        message.channel = Spark::Net::ChannelType::Unreliable;
+        message.senderID = sender;
+        message.payload = buffer.GetData();
+        return message;
+    }
+
+    struct MMOServerFixture
+    {
+        MMOServerFixture()
+        {
+            auto& network = Spark::Net::NetworkManager::GetInstance();
+            network.Shutdown();
+            started = network.Initialize() && network.StartServer(0, 4, Spark::Net::NetworkEndpointPolicy::Loopback());
+        }
+        ~MMOServerFixture()
+        {
+            auto& network = Spark::Net::NetworkManager::GetInstance();
+            network.StopServer();
+            network.Shutdown();
+        }
+        bool started = false;
+    };
+} // namespace
+
+TEST(MMO_StateRequest_ServerOwnsEntityAndIgnoresClientChosenId)
+{
+    MMOServerFixture fixture;
+    ASSERT_TRUE(fixture.started);
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    MMOWorldSetup world;
+
+    constexpr uint32_t kForgedId = 0xDEADu;
+    const uint32_t alice =
+        world.ApplyClientStateRequest(network, MMOStateRequest(7, kForgedId, {10.0f, 1.0f, 20.0f}, {1.0f, 0.0f, 0.0f}));
+    ASSERT_TRUE(alice != 0);
+    EXPECT_TRUE(alice != kForgedId);
+    EXPECT_FALSE(network.GetReplicatedEntitySnapshot(kForgedId).has_value());
+    const auto aliceEntity = network.GetReplicatedEntitySnapshot(alice);
+    ASSERT_TRUE(aliceEntity.has_value());
+    EXPECT_EQ(aliceEntity->ownerID, static_cast<Spark::Net::ClientID>(7));
+    EXPECT_TRUE(aliceEntity->entityType == "MMOPlayer");
+    EXPECT_NEAR(aliceEntity->position.x, 10.0f, 1e-6f);
+
+    const uint32_t bob =
+        world.ApplyClientStateRequest(network, MMOStateRequest(8, 1, {-5.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    ASSERT_TRUE(bob != 0);
+    EXPECT_TRUE(bob != alice);
+
+    // Alice names Bob's entity; the request still lands on Alice's own entity only.
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(7, bob, {99.0f, 1.0f, 99.0f}, {0.0f, 0.0f, 0.0f})),
+              alice);
+    EXPECT_NEAR(network.GetReplicatedEntitySnapshot(alice)->position.x, 99.0f, 1e-6f);
+    EXPECT_NEAR(network.GetReplicatedEntitySnapshot(bob)->position.x, -5.0f, 1e-6f);
+}
+
+TEST(MMO_StateRequest_RejectsMalformedAndImplausibleState)
+{
+    MMOServerFixture fixture;
+    ASSERT_TRUE(fixture.started);
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    MMOWorldSetup world;
+
+    const uint32_t owned =
+        world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}));
+    ASSERT_TRUE(owned != 0);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const DirectX::XMFLOAT3 still{0.0f, 0.0f, 0.0f};
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {nan, 1.0f, 1.0f}, still)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {1.0e9f, 1.0f, 1.0f}, still)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, {1.0e4f, 0.0f, 0.0f})),
+              0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 1)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 0, true)), 0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(network,
+                                            MMOStateRequest(Spark::Net::INVALID_CLIENT, 0, {2.0f, 1.0f, 1.0f}, still)),
+              0u);
+    // Rotation is Euler degrees republished to every client: finite but absurd values are rejected,
+    // while a full turn in either direction is still a valid orientation.
+    EXPECT_EQ(world.ApplyClientStateRequest(
+                  network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 0, false, {3.0e38f, 0.0f, 0.0f})),
+              0u);
+    EXPECT_EQ(world.ApplyClientStateRequest(
+                  network, MMOStateRequest(3, 0, {2.0f, 1.0f, 1.0f}, still, 0, false, {0.0f, 0.0f, -361.0f})),
+              0u);
+
+    // None of the rejected requests moved the sender's entity.
+    const auto entity = network.GetReplicatedEntitySnapshot(owned);
+    ASSERT_TRUE(entity.has_value());
+    EXPECT_NEAR(entity->position.x, 1.0f, 1e-6f);
+
+    EXPECT_EQ(world.ApplyClientStateRequest(
+                  network, MMOStateRequest(3, 0, {4.0f, 1.0f, 1.0f}, still, 0, false, {-360.0f, 90.0f, 360.0f})),
+              owned);
+    EXPECT_NEAR(network.GetReplicatedEntitySnapshot(owned)->rotation.x, -360.0f, 1e-6f);
+}
+
+// ============================================================================
+// SEC-120: the network-free decoders the server and client run on untrusted
+// datagrams (MMOClientStateCodec, MMOEntityEventCodec), also driven by the
+// FuzzMMOClientState / FuzzMMOEntityEvents libFuzzer targets.
+// ============================================================================
+
+TEST(MMOClientState_DecodeRejectsNonFiniteAndImplausible)
+{
+    const DirectX::XMFLOAT3 still{0.0f, 0.0f, 0.0f};
+    const auto decode = [](const Spark::Net::NetworkMessage& message)
+    { return MMO::DecodeClientStateRequest(message.payload); };
+
+    const auto accepted =
+        decode(MMOStateRequest(3, 99, {5.0f, -2.0f, 1.0e6f}, {0.0f, 100.0f, 0.0f}, 0, false, {-360.0f, 0.0f, 360.0f}));
+    ASSERT_TRUE(accepted.has_value());
+    EXPECT_NEAR(accepted->position.z, 1.0e6f, 1.0f);
+    EXPECT_NEAR(accepted->velocity.y, 100.0f, 1e-6f);
+    EXPECT_NEAR(accepted->rotation.z, 360.0f, 1e-6f);
+
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, {nan, 0.0f, 0.0f}, still)).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, {0.0f, -inf, 0.0f}, still)).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, {0.0f, 0.0f, nan})).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, still, 0, false, {inf, 0.0f, 0.0f})).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, {1.01e6f, 0.0f, 0.0f}, still)).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, {80.0f, 80.0f, 0.0f})).has_value());
+    EXPECT_FALSE(decode(MMOStateRequest(3, 0, still, still, 0, false, {0.0f, 361.0f, 0.0f})).has_value());
+}
+
+TEST(MMOClientState_DecodeRejectsWrongSizeAndProperties)
+{
+    const DirectX::XMFLOAT3 still{0.0f, 0.0f, 0.0f};
+    const std::vector<uint8_t> valid = MMOStateRequest(3, 0, still, still).payload;
+    ASSERT_EQ(valid.size(), MMO::kClientStateRequestSize);
+    EXPECT_TRUE(MMO::DecodeClientStateRequest(valid).has_value());
+
+    const std::vector<uint8_t> shortByOne(valid.begin(), valid.end() - 1);
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(shortByOne).has_value());
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(MMOStateRequest(3, 0, still, still, 0, true).payload).has_value());
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(MMOStateRequest(3, 0, still, still, 1).payload).has_value());
+    EXPECT_FALSE(MMO::DecodeClientStateRequest(std::vector<uint8_t>{}).has_value());
+}
+
+namespace
+{
+    std::vector<uint8_t> MMOSpawnPayload(const std::string& entityType, const DirectX::XMFLOAT3& position)
+    {
+        Spark::Net::NetBuffer buffer;
+        buffer.WriteUint32(42);
+        buffer.WriteUint32(5);
+        buffer.WriteString(entityType);
+        buffer.WriteVector3(position);
+        buffer.WriteVector3(DirectX::XMFLOAT3{0.0f, 90.0f, 0.0f});
+        return buffer.GetData();
+    }
+} // namespace
+
+TEST(MMOEntityEvents_SpawnRejectsNonFinitePosition)
+{
+    const auto spawn = MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {1.0f, 2.0f, 3.0f}));
+    ASSERT_TRUE(spawn.has_value());
+    EXPECT_EQ(spawn->networkId, 42u);
+    EXPECT_EQ(spawn->clientId, 5u);
+    EXPECT_TRUE(spawn->entityType == "MMOPlayer");
+    EXPECT_NEAR(spawn->position.y, 2.0f, 1e-6f);
+
+    // A NaN or infinite spawn position used to flow straight into a remote player's
+    // current and target position.
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {nan, 2.0f, 3.0f})).has_value());
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {1.0f, -inf, 3.0f})).has_value());
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(MMOSpawnPayload("MMOPlayer", {1.0f, 2.0f, inf})).has_value());
+}
+
+TEST(MMOEntityEvents_SpawnRejectsTruncatedString)
+{
+    const std::vector<uint8_t> valid = MMOSpawnPayload("MMOPlayer", {1.0f, 2.0f, 3.0f});
+
+    // The entity type claims 65535 bytes but only three follow.
+    Spark::Net::NetBuffer overclaim;
+    overclaim.WriteUint32(42);
+    overclaim.WriteUint32(5);
+    overclaim.WriteUint16(0xFFFF);
+    overclaim.WriteBytes("MMO", 3);
+    EXPECT_FALSE(MMO::DecodeEntitySpawn(overclaim.GetData()).has_value());
+
+    // Cut inside the string, inside the position and inside the rotation.
+    for (const size_t cut : {size_t{12}, size_t{25}, valid.size() - 1})
+    {
+        const std::vector<uint8_t> truncated(valid.begin(), valid.begin() + static_cast<std::ptrdiff_t>(cut));
+        EXPECT_FALSE(MMO::DecodeEntitySpawn(truncated).has_value());
+    }
+}
+
+TEST(MMOEntityEvents_DestroyNeedsFourBytes)
+{
+    const std::vector<uint8_t> destroy = {0x2A, 0x00, 0x00, 0x01};
+    const auto networkId = MMO::DecodeEntityDestroy(destroy);
+    ASSERT_TRUE(networkId.has_value());
+    EXPECT_EQ(*networkId, 0x0100002Au);
+
+    EXPECT_FALSE(MMO::DecodeEntityDestroy(std::vector<uint8_t>{0x2A, 0x00, 0x00}).has_value());
+    EXPECT_FALSE(MMO::DecodeEntityDestroy(std::vector<uint8_t>{}).has_value());
+}
+
+namespace
+{
+    /// Headless host context whose network is the NetworkManager singleton, so
+    /// MMOWorldSetup starts its WorldServer and bridges NetworkManager clients into it.
+    class MMOHeadlessNetContext final : public Spark::IEngineContext
+    {
+      public:
+        GraphicsEngine* GetGraphics() override { return nullptr; }
+        const GraphicsEngine* GetGraphics() const override { return nullptr; }
+        InputManager* GetInput() override { return nullptr; }
+        const InputManager* GetInput() const override { return nullptr; }
+        Timer* GetTimer() override { return nullptr; }
+        const Timer* GetTimer() const override { return nullptr; }
+        Spark::EventBus* GetEventBus() override { return nullptr; }
+        const Spark::EventBus* GetEventBus() const override { return nullptr; }
+        ::AudioEngine* GetAudio() override { return nullptr; }
+        const ::AudioEngine* GetAudio() const override { return nullptr; }
+        PhysicsSystem* GetPhysics() override { return nullptr; }
+        const PhysicsSystem* GetPhysics() const override { return nullptr; }
+        Spark::NetworkManager* GetNetwork() override { return &Spark::Net::NetworkManager::GetInstance(); }
+        const Spark::NetworkManager* GetNetwork() const override { return &Spark::Net::NetworkManager::GetInstance(); }
+        bool IsHeadless() const override { return true; }
+        uint32_t GetEngineVersion() const override { return 0; }
+        uint32_t GetSDKVersion() const override { return 0; }
+    };
+} // namespace
+
+// NET-100: a slot still Securing (ConnectAccepted sent, no ClientFinished yet) is not a player.
+// The MMO server bridge must not register it with the WorldServer (it has no name and may be a
+// spoofed Connect); once ClientFinished admits it, it joins under the name it sent.
+TEST(MMO_ServerBridge_RegistersOnlyAdmittedClients)
+{
+    auto& network = Spark::Net::NetworkManager::GetInstance();
+    network.Shutdown();
+    MMOHeadlessNetContext context;
+    MMOWorldSetup world;
+    ASSERT_TRUE(world.Initialize(&context));
+    ASSERT_TRUE(world.GetWorldServer() != nullptr);
+    ASSERT_TRUE(world.StartNetworkServer(0));
+
+    SparkTestFixtures::SecureRawClient peer;
+    ASSERT_TRUE(peer.Socket().SendTo(network.GetBoundPort(), peer.BeginConnect()));
+    const auto accepted = peer.AwaitType(network, Spark::Net::MessageType::ConnectAccepted);
+    ASSERT_TRUE(accepted.has_value());
+    ASSERT_TRUE(peer.FinishFromAccepted(*accepted, SparkTestFixtures::TestServerIdentity().publicKey));
+    const Spark::Net::ClientID id = peer.Id();
+
+    for (int tick = 0; tick < 5; ++tick)
+        world.ServerTick(0.016f);
+    ASSERT_EQ(network.GetClientSlots().size(), static_cast<size_t>(1));             // the Securing slot exists...
+    EXPECT_FALSE(world.GetWorldServer()->GetPlayerSessionSnapshot(id).has_value()); // ...but is no player
+
+    ASSERT_TRUE(peer.SendSealed(SparkTestFixtures::BuildWire(Spark::Net::MessageType::ClientFinished,
+                                                             SparkTestFixtures::EncodeName("Aurelia"),
+                                                             Spark::Net::ChannelType::Reliable, 0, id),
+                                network.GetBoundPort()));
+    std::optional<Spark::Net::PlayerSession> session;
+    for (int tick = 0; tick < 100 && !session; ++tick)
+    {
+        world.ServerTick(0.016f);
+        session = world.GetWorldServer()->GetPlayerSessionSnapshot(id);
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    ASSERT_TRUE(session.has_value());
+    EXPECT_EQ(session->playerName, std::string("Aurelia"));
+
+    world.StopNetworkServer();
+    world.Shutdown();
+    network.Shutdown();
+}
+#endif // ENABLE_NETWORKING
+
+TEST(MMOWorld_AreaScenePathsExistExactCase)
+{
+    const std::filesystem::path sourceRoot(SPARK_TEST_SOURCE_DIR);
+
+    MMOTestContext context;
+    MMOWorldSetup world;
+    ASSERT_TRUE(world.Initialize(&context));
+    ASSERT_EQ(world.GetAreaCount(), 4u);
+
+    // Every world area streams/serves its sceneFile verbatim, so each one must exist with exact case
+    // and declare the same areaId in its JSON header.
+    for (const auto& area : world.GetAreas())
+    {
+        EXPECT_TRUE(ExistsWithExactCase(sourceRoot, area.sceneFile));
+        EXPECT_EQ(ReadSceneAreaId(sourceRoot / area.sceneFile), static_cast<long long>(area.areaId));
+    }
+    EXPECT_EQ(world.GetArea(1)->sceneFile, std::string("Assets/Scenes/MMO/town_square.scene"));
+    EXPECT_EQ(world.GetArea(3)->sceneFile, std::string("Assets/Scenes/MMO/shadow_crypt.scene"));
+
+    // The legacy name-derived spelling must not resolve on a case-sensitive tree.
+    EXPECT_FALSE(ExistsWithExactCase(sourceRoot, "Assets/Scenes/TownSquare.scene"));
+    EXPECT_FALSE(ExistsWithExactCase(sourceRoot, "Assets/Scenes/MMO/Town_Square.scene"));
+
+    // Enterable dungeons point at an authored scene that belongs to a registered world area.
+    MMODungeonSystem dungeons;
+    ASSERT_TRUE(dungeons.Initialize(&context));
+    size_t enterable = 0;
+    for (uint32_t dungeonId = 1; dungeonId <= dungeons.GetDungeonCount(); ++dungeonId)
+    {
+        const auto* dungeon = dungeons.GetDungeon(dungeonId);
+        ASSERT_TRUE(dungeon != nullptr);
+        if (!dungeon->IsEnterable())
+            continue;
+        ++enterable;
+        EXPECT_TRUE(ExistsWithExactCase(sourceRoot, dungeon->scenePath));
+
+        const MMOAreaInfo* owningArea = nullptr;
+        for (const auto& area : world.GetAreas())
+        {
+            if (area.sceneFile == dungeon->scenePath)
+                owningArea = &area;
+        }
+        ASSERT_TRUE(owningArea != nullptr);
+        EXPECT_EQ(ReadSceneAreaId(sourceRoot / dungeon->scenePath), static_cast<long long>(owningArea->areaId));
+    }
+    EXPECT_EQ(enterable, 1u);
+    dungeons.Shutdown();
+    world.Shutdown();
+}
+
+TEST(MMOWorld_UnauthoredDungeonsFailClosed)
+{
+    MMOTestContext context;
+    MMODungeonSystem dungeons;
+    ASSERT_TRUE(dungeons.Initialize(&context));
+    ASSERT_EQ(dungeons.GetDungeonCount(), 3u);
+
+    // Shadow Crypt has an authored scene; Forgotten Mine and Void Spire do not and must not be enterable.
+    EXPECT_TRUE(dungeons.GetDungeon(1)->IsEnterable());
+    EXPECT_FALSE(dungeons.GetDungeon(2)->IsEnterable());
+    EXPECT_FALSE(dungeons.GetDungeon(3)->IsEnterable());
+    EXPECT_EQ(dungeons.CreateInstance(2, DungeonDifficulty::Normal, {7}), 0u);
+    EXPECT_EQ(dungeons.CreateInstance(3, DungeonDifficulty::Normal, {7}), 0u);
+    EXPECT_EQ(dungeons.GetInstanceCount(), 0u);
+
+    const std::string listing = dungeons.GetDungeonListString();
+    EXPECT_NE(listing.find("Forgotten Mine (Lv5, 3p, 1 bosses) [not enterable: no scene authored]"), std::string::npos);
+    EXPECT_NE(listing.find("Void Spire (Lv20, 5p, 3 bosses) [not enterable: no scene authored]"), std::string::npos);
+    EXPECT_EQ(listing.find("Shadow Crypt (Lv10, 5p, 2 bosses) [not enterable"), std::string::npos);
+
+    const uint32_t instanceId = dungeons.CreateInstance(1, DungeonDifficulty::Normal, {7});
+    EXPECT_NE(instanceId, 0u);
+    EXPECT_EQ(dungeons.GetInstanceCount(), 1u);
+    dungeons.Shutdown();
 }
 
 TEST(MMO_WorldAreaResolution_PrefersCurrentOverlappingArea)

@@ -1,0 +1,9 @@
+SPARKPREFAB 2
+name "Say \"hi\"\tthere"
+components 1
+component "Script Component"
+properties 3
+  "path\\with\\backslash" string "line one\nline two\r\n"
+  "precise" double 0.1
+  "tiny" float 1e-45
+end

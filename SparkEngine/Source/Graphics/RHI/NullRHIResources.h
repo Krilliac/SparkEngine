@@ -26,7 +26,9 @@
 #include "RHITypes.h"
 
 #include <cstring>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Spark
@@ -35,9 +37,35 @@ namespace Spark
     {
 
         /**
+         * @brief Destruction hook shared by every Null* resource.
+         *
+         * NullRHIDevice installs a callback that returns the resource's live-tracking
+         * slot when the owning unique_ptr destroys it. The callback must tolerate the
+         * device being shut down or destroyed first; it never touches the resource.
+         */
+        class NullReleaseHook
+        {
+          public:
+            NullReleaseHook() = default;
+            NullReleaseHook(const NullReleaseHook&) = delete;
+            NullReleaseHook& operator=(const NullReleaseHook&) = delete;
+
+            ~NullReleaseHook()
+            {
+                if (m_onRelease)
+                    m_onRelease();
+            }
+
+            void SetReleaseCallback(std::function<void()> onRelease) { m_onRelease = std::move(onRelease); }
+
+          private:
+            std::function<void()> m_onRelease;
+        };
+
+        /**
          * @brief CPU-backed stub buffer. Owns a std::vector that MapBuffer returns.
          */
-        class NullBuffer : public IRHIBuffer
+        class NullBuffer : public IRHIBuffer, public NullReleaseHook
         {
           public:
             explicit NullBuffer(const RHIBufferDesc& desc)
@@ -75,7 +103,7 @@ namespace Spark
         /**
          * @brief Interface-only stub texture. No backing memory.
          */
-        class NullTexture : public IRHITexture
+        class NullTexture : public IRHITexture, public NullReleaseHook
         {
           public:
             explicit NullTexture(const RHITextureDesc& desc) : m_desc(desc), m_debugName(desc.debugName) {}
@@ -103,7 +131,7 @@ namespace Spark
         /**
          * @brief Interface-only stub shader.
          */
-        class NullShader : public IRHIShader
+        class NullShader : public IRHIShader, public NullReleaseHook
         {
           public:
             explicit NullShader(const RHIShaderDesc& desc) : m_desc(desc), m_debugName(desc.debugName) {}
@@ -126,7 +154,7 @@ namespace Spark
         /**
          * @brief Interface-only stub sampler.
          */
-        class NullSampler : public IRHISampler
+        class NullSampler : public IRHISampler, public NullReleaseHook
         {
           public:
             explicit NullSampler(const RHISamplerDesc& desc) : m_desc(desc) {}
@@ -146,7 +174,7 @@ namespace Spark
         /**
          * @brief Interface-only stub pipeline state.
          */
-        class NullPipelineState : public IRHIPipelineState
+        class NullPipelineState : public IRHIPipelineState, public NullReleaseHook
         {
           public:
             explicit NullPipelineState(const RHIPipelineStateDesc& desc) : m_desc(desc) {}

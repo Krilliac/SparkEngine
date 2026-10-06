@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "rowId": "win11-x64-msvc143-nullrhi",
+  "note": "Collector plan for the declared headless NullRHI row. It runs only on a clean Windows 11 x64 host at the exact commit under test, through a CI job that passes --from-github-env (the plan deliberately carries no provenance block, so a hand-run collection is refused), --no-gpu, --no-audio, --compiler-command cl and --windows-sdk-version. Precondition: the tree was configured at that commit with `cmake --preset windows-shipping -DBUILD_TESTS=ON`, which registers the ctest selectors below in build/windows-shipping. Probes run in category order, so 'build' rebuilds the MinSizeRel Shipping product before 'launch' uses it. Every ctest probe passes --no-tests=error so a missing test fails instead of passing vacuously. The categories in uncoveredCategories have no implementation yet; the collector does not record them, and the validator then refuses to certify the row. firstPartyImages and dependencyClosure below are the historical declaration from the 256603c1c Windows Shipping install (2026-09-29), retained as a regression baseline only. They are not a measurement of this tree. Rebuild and stage this tree with WindowsCertification_PackageDependencyClosure before claiming current closure: it checks app-local runtime availability and both row declarations, retaining hashed import graphs and logs per run. Refresh declared versions from the new staged CRT and host System32 files; pe_imports.py measures imports and image hashes, not file versions. The current-tree remeasurement is pending; no readiness or certification promotion follows from this declaration or a synthetic fixture pass.",
+  "probes": {
+    "build": {
+      "command": ["cmake", "--build", "--preset", "windows-shipping", "--config", "MinSizeRel"],
+      "timeoutSeconds": 7200
+    },
+    "launch": {
+      "command": [
+        "ctest", "--test-dir", "build/windows-shipping", "-C", "MinSizeRel",
+        "-R", "^NullRHI_Windows_FPSLifecycle$", "--no-tests=error", "--output-on-failure"
+      ],
+      "timeoutSeconds": 300
+    }
+  },
+  "firstPartyImages": [
+    "SparkAutomation.exe",
+    "SparkBuild.exe",
+    "SparkConsole.exe",
+    "SparkCooker.exe",
+    "SparkCrashReporter.exe",
+    "SparkEditor.exe",
+    "SparkEngine.exe",
+    "SparkGameFPS.dll",
+    "SparkInstaller.exe",
+    "SparkLauncher.exe",
+    "SparkShaderCompiler.exe",
+    "SparkWorker.exe"
+  ],
+  "dependencyClosure": [
+    {"name": "msvcp140.dll", "version": "14.44.35211.0", "source": "vcredist"},
+    {"name": "vcruntime140.dll", "version": "14.44.35211.0", "source": "vcredist"},
+    {"name": "vcruntime140_1.dll", "version": "14.44.35211.0", "source": "vcredist"},
+    {"name": "advapi32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "bcrypt.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "comdlg32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "d3d11.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "d3d12.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "d3dcompiler_47.dll", "version": "10.0.26100.9457", "source": "system"},
+    {"name": "dbghelp.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "dxgi.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "gdi32.dll", "version": "10.0.26100.8328", "source": "system"},
+    {"name": "imm32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "kernel32.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "ole32.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "shell32.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "user32.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "winhttp.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "winmm.dll", "version": "10.0.26100.9278", "source": "system"},
+    {"name": "ws2_32.dll", "version": "10.0.26100.9444", "source": "system"}
+  ],
+  "uncoveredCategories": {
+    "install": "The stable-v1 install path is the signed Shipping MSI (.github/scripts/qualify-windows-msi.py), which needs per-run version, source SHA and package-manifest arguments that a static plan cannot carry; INST-130/REL-100 own a row-level install probe.",
+    "save": "No NullRHI save/reload proof exists: FPSPackage_InstalledRuntime proves save/reload only through D3D11 WARP processes (GameModules/SparkGameFPS/README.md).",
+    "crash": "CrashCapturePackageSecurity drives the production capture path through the SparkTests producer, not the installed Shipping runtime; a packaged-runtime crash probe is owned by OPS-100.",
+    "upgrade": "Upgrade needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
+    "rollback": "Rollback needs a signed predecessor MSI and receipt (INST-130/REL-110); no static probe exists.",
+    "uninstall": "Uninstall runs inside the MSI transaction of .github/scripts/qualify-windows-msi.py, which needs per-run arguments; INST-130/REL-100 own a row-level probe."
+  }
+}

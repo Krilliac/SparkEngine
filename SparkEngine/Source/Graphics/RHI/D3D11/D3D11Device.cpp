@@ -15,9 +15,11 @@
 
 #include "D3D11Device.h"
 #include "../RHIFormatUtils.h"
+#include "../../../Utils/LogMacros.h"
 #include "../../../Utils/Validate.h"
 #include <algorithm>
 #include <cassert>
+#include <climits>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -30,6 +32,11 @@ namespace Spark
     {
         namespace D3D11
         {
+            namespace
+            {
+                /// D3DCompile source name for a shader with neither a debug name nor a file path.
+                const std::string kUnnamedShaderSource = "SparkShader";
+            } // namespace
 
             // ============================================================================
             // D3D11 BUFFER
@@ -270,6 +277,19 @@ namespace Spark
                 if (!m_swapChain)
                     return false;
                 HRESULT hr = m_swapChain->Present(vsync ? 1 : 0, 0);
+                if (FAILED(hr))
+                {
+                    // A bare `false` hid device removal: callers saw a failed frame with
+                    // no reason. Name the HRESULT and, for removal/reset, the device's
+                    // removed reason (TDR, driver update, hang) so the log shows why.
+                    const bool deviceLost = hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET;
+                    const HRESULT reason = (deviceLost && m_device) ? m_device->GetDeviceRemovedReason() : S_OK;
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D11SwapChain::Present failed (HRESULT 0x%08lX%s, removed reason "
+                                            "0x%08lX)",
+                                            static_cast<unsigned long>(hr), deviceLost ? ", device lost" : "",
+                                            static_cast<unsigned long>(reason));
+                }
                 return SUCCEEDED(hr);
             }
 
@@ -366,13 +386,37 @@ namespace Spark
             void D3D11CommandList::SetRenderTargets(IRHITexture* const* renderTargets, uint32_t count,
                                                     IRHITexture* depthStencil)
             {
-                ID3D11RenderTargetView* rtvs[8] = {};
-                for (uint32_t i = 0; i < count && i < 8; ++i)
+                // D3D11 binds at most 8 targets. Passing a larger count straight through
+                // read past `rtvs` and made the runtime reject the whole call, leaving the
+                // previous targets bound so every following draw landed in the wrong place.
+                constexpr uint32_t kMaxTargets = D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT;
+                if (count > kMaxTargets)
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D11CommandList::SetRenderTargets: %u targets requested, D3D11 binds "
+                                            "at most %u — extra targets ignored",
+                                            count, kMaxTargets);
+                    count = kMaxTargets;
+                }
+                if (count > 0 && !renderTargets)
+                    count = 0;
+
+                ID3D11RenderTargetView* rtvs[kMaxTargets] = {};
+                for (uint32_t i = 0; i < count; ++i)
                 {
                     if (renderTargets[i])
                     {
                         auto* d3dTex = static_cast<D3D11Texture*>(renderTargets[i]);
                         rtvs[i] = d3dTex->GetD3D11RTV();
+                        if (!rtvs[i])
+                        {
+                            // Binding nullptr here silently discards every draw into this
+                            // slot; the frame keeps its clear colour and nothing reports it.
+                            SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                                    "D3D11CommandList::SetRenderTargets: '%s' in slot %u has no "
+                                                    "render-target view — draws to it are discarded",
+                                                    d3dTex->GetDebugName().c_str(), i);
+                        }
                     }
                 }
 
@@ -392,7 +436,14 @@ namespace Spark
                     return;
                 auto* d3dTex = static_cast<D3D11Texture*>(target);
                 if (d3dTex->GetD3D11RTV())
+                {
                     m_context->ClearRenderTargetView(d3dTex->GetD3D11RTV(), color);
+                    return;
+                }
+                SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                        "D3D11CommandList::ClearRenderTarget: '%s' has no render-target view — "
+                                        "clear skipped",
+                                        d3dTex->GetDebugName().c_str());
             }
 
             void D3D11CommandList::ClearDepthStencil(IRHITexture* target, float depth, uint8_t stencil)
@@ -764,6 +815,18 @@ namespace Spark
                 if (FAILED(hr))
                     return false;
 
+                if (desc.enableDebugLayer)
+                {
+                    // A debug device always exposes its info queue; failing here means
+                    // validation was requested but cannot be observed. The default
+                    // storage limit stays: nothing drains this queue every frame.
+                    hr = m_device.As(&m_infoQueue);
+                    if (FAILED(hr))
+                        return false;
+                    m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+                    m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
+                }
+
                 // Get DXGI factory
                 ComPtr<IDXGIDevice> dxgiDevice;
                 hr = m_device.As(&dxgiDevice);
@@ -788,6 +851,10 @@ namespace Spark
                 m_capabilities.deviceName = deviceName;
                 m_capabilities.dedicatedVideoMemory = adapterDesc.DedicatedVideoMemory;
                 m_capabilities.sharedSystemMemory = adapterDesc.SharedSystemMemory;
+                // On a GPU-less host the hardware driver type succeeds on the Microsoft Basic Render
+                // Driver (1414:008C), which is WARP: report it as software like the explicit fallback.
+                if (adapterDesc.VendorId == 0x1414 && adapterDesc.DeviceId == 0x8C)
+                    m_isSoftwareDevice = true;
 
                 switch (adapterDesc.VendorId)
                 {
@@ -870,6 +937,7 @@ namespace Spark
                 m_immediateCommandList.reset();
                 m_immediateContext.Reset();
                 m_dxgiFactory.Reset();
+                m_infoQueue.Reset();
                 m_device.Reset();
             }
 
@@ -1171,12 +1239,26 @@ namespace Spark
                     srvDesc.Format = depthReadback ? DepthShaderResourceFormat(format) : format;
                     if (desc.sampleCount > 1)
                     {
-                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        srvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                    ? D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY
+                                                    : D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        if (srvDesc.ViewDimension == D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY)
+                            srvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
                     }
                     else
                     {
-                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-                        srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        srvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                    ? D3D11_SRV_DIMENSION_TEXTURE2DARRAY
+                                                    : D3D11_SRV_DIMENSION_TEXTURE2D;
+                        if (srvDesc.ViewDimension == D3D11_SRV_DIMENSION_TEXTURE2DARRAY)
+                        {
+                            srvDesc.Texture2DArray.MipLevels = desc.mipLevels;
+                            srvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                        }
+                        else
+                        {
+                            srvDesc.Texture2D.MipLevels = desc.mipLevels;
+                        }
                     }
                     hr = m_device->CreateShaderResourceView(texture.Get(), &srvDesc, &srv);
                     if (FAILED(hr))
@@ -1196,8 +1278,26 @@ namespace Spark
                 {
                     D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
                     dsvDesc.Format = format;
-                    dsvDesc.ViewDimension =
-                        desc.sampleCount > 1 ? D3D11_DSV_DIMENSION_TEXTURE2DMS : D3D11_DSV_DIMENSION_TEXTURE2D;
+                    if (desc.sampleCount > 1)
+                    {
+                        dsvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                    ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY
+                                                    : D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                        if (dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY)
+                            dsvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                    }
+                    else
+                    {
+                        dsvDesc.ViewDimension = desc.type == RHITextureType::Texture2DArray
+                                                    ? D3D11_DSV_DIMENSION_TEXTURE2DARRAY
+                                                    : D3D11_DSV_DIMENSION_TEXTURE2D;
+                        if (dsvDesc.ViewDimension == D3D11_DSV_DIMENSION_TEXTURE2DARRAY)
+                        {
+                            dsvDesc.Texture2DArray.MipSlice = 0;
+                            dsvDesc.Texture2DArray.FirstArraySlice = 0;
+                            dsvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                        }
+                    }
                     hr = m_device->CreateDepthStencilView(texture.Get(), &dsvDesc, &dsv);
                     if (FAILED(hr))
                         return nullptr;
@@ -1227,13 +1327,29 @@ namespace Spark
 
                     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
                     srvDesc.Format = depthSRVFormat != DXGI_FORMAT_UNKNOWN ? depthSRVFormat : format;
+                    const bool isArray = desc.type == RHITextureType::Texture2DArray;
                     if (desc.sampleCount > 1)
                     {
-                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        srvDesc.ViewDimension =
+                            isArray ? D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                        if (isArray)
+                        {
+                            srvDesc.Texture2DMSArray.FirstArraySlice = 0;
+                            srvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                        }
+                    }
+                    else if (isArray)
+                    {
+                        srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                        srvDesc.Texture2DArray.MostDetailedMip = 0;
+                        srvDesc.Texture2DArray.MipLevels = desc.mipLevels;
+                        srvDesc.Texture2DArray.FirstArraySlice = 0;
+                        srvDesc.Texture2DArray.ArraySize = desc.arraySize;
                     }
                     else
                     {
                         srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+                        srvDesc.Texture2D.MostDetailedMip = 0;
                         srvDesc.Texture2D.MipLevels = desc.mipLevels;
                     }
                     HRESULT srvHr = m_device->CreateShaderResourceView(resource.Get(), &srvDesc, &srv);
@@ -1247,7 +1363,91 @@ namespace Spark
                     }
                 }
 
-                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv));
+                ComPtr<ID3D11DepthStencilView> dsv;
+                if (desc.usage & RHITextureUsage::DepthStencil)
+                {
+                    const DXGI_FORMAT format = ConvertFormat(desc.format);
+                    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+                    dsvDesc.Format = format;
+                    const bool isArray = desc.type == RHITextureType::Texture2DArray;
+                    if (desc.sampleCount > 1)
+                    {
+                        dsvDesc.ViewDimension =
+                            isArray ? D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                        if (isArray)
+                        {
+                            dsvDesc.Texture2DMSArray.FirstArraySlice = 0;
+                            dsvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                        }
+                    }
+                    else if (isArray)
+                    {
+                        dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                        dsvDesc.Texture2DArray.MipSlice = 0;
+                        dsvDesc.Texture2DArray.FirstArraySlice = 0;
+                        dsvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                    }
+                    else
+                    {
+                        dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+                        dsvDesc.Texture2D.MipSlice = 0;
+                    }
+
+                    const HRESULT dsvHr = m_device->CreateDepthStencilView(resource.Get(), &dsvDesc, &dsv);
+                    if (FAILED(dsvHr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::WrapNativeTexture: DSV creation failed for '%s' "
+                                        "(HRESULT 0x%08lX)",
+                                        desc.debugName.c_str(), dsvHr);
+                        return nullptr;
+                    }
+                }
+
+                // Honour RenderTarget usage like CreateTexture does. Handing back a wrapper
+                // with a null RTV let SetRenderTargets bind nothing, so draws and clears to
+                // the wrapped target were silently dropped and it kept its old contents.
+                ComPtr<ID3D11RenderTargetView> rtv;
+                if (desc.usage & RHITextureUsage::RenderTarget)
+                {
+                    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+                    rtvDesc.Format = ConvertFormat(desc.format);
+                    const bool isArray = desc.type == RHITextureType::Texture2DArray;
+                    if (desc.sampleCount > 1)
+                    {
+                        rtvDesc.ViewDimension =
+                            isArray ? D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY : D3D11_RTV_DIMENSION_TEXTURE2DMS;
+                        if (isArray)
+                        {
+                            rtvDesc.Texture2DMSArray.FirstArraySlice = 0;
+                            rtvDesc.Texture2DMSArray.ArraySize = desc.arraySize;
+                        }
+                    }
+                    else if (isArray)
+                    {
+                        rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                        rtvDesc.Texture2DArray.MipSlice = 0;
+                        rtvDesc.Texture2DArray.FirstArraySlice = 0;
+                        rtvDesc.Texture2DArray.ArraySize = desc.arraySize;
+                    }
+                    else
+                    {
+                        rtvDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+                        rtvDesc.Texture2D.MipSlice = 0;
+                    }
+
+                    const HRESULT rtvHr = m_device->CreateRenderTargetView(resource.Get(), &rtvDesc, &rtv);
+                    if (FAILED(rtvHr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "D3D11Device::WrapNativeTexture: RTV creation failed for '%s' "
+                                        "(HRESULT 0x%08lX)",
+                                        desc.debugName.c_str(), rtvHr);
+                        return nullptr;
+                    }
+                }
+
+                return std::make_unique<D3D11Texture>(desc, resource, std::move(srv), std::move(rtv), std::move(dsv));
             }
 
             std::unique_ptr<IRHIShader> D3D11Device::CreateShader(const RHIShaderDesc& desc)
@@ -1279,23 +1479,30 @@ namespace Spark
                     case RHIShaderStage::Compute:
                         target = "cs_5_0";
                         break;
-                    default:
-                        return nullptr; // RT stages not supported in D3D11
+                    default: // RT stages are not supported in D3D11
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "CreateShader (%s): stage %d has no D3D11 compile target",
+                                        desc.debugName.c_str(), static_cast<int>(desc.stage));
+                        return nullptr;
                     }
 
                     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3;
 
-                    HRESULT hr = D3DCompile(desc.sourceCode.c_str(), desc.sourceCode.size(), desc.debugName.c_str(),
+                    // D3D_COMPILE_STANDARD_FILE_INCLUDE resolves #include relative to the source name,
+                    // and an empty name fails the whole compile with ERROR_INVALID_NAME and no error
+                    // blob. Prefer the debug name, then the file the source came from.
+                    const std::string& sourceName = !desc.debugName.empty()  ? desc.debugName
+                                                    : !desc.filePath.empty() ? desc.filePath
+                                                                             : kUnnamedShaderSource;
+                    HRESULT hr = D3DCompile(desc.sourceCode.c_str(), desc.sourceCode.size(), sourceName.c_str(),
                                             nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, desc.entryPoint.c_str(), target,
                                             flags, 0, &bytecodeBlob, &errorBlob);
                     if (FAILED(hr))
                     {
-                        if (errorBlob)
-                        {
-                            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s): %s",
-                                            desc.debugName.c_str(),
-                                            static_cast<const char*>(errorBlob->GetBufferPointer()));
-                        }
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader compile failed (%s, hr=0x%08lX): %s",
+                                        sourceName.c_str(), static_cast<unsigned long>(hr),
+                                        errorBlob ? static_cast<const char*>(errorBlob->GetBufferPointer())
+                                                  : "no compiler diagnostics");
                         return nullptr;
                     }
                 }
@@ -1303,11 +1510,18 @@ namespace Spark
                 {
                     HRESULT hr = D3DCreateBlob(desc.bytecodeSize, &bytecodeBlob);
                     if (FAILED(hr))
+                    {
+                        SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                        "Shader bytecode blob allocation failed (%s, hr=0x%08lX)",
+                                        desc.debugName.c_str(), static_cast<unsigned long>(hr));
                         return nullptr;
+                    }
                     memcpy(bytecodeBlob->GetBufferPointer(), desc.bytecode, desc.bytecodeSize);
                 }
                 else
                 {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "CreateShader (%s): neither source nor bytecode given", desc.debugName.c_str());
                     return nullptr;
                 }
 
@@ -1370,12 +1584,19 @@ namespace Spark
                         cs.As(&shaderObj);
                     break;
                 }
-                default:
-                    return nullptr; // RT stages not supported in D3D11
+                default: // RT stages are not supported in D3D11
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics,
+                                    "CreateShader (%s): stage %d has no D3D11 shader object", desc.debugName.c_str(),
+                                    static_cast<int>(desc.stage));
+                    return nullptr;
                 }
 
                 if (FAILED(hr) || !shaderObj)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Shader object creation failed (%s, hr=0x%08lX)",
+                                    desc.debugName.c_str(), static_cast<unsigned long>(hr));
                     return nullptr;
+                }
 
                 return std::make_unique<D3D11Shader>(desc, std::move(shaderObj), std::move(bytecodeBlob));
             }
@@ -1547,6 +1768,23 @@ namespace Spark
             void D3D11Device::UpdateBuffer(IRHIBuffer* buffer, const void* data, size_t size, size_t offset)
             {
                 auto* d3dBuf = static_cast<D3D11Buffer*>(buffer);
+                if (!d3dBuf || !data)
+                    return;
+                // Reject a range outside the buffer before either path: the Dynamic path memcpys
+                // into a mapping of exactly GetSize() bytes, and the static path narrows the range
+                // to UINT for the D3D11_BOX. D3D11 ByteWidth is a UINT, so a larger size is invalid.
+                const uint64_t bufferSize = d3dBuf->GetSize();
+                if (!IsBufferRangeValid(bufferSize, offset, size) || bufferSize > UINT_MAX)
+                {
+                    SPARK_LOG_EVERY_SECONDS(Spark::LogLevel::Error, Spark::LogCategory::Graphics, 5,
+                                            "D3D11Device::UpdateBuffer: range [%llu, +%llu) outside '%s' (%llu bytes) "
+                                            "- update dropped",
+                                            static_cast<unsigned long long>(offset),
+                                            static_cast<unsigned long long>(size), d3dBuf->GetDebugName().c_str(),
+                                            static_cast<unsigned long long>(bufferSize));
+                    return;
+                }
+
                 if (d3dBuf->GetDesc().access == RHIBufferAccess::Dynamic)
                 {
                     void* mapped = MapBuffer(buffer);
@@ -1560,7 +1798,6 @@ namespace Spark
                 {
                     // A null D3D11_BOX updates the whole resource and ignores size/offset.
                     // For a partial update, describe the exact byte range to write.
-                    const uint64_t bufferSize = d3dBuf->GetSize();
                     if (offset != 0 || size < bufferSize)
                     {
                         D3D11_BOX box = {};

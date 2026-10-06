@@ -25,10 +25,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -86,12 +88,12 @@ namespace Spark::Net
         std::vector<std::string> mapRotation;
         bool randomizeMapOrder = false;
 
-        // Administration
-        // Reserved for source/config compatibility. No remote RCON transport
-        // currently consumes these fields; use ExecuteRcon only from trusted
-        // host code until an authenticated administration channel is added.
-        std::string rconPassword;
-        uint16_t rconPort = 0;
+        // Administration is trusted in-process only (ExecuteRcon from host
+        // code). Remote administration is permanently unavailable in stable-v1
+        // (OD-05), so there is deliberately no RCON password or port field that
+        // configuration could set. TestSEC100RemoteAdminUnavailableReal.cpp fails
+        // the build if rconPassword, rconPort, enableRcon or
+        // enableRemoteAdministration is added here.
         bool enableLogging = true;
         std::string logFilePath = "server.log";
 
@@ -142,6 +144,12 @@ namespace Spark::Net
         uint64_t totalBytesOut = 0;          ///< Cumulative outbound traffic (bytes).
         uint32_t totalConnectionsServed = 0; ///< Lifetime connection count (including disconnected).
         float currentTickRate = 0.0f;        ///< Actual ticks per second (may differ from target).
+
+        // Network message queues at the end of the last tick (NetworkStats), for soak/queue-growth checks.
+        size_t netIncomingQueueDepth = 0; ///< Incoming messages still queued.
+        size_t netOutgoingQueueDepth = 0; ///< Outgoing messages still queued.
+        size_t netIncomingQueuePeak = 0;  ///< Largest incoming queue since the network runtime initialized.
+        size_t netOutgoingQueuePeak = 0;  ///< Largest outgoing queue since the network runtime initialized.
 
         // Match state
         std::string currentMap;          ///< Name of the active map (e.g. "de_dust2").
@@ -285,13 +293,15 @@ namespace Spark::Net
                                  std::function<std::string(const std::vector<std::string>&)> handler);
 
         /// @brief Execute a trusted in-process RCON command string, e.g. "kick 3 cheating".
-        /// Network chat is intentionally not an RCON transport; a future remote
-        /// administration channel must authenticate before calling this API.
-        /// @return The command response text.
+        /// Network chat is intentionally not an RCON transport, and no remote
+        /// administration channel exists or will be added for stable-v1 (OD-05).
+        /// Every call writes exactly one audit line, including when the handler
+        /// throws; the exception text is never logged or returned.
+        /// @return The command response text, or "Command failed: <name>" when the handler threw.
         std::string ExecuteRcon(const std::string& commandLine);
 
-        /// @brief Get all registered administration commands.
-        const std::vector<RconCommand>& GetRconCommands() const { return m_rconCommands; }
+        /// @brief Snapshot of all registered administration commands, taken under the registry lock.
+        std::vector<RconCommand> GetRconCommands() const;
 
         // -- LAN Discovery --
 
@@ -347,6 +357,20 @@ namespace Spark::Net
 
         /// @brief Log a message to file and callback.
         void Log(const std::string& message);
+
+        /// @brief Maximum number of remote-supplied bytes copied into one server log record.
+        static constexpr std::size_t kMaxLoggedRemoteTextBytes = 256;
+
+        /// @brief Render untrusted remote text as a single, unambiguous log field.
+        ///
+        /// Remote chat reaches Log() after PacketValidator, which deliberately permits
+        /// '\n' and '\r'. Written raw, a client could terminate its own record and
+        /// forge a following line (for example a fake "RCON: ... disposition=dispatched"
+        /// audit record). This escapes backslash, double quote, every byte below 0x20,
+        /// 0x7F, and every byte >= 0x80 as \xHH (or \n, \r, \t), so the output is
+        /// printable ASCII with no line terminators, and bounds the copied input to
+        /// kMaxLoggedRemoteTextBytes, appending "...[truncated]" when it was longer.
+        static std::string EscapeRemoteTextForLog(std::string_view text);
 
         /// @brief Parse an administration command string into name + arguments.
         static void ParseRconCommandLine(const std::string& commandLine, std::string& outName,

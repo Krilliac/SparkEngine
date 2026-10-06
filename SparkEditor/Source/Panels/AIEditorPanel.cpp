@@ -172,7 +172,7 @@ namespace SparkEditor
 
     void AIEditorPanel::RenderAgentInspector()
     {
-        ImGui::TextDisabled("Connect via RemoteDebug to inspect live AI agents during Play mode.");
+        ImGui::TextDisabled("State preview does not tick AI. This inspector has no live agent feed.");
         ImGui::Separator();
 
         if (ImGui::BeginTable("AgentTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
@@ -183,9 +183,9 @@ namespace SparkEditor
             ImGui::TableSetupColumn("Target");
             ImGui::TableHeadersRow();
 
-            // Agent data is populated via RemoteDebugClient when connected
-            // to a running game instance. Without a live connection, the table
-            // remains empty to indicate no data is available.
+            // This panel currently has no live agent-data source. Keep the
+            // Keep the empty table explicit rather than implying state preview
+            // will populate it.
 
             ImGui::EndTable();
         }
@@ -193,7 +193,7 @@ namespace SparkEditor
 
     void AIEditorPanel::RenderBlackboardViewer()
     {
-        ImGui::TextDisabled("AI Blackboard variables will appear here during Play mode.");
+        ImGui::TextDisabled("State preview has no live AI blackboard; this inspector has no live feed.");
         ImGui::Separator();
 
         if (ImGui::BeginTable("BlackboardTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))

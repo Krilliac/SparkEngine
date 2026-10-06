@@ -167,10 +167,14 @@ namespace Spark::AI
         }
 
         /**
-         * @brief Shut down all AI subsystems.
+         * @brief Shut down all AI subsystems and release every registered behavior tree.
+         *
+         * Runs after module OnUnload and before the module images are unmapped, so
+         * module-built trees are destroyed while their code is still resident.
          */
         void Shutdown()
         {
+            m_aiSystem.ClearBehaviors();
             m_obstacleManager = nullptr;
             m_budgetLimiter.reset();
             m_parallelPerception.reset();

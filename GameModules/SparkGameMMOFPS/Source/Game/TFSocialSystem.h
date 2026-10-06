@@ -114,17 +114,25 @@ namespace Terrafront
         /// ClientSendOp on listen host / standalone.
         void ServerHandleSocialOpRaw(PlayerId sender, const void* data, size_t size);
 
+        /// On-disk schema of terrafront_social.json, written as "schemaVersion". A file without the key is
+        /// v0 (N-1): it loads and is rewritten as the current version by the next save. A newer file is
+        /// refused without a quarantine copy and latches store writes off, so it stays byte-identical.
+        static constexpr uint32_t kStoreSchemaVersion = 1;
+
 #ifdef SPARK_SOCIAL_STORE_TESTS
         struct StoreLoadTestResult
         {
             bool accepted{false};
             bool missing{false};
+            bool unsupportedVersion{false};
             size_t recordCount{0};
             std::string detail;
         };
 
         static bool ValidateStoreJsonForTesting(std::string_view text, std::string* detail = nullptr);
         static StoreLoadTestResult LoadStoreForTesting(const std::filesystem::path& path);
+        /// Load `path` and write the accepted records back through the production serializer.
+        static bool ResaveStoreForTesting(const std::filesystem::path& path);
 #endif
 
       private:
@@ -147,6 +155,7 @@ namespace Terrafront
             Unreadable,
             Corrupt,
             RecoveryRequired,
+            UnsupportedVersion, ///< "schemaVersion" above kStoreSchemaVersion
         };
         struct OnlineInfo
         {
@@ -177,13 +186,17 @@ namespace Terrafront
         void SendOpReplyTo(PlayerId player, SocialOp op, SocialOpResult result, const std::string& name);
 
         // persistence (atomic JSON, TFDatabase tmp+rename pattern)
-        static bool ParseStoreDocument(std::string_view text, std::unordered_map<uint64_t, SocialRecord>& loaded,
-                                       std::string& detail);
+        /// Loaded, Corrupt or UnsupportedVersion.
+        static StoreLoadStatus ParseStoreDocument(std::string_view text,
+                                                  std::unordered_map<uint64_t, SocialRecord>& loaded,
+                                                  std::string& detail);
         static StoreLoadStatus LoadStoreFromPath(const std::filesystem::path& path,
                                                  std::unordered_map<uint64_t, SocialRecord>& loaded,
                                                  std::string& detail);
+        static bool SaveStoreToPath(const std::filesystem::path& path,
+                                    const std::unordered_map<uint64_t, SocialRecord>& store);
         bool StoreEnsureLoaded();
-        bool StoreSaveToDisk() const;
+        bool StoreSaveToDisk() const { return SaveStoreToPath(m_storePath, m_store); }
         void StoreMarkDirty() { m_storeDirty = true; }
         void StoreFlushIfDue(float dt);
 

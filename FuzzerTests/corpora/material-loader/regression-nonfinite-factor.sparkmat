@@ -1,0 +1,5 @@
+name = NaNMaterial
+metallic = nan
+roughness = inf
+normalScale = -inf
+emissiveFactor = NAN

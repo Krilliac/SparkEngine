@@ -2,15 +2,23 @@
  * @file VisualScriptCompiler.h
  * @brief Compiles a visual script node graph into AngelScript source code
  *
- * Follows the ShaderGraphCompiler pattern: topological sort from entry-point
- * nodes, then emit code in dependency order. The generated .as file feeds
- * directly into AngelScriptEngine + ScriptHotReload — no new runtime needed.
+ * Each event node becomes a method of the generated class. Execution wires
+ * are walked in order from the event; Branch, Sequence and ForLoop emit their
+ * output chains inside their own blocks, so control flow nests to any depth.
+ * Pure data nodes (no execution pins) are evaluated at the point of use: every
+ * statement re-evaluates the data nodes feeding it in a scoped block, so a
+ * Get Variable read after a Set Variable in the same chain sees the new value.
+ * The generated .as file feeds directly into AngelScriptEngine and
+ * ScriptHotReload; no separate runtime exists.
+ *
+ * Contract: stateless and re-entrant (any thread); allocates only the output
+ * strings; editor/tooling tier, never called per frame.
  *
  * Umbrella header: node type enum lives in VisualScriptNodeTypes.h and the
  * graph data structures live in VisualScriptGraphTypes.h; both are included
  * here so existing includers need no changes.
  *
- * @see ShaderGraphCompiler.h for the HLSL equivalent
+ * @see VisualScriptGraphIO.h for the .vscript graph file format
  * @see AngelScriptEngine.h for script compilation and execution
  */
 
@@ -21,7 +29,6 @@
 
 #include <cstdint>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace Spark::Scripting
@@ -34,10 +41,11 @@ namespace Spark::Scripting
     /**
      * @brief Compiles a visual script node graph to AngelScript source code
      *
-     * Mirrors the ShaderGraphCompiler pattern:
-     * 1. Find event entry-point nodes
-     * 2. Topological sort: walk execution + data connections
-     * 3. Emit AngelScript class with member variables, lifecycle methods
+     * Emits one AngelScript class: member variables, one method per event
+     * signature, reusable function graphs and custom event handlers. Fails
+     * (success == false, errors filled) on an empty graph, a graph without
+     * events, an execution or data cycle, or a variable default that is not a
+     * literal of the variable's type.
      */
     class VisualScriptCompiler
     {
@@ -58,43 +66,6 @@ namespace Spark::Scripting
 
         /// Category name for a node type (fallback: "Misc").
         static const char* GetNodeCategory(ScriptNodeType type);
-
-      private:
-        /// Generate a unique variable name for a node's output
-        static std::string VarName(uint32_t nodeID, uint32_t pinIndex);
-
-        /// Find the AngelScript type string for a pin kind
-        static std::string PinTypeString(PinKind kind);
-
-        /// Get the default value literal for a pin
-        static std::string DefaultLiteral(const ScriptPin& pin);
-
-        /// Topological sort of data-dependency nodes reachable from an execution chain
-        static std::vector<uint32_t> TopologicalSortData(const VisualScriptGraph& graph, uint32_t startNode);
-
-        /// Emit AngelScript code for a single node
-        static void EmitNode(const ScriptNode& node, const VisualScriptGraph& graph, std::string& code);
-
-        /// Emit every node in the execution chain hanging off an output pin (used
-        /// by Branch/ForLoop/Sequence so multi-node chains stay inside the block)
-        static void EmitExecChain(const VisualScriptGraph& graph, uint32_t fromNodeID, uint32_t fromPinIndex,
-                                  std::string& code);
-
-        /// Resolve an input pin to its expression (connected var or default)
-        static std::string ResolveInput(const ScriptNode& node, uint32_t inputIndex, const VisualScriptGraph& graph);
-
-        /// Find the connection feeding into a specific input pin
-        static const ScriptConnection* FindConnectionToInput(const VisualScriptGraph& graph, uint32_t nodeID,
-                                                             uint32_t pinIndex);
-
-        /// Find a node by ID
-        static const ScriptNode* FindNode(const VisualScriptGraph& graph, uint32_t nodeID);
-
-        /// Check if a node type is an event entry point
-        static bool IsEventNode(ScriptNodeType type);
-
-        /// Check if a node type is an action (has execution pins)
-        static bool IsActionNode(ScriptNodeType type);
     };
 
 } // namespace Spark::Scripting

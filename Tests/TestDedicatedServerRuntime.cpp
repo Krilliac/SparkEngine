@@ -6,6 +6,10 @@
 
 #include <atomic>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -222,6 +226,30 @@ TEST(DedicatedServerRuntime_InvalidEndpointPolicyFailsBeforeRuntimeInitializatio
     EXPECT_FALSE(runtime.startServerCalled);
 }
 
+TEST(DedicatedServerRuntime_OutOfRangeMaxClientsFailsBeforeRuntimeInitialization)
+{
+    for (const int maxClients : {0, MAX_SERVER_CLIENTS + 1, 100000})
+    {
+        MockNetworkRuntime runtime;
+        DedicatedServer server(runtime);
+        ServerConfig config;
+        config.endpointPolicy = NetworkEndpointPolicy::Loopback();
+        config.maxClients = maxClients;
+        EXPECT_FALSE(server.InitializeOnly(config));
+        EXPECT_FALSE(runtime.initializeCalled);
+        EXPECT_FALSE(runtime.startServerCalled);
+    }
+
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime, []() { return INVALID_SOCKET; });
+    ServerConfig config;
+    config.endpointPolicy = NetworkEndpointPolicy::Loopback();
+    config.maxClients = MAX_SERVER_CLIENTS;
+    ASSERT_TRUE(server.InitializeOnly(config));
+    EXPECT_EQ(runtime.startedMaxClients, MAX_SERVER_CLIENTS);
+    server.Stop();
+}
+
 TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)
 {
     MockNetworkRuntime runtime;
@@ -258,6 +286,166 @@ TEST(DedicatedServerRuntime_ChatCannotInvokeRcon)
     const std::string helpResponse = server.ExecuteRcon("help");
     EXPECT_TRUE(helpResponse.find("Available commands") != std::string::npos);
 
+    server.Stop();
+}
+
+TEST(DedicatedServerRuntime_RconAuditRedactsArgumentsAndResponses)
+{
+    const std::string secretArgument = "SEC100_FAKE_ARGUMENT_73B19";
+    const std::string secretResponse = "ERROR: SEC100_FAKE_RESPONSE_84C20";
+    const std::string unknownCommand = "SEC100_FAKE_UNKNOWN_95D31";
+    const std::string commandLine = "audit_probe " + secretArgument;
+    std::vector<std::string> auditMessages;
+    std::vector<std::string> receivedArguments;
+    std::string callbackCommand;
+    std::string callbackResponse;
+    int handlerCalls = 0;
+    int callbackCalls = 0;
+    ServerCallbacks callbacks;
+    callbacks.onLogMessage = [&](const std::string& message) { auditMessages.push_back(message); };
+    callbacks.onRconCommand = [&](const std::string& command, const std::string& response)
+    {
+        ++callbackCalls;
+        callbackCommand = command;
+        callbackResponse = response;
+    };
+
+    // Callback captures must outlive the server: a failed assertion can unwind
+    // through DedicatedServer::~DedicatedServer(), which logs during Stop().
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+    ServerConfig config;
+    config.enableLogging = false;
+    ASSERT_TRUE(server.InitializeOnly(config));
+    server.SetCallbacks(callbacks);
+    server.RegisterRconCommand("audit_probe", "Audit redaction probe",
+                               [&](const std::vector<std::string>& arguments)
+                               {
+                                   ++handlerCalls;
+                                   receivedArguments = arguments;
+                                   return secretResponse;
+                               });
+
+    EXPECT_EQ(server.ExecuteRcon(commandLine), secretResponse);
+    EXPECT_EQ(handlerCalls, 1);
+    ASSERT_EQ(receivedArguments.size(), static_cast<size_t>(1));
+    EXPECT_EQ(receivedArguments.front(), secretArgument);
+    EXPECT_EQ(callbackCalls, 1);
+    EXPECT_EQ(callbackCommand, commandLine);
+    EXPECT_EQ(callbackResponse, secretResponse);
+
+    EXPECT_EQ(server.ExecuteRcon(unknownCommand + " " + secretArgument), "Unknown command: " + unknownCommand);
+    EXPECT_EQ(handlerCalls, 1);
+    EXPECT_EQ(callbackCalls, 1);
+    ASSERT_EQ(auditMessages.size(), static_cast<size_t>(2));
+    EXPECT_STR_CONTAINS(auditMessages[0], "RCON: command=audit_probe disposition=dispatched");
+    EXPECT_STR_CONTAINS(auditMessages[1], "RCON: command=<unknown> disposition=unknown_command");
+    for (const auto& message : auditMessages)
+    {
+        EXPECT_TRUE(message.find(secretArgument) == std::string::npos);
+        EXPECT_TRUE(message.find(secretResponse) == std::string::npos);
+        EXPECT_TRUE(message.find(unknownCommand) == std::string::npos);
+    }
+    server.Stop();
+}
+
+TEST(DedicatedServerRuntime_RconHandlerExceptionIsAuditedWithoutSecrets)
+{
+    const std::string secretArgument = "SEC100_FAKE_THROW_ARGUMENT_41E77";
+    const std::string secretExceptionText = "SEC100_FAKE_EXCEPTION_52F88";
+    const auto logPath =
+        std::filesystem::temp_directory_path() /
+        ("spark-rcon-throw-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".log");
+    std::error_code error;
+    std::filesystem::remove(logPath, error);
+
+    std::vector<std::string> auditMessages;
+    int callbackCalls = 0;
+    ServerCallbacks callbacks;
+    callbacks.onLogMessage = [&](const std::string& message) { auditMessages.push_back(message); };
+    callbacks.onRconCommand = [&](const std::string&, const std::string&) { ++callbackCalls; };
+
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+    ServerConfig config;
+    config.enableLogging = true;
+    config.logFilePath = logPath.string();
+    ASSERT_TRUE(server.InitializeOnly(config));
+    server.SetCallbacks(callbacks);
+    server.RegisterRconCommand("explode", "Handler that throws",
+                               [&](const std::vector<std::string>& arguments) -> std::string
+                               { throw std::runtime_error(secretExceptionText + " " + arguments.front()); });
+
+    // The exception must not escape, and neither its text nor the arguments
+    // may reach the caller.
+    EXPECT_EQ(server.ExecuteRcon("explode " + secretArgument), std::string("Command failed: explode"));
+    EXPECT_EQ(callbackCalls, 0);
+    // The registry is still usable after a failed dispatch.
+    EXPECT_TRUE(server.ExecuteRcon("status").find("Server") != std::string::npos);
+    server.Stop();
+
+    std::string logText;
+    {
+        std::ifstream logFile(logPath);
+        ASSERT_TRUE(logFile.is_open());
+        logText.assign(std::istreambuf_iterator<char>(logFile), std::istreambuf_iterator<char>());
+    }
+    const std::string failedRecord = "RCON: command=explode disposition=failed";
+    const size_t first = logText.find(failedRecord);
+    EXPECT_TRUE(first != std::string::npos);
+    EXPECT_TRUE(first == std::string::npos || logText.find(failedRecord, first + 1) == std::string::npos);
+    EXPECT_TRUE(logText.find("RCON: command=status disposition=dispatched") != std::string::npos);
+    EXPECT_TRUE(logText.find(secretArgument) == std::string::npos);
+    EXPECT_TRUE(logText.find(secretExceptionText) == std::string::npos);
+    for (const auto& message : auditMessages)
+    {
+        EXPECT_TRUE(message.find(secretArgument) == std::string::npos);
+        EXPECT_TRUE(message.find(secretExceptionText) == std::string::npos);
+    }
+    std::filesystem::remove(logPath, error);
+}
+
+TEST(DedicatedServerRuntime_RconRegistrySnapshotIsSafeDuringRegistration)
+{
+    MockNetworkRuntime runtime;
+    DedicatedServer server(runtime);
+    ServerConfig config;
+    config.enableLogging = false;
+    ASSERT_TRUE(server.InitializeOnly(config));
+    const size_t builtInCount = server.GetRconCommands().size();
+
+    // GetRconCommands used to hand out an unlocked reference to the registry
+    // while RegisterRconCommand reallocated it; a snapshot must be internally
+    // consistent and never shrink while registration runs concurrently.
+    constexpr size_t registrations = 256;
+    std::atomic<bool> registering{true};
+    std::thread writer(
+        [&]
+        {
+            for (size_t index = 0; index < registrations; ++index)
+            {
+                server.RegisterRconCommand("stress_" + std::to_string(index), "Concurrent registration",
+                                           [](const std::vector<std::string>&) { return std::string("ok"); });
+            }
+            registering.store(false, std::memory_order_release);
+        });
+
+    size_t previousSize = builtInCount;
+    bool monotonic = true;
+    bool wellFormed = true;
+    while (registering.load(std::memory_order_acquire))
+    {
+        const std::vector<RconCommand> snapshot = server.GetRconCommands();
+        monotonic = monotonic && snapshot.size() >= previousSize;
+        previousSize = snapshot.size();
+        for (const RconCommand& command : snapshot)
+            wellFormed = wellFormed && !command.name.empty() && static_cast<bool>(command.handler);
+    }
+    writer.join();
+
+    EXPECT_TRUE(monotonic);
+    EXPECT_TRUE(wellFormed);
+    EXPECT_EQ(server.GetRconCommands().size(), builtInCount + registrations);
     server.Stop();
 }
 

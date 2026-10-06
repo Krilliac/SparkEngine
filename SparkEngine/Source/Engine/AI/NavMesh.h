@@ -63,6 +63,9 @@
 #pragma once
 #include "NavMeshTypes.h"
 
+#include <cstdint>
+#include <iosfwd>
+#include <string>
 #include <unordered_map>
 #include <memory>
 #include <functional>
@@ -324,6 +327,44 @@ namespace Spark::AI
                                                                  const XMFLOAT3& origin, float cellSize,
                                                                  const NavMeshBuildSettings& settings);
     };
+
+    // =============================================================================
+    // .snav decoding (NavMeshFormat.cpp)
+    // =============================================================================
+
+    /// Largest mesh whose fixed edge links LoadNavMesh rebuilds; RebuildTriangleAdjacency is O(n^2).
+    inline constexpr uint32_t kMaxSnavAdjacencyRebuild = 50'000;
+
+    /**
+     * @brief Decode a `.snav` byte stream into a NavMeshData.
+     *
+     * The single decoder behind NavMeshManager::LoadNavMesh and the SparkFuzzNavMesh harness. It reads
+     * from the stream's current position; @p size is the number of bytes available from there. Every
+     * count is checked against those bytes before anything is allocated for it, and the result satisfies
+     * the invariants every NavMeshQuery relies on: each triangle index is below the vertex count, each
+     * dynamic adjacency entry is below the triangle count, and every stored float is finite. The fixed
+     * `neighborTriangles` links are not part of the format and are left at UINT32_MAX; call
+     * RebuildTriangleAdjacency() to reconstruct them.
+     *
+     * Thread affinity: any thread. Allocation: bounded by @p size. No logging.
+     *
+     * @param stream  Binary stream positioned at the `SNAV` magic.
+     * @param size    Bytes readable from the current position.
+     * @param out     Receives the mesh on success; untouched on failure.
+     * @param error   Receives a one-line reason on failure.
+     * @return        `true` if the whole mesh decoded and validated.
+     */
+    bool DecodeSnav(std::istream& stream, uint64_t size, NavMeshData& out, std::string& error);
+
+    /**
+     * @brief Rebuild the fixed per-edge neighbor links from shared vertex positions.
+     *
+     * Two triangles neighbor each other when they share at least two vertices. Every link is first
+     * reset to UINT32_MAX, and a triangle whose indices leave the vertex array gains no neighbors, so
+     * the result only ever names in-range triangles. O(n^2) in the triangle count: LoadNavMesh bounds it by
+     * kMaxSnavAdjacencyRebuild, and NavMeshBuilder's triangle-soup path runs it as part of an offline bake.
+     */
+    void RebuildTriangleAdjacency(NavMeshData& navMesh);
 
     // =============================================================================
     // NavMesh Manager

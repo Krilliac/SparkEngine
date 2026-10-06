@@ -1,10 +1,12 @@
 /**
  * @file GameDebugUI.cpp
- * @brief Live status and editor controls for the playable Spark Arena example
+ * @brief Live status, editor controls and the developer arena autopilot for the playable Spark Arena example
  */
 
 #include "Game.h"
 
+#include "Camera/SparkEngineCamera.h"
+#include "Input/InputManager.h"
 #include "Player.h"
 #include "ProgressionSystem.h"
 #include "WaveSpawner.h"
@@ -89,10 +91,24 @@ std::string Game::GetStatusString() const
                << m_player->GetCurrentAmmo() << '\n';
     }
 
+    if (m_camera && m_player)
+    {
+        const auto camera = m_camera->GetPosition();
+        const auto player = m_player->GetPosition();
+        status << std::fixed << std::setprecision(1);
+        status << "Camera/Player XZ: (" << camera.x << ", " << camera.z << ") / (" << player.x << ", " << player.z
+               << ")\n";
+    }
+
     if (m_progression)
     {
         status << "Level " << m_progression->GetLevel() << " | XP " << m_progression->GetCurrentXP() << '/'
                << m_progression->GetXPToNextLevel() << '\n';
+    }
+
+    if (m_gameMode && m_respawnSystem)
+    {
+        status << m_arenaAutopilot.FormatLoopLine(*m_gameMode, *m_respawnSystem) << '\n';
     }
 
     status << "SDK services: " << (m_engineSystemsInitialized ? "wired" : "legacy/minimal")
@@ -101,6 +117,56 @@ std::string Game::GetStatusString() const
            << " | Time scale: " << std::fixed << std::setprecision(2) << m_timeScale << "x | "
            << (m_isPaused ? "Paused" : "Running");
     return status.str();
+}
+
+bool Game::SetArenaAutopilot(bool enabled)
+{
+    if (!m_player || !m_camera || !m_input || !m_gameMode || !m_respawnSystem)
+    {
+        return false;
+    }
+    if (enabled && !m_arenaAutopilot.IsEnabled())
+    {
+        m_arenaAutopilot.Enable(m_player->GetPosition());
+    }
+    else if (!enabled)
+    {
+        m_arenaAutopilot.Disable(*m_input);
+    }
+    return true;
+}
+
+void Game::UpdateArenaAutopilot(float dt)
+{
+    if (!m_arenaAutopilot.IsEnabled() || !m_player || !m_camera || !m_input || !m_gameMode || !m_respawnSystem)
+    {
+        return;
+    }
+
+    m_arenaAutopilotTargets.clear();
+    for (const Enemy* enemy : m_enemies)
+    {
+        if (enemy && enemy->IsActive() && enemy->IsAlive())
+        {
+            m_arenaAutopilotTargets.push_back(enemy->GetPosition());
+        }
+    }
+
+    const SparkFPS::ArenaView view{m_player->GetPosition(), m_player->IsAlive(), m_arenaAutopilotTargets};
+    if (!m_arenaAutopilot.Step(*m_gameMode, *m_respawnSystem, *m_camera, *m_input, view, dt))
+    {
+        return;
+    }
+
+    // The same calls the R key and the left mouse button make in Player::HandleInput.
+    if (m_player->GetCurrentAmmo() <= 0)
+    {
+        m_player->StartReload();
+    }
+    else
+    {
+        m_player->Fire();
+    }
 }
 
 void Game::RenderDebugUI()
@@ -142,6 +208,7 @@ void Game::RenderDebugUI()
         CycleNextClass();
     }
 
-    ImGui::TextDisabled("F11: start survival | F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
+    ImGui::TextDisabled("F2: quicksave | F3: quickload | F11: start survival");
+    ImGui::TextDisabled("F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
 #endif
 }

@@ -6,16 +6,520 @@
 
 ## Current Status
 
-SEC-120 remains open and release-blocking. The repository has a blocking structural
-policy gate, but it does not yet have a production fuzz target, seed corpus, sanitizer
-fuzz smoke, scheduled campaign, coverage result, or crash-free-duration result.
+SEC-120 remains open and release-blocking. Production fuzz targets and bounded seed
+corpora cover some inventoried parsers. The current target and corpus set is recorded in
+`tools/fuzz-policy/parser-inventory.json` and `tools/fuzz-policy/corpus-manifest.json`.
+The current structural snapshot has 138 inventoried parsers: 74 fuzzed, 64 blocked,
+zero deferred candidates and 120 OD-21 exemptions. These counts are generated in
+`docs/sec120-fuzz-policy-check.json`; 64 missing harnesses keep closure open.
+Exact-SHA hosted sanitizer evidence, scheduled campaigns, coverage, and
+crash-free-duration evidence remain absent.
+
+The reflected gameplay adapter (`SceneManagerReflected.cpp`) is a separate
+untrusted-file parser owned by SEC-120. It reparses validated scene bytes and
+applies gameplay component, asset, camera and spawn restrictions. Existing
+reflected-world and text-reader fuzz targets do not execute `LoadReflected`,
+so this parser remains blocked until its own production-bound harness and
+bounded corpus exist.
 
 The deterministic snapshot in `docs/sec120-fuzz-policy-check.json` is validated by CI.
-For the recorded source-tree state it reports **105 explicitly inventoried parsers, all
-blocked**, **151 detected candidates deferred with an owner and expiry**, and **1979
-source files scanned across 17 first-party roots**. Those counts are not fuzz coverage.
+Read its generated inventory, corpus, exemption, and blocker metrics for the current
+source-tree state. The unwired material file import path (`Material::LoadFromFile`,
+`Material::LoadTexture` and `MaterialSystem::LoadTextureFromFile`, inventoried as
+`pbr-material-file`, `wic-pbr-material-texture` and `wic-material-texture`) was deleted
+rather than fuzzed, so those three parsers left the inventory. Five more blocked records
+decoded no untrusted bytes and were reclassified rather than given a harness that would
+inflate the fuzzed count (see [Retired and reclassified records](#retired-and-reclassified-records)).
+Inventory counts are not fuzz coverage.
 `passed` in that snapshot is computed from the closure blockers, so it reads `false`
 while any blocker remains.
+
+The current SEC-120 parser slice hardens the editor collaboration frame decoder,
+DataTable CSV/JSON file reader, dialogue tree file reader, localization catalog reader,
+and SparkGameFPS snapshot batch decoder. Collaboration frames publish only after a
+complete decode; DataTable and dialogue reject files above their production byte caps
+before allocating for content; dialogue and localization preserve their prior state on
+a failed load (a successful localization load still merges over existing entries, and a
+UTF-8 byte order mark is accepted); and the FPS runtime uses the same bounded batch decoder
+as its fuzz target. `StringTable` lives in its own translation unit (`StringTable.cpp`) so
+the localization target links the shipped loader without the language registry. Each
+target has a production adapter, an oracle beyond "does not crash", a bounded corpus with
+a declared regression seed per fixed defect, and a registered smoke. A DataTable campaign
+found that `SaveToCSV` dropped a single-column row whose cell was empty; that fix has its
+own seed and guard test. Local Linux Clang ASan/UBSan smokes are not hosted exact-SHA
+evidence.
+
+The neural CTest uses `-runs=8` to replay all eight reviewed seeds, and the crash-manifest
+CTest replays its six reviewed seeds, under ASan/UBSan without mutating the tracked
+corpus. The texture-stex and scene-manifest CTests replay their eight reviewed seeds the
+same way, and the json-utils CTest replays its seven (`-runs=7`). The json-utils smoke
+previously mutated for `-max_total_time=4` with no `-runs`, so its execution count
+varied run to run (about 300,000) and it wrote several hundred mutated units into the
+tracked `FuzzerTests/corpora/json-utils/` directory. The neural smoke also carried
+`-max_total_time=4` next to its `-runs=8` until the SEC-120 hardening pass removed it.
+The corpus binding (`_verify_replay_runs`) now rejects `-max_total_time=`, `-jobs=`,
+`-workers=` and `-fork=` on every blocking smoke, so a wall-clock or worker bound cannot
+return. Every smoke now runs only the empty input plus its reviewed seeds. libFuzzer's leak check can still run one seed a second
+time when malloc/free counts differ, so the `Done N runs` line may read one higher. The
+scene-manifest adapter aborts when an accepted asset path climbs out of the
+root under Windows separator semantics (its own lexical walk splits on both `/` and `\`,
+so it does not merely re-run the parser's filter), contains a control byte such as an
+embedded NUL, or fails `IsVirtualPathSafe`, or when the entry cap is exceeded. The
+production `IsVirtualPathSafe` itself treats `\` as a separator on every host, so the
+Linux-hosted target covers Windows separator semantics as well as POSIX ones
+(`SceneManifest_ParseDropsBackslashTraversalOnEveryHost`); other Win32 name quirks such
+as 8.3 short names are not modelled. The 8 MB and 100,000-entry caps sit above its
+64 KiB `-max_len`, so the `SceneManifest_EntryCap*`/`SceneManifest_ByteCap*` unit tests pin those boundaries. These
+are seed-smoke checks, not mutation campaigns; the scheduled campaign (below) mutates a
+disposable writable corpus and retains its results. Mutation runs on the larger scene-manifest seeds
+trip `-rss_limit_mb=256` through ASan's default 256 MB quarantine alone, so run campaigns
+with `ASAN_OPTIONS=quarantine_size_mb=32` (a local 180-second campaign then completed
+86,134 executions with no finding).
+
+The SparkPak target (`SparkFuzzArchive`, `FuzzArchiveSmoke`) writes each input to an
+anonymous memfd, mounts it with `SparkPakReader::Open` through `/proc/self/fd`, and reads
+every listed entry with `ReadFile`, so the TOC parser, the per-entry decompression budget,
+miniz inflate and the vendored zstd decoder all see fuzz bytes. miniz (a pinned
+submodule, which the `fuzz-policy` job now checks out) is compiled into the target with
+fuzzer instrumentation rather than linked from the uninstrumented root target. The adapter
+aborts on a listed path that escapes the root under Windows separator semantics, contains
+a control byte or fails `IsVirtualPathSafe`; on a listing that differs from the mounted
+entry set; on more entries than the TOC bytes can encode after inflating at deflate's
+1032:1 ceiling; and on a read above the per-entry budget. Its smoke replays eleven seeds
+(`-runs=11`) generated by `tools/fuzz-policy/generate_sparkpak_corpus.py` and runs under
+`-rss_limit_mb=512`, because the reader's designed per-entry decompression ceiling is
+256 MB. It found two reader defects, both fixed with regression seeds: a deflate entry
+declaring zero output handed miniz a null destination (UBSan,
+`regression-deflate-empty-output.spk`), and a header could make `ReadTOC` allocate a
+256 MB zero-filled TOC buffer from a ~100-byte file and still mount a stream that ended
+short of it (`regression-toc-ratio-bomb.spk`, pinned by
+`SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput`). A local 10-minute
+mutation run with the 32 MB quarantine then completed 3.68M executions (peak RSS 112 MB)
+with no finding.
+
+### SEC-120 batch 3 engine and launcher targets
+
+Batch 3 adds production-entry-point targets for `runtime-prefab`, `asset-migration`,
+`ui-layout`, `event-response-definitions`, `achievement-definitions`,
+`asset-cooker-input`, `launcher-template-json`, and `launcher-module-manifest`.
+The CMake targets are `SparkFuzzRuntimePrefab`, `SparkFuzzAssetMigration`,
+`SparkFuzzUILayout`, `SparkFuzzEventResponse`, `SparkFuzzAchievement`,
+`SparkFuzzAssetCooker`, `SparkFuzzLauncherTemplate`, and
+`SparkFuzzLauncherModuleManifest`.
+Each target has a libc++ production adapter, an independent invariant oracle, a
+non-empty valid and malformed seed corpus, exact manifest digest and budget pins,
+and a deterministic `fuzz;fuzz-smoke;security` CTest registration. The launcher
+module target uses the production 1 MiB manifest cap; the other input limits and
+nesting depths are declared in `corpus-manifest.json` and matched by their harnesses.
+The batch remains local structural evidence until an exact-SHA hosted sanitizer
+build and smoke run exists.
+
+### SEC-120 hardening targets
+
+These targets were added after the first six and all use the libc++ adapter split of
+`SparkFuzzJsonUtils`. None has hosted runtime evidence yet: each was authored and
+structurally bound on Windows and awaits its first Linux Clang build and smoke replay.
+
+- **`shader-daemon-blob`** (`SparkFuzzShaderBlob`, `FuzzShaderBlobSmoke`, `-runs=7`)
+  feeds `Spark::Graphics::DecodeCompiledShaderBlob`, the decoder `ShaderDiskCache::Lookup`
+  runs on bytes the shader daemon returns. The adapter aborts when an accepted blob
+  carries bytecode above `kMaxShaderDaemonBytecodeBytes` or more payload than the input,
+  when its re-encoding differs from the consumed input prefix (success byte normalised)
+  or fails to decode to equal fields, and when a rejected blob modified the caller's
+  output. The seeds include a 4 GiB bytecode length claim in 16 bytes; the local-disk
+  path in `ShaderDiskCache::Lookup` now applies the same 16 MiB cap to the cached file's
+  length (`ShaderDiskCache_OversizedBlobIsAMiss`).
+- **`shader-service-protocol`** (`SparkFuzzShaderServiceProtocol`,
+  `FuzzShaderServiceProtocolSmoke`, `-runs=8`) covers the header-only daemon codecs in
+  `Utils/ShaderServiceProtocol.h`: input byte 0 selects `DecodeGetCacheEntryRequest`,
+  `DecodeGetCacheEntryResponse`, `DecodePutCacheEntryRequest` (the inventory entry
+  symbol) or `DecodeShaderCacheStats`. An accepted message must re-encode to exactly the
+  consumed payload prefix, a decoded blob may not outgrow its payload, the fixed-length
+  decoders must accept exactly when enough bytes are present (a 32-byte legacy stats
+  payload leaves `evictionCount` zero), and the two publish-on-success decoders must leave
+  a rejected output untouched. `asset-service-protocol` and `daemon-protocol-frame` stay
+  blocked until they get the same template.
+- **`config-parser`** (`SparkFuzzConfigParser`, `FuzzConfigParserSmoke`, `-runs=8`)
+  feeds `Spark::ConfigParser::LoadFromString` after loading a fixed baseline document.
+  A rejected document must leave the baseline's `SaveToString()` byte-identical (the
+  transactional-reload promise), an accepted one must reload from its own
+  `SaveToString()` output byte-stable, and no accepted key may be empty, contain `=` or a
+  line break, or carry edge whitespace. Modelling the round-trip oracle found a defect
+  before the target ever ran: a key that began with a UTF-8 BOM mid-document was accepted,
+  then saved as the first line, so the next load stripped the BOM (renaming the key, or
+  rejecting `\xEF\xBB\xBF= 1` outright). `LoadFromString` now rejects such keys;
+  `regression-midfile-bom-key.ini` and `ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected`
+  pin it.
+- **`telemetry-spool-format`** (`SparkFuzzTelemetrySpool`, `FuzzTelemetrySpoolSmoke`,
+  `-runs=8`) feeds `Spark::TelemetryDetail::Parse`, which reads the local spool back after
+  a crash or restart, once with `kAbsoluteMaxEvents` and once with a 4-event caller cap.
+  The adapter aborts when the event count leaves `[1, maximumEvents]`, when the small cap
+  accepts a different set of spools than the absolute cap allows, when a rejected spool
+  modified the caller's vector, when an accepted event has no valid serialized size or
+  out-of-order sequences, and when `Serialize` does not reproduce the spool's length and
+  events. The link closure is `TelemetrySpoolFormat.cpp` alone.
+- **`scene-serializer`** (`SparkFuzzReflectedScene`, `FuzzReflectedSceneSmoke`,
+  `-runs=10`) feeds `Spark::DeserializeInto`, the reflected JSON reader behind `LoadWorld`
+  and editor crash recovery. The first input byte picks `Permissive` or `StrictRecovery`
+  (never `TrustedSnapshot`, which skips the untrusted-input caps). The adapter loads each
+  document into a fresh `World` and aborts when an accepted document creates a different
+  number of entities than its `entities` array holds, when a `Transform` parent names
+  itself or a missing entity, is not mirrored in the parent's `children`, or cycles (a
+  bounded walk independent of `World::SetParent`), when `TrySerializeWorld` refuses the
+  loaded world, or when `SerializeWorld` output does not reload to byte-identical text.
+  The link closure is `ReflectedSceneSerializer.cpp`, `ReflectedSceneValidation.cpp`,
+  `ComponentReflection.cpp` (the static registrations that fill `ComponentFactory` and
+  `TypeRegistry`) and the logger, over the pinned EnTT submodule; the adapter defines the
+  `Assert::Fail` fatal sink as print-and-abort instead of linking the crash handler and
+  console. SceneManager's versioned-text, INI and legacy object-line readers are a
+  separate record, `scene-manager-text`.
+  Disabling `World::SetParent`'s cycle check makes the `parent-cycle-and-unknown-parent`
+  seed abort the smoke. **Open finding (not fixed):** a document whose entities form one
+  parent chain loads in super-linear time, because `DeserializeInto` links each child
+  through `World::SetParent`, whose cycle check walks the whole ancestor chain and
+  `std::find`s a visited vector on every step. Measured under the fuzz build: 1,000
+  chained entities 2.2 s, 2,000 13.4 s, 4,100 (a 64 KiB input) 94 s; with the visited
+  search removed the remaining ancestor walk still takes 26 s at 4,100. The seed corpus
+  therefore uses a balanced 200-entity tree, and a mutation campaign reports chain inputs
+  as timeouts until the loader validates the hierarchy in one linear pass.
+- **`scene-manager-text`** (`SparkFuzzSceneManagerText`, `FuzzSceneManagerTextSmoke`,
+  `-runs=10`) covers SceneManager's three text dialects, now pure functions in
+  `SceneManager/SceneTextFormat.cpp` (`ParseVersionedSceneText`, `ParseIniSceneText`,
+  `ParseLegacyObjectLines`, `SerializeVersionedSceneText`) that `LoadJSON`, `LoadCustom`
+  and `SaveScene` call. Every input goes to the versioned reader (the `.json` path) and
+  then to the parser `DetectSceneTextDialect` picks (the `.scene` path). The adapter aborts
+  when a rejected document changed the caller's outputs, when an accepted node list is
+  empty, over `kMaxSceneTextNodes` (100,000), has a missing type or name, a non-finite
+  transform, a parent index outside `[-1, n)` or on itself, a parent cycle (bounded walk
+  here) or `childIndices` that disagree with the parent indices, when INI names repeat,
+  when a legacy row has a non-positive or non-finite dimension or sphere tessellation
+  outside `[3|2, 256]`, or when an accepted versioned scene does not write, reload and
+  rewrite byte for byte. The extraction fixed three defects: the legacy reader accepted a
+  line such as `Sphere 0 0 0 1 1 1` or `Cube 0 0 0 0` and handed it to a primitive
+  constructor whose `SPARK_REQUIRE` aborts on it (read from the code; the loader only
+  constructs objects with a graphics device, so the fuzz oracle checks the accepted
+  parameters instead), sphere tessellation was unbounded (`2147483647` slices), and the
+  hierarchy check walked every node's ancestor chain (a 100,000-node chain took 32.7 s at
+  `-O2`, now 0.5 s). `SceneManager::LoadPrefab`/`SavePrefab`, which had no caller and
+  parsed rows without finite or parent checks, were removed.
+  `SceneManager_LegacySphereRejectsDegenerateOrHugeTessellation` and
+  `SceneManager_TextParsersRejectNodeCountAboveCap` pin the bounds and the cap.
+
+### SparkBuild, `-exec` and `.vscript` targets
+
+Unlike the hardening targets above, these four were built with Clang 21 and libFuzzer on a
+local Linux (WSL Ubuntu) clone, their corpora replayed clean through the registered CTest
+smokes, and each oracle was shown to fire by a one-line mutation of the production code
+in that clone only (a RED proof). They have no hosted runtime evidence yet, and none found
+a defect in the existing parser.
+
+- **`sparkbuild-archive-download`** (`SparkFuzzZipListing`, `FuzzZipListingSmoke`,
+  `-runs=9`, `-max_len=131072`) writes the input to a memfd and lists it with the shipped
+  `SparkBuild::ArchiveExtraction::ListZipMembers`, which SparkBuild runs on every downloaded
+  ZIP before an extractor sees it. For an accepted listing the adapter aborts when it
+  exceeds `kMaxZipEntries` or 46 central bytes per member, when a name passes the ZIP member
+  policy but an independent walk (both separators, `..`, leading separator, drive prefix,
+  NUL, `:`) says it could leave the root, when a ZIP-safe name fails the TAR policy, or when
+  `ValidateMemberNames` disagrees with the per-name policy. The seeds come from
+  `tools/fuzz-policy/generate_zip_corpus.py`; the largest carries a 65535-byte comment with a
+  decoy end record inside it, which is why `-max_len` is 131072. `*.zip` is gitignored, so
+  the seeds are force-added. The target builds `ArchiveExtraction.cpp` as C++17, like
+  SparkBuild. A 60-second campaign ran 523,739 inputs clean.
+- **`exec-script-file`** (`SparkFuzzExecScript`, `FuzzExecScriptSmoke`, `-runs=7`) feeds
+  `Spark::ParseExecScript`. It aborts on an `atSec` that is neither the -1 sentinel nor a
+  finite time >= 0, a negative frame, an empty command or one that keeps a line feed or a
+  trailing CR/space, a schedule out of due-time order, or more commands than lines. GNU ld
+  reports undefined symbols even in sections `--gc-sections` drops, so the parser moved
+  verbatim into `Core/ExecScriptParse.cpp`, apart from the `SimpleConsole`-calling player.
+  A 60-second campaign ran 417,914 inputs clean.
+- **`sparkbuild-config`** (`SparkFuzzSparkBuildConfig`, `FuzzSparkBuildConfigSmoke`,
+  `-runs=8`) feeds `SparkBuild::ConfigManager::LoadFromStream` and then builds both cmake
+  commands that ProcessRunner runs through `/bin/sh -c`. It aborts when a rejected
+  document changed the loaded config, when a builder refuses without an unquotable value,
+  when an independent sh word split finds an unquoted metacharacter, an expansion or escape
+  inside quotes or an unterminated quote, or when a path or preset is not exactly one whole
+  argv word in its place. `ConfigManager::Load` previously read `sparkbuild.ini` without a
+  bound; it now refuses a file over `kMaxConfigBytes` (64 KiB) before parsing
+  (`SparkBuildConfig_LoadRejectsOversizedFile`, `SparkBuildConfig_LoadFromStreamMatchesLoad`).
+  A 60-second campaign ran 192,912 inputs clean.
+- **`visual-script-graph`** (`SparkFuzzVisualScriptGraph`, `FuzzVisualScriptGraphSmoke`,
+  `-runs=8`) feeds `Spark::Scripting::VisualScriptGraphIO::Parse`. For an accepted graph it
+  aborts when the canonical `Serialize` output does not parse again or is not stable across
+  a reload, when a node id leaves `[1, kMaxNodeId]`, or when a body, node or graph exceeds the
+  decoder's caps. The seeds are the shipped `GameManager.vscript` and the MOD-390 test's
+  minimal document with one defect each. A 90-second campaign ran 473,683 inputs clean.
+
+### Installer marker and mod-manifest targets
+
+Both targets were built with Clang 21 and libFuzzer on a local WSL Ubuntu tree and their
+corpora replayed clean through the registered CTest smokes. Each was also linked against
+the pre-fix reader extracted from 256603c1c, where its regression seeds abort. Neither
+target has hosted runtime evidence yet.
+
+- **`installer-state-manifest`** (`SparkFuzzInstallState`, `FuzzInstallStateSmoke`,
+  `-runs=6`, `-max_len=65537`) writes every input twice: once as
+  `.sparkengine-install.json` for `SparkInstaller::InstallState::Load` and once as
+  `.sparkengine-install.pending` for `InstallState::ReadPendingMarker`. The adapter aborts
+  in these cases:
+  - a rejected read changed its outputs;
+  - an accepted state's `"schema"` member is not literally the token `1` (an independent
+    scan);
+  - an accepted state changes across `Save` then `Load`;
+  - an accepted pending marker holds an empty value, CR, LF or NUL, or changes across
+    `WritePendingMarker` then `ReadPendingMarker`.
+
+  The old reader used substring scanners with three defects. It read the schema with
+  `std::atoi`, so on LP64 glibc `4294967297` read back as `1`. It never unescaped
+  strings, so every Windows destination read back with doubled backslashes and a ref
+  holding a quote was cut short at the backslash. It also matched keys inside other
+  values. `Load` is now a strict tokenizer for exactly the object `Save` writes: each key
+  once, no unknown keys, only `Save`'s escapes, and `std::from_chars` for the schema
+  (without JSON's forbidden leading zeros, which a 60-second `SparkFuzzInstallState`
+  campaign found `from_chars` alone accepts as `01`).
+  `Load` also refuses a compact document that would exceed the 64 KiB limit when
+  `Save` writes it again; `Save` refuses raw controls it cannot encode and oversized
+  output before replacing an existing marker. The pending marker used to be read
+  to EOF after a stat. Its reader and writer moved from
+  `Installer.cpp` into `InstallState`, and the reader now reads at most 4 KiB + 1 bytes
+  and refuses duplicate or unknown lines. `SparkInstallerInstallStateTests` pins all of
+  this.
+- **`mod-manifest`** (`SparkFuzzModManifest`, `FuzzModManifestSmoke`, `-runs=6`,
+  `-max_len=131073`) splits each input at its first `0x00` byte into one or two `mod.json`
+  documents. It runs `Spark::ModSystem::ScanForMods` over them twice, the path the
+  editor's ModdingPanel scan and rescan buttons take, and then passes the first document
+  to `LoadConfig`. The adapter aborts in these cases:
+  - the returned count differs from `GetAllMods()`;
+  - a published id or dependency breaks the id policy (1-128 characters of
+    `[A-Za-z0-9._-]`, not `.` or `..`);
+  - a mod depends on itself or lists a dependency twice;
+  - two mods share a directory, or a scan enables or loads a mod;
+  - a rescan changes the published set;
+  - a rejected `LoadConfig` changes the mods.
+
+  The scan used to publish each manifest as it parsed it. A rescan therefore reset an
+  Active mod to `loaded=false` without running its unload callbacks, so `UnloadAll`
+  skipped it. Two directories that declared one id were both counted, but only the last
+  one read was registered. An id could also hold control bytes, NUL or separators. The
+  scan now publishes only after it completes: it skips an id that more than one directory
+  claims, and for a known id it refreshes the manifest metadata while keeping an active
+  mod's original path as its resource ownership anchor. Load and unload moved into
+  `ModSystemLifecycle.cpp`, so the discovery closure (`ModSystem.cpp`,
+  `ModSystemIO.cpp`, `FileUtils.cpp`, `Logger.cpp`) does not need the fault isolator. The
+  harden tests `ModSystem_RescanKeepsActiveModLoadedAndUnloadable`,
+  `ModSystem_RescanKeepsActiveModPathOwnership`,
+  `ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished` and
+  `ModSystem_RejectsIdWithControlOrSeparatorBytes` pin these fixes.
+
+### Replay and animation binary targets
+
+These targets are registered for the Linux Clang libFuzzer smoke. They have no hosted runtime
+evidence yet, and structural policy results are not sanitizer runtime evidence.
+
+- **`replay-system`** (`SparkFuzzReplay`, `FuzzReplaySmoke`, `-runs=7`) writes each input
+  to a temporary file and calls `ReplaySystem::LoadFromFile`. Rejected input must preserve
+  the previously recorded replay; accepted input must have version 1 and allow bounded
+  seeking, playback, event queries and kill-cam updates with finite, ordered frame data.
+  The loader checks declared counts against remaining bytes and rejects unplayable
+  timeline values; `SaveToFile` refuses to write a replay that loader would reject. The
+  corpus pins unknown version, NaN duration and descending timestamp regressions.
+- **`animation-skel-sanim`** (`SparkFuzzAnimationBinary`, `FuzzAnimationBinarySmoke`,
+  `-runs=7`) feeds the extracted `DecodeSkeletonBinary` and `DecodeAnimationClipsBinary`
+  functions called by `AnimationManager`. Rejection must leave the caller's object intact;
+  accepted data must match its header count and version, keep parents before children and
+  carry finite matrices, clip timing and keys with ordered key times. The corpus pins a
+  key-count allocation amplification, NaN clip duration and decreasing key-time regression.
+
+### Save, store and daemon state targets
+
+These six targets cover persisted state that a server or daemon reads back from disk before it
+accepts work. They were built with Clang 21 and libFuzzer (ASan and UBSan) on a local WSL
+Ubuntu tree, their corpora replayed clean through the registered CTest smokes, and each ran a
+bounded local campaign of 151 seconds each with no crash, leak or timeout (rerun at
+`76f3f25b4`): 1,619,467 inputs for the orchestration journal, 152,119 for the store file,
+13,725,069 for the character row, 3,101,649 for the epoch state, 4,743,016 for the RTS snapshot
+and 1,594,853 for the identity state. Every `regression-*` seed was also replayed against a
+harness linked with the pre-fix reader (the base commit's file, or its logic moved verbatim
+behind the new codec API) and aborts there with the matching invariant. None of them has hosted
+runtime evidence yet.
+
+- **`daemon-orchestration-journal`** (`SparkFuzzOrchestrationJournal`,
+  `FuzzOrchestrationJournalSmoke`) splits each input into an orchestration snapshot and its
+  write-ahead log and calls `Spark::Daemon::RecoverOrchestrationJournal`, the path
+  `OrchestrationService::LoadJournalLocked` takes. An accepted journal must stay within the
+  configured process, client and crash-history counts, hold unique process ids and unique,
+  non-empty client instances, report each interrupted mutation once, and be a fixed point of
+  write, load, write. `LoadOrchestrationJournal` used to accept a repeated process id or
+  client instance (which the service's keyed tables silently collapsed), an empty client
+  instance, and crash timestamps or drain deadlines that overflow the service's
+  `system_clock` conversion (signed-overflow UB). It now refuses all five; the regression
+  seeds and `SparkDaemonServiceTests` pin them.
+- **`async-database-kv`** (`SparkFuzzAsyncDatabase`, `FuzzAsyncDatabaseSmoke`) writes the
+  input as the store file and opens it with `SQLiteConnection::Open` under a 64 KiB budget.
+  An independent model of the format (legacy raw records, or escape-decoded records after
+  the `#!spark-kv-v2` marker, no repeated key) must agree with every accept and reject, a
+  rejected open must leave the file intact, and an accepted store must republish and reopen
+  to the same records. `Open` accepted a legacy store, or an escaped store holding raw tabs,
+  whose canonical rewrite exceeds the budget, so every later write failed to publish. It now
+  sizes the rewrite while loading
+  (`SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish`).
+- **`mmo-character-record`** (`SparkFuzzMMOCharacterRecord`, `FuzzMMOCharacterRecordSmoke`)
+  feeds the stored `character_<id>` row to `MMO::DecodeCharacterRecord`. The row codec moved
+  out of `MMOPersistenceSystem.cpp` into `MMOCharacterRecord.cpp`. The old reader took any
+  row with 14 or more fields, accepted `-1` as account id 4294967295, `12abc` as level 12 and
+  `nan` as a position, and the writer kept six significant digits, so a load-save cycle
+  moved the character. The decoder now takes exactly 14 or 15 whole fields and finite
+  floats, the encoder writes the shortest exact form and refuses a row it could not read
+  back, and `SaveCharacter` then leaves the stored row alone. The shortest form of a
+  subnormal (`1e-40`) made `std::stof` throw `out_of_range`, so floats are read through
+  `StringUtils::ParseFloatingExact`. The `MMOPersistence_CharacterRow*` and
+  `MMOPersistence_UnstorableCharacterIsNotSaved` tests pin this. The inventory, guild,
+  guild-member and id-suffix rows in `MMOPersistenceSystem.cpp` are a separate record,
+  `mmo-persistence-rows`, which stays blocked.
+- **`gateway-area-control-state`** (`SparkFuzzGatewayAreaControlState`,
+  `FuzzGatewayAreaControlStateSmoke`) feeds `Spark::Gateway::ParseAreaControlState`, the
+  epoch-state reader `LocalAreaControlService::LoadState` runs before it accepts a handoff
+  phase. It moved to `GatewayAreaControlState.cpp` with its writer. `std::istream` negated a
+  signed token into the unsigned fields: `-1` loaded as the largest epoch, which fenced the
+  session forever, and `-4294967295` wrapped to phase 1. Every number is now plain unsigned
+  decimal (`GatewayAreaControl_EpochStateRejectsSignedNumbers`).
+- **`rts-save-snapshot`** (`SparkFuzzRTSPersistence`, `FuzzRTSPersistenceSmoke`) feeds the
+  `SparkGameRTS.match.v2` custom state of a save slot to `RTSPersistence::Deserialize`. A
+  rejected snapshot must leave the caller's snapshot intact, and an accepted one must pass
+  `RTSPersistence::Validate` and be a fixed point of serialize, deserialize, serialize.
+  `Validate` and `RTSCommandSystem::IsCommandValid` moved to `RTSPersistenceValidation.cpp`
+  so the target links without the live systems (GNU ld reports the undefined references of
+  `Capture` and `Apply` even in sections `--gc-sections` drops). No parser defect was found.
+- **`daemon-orchestrator-identity-state`** (`SparkFuzzOrchestratorIdentity`,
+  `FuzzOrchestratorIdentitySmoke`) writes the input as a private `SPORCHCLI1` state file and
+  takes an `OrchestratorIdentityLease`, as every SparkOrchestrator mutation does. `Acquire`
+  must accept exactly an empty file or a well-formed state with a sequence below
+  `UINT64_MAX`, republish the next sequence, leave a rejected file intact, and never hand two
+  leases the same key. No defect was found.
+
+### Content, settings and module-gate targets
+
+These eight targets cover files the engine reads from content, settings and module
+directories before it trusts them. They were built with Clang 21 and libFuzzer (ASan and
+UBSan) on a local WSL Ubuntu tree, their corpora replayed clean through the smoke command
+line, and each ran a bounded local campaign of 131 seconds with no crash, leak or timeout
+(fixtures on ext4; ASan quarantine 32 MB as `run_campaign.py` sets it): 1,538,422 inputs for
+the material reader, 25,257 for engine settings, 572,603 for the VFS resolver, 435,875 for
+the archetype reader, 481,035 for the sidecar reader, 170,887 for plugin metadata,
+11,775,298 for the reflection codec and 586,171 for the blob cache. None of them has hosted
+runtime evidence yet.
+
+- **`material-loader`** (`SparkFuzzMaterialLoader`, `FuzzMaterialLoaderSmoke`) feeds
+  `Spark::Graphics::ParseSparkMatDefinition`, the `.sparkmat` reader
+  `MaterialLoader::ParseFile` now hands its stream to (moved to `SparkMatParser.cpp` so it
+  links without the MaterialSystem and console). `std::stof` accepted `nan` and `inf`, and
+  `RegisterMaterial`'s `std::clamp` passes NaN through (`normalScale` is not clamped), so a
+  material file put non-finite PBR factors into the GPU constant buffers. A non-finite factor
+  now keeps its previous value (`SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults`).
+- **`engine-settings`** (`SparkFuzzEngineSettings`, `FuzzEngineSettingsSmoke`) writes
+  `settings.ini` (and, after a NUL byte, `settings.local.ini`) and calls
+  `EngineSettings::Load`. A rejected file must change no setting and not touch the assert
+  policy, an accepted one must apply its `[Debug]` policy, drop the retired crash-upload keys
+  and be a fixed point of load, `SaveAs`, load. The `settings_*` console commands moved to
+  `EngineSettingsConsole.cpp`; the adapter defines the two `Assert` policy setters, as
+  `SparkFuzzReflectedScene` does for `Assert::Fail`. No defect was found.
+- **`virtual-filesystem-mounts`** (`SparkFuzzVirtualFileSystem`,
+  `FuzzVirtualFileSystemSmoke`) resolves the input as a virtual path through
+  `VirtualFileSystem::ReadFile`/`ReadTextFile` over two real mounts holding links that point
+  out of the mount. Nothing outside the roots may be returned, a read is a regular fixture
+  file's bytes or nothing, and the higher-priority mount wins. On Linux an `ifstream` opens a
+  directory and its ext4 end offset reads as `INT64_MAX`, which `LocalFileProvider::ReadFile`
+  used as the buffer size, so a mod naming `.` or a folder aborted the engine. The defect does
+  not reproduce on tmpfs, where the directory offset is refused; the smoke reproduces it
+  wherever the temporary directory is on ext4, as on the hosted runner. A review then noted
+  the check-then-open-by-name race: an entry swapped for a directory or an outside link
+  between the containment check and the open was still read. `LocalFileProvider` now opens
+  first and decides on the opened handle (the held-handle helpers in `HeldHandles.h`, shared
+  with the mod scanner): a regular file (`fstat` / `GetFileInformationByHandle`), resolving
+  inside the mount root (`/proc/self/fd` or `F_GETPATH` plus a device/inode match on POSIX,
+  `GetFinalPathNameByHandleW` on Windows), at most 1 GiB, read to exactly its size
+  (`SecurityParsers_VfsDirectoryPathReadsAsNothing` and the three
+  `SecurityParsers_Vfs*SwappedFor*AfterCheckReadsAsNothing` tests, which swap the entry
+  through an open probe; the file-symlink case is POSIX-only).
+- **`entity-archetype-loader`** (`SparkFuzzEntityArchetype`, `FuzzEntityArchetypeSmoke`)
+  feeds `Spark::ECS::ParseArchetypeDefinition`, moved to `EntityArchetypeParse.cpp` out of
+  `LoadArchetypeFromFile`. Accepted archetypes keep trimmed, line-free fields, positional
+  parameters `p0`..`pN-1` and survive write, parse. No defect was found.
+- **`module-abi-sidecar`** (`SparkFuzzModuleSidecar`, `FuzzModuleSidecarSmoke`) writes the
+  input as the `.sparkabi` sidecar of a fixed module image and calls
+  `Spark::ModuleSidecar::ValidateModuleSidecar`, the gate `ModuleManager` runs before the OS
+  loader maps a module (moved with its SHA-256 and `DescribeModuleCompatibilityRejection` to
+  `ModuleSidecar.cpp`). The literal `@compiler_abi_version@` in a seed is replaced by the
+  building Clang's value, the one field that differs between toolchains. An accepted sidecar
+  must hold exactly the twelve fields with this host's descriptor (a larger `struct_size` is
+  allowed: the descriptor is append-only) and the image's hash. No defect was found.
+- **`plugin-metadata-json`** (`SparkFuzzPluginMetadata`, `FuzzPluginMetadataSmoke`) writes the
+  input as `fuzz-plugin.so.sparkplugin.json` and calls `Spark::ValidatePluginMetadata`, moved
+  to `PluginMetadata.cpp` out of `DynamicPluginHost.cpp`. Both gates must accept their own
+  correct document, so a gate that rejects everything fails the target. No defect was found.
+- **`reflection-binary-codec`** (`SparkFuzzReflectionBinary`, `FuzzReflectionBinarySmoke`)
+  decodes into a record with every field kind. The decoder must consume all bytes or none,
+  never write Custom, Unknown or non-serialized fields, keep Bool at 0 or 1, and agree with
+  `SerializeToBinary` on every accepted record. No defect was found.
+- **`shader-disk-cache-blob`** (`SparkFuzzShaderDiskCache`, `FuzzShaderDiskCacheSmoke`)
+  plants the input as the `.blob` `Store` wrote and calls `ShaderDiskCache::Lookup`. A
+  zero-length entry (a crash between `Store`'s truncating open and its write, or a planted
+  file) was returned as a successful blob with empty bytecode on every run, so the shader
+  was never recompiled; it is now a miss (`ShaderDiskCachePhaseV_EmptyCachedBlobIsAMiss`).
+  The empty input libFuzzer always runs is that regression; no zero-byte seed is committed.
+
+### Editor parser batch 3
+
+Eight editor targets now bind shipped read paths to bounded, byte-exact corpora. These are
+structural registrations awaiting a Linux Clang build, sanitizer smoke, and mutation campaigns;
+no runtime or exact-commit CI result is claimed for them.
+
+| Inventory parser | Fuzz target | Production entry and oracle |
+|---|---|---|
+| `editor-scene-json` | `SparkFuzzEditorSceneJson` | `DecodeSceneJSONDocument`; rejected output stays unchanged, accepted scenes validate and round-trip |
+| `editor-scene-load-dispatch` | `SparkFuzzEditorSceneLoad` | `SceneSerializer::LoadScene`; file extension dispatch agrees with decode and saved scene reload |
+| `editor-project-file` | `SparkFuzzEditorProjectFile` | extracted project and recent-list readers used by `ProjectManager`; accepted fields round-trip |
+| `editor-recovery-snapshot` | `SparkFuzzEditorRecovery` | `EditorRecoveryStore::LoadForProject`; primary/backup recovery and restored world invariants |
+| `editor-scene-ini-import` | `SparkFuzzEditorSceneImport` | extracted `ParseGameSceneIni` used by the import panel; finite transforms and deterministic parse |
+| `editor-theme-import` | `SparkFuzzEditorThemeImport` | extracted `ParseThemeDocument` used by theme import; finite colours and export/import round-trip |
+| `editor-window-layout` | `SparkFuzzEditorWindowLayout` | `EditorWindowManager::LoadLayoutFromFile`; finite layout fields and save/load agreement |
+| `editor-layout` | `SparkFuzzEditorLayout` | `EditorLayoutManager::LoadLayout`; finite layout state and save/load agreement |
+
+The window-layout and layout targets are the permitted substitutes for the still-blocked
+`editor-scene-binary` and `editor-crash-recovery-state` records in this batch. The binary
+scene `LoadBinary` entry always refuses because the legacy format is incomplete; the crash
+handler writes state but has no untrusted-state reader. Neither gives a meaningful Linux
+parser harness without a product/scope decision to retire or reclassify its inventory record. Bounded file
+readers validate the opened regular-file handle before parsing, avoiding a checked-path/opened-path
+race. Each corpus has valid and malformed nonempty seeds; regression seeds are declared in
+`tools/fuzz-policy/corpus-manifest.json` and replayed by its registered `FuzzEditor*Smoke` test.
+
+Build just this batch on Linux Clang:
+
+```bash
+CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
+  LDFLAGS="-stdlib=libstdc++" \
+  cmake -S tools/fuzz-policy -B build/fuzz-policy
+cmake --build build/fuzz-policy --target \
+  SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile \
+  SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport \
+  SparkFuzzEditorWindowLayout SparkFuzzEditorLayout
+ctest --test-dir build/fuzz-policy --output-on-failure \
+  -R '^FuzzEditor(SceneJson|SceneLoad|ProjectFile|Recovery|SceneImport|ThemeImport|WindowLayout|Layout)Smoke$' \
+  --no-tests=error
+```
+
+### Retired and reclassified records
+
+Five blocked records described code that decodes no untrusted bytes. Each now carries its
+reviewed classification, and none counts as fuzzed:
+
+| Former record | Outcome |
+|---|---|
+| `svg-renderer` | `Graphics/SVGRenderer.h` had no include anywhere; deleted as unwired code |
+| `input-bindings` | `InputBindingManager::LoadFromFile`/`SaveToFile` (a `std::regex` reader with no size cap) had no caller; deleted, so the attack surface is gone rather than covered |
+| `texture-basis-transcoder` | no basisu backend is linked and `ParseHeader`/`Transcode` read nothing; exempted as `not-a-parser` |
+| `archive-resource-provider` | forwards to `SparkPakReader`; both files exempted as `delegating-call-site` of the fuzzed `sparkpak-reader` (the reader opens `.spk` only, not `.pak`/`.zip`) |
+| `texture-streaming-container` | `TextureStreaming.cpp` only queues `TextureSystem::LoadTextureFromFile` calls (the `texture-loader-*` records); no detector hits it, so the record was dropped rather than exempted |
 
 Two gates, deliberately separate:
 
@@ -24,10 +528,12 @@ Two gates, deliberately separate:
 | Structural | `check_fuzz_policy.py --ci` | merges (Required CI Gate) | passes |
 | Closure | `check_fuzz_policy.py --ci --require-closure` | releases (`release.yml`) | **fails — by design** |
 
-Network packet/protocol fuzzing belongs to NET-100 behind G12. AngelScript and
-visual-script fuzzing belongs to ENG-200 behind G11, including `.as` script-file
-ingestion under `SparkEngine/Source/Engine/Scripting`. Their subtrees are named as
-ticketed, owned, expiring exclusions rather than silently omitted.
+Network packet/protocol fuzzing belongs to NET-100 behind G12. AngelScript fuzzing
+belongs to ENG-200 behind G11, including `.as` script-file ingestion under
+`SparkEngine/Source/Engine/Scripting`. Their subtrees are named as ticketed, owned,
+expiring exclusions rather than silently omitted. A file an inventoried parser owns is
+never hidden by a subtree exclusion: the `.vscript` graph decoder in the scripting
+subtree is the `visual-script-graph` parser, fuzzed by `SparkFuzzVisualScriptGraph`.
 
 ## What the Gate Proves
 
@@ -51,8 +557,9 @@ The gate proves that:
   entries fatal and the entry cap applied *before* a directory listing is materialized;
 - the declared scope cannot shrink: every `Spark*`/`GameModules` source tree present on
   disk must be a declared root, and the extension set must be the full supported set;
-- every detected candidate is either owned by an inventory record or deferred with a
-  reason, the `sec-120-parser-triage` owner, the SEC-120 ticket, and an expiry;
+- every detected candidate is owned by an inventory record, deferred with a reason, the
+  `sec-120-parser-triage` owner, the SEC-120 ticket, and an expiry, or carries an OD-21
+  exemption (see [OD-21 Candidate Classification](#od-21-candidate-classification));
 - **exclusions are reviewed waivers, not free text.** An exclusion needs an approved
   ticket from a hard-coded allowlist, that ticket's approved owner, an expiry inside
   365 days, and the exact count of candidates it hides. Whole-scan-root, overlapping,
@@ -76,9 +583,54 @@ The gate proves that:
   a non-blocking status, while blockers remain.
 
 The gate does **not** prove that the regex scanner finds every possible parser, or that
-declared limits hold at runtime. The snapshot reports `detector_blind_spot_count` — 27
-inventoried files that no detector pattern matches, found by human review — precisely so
-that limitation is a number rather than an assumption.
+declared limits hold at runtime. The full inventory report records inventoried files that no detector pattern matches,
+found by human review. Consult that generated report for the measured gap.
+
+Two detectors cover decoders that name no parse call: `binary-reader` (a
+`Spark::BinaryReader` constructed over the input) and `bounded-field-read` (a
+hand-rolled `ReadU8`/`ReadU16`/`ReadU32`/`ReadU64`/`ReadI32`/`ReadF32` field reader). When
+they landed they surfaced five first-party decoders that were outside the inventory: the
+daemon IPC codecs `shader-daemon-blob` (`ShaderDaemonBridge.cpp`),
+`shader-service-protocol`, `asset-service-protocol` and `daemon-protocol-frame`, now
+blocked `untrusted-ipc` records, and the terrain field reader `TerrainAssetFormat.h`,
+folded into `terrain-sparkterrain`. Three play-mode snapshot exemptions gained
+`bounded-field-read` in their reviewed `detected_by`. The `save-system` record's format
+is `.spark_save`, the extension `SaveSystem::GetSavePath` writes.
+
+## OD-21 Candidate Classification
+
+Owner decision OD-21 fixes how a detected candidate is classified, one entry per file,
+and fails closed toward fuzzing:
+
+1. Code that parses bytes from outside the process — files a user or mod can supply,
+   packages, network, save/scene/config files read at runtime — is an inventoried
+   parser in `parsers[]` and needs a fuzz target. `trust_boundary` is one of
+   `untrusted-file`, `untrusted-network`, or `untrusted-ipc` (pipes, child-process
+   output and health files, git output). Until a harness exists it is `blocked`
+   with a SEC-120 blocker; it is never exempted.
+2. Code that only parses data this same process produced, or build-time/developer
+   tooling that never ships, is exempt with a written justification.
+3. Generic read/tokenize helpers are helper-exempt; every parser that calls them is
+   classified on its own.
+
+When in doubt, the file is a boundary. Exemptions live in `exempt_candidates[]`:
+
+| `classification` | Meaning |
+|---|---|
+| `same-process-data` | rule (2): decodes only bytes this process generated (e.g. the in-memory play-mode snapshot) |
+| `developer-tooling` | rule (2): build/test tooling no shipped runtime path reaches |
+| `helper` | rule (3): generic read/tokenize/hash helper with no grammar of its own |
+| `delegating-call-site` | forwards to, or only declares, an inventoried parser's entry point; `delegates_to` must name that parser id or an excluded subtree |
+| `not-a-parser` | the detector matched code that decodes no externally suppliable bytes (doc comments, atomic ring indices, kernel-owned `/proc` reads, display-only log tails) |
+
+Each exemption also records `detected_by`, the exact detector hits the reviewer read.
+The gate requires the live scan to report the same set, so adding a new kind of parsing
+to an exempt file fails CI until the file is re-reviewed. Stale, duplicate, case-aliased,
+unjustified (under 40 characters), and parser-or-deferral-overlapping exemptions are
+rejected. The first triage (2026-09-24) classified all 149 deferred candidates: 28 new
+blocked boundaries (including the collaborative-edit TCP codec, the editor/engine named
+pipe, LAN discovery beacons, game-module save-state decoders, and two tinyobj-based OBJ
+loaders), files folded into existing blocked records, and 115 exemptions.
 
 ## Commands
 
@@ -93,12 +645,34 @@ python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --ci --require-cl
 python3 tools/fuzz-policy/check_fuzz_policy.py --source-root . --emit-json \
   > docs/sec120-fuzz-policy-check.json
 
-python3 -m unittest discover -s Tests/fuzz-policy -p "test_*.py" -v
+python3 -m unittest discover -s FuzzerTests/policy -p "test_*.py" -v
 bash tools/check-fuzz-policy.sh          # also runs via tools/validate-all.sh
 
-cmake -S tools/fuzz-policy -B build/fuzz-policy
+# Ubuntu/Debian's compiler-rt libFuzzer archive uses libstdc++. The fuzzer
+# executable and callback stay on that ABI, while the production adapter and
+# logger compile with libc++ for the C++23 headers. They communicate only via
+# an extern "C" byte-buffer entry point, so no C++ standard-library object
+# crosses the boundary.
+sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+CXX=clang++ CXXFLAGS="-stdlib=libstdc++" \
+  LDFLAGS="-stdlib=libstdc++" \
+  cmake -S tools/fuzz-policy -B build/fuzz-policy
 cmake --build build/fuzz-policy --target check-fuzz-policy
+cmake --build build/fuzz-policy --target \
+  SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive \
+  SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab \
+  SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr \
+  SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents \
+  SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain \
+  SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable \
+  SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest \
+  SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState \
+  SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype \
+  SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad \
+  SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout
+cmake --build build/fuzz-policy --parallel 4
 ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 ```
 
 `-C Release` is required by multi-config generators (Visual Studio) and ignored by
@@ -107,19 +681,156 @@ failures return nonzero, including JSON emission mode. The CI mode also checks t
 workflow/CMake wiring and requires the committed evidence snapshot to equal the
 freshly computed report.
 
+## FuzzerTests Layout
+
+Fuzzing lives in the top-level `FuzzerTests/` directory, separate from the unit suite in
+`Tests/`. The fuzz targets are added from the root `CMakeLists.txt` when
+`SPARK_ENABLE_FUZZ_TARGETS` is on, not through `Tests/CMakeLists.txt`.
+
+| Path | Contents | Rules |
+|------|----------|-------|
+| `FuzzerTests/*.cpp`, `CMakeLists.txt` | libFuzzer harnesses, production adapters, smoke registration | clang-format root; bound by `parser-inventory.json` |
+| `FuzzerTests/corpora/<parser>/` | Reviewed seeds and `regression-*` reproducers | `corpus-manifest.json` budget and `content_digest`; the blocking smoke replays exactly these |
+| `FuzzerTests/generated/<parser>/` | Coverage-minimized units kept from earlier fuzzing | Read-only second corpus for the scheduled campaign; byte-exact (`-text`); never replayed by the merge gate |
+| `FuzzerTests/policy/` | Adversarial policy and campaign tests (`FuzzPolicyAdversarial`) | Run by the blocking `fuzz-policy` job |
+| `FuzzerTests/Replay/` | Corpus replay driver for the normal test build (`FuzzReplay_<corpus>`) | Not fuzz targets; labelled `fuzz-replay`, never counted by the policy |
+
+The libFuzzer targets build only on Linux Clang, so `FuzzerTests/Replay/` (added from the
+root `CMakeLists.txt` whenever `BUILD_TESTS` is on) links each harness and its production
+adapter against `SparkEngineLib` with `FuzzReplayMain.cpp` in place of the libFuzzer
+driver. `FuzzReplay_<corpus>` feeds every committed seed, including each `regression-*`
+fixture, through the production entry point once, and fails on an abort, a crash, a
+per-input timeout (5 s) or an empty corpus. On Windows the SparkPak adapter stages input
+in a temporary file instead of a memfd. `json-utils`, `scene-manifest`,
+`sparkpak-reader` and `crash-manifest` replay on every platform; `neural-weights-nnw` and
+`texture-stex` stage input through `mkstemp` and replay on POSIX builds only. Replay
+carries no sanitizer of its own: it runs under whatever the build uses (the Linux ASan
+and UBSan presets), so on MSVC it catches aborts, crashes and hangs, not silent memory
+errors.
+
+```bash
+ctest --test-dir build/windows-release -C Release -L '^fuzz-replay$' --no-tests=error
+```
+
+A `generated/` directory is not a seed set, so it is outside the per-corpus seed budget.
+Refresh it only with a coverage merge, never by copying raw campaign output:
+
+```bash
+mkdir /tmp/merged
+build/fuzz-policy/fuzz-targets/SparkFuzzJsonUtils -merge=1 -max_len=4096 -timeout=1 -rss_limit_mb=256 \
+  /tmp/merged FuzzerTests/generated/json-utils <campaign corpus directories>
+# replace FuzzerTests/generated/json-utils with /tmp/merged, minus files identical to a seed
+```
+
+`FuzzerTests/generated/json-utils` was seeded on 2026-09-25 from 1,776 units that an
+earlier time-bounded JSON smoke had written into the seed directory. A `-merge=1` pass
+kept 773 units that add coverage (972 edges); dropping the 3 that duplicate committed
+seeds left a reduced corpus totaling 57 KB.
+
+## Scheduled Campaign
+
+`.github/workflows/fuzz-scheduled.yml` (job `fuzz-scheduled`, nightly and
+`workflow_dispatch`) is the exploration half of the gate. It is deliberately not a need
+of `required-ci-gate`: a campaign finding is a new bug to fix with a regression seed,
+not a reason to block unrelated merges. `tools/fuzz-policy/run_campaign.py` discovers
+every CTest test labelled exactly `fuzz` in the configured build, so a new target joins
+the campaign when its smoke is registered. For each target it:
+
+- copies the committed corpus into a temporary directory and gives libFuzzer only that
+  copy as its writable corpus, adds `FuzzerTests/generated/<parser>` (when present) as a
+  read-only second corpus, then re-hashes both committed directories and reports
+  `corpus-mutated` if either changed (the workflow also fails on any `git status` change
+  under `FuzzerTests/corpora` or `FuzzerTests/generated`);
+- keeps the smoke's `-max_len`/`-timeout`/`-rss_limit_mb`, drops its replay-only
+  `-runs`/`-max_total_time`, and mutates for `--seconds` (by default, the total
+  campaign budget divided by the discovered target count, rounded down);
+- caps ASan's quarantine at 32 MB unless `ASAN_OPTIONS` already sets one, so the 256 MB
+  RSS limit does not report false OOMs;
+- sets `UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1` unless `halt_on_error` is
+  already set, in addition to the fatal UBSan compile and link flags required on
+  every registered target; it also reports `sanitizer-report` if a `runtime error:`
+  line is in the log of an otherwise clean run;
+- runs `-minimize_crash=1` on every `crash-`/`leak-`/`timeout-`/`oom-` reproducer and
+  keeps both the raw and the minimized file;
+- rewrites `campaign-summary.json` after every target (`complete` stays `false` until
+  the last one finishes, so a cancelled job still uploads partial results) with
+  per-target status, duration, executed units, crash-free wall time, peak RSS, new
+  units and artifact SHA-256s, plus `unimported_findings`: every reproducer whose bytes
+  no committed `regression-*` seed of that target's corpus holds yet.
+
+It exits 1 on any finding (crash, hang, abnormal exit, UBSan report or corpus change).
+Without a finding it exits 2 when the campaign could not be set up (bad arguments, no
+targets, an explicit budget above `--max-campaign-seconds`) or when a target could not run
+(non-executable binary or unusable corpus, recorded as `setup-error` in the summary).
+The workflow passes `--max-campaign-seconds 6000`, so its default per-target seconds
+scale down as targets are added and their total fits 100 of the job's 180 minutes.
+An explicit `seconds_per_target` override is rejected when that total exceeds 6000.
+The workflow uploads the whole output directory as `fuzz-campaign-<run id>` for 90
+days. To land a finding, reproduce with the minimized file, fix the parser, and import
+the reproducer with `tools/fuzz-policy/import_regression.py`, which copies it into the
+parser's corpus as `regression-<slug>.<ext>`, refreshes `content_digest` and
+`last_verified`, grows `max_corpus_entries`/`max_corpus_bytes` when needed, and raises
+the smoke's `-runs=N`. It refuses a raw reproducer when a minimized one exists, a file
+the campaign did not record, bytes that no longer match the recorded SHA-256, and a
+reproducer found by another target.
+
+```bash
+python3 tools/fuzz-policy/run_campaign.py --build-dir build/fuzz-policy \
+  --output /tmp/fuzz-campaign --seconds 30
+git status --porcelain -- FuzzerTests/corpora   # must print nothing
+python3 tools/fuzz-policy/import_regression.py /tmp/fuzz-campaign/campaign-summary.json \
+  /tmp/fuzz-campaign/<target>/minimized/<crash>.min --parser sparkpak-reader --slug <name>
+```
+
+### Regression fixtures
+
+Every recorded `regression-*` seed has a manifest record. The gate checks the records
+it can see; it cannot discover an issue fixed without a fixture or prove a hand-landed
+seed was minimized. Each `corpus-manifest.json` entry carries a `regressions` array of
+`{file, finding, found_by, guard_test, fixed_commit}` records:
+
+- every `regression-*` seed in the corpus is declared, and every declared `file` is a
+  seed, so a fixture can be neither dropped silently nor landed undocumented;
+- `finding` is one line describing the defect, and `found_by` is `campaign`, `smoke`,
+  `review` or `report`;
+- `guard_test` names the test that fails without the fix: a CTest registered in a
+  first-party CMake listfile (the fuzz smoke itself qualifies when only the sanitizer
+  replay catches the bug) or a `TEST(...)` case under `Tests/`. Vendored and build trees
+  do not count;
+- `fixed_commit` is required, must resolve to a commit in the checkout, and must touch
+  an inventoried source file for that parser. The CI checkout fetches full history;
+- the import tool writes `finding`, `guard_test` and `fixed_commit` as `TODO`, which
+  the policy rejects until the fix and its evidence are recorded;
+- the smoke's `-runs=N` must equal the corpus seed count, so the blocking replay covers
+  every fixture, and `content_digest` covers its bytes.
+
+All 64 existing regression records now carry a historical source-touching commit.
+That check does not prove their guard tests fail before the fix. The empty-input
+`ShaderDiskCache::Lookup` finding still needs an owner-approved record type because
+the seed policy rejects zero-byte files; no zero-byte seed exception was added.
+
+A workflow file proves nothing until a hosted run is recorded; no scheduled-campaign
+history exists yet, so `runtime_evidence.scheduled_campaign` stays `false`.
+
 ## Adding or Reclassifying a Parser
 
 1. Add its production implementation files to
    `tools/fuzz-policy/parser-inventory.json` using canonical repository-relative paths.
 2. Mark it `blocked` with a substantive SEC-120 reason, or `fuzzed` with a harness,
-   CMake listfile, target, CTest selector, corpus id, and `entry_symbol`.
-3. Remove any corresponding entry from `deferred_candidates`.
+   CMake listfile, target, CTest selector, corpus id, and `entry_symbol`. If the
+   harness crosses a C ABI adapter, also declare its `binding_source` and
+   `harness_entry_symbol`; the adapter must call the production `entry_symbol`.
+3. Remove any corresponding entry from `deferred_candidates` or `exempt_candidates`.
+   A newly detected file that is not a boundary gets an OD-21 exemption instead, with
+   its `classification`, a concrete `justification`, and the sorted `detected_by`
+   list the scanner reports for it.
 4. For a fuzzed parser, add exactly one entry to `corpus-manifest.json`. The seed tree
-   lives under `Tests/fuzz-corpora/`, must be non-empty, fresh, confined, link-free,
+   lives under `FuzzerTests/corpora/`, must be non-empty, fresh, confined, link-free,
    within every declared limit, and pinned by `content_digest`.
 5. Bind the exact input, timeout, memory, depth, and smoke limits in the harness and the
    CMake registration, then run the commands above under ASan/UBSan.
-6. Persist each minimized crash input as a regression and regenerate the snapshot.
+6. Persist each minimized crash input as a declared regression fixture (see
+   [Regression fixtures](#regression-fixtures)) and regenerate the snapshot.
 
 Do not change a parser to `fuzzed` based on an upstream library campaign or a unit test
 that bypasses the production entry point. Adding an exclusion ticket requires editing
@@ -128,22 +839,31 @@ change *is* the review record.
 
 ## Remaining Closure Work
 
-- classify the 151-file deferred backlog before it expires on 2027-02-24;
-- implement production-entry-point fuzz targets for the inventoried parsers, starting
-  with the highest-risk binary readers (`neural-weights-nnw`, `terrain-sparkterrain`,
-  `daemon-asset-cache-blob`, `editor-level-streaming-world`, `startup-splash-bmp`,
-  `fps-terrain-heightmap-bmp`, `asset-media-windows`);
-- commit bounded seed corpora under `Tests/fuzz-corpora/` and minimized regressions;
-- add blocking ASan/UBSan smoke and scheduled campaigns with retained coverage and
-  crash-free-duration evidence, and wire the `-L fuzz` smoke run into the CI job (the
-  gate already requires it as soon as any parser is marked `fuzzed`);
+- implement production entry-point fuzz targets for every parser still marked `blocked`
+  in the generated snapshot, prioritizing remaining network, mod, save, and user-file
+  boundaries. Each target needs the production parser, a bounded corpus, a meaningful
+  oracle, a deterministic blocking smoke, and a regression fixture for every fix;
+- retain exact-SHA sanitizer smoke for all registered targets. A structural binding
+  check alone does not show that a target compiled or ran;
+- commit bounded seed corpora under `FuzzerTests/corpora/` and minimized regressions;
+- retain the blocking ASan/UBSan smoke now wired for the registered targets and record hosted
+  `fuzz-scheduled` campaign history with its crash-free-duration statistics, then add
+  coverage reporting (the `-L fuzz` CI run is required whenever a parser is marked
+  `fuzzed`);
 - independently review that each harness reaches production parsing code and that
   allocation, depth, path, integer, and time bounds are enforced by that code;
-- extend the detector so the 27 known blind spots shrink.
+- extend the detector so the 33 known blind spots shrink;
+- have an independent security reviewer re-check the OD-21 exemptions; they are
+  recorded judgement, not proof of unreachability.
 
 ## Source & Freshness
 
 Source of truth: `tools/fuzz-policy/`, `cmake/SparkFuzzPolicy.cmake`, the blocking
-`fuzz-policy` job in `.github/workflows/build.yml`, and the closure step in
-`.github/workflows/release.yml`. Status checked 2026-08-28 against base commit
-`006c2ed32f751d3c363e76c3595c78a95069c4bc`; rerun the CI command for current counts.
+`fuzz-policy` job in `.github/workflows/build.yml`, the non-blocking `fuzz-scheduled`
+campaign in `.github/workflows/fuzz-scheduled.yml`, and the closure step in
+`.github/workflows/release.yml`. The OD-21 classification and the counts above were
+re-verified structurally 2026-09-28 (SparkBuild, `-exec` and `.vscript` targets and the
+record reclassification), 2026-09-29 (installer marker and mod-manifest targets) and 2026-09-30
+(save, store and daemon state targets) and 2026-10-01 (content, settings and module-gate
+targets); rerun the CI command for
+current counts and exact-SHA runtime evidence.

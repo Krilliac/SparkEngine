@@ -23,7 +23,7 @@ Verified present (2026-06-08) in all of the following:
 
 - `PacketValidator.cpp` — payload size, auth, direction checks
 - `NetworkConnection.cpp` — packet validation gateway
-- `DedicatedServer.cpp` — RCON command gate
+- `DedicatedServer.cpp` — trusted local administration command boundary; network chat never dispatches admin commands and no remote RCON listener exists
 - `SparkConsole.cpp` — RBAC permission check
 - `ScriptSandbox.cpp` — instruction / timeout / memory limits
 - `AbilitySystem.cpp` — cooldowns, damage validation, death check, health cap
@@ -50,7 +50,7 @@ Verified present (2026-06-08) in all of the following:
 - Ticked via `SPARK_GUARDED_UPDATE` inside `UpdateDebugSystems(dt)`.
 - Violation response: Log + EventBus event + user callback (the game decides what to do).
 - Console commands: `memory.integrity.status` / `scan` / `violations` (Developer permission).
-- Test coverage: `Tests/TestMemoryIntegrity.cpp` (16 tests, confirmed 2026-06-08).
+- Test coverage: `Tests/TestMemoryIntegrity.cpp` (source confirmed 2026-06-08).
 - Active in both Debug and Release builds.
 
 ## Macro usage
@@ -76,7 +76,7 @@ Status changes / verifications found during freshening:
 
 - `MemoryIntegrity.h` and `.cpp` both present in `Engine/Security/`.
 - All 11 documented guard call sites confirmed via grep for `SPARK_BRANCH_GUARD_BEGIN`/`SPARK_INTEGRITY_CHECKPOINT` (engine + FPS/MMO/ARPG modules).
-- `Tests/TestMemoryIntegrity.cpp` confirmed at 16 tests — unchanged.
+- `Tests/TestMemoryIntegrity.cpp` confirmed present in the recorded source snapshot.
 - No status changes; entry is current.
 
 ## Related Pages

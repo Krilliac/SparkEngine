@@ -456,11 +456,12 @@ namespace Terrafront
 
     void TFPingSystem::ReleaseClientHandlers()
     {
-        // NetworkManager has no per-type removal; replace with a no-op so no
-        // dangling `this` survives module shutdown (TFServerSim pattern).
+        // Remove (never replace) this observer. An empty placeholder lambda is itself code in this module
+        // image: it outlived unload, and during hot reload it overwrote the replacement module's handler.
+        // Inside the module's teardown scope NetworkManager leaves a slot the replacement already owns
+        // untouched.
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFMsgPingState),
-                           [](const Spark::Net::NetworkMessage&) {});
+        nm.UnregisterHandler(static_cast<Spark::Net::MessageType>(kTFMsgPingState));
         m_clientHandlers = false;
     }
 

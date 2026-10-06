@@ -115,6 +115,18 @@ class FooBar {
 
 
 class DocsGenerationHostileTests(unittest.TestCase):
+    def test_symbol_tsv_round_trips_briefs_that_contain_quotes(self) -> None:
+        # The writer never quotes fields, so a brief opening with '"' must come back verbatim
+        # (csv's default quoting used to strip the quotes and fail the source projection check).
+        symbols = [
+            docs_contract.Symbol("SparkEngine/Source/A.h", 3, "function", "Describe", '"entity #N (\'name\')" label.'),
+            docs_contract.Symbol("SparkEngine/Source/A.h", 9, "class", "Quoted", 'Holds a "quoted" word and a trailing "'),
+        ]
+        with tempfile.TemporaryDirectory(prefix="docs-tsv-quotes-") as directory:
+            path = Path(directory) / ".symbols.tsv"
+            path.write_text("\n".join("\t".join(value.tsv_row()) for value in symbols) + "\n", encoding="utf-8")
+            self.assertEqual(docs_contract.load_symbols(path), symbols)
+
     def test_duplicate_json_members_are_rejected_by_both_contract_readers(self) -> None:
         with MiniContract() as fixture:
             source = json.loads(fixture.contract.read_text(encoding="utf-8"))
@@ -255,7 +267,7 @@ class DocsGenerationHostileTests(unittest.TestCase):
         self.assertNotIn("SPARK_FILE_TREE_OUTPUT", environment)
         self.assertNotIn("SPARK_WIKI_DIR", environment)
 
-    def test_currentness_pins_generation_date_to_source_commit_utc_day(self) -> None:
+    def test_currentness_strips_date_overrides_and_preserves_source_identity(self) -> None:
         environments: list[dict[str, str]] = []
 
         def completed_process(
@@ -290,8 +302,48 @@ class DocsGenerationHostileTests(unittest.TestCase):
 
         self.assertEqual(
             [environment.get("GENERATED_DATE") for environment in environments],
-            ["2026-09-01", "2026-09-01", "2026-09-01"],
+            [None] * 3,
         )
+        self.assertEqual(
+            [environment.get("SPARKENGINE_DOC_SOURCE_SHA") for environment in environments],
+            [EXACT_SHA] * 3,
+        )
+        self.assertEqual(
+            [environment.get("SPARKENGINE_DOC_SOURCE_COMMITTED_AT") for environment in environments],
+            ["2026-08-31T19:31:59-05:00"] * 3,
+        )
+        self.assertEqual(
+            {environment.get("PYTHONDONTWRITEBYTECODE") for environment in environments},
+            {"1"},
+        )
+
+    def test_tracked_codebase_statistics_excludes_calendar_time(self) -> None:
+        script = (REPO_ROOT / "docs" / "update-codebase-stats.sh").read_text(encoding="utf-8")
+        page = (REPO_ROOT / "wiki" / "advanced" / "Codebase-Statistics.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("GENERATED_DATE", script)
+        self.assertNotIn("date -u", script)
+        self.assertNotRegex(
+            page,
+            r"(?m)^Comprehensive metrics.*Updated [0-9]{4}-[0-9]{2}-[0-9]{2}\.$",
+        )
+
+    def test_windows_prefers_installed_git_bash_over_wsl_shim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-bash-selection-") as directory:
+            git_bash = Path(directory) / "bash.exe"
+            git_bash.write_text("trusted", encoding="utf-8")
+            with (
+                mock.patch.object(docs_currentness, "WINDOWS_HOST", True, create=True),
+                mock.patch.object(docs_currentness, "GIT_BASH_PATH", str(git_bash), create=True),
+                mock.patch.object(
+                    docs_currentness.shutil,
+                    "which",
+                    return_value=r"C:\WindowsApps\bash.exe",
+                ),
+            ):
+                selected = docs_currentness.find_bash(allow_override=False)
+        self.assertEqual(str(git_bash), selected)
 
     def test_bounded_process_timeout_terminates_descendants_promptly(self) -> None:
         child = (
@@ -381,6 +433,74 @@ class DocsGenerationHostileTests(unittest.TestCase):
                 projection,
             )
             self.assertIn("not a regular non-reparse file", str(caught.exception))
+
+    def test_undeclared_isolated_output_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-undeclared-output-") as directory:
+            root = Path(directory)
+            first = root / "first"
+            second = root / "second"
+            for snapshot in (first, second):
+                write(snapshot / "tracked.md", "tracked\n")
+                write(snapshot / "docs" / "api" / "README.md", "generated\n")
+                write(snapshot / "docs" / "unlisted.md", "undeclared\n")
+            write(root / "tracked.md", "tracked\n")
+            contract = {
+                "schemaVersion": 1,
+                "generators": [
+                    {
+                        "id": "api-docs",
+                        "script": "generate-api-docs.sh",
+                        "mode": "generate",
+                        "outputs": [
+                            {"path": "docs/api", "tracked": False, "tree": True},
+                        ],
+                    },
+                ],
+            }
+            with mock.patch.object(docs_currentness, "REPO_ROOT", root):
+                with self.assertRaisesRegex(
+                    docs_currentness.CurrentnessError,
+                    "undeclared generated output",
+                ):
+                    docs_currentness.compare_outputs(
+                        contract,
+                        first,
+                        second,
+                        ["tracked.md"],
+                    )
+
+    def test_windows_case_variant_of_tracked_input_is_not_undeclared(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-case-variant-") as directory:
+            root = Path(directory)
+            first = root / "first"
+            second = root / "second"
+            for snapshot in (first, second):
+                write(snapshot / "Tools" / "api-changelog.py", "tracked\n")
+                write(snapshot / "docs" / "api" / "README.md", "generated\n")
+            write(root / "tools" / "api-changelog.py", "tracked\n")
+            contract = {
+                "schemaVersion": 1,
+                "generators": [
+                    {
+                        "id": "api-docs",
+                        "script": "generate-api-docs.sh",
+                        "mode": "generate",
+                        "outputs": [
+                            {"path": "docs/api", "tracked": False, "tree": True},
+                        ],
+                    },
+                ],
+            }
+            with (
+                mock.patch.object(docs_currentness, "CASE_INSENSITIVE_TRACKED_PATHS", True),
+                mock.patch.object(docs_currentness, "REPO_ROOT", root),
+            ):
+                docs_currentness.compare_outputs(
+                    contract,
+                    first,
+                    second,
+                    ["tools/api-changelog.py"],
+                )
 
     def test_newer_readme_cannot_hide_stale_source_or_missing_page(self) -> None:
         with MiniContract() as fixture:
@@ -531,6 +651,58 @@ class FooBar {};
             self.assertEqual(1, health["exitCode"])
 
 
+class CurrentnessRejectionTests(unittest.TestCase):
+    """Exercise byte comparisons and the real tracked-tree mutation guard."""
+
+    def test_declared_output_comparisons_fail_closed(self) -> None:
+        for case, message in (
+            ("stale", "tracked generated output is stale"),
+            ("file", "generated file is nondeterministic"),
+            ("tree", "generated tree is nondeterministic"),
+            ("undeclared", "undeclared tracked output"),
+        ):
+            with self.subTest(case=case), tempfile.TemporaryDirectory(prefix="docs-currentness-") as temporary:
+                root = Path(temporary)
+                first, second = root / "first", root / "second"
+                relative = "docs/generated/page.md"
+                for directory in (root, first, second):
+                    write(directory / relative, "current\n")
+                if case == "stale":
+                    write(root / relative, "old\n")
+                elif case == "undeclared":
+                    for directory in (first, second):
+                        write(directory / relative, "changed\n")
+                else:
+                    write(second / relative, "different\n")
+                output = {"path": relative, "tracked": True}
+                if case == "tree":
+                    output = {"path": "docs/generated", "tracked": False, "tree": True}
+                contract = {"generators": [{"outputs": [] if case == "undeclared" else [output]}]}
+                with mock.patch.object(docs_currentness, "REPO_ROOT", root):
+                    with self.assertRaisesRegex(docs_currentness.CurrentnessError, message):
+                        docs_currentness.compare_outputs(contract, first, second, [relative])
+
+    def test_check_rejects_tracked_tree_mutation(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-mutation-") as temporary:
+            root = Path(temporary)
+            write(root / "tracked.md", "before\n")
+
+            def mutate(*args: object) -> None:
+                write(root / "tracked.md", "after\n")
+
+            with mock.patch.object(docs_currentness, "REPO_ROOT", root), \
+                 mock.patch.object(docs_currentness, "load_contract", return_value={"generators": []}), \
+                 mock.patch.object(docs_currentness, "exact_identity", return_value=(EXACT_SHA, COMMITTED_AT)), \
+                 mock.patch.object(docs_currentness, "tracked_inventory", return_value=(
+                     ["tracked.md"], {"tracked.md": "100644"})), \
+                 mock.patch.object(docs_currentness, "copy_snapshot"), \
+                 mock.patch.object(docs_currentness, "run_snapshot", side_effect=mutate), \
+                 mock.patch.object(docs_currentness, "validate_health"), \
+                 mock.patch.object(docs_currentness, "compare_outputs"):
+                with self.assertRaisesRegex(docs_currentness.CurrentnessError, "mutated the tracked working tree"):
+                    docs_currentness.check_currentness(EXACT_SHA, COMMITTED_AT)
+
+
 class LinkFixture:
     def __init__(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="docs-link-fixture-")
@@ -589,6 +761,44 @@ class LinkFixture:
 
 
 class DocsLinksHostileTests(unittest.TestCase):
+    def test_missing_images_are_rejected(self) -> None:
+        for markup in ('![alt](missing.png)', '<img src="missing.png">', '<source src="missing.png">'):
+            with self.subTest(markup=markup), LinkFixture() as fixture:
+                write(fixture.docs / "Guide.md", "# Guide\n\n" + markup + "\n")
+                errors = links.validate_docs_links(
+                    fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+                )
+                self.assertTrue(any("target does not exist" in row["error"] for row in errors), errors)
+
+    def test_present_images_resolve(self) -> None:
+        with LinkFixture() as fixture:
+            (fixture.docs / "present.png").write_bytes(b"image fixture")
+            write(fixture.docs / "Guide.md", '# Guide\n![alt](present.png)\n<img src="present.png">\n')
+            self.assertEqual([], links.validate_docs_links(
+                fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+            ))
+
+    def test_source_line_anchor_bounds(self) -> None:
+        for anchor, valid in (("L3", True), ("L1-L3", True), ("L999", False), ("L1-L999", False)):
+            with self.subTest(anchor=anchor), LinkFixture() as fixture:
+                write(fixture.docs / "Target.md", "# Target\nsecond\nthird\n")
+                write(fixture.docs / "Guide.md", f"# Guide\n[x](Target.md#{anchor})\n")
+                errors = links.validate_docs_links(
+                    fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+                )
+                if valid:
+                    self.assertEqual([], errors)
+                else:
+                    self.assertTrue(any("source line anchor exceeds" in row["error"] for row in errors), errors)
+
+    def test_missing_catalog_root_document_is_rejected(self) -> None:
+        with LinkFixture() as fixture:
+            fixture.catalog["include"]["rootDocuments"] = ["missing.md"]
+            errors = links.validate_docs_links(
+                fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+            )
+            self.assertTrue(any("root document is missing" in row["error"] for row in errors), errors)
+
     def test_reference_style_missing_target_is_rejected(self) -> None:
         with LinkFixture() as fixture:
             write(
@@ -686,12 +896,241 @@ class DocsLinksHostileTests(unittest.TestCase):
             )
             self.assertTrue(any("escapes repository" in error["error"] for error in errors), errors)
 
+    def test_wrong_case_link_is_rejected_on_every_filesystem(self) -> None:
+        with LinkFixture() as fixture:
+            write(fixture.docs / "Target.md", "# Target\n")
+            write(fixture.docs / "Guide.md", "# Guide\n\n[wrong case](target.md)\n")
+            case_insensitive = (fixture.docs / "target.md").exists()
+            errors = links.validate_docs_links(
+                fixture.catalog,
+                generated_root=fixture.api,
+                source_sha=EXACT_SHA,
+            )
+            expected = "target path casing is not exact" if case_insensitive else "target does not exist"
+            self.assertTrue(
+                any(error["target"] == "target.md" and expected in error["error"] for error in errors),
+                errors,
+            )
+
+    def test_tracked_index_decides_case_when_directories_differ_only_by_case(self) -> None:
+        # A case-insensitive checkout merges tracked Tools/ and tools/ into one
+        # on-disk directory, so only the index knows each file's exact spelling.
+        with tempfile.TemporaryDirectory(prefix="docs-link-case-") as temporary:
+            root = Path(temporary)
+            write(root / "Tools" / "x.c", "")
+            write(root / "Tools" / "y.c", "")
+            tracked = links.TrackedTree(
+                frozenset({"tools", "tools/x.c", "Tools", "Tools/y.c"}),
+                frozenset({"tools", "tools/x.c", "tools/y.c"}),
+            )
+            self.assertTrue(links.exact_case(root / "tools" / "x.c", root, tracked))
+            self.assertTrue(links.exact_case(root / "Tools" / "y.c", root, tracked))
+            self.assertFalse(links.exact_case(root / "TOOLS" / "x.c", root, tracked))
+            self.assertFalse(links.exact_case(root / "tools" / "y.c", root, tracked))
+            self.assertFalse(links.exact_case(root / "Tools" / "x.c", root, tracked))
+
+    def test_tracked_tree_is_not_loaded_outside_a_repository_root(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-link-untracked-") as temporary:
+            self.assertIsNone(links.load_tracked_tree(Path(temporary)))
+
 
 class RepositoryEvidenceTests(unittest.TestCase):
+    def test_master_results_honor_safe_tmpdir_when_mktemp_uses_a_symlink(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-master-temp-") as directory:
+            root = Path(directory).resolve()
+            checkout = root / "checkout"
+            safe_temp = root / "safe-temp"
+            unsafe_link = root / "unsafe-link"
+            safe_temp.mkdir()
+            try:
+                unsafe_link.symlink_to(safe_temp, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"directory symlinks unavailable: {error}")
+            for name in ("docs_currentness.py", "docs_contract.py"):
+                write(checkout / "tools" / name, (REPO_ROOT / "tools" / name).read_text(encoding="utf-8"))
+            write(checkout / "docs" / "update-all-docs.sh",
+                  (REPO_ROOT / "docs" / "update-all-docs.sh").read_text(encoding="utf-8"))
+            contract = docs_currentness.load_contract()
+            write(checkout / "docs" / "generated-docs-manifest.json", json.dumps(contract))
+            for generator in contract["generators"]:
+                write(checkout / "docs" / generator["script"], "#!/bin/bash\nexit 0\n")
+            fake_bin = root / "bin"
+            fake_mktemp = fake_bin / "mktemp"
+            write(fake_mktemp, '#!/bin/bash\n: > "$UNSAFE_RESULTS"\nprintf "%s\\n" "$UNSAFE_RESULTS"\n')
+            fake_mktemp.chmod(0o755)
+            health = root / "health.json"
+            result = subprocess.run(
+                [docs_currentness.find_bash(allow_override=False), str(checkout / "docs" / "update-all-docs.sh"), "update"],
+                cwd=checkout,
+                env={**os.environ, "PATH": str(fake_bin)+os.pathsep+os.environ["PATH"],
+                     "PYTHON": sys.executable, "TMPDIR": str(safe_temp),
+                     "UNSAFE_RESULTS": str(unsafe_link / "results.tsv"),
+                     "SPARK_DOC_HEALTH_OUTPUT": str(health),
+                     "SPARKENGINE_DOC_SOURCE_SHA": EXACT_SHA,
+                     "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": COMMITTED_AT},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout+result.stderr)
+            evidence = json.loads(health.read_text(encoding="utf-8"))
+            self.assertEqual("pass", evidence["overall"])
+            self.assertEqual(9, evidence["successes"])
+            self.assertEqual(0, evidence["failures"])
+            self.assertFalse((safe_temp / "results.tsv").exists(), "bare mktemp was called")
+
     def test_manifest_declares_every_generator_exactly_once(self) -> None:
         contract = docs_currentness.load_contract()
         ids = tuple(row["id"] for row in contract["generators"])
         self.assertEqual(docs_currentness.REQUIRED_GENERATORS, ids)
+
+    def test_wiki_ecs_inventory_is_identical_for_lf_and_crlf_headers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-ecs-newlines-") as directory:
+            root = Path(directory)
+            write(root / "docs" / "sync-wiki.sh", (REPO_ROOT / "docs" / "sync-wiki.sh").read_text(encoding="utf-8"))
+            for relative in ("SparkEditor/Source/Panels", "Tests", "GameModules"):
+                (root / relative).mkdir(parents=True)
+            headers = {
+                "SparkEngine/Source/Engine/ECS/Components/FixtureComponents.h": (
+                    "struct ZuluComponent\n{\n};\n"
+                    "struct AlphaComponent\n{\n};\n"
+                    "struct AlphaComponentExtra {};\n"
+                ),
+                "SparkEngine/Source/Engine/ECS/Systems/FixtureSystems.h": (
+                    "class ZuluSystem\n{\n};\n"
+                    "class AlphaSystem\n{\n};\n"
+                    "class AlphaSystemExtra : public AlphaSystem {};\n"
+                ),
+            }
+            page = root / "wiki" / "subsystems" / "Entity-Component-System.md"
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            command = [str(git_bash if git_bash.is_file() else "bash"), "docs/sync-wiki.sh", "sync"]
+            generated = []
+            for newline in ("\n", "\r\n"):
+                with self.subTest(newline=repr(newline)):
+                    for relative, content in headers.items():
+                        path = root / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(content.replace("\n", newline).encode("utf-8"))
+                    write(page, "# ECS\n")
+                    result = subprocess.run(
+                        command,
+                        cwd=root,
+                        env={**os.environ, "SPARK_WIKI_DIR": str(root / "wiki")},
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=30,
+                    )
+                    self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+                    published = page.read_bytes()
+                    generated.append(published)
+                    self.assertEqual(
+                        [b"AlphaComponentExtra", b"AlphaComponent", b"ZuluComponent",
+                         b"AlphaSystemExtra", b"AlphaSystem", b"ZuluSystem"],
+                        [line.split(b"`")[1] for line in published.split(b"\n") if line.startswith(b"| `")],
+                    )
+                    self.assertNotIn(b"\r", published)
+            self.assertEqual(generated[0], generated[1])
+
+    def test_wiki_multiline_sections_work_with_bsd_awk_argument_rules(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-bsd-awk-") as directory:
+            root = Path(directory)
+            write(root / "docs" / "sync-wiki.sh", (REPO_ROOT / "docs" / "sync-wiki.sh").read_text(encoding="utf-8"))
+            for relative in ("SparkEditor/Source/Panels", "Tests", "GameModules"):
+                (root / relative).mkdir(parents=True)
+            write(root / "SparkEngine/Source/Engine/ECS/Components/FixtureComponents.h",
+                  "struct FirstComponent {};\nstruct SecondComponent {};\n")
+            write(root / "SparkEngine/Source/Engine/ECS/Systems/FixtureSystems.h",
+                  "class FixtureSystem {};\n")
+            page = root / "wiki/subsystems/Entity-Component-System.md"
+            write(page, "# ECS\nAuthored text stays.\n")
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            shell = str(git_bash if git_bash.is_file() else "bash")
+            actual_awk = subprocess.run([shell, "-c", "command -v awk"],
+                                        capture_output=True, text=True, check=True).stdout.strip()
+            wrapper = root / "bin/awk"
+            write(wrapper, '''#!/bin/bash
+# BSD awk rejects embedded newlines in -v string assignments.
+assignment=false
+for argument in "$@"; do
+    if $assignment && [[ "$argument" == *$'\\n'* ]]; then
+        echo "awk: newline in string" >&2
+        exit 2
+    fi
+    assignment=false
+    [ "$argument" != "-v" ] || assignment=true
+done
+exec "$SPARK_TEST_REAL_AWK" "$@"
+''')
+            wrapper.chmod(0o755)
+            result = subprocess.run(
+                [shell, "docs/sync-wiki.sh", "sync"], cwd=root,
+                env={**os.environ, "PATH": str(wrapper.parent) + os.pathsep + os.environ["PATH"],
+                     "SPARK_TEST_REAL_AWK": actual_awk, "SPARK_WIKI_DIR": str(root / "wiki")},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(
+                ["FirstComponent", "SecondComponent", "FixtureSystem"],
+                [line.split("`")[1] for line in page.read_text(encoding="utf-8").splitlines()
+                 if line.startswith("| `")],
+            )
+            self.assertIn("Authored text stays.", page.read_text(encoding="utf-8"))
+
+    def test_codebase_statistics_retains_named_subsystem_counts(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="stats-subsystem-counts-") as directory:
+            root = Path(directory)
+            for name in ("update-codebase-stats.sh", "codebase-metrics.py", "generated-docs-manifest.json"):
+                write(root / "docs" / name, (REPO_ROOT / "docs" / name).read_text(encoding="utf-8"))
+            for relative in ("wiki/advanced", "SparkEditor/Source", "SparkEngine/Source/Engine/ECS/Components",
+                             "Tests", "Shaders", "Assets", "GameModules", "SparkSDK", "cmake"):
+                (root / relative).mkdir(parents=True)
+            sources = {
+                "SparkEngine/Source/Graphics/Fixture.cpp": "// graphics\n" * 8,
+                "SparkEngine/Source/Engine/AI/Fixture.cpp": "// ai\n" * 3,
+                "SparkEngine/Source/Engine/2D/Fixture.cpp": "// 2d\n" * 4,
+                "SparkEngine/Source/Engine/Physics/Fixture.cpp": "// physics\n" * 5,
+                "SparkEngine/Source/Engine/ECS/Systems/ECSystems.h": "class FixtureSystem {};\n",
+            }
+            for relative, content in sources.items():
+                write(root / relative, content)
+            write(root / "CMakeLists.txt", "option(ENABLE_FIXTURE \"Fixture\" ON)\n")
+            manifest = root / "tracked-paths"
+            manifest.write_bytes(b"\0".join(path.encode("utf-8") for path in sources) + b"\0")
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            result = subprocess.run(
+                [str(git_bash if git_bash.is_file() else "bash"), "docs/update-codebase-stats.sh", "generate"],
+                cwd=root, env={**os.environ, "SPARK_DOC_TRACKED_PATHS": str(manifest)},
+                capture_output=True, text=True, check=False, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            page = (root / "wiki/advanced/Codebase-Statistics.md").read_text(encoding="utf-8")
+            for subsystem, lines in (("AI", 3), ("2D", 4), ("Physics", 5), ("ECS", 1)):
+                self.assertIn(f"| {subsystem} | {lines} |", page)
+            self.assertNotIn("| Networking |", page)
+
+    def test_wiki_test_inventory_includes_all_registered_test_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="wiki-test-inventory-") as directory:
+            wiki = Path(directory)
+            (wiki / "advanced").mkdir(parents=True)
+            for relative in (Path("Home.md"), Path("advanced") / "Testing.md"):
+                source = REPO_ROOT / "wiki" / relative
+                destination = wiki / relative
+                destination.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+            git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+            command = [str(git_bash if git_bash.is_file() else "bash"), "docs/sync-wiki.sh", "sync"]
+            result = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                env={**os.environ, "SPARK_WIKI_DIR": str(wiki)},
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=120,
+            )
+            self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+            published = (wiki / "advanced" / "Testing.md").read_text(encoding="utf-8")
+            self.assertIn("| `TestMain` | 1 |", published)
 
     def test_check_paths_are_content_based_and_read_only(self) -> None:
         scripts = {
@@ -719,7 +1158,7 @@ class RepositoryEvidenceTests(unittest.TestCase):
         self.assertEqual([], errors)
         gateway = REPO_ROOT / "Tests" / "TestGatewaySecurity.cpp"
         actual_loc = len(gateway.read_text(encoding="utf-8").splitlines())
-        self.assertEqual(576, actual_loc)
+        self.assertEqual(596, actual_loc)
         tree = (REPO_ROOT / "wiki" / "reference" / "File-Tree.md").read_text(encoding="utf-8")
         self.assertIn(
             f"(../../Tests/TestGatewaySecurity.cpp) - {actual_loc} LOC",
@@ -739,6 +1178,17 @@ class PublishedDocumentationHealthTests(unittest.TestCase):
     """The bundle's docs health must be measured evidence, never a fallback."""
 
     GENERATORS = docs_currentness.REQUIRED_GENERATORS
+
+    def test_currentness_rejects_missing_generator_result(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="docs-health-missing-") as temporary:
+            path = Path(temporary) / "health.json"
+            payload = self.payload()
+            write(path, json.dumps(payload))
+            docs_currentness.validate_health(path, EXACT_SHA, COMMITTED_AT)
+            payload["results"].pop()
+            write(path, json.dumps(payload))
+            with self.assertRaisesRegex(docs_currentness.CurrentnessError, "every generator exactly once"):
+                docs_currentness.validate_health(path, EXACT_SHA, COMMITTED_AT)
 
     def payload(self, **overrides: object) -> dict:
         base = {
@@ -931,6 +1381,18 @@ class AssetIntegrityTests(unittest.TestCase):
                 )
                 self.assertTrue(any(fragment in message for message in messages), messages)
 
+    def test_windows_reserved_asset_reference_fails_before_resolution(self) -> None:
+        for reference in ("CON", "CON.txt", "nested/AUX.bin", "LPT9.log"):
+            with self.subTest(reference=reference):
+                messages = self.findings(
+                    [{"path": reference, "origin": "authored", "sha256": "0" * 64}],
+                    {"art.png": b"intact\n"},
+                )
+                self.assertTrue(
+                    any("reserved Windows device name" in message for message in messages),
+                    messages,
+                )
+
     def test_undeclared_shipped_file_fails(self) -> None:
         payload = b"intact\n"
         messages = self.findings(
@@ -938,6 +1400,88 @@ class AssetIntegrityTests(unittest.TestCase):
             {"art.png": payload, "stowaway.bin": b"extra"},
         )
         self.assertTrue(any("no manifest declares it" in message for message in messages), messages)
+
+    def test_directory_reparse_is_rejected_before_asset_hash(self) -> None:
+        root = Path(self.temporary.name)
+        assets = root / "Templates" / "Probe" / "Assets"
+        outside = root / "outside"
+        assets.mkdir(parents=True)
+        outside.mkdir()
+        payload = b"outside payload"
+        (outside / "payload.bin").write_bytes(payload)
+        reparse = assets / "External"
+        try:
+            if sys.platform == "win32":
+                subprocess.run(
+                    ["cmd", "/c", "mklink", "/J", str(reparse), str(outside)],
+                    check=True,
+                    capture_output=True,
+                )
+            else:
+                reparse.symlink_to(outside, target_is_directory=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            self.skipTest(f"directory reparses unavailable: {error}")
+
+        try:
+            (assets / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "manifestVersion": 1,
+                        "package": "Probe",
+                        "license": "Spark Open License 1.0",
+                        "assets": [
+                            {
+                                "path": "External/payload.bin",
+                                "origin": "fixture",
+                                "sha256": self.digest(payload),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            tracked = frozenset(
+                {
+                    "Templates/Probe/Assets/External/payload.bin",
+                    "Templates/Probe/Assets/manifest.json",
+                }
+            )
+            with mock.patch.object(site_assets, "REPO_ROOT", root), mock.patch.object(
+                site_assets, "file_digest", wraps=site_assets.file_digest
+            ) as digest_mock:
+                results = site_assets.validate_package("Templates/Probe/Assets", tracked)
+        finally:
+            if sys.platform == "win32":
+                subprocess.run(["cmd", "/c", "rmdir", str(reparse)], check=False, capture_output=True)
+            else:
+                reparse.unlink(missing_ok=True)
+
+        messages = [message for _, message in results]
+        self.assertTrue(any("reparse" in message.lower() for message in messages), messages)
+        digest_mock.assert_not_called()
+
+    def test_manifest_package_identity_must_match_directory(self) -> None:
+        payload = b"intact\n"
+        directory, _ = self.package(
+            [{"path": "art.png", "origin": "authored", "sha256": self.digest(payload)}],
+            {"art.png": payload},
+        )
+        manifest = directory / "Templates" / "Probe" / "Assets" / "manifest.json"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        data["package"] = "DifferentPackage"
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+        with mock.patch.object(site_assets, "REPO_ROOT", directory):
+            results = site_assets.validate_package(
+                "Templates/Probe/Assets",
+                frozenset(
+                    {
+                        "Templates/Probe/Assets/art.png",
+                        "Templates/Probe/Assets/manifest.json",
+                    }
+                ),
+            )
+        messages = [message for _, message in results]
+        self.assertTrue(any("package" in message.lower() for message in messages), messages)
 
     def test_repository_asset_packages_pass_the_real_walk(self) -> None:
         integrity = [
@@ -993,6 +1537,33 @@ class TrackedInventoryAndExecutionEvidenceTests(unittest.TestCase):
             report.write_text("<testsuite/>", encoding="utf-8")
             with self.assertRaisesRegex(site_common.SiteDataError, "no test cases"):
                 site_generate.ctest_summary(report)
+
+
+class GeneratedNewlineDeterminismTests(unittest.TestCase):
+    def test_flowchart_generator_writes_lf_on_every_host(self) -> None:
+        # Text-mode writes translate "\n" to CRLF on Windows, so a Windows regeneration would differ from the
+        # tracked LF page byte-for-byte and the currentness check would report it stale.
+        with tempfile.TemporaryDirectory(prefix="flowchart-newlines-") as tmp:
+            output = Path(tmp) / "flowchart.md"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "docs" / "generate-flowchart-content.py"),
+                    "--output",
+                    str(output),
+                    "--project-root",
+                    str(REPO_ROOT),
+                    "--headers",
+                    "1",
+                    "--sources",
+                    "1",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            content = output.read_bytes()
+        self.assertIn(b"\n", content)
+        self.assertNotIn(b"\r", content)
 
 
 if __name__ == "__main__":

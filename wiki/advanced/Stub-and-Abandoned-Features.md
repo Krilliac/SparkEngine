@@ -93,7 +93,7 @@ could never report occlusion is retired: both trace `WorldStatic` hits once a
 
 ### Graphics subsystems
 
-The Graphics audit listed ~30 header-only files with no engine call sites (~10,000 lines total). Per-file verification found 1 filename-collision false positive among the high-value set and 2 already-wired among the smaller set; the remainder are legitimate reusable utilities and were documented in-header (resolution path "(c) document as intentional utility"). None were deleted — each is substantial working code (200–750 lines) useful when the corresponding render feature is built.
+The Graphics audit listed header-only utility files with no engine call sites. Per-file verification found 1 filename-collision false positive among the high-value set and 2 already-wired among the smaller set; the remainder are legitimate reusable utilities and were documented in-header (resolution path "(c) document as intentional utility"). None were deleted — each is substantial working code useful when the corresponding render feature is built.
 
 High-value utilities, all **documented as intentional** (selected):
 
@@ -125,7 +125,7 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 | File | Lines | Note |
 |---|---|---|
 | `Graphics/LineTrailRenderer.h` | 127 | Data-carrier structs for line/trail components. |
-| `Graphics/SpringArm.h` | 69 | Pure-CPU `SpringArmState`. `Tests/TestSpringArm.cpp` added (6 tests). |
+| `Graphics/SpringArm.h` | 69 | Pure-CPU `SpringArmState`. `Tests/TestSpringArm.cpp` added. |
 | `Graphics/DirtyRectTracker.h` | 167 | CPU rectangle-merge for partial texture updates. Tested. |
 | `Graphics/ClusteredLightGPU.h` | 163 | Bridge to structured-buffer arrays for forward+. Tested. |
 | `Graphics/ConstantBufferDiff.h` | 138 | **False positive.** `ConstantBufferDiffManager` wired in the per-frame loop. |
@@ -140,7 +140,7 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 | `ClusteredLightGPU` | `Graphics/ClusteredLightGPU.h` | Tested; documented as an intentional Tier-2 utility (no render-path call yet). |
 | `DirtyRectTracker` | `Graphics/DirtyRectTracker.h` | Tested; documented as intentional utility. |
 | `DeferredDeletionQueue` | `Graphics/RHI/DeferredDeletionQueue.h` | Tested (`TestDeferredDeletionReal.cpp`); no production caller (see Tier 2). |
-| `AdvancedAssetPipeline` | `SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h` | 3,835 lines with a real test (`Tests/TestAdvancedAssetPipeline.cpp`) and no production caller; ship-or-delete needs a product decision. |
+| `AdvancedAssetPipeline` | `SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h` | A large implementation with a real test (`Tests/TestAdvancedAssetPipeline.cpp`) and no production caller; ship-or-delete needs a product decision. |
 
 Resolved and no longer tracked: `TutorialSystem`, `AssetAuditGraph`, `ConstantBufferDiff` (wired), `AIIntegratedSystem` + `ParallelPerceptionSystem`.
 
@@ -149,7 +149,7 @@ Resolved and no longer tracked: `TutorialSystem`, `AssetAuditGraph`, `ConstantBu
 | File | Current Status |
 |---|---|
 | `SparkEditor/Source/Core/EditorWindowManager.h` | **Resolved (2026-09).** `SaveCurrentLayoutToFile()`/`LoadLayoutFromFile()` now have real callers: `EditorApplication::Initialize` restores `<EditorData>/window_layout.json` and `Shutdown` writes it (`EditorApplication::WindowLayoutFilePath`). |
-| `SparkEditor/Source/Panels/SelectionManager.h` | **Partially resolved.** Singleton now initialized/torn down from `EditorUI`. 13 new tests. **Still pending:** migrating `HierarchyPanel`/`InspectorPanel`/`SceneView` off their per-panel selection state — blocked on unifying `SelectionManager::EntityId` (`uint32_t`) with the editor's `ObjectID` (`uint64_t`). |
+| `SparkEditor/Source/Panels/SelectionManager.h` | **Partially resolved.** Singleton now initialized/torn down from `EditorUI`. Regression coverage was added. **Still pending:** migrating `HierarchyPanel`/`InspectorPanel`/`SceneView` off their per-panel selection state — blocked on unifying `SelectionManager::EntityId` (`uint32_t`) with the editor's `ObjectID` (`uint64_t`). |
 | `SparkEditor/Source/Panels/NetworkDebugPanel.h` | **Resolved (data + UI).** Data model and ImGui rendering implemented. **Still pending:** wiring `NetworkManager` to feed `RecordBytesSent`/`RecordBytesRecv`/`LogPacket`/`SetCurrentLatency` — verified 2026-06-08 that no producer calls these in the networking `.cpp` files yet. |
 
 ## Confirmed false positives (do NOT add to any deletion list)

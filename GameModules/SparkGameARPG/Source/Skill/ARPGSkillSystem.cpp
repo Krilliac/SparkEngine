@@ -6,14 +6,14 @@
 #include "ARPGSkillSystem.h"
 #include "Engine/Security/MemoryIntegrity.h"
 #include "Hero/ARPGHeroSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 
 namespace ARPG
@@ -28,9 +28,9 @@ namespace ARPG
         m_heroSystem = heroSystem;
         RegisterSkillTrees();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill system initialized with %zu skills", m_allSkills.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Skill system initialized (" +
-                                                    std::to_string(m_allSkills.size()) + " skills)");
+        Spark::ModuleLog::Info(m_context, "ARPG skill system initialized with {} skills", m_allSkills.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[ARPG] Skill system initialized (" + std::to_string(m_allSkills.size()) + " skills)");
         return true;
     }
 
@@ -171,8 +171,8 @@ namespace ARPG
         }
 
         learned.push_back(skillId);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG skill learned: %s (id=%u)", skill->name.c_str(), skillId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[ARPG] Learned skill: " + skill->name);
+        Spark::ModuleLog::Info(m_context, "ARPG skill learned: {} (id={})", skill->name.c_str(), skillId);
+        Spark::ModuleLog::Info(m_context, "{}", "[ARPG] Learned skill: " + skill->name);
         return true;
     }
 
@@ -208,8 +208,7 @@ namespace ARPG
             m_cooldowns[heroId].push_back({skillId, skill->cooldown});
         }
         SPARK_BRANCH_GUARD_END("arpg_cooldown_apply")
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "ARPG skill used: %s (cd=%.1fs)", skill->name.c_str(),
-                        skill->cooldown);
+        Spark::ModuleLog::Debug(m_context, "ARPG skill used: {} (cd={:.1f}s)", skill->name.c_str(), skill->cooldown);
 
         return true;
     }
@@ -220,6 +219,56 @@ namespace ARPG
         if (it != m_learnedSkills.end())
             return it->second;
         return {};
+    }
+
+    std::vector<SkillCooldownState> ARPGSkillSystem::GetCooldowns(uint32_t heroId) const
+    {
+        const auto it = m_cooldowns.find(heroId);
+        if (it != m_cooldowns.end())
+            return it->second;
+        return {};
+    }
+
+    bool ARPGSkillSystem::CanRestoreHeroSkills(ARPGHeroClass heroClass, int heroLevel,
+                                               const std::vector<uint32_t>& learnedSkills,
+                                               const std::vector<SkillCooldownState>& cooldowns) const
+    {
+        for (size_t i = 0; i < learnedSkills.size(); ++i)
+        {
+            const SkillData* skill = GetSkill(learnedSkills[i]);
+            if (!skill || skill->heroClass != heroClass || skill->requiredLevel > heroLevel ||
+                std::find(learnedSkills.begin() + static_cast<std::ptrdiff_t>(i) + 1, learnedSkills.end(),
+                          learnedSkills[i]) != learnedSkills.end())
+                return false;
+        }
+
+        for (size_t i = 0; i < cooldowns.size(); ++i)
+        {
+            const SkillCooldownState& cooldown = cooldowns[i];
+            const SkillData* skill = GetSkill(cooldown.skillId);
+            if (!skill || std::ranges::find(learnedSkills, cooldown.skillId) == learnedSkills.end() ||
+                !std::isfinite(cooldown.remainingCooldown) || cooldown.remainingCooldown <= 0.0f ||
+                cooldown.remainingCooldown > skill->cooldown)
+                return false;
+            for (size_t j = i + 1; j < cooldowns.size(); ++j)
+            {
+                if (cooldowns[j].skillId == cooldown.skillId)
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    bool ARPGSkillSystem::RestoreHeroSkills(uint32_t heroId, const std::vector<uint32_t>& learnedSkills,
+                                            const std::vector<SkillCooldownState>& cooldowns)
+    {
+        const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
+        if (!hero || !CanRestoreHeroSkills(hero->heroClass, hero->level, learnedSkills, cooldowns))
+            return false;
+
+        m_learnedSkills[heroId] = learnedSkills;
+        m_cooldowns[heroId] = cooldowns;
+        return true;
     }
 
     std::string ARPGSkillSystem::GetSkillListString() const

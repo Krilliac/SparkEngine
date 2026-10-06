@@ -9,6 +9,7 @@
  * the shipped class.
  */
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 
 #include "Engine/Animation/AnimationSystem.h"
@@ -16,6 +17,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/PacketValidator.h"
 #include "Engine/Streaming/SceneManifest.h"
+#include "Graphics/MaterialLoader.h"
 #include "Utils/JsonUtils.h"
 
 #include <cstdint>
@@ -24,6 +26,7 @@
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -335,6 +338,164 @@ TEST(SecurityParsers_ZeroByteOverrideWinsThePriorityContest)
     std::filesystem::remove_all(engineRoot, ec);
     std::filesystem::remove_all(modRoot, ec);
 }
+
+TEST(SecurityParsers_VfsDirectoryPathReadsAsNothing)
+{
+    // SEC-120 fuzz finding (SparkFuzzVirtualFileSystem, regression-mount-root-directory.path
+    // and regression-subdirectory.path). On Linux an ifstream opens a directory, and on ext4
+    // its end offset reads as INT64_MAX, which LocalFileProvider::ReadFile used as the buffer
+    // size: a mod naming "." or a folder aborted the engine. Only regular files have contents.
+    const auto modRoot = ScratchPath("vfs_directory_mod");
+    std::error_code ec;
+    std::filesystem::remove_all(modRoot, ec);
+    std::filesystem::create_directories(modRoot / "textures" / "nested", ec);
+    {
+        std::ofstream file(modRoot / "textures" / "brick.dds", std::ios::binary | std::ios::trunc);
+        file << "DDS ";
+    }
+
+    auto& vfs = Spark::VirtualFileSystem::GetInstance();
+    vfs.Initialize();
+    vfs.Unmount("securityparsers_dirs");
+    vfs.Mount("securityparsers_dirs", std::make_unique<Spark::LocalFileProvider>(modRoot.string()),
+              Spark::MOD_PRIORITY);
+
+    for (const char* directory : {".", "textures", "textures/nested", "textures/./nested/.."})
+    {
+        EXPECT_EQ(vfs.ReadFile(directory).size(), 0u);
+        EXPECT_EQ(vfs.ReadTextFile(directory).size(), 0u);
+    }
+    // A regular file beside them still reads.
+    EXPECT_EQ(vfs.ReadTextFile("textures/brick.dds"), std::string("DDS "));
+    EXPECT_EQ(vfs.ReadFile("textures/brick.dds").size(), 4u);
+
+    vfs.Unmount("securityparsers_dirs");
+    std::filesystem::remove_all(modRoot, ec);
+}
+
+// LocalFileProvider used to check a path and then open it by name. Whatever sat at the name
+// when the open happened was read: a file swapped for a directory recreated the INT64_MAX
+// allocation abort, and a link swapped in after the containment check escaped the mount.
+// The open probe runs after every check passed and right before the open, which is the
+// window a concurrent swap needs.
+TEST(SecurityParsers_VfsFileSwappedForDirectoryAfterCheckReadsAsNothing)
+{
+    const auto root = ScratchPath("vfs_swap_directory");
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    std::filesystem::create_directories(root, ec);
+    {
+        std::ofstream file(root / "victim.dat", std::ios::binary | std::ios::trunc);
+        file << "victim contents";
+    }
+
+    Spark::LocalFileProvider provider(root.string());
+    // Control: untouched, the file reads, so an empty read below is caused by the swap.
+    ASSERT_EQ(provider.ReadTextFile("victim.dat"), std::string("victim contents"));
+
+    int swaps = 0;
+    provider.SetOpenProbeForTesting(
+        [&](const std::string&)
+        {
+            std::error_code swapError;
+            std::filesystem::remove(root / "victim.dat", swapError);
+            std::filesystem::create_directory(root / "victim.dat", swapError);
+            swaps += swapError ? 0 : 1;
+        });
+    EXPECT_EQ(provider.ReadFile("victim.dat").size(), 0u);
+    ASSERT_EQ(swaps, 1);
+    ASSERT_TRUE(std::filesystem::is_directory(root / "victim.dat"));
+    EXPECT_EQ(provider.ReadTextFile("victim.dat").size(), 0u);
+
+    std::filesystem::remove_all(root, ec);
+}
+
+// The same window for a directory on the path: "sub" passes the checks and is then replaced
+// by a link (a junction on Windows, which needs no privilege) to a directory outside the
+// mount that holds a file of the same name.
+TEST(SecurityParsers_VfsDirectorySwappedForOutsideLinkAfterCheckReadsAsNothing)
+{
+    const auto base = ScratchPath("vfs_swap_link");
+    std::error_code ec;
+    std::filesystem::remove_all(base, ec);
+    const auto root = base / "mount";
+    const auto outside = base / "outside";
+    std::filesystem::create_directories(root / "sub", ec);
+    std::filesystem::create_directories(outside, ec);
+    {
+        std::ofstream inside(root / "sub" / "asset.dat", std::ios::binary | std::ios::trunc);
+        inside << "inside";
+        std::ofstream secret(outside / "asset.dat", std::ios::binary | std::ios::trunc);
+        secret << "SECRET-OUTSIDE-THE-MOUNT";
+    }
+
+    Spark::LocalFileProvider provider(root.string());
+    ASSERT_EQ(provider.ReadTextFile("sub/asset.dat"), std::string("inside"));
+
+    bool swapped = false;
+    provider.SetOpenProbeForTesting(
+        [&](const std::string&)
+        {
+            if (swapped)
+            {
+                return;
+            }
+            std::error_code moveError;
+            std::filesystem::rename(root / "sub", base / "parked", moveError);
+            swapped = !moveError && SparkTestLinks::MakeDirectoryLink(outside, root / "sub");
+        });
+    const std::vector<uint8_t> bytes = provider.ReadFile("sub/asset.dat");
+
+    ASSERT_TRUE(swapped);
+    // The link really resolves to the outside file, so only the opened-handle check can refuse it.
+    ASSERT_TRUE(SparkTestLinks::IsDirectoryLink(root / "sub"));
+    ASSERT_TRUE(std::filesystem::is_regular_file(root / "sub" / "asset.dat"));
+    EXPECT_EQ(bytes.size(), 0u);
+
+    // Remove the link itself before remove_all walks the tree.
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(root / "sub"));
+    std::filesystem::remove_all(base, ec);
+}
+
+// POSIX only: an unprivileged Windows process cannot create a file symlink, the only link a
+// single file can be swapped for there; the directory-link test above covers the Windows
+// handle check.
+#ifndef _WIN32
+TEST(SecurityParsers_VfsFileSwappedForOutsideSymlinkAfterCheckReadsAsNothing)
+{
+    const auto base = ScratchPath("vfs_swap_symlink");
+    std::error_code ec;
+    std::filesystem::remove_all(base, ec);
+    const auto root = base / "mount";
+    std::filesystem::create_directories(root, ec);
+    {
+        std::ofstream victim(root / "victim.dat", std::ios::binary | std::ios::trunc);
+        victim << "victim";
+        std::ofstream secret(base / "secret.dat", std::ios::binary | std::ios::trunc);
+        secret << "SECRET-OUTSIDE-THE-MOUNT";
+    }
+    // Staged before the read, so the probe only has to rename it over the victim atomically.
+    std::filesystem::create_symlink(base / "secret.dat", base / "staged-link", ec);
+    ASSERT_FALSE(static_cast<bool>(ec));
+
+    Spark::LocalFileProvider provider(root.string());
+    bool swapped = false;
+    provider.SetOpenProbeForTesting(
+        [&](const std::string&)
+        {
+            std::error_code swapError;
+            std::filesystem::rename(base / "staged-link", root / "victim.dat", swapError);
+            swapped = swapped || !swapError;
+        });
+    const std::vector<uint8_t> bytes = provider.ReadFile("victim.dat");
+
+    ASSERT_TRUE(swapped);
+    ASSERT_TRUE(std::filesystem::is_symlink(root / "victim.dat"));
+    EXPECT_EQ(bytes.size(), 0u);
+
+    std::filesystem::remove_all(base, ec);
+}
+#endif
 
 // ============================================================================
 // Scene manifest containment (security-parsers-17)
@@ -746,4 +907,27 @@ TEST(SecurityParsers_HitValidationRejectsOutOfWindowClientTimestamp)
     EXPECT_FALSE(manager.ValidateHit(0.5f, 0.0f, origin, direction, 1000.0f).hit);
 
     manager.GetLagCompensator().Clear();
+}
+
+// ============================================================================
+// .sparkmat factors (SEC-120 material-loader fuzz finding)
+// ============================================================================
+
+TEST(SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults)
+{
+    // SparkFuzzMaterialLoader found that std::stof accepts "nan" and "inf", and
+    // RegisterMaterial's std::clamp passes NaN through (normalScale is not clamped at all),
+    // so a material file put non-finite PBR factors into the GPU constant buffers.
+    std::istringstream input("name = NaNMaterial\nmetallic = nan\nroughness = inf\nnormalScale = -inf\n"
+                             "emissiveFactor = NAN\nalphaCutoff = 0.25\n");
+    Spark::Graphics::SparkMatDefinition definition;
+    ASSERT_TRUE(Spark::Graphics::ParseSparkMatDefinition(input, definition));
+    const Spark::Graphics::SparkMatDefinition defaults;
+    EXPECT_EQ(definition.metallic, defaults.metallic);
+    EXPECT_EQ(definition.roughness, defaults.roughness);
+    EXPECT_EQ(definition.normalScale, defaults.normalScale);
+    EXPECT_EQ(definition.emissiveFactor, defaults.emissiveFactor);
+    // Finite factors still parse.
+    EXPECT_EQ(definition.alphaCutoff, 0.25f);
+    EXPECT_EQ(definition.name, std::string("NaNMaterial"));
 }

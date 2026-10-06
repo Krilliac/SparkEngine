@@ -25,6 +25,8 @@ set(LAUNCHER_SOURCES
     src/LauncherPaths.h
     src/LauncherProcess.cpp
     src/LauncherProcess.h
+    src/LauncherTemplates.cpp
+    src/LauncherTemplates.h
     src/LauncherBackend.h
 )
 if(WIN32)
@@ -41,6 +43,7 @@ endif()
 # Pull ProjectManager + FolderDialog directly from the editor tree — no copy, no new lib.
 target_sources(SparkLauncher PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectManager.cpp"
+    "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/ProjectDocument.cpp"
     "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Utils/FolderDialog.cpp"
 )
 
@@ -76,6 +79,7 @@ install(TARGETS SparkLauncher RUNTIME DESTINATION bin COMPONENT runtime)
 
 if(BUILD_TESTS)
     enable_testing()
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_test(NAME SparkLauncherHelp COMMAND $<TARGET_FILE:SparkLauncher> --help)
     set(_sparklauncher_version_test_script
         "${CMAKE_CURRENT_BINARY_DIR}/VerifySparkLauncherVersion.cmake")
@@ -108,6 +112,12 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkLauncher>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkLauncher ${PROJECT_VERSION}"
             -P "${_sparklauncher_version_test_script}")
-    set_tests_properties(SparkLauncherHelp SparkLauncherVersion PROPERTIES TIMEOUT 10)
+    add_test(NAME SparkLauncherHeadlessSmoke
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/Tests/Tools/run_launcher_headless_smoke.py"
+            "$<TARGET_FILE:SparkLauncher>")
+    set_tests_properties(SparkLauncherHelp SparkLauncherVersion SparkLauncherHeadlessSmoke PROPERTIES
+        TIMEOUT 10
+        LABELS "launcher;cli;integration;process")
     unset(_sparklauncher_version_test_script)
 endif()

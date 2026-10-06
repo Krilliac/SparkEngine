@@ -145,12 +145,12 @@ namespace Spark::AI
      * @brief EntityID of the current primary threat/target.
      *
      * Set by the perception system when the player or another threat is detected.
-     * `static_cast<EntityID>(-1)` indicates no active target. Behavior tree
+     * `entt::null` indicates no active target. Behavior tree
      * conditions read this to decide between attack, patrol, and idle branches.
-     * (Spark::AI::EntityID is a `uint32_t` alias from MovementSystem.h, distinct
-     * from `entt::entity`.)
+     * This is explicitly the ECS entity type; several AI support headers define
+     * a separate uint32_t EntityID alias for compact work queues.
      */
-        EntityID targetEntity = static_cast<EntityID>(-1);
+        ::EntityID targetEntity = entt::null;
 
         /**
      * @brief Last confirmed world-space position of the primary target.
@@ -316,6 +316,17 @@ namespace Spark::AI
      */
         BehaviorTree* CreateBehaviorInstance(const std::string& templateName);
 
+        /**
+     * @brief Destroy every registered template and every per-agent instance.
+     *
+     * Game modules build behavior trees from their own code, so each node's
+     * vtable and destructor live in the module image. Teardown calls this after
+     * module OnUnload and before the image is unmapped (AIIntegratedSystem::Shutdown);
+     * leaving the trees to the process-exit destructor ran them in unmapped code.
+     * Every `AIComponent::behaviorTreeHandle` handed out earlier is invalid afterwards.
+     */
+        void ClearBehaviors();
+
         // =========================================================================
         // Console integration
         // =========================================================================
@@ -341,7 +352,7 @@ namespace Spark::AI
      * @param entity  EntityID of the agent to inspect.
      * @return        Multi-line formatted string with agent debug information.
      */
-        std::string Console_GetAgentInfo(World& world, EntityID entity) const;
+        std::string Console_GetAgentInfo(World& world, ::EntityID entity) const;
 
       private:
         /**
@@ -357,7 +368,7 @@ namespace Spark::AI
      * @param transform  The agent's current world transform (determines origin for raycasts).
      * @param deltaTime  Frame time for advancing timers.
      */
-        void UpdatePerception(World& world, EntityID selfEntity, AIComponent& ai, const Transform& transform,
+        void UpdatePerception(World& world, ::EntityID selfEntity, AIComponent& ai, const Transform& transform,
                               float deltaTime);
 
         /**
@@ -380,7 +391,7 @@ namespace Spark::AI
      *                   no RigidBodyComponent is present.
      * @param deltaTime  Frame time for speed-independent movement.
      */
-        void UpdateMovement(World& world, EntityID entity, AIComponent& ai, Transform& transform, float deltaTime);
+        void UpdateMovement(World& world, ::EntityID entity, AIComponent& ai, Transform& transform, float deltaTime);
 
         /**
      * @brief Tick the agent's behavior tree and update high-level state.

@@ -5,12 +5,23 @@
 
 #include "EditorWindowManager.h"
 
+#include "../Utils/EditorFileRead.h"
+
 #include <filesystem>
 #include <fstream>
+#include <cmath>
+#include <limits>
 #include <sstream>
 
 namespace SparkEditor
 {
+
+    namespace
+    {
+        /// Largest window-layout file the editor reads; a layout is panel state plus the
+        /// ImGui dock string, a few kilobytes.
+        constexpr std::uint64_t kMaxWindowLayoutBytes = std::uint64_t{1024} * 1024;
+    } // namespace
 
     // ========================================================================
     // Layout management
@@ -106,15 +117,14 @@ namespace SparkEditor
         if (path.empty())
             return false;
 
-        std::ifstream f(path);
-        if (!f.is_open())
+        // Read through one opened handle, bounded: the whole file used to be read without a limit.
+        std::string contents;
+        if (ReadRegularFileBounded(std::filesystem::path(path), kMaxWindowLayoutBytes, contents) !=
+                BoundedReadStatus::Ok ||
+            contents.empty())
+        {
             return false;
-
-        std::stringstream buf;
-        buf << f.rdbuf();
-        const std::string contents = buf.str();
-        if (contents.empty())
-            return false;
+        }
 
         if (contents.find("\"windowLayout\"") == std::string::npos)
             return false;
@@ -156,7 +166,11 @@ namespace SparkEditor
                     p.posY = ReadJsonNumber(obj, "\"posY\"", 0.0f);
                     p.width = ReadJsonNumber(obj, "\"width\"", 400.0f);
                     p.height = ReadJsonNumber(obj, "\"height\"", 300.0f);
-                    p.monitorIndex = static_cast<int32_t>(ReadJsonNumber(obj, "\"monitorIndex\"", -1.0f));
+                    // static_cast<int32_t> of a float outside int32's range is undefined behaviour;
+                    // such an index names no monitor, so it reads as the primary (-1).
+                    const float monitor = ReadJsonNumber(obj, "\"monitorIndex\"", -1.0f);
+                    constexpr auto kLowest = static_cast<float>(std::numeric_limits<int32_t>::min());
+                    p.monitorIndex = monitor >= kLowest && monitor < -kLowest ? static_cast<int32_t>(monitor) : -1;
                     if (!p.panelName.empty())
                         loaded.panels.push_back(p);
 
@@ -388,7 +402,8 @@ namespace SparkEditor
             return defaultValue;
         try
         {
-            return std::stof(src.substr(start, colon - start));
+            const float value = std::stof(src.substr(start, colon - start));
+            return std::isfinite(value) ? value : defaultValue;
         }
         catch (...)
         {

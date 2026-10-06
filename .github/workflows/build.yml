@@ -5,11 +5,18 @@ on:
   # pull_request trigger only. Listing them under push queued the whole
   # matrix twice per push (push + pull_request) and nothing downstream
   # consumed the push copy: every workflow_run consumer filters to Working.
+  # 'claude/**' bases let PRs stacked on a release branch get the same CI.
   push:
     branches: [ main, develop, Working, 'release/**' ]
   pull_request:
-    branches: [ main, develop, Working ]
+    branches: [ main, develop, Working, 'claude/**' ]
   workflow_dispatch:
+    inputs:
+      simulate_required_job_failure:
+        description: "Fail the required CI-tooling job to verify Required CI Gate propagation"
+        required: false
+        default: false
+        type: boolean
 
 # Supersede stale pull-request runs, but preserve every pushed SHA so the
 # required gate and its evidence can reach a terminal state for Working.
@@ -51,7 +58,7 @@ jobs:
   # SparkEditor/Source and Spark{ShaderCompiler,Installer,CrashReporter,
   # AssetPipelineCore,Cooker,Worker,Build,Launcher,Console,Daemon,Server,
   # Gateway,Automation}/src, SparkSDK/Include, GameModules — plus
-  # tools/fuzz-policy/**, Tests/fuzz-policy/**, Tests/fuzz-corpora/**,
+  # tools/fuzz-policy/**, FuzzerTests/** (harnesses, policy tests, seed and generated corpora),
   # cmake/SparkFuzzPolicy.cmake and CMakeLists.txt. Do NOT add paths: or
   # paths-ignore: to this workflow without covering all of them: a skipped gate
   # reports the same green as a passing one.
@@ -59,22 +66,47 @@ jobs:
   fuzz-policy:
     name: "Fuzz policy"
     runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
     permissions:
       contents: read
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0 # fixed_commit verification needs the historical fix objects
+
+    - name: Install Clang C++23 libc++ toolchain
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang cmake libc++-dev libc++abi-dev
+
+    # SparkFuzzArchive compiles the vendored miniz (a pinned submodule) with
+    # fuzzer instrumentation, and SparkFuzzReflectedScene builds World over the
+    # pinned EnTT submodule; no other submodule is needed by this job.
+    - name: Check out the miniz and EnTT submodules
+      run: git submodule update --init --depth 1 ThirdParty/Utils/miniz ThirdParty/ECS/entt
 
     - name: Configure fuzz-policy checks
+      env:
+        CXXFLAGS: "-stdlib=libstdc++"
+        LDFLAGS: "-stdlib=libstdc++"
       run: cmake -S tools/fuzz-policy -B build/fuzz-policy
 
     - name: Run blocking fuzz-policy target
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
+    - name: Build production fuzz smoke target
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest
+
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
       # ones, so the same command works for CI and for local Windows runs.
       run: ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release
+
+    - name: Run production fuzz smoke
+      run: ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release
 
   # ===========================================================================
   # CI Tooling — prove report parsers and generated repository statistics
@@ -102,14 +134,60 @@ jobs:
     - name: Test sanitizer JUnit evidence parser
       run: python3 .github/scripts/test-verify-sanitizer-evidence.py
 
+    - name: Validate flaky warning ownership and expiry
+      run: python3 Tools/validate_test_warnings.py
+
+    - name: Test flaky warning ownership and expiry policy
+      run: python3 Tests/Tools/test_validate_test_warnings.py
+
+    # CI-110: static view over every first-party CMakeLists.txt / *.cmake that
+    # calls add_test. The configured-tree view runs in the build lanes below.
+    - name: Validate CTest timeout and label policy
+      run: python3 Tools/validate_ctest_policy.py
+
+    - name: Test CTest timeout and label policy
+      run: python3 Tests/Tools/test_validate_ctest_policy.py
+
+    - name: Test clang-tidy diagnostic budget ratchet
+      run: python3 Tests/Tools/test_clang_tidy_budget.py
+
+    - name: Test blocking analysis results and CI claims
+      run: |
+        python3 .github/scripts/test-check-analysis-results.py
+        python3 .github/scripts/test-ci-perf-contract.py
+
+    - name: Test shared build-directory lock
+      run: python3 Tests/Tools/test_build_lock.py
+
+    - name: Test code city generator
+      run: python3 Tests/Tools/test_code_city.py
+
     - name: Test required-job gate
       run: python3 .github/scripts/test-verify-required-jobs.py
+
+    # Fixture mode only. Operators re-verify the live ruleset with
+    # python3 .github/scripts/verify-working-ruleset.py --live
+    - name: Test Working ruleset verifier
+      run: python3 .github/scripts/test-verify-working-ruleset.py
 
     - name: Test exact-commit release gate
       run: python3 .github/scripts/test-verify-exact-required-gate.py
 
     - name: Test release acceptance publication gate
       run: python3 .github/scripts/test-release-acceptance-gate.py
+
+    - name: Test candidate and protected publication stages
+      run: |
+        python3 Tests/Tools/test_release_stages.py
+        python3 .github/scripts/test_verify_release_environment.py
+        python3 .github/scripts/test_verify_release_policy.py
+        python3 .github/scripts/test_guard_release_mutation.py
+        python3 .github/scripts/test_stage_release_draft.py
+        python3 .github/scripts/test_verify_published_stable_release.py
+        python3 .github/scripts/test_record_release_approval.py
+        python3 .github/scripts/test_release_stages_workflow.py
+        python3 .github/scripts/test_stable_release_tag.py
+        python3 .github/scripts/test_nightly_release_tag.py
 
     - name: Test the build-matrix exact-source status gate
       run: node .github/scripts/test-build-matrix-commit-status.js
@@ -120,11 +198,27 @@ jobs:
     - name: Test Windows package signature orchestration
       run: python3 .github/scripts/test_verify_windows_package_signatures.py
 
+    - name: Test owner-run signing precursor contract
+      run: python3 -m unittest Tests.Tools.test_self_signed_signing_precursor -v
+
     - name: Test native MSI qualification orchestration
       run: python3 .github/scripts/test_qualify_windows_msi.py
 
+    - name: Test installed package runtime and installer token contracts
+      run: |
+        python3 Tests/PackageSmoke/package_runtime_probe_tests.py
+        python3 Tests/Tools/test_package_smoke_artifacts.py
+        python3 .github/scripts/test-run-non-elevated-windows.py
+
     - name: Test exact release asset publication boundary
       run: python3 .github/scripts/test_verify_release_asset_boundary.py
+
+    - name: Test detached stable signature bundle contracts
+      run: |
+        python3 .github/scripts/test_sign_release_bundle.py
+        python3 .github/scripts/test_extract_release_signature_bundle.py
+        python3 .github/scripts/test_verify_release_bundle.py
+        python3 .github/scripts/test_verify_release_bundle_workflow.py
 
     - name: Test release publication recovery
       run: python3 .github/scripts/test_recover_release_publication.py
@@ -137,6 +231,9 @@ jobs:
 
     - name: Test sanitizer pipeline exit propagation
       run: bash .github/scripts/test-run-sanitizer-tests.sh
+
+    - name: Test check-format controlled failures
+      run: bash .github/scripts/test-check-format-changed.sh
 
     - name: Test workflow failure-propagation contract
       run: python3 .github/scripts/test-workflow-failure-propagation.py
@@ -159,11 +256,47 @@ jobs:
     - name: Verify every test source is registered
       run: bash tools/check-test-registration.sh
 
+    # The tools/validate-all.sh checks below fail this required job when they
+    # fail. test-workflow-failure-propagation.py maps every validate-all check
+    # to its required invocation (or an explicit advisory reason).
+    - name: Verify every header uses pragma once
+      run: bash tools/check-pragma-once.sh
+
+    - name: Verify every editor panel is registered
+      run: bash tools/check-editor-panels.sh
+
+    - name: Verify no deprecated submodules are referenced
+      run: bash tools/check-deprecated-submodules.sh
+
+    - name: Verify wiki pages match the sidebar
+      run: bash tools/check-wiki-nav.sh
+
+    - name: Verify initialized systems are wired in
+      run: bash tools/check-wiring.sh
+
+    - name: Verify header Doxygen coverage
+      run: bash tools/check-doxygen-coverage.sh check
+
+    - name: Verify cross-utilization boundaries
+      run: bash tools/check-cross-utilization.sh
+
+    - name: Verify DI singleton guardrails
+      run: bash tools/check-di-singletons.sh
+
+    - name: Test module asset reference checker
+      run: python3 Tests/Tools/test_check_module_asset_refs.py
+
+    - name: Verify module asset references
+      run: python3 tools/check-module-asset-refs.py
+
     - name: Test asset integrity verifier
-      run: python3 -m unittest Tests.Tools.test_asset_integrity -v
+      run: python3 -m unittest Tests.Tools.test_asset_integrity Tests.Tools.test_asset_package_profile -v
 
     - name: Verify repository asset integrity baseline
       run: python3 tools/asset-integrity/verify_asset_integrity.py check-all --repo-root .
+
+    - name: Verify authored FPS material coverage
+      run: python3 -m unittest Tests.Tools.test_fps_scene_material_contract -v
 
     - name: Validate module evidence manifest (declarative layer)
       # Fast pre-check: no build artifacts exist in this job. The release gate
@@ -180,7 +313,22 @@ jobs:
     - name: Test build-matrix inventory and parity
       run: python3 Tests/Tools/test_build_matrix_parity.py
 
+    - name: Test strict Shipping and reproducible-build contract
+      run: python3 Tests/Tools/test_build_shipping_contract.py
+
+    - name: Test the stable-v1 x86-64 SSE4.2 CPU floor (OD-04)
+      run: python3 Tests/Tools/test_cpu_floor.py
+
+    - name: Test the Shipping private-symbol manifest (BLD-100)
+      run: python3 -B -m unittest Tests.Tools.test_shipping_symbol_manifest -v
+
+    - name: Test the build-output reproducibility comparator (BLD-100)
+      run: |
+        python3 -B -m unittest Tests.Tools.test_compare_build_outputs -v
+        python3 -B Tests/Tools/test_compare_windows_shipping_repro.py
+
     - name: Generate and compare the deterministic build-matrix inventory
+      id: build-matrix-inventory
       run: |
         python3 Tools/buildmatrix/inventory.py \
           --output build-matrix-inventory.json \
@@ -210,8 +358,12 @@ jobs:
         fi
         echo "status=$status" >> "$GITHUB_OUTPUT"
 
+    # Publish whenever the inventory step ran, including when it or the parity
+    # comparison failed. When an earlier step failed the job, the inventory step is
+    # skipped and there is nothing to publish; uploading anyway only adds a second,
+    # misleading "No files were found" error to the real failure.
     - name: Upload deterministic build-matrix evidence
-      if: always()
+      if: always() && steps.build-matrix-inventory.outcome != 'skipped'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: build-matrix-inventory-${{ github.sha }}-${{ github.run_attempt }}
@@ -264,6 +416,12 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
 
+    - name: Controlled required-job failure probe
+      if: github.event_name == 'workflow_dispatch' && inputs.simulate_required_job_failure == true
+      run: |
+        echo "::error::CI-100 controlled required-job failure probe requested"
+        exit 1
+
   # ===========================================================================
   # Code Quality — clang-format enforcement
   # ===========================================================================
@@ -288,81 +446,10 @@ jobs:
     - name: Check formatting
       env:
         FORMAT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: |
-        set -euo pipefail
-        # Every C++ surface is in scope, but source checks are incremental so
-        # unrelated legacy formatting debt does not hide new debt. The style
-        # file itself is always validated and is part of change detection.
-        FORMAT_ROOTS=(SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests)
-        for root in "${FORMAT_ROOTS[@]}"; do
-          if [[ ! -d "$root" ]]; then
-            echo "::error::Formatting source root is missing: $root"
-            exit 1
-          fi
-        done
-        BASE_SHA="${FORMAT_BASE_SHA:-}"
-        if [[ ! "$BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] ||
-           [[ "$BASE_SHA" == "0000000000000000000000000000000000000000" ]] ||
-           ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-          BASE_SHA=$(git rev-parse HEAD^ 2>/dev/null || true)
-        fi
-
-        if [[ -n "$BASE_SHA" ]]; then
-          mapfile -d '' CHANGED_PATHS < <(
-            git diff --name-only --diff-filter=ACMRD -z "$BASE_SHA" HEAD -- "${FORMAT_ROOTS[@]}" .clang-format
-          )
-        else
-          mapfile -d '' CHANGED_PATHS < <(git ls-files -z -- "${FORMAT_ROOTS[@]}" .clang-format)
-        fi
-
-        FORMAT_SOURCES=()
-        FORMAT_CONFIG_CHANGED=false
-        for source in "${CHANGED_PATHS[@]}"; do
-          case "$source" in
-            .clang-format) FORMAT_CONFIG_CHANGED=true ;;
-            */Metal/*) ;;
-            *.h|*.hpp|*.cpp)
-              if [[ -f "$source" ]]; then
-                FORMAT_SOURCES+=("$source")
-              fi
-              ;;
-          esac
-        done
-
-        if ! command -v clang-format >/dev/null 2>&1; then
-          echo "::error::clang-format is not installed."
-          exit 1
-        fi
-        if [[ ! -f .clang-format ]]; then
-          echo "::error::.clang-format is missing."
-          exit 1
-        fi
-        if ! clang-format --style=file --dump-config > /dev/null 2> check-format-output.log; then
-          cat check-format-output.log
-          echo "::error::.clang-format could not be parsed."
-          exit 1
-        fi
-        if [[ "$FORMAT_CONFIG_CHANGED" == true ]]; then
-          echo "Validated changed .clang-format configuration."
-        fi
-        if (( ${#FORMAT_SOURCES[@]} == 0 )); then
-          echo "No changed C++ sources require formatting."
-          exit 0
-        fi
-
-        set +e
-        clang-format --dry-run --Werror "${FORMAT_SOURCES[@]}" > check-format-output.log 2>&1
-        FORMAT_STATUS=$?
-        set -e
-        if (( FORMAT_STATUS != 0 )); then
-          cat check-format-output.log
-          if grep -q -- "-Wclang-format-violations" check-format-output.log; then
-            echo "::error::Code formatting violations found. Run 'clang-format -i' on the listed files."
-          else
-            echo "::error::clang-format failed to parse or format the changed sources (exit ${FORMAT_STATUS})."
-          fi
-          exit "$FORMAT_STATUS"
-        fi
+      # Roots check, base-SHA resolution, changed-file selection, style-file
+      # parse, and --dry-run --Werror live in the script so their failure paths
+      # are executable; validate-ci-tools runs test-check-format-changed.sh.
+      run: bash .github/scripts/check-format-changed.sh
 
     - name: Extract check-format error summary
       if: failure()
@@ -405,21 +492,30 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - name: Run OPS-100 policy and adversarial tests
+    - name: Run OPS-100 policy and SDK package adversarial tests
       env:
         PYTHONDONTWRITEBYTECODE: "1"
       run: |
         set -euo pipefail
-        # The four source files are test_ops100_redaction.py,
-        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py, and
-        # test_ops100_adversarial.py; unittest runs their native test classes
-        # without requiring an unpinned third-party pytest installation.
+        # The source files are test_ops100_redaction.py,
+        # test_ops100_crash_security.py, test_ops100_telemetry_spool.py,
+        # test_ops100_adversarial.py, test_crash_capture_security.py,
+        # test_sdk_component_completeness.py (compiler-free CMake install fixtures),
+        # test_sdl_component_archives.py (native CMake/CPack component archives),
+        # and test_ops100_symbolication.py (which
+        # compiles a small ELF with the runner's cc/objcopy/addr2line);
+        # unittest runs their native test classes without requiring an
+        # unpinned third-party pytest installation.
         cd Tests/Tools
         python3 -m unittest \
           test_ops100_redaction \
           test_ops100_crash_security \
+          test_crash_capture_security \
+          test_sdk_component_completeness \
+          test_sdl_component_archives \
           test_ops100_telemetry_spool \
           test_ops100_adversarial \
+          test_ops100_symbolication \
           -v 2>&1 | tee ops100-results.log
         echo "OPS-100 validation passed."
 
@@ -432,6 +528,32 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
 
+  # ===========================================================================
+  # SEC-110 — repository secret scan with the OPS-100 detectors. Every tracked
+  # regular file is scanned (bounded, symlinks never followed); a finding
+  # passes only through an exact <rule>:<path> exception in
+  # tools/secret-scan-exceptions.json with an owner, live expiry, exact count.
+  # ===========================================================================
+  secret-scan:
+    name: "Secret Scan"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Secret-scan adversarial tests
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: python3 -m unittest Tests.Tools.test_check_secret_scan -v
+
+    - name: Scan tracked files for secrets
+      env:
+        PYTHONDONTWRITEBYTECODE: "1"
+      run: python3 tools/check-secret-scan.py
+
   check-thirdparty-manifest:
     runs-on: ubuntu-24.04
     steps:
@@ -441,7 +563,7 @@ jobs:
         fetch-depth: 0
 
     - name: Check ThirdParty manifest sync
-      run: ./tools/check-thirdparty-manifest-sync.sh
+      run: ./tools/check-thirdparty-manifest-sync.sh --ci
 
   check-supply-chain:
     runs-on: ubuntu-24.04
@@ -468,6 +590,99 @@ jobs:
     - name: Supply-chain adversarial tests
       run: python3 -m unittest Tests.test_check_supply_chain -v
 
+    # REL-110: the release vulnerability gate and its release.yml wiring. The
+    # CTest registration runs the gate cases on every lane; the wiring cases
+    # need PyYAML, which this job installs and asserts above, so they cannot
+    # skip here.
+    - name: Release vulnerability gate tests
+      run: python3 .github/scripts/test_verify_vulnerability_findings.py -v
+
+    # SEC-110: the lock-derived SPDX SBOM must generate from this exact commit
+    # (lockfiles equal to their committed blobs) and reproduce byte for byte.
+    - name: Generate and reproduce lock-derived SPDX SBOM
+      run: |
+        set -euo pipefail
+        python3 tools/generate-sbom.py --out "$RUNNER_TEMP/SparkEngine-lock.spdx.json"
+        python3 tools/generate-sbom.py --check "$RUNNER_TEMP/SparkEngine-lock.spdx.json"
+
+    - name: SBOM and package-reconciliation tests
+      run: python3 -m unittest Tests.Tools.test_generate_sbom -v
+
+  # SEC-110: vulnerability gate on every locked dependency at PR time. The
+  # release gate scans the SBOM syft builds from packaged binaries, which does
+  # not see statically linked vendored code. This job scans the lock-derived
+  # SBOM instead, whose packages carry the reviewed CPEs and upstream versions,
+  # and applies the same policy: a Critical or High finding passes only through
+  # an owned, unexpired exception in ThirdParty/supply-chain.lock.
+  dependency-policy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    # generate-sbom.py expands the dependency manifest through CMake.
+    - name: Install SBOM generator dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake
+        cmake --version
+
+    - name: Generate lock-derived SPDX SBOM
+      run: python3 tools/generate-sbom.py --out SparkEngine-lock.spdx.json
+
+    - name: Scan lock SBOM for known vulnerabilities
+      uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+      with:
+        sbom: SparkEngine-lock.spdx.json
+        output-format: json
+        output-file: SparkEngine-lock.grype.json
+        fail-build: false
+
+    - name: Enforce vulnerability policy on the lock SBOM
+      run: |
+        set -euo pipefail
+        python3 .github/scripts/verify_vulnerability_findings.py \
+          --report "SparkEngine-lock.grype.json" \
+          --sbom "SparkEngine-lock.spdx.json" \
+          --lockfile "ThirdParty/supply-chain.lock" \
+          --summary "$GITHUB_STEP_SUMMARY"
+
+  license-compliance:
+    name: "License compliance"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: Run legal contract validator
+      run: |
+        set -euo pipefail
+        timeout 3m python3 tools/site-data/validate.py --legal
+
+    - name: Check support policy against published releases
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        # GOV-400: SECURITY.md/SUPPORT.md must name what the releases page actually
+        # publishes. A failed fetch fails this job; it is never read as "no releases".
+        RELEASES_JSON="$RUNNER_TEMP/published-releases.json"
+        for attempt in 1 2 3; do
+          if gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases" > "$RELEASES_JSON"; then
+            break
+          fi
+          if test "$attempt" -eq 3; then
+            echo "Could not list published releases for the support-policy check." >&2
+            exit 1
+          fi
+          sleep 10
+        done
+        timeout 1m python3 tools/site-data/policy.py --published-releases "$RELEASES_JSON"
+
   # ===========================================================================
   # Linux Build — GCC with AddressSanitizer + UBSan + LSan
   # ===========================================================================
@@ -487,7 +702,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -507,19 +722,29 @@ jobs:
           build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           build-linux-asan-
 
+    # -no-pie: the PIE SparkTests carries ~29 M relative relocations (mostly UBSan
+    # check data), so every process start rewrites ~1.8 GB of .data. The
+    # process-interruption tests launch it ~400 times; non-PIE cuts a 100-kill
+    # rehearsal from ~98 s to ~30 s. Instrumentation is unchanged.
     - name: Configure CMake (ASan + UBSan + LSan)
       run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
+          -DSPARK_LIFECYCLE_TEST_HOOKS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_FLAGS_DEBUG="-g -Og" \
+          -DCMAKE_C_FLAGS_DEBUG="-g -Og" \
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
           -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer" \
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined -no-pie" \
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
     - name: Build
@@ -549,9 +774,13 @@ jobs:
           --job "${{ github.job }}" \
           --expected-selector all \
           --minimum-tests 6900 \
-          --timeout-seconds 900 \
+          --timeout-seconds 1800 \
           --runtime-env ASAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
+
+        # Fault-injection hooks are confined to this non-packaging Debug lane.
+        ctest --test-dir build --output-on-failure --no-tests=error \
+          -R '^HeadlessInitFailure_Unwinds$'
 
     - name: Summarize ASan exact-commit test evidence
       run: |
@@ -573,7 +802,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-asan \
           --minimum-tests 6900 \
-          --timeout-seconds 900
+          --timeout-seconds 1800
 
     - name: Extract error summary
       if: failure()
@@ -605,6 +834,7 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
     - name: Upload ASan exact-commit test evidence
+      if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-linux-asan
@@ -617,7 +847,8 @@ jobs:
   # ===========================================================================
   build-linux-tsan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # 120/3000: the hosted 4-vCPU runner needs ~2,400-2,700 s for the full TSan suite (run 36811181228).
+    timeout-minutes: 120
     steps:
     - name: Define TSan evidence directory
       shell: bash
@@ -631,7 +862,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -653,8 +884,11 @@ jobs:
 
     - name: Configure CMake (TSan)
       run: |
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
@@ -688,7 +922,7 @@ jobs:
           --job "${{ github.job }}" \
           --expected-selector all \
           --minimum-tests 6900 \
-          --timeout-seconds 900 \
+          --timeout-seconds 3000 \
           --runtime-env TSAN_OPTIONS \
           -- build/bin/SparkTests --warn-is-error --shuffle 123
 
@@ -712,7 +946,7 @@ jobs:
           --run-attempt "${{ github.run_attempt }}" \
           --job build-linux-tsan \
           --minimum-tests 6900 \
-          --timeout-seconds 900
+          --timeout-seconds 3000
 
     - name: Extract error summary
       if: failure()
@@ -744,6 +978,7 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
     - name: Upload TSan exact-commit test evidence
+      if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-results-linux-tsan
@@ -751,13 +986,20 @@ jobs:
         if-no-files-found: error
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
-  # ===========================================================================
-  # OPS-100A durable telemetry delivery — focused Linux Shipping integration
-  # ===========================================================================
-  telemetry-integration:
-    name: "Telemetry Integration"
+  # SEC-100: runtime security selectors in the Linux Shipping configuration
+  # (MinSizeRel, SPARK_SHIPPING=1), so a selector that shipping compiles out
+  # fails here instead of passing only in a development tree. Each label runs
+  # as its own CTest invocation with --no-tests=error, so an empty label
+  # cannot hide behind a non-empty one.
+  #
+  # OPS-100A durable telemetry delivery runs here too: TelemetrySpool lives in
+  # the same Linux Shipping SparkTests build, so it reuses this job's build
+  # instead of compiling SparkTests cold a second time in a separate job. It
+  # keeps its own exact selector and --no-tests=error.
+  security-runtime:
+    name: "Security Runtime"
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -767,17 +1009,36 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
 
-    - name: Configure Linux Shipping telemetry tests
+    - name: Configure Linux Shipping security tests
       run: |
         set -o pipefail
-        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee telemetry-configure.log
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee security-configure.log
 
-    - name: Build telemetry integration target
+    # SparkTests pulls in SparkServer, SparkGateway and SparkCrashReporter via
+    # add_dependencies; the crash-reporter unit executables selected by the
+    # crash-security label are standalone targets and are named explicitly.
+    - name: Build security runtime targets
       run: |
         set -o pipefail
-        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee telemetry-build.log
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkTests SparkCrashReporterManifestTests SparkCrashReporterConsentTests \
+          SparkCrashReporterFakeGh 2>&1 | tee security-build.log
+
+    - name: Run RemoteAdmin selectors
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R RemoteAdmin 2>&1 | tee security-remote-admin-selectors.log
+
+    - name: Run security runtime labels
+      run: |
+        set -o pipefail
+        for label in remote-admin gateway crash-security; do
+          ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+            -L "^${label}\$" 2>&1 | tee "security-${label}.log"
+        done
 
     - name: Run telemetry spool integration test
       run: |
@@ -785,19 +1046,265 @@ jobs:
         ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
           -R '^TelemetrySpool$' 2>&1 | tee telemetry-tests.log
 
-    - name: Extract telemetry integration error summary
+    - name: Extract security runtime error summary
       if: failure()
       run: |
         .github/scripts/extract-errors.sh \
-          "telemetry-integration" \
+          "security-runtime" \
           error-summary.json \
-          telemetry-configure.log telemetry-build.log telemetry-tests.log
+          security-configure.log security-build.log security-remote-admin-selectors.log \
+          security-remote-admin.log security-gateway.log security-crash-security.log \
+          telemetry-tests.log
 
-    - name: Upload telemetry integration error summary
+    - name: Upload security runtime error summary
       if: failure()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: ci-errors-telemetry-integration
+        name: ci-errors-security-runtime
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # NET-100: every CTest labelled network-security (the SecureChannel and
+  # libsodium transport families, the handshake core, session-version
+  # negotiation, and the static network-boundary contracts) in the Linux
+  # Shipping configuration. One label, one invocation, --no-tests=error, so a
+  # label that loses its tests fails instead of passing empty.
+  network-security:
+    name: "Network Security"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping network security tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-security-configure.log
+
+    - name: Build network security target
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee network-security-build.log
+
+    - name: Run network-security label
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -L '^network-security$' 2>&1 | tee network-security-tests.log
+
+    - name: Extract network security error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "network-security" \
+          error-summary.json \
+          network-security-configure.log network-security-build.log network-security-tests.log
+
+    - name: Upload network security error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-network-security
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # TF-110 / NET-100: advisory until three clean local runs and one clean hosted
+  # run qualify this exact selection for promotion by the integrator.
+  # Do not add to Required CI Gate in this change.
+  terrafront-multiclient:
+    name: "Terrafront Multi-client (advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Terrafront process tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON \
+          -DENABLE_NETWORKING=ON -DSPARK_HEADLESS_SUPPORT=ON \
+          -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON 2>&1 | tee terrafront-configure.log
+
+    - name: Build Terrafront processes and tests
+      run: |
+        set -euo pipefail
+        cmake --build build/linux-gcc-release --target SparkEngine SparkGameMMOFPS SparkTests \
+          --parallel 2 2>&1 | tee terrafront-build.log
+
+    - name: Pin Terrafront process selections
+      id: selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-multiclient$' > terrafront-multiclient-selection.json
+        python3 Tools/Terrafront/check_selection.py terrafront-multiclient-selection.json --label terrafront-multiclient
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-soak$' > terrafront-soak-selection.json
+        python3 Tools/Terrafront/check_selection.py terrafront-soak-selection.json --label terrafront-soak
+
+    - name: Run Terrafront multi-client selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^terrafront-multiclient$' \
+          --no-tests=error --output-on-failure --output-junit terrafront-multiclient.xml \
+          2>&1 | tee terrafront-multiclient-tests.log
+
+    - name: Run Terrafront short soak
+      if: ${{ !cancelled() && steps.selection.outcome == 'success' }}
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^terrafront-soak$' \
+          --no-tests=error --output-on-failure --output-junit terrafront-soak.xml \
+          2>&1 | tee terrafront-soak-tests.log
+
+    - name: Upload Terrafront summaries and audit logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: terrafront-multiclient-${{ github.sha }}
+        if-no-files-found: error
+        path: |
+          terrafront-*.log
+          terrafront-*-selection.json
+          build/linux-gcc-release/terrafront-*.xml
+          build/linux-gcc-release/Testing/Temporary/LastTest.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/summary.json
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/exec_audit.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/stdout.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/stderr.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # SEC-100: real multi-process network integration in the Linux Shipping
+  # configuration. SparkServer, SparkGateway and the SparkGame module run as
+  # separate processes over the area-control channel, and the orchestration
+  # smoke supervises SparkServer through SparkDaemon/SparkOrchestrator. Only
+  # the process targets are built; each smoke runs under its own exact
+  # selector with --no-tests=error.
+  network-integration:
+    name: "Network Integration"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux Shipping network integration
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee network-configure.log
+
+    - name: Build network integration processes
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --parallel $(nproc) --target \
+          SparkAutomation SparkServer SparkGateway SparkGame SparkGatewayTopologyProbe \
+          SparkDaemon SparkOrchestrator SparkCollabServer 2>&1 | tee network-build.log
+
+    - name: Run server/gateway process smoke
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^SparkServerGatewayProcessSmoke$' 2>&1 | tee network-server-gateway.log
+
+    - name: Run orchestration process smoke
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -R '^SparkOrchestrationProcessSmoke$' 2>&1 | tee network-orchestration.log
+
+    - name: Extract network integration error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "network-integration" \
+          error-summary.json \
+          network-configure.log network-build.log network-server-gateway.log network-orchestration.log
+
+    - name: Upload network integration error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-network-integration
+        path: error-summary.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+
+  # NET-110 / OD-08: the online-service boundary contract. The public-claim
+  # guard and the services.production capability run first; then every
+  # online-services CTest (IOnlinePlatform conformance across all adapters and
+  # the degraded-dependency circuit breaker) runs in the Linux Shipping
+  # configuration under --no-tests=error, so an empty label cannot pass.
+  service-contract:
+    name: "Online Service Contract"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Check online-service boundary claims
+      run: |
+        set -o pipefail
+        python3 -m unittest Tests.Tools.test_site_data_contract -k OnlineServiceBoundary -v 2>&1 | tee service-boundary.log
+        python3 tools/site-data/validate.py --capability services.production 2>&1 | tee -a service-boundary.log
+
+    - name: Configure Linux Shipping service contract tests
+      run: |
+        set -o pipefail
+        cmake --preset linux-shipping -DBUILD_TESTS=ON 2>&1 | tee service-configure.log
+
+    - name: Build service contract target
+      run: |
+        set -o pipefail
+        cmake --build --preset linux-shipping --target SparkTests --parallel $(nproc) 2>&1 | tee service-build.log
+
+    - name: Run online-services label
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -L '^online-services$' 2>&1 | tee service-tests.log
+
+    - name: Extract service contract error summary
+      if: failure()
+      run: |
+        .github/scripts/extract-errors.sh \
+          "service-contract" \
+          error-summary.json \
+          service-boundary.log service-configure.log service-build.log service-tests.log
+
+    - name: Upload service contract error summary
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ci-errors-service-contract
         path: error-summary.json
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
 
@@ -867,7 +1374,7 @@ jobs:
       id: install-deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        sudo apt-get install -y clang clang-18 libclang-rt-18-dev cmake ninja-build ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
     - name: Pin the runner clang to the LLVM series
       id: clang
@@ -983,6 +1490,7 @@ jobs:
           -DBUILD_TESTS=ON \
           -DENABLE_SDL2=OFF \
           -DENABLE_VULKAN=OFF \
+          -DSPARK_IMGUI_ENABLE_FREETYPE=OFF \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
@@ -1221,6 +1729,7 @@ jobs:
           build/SparkTests-load-junit.xml \
           build/SparkTests-load.log \
           build/SparkTests-load-output.log \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1262,6 +1771,31 @@ jobs:
         sccache --start-server
         sccache --show-stats
 
+    - name: Install Intel SDE 10.13.1 for CPU-floor process test
+      if: matrix.config == 'Release'
+      timeout-minutes: 5
+      shell: pwsh
+      run: |
+        $url = 'https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz'
+        $expectedSha256 = '74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651'
+        $dest = Join-Path $env:RUNNER_TEMP 'intel-sde-10.13.1'
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        $archive = Join-Path $dest 'sde-win.tar.xz'
+        Write-Host "Intel SDE: downloading pinned archive"
+        Invoke-WebRequest -Uri $url -OutFile $archive
+        Write-Host "Intel SDE: download completed; verifying digest"
+        $actualSha256 = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
+        if ($actualSha256 -ne $expectedSha256) { throw "Intel SDE archive hash mismatch: $actualSha256" }
+        Write-Host "Intel SDE: digest verified; extracting archive"
+        $unpacked = Join-Path $dest 'unpacked'
+        $metadata = Join-Path $dest 'sde-extraction.json'
+        python .github/scripts/extract_sde_archive.py --archive $archive --destination $unpacked --metadata $metadata
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Write-Host "Intel SDE: extraction completed; locating executable"
+        $executables = @(Get-ChildItem -LiteralPath $unpacked -Recurse -File -Filter 'sde.exe')
+        if ($executables.Count -ne 1) { throw "Expected one sde.exe, found $($executables.Count)" }
+        Add-Content -Path $env:GITHUB_ENV -Value "SPARK_SDE_EXECUTABLE=$($executables[0].FullName.Replace('\', '/'))" -Encoding utf8
+
     - name: Test native Windows signature rejection
       if: matrix.config == 'Release'
       run: python .github/scripts/test_verify_windows_package_signatures.py
@@ -1271,6 +1805,8 @@ jobs:
       shell: pwsh
       run: |
         python .github/scripts/test_write_shipping_package_manifest.py
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python .github/scripts/test_provision_previous_windows_msi.py
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         python .github/scripts/test_qualify_windows_msi.py
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1293,13 +1829,49 @@ jobs:
           -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
           -DCMAKE_CXX_SCAN_FOR_MODULES=OFF \
           -DGENERATE_DEBUG_SYMBOLS=OFF \
+          -DSPARK_SDE_EXECUTABLE="${SPARK_SDE_EXECUTABLE:-}" \
           -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON 2>&1 | tee cmake-configure.log
+
+    # ReleaseApproval_Record and the supply-chain suites import PyYAML and fail
+    # in CI without it (the Ubuntu lanes get it from apt:python3-yaml). Install
+    # the hash-pinned wheel into the exact interpreter the configured ctest
+    # registrations run, not whichever python is first on PATH.
+    - name: Install hash-pinned PyYAML into the configured test interpreter
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3_exe="$(ctest --test-dir build -C ${{ matrix.config }} --show-only=json-v1 -R '^ReleaseApproval_Record$' \
+          | python -c 'import json, sys; print(json.load(sys.stdin)["tests"][0]["command"][0])')"
+        test -n "$python3_exe" || { echo "::error::ReleaseApproval_Record registers no interpreter"; exit 1; }
+        "$python3_exe" -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps \
+          -r .github/ci-python-requirements.txt
+        "$python3_exe" -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)"
+
+    # CI-110: every test this configured tree registers (subdirectories, loops
+    # and WIN32-only branches included) must carry a positive TIMEOUT and
+    # LABELS, so one hang fails its own test and label lanes can select it.
+    - name: Enforce configured-tree CTest policy
+      shell: bash
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-policy-inventory.json
+        python Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json --build-dir build
 
     - name: Build
       shell: bash
       run: |
         set -o pipefail
         cmake --build build --config ${{ matrix.config }} --parallel 2>&1 | tee cmake-build.log
+
+    - name: Refuse a below-floor CPU under Intel SDE
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$' \
+          --output-on-failure --no-tests=error
 
     # Authoritative cache numbers for this job (SCCACHE_IDLE_TIMEOUT=0 keeps the
     # server that did the work alive until --stop-server here). Never fails the
@@ -1336,6 +1908,39 @@ jobs:
         path: ${{ runner.temp }}\sccache
         key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
 
+    # RHI-210: the D3D11_Validation lane (label d3d11-debug-layer) creates D3D11
+    # debug-layer devices and fails, never skips, without the Windows "Graphics
+    # Tools" optional feature. Install it and fail here, with a named cause, when
+    # the layer DLL is still missing instead of letting ctest report it as a test bug.
+    - name: Install D3D11 debug layer (Graphics Tools)
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $capability = 'Tools.Graphics.DirectX~~~~0.0.1.0'
+        if ((Get-WindowsCapability -Online -Name $capability).State -ne 'Installed') {
+          Add-WindowsCapability -Online -Name $capability | Out-Null
+        }
+        $layer = Join-Path $env:SystemRoot 'System32\d3d11_3SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layer)) {
+          throw "D3D11 debug layer missing after installing ${capability}: $layer"
+        }
+        Write-Host "D3D11 debug layer present: $layer"
+
+    # RHI-225: D3D12_Validation needs d3d12SDKLayers.dll and fails closed without it.
+    - name: Install D3D12 debug layer
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $layers = Join-Path $env:SystemRoot 'System32\d3d12SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layers)) {
+          Add-WindowsCapability -Online -Name 'Tools.Graphics.DirectX~~~~0.0.1.0' -ErrorAction Stop | Out-Host
+        }
+        if (-not (Test-Path -LiteralPath $layers)) {
+          throw "Graphics Tools installed but $layers is missing; D3D12_Validation cannot run"
+        }
+        "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
+
     # Debug is built but not tested here: the Debug SparkTests run exceeds the
     # single ctest timeout this lane inherits, so no green lane in the
     # repository currently executes SparkTests in a Debug MSVC configuration
@@ -1344,6 +1949,17 @@ jobs:
     # drop this guard and add a windows-vs2022-debug entry to BOTH
     # .github/test-count-ratchet.json and the --expected-lane list of
     # "Require and aggregate primary-lane evidence" (they are asserted equal).
+    # CI-110: run each documented windows-release CTest command against this tree.
+    # The full Release run takes about 17 minutes at --parallel 2; the documented
+    # subset is smaller and SparkTests children are capped by SPARK_TEST_LIMIT.
+    - name: Execute documented subsystem commands
+      if: matrix.config == 'Release'
+      timeout-minutes: 40
+      shell: bash
+      run: |
+        python tools/site-data/check_documented_selectors.py --build-dir build \
+          --documented-build-dir build/windows-release --config Release --execute --test-limit 50
+
     - name: Run Tests
       if: matrix.config == 'Release'
       shell: bash
@@ -1363,16 +1979,17 @@ jobs:
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
         test -s build/test-registration-count.json
-        # Both ctest lanes are summarized: SparkEngineTests excludes the
-        # load/stress family and SparkEngineLoadTests runs it, so summarizing
-        # only the first would shrink the population the floors measure without
-        # lowering the floors. --registration-count compares the executed total
+        # All three granular ctest lanes are summarized: the main suite excludes
+        # load/stress and D3D11 device-loss families, which retain their own
+        # lanes. --registration-count compares the executed total
         # against the TEST macros this build actually compiled, which is the one
         # comparison a hand-written --min-tests literal cannot make.
         test -s build/SparkTests-load-junit.xml
+        test -s build/SparkTests-d3d11-device-loss-junit.xml
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           build/SparkTests-load-junit.xml \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           --min-tests 6800 \
           --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2022 Release" \
@@ -1391,6 +2008,12 @@ jobs:
         python Tools/test_source_census.py --check \
           --json test-source-census.json \
           --minimum-production-tests "$MIN_PRODUCTION_TESTS"
+        # RDY-010: a stable-v1/module-profile selector must reach only
+        # production-source, non-tautological TESTs - in this configured
+        # Windows tree and in every platform branch of Tests/CMakeLists.txt.
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-profile-inventory.json
+        python Tools/test_source_census.py --profile-selectors build/ctest-profile-inventory.json
 
     # Named for the exact commit so a consumer (the site-data publish job) can ask
     # for the CTest report of this SHA and nothing else. generate.py publishes
@@ -1417,6 +2040,7 @@ jobs:
           build/SparkTests-load-junit.xml
           build/SparkTests-load.log
           build/SparkTests-load-output.log
+          build/SparkTests-d3d11-device-loss-junit.xml
           build/ctest-junit.xml
           build/test-registration-count.json
           build/*-process-smoke.log
@@ -1512,14 +2136,38 @@ jobs:
   build-windows-shipping:
     name: "Windows Shipping build matrix"
     runs-on: windows-2022
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
+    # This producer intentionally performs the visible required lane builds and
+    # separate owned File API capture/build transactions.  The full stable-v1
+    # matrix exceeded the old two-hour ceiling during its second Windows
+    # validation transaction, so retain the complete evidence contract with
+    # enough bounded time for a clean hosted run and its final artifacts.
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+
+    - name: Pin CMake and CPack for per-user Shipping MSI
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP 'cmake-4.4.1-windows-x86_64.zip'
+        $root = Join-Path $env:RUNNER_TEMP 'spark-cmake-4.4.1'
+        $cmakeSha256 = '091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19'
+        if (Test-Path -LiteralPath $root) { throw 'Pinned CMake directory must be fresh' }
+        Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip' -OutFile $archive
+        $cmakeActual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash
+        if ($cmakeActual -ne $cmakeSha256) { throw 'Pinned CMake archive checksum mismatch' }
+        Expand-Archive -LiteralPath $archive -DestinationPath $root
+        $bin = Join-Path $root 'cmake-4.4.1-windows-x86_64/bin'
+        $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & (Join-Path $bin 'cmake.exe') --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & (Join-Path $bin 'cpack.exe') --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
@@ -1533,6 +2181,89 @@ jobs:
         # 2-core runner. /MP stays; the project-level parallelism is capped.
         cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee build-matrix-windows-shipping-build.log
 
+    - name: Check Windows Shipping PE ISA floor (BLD-100)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The CMake target carries one TARGET_PDB_FILE genex per PE image. Do
+        # not turn a missing disassembler or llvm-pdbutil into a skipped scan.
+        command -v llvm-pdbutil >/dev/null || {
+          echo "::error::BLD-100 requires llvm-pdbutil on PATH"; exit 1;
+        }
+        command -v llvm-objdump >/dev/null || {
+          echo "::error::BLD-100 requires llvm-objdump on PATH"; exit 1;
+        }
+        cmake --build --preset windows-shipping --config MinSizeRel \
+          --target CpuFloor_IsaBaseline --parallel 1 2>&1 | tee build-matrix-windows-shipping-isa.log
+
+    - name: Verify stable Shipping product versions
+      shell: bash
+      run: |
+        set -euo pipefail
+        # REL-100: every non-test stable-v1 executable (SparkEngine, SparkEditor,
+        # SparkConsole, SparkShaderCompiler, SparkCrashReporter, SparkCooker,
+        # SparkAutomation, SparkLauncher, SparkBuild, SparkInstaller) must print
+        # its exact version line; the script fails if the stable-v1 product
+        # contract gains an executable its table does not cover.
+        python Tests/Tools/test_rel100_product_versions.py \
+          --bin-dir build/windows-shipping/bin/MinSizeRel
+
+    - name: Stage and map Shipping private symbols
+      shell: bash
+      run: |
+        set -euo pipefail
+        # BLD-100: the packaged components and the private "symbols" component
+        # install to separate roots. Every staged EXE/DLL must map by its RSDS
+        # PDB GUID+age to exactly one staged PDB, record a bare PDB file name,
+        # and no PDB may land in the runtime tree.
+        for component in runtime tools samples; do
+          cmake --install build/windows-shipping --config MinSizeRel \
+            --component "$component" --prefix build/shipping-runtime-stage
+        done
+        cmake --install build/windows-shipping --config MinSizeRel \
+          --component symbols --prefix build/shipping-symbols
+        python tools/shipping_symbol_manifest.py \
+          --images build/shipping-runtime-stage \
+          --symbols build/shipping-symbols/symbols \
+          --output build/shipping-symbols/shipping-symbol-manifest.json
+
+    - name: Verify Shipping runtime dependency closure (PLT-200)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Use the same fresh install and both checks as the CTest entry. This
+        # runs even when the Shipping preset has BUILD_TESTS=OFF.
+        cmake \
+          "-DSPARK_ENGINE_BUILD_DIR=${{ github.workspace }}/build/windows-shipping" \
+          "-DSPARK_SOURCE_ROOT=${{ github.workspace }}" \
+          -DSPARK_CONFIG=MinSizeRel \
+          "-DSPARK_TEST_ROOT=${{ github.workspace }}/build/shipping-closure" \
+          "-DSPARK_PYTHON_EXECUTABLE=$(python -c 'import sys; print(sys.executable)')" \
+          -P Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake
+
+    - name: Upload Windows Shipping dependency closure
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-closure-${{ github.sha }}
+        path: |
+          build/shipping-closure/run-*/*.json
+          build/shipping-closure/run-*/*.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
+    - name: Upload Windows Shipping private symbols
+      # A separate artifact from the MSI: symbols never enter a package. Hosting
+      # them on a symbol server is OPS-100 scope.
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-symbols-${{ github.sha }}
+        path: |
+          build/shipping-symbols/symbols
+          build/shipping-symbols/shipping-symbol-manifest.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
     - name: Capture Windows Shipping provenance
       shell: bash
       run: |
@@ -1541,6 +2272,17 @@ jobs:
           --profile windows-shipping \
           --build-dir build/windows-shipping \
           --build 2>&1 | tee build-matrix-windows-shipping-producer.log
+
+    - name: Verify Shipping is a distinct configuration (BLD-100)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Reads the codemodel the provenance capture just produced: MinSizeRel
+        # must carry the Shipping defines and none of the preset's development
+        # toggles, Debug and Release must not, each configuration must own its
+        # artifact directory, and the Shipping link must map a bare-name PDB.
+        python tools/check_shipping_configuration.py \
+          --build-dir build/windows-shipping --require-preset windows-shipping
 
     - name: Install the Windows Shipping SDK for the consumer profile
       shell: bash
@@ -1651,6 +2393,66 @@ jobs:
           --commit-sha "${{ github.sha }}" --out "$packageRoot/shipping-package-manifest.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+    - name: Package and verify Windows Shipping ZIP and NSIS artifacts
+      shell: pwsh
+      # Keep all final CPack distributables together so the version, provenance,
+      # and supply-chain checks inspect the exact bytes retained by this job.
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $versions = @(Get-Content -LiteralPath build/windows-shipping/CMakeCache.txt | Select-String -Pattern '^SPARK_ENGINE_VERSION:STRING=([0-9]+\.[0-9]+\.[0-9]+)$')
+        if ($versions.Count -ne 1) { throw "Expected one configured Shipping version" }
+        $version = $versions[0].Matches[0].Groups[1].Value
+        $packageRoot = Join-Path "${{ github.workspace }}" "build/ci-shipping-packages"
+        if (Test-Path -LiteralPath $packageRoot) { throw "Shipping package directory must be fresh" }
+        New-Item -ItemType Directory -Path $packageRoot | Out-Null
+        cpack --config build/windows-shipping/CPackConfig.cmake -G ZIP -C MinSizeRel -B "$packageRoot" 2>&1 | Tee-Object -FilePath shipping-zip-cpack.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cpack --config build/windows-shipping/CPackConfig.cmake -G NSIS -C MinSizeRel -B "$packageRoot" 2>&1 | Tee-Object -FilePath shipping-nsis-cpack.log
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $zip = @(Get-ChildItem -LiteralPath $packageRoot -Filter '*.zip' -File)
+        $nsis = @(Get-ChildItem -LiteralPath $packageRoot -Filter '*.exe' -File)
+        if ($zip.Count -ne 1) { throw "Expected exactly one Shipping ZIP, found $($zip.Count)" }
+        if ($nsis.Count -ne 1) { throw "Expected exactly one Shipping NSIS installer, found $($nsis.Count)" }
+        python tools/verify_package_versions.py --version $version $zip[0].FullName $nsis[0].FullName
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python tools/generate-sbom.py reconcile --archive $zip[0].FullName `
+          --not-configured SDL2 --not-configured AngelScript --not-configured glad `
+          --json-report (Join-Path $packageRoot 'spark-package-inventory-reconciliation-v1.json')
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $msi = @(Get-ChildItem -LiteralPath "${{ github.workspace }}\build\ci-msi-package" -Filter '*.msi' -File)
+        if ($msi.Count -ne 1) { throw "Expected exactly one Shipping MSI, found $($msi.Count)" }
+        Copy-Item -LiteralPath $msi[0].FullName -Destination $packageRoot
+        $assets = @(Get-ChildItem -LiteralPath $packageRoot -File | Where-Object { $_.Extension -in '.zip', '.exe', '.msi' })
+        if ($assets.Count -ne 3) { throw "Expected ZIP, NSIS, and MSI in the provenance set, found $($assets.Count)" }
+        $assetNames = $assets.Name | Sort-Object
+        Set-Content -LiteralPath (Join-Path $packageRoot 'expected-release-assets.txt') -Value $assetNames
+        python tools/release_build_provenance.py record `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --version $version --profile stable-v1 --platform Windows --configuration MinSizeRel `
+          --build-dir build/windows-shipping --packages $packageRoot `
+          --out build/ci-shipping-provenance/build-provenance-Windows-MinSizeRel.json
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python tools/release_build_provenance.py verify `
+          --records-dir build/ci-shipping-provenance --assets-dir $packageRoot `
+          --assets-file (Join-Path $packageRoot 'expected-release-assets.txt') `
+          --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
+          --version $version --stable
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload Windows Shipping package reconciliation and provenance
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: shipping-package-integrity-${{ github.sha }}
+        path: |
+          build/ci-shipping-packages/*.zip
+          build/ci-shipping-packages/*.exe
+          build/ci-shipping-packages/*.msi
+          build/ci-shipping-packages/*.json
+          build/ci-shipping-packages/expected-release-assets.txt
+          build/ci-shipping-provenance/build-provenance-Windows-MinSizeRel.json
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
     - name: Upload exact Windows Shipping MSI for package smoke
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
@@ -1659,6 +2461,7 @@ jobs:
           build/ci-msi-package/*.msi
           build/ci-msi-package/shipping-package-manifest.json
           build/windows-shipping/SparkEngineGameModules.cmake
+          build/windows-shipping/CMakeCache.txt
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: error
 
@@ -1670,6 +2473,21 @@ jobs:
         path: |
           msi-cpack.log
           build/ci-msi-package/_CPack_Packages/**/wix.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+    # Diagnostic-only: preserve exact JSON bytes and record absent producers.
+    - name: Bundle bounded build-matrix diagnostics
+      if: always()
+      shell: pwsh
+      run: python Tools/buildmatrix/bundle_diagnostics.py --output build-matrix-report-diagnostics.zip
+
+    - name: Upload build-matrix report diagnostics
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: build-matrix-reports-${{ github.sha }}-${{ github.run_attempt }}
+        path: build-matrix-report-diagnostics.zip
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         if-no-files-found: ignore
 
@@ -1710,6 +2528,111 @@ jobs:
           exit 1
         fi
         echo "Build-matrix evidence recorded for ${{ github.sha }}; the Build Matrix Verifier attests it from the Working checkout."
+
+  # BLD-100: two clean windows-shipping builds of this commit, from two
+  # independent checkouts staged sequentially at the same compiler-visible
+  # path, must install equivalent outputs. tools/compare_build_outputs.py records
+  # size, SHA-256, COFF timestamp, RSDS GUID/age/PDB name and per-section
+  # hashes of every installed EXE, DLL and static library, and fails on any
+  # missing, extra or differing output. Nothing is cached between the builds.
+  # Advisory (job-level continue-on-error, not a required-ci-gate need) until a
+  # hosted run has shown equivalent trees; promoting it is a CI-100 decision.
+  # Being advisory also keeps build-matrix parity from counting its Shipping
+  # builds as coverage for the required build-windows-shipping producer.
+  reproducibility-windows:
+    name: "Windows Shipping reproducibility (advisory)"
+    runs-on: windows-2022
+    timeout-minutes: 360
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the first tree
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: tree-a
+        submodules: recursive
+
+    - name: Checkout the second tree
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: tree-b
+        submodules: recursive
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+    - name: Build and stage Shipping in the first tree
+      shell: bash
+      run: |
+        set -euo pipefail
+        # MSVC records the object-output path in CodeView and BigObj metadata.
+        # Move each separate checkout to one real path for its build, then
+        # restore it so checkout cleanup and the comparator see both trees.
+        physical_parent=$PWD
+        source_tree="$physical_parent/tree-a"
+        canonical_tree="$physical_parent/reproducibility-source"
+        test ! -e "$canonical_tree"
+        mv "$source_tree" "$canonical_tree"
+        restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }
+        trap restore_tree EXIT
+        cd "$canonical_tree"
+        cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-a-configure.log"
+        # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-a-build.log"
+        cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-a"
+        restore_tree
+        trap - EXIT
+
+    - name: Build and stage Shipping in the second tree
+      shell: bash
+      run: |
+        set -euo pipefail
+        physical_parent=$PWD
+        source_tree="$physical_parent/tree-b"
+        canonical_tree="$physical_parent/reproducibility-source"
+        test ! -e "$canonical_tree"
+        mv "$source_tree" "$canonical_tree"
+        restore_tree() { cd "$physical_parent" && mv "$canonical_tree" "$source_tree"; }
+        trap restore_tree EXIT
+        cd "$canonical_tree"
+        cmake --preset windows-shipping 2>&1 | tee "$physical_parent/reproducibility-b-configure.log"
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee "$physical_parent/reproducibility-b-build.log"
+        cmake --install build/windows-shipping --config MinSizeRel --prefix "$physical_parent/reproducibility-stage-b"
+        restore_tree
+        trap - EXIT
+
+    - name: Compare the two Shipping builds
+      shell: bash
+      run: |
+        set -euo pipefail
+        # OD-24 permits only equal-length build-root strings in .lib CodeView
+        # sections. Native Windows spelling must match the /Z7 object bytes,
+        # so the existing build dirs are resolved and converted with cygpath -w.
+        build_a=$(cd tree-a/build/windows-shipping && pwd)
+        build_b=$(cd tree-b/build/windows-shipping && pwd)
+        root_a=$(cygpath -w "$build_a")
+        root_b=$(cygpath -w "$build_b")
+        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-a --output reproducibility/manifest-a.json --build-root "$root_a"
+        python tree-a/tools/compare_build_outputs.py manifest reproducibility-stage-b --output reproducibility/manifest-b.json --build-root "$root_b"
+        python tree-a/.github/scripts/compare_windows_shipping_repro.py \
+          --first-manifest reproducibility/manifest-a.json \
+          --second-manifest reproducibility/manifest-b.json \
+          --first-root reproducibility-stage-a --second-root reproducibility-stage-b \
+          --first-build-root "$root_a" --second-build-root "$root_b" \
+          --report reproducibility/report.json \
+          --diagnostics reproducibility/coff-diagnostics.json
+
+    - name: Upload reproducibility evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: reproducibility-windows-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          reproducibility/
+          reproducibility-*.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
 
   # ===========================================================================
   # Windows Build (Visual Studio 2026 / v145)
@@ -1801,6 +2724,7 @@ jobs:
           build/SparkTests-load-junit.xml \
           build/SparkTests-load.log \
           build/SparkTests-load-output.log \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           build/ctest-junit.xml \
           build/*-process-smoke.log \
           build/*-process-smoke.json \
@@ -1868,6 +2792,19 @@ jobs:
           -DGENERATE_DEBUG_SYMBOLS=OFF \
           -DBUILD_TESTS=ON 2>&1 | tee cmake-configure.log
 
+    # Same hash-pinned PyYAML install as build-windows-vs2022.
+    - name: Install hash-pinned PyYAML into the configured test interpreter
+      if: matrix.config == 'Release'
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3_exe="$(ctest --test-dir build -C ${{ matrix.config }} --show-only=json-v1 -R '^ReleaseApproval_Record$' \
+          | python -c 'import json, sys; print(json.load(sys.stdin)["tests"][0]["command"][0])')"
+        test -n "$python3_exe" || { echo "::error::ReleaseApproval_Record registers no interpreter"; exit 1; }
+        "$python3_exe" -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps \
+          -r .github/ci-python-requirements.txt
+        "$python3_exe" -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)"
+
     - name: Build
       run: cmake --build build --config ${{ matrix.config }} --parallel
 
@@ -1906,7 +2843,22 @@ jobs:
         path: ${{ runner.temp }}\sccache
         key: ${{ steps.sccache-restore.outputs.cache-primary-key }}
 
+    # RHI-225: D3D12_Validation needs d3d12SDKLayers.dll and fails closed without it.
+    - name: Install D3D12 debug layer
+      if: matrix.config == 'Release'
+      shell: pwsh
+      run: |
+        $layers = Join-Path $env:SystemRoot 'System32\d3d12SDKLayers.dll'
+        if (-not (Test-Path -LiteralPath $layers)) {
+          Add-WindowsCapability -Online -Name 'Tools.Graphics.DirectX~~~~0.0.1.0' -ErrorAction Stop | Out-Host
+        }
+        if (-not (Test-Path -LiteralPath $layers)) {
+          throw "Graphics Tools installed but $layers is missing; D3D12_Validation cannot run"
+        }
+        "d3d12SDKLayers.dll $((Get-Item -LiteralPath $layers).VersionInfo.FileVersion)"
+
     - name: Run Tests
+      id: vs2026-release-tests
       if: matrix.config == 'Release'
       run: >-
         ctest --test-dir build -C ${{ matrix.config }}
@@ -1922,10 +2874,12 @@ jobs:
         test -s build/SparkTests-output.log
         test -s build/ctest-junit.xml
         test -s build/SparkTests-load-junit.xml
+        test -s build/SparkTests-d3d11-device-loss-junit.xml
         test -s build/test-registration-count.json
         python .github/scripts/summarize-test-results.py \
           build/SparkTests-junit.xml \
           build/SparkTests-load-junit.xml \
+          build/SparkTests-d3d11-device-loss-junit.xml \
           --min-tests 6800 \
           --registration-count build/test-registration-count.json \
           --title "SparkTests — Windows VS2026 Release" \
@@ -1943,12 +2897,32 @@ jobs:
           build/SparkTests-load-junit.xml
           build/SparkTests-load.log
           build/SparkTests-load-output.log
+          build/SparkTests-d3d11-device-loss-junit.xml
           build/ctest-junit.xml
           build/*-process-smoke.log
           build/*-process-smoke.json
           build/*-process-smoke.xml
           test-stats-windows-vs2026-release.json
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
+    # VS 18 ships an independent MSVC toolset. When its fail-closed ISA scan
+    # rejects unreviewed CRT/STL ranges, retain one broad and one small image
+    # with their build PDBs so the guard-dominance review can be performed
+    # without weakening the x86-64-v2 floor or guessing from truncated logs.
+    - name: Upload bounded VS2026 CPU-floor review inputs
+      if: always() && matrix.config == 'Release' && steps.vs2026-release-tests.outcome == 'failure'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: vs2026-cpu-floor-review-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          build/bin/Release/SparkEngine.exe
+          build/bin/Release/SparkEngine.pdb
+          build/bin/Release/SparkConsole.exe
+          build/bin/Release/SparkConsole.pdb
+          build/CMakeCache.txt
+          build/ctest-junit.xml
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: error
 
     - name: Upload Build Artifacts
@@ -1974,7 +2948,7 @@ jobs:
   build-linux-gcc:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         config: [Debug, Release]
 
@@ -1987,7 +2961,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -2023,17 +2999,48 @@ jobs:
           build/*-process-smoke.json \
           build/*-process-smoke.xml
 
+    - name: Install Intel SDE 10.13.1 for CPU-floor process test
+      if: matrix.config == 'Release'
+      run: |
+        set -euo pipefail
+        url='https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz'
+        expected_sha256='94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50'
+        dest="${RUNNER_TEMP}/intel-sde-10.13.1"
+        mkdir -p "$dest"
+        archive="$dest/sde-linux.tar.xz"
+        curl --fail --location --retry 3 "$url" --output "$archive"
+        printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum -c -
+        tar -xf "$archive" -C "$dest"
+        mapfile -t executables < <(find "$dest" -type f -name sde64)
+        test "${#executables[@]}" -eq 1
+        test -x "${executables[0]}"
+        echo "SPARK_SDE_EXECUTABLE=${executables[0]}" >> "$GITHUB_ENV"
+
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DSPARK_SDE_EXECUTABLE="${SPARK_SDE_EXECUTABLE:-}" 2>&1 | tee cmake-configure.log
+
+    # CI-110: every test this configured tree registers (subdirectories, loops
+    # and non-Windows branches included) must carry a positive TIMEOUT and
+    # LABELS, so one hang fails its own test and label lanes can select it.
+    - name: Enforce configured-tree CTest policy
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C ${{ matrix.config }} --no-tests=error \
+          --show-only=json-v1 > build/ctest-policy-inventory.json
+        python3 Tools/validate_ctest_policy.py --ctest-json build/ctest-policy-inventory.json --build-dir build
 
     - name: Build all targets
       run: |
@@ -2041,14 +3048,39 @@ jobs:
         find build -name '*.pch' -delete 2>/dev/null || true
         cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
 
+    - name: Refuse a below-floor CPU under Intel SDE
+      if: matrix.config == 'Release'
+      run: |
+        set -euo pipefail
+        ctest --test-dir build -C Release -R '^CpuFloor_BelowFloorStartupRefused$' \
+          --output-on-failure --no-tests=error
+
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # CI-110: run each documented linux-gcc-release CTest command against this tree.
+    # The full Release run takes about 20 minutes at --parallel 2; the documented
+    # subset is smaller and SparkTests children are capped by SPARK_TEST_LIMIT.
+    # The advisory experimental-modules label stays out of this required lane.
+    - name: Execute documented subsystem commands
+      if: matrix.config == 'Release'
+      timeout-minutes: 40
+      shell: bash
+      run: |
+        python3 tools/site-data/check_documented_selectors.py --build-dir build \
+          --documented-build-dir build/linux-gcc-release --config Release --execute --test-limit 50 \
+          --label-exclude experimental-modules
+
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
+    # advisory experimental-module-lifecycle job; this required lane excludes it.
+    # CI-110: the golden CTest entries stay in this required run until the Mesa-pinned
+    # golden-linux lane is promoted to required; promotion excludes them here.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2094,12 +3126,16 @@ jobs:
       if: matrix.config == 'Release'
       run: grep -q "ENABLE_VULKAN:BOOL=ON" build/CMakeCache.txt
 
-    - name: Assert Vulkan shader compile parity test ran (Release gate)
+    # These tests exist only when SPARK_VULKAN_SUPPORT compiles the backend in, so their presence in the
+    # JUnit report proves the Release SparkTests binary carries the real Vulkan backend. The full run may
+    # report them as skipped; the VulkanValidation CTest entry (SPARK_REQUIRE_VULKAN_VALIDATION=1) is what
+    # makes a missing ICD or validation layer fatal.
+    - name: Assert Vulkan backend tests are compiled in (Release gate)
       if: matrix.config == 'Release'
       run: |
         echo "Test results: $(wc -l < test-results.log) lines"
-        grep -Fq 'name="VulkanParity_ShaderCompilePath_Asserted"' build/SparkTests-junit.xml
-        grep -Fq 'name="VulkanParity_D3D11MilestoneSnapshot"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanShaderToolchain_RejectsMalformedSpirv"' build/SparkTests-junit.xml
+        grep -Fq 'name="VulkanGolden_FullscreenTriangleReadback"' build/SparkTests-junit.xml
 
     - name: Extract error summary
       if: failure()
@@ -2139,7 +3175,7 @@ jobs:
   build-linux-clang:
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         config: [Debug, Release]
 
@@ -2152,7 +3188,9 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev
+        # RHI-230: the VulkanValidation CTest entry requires Lavapipe plus the
+        # Khronos validation layer (SPARK_REQUIRE_VULKAN_VALIDATION=1) and fails without them.
+        sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
 
     - name: Setup ccache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -2191,8 +3229,11 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DENABLE_LTO=OFF \
@@ -2224,10 +3265,15 @@ jobs:
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # RDY-015: ExperimentalModuleLifecycle_* is prototype evidence with its own
+    # advisory experimental-module-lifecycle job; this required lane excludes it.
+    # CI-110: the golden CTest entries stay in this required run until the Mesa-pinned
+    # golden-linux lane is promoted to required; promotion excludes them here.
     - name: Run Tests
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
+          --label-exclude '^experimental-modules$' \
           --output-on-failure --no-tests=error --parallel 2 \
           --output-junit ctest-junit.xml 2>&1 | tee test-results.log
 
@@ -2302,11 +3348,145 @@ jobs:
         retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
   # ===========================================================================
-  # Linux MinGW Cross-Compilation — Build Windows D3D11/D3D12 code on Linux
+  # Linux golden images (CI-110 / RHI-230 / RHI-240)
+  # The committed opengl-llvmpipe and vulkan-lavapipe baselines belong to one
+  # reviewed Mesa build (Tests/GoldenImages/manifest.json). A runner with a
+  # different Mesa fails here instead of comparing against a rasterizer nobody
+  # reviewed. Advisory until its first hosted pass: it is deliberately NOT a
+  # required-ci-gate dependency yet, so build-linux-gcc and build-linux-clang
+  # keep the two golden CTest entries and hold the only required comparison.
+  # Promotion is one change: add this job to the gate needs,
+  # EXPECTED_REQUIRED_JOBS_JSON and REQUIRED_CI_JOBS, flip GOLDEN_LINUX_REQUIRED
+  # in .github/scripts/test-workflow-failure-propagation.py, and exclude the
+  # goldens from those two lanes' full ctest runs.
+  # ===========================================================================
+  golden-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      SPARK_GOLDEN_MESA_VERSION: 25.2.8-0ubuntu0.24.04.2
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        # llvmpipe (libgl1-mesa-dri through headless EGL) renders the OpenGL
+        # row, Lavapipe (mesa-vulkan-drivers) plus the Khronos validation layer
+        # the Vulkan row.
+        sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libegl-dev libegl-mesa0 libgl1-mesa-dri libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
+        # noble-updates moves Mesa independently of the reviewed baselines
+        # (0ubuntu0.24.04.3 replaced .2 there on 2026-09-30 while .2 stayed
+        # published in noble-security), so install the reviewed build of every
+        # Mesa binary the line above pulls in instead of whatever the newest
+        # pocket carries. They must move together: most depend on
+        # mesa-libgallium at the exact same version. The list is explicit so
+        # the supply-chain check sees every package name; the next step fails
+        # if any installed Mesa binary is still not the reviewed build.
+        sudo apt-get install -y --allow-downgrades \
+          libegl-mesa0="$SPARK_GOLDEN_MESA_VERSION" \
+          libgbm-dev="$SPARK_GOLDEN_MESA_VERSION" \
+          libgbm1="$SPARK_GOLDEN_MESA_VERSION" \
+          libgl1-mesa-dri="$SPARK_GOLDEN_MESA_VERSION" \
+          libglx-mesa0="$SPARK_GOLDEN_MESA_VERSION" \
+          mesa-libgallium="$SPARK_GOLDEN_MESA_VERSION" \
+          mesa-vulkan-drivers="$SPARK_GOLDEN_MESA_VERSION"
+
+    - name: Assert the reviewed Mesa build
+      run: |
+        set -euo pipefail
+        for package in libgl1-mesa-dri mesa-vulkan-drivers; do
+          installed=$(dpkg-query -W -f='${Version}' "$package")
+          if [ "$installed" != "$SPARK_GOLDEN_MESA_VERSION" ]; then
+            echo "::error::$package is $installed, but the golden baselines were reviewed on Mesa $SPARK_GOLDEN_MESA_VERSION. Re-render and re-review the baselines (Tests/GoldenImages/README.md) instead of comparing against an unreviewed rasterizer."
+            exit 1
+          fi
+        done
+        # The drivers load the other Mesa libraries (mesa-libgallium, libgbm1, ...)
+        # at run time, so every installed Mesa binary must be the reviewed build.
+        stray=$(dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package} ${source:Package} ${Version}\n' \
+          | awk -v reviewed="$SPARK_GOLDEN_MESA_VERSION" '$1 == "ii" && $3 == "mesa" && $4 != reviewed')
+        if [ -n "$stray" ]; then
+          echo "::error::Mesa binaries not at the reviewed build $SPARK_GOLDEN_MESA_VERSION: $(echo "$stray" | tr '\n' ' ')"
+          exit 1
+        fi
+
+    - name: Setup ccache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ~/.ccache
+        key: ccache-golden-linux-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+        restore-keys: |
+          ccache-golden-linux-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+          ccache-golden-linux-
+
+    - name: Configure CMake
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release \
+          -DCMAKE_C_COMPILER=gcc-14 \
+          -DCMAKE_CXX_COMPILER=g++-14 \
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+        # No display server runs here: GLDevice must bootstrap through EGL
+        # (Mesa surfaceless llvmpipe), which only exists when configure found it.
+        grep -Fq 'EGL found' cmake-configure.log
+
+    # --no-tests=error only fails on zero matches, so each golden entry must
+    # be registered by name: a configure that silently drops one row cannot
+    # turn this lane into a comparison of the other row alone.
+    - name: Assert both golden CTest entries are registered
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' \
+          --no-tests=error --show-only=json-v1 > golden-ctest-inventory.json
+        python3 -c 'import json, sys; names = sorted(t["name"] for t in json.load(open("golden-ctest-inventory.json"))["tests"]); expected = ["SparkOpenGLGoldenTests", "VulkanGoldenTests"]; sys.exit(0 if names == expected else f"golden CTest entries {names} != {expected}")'
+
+    - name: Build SparkTests and SPIR-V shaders
+      run: |
+        set -euo pipefail
+        cmake --build build/linux-gcc-release --parallel $(nproc) \
+          --target SparkTests SparkSpirvShaders 2>&1 | tee cmake-build.log
+
+    - name: Compare golden images
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' \
+          --output-on-failure --no-tests=error \
+          --output-junit golden-junit.xml 2>&1 | tee golden-results.log
+
+    - name: Upload golden results and diffs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: golden-linux-${{ github.sha }}
+        path: |
+          build/linux-gcc-release/golden-junit.xml
+          build/linux-gcc-release/SparkTests-opengl-golden-junit.xml
+          build/linux-gcc-release/SparkTests-opengl-golden.log
+          build/linux-gcc-release/SparkTests-opengl-golden-output.log
+          build/linux-gcc-release/Tests/Output/
+          golden-ctest-inventory.json
+          golden-results.log
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        if-no-files-found: error
+
+  # ===========================================================================
+  # Linux MinGW Cross-Compilation — Build Windows D3D11 engine/editor on Linux
   # Runs the resulting .exe under Wine + DXVK + Lavapipe (software Vulkan)
+  # Experimental: manual dispatch only and advisory. It is not a required-ci-gate
+  # dependency; known Wine-only test failures are listed on the wiki page
+  # wiki/development/MinGW-Wine-Cross-Compilation.md.
   # ===========================================================================
   build-linux-mingw-wine:
+    name: "build-linux-mingw-wine (experimental)"
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
@@ -2319,8 +3499,8 @@ jobs:
         sudo dpkg --add-architecture i386
         sudo apt-get update
         sudo apt-get install -y \
-          mingw-w64 cmake ccache \
-          wine64 wine \
+          mingw-w64 cmake ccache curl ca-certificates \
+          wine64 wine xvfb xauth \
           mesa-vulkan-drivers
 
     - name: Setup ccache
@@ -2332,55 +3512,95 @@ jobs:
           ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
           ccache-linux-mingw-
 
-    - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
-      with:
-        path: build
-        key: build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
-        restore-keys: |
-          build-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
-          build-linux-mingw-
-
     - name: Configure CMake (MinGW cross-compilation)
+      id: mingw-configure
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
-        cmake -B build \
+        cmake --preset linux-mingw-release \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_TESTS=ON \
+          -DENABLE_EDITOR=ON \
           -DENABLE_VULKAN=OFF \
           -DENABLE_OPENGL=OFF \
           -DENABLE_SDL2=OFF \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
 
-    - name: Build (Windows .exe via MinGW)
+    - name: Build engine (Windows .exe via MinGW)
+      id: mingw-engine
       run: |
         set -o pipefail
-        cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+        cmake --build build/linux-mingw-release --target SparkEngine --parallel $(nproc) 2>&1 | tee cmake-engine.log
+
+    - name: Build editor (Windows .exe via MinGW)
+      id: mingw-editor
+      if: ${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}
+      run: |
+        set -o pipefail
+        cmake --build build/linux-mingw-release --target SparkEditor --parallel $(nproc) 2>&1 | tee cmake-editor.log
+
+    - name: Build tests and remaining targets (MinGW)
+      id: mingw-tests-build
+      if: ${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}
+      run: |
+        set -o pipefail
+        cmake --build build/linux-mingw-release --parallel $(nproc) 2>&1 | tee cmake-build.log
 
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
     - name: Setup Wine prefix and DXVK
+      id: mingw-setup
+      if: ${{ !cancelled() && steps.mingw-configure.outcome == 'success' }}
+      timeout-minutes: 5
       run: |
-        export WINEPREFIX=${{ github.workspace }}/build/.wineprefix
-        tools/wine-run.sh --setup-only
+        export WINEPREFIX="$PWD/build/linux-mingw-release/.wineprefix-mingw"
+        xvfb-run -a bash tools/wine-run.sh --setup-only
+        bash tools/setup-mingw-wine.sh --dxvk-only
+
+    - name: Engine CPU-render agent-control smoke
+      id: mingw-engine-smoke
+      if: ${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-engine.outcome == 'success' }}
+      timeout-minutes: 5
+      run: python3 .github/scripts/mingw-wine-smoke.py engine
+
+    - name: Editor CPU-render agent-control smoke
+      id: mingw-editor-smoke
+      if: ${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-editor.outcome == 'success' }}
+      timeout-minutes: 8
+      run: python3 .github/scripts/mingw-wine-smoke.py editor
 
     - name: Run Tests under Wine
-      env:
-        WINEPREFIX: ${{ github.workspace }}/build/.wineprefix
-        WINEDEBUG: -all
-        LIBGL_ALWAYS_SOFTWARE: "1"
-        # Native Windows lanes cover these facilities. Wine lacks Windows Git,
-        # WARP, native D3DCompiler include semantics, and native stack-frame
-        # addresses, so exclude only those known platform-incompatible tests.
-        SPARK_TEST_EXCLUDE: VersionControlPhaseAA_InitializeShutdown,GPUDriven_D3D11_ShaderReflectionMatchesSharedABI,GPUDriven_D3D11_PrimitiveLosesSparseSourceIdentityAndProductionGateFailsClosed,PostProcessingD3D11_ZeroAndOnePassRouteWithoutViewHazards,WorldBasicRender_DrawsGeometryIntoOffscreenRTV,WARP_D3D11DeviceInit,WARP_D3D11BufferCreation,WARP_D3D11FactoryCreate,StackTrace_FramesHaveAddresses
+      id: mingw-tests
+      if: ${{ !cancelled() && steps.mingw-setup.outcome == 'success' && steps.mingw-tests-build.outcome == 'success' }}
+      timeout-minutes: 32
+      # Named Wine-only exclusions and per-test reasons: .github/scripts/mingw-wine-exclusions.json.
+      # Windows Git is absent; WARP/D3DCompiler and stack-address tests require native Windows.
+      # Gateway key-file / CrashHandler artifacts require protected owner-only Windows DACLs.
+      # GatewayAreaControl depends on native named-pipe disconnect/PeekNamedPipe timing.
+      # UserDataPaths relies on Windows profile mapping; ModuleHotReload uses mapped-PE replacement.
+      # The documented FAudio crash requires an ALSA device absent on this hosted runner.
+      # Pure credential/replay tests remain included; all exclusions still run on native Windows.
+      # Runner pins 7500 passing tests and --warn-is-error; rc=255 is never accepted.
       run: |
         set -o pipefail
-        tools/wine-run.sh build/bin/SparkTests.exe 2>&1 | tee wine-test-results.txt
+        export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+        python3 .github/scripts/mingw-wine-smoke.py tests 2>&1 | tee wine-test-results.txt
+
+    - name: Summarize experimental MinGW execution
+      if: always()
+      env:
+        MINGW_CONFIGURED: ${{ steps.mingw-configure.outcome }}
+        MINGW_ENGINE_BUILT: ${{ steps.mingw-engine.outcome }}
+        MINGW_EDITOR_BUILT: ${{ steps.mingw-editor.outcome }}
+        MINGW_TESTS_BUILT: ${{ steps.mingw-tests-build.outcome }}
+      run: python3 .github/scripts/mingw-wine-smoke.py summary
 
     - name: Extract error summary
       if: failure()
@@ -2388,7 +3608,7 @@ jobs:
         .github/scripts/extract-errors.sh \
           "build-linux-mingw-wine" \
           error-summary.json \
-          cmake-configure.log cmake-build.log wine-test-results.txt
+          cmake-configure.log cmake-engine.log cmake-editor.log cmake-build.log wine-test-results.txt
 
     - name: Upload error summary
       if: failure()
@@ -2403,8 +3623,15 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: mingw-wine-test-results
-        path: wine-test-results.txt
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        path: |
+          build/mingw-wine-evidence/
+          wine-test-results.txt
+          cmake-configure.log
+          cmake-engine.log
+          cmake-editor.log
+          cmake-build.log
+        if-no-files-found: error
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
 
   # ===========================================================================
   # macOS Build — Apple Clang (experimental)
@@ -2481,12 +3708,15 @@ jobs:
     - name: Configure CMake
       run: |
         set -o pipefail
+        spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+        test -n "$spark_engine_version"
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
         # macOS path: SDL2 + OpenGL + OpenAL. DXR/Vulkan always off here
         # (MoltenVK path has its own preset). ENABLE_METAL is matrix-driven —
         # the Metal entry compiles MetalDevice.mm and the Objective-C++ wiring.
         # ENABLE_SDL2=ON is required — macOS has no X11 fallback.
         cmake -B build \
+          -DSPARK_ENGINE_VERSION="$spark_engine_version" \
           -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
           -DBUILD_TESTS=ON \
           -DENABLE_LTO=OFF \
@@ -2509,12 +3739,40 @@ jobs:
         find build -name 'lib*.a' -delete 2>/dev/null || true
         cmake --build build --parallel $(sysctl -n hw.logicalcpu) 2>&1 | tee cmake-build.log
 
+    # PLT-220: the built Mach-O images must record SPARK_MACOS_MIN_VERSION as
+    # their minimum OS, matching the documented floor.
+    - name: Check macOS minimum version parity
+      run: |
+        python3 tools/check_macos_min_version.py \
+          --binary build/bin/SparkEngine build/bin/SparkTests
+
     - name: Print ccache stats
       if: always()
       run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
 
+    # Same hash-pinned PyYAML install as build-windows-vs2022: the supply-chain,
+    # release-provenance and release-approval suites import it and fail without
+    # it. The configured interpreter is Homebrew's, which PEP 668 marks
+    # externally managed; this ephemeral runner owns it, and --require-hashes
+    # --only-binary still admits only the pinned wheels.
+    - name: Install hash-pinned PyYAML into the configured test interpreter
+      if: matrix.config == 'Release'
+      run: |
+        set -euo pipefail
+        python3_exe="$(ctest --test-dir build -C ${{ matrix.config }} --show-only=json-v1 -R '^ReleaseApproval_Record$' \
+          | python3 -c 'import json, sys; print(json.load(sys.stdin)["tests"][0]["command"][0])')"
+        test -n "$python3_exe" || { echo "::error::ReleaseApproval_Record registers no interpreter"; exit 1; }
+        "$python3_exe" -m pip install --disable-pip-version-check --break-system-packages \
+          --require-hashes --only-binary=:all: --no-deps -r .github/ci-python-requirements.txt
+        "$python3_exe" -c "import sys, yaml; print(sys.executable, 'PyYAML', yaml.__version__)"
+
     - name: Run Tests
       if: matrix.config == 'Release'
+      env:
+        # The default macOS TMPDIR sits under the /var -> /private/var symlink,
+        # which the receipt, site-data and asset tools refuse as a symlinked
+        # ancestor by design. The runner temp directory has no symlink.
+        TMPDIR: ${{ runner.temp }}
       run: |
         set -o pipefail
         ctest --test-dir build -C ${{ matrix.config }} \
@@ -2559,7 +3817,7 @@ jobs:
           build/*-process-smoke.xml
           test-stats-macos-${{ matrix.backend }}-release.json
           test-results.log
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
         if-no-files-found: error
 
     - name: Extract error summary
@@ -2592,7 +3850,7 @@ jobs:
           Tests/Output/
           build/Tests/Output/
         if-no-files-found: ignore
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
 
     - name: Upload Build Artifacts
       if: matrix.config == 'Release'
@@ -2600,7 +3858,44 @@ jobs:
       with:
         name: SparkEngine-macOS-${{ matrix.config }}-${{ matrix.backend }}
         path: build/bin/
-        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        retention-days: 14  # OD-17: experimental artifacts are kept 14 days
+
+  # ===========================================================================
+  # macOS Shipping (PLT-220) — the macos-shipping preset, advisory
+  # build-macos configures by hand, so this is the only lane that proves the
+  # shipped macOS configuration (MinSizeRel, arm64, no editor or dev tools)
+  # still configures, builds, installs, and records the documented minimum OS.
+  # Advisory (continue-on-error, OD-11) and never a required-ci-gate
+  # dependency until a hosted run is green.
+  # ===========================================================================
+  build-macos-shipping:
+    name: "macOS Shipping (advisory)"
+    if: github.ref == 'refs/heads/Working' || github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        brew update
+        brew install cmake sdl2 openal-soft
+
+    - name: Configure, build and stage the Shipping runtime
+      run: |
+        set -euo pipefail
+        cmake --preset macos-shipping 2>&1 | tee cmake-configure.log
+        cmake --build --preset macos-shipping --parallel "$(sysctl -n hw.logicalcpu)" 2>&1 | tee cmake-build.log
+        cmake --install build/macos-shipping --prefix stage --component runtime
+
+    - name: Check macOS minimum version parity of the staged engine
+      run: python3 tools/check_macos_min_version.py --binary stage/bin/SparkEngine
 
   # ===========================================================================
   # Code Coverage — GCC with lcov
@@ -2610,15 +3905,25 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # 60: the build takes ~23 min and the instrumented suite ~17-20 min on the hosted runner.
+    timeout-minutes: 75
+    env:
+      # Instrumented objects plus one .gcno per compile outgrow the workflow's
+      # 1G cache (the plain GCC Debug lane alone fills 0.8G); evicting during a
+      # cold fill would leave the next run only partially warm.
+      CCACHE_MAXSIZE: 3G
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev libfreetype-dev
+      # restore/save are split so a run that later times out or fails in Test
+      # still keeps the objects it compiled (the composite action saves only on
+      # success(), and a cold coverage build alone is 26-34 min of the 45).
       - name: Setup ccache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        id: ccache-restore
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.ccache
           key: ccache-coverage-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -2638,24 +3943,49 @@ jobs:
             build-coverage-
       - name: Configure
         run: |
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
+          # Pin ccache to the directory the cache steps persist. Unset, ccache
+          # 4.9 writes to ~/.cache/ccache and ~/.ccache is never created.
+          mkdir -p "$HOME/.ccache"
+          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          export CCACHE_DIR="$HOME/.ccache"
           command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
+          # -pthread, not -fprofile-update=atomic: the GCC driver turns
+          # --coverage + -pthread into -fprofile-update=prefer-atomic (atomic on
+          # x86-64), so counters stay race-free, while ccache 4.9 (Ubuntu 24.04)
+          # rejects any unknown -fprofile-* option as an unsupported compiler
+          # option, which made every coverage compile uncacheable.
+          g++-14 -dumpspecs | grep -q 'pthread:-fprofile-update=prefer-atomic' || {
+            echo "::error::g++-14 no longer maps -pthread to -fprofile-update=prefer-atomic"; exit 1; }
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" -DCMAKE_C_FLAGS="--coverage -fprofile-update=atomic" \
+            -DCMAKE_CXX_FLAGS="--coverage -pthread" -DCMAKE_C_FLAGS="--coverage -pthread" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON
       - name: Build
         run: |
           # pipefail so a cmake --build failure is not masked by tee
           set -o pipefail
-          cmake --build build --parallel $(nproc) 2>&1 | tee cmake-build.log
+          # Coverage executes SparkTests only; building the default target also
+          # compiles unrelated tools and product binaries inside the job budget
+          # (75 minutes, OD-29). SparkTests still brings in every library and module it
+          # links, so the instrumented test corpus and coverage thresholds are
+          # unchanged.
+          cmake --build build --target SparkTests --parallel $(nproc) 2>&1 | tee cmake-build.log
       - name: Print ccache stats
         if: always()
         run: command -v ccache >/dev/null && ccache --show-stats || echo "::warning::ccache not installed, skipping stats"
+      - name: Save ccache
+        if: ${{ always() && steps.ccache-restore.outcome == 'success' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.ccache
+          key: ${{ steps.ccache-restore.outputs.cache-primary-key }}
       - name: Test
         id: coverage-tests
-        continue-on-error: true
         env:
           SPARK_TEST_EXCLUDE: "LoadTest_"
         run: |
@@ -2668,7 +3998,6 @@ jobs:
       - name: Generate coverage
         id: generate-coverage
         if: always()
-        continue-on-error: true
         # lcov is noisy on warnings and sometimes emits non-zero exit
         # codes even with --ignore-errors. Capture each command's exit
         # status explicitly so we can continue into the per-subsystem
@@ -2709,7 +4038,6 @@ jobs:
       - name: Per-subsystem coverage analysis
         id: subsystem-coverage
         if: always()
-        continue-on-error: true
         run: |
           set +e
           chmod +x scripts/coverage-report.sh
@@ -2843,16 +4171,16 @@ jobs:
           THRESHOLD_OUTCOME: ${{ steps.subsystem-coverage.outcome }}
         run: |
           failed=0
-          if [ "$TEST_OUTCOME" = "failure" ]; then
-            echo "::error::SparkTests failed during the coverage run"
+          if [ "$TEST_OUTCOME" != "success" ]; then
+            echo "::error::SparkTests coverage step ended as '$TEST_OUTCOME'"
             failed=1
           fi
-          if [ "$GENERATE_OUTCOME" = "failure" ]; then
-            echo "::error::Coverage generation failed"
+          if [ "$GENERATE_OUTCOME" != "success" ]; then
+            echo "::error::Coverage generation step ended as '$GENERATE_OUTCOME'"
             failed=1
           fi
-          if [ "$THRESHOLD_OUTCOME" = "failure" ]; then
-            echo "::error::One or more coverage thresholds failed"
+          if [ "$THRESHOLD_OUTCOME" != "success" ]; then
+            echo "::error::Coverage threshold step ended as '$THRESHOLD_OUTCOME'"
             failed=1
           fi
           exit "$failed"
@@ -2862,6 +4190,59 @@ jobs:
   # This workflow has no path filter, so budget definitions, validator code,
   # comparator code, and their tests all reach this required job.
   # ===========================================================================
+  # The published CodeQL workflow remains data-only. This separate, read-only
+  # scan is a direct required dependency, so new findings block PRs as well as
+  # pushes without waiting on cross-workflow status publication or trusting
+  # artifacts. Findings are compared with the reviewed .github/codeql-baseline.json:
+  # a finding it does not list blocks, and a listed finding that disappeared blocks
+  # until its entry is removed. Hosted c-cpp analysis takes about 80 minutes
+  # (CodeQL Advanced run 36455093304), so each language carries its own bound.
+  analysis-regressions:
+    name: "Blocking CodeQL (${{ matrix.language }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    permissions:
+      contents: read
+    env:
+      CODEQL_EXTRACTOR_CPP_OPTION_FRONTEND_OPTIONS: --c++23
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            report: actions.sarif
+            timeout: 20
+          - language: c-cpp
+            report: cpp.sarif
+            timeout: 150
+          - language: python
+            report: python.sarif
+            timeout: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize blocking analysis
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config: |
+            paths-ignore:
+              - "ThirdParty"
+              - "ThirdParty/**"
+      - name: Produce fresh analysis results
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          output: ${{ runner.temp }}/blocking-codeql
+          upload: never
+          upload-database: false
+      - name: Fail on analysis findings
+        run: >-
+          python3 .github/scripts/check-analysis-results.py
+          "${{ runner.temp }}/blocking-codeql/${{ matrix.report }}"
+          --language "${{ matrix.language }}" --baseline .github/codeql-baseline.json
+
   performance-budget-governance:
     name: "Performance budget governance"
     runs-on: ubuntu-24.04
@@ -2870,6 +4251,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The golden review gate diffs the manifest against the base revision.
+          fetch-depth: 0
 
       - name: Run performance budget governance tests
         run: >-
@@ -2877,10 +4261,23 @@ jobs:
           Tests.Tools.test_perf_budget
           Tests.Tools.test_perf_budget_adversarial
           Tests.Tools.test_perf_budget_hardening
+          Tests.Tools.test_golden_review_gate
           -v
 
       - name: Validate committed performance budget suite
         run: python3 tools/perf-budget/validate_budget.py perf-budgets/v1
+
+      # PERF-100: a golden baseline or threshold change must carry a new,
+      # non-downgraded review record. An empty, all-zero or unknown base (a new
+      # branch or a force push) falls back to the merge-base with Working; an
+      # unresolvable base fails the job (exit 2).
+      - name: Check golden baseline review records
+        env:
+          GOLDEN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: >-
+          python3 tools/perf-budget/check_golden_review.py
+          --base "${GOLDEN_BASE_SHA}"
+          --fallback-base origin/Working
 
   # ===========================================================================
   # Coverage PR Comment — privileged, data-only reporter
@@ -3033,7 +4430,10 @@ jobs:
             build-clang-tidy-
       - name: Configure
         run: |
+          spark_engine_version=$(grep -o 'SPARK_ENGINE_VERSION [^ ]*' CMakeLists.txt | cut -d' ' -f2 | sed 's/^"//;s/"$//')
+          test -n "$spark_engine_version"
           cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DSPARK_ENGINE_VERSION="$spark_engine_version" \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
@@ -3041,6 +4441,11 @@ jobs:
             -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
             -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      # clang-tidy parses sources without building them, so headers generated
+      # at build time must exist first (SparkServer/src/main.cpp includes the
+      # stamped SparkServerBuildIdentity.h).
+      - name: Generate build-time headers
+        run: cmake --build build --target SparkServerBuildIdentity
       - name: Run clang-tidy
         id: clang-tidy-run
         run: |
@@ -3049,10 +4454,57 @@ jobs:
           # comment, while also printing a tail to the job log for
           # live-viewing in the Actions UI.
           set +e
-          find SparkEngine/Source -name '*.cpp' -print0 | sort -z | head -z -n 30 > clang-tidy-files.list
-          xargs -0 -r -n 1 -P 2 clang-tidy -p build --warnings-as-errors="" \
-            < clang-tidy-files.list 2>&1 | tee clang-tidy-output.log
-          ct_exit=${PIPESTATUS[0]}
+          # Analyze every shipped-product translation unit. Keep the inventory
+          # byte-deterministic and fail closed if the checkout yields nothing;
+          # a bounded sample can never prove the static-analysis gate.
+          source_roots=(
+            SparkEngine/Source
+            SparkEditor/Source
+            SparkConsole/src
+            SparkDaemon/src
+            SparkGateway/src
+            SparkLauncher/src
+            SparkServer/src
+            SparkWorker/src
+            SparkCooker/src
+            SparkAutomation/src
+            SparkBuild/src
+            SparkInstaller/src
+            SparkShaderCompiler/src
+            SparkAssetPipelineCore/src
+            SparkCrashReporter/src
+            GameModules
+          )
+          for root in "${source_roots[@]}"; do
+            if [ ! -d "$root" ]; then
+              echo "::error::clang-tidy source root is missing: $root"
+              exit 1
+            fi
+          done
+          find "${source_roots[@]}" -type f -name '*.cpp' -print0 | sort -z > clang-tidy-files.list
+          file_count=$(tr -cd '\0' < clang-tidy-files.list | wc -c)
+          echo "clang-tidy translation units: $file_count"
+          if [ "$file_count" -eq 0 ]; then
+            echo "::error::clang-tidy source inventory is empty"
+            exit 1
+          fi
+          clang-tidy --version > clang-tidy-version.txt || exit 1
+          cat clang-tidy-version.txt
+          # CI-110 budget ratchet: one log per translation unit so the parallel
+          # workers never interleave partial diagnostic lines, concatenated in
+          # sorted order so the parsed stream is deterministic.
+          rm -rf clang-tidy-logs
+          mkdir clang-tidy-logs || exit 1
+          xargs -0 -r -n 1 -P 2 bash -c \
+            'clang-tidy -p build --warnings-as-errors="" "$1" > "$0/${1//\//__}.log" 2>&1' \
+            clang-tidy-logs < clang-tidy-files.list
+          ct_exit=$?
+          log_count=$(find clang-tidy-logs -type f -name '*.log' | wc -l)
+          if [ "$log_count" -ne "$file_count" ]; then
+            echo "::error::clang-tidy produced $log_count logs for $file_count translation units"
+            exit 1
+          fi
+          find clang-tidy-logs -type f -name '*.log' -print0 | sort -z | xargs -0 cat > clang-tidy-output.log || exit 1
           echo ""
           echo "=== Last 50 lines of clang-tidy output ==="
           tail -50 clang-tidy-output.log
@@ -3061,8 +4513,21 @@ jobs:
           warn_count=$(grep -cE ':\s*(warning|error):' clang-tidy-output.log || true)
           echo "clang-tidy issues detected: $warn_count"
           echo "warn_count=$warn_count" >> "$GITHUB_OUTPUT"
-          # Warnings remain advisory; compiler/configuration failures are fatal.
+          # Individual warnings do not fail this step; compiler/configuration
+          # failures are fatal here and the budget step below blocks regressions.
           exit "$ct_exit"
+      # CI-110: distinct diagnostics per check must equal the committed budget.
+      # More is a regression, an unbudgeted check is new debt, fewer means the
+      # budget must be lowered in the same change. Regenerate from this lane's
+      # uploaded log with Tools/clang_tidy_budget.py update.
+      - name: Enforce clang-tidy diagnostic budget
+        run: |
+          python3 Tools/clang_tidy_budget.py check \
+            --log clang-tidy-output.log \
+            --budget Tools/clang-tidy-budget.json \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --clang-tidy-version-file clang-tidy-version.txt \
+            --summary "$GITHUB_STEP_SUMMARY"
       - name: Extract clang-tidy error summary
         if: always()
         run: |
@@ -3083,7 +4548,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: clang-tidy-output
-          path: clang-tidy-output.log
+          path: |
+            clang-tidy-output.log
+            clang-tidy-version.txt
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: ignore
 
@@ -3127,7 +4594,7 @@ jobs:
             --allow-prior-attempt \
             --job build-linux-asan \
             --minimum-tests 6900 \
-            --timeout-seconds 900
+            --timeout-seconds 1800
 
       - name: Verify downloaded TSan evidence identity
         run: |
@@ -3142,7 +4609,7 @@ jobs:
             --allow-prior-attempt \
             --job build-linux-tsan \
             --minimum-tests 6900 \
-            --timeout-seconds 900
+            --timeout-seconds 3000
 
       - name: Collect deterministic repository metrics
         run: python3 docs/codebase-metrics.py > repository-metrics.json
@@ -3190,11 +4657,13 @@ jobs:
       - check-format
       - validate-prompts
       - validate-ops100
+      - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
+      - dependency-policy
+      - license-compliance
       - build-linux-asan
       - build-linux-tsan
-      - telemetry-integration
       - build-linux-msan
       - build-windows-vs2022
       - build-windows-vs2026
@@ -3207,6 +4676,10 @@ jobs:
       - todo-count
       - build-installer
       - aggregate-test-stats
+      - service-contract
+      - network-security
+      - security-runtime
+      - network-integration
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3253,13 +4726,31 @@ jobs:
       - name: Count TODO/FIXME/HACK comments
         id: todo-count-run
         run: |
-          grep -rn 'TODO\|FIXME\|HACK\|XXX' SparkEngine/Source SparkEditor/Source GameModules \
-            --include='*.h' --include='*.cpp' > todo-list.log || true
+          set -euo pipefail
+          todo_roots=(SparkEngine/Source SparkEditor/Source GameModules)
+          for root in "${todo_roots[@]}"; do
+            if [ ! -d "$root" ]; then
+              echo "::error::TODO/FIXME source root is missing: $root"
+              exit 1
+            fi
+          done
+          # grep exits 1 when nothing matched (a real zero count). Any higher
+          # status is a failed scan and must not be reported as zero markers.
+          set +e
+          grep -rn 'TODO\|FIXME\|HACK\|XXX' "${todo_roots[@]}" \
+            --include='*.h' --include='*.cpp' > todo-list.log
+          grep_status=$?
+          set -e
+          if [ "$grep_status" -gt 1 ]; then
+            echo "::error::TODO/FIXME scan failed (grep exit $grep_status)"
+            exit "$grep_status"
+          fi
           count=$(wc -l < todo-list.log)
           echo "Found $count TODO/FIXME/HACK/XXX comments"
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -gt 20 ]; then
-            echo "::warning::TODO/FIXME count ($count) exceeds threshold of 20"
+            echo "::error::TODO/FIXME count ($count) exceeds threshold of 20"
+            exit 1
           fi
       - name: Upload todo-count summary artifact
         if: always()
@@ -3315,6 +4806,8 @@ jobs:
           cmake --build build-installer/build --config Release --target
           SparkInstaller
           SparkInstallerGitTests
+          SparkInstallerInstallStateTests
+          SparkInstallerTransactionTests
           SparkBuildProcessRunnerTests
           SparkBuildDownloaderTests
           -j
@@ -3376,8 +4869,9 @@ jobs:
           $msis = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "*.msi" -File)
           $identities = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "shipping-package-manifest.json" -File)
           $moduleManifests = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "SparkEngineGameModules.cmake" -File)
-          if ($msis.Count -ne 1 -or $identities.Count -ne 1 -or $moduleManifests.Count -ne 1) {
-            throw "expected exactly one Shipping MSI, identity manifest, and game-module manifest"
+          $buildCaches = @(Get-ChildItem -LiteralPath $download -Recurse -Filter "CMakeCache.txt" -File)
+          if ($msis.Count -ne 1 -or $identities.Count -ne 1 -or $moduleManifests.Count -ne 1 -or $buildCaches.Count -ne 1) {
+            throw "expected exactly one Shipping MSI, identity manifest, game-module manifest, and producer cache"
           }
           $input = Join-Path $env:RUNNER_TEMP "module-profile-package-smoke-input"
           if (Test-Path -LiteralPath $input) { throw "package-smoke input directory must be fresh" }
@@ -3385,6 +4879,7 @@ jobs:
           Copy-Item -LiteralPath $msis[0].FullName -Destination $input
           Copy-Item -LiteralPath $identities[0].FullName -Destination $input
           Copy-Item -LiteralPath $moduleManifests[0].FullName -Destination $input
+          Copy-Item -LiteralPath $buildCaches[0].FullName -Destination $input
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "MODULE_PACKAGE_SMOKE_INPUT=$input" -Encoding utf8
 
       - name: Qualify installed SparkGameFPS package
@@ -3402,6 +4897,8 @@ jobs:
             --manifest (Join-Path $env:MODULE_PACKAGE_SMOKE_INPUT "SparkEngineGameModules.cmake") `
             --package-manifest (Join-Path $env:MODULE_PACKAGE_SMOKE_INPUT "shipping-package-manifest.json") `
             --runner-temp $env:RUNNER_TEMP --logs $logs `
+            --build-root $env:MODULE_PACKAGE_SMOKE_INPUT `
+            --drills interrupt,repair,repeatability `
             --source-sha "${{ github.sha }}"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -3409,7 +4906,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: module-profile-package-smoke-${{ github.sha }}
-          path: msi-qualification/package-smoke.log
+          path: |
+            msi-qualification/package-smoke.log
+            msi-qualification/interrupt-drill.json
+            msi-qualification/repair-drill.json
+            msi-qualification/repeatability-drill.json
+            msi-qualification/runtime-result.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
@@ -3421,6 +4923,107 @@ jobs:
           path: msi-qualification/
           retention-days: ${{ env.ERROR_RETENTION_DAYS }}
           if-no-files-found: ignore
+
+  # ENG-200[3] advisory package proof.  This lane intentionally stays outside
+  # required-ci-gate until a hosted run establishes the exact-SHA evidence.
+  visual-script-package:
+    name: "Visual script package gameplay (advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install configure dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libgl-dev libfreetype-dev
+
+      - name: Configure visual-script Release runtime
+        run: |
+          cmake -S . -B build/visual-script-package -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON -DSPARK_HEADLESS_SUPPORT=ON \
+            -DSPARK_GAME_MODULES=SparkGameVisualScript -DENABLE_ANGELSCRIPT=ON \
+            -DENABLE_SDL2=OFF -DENABLE_VULKAN=OFF -DENABLE_OPENGL=OFF \
+            -DSPARK_STRICT_DEPS=ON
+
+      - name: Verify package harness rejection controls
+        run: python3 Tests/Tools/test_visual_script_package.py
+
+      - name: Build the real engine, graph compiler tests, and visual-script module
+        run: cmake --build build/visual-script-package --target SparkEngine SparkTests SparkGameVisualScript --parallel $(nproc)
+
+      - name: Assemble a packager project around the built module
+        env:
+          PROJECT_ROOT: ${{ runner.temp }}/visual-script-package-project
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          project = Path(os.environ["PROJECT_ROOT"])
+          project.mkdir(parents=True, exist_ok=False)
+          (project / "Assets").mkdir()
+          shutil.copytree("GameModules/SparkGameVisualScript/Assets", project / "Assets", dirs_exist_ok=True)
+          (project / "VisualScriptPackage.sparkproject").write_text(json.dumps({
+              "projectFileVersion": 1, "name": "VisualScriptPackage", "version": "1.0.0",
+              "description": "ENG-200 visual-script package smoke", "template": "empty",
+              "createdTime": 0, "lastModified": 0, "modules": ["SparkGameVisualScript"]
+          }, indent=2) + "\n", encoding="utf-8")
+          (project / "spark.modules.json").write_text(json.dumps({
+              "modules": [{"name": "SparkGameVisualScript", "path": "SparkGameVisualScript.so"}]
+          }, indent=2) + "\n", encoding="utf-8")
+          (project / "CMakeLists.txt").write_text(
+              "cmake_minimum_required(VERSION 3.25)\nproject(VisualScriptPackage LANGUAGES CXX)\n"
+              "add_custom_target(visual_script_package ALL)\n", encoding="utf-8")
+          PY
+          cmake -S "$PROJECT_ROOT" -B "$PROJECT_ROOT/build/Release" -DCMAKE_BUILD_TYPE=Release
+          SPARK_TEST_NAME_PREFIX=VisualScriptGraphs_CheckedInGraphsRegenerateShippedScripts \
+            SPARK_TEST_EXPECT_COUNT=1 \
+            SPARK_VSCRIPT_OUTPUT_DIR="$PROJECT_ROOT/Assets/Scripts/Generated" \
+            build/visual-script-package/bin/SparkTests --warn-is-error
+          module=$(find build/visual-script-package -type f -name 'libSparkGameVisualScript.so' -print -quit)
+          test -n "$module"
+          cp "$module" "$PROJECT_ROOT/build/Release/SparkGameVisualScript.so"
+          cp "$module.sparkabi" "$PROJECT_ROOT/build/Release/SparkGameVisualScript.so.sparkabi"
+          host=$(find build/visual-script-package -type f -name SparkEngine -perm -111 -print -quit)
+          test -n "$host"
+          echo "SPARKENGINE_RUNTIME_HOST=$GITHUB_WORKSPACE/$host" >> "$GITHUB_ENV"
+          echo "SPARK_ENGINE_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+
+      - name: Package graphs and generated scripts with spark-cli
+        env:
+          PROJECT_ROOT: ${{ runner.temp }}/visual-script-package-project
+        run: |
+          python3 "$GITHUB_WORKSPACE/Tools/spark-cli/spark_cli.py" package --config Release --output dist --force
+        working-directory: ${{ runner.temp }}/visual-script-package-project
+
+      - name: Launch packaged engine from a foreign working directory
+        env:
+          PROJECT_ROOT: ${{ runner.temp }}/visual-script-package-project
+        run: |
+          mkdir -p "$RUNNER_TEMP/visual-script-foreign-cwd"
+          python3 "$GITHUB_WORKSPACE/Tests/run_visual_script_package.py" \
+            --package-dir "$PROJECT_ROOT/dist/VisualScriptPackage-linux-release" \
+            --engine SparkGame --module SparkGameVisualScript.so \
+            --foreign-cwd "$RUNNER_TEMP/visual-script-foreign-cwd" \
+            --log "$GITHUB_WORKSPACE/visual-script-package.log"
+
+      - name: Upload visual-script package log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: visual-script-package-${{ github.sha }}-${{ github.run_attempt }}
+          path: visual-script-package.log
+          retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+          if-no-files-found: warn
 
   # ===========================================================================
   # RDY-010 real Windows module lifecycle producer. It consumes only the exact
@@ -3503,7 +5106,7 @@ jobs:
   # ===========================================================================
   module-evidence:
     name: "Module evidence (RDY-010)"
-    needs: [build-linux-gcc, module-profile-lifecycle, module-profile-package-smoke]
+    needs: [build-linux-gcc, build-linux-asan, module-profile-lifecycle, module-profile-package-smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3516,7 +5119,7 @@ jobs:
       - name: Install configure dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev libsdl2-dev libfreetype-dev
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
 
       - name: Run module evidence adversarial tests
         run: python3 -m unittest Tests.Tools.test_module_evidence -v
@@ -3526,16 +5129,40 @@ jobs:
           python3 tools/module-evidence/collect_targets.py \
             --build-dir build/module-evidence-configure \
             --out build/module-evidence/module-targets.json \
-            --configure-arg -DCMAKE_BUILD_TYPE=Release \
-            --configure-arg -DBUILD_GAME_MODULES=ON \
-            --configure-arg -DBUILD_TESTS=OFF \
-            --configure-arg -DCMAKE_C_COMPILER=gcc-14 \
-            --configure-arg -DCMAKE_CXX_COMPILER=g++-14
+            --configure-arg=-DCMAKE_BUILD_TYPE=Release \
+            --configure-arg=-DBUILD_GAME_MODULES=ON \
+            --configure-arg=-DBUILD_TESTS=OFF \
+            --configure-arg=-DCMAKE_C_COMPILER=gcc-14 \
+            --configure-arg=-DCMAKE_CXX_COMPILER=g++-14
 
       - name: Download published JUnit evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: test-results-linux-gcc-Release
+
+      - name: Download exact ASan evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: test-results-linux-asan
+          path: build/module-evidence/sanitizer-asan
+
+      # The full published-evidence verifier (console/report/footer/stats
+      # agreement, exact provenance) runs before the manifest consumer, which
+      # then binds metadata.json + junit.xml to the FPS production selector.
+      - name: Verify downloaded ASan evidence
+        run: |
+          python3 .github/scripts/verify-sanitizer-evidence.py verify-published \
+            --evidence-dir "$GITHUB_WORKSPACE/build/module-evidence/sanitizer-asan" \
+            --stats "$GITHUB_WORKSPACE/build/module-evidence/sanitizer-asan/test-stats-linux-asan.json" \
+            --sanitizer asan \
+            --lane linux-asan \
+            --expected-sha "${{ github.sha }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --allow-prior-attempt \
+            --job build-linux-asan \
+            --minimum-tests 6900 \
+            --timeout-seconds 1800
 
       - name: Download exact lifecycle evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -3582,9 +5209,173 @@ jobs:
             build/module-evidence/module-lifecycle.json
             build/module-evidence/module-lifecycle-SparkGameFPS.log
             build/module-evidence/package-smoke.log
+            build/module-evidence/sanitizer-asan/metadata.json
+            build/module-evidence/sanitizer-asan/junit.xml
             tools/module-evidence/evidence-gaps.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
+
+  # ===========================================================================
+  # RDY-015. Real-source lifecycle evidence for every experimental game module
+  # (tools/module-evidence/manifest.json entries tracked under RDY-015): the
+  # production Linux SDL host runs each module with -require-game and every
+  # phase must report at least once with no faults. Advisory by design: a
+  # failure here never fails the workflow, the job is absent from
+  # required-ci-gate, a failing module stays visible here and in its JUnit
+  # artifact, and no result feeds the stable-v1 profile. Required full-ctest
+  # lanes exclude the label.
+  # ===========================================================================
+  experimental-module-lifecycle:
+    name: "Experimental module lifecycle (prototype, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
+
+      - name: Setup ccache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.ccache
+          key: ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
+            ccache-experimental-module-lifecycle-
+
+      - name: Configure CMake
+        run: |
+          set -euo pipefail
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache 2>&1 | tee cmake-configure.log
+
+      - name: Build the host and every experimental module
+        run: |
+          set -euo pipefail
+          mapfile -t modules < <(python3 -c 'import json; [print(m["cmakeTarget"]) for m in json.load(open("tools/module-evidence/manifest.json"))["modules"] if (m.get("experimentalSeparation") or {}).get("trackedUnder") == "RDY-015"]')
+          test "${#modules[@]}" -gt 0
+          cmake --build build --parallel "$(nproc)" --target SparkEngine "${modules[@]}" 2>&1 | tee cmake-build.log
+
+      - name: Require one prototype-only test per experimental module
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --no-tests=error -L '^experimental-modules$' --show-only=json-v1 \
+            > build/experimental-module-inventory.json
+          python3 - <<'PY'
+          import json
+          manifest = json.load(open("tools/module-evidence/manifest.json"))
+          expected = {
+              f"ExperimentalModuleLifecycle_{m['cmakeTarget']}"
+              for m in manifest["modules"]
+              if (m.get("experimentalSeparation") or {}).get("trackedUnder") == "RDY-015"
+          }
+          tests = json.load(open("build/experimental-module-inventory.json"))["tests"]
+          registered = {test["name"] for test in tests}
+          if registered != expected:
+              raise SystemExit(f"experimental-modules tests {sorted(registered)} != manifest {sorted(expected)}")
+          for test in tests:
+              labels = next(
+                  (p["value"] for p in test.get("properties", []) if p.get("name") == "LABELS"), []
+              )
+              promoted = {"stable-v1", "module-profile"} & set(labels)
+              if promoted:
+                  raise SystemExit(f"{test['name']} carries stable profile label(s) {sorted(promoted)}")
+          print(f"{len(registered)} experimental module lifecycle tests registered, none stable-labeled")
+          PY
+
+      - name: Run experimental module lifecycle tests
+        run: |
+          set -euo pipefail
+          ctest --test-dir build -L '^experimental-modules$' \
+            --output-on-failure --no-tests=error \
+            --output-junit experimental-module-lifecycle-junit.xml 2>&1 | tee experimental-module-lifecycle.log
+
+      - name: Upload experimental module lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: experimental-module-lifecycle-${{ github.sha }}
+          path: |
+            build/experimental-module-lifecycle-junit.xml
+            build/experimental-module-inventory.json
+            experimental-module-lifecycle.log
+          retention-days: 14  # OD-17: experimental artifacts are kept 14 days
+          if-no-files-found: warn
+
+  # DOC-410: documentation exact-currentness, broken links and the docs contract.
+  # Moved from site-data.yml so a stale generator, missing result or broken link
+  # blocks the Required CI Gate; this workflow never cancels a pushed SHA.
+  docs-health:
+    name: Documentation exact-currentness
+    runs-on: ubuntu-24.04
+    # 9-10 min on a normal runner; a slow hosted runner hit 15 while the final check was already done.
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Generate and validate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+          timeout 2m python3 tools/docs_contract.py validate \
+            --api-dir docs/api --wiki-root wiki
+          timeout 3m python3 tools/site-data/validate_docs_links.py \
+            --generated-root docs/api --source-sha "$GITHUB_SHA"
+
+      - name: Run hostile documentation contract tests
+        run: |
+          set -euo pipefail
+          timeout 3m python3 Tests/Tools/test_docs_health.py -v
+          timeout 5m python3 Tests/Tools/test_site_data_contract.py -v
+          timeout 3m python3 tools/site-data/validate.py --docs
+
+      - name: Prove isolated deterministic currentness and clean checkout
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          before="$(git status --porcelain=v1 --untracked-files=no)"
+          timeout 10m bash docs/update-all-docs.sh check
+          after="$(git status --porcelain=v1 --untracked-files=no)"
+          test "$before" = "$after"
+
+  # RDY-000: full bundle proof, including two independent health regenerations.
+  # The existing advisory job retains its narrower 10-minute proof unchanged.
+  site-data-full-determinism:
+    name: Clean site-data and documentation health determinism
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Compare two clean independently generated bundles
+        run: |
+          set -euo pipefail
+          timeout 15m python3 -B Tests/Tools/test_site_data_generation_determinism.py -v
 
   # ===========================================================================
   # One stable branch-protection target. A cancelled, skipped, or missing
@@ -3601,11 +5392,14 @@ jobs:
       - check-format
       - validate-prompts
       - validate-ops100
+      - secret-scan
       - check-thirdparty-manifest
       - check-supply-chain
+      - dependency-policy
+      - license-compliance
       - build-linux-asan
       - build-linux-tsan
-      - telemetry-integration
+      - security-runtime
       - build-windows-vs2022
       - module-profile-lifecycle
       - build-windows-shipping
@@ -3614,10 +5408,14 @@ jobs:
       - build-linux-clang
       - coverage
       - clang-tidy
+      - analysis-regressions
       - todo-count
       - build-installer
       - aggregate-test-stats
       - module-evidence
+      - network-security
+      - docs-health
+      - site-data-full-determinism
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -3627,6 +5425,19 @@ jobs:
       - name: Verify every required job succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","check-thirdparty-manifest","check-supply-chain","build-linux-asan","build-linux-tsan","telemetry-integration","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","todo-count","build-installer","aggregate-test-stats","module-evidence"]'
+          EXPECTED_REQUIRED_JOBS_JSON: '["fuzz-policy","validate-ci-tools","performance-budget-governance","check-format","validate-prompts","validate-ops100","secret-scan","check-thirdparty-manifest","check-supply-chain","dependency-policy","license-compliance","build-linux-asan","build-linux-tsan","security-runtime","build-windows-vs2022","module-profile-lifecycle","build-windows-shipping","module-profile-package-smoke","build-linux-gcc","build-linux-clang","coverage","clang-tidy","analysis-regressions","todo-count","build-installer","aggregate-test-stats","module-evidence","network-security","docs-health","site-data-full-determinism"]'
           DEFERRED_REQUIRED_FAILURES_JSON: '{}'
-        run: python3 .github/scripts/verify-required-jobs.py
+        run: python3 .github/scripts/verify-required-jobs.py --json-out required-ci-gate.json
+
+      # Normalized exact-SHA gate record (sha, run id/attempt, event, ref,
+      # expected jobs, per-job results, deferred entries, verdict). Uploaded on
+      # pass and fail; a missing record means the needs evidence was invalid.
+      # Additive only: no consumer may depend on it until a hosted run proves it.
+      - name: Upload Required CI Gate record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: required-ci-gate-${{ github.sha }}-${{ github.run_attempt }}
+          path: required-ci-gate.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error

@@ -1,9 +1,11 @@
 // TestFileUtils.cpp - Tests for file I/O and path utilities
 // Uses the actual FileUtils.h header
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Graphics/ProjectAssetPath.h"
 #include "Utils/FileUtils.h"
+#include "Utils/LocalFileCache.h"
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -298,16 +300,11 @@ TEST(ProjectAssetPath_ConfinesUnicodeAssetsAndDerivesSceneRoot)
         EXPECT_TRUE(resolved->cacheKey != second->cacheKey);
 
     EXPECT_TRUE(WriteOnePixelBmp(fixture.outside / "secret.bmp", 1, 2, 3));
-    std::error_code linkError;
-    std::filesystem::create_directory_symlink(fixture.outside, fixture.root / "Assets" / "Escape", linkError);
-    if (!linkError)
-    {
-        EXPECT_FALSE(Spark::ResolveProjectAssetPath(rootUtf8, "Assets/Escape/secret.bmp").has_value());
-    }
-    else
-    {
-        std::cout << "[ INFO   ] ProjectAssetPath symlink escape check skipped: " << linkError.message() << "\n";
-    }
+    // A directory link out of the project (an NTFS junction on Windows, which needs
+    // no privilege) must not resolve as a project asset.
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(fixture.outside, fixture.root / "Assets" / "Escape"));
+    EXPECT_FALSE(Spark::ResolveProjectAssetPath(rootUtf8, "Assets/Escape/secret.bmp").has_value());
+    SparkTestLinks::RemoveDirectoryLink(fixture.root / "Assets" / "Escape");
 
     const std::filesystem::path scene = fixture.root / "Scenes" / "Nested" / "Level.sparkscene";
     std::filesystem::create_directories(scene.parent_path());
@@ -445,3 +442,116 @@ TEST(ProjectAssetTextureCache_RetriesFailuresAndSeparatesProjects)
 #endif
 
 #endif
+
+// =============================================================================
+// UTF-8 path handling
+//
+// Engine path strings are UTF-8. On Windows the narrow fstream / fs::path
+// constructors decode them in the active ANSI code page instead, so these
+// tests are load-bearing on the MSVC lanes; POSIX paths are bytes either way.
+// =============================================================================
+
+#if SPARK_HAS_FILESYSTEM
+
+TEST(Utf8Path_ValidatorRejectsMalformedSequences)
+{
+    EXPECT_TRUE(IsValidUtf8(""));
+    EXPECT_TRUE(IsValidUtf8("plain/ascii.txt"));
+    EXPECT_TRUE(IsValidUtf8("caf\xC3\xA9"));      // U+00E9
+    EXPECT_TRUE(IsValidUtf8("\xE9\x9B\xAA"));     // U+96EA
+    EXPECT_TRUE(IsValidUtf8("\xF0\x9F\x9A\x80")); // U+1F680
+    EXPECT_TRUE(IsValidUtf8("\xF4\x8F\xBF\xBF")); // U+10FFFF
+
+    EXPECT_FALSE(IsValidUtf8("caf\xE9"));          // CP1252 byte, a legacy code-page string
+    EXPECT_FALSE(IsValidUtf8("\x80"));             // lone continuation byte
+    EXPECT_FALSE(IsValidUtf8("\xC3"));             // truncated 2-byte sequence
+    EXPECT_FALSE(IsValidUtf8("\xE9\x9B"));         // truncated 3-byte sequence
+    EXPECT_FALSE(IsValidUtf8("\xC0\xAF"));         // overlong '/'
+    EXPECT_FALSE(IsValidUtf8("\xE0\x80\xAF"));     // overlong '/'
+    EXPECT_FALSE(IsValidUtf8("\xF0\x80\x80\xAF")); // overlong '/'
+    EXPECT_FALSE(IsValidUtf8("\xED\xA0\x80"));     // UTF-16 surrogate U+D800
+    EXPECT_FALSE(IsValidUtf8("\xF4\x90\x80\x80")); // above U+10FFFF
+    EXPECT_FALSE(IsValidUtf8("\xE9\x41\x41"));     // bad continuation
+}
+
+TEST(Utf8Path_NonAsciiNamesRoundTripThroughFileUtilsAndCache)
+{
+    const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / ("spark-utf8-path-" + std::to_string(stamp));
+    std::filesystem::create_directories(dir);
+
+    // U+96EA and U+00E9: outside most active code pages, and never a single ACP character.
+    const std::string fileName = "\xE9\x9B\xAA-caf\xC3\xA9.txt";
+    const std::filesystem::path nativeFile = dir / std::filesystem::u8path(fileName);
+    const std::string utf8File = PathToTestUtf8(nativeFile);
+
+    EXPECT_TRUE(WriteTextFile(utf8File, "snow"));
+
+    // The write landed on the Unicode name, not on a code-page-decoded sibling.
+    EXPECT_TRUE(std::filesystem::exists(nativeFile));
+    size_t entries = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        (void)entry;
+        ++entries;
+    }
+    EXPECT_EQ(entries, static_cast<size_t>(1));
+
+    const auto text = ReadTextFile(utf8File);
+    EXPECT_TRUE(text.has_value());
+    EXPECT_EQ(text.value_or(""), std::string("snow"));
+    EXPECT_TRUE(FileExists(utf8File));
+    EXPECT_EQ(GetFileSize(utf8File).value_or(0), static_cast<uintmax_t>(4));
+    EXPECT_EQ(GetFilename(utf8File), fileName);
+    EXPECT_EQ(GetExtension(utf8File), std::string(".txt"));
+
+    // ListFiles returns the name in UTF-8 so it can be fed straight back in.
+    const auto listed = ListFiles(PathToTestUtf8(dir), ".txt");
+    EXPECT_EQ(listed.size(), static_cast<size_t>(1));
+    if (listed.size() == 1)
+    {
+        EXPECT_EQ(GetFilename(listed[0]), fileName);
+        EXPECT_EQ(ReadTextFile(listed[0]).value_or(""), std::string("snow"));
+    }
+
+    // LocalFileCache reads and writes through the same helpers.
+    Spark::LocalFileCache cache;
+    const auto cached = cache.ReadText(utf8File);
+    EXPECT_TRUE(cached.IsOk());
+    if (cached.IsOk())
+        EXPECT_EQ(cached.Value(), std::string("snow"));
+
+    const std::string secondName = "\xF0\x9F\x9A\x80-flake.txt";
+    const std::filesystem::path nativeSecond = dir / std::filesystem::u8path(secondName);
+    EXPECT_TRUE(cache.WriteText(PathToTestUtf8(nativeSecond), "flake").IsOk());
+    EXPECT_TRUE(std::filesystem::exists(nativeSecond));
+    std::string onDisk;
+    {
+        std::ifstream input(nativeSecond, std::ios::binary);
+        std::getline(input, onDisk);
+    }
+    EXPECT_EQ(onDisk, std::string("flake"));
+    EXPECT_TRUE(cache.Delete(PathToTestUtf8(nativeSecond)).IsOk());
+    EXPECT_FALSE(std::filesystem::exists(nativeSecond));
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(Utf8Path_LegacyCodePageStringsStillWork)
+{
+    // A string that is not valid UTF-8 is a legacy active-code-page path (for example
+    // from path::string()). It keeps its native meaning instead of throwing.
+    const std::string legacy = "legacy-caf\xE9.txt";
+    EXPECT_NO_THROW((void)PathFromUtf8(legacy));
+    EXPECT_NO_THROW((void)FileExists(legacy));
+    EXPECT_NO_THROW((void)ReadTextFile(legacy));
+    EXPECT_FALSE(FileExists(legacy));
+
+    // ASCII paths are identical in both encodings.
+    EXPECT_EQ(NormalizePath("a/./b/../c.txt"), std::filesystem::path("a/./b/../c.txt").lexically_normal().string());
+    EXPECT_EQ(JoinPath("assets", "model.fbx"), (std::filesystem::path("assets") / "model.fbx").string());
+}
+
+#endif // SPARK_HAS_FILESYSTEM

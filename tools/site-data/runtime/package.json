@@ -1,0 +1,19 @@
+{
+  "name": "@sparkengine/site-data-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reference runtime verifier and freshness classifier for the SparkEngine site-data publication.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    "./verifyBundle": "./verifyBundle.mjs",
+    "./freshness": "./freshness.mjs",
+    "./siteDataRuntime": "./siteDataRuntime.mjs",
+    "./browserRuntime": "./browserRuntime.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

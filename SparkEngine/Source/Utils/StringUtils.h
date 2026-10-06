@@ -30,6 +30,12 @@
 #include <cstdarg>
 #include <sstream>
 #include <cstdint>
+#include <cerrno>
+#include <cmath>
+#include <concepts>
+#include <cstdlib>
+#include <string_view>
+#include <type_traits>
 
 namespace Spark
 {
@@ -251,6 +257,57 @@ namespace Spark
             {
             }
             return std::nullopt;
+        }
+
+        /**
+         * @brief Whole-token float/double parse with std::from_chars' acceptance rules
+         *
+         * Floating-point std::from_chars is deleted in the libc++ the Clang, MSan and macOS
+         * lanes build against, so this reads through strtof/strtod (the engine never changes
+         * the C numeric locale) and rejects what from_chars would: leading whitespace, a
+         * leading '+', a hex prefix, trailing characters and overflow. "inf"/"nan" parse, as
+         * they do with from_chars; callers that need a finite value check std::isfinite.
+         * Allocates one terminated copy of @p text, so keep it off per-frame paths.
+         */
+        template <std::floating_point T> std::optional<T> ParseFloatingExact(std::string_view text)
+        {
+            if (text.empty() || text.front() == '+' || std::isspace(static_cast<unsigned char>(text.front())))
+            {
+                return std::nullopt;
+            }
+            const std::string_view unsignedText = text.front() == '-' ? text.substr(1) : text;
+            if (unsignedText.size() >= 2 && unsignedText[0] == '0' && (unsignedText[1] | 0x20) == 'x')
+            {
+                return std::nullopt;
+            }
+
+            const std::string terminated(text);
+            char* parsedEnd = nullptr;
+            errno = 0;
+            T value{};
+            if constexpr (std::is_same_v<T, float>)
+            {
+                value = std::strtof(terminated.c_str(), &parsedEnd);
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+                value = std::strtod(terminated.c_str(), &parsedEnd);
+            }
+            else
+            {
+                value = std::strtold(terminated.c_str(), &parsedEnd);
+            }
+
+            if (parsedEnd != terminated.c_str() + terminated.size())
+            {
+                return std::nullopt;
+            }
+            // from_chars reports result_out_of_range when the value overflows or underflows to zero.
+            if (errno == ERANGE && (std::isinf(value) || value == T{}))
+            {
+                return std::nullopt;
+            }
+            return value;
         }
 
         inline std::optional<bool> ParseBool(const std::string& str)

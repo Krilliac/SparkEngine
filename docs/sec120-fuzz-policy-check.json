@@ -1,44 +1,51 @@
 {
   "closure_blockers": [
-    "105 inventoried parsers have no fuzz target",
-    "151 detected candidates await classification",
-    "no corpus/resource budget is bound to a runnable fuzz target"
+    "64 inventoried parsers have no fuzz target"
   ],
   "corpus": {
-    "bound_target_count": 0,
-    "corpus_count": 0,
+    "bound_target_count": 75,
+    "corpus_count": 75,
     "max_staleness_days": 90,
-    "seed_bytes": 0,
-    "seed_count": 0
+    "regression_count": 73,
+    "seed_bytes": 17440633,
+    "seed_count": 699
   },
   "coverage_claim": false,
   "inputs": {
-    "corpus_manifest": "1b4e9fef546a3e89b0783976da4c8b7c7b622cebfd6194354ba64657e57298c4",
-    "inventory": "9f931881195827d077a2623807de7fd84d633cd08e0ee0f0c0c72dc161190bb6"
+    "corpus_manifest": "ea62a2434a02f04a6917993ef8e9bb88c4121c84c1a54409d5292e89f07feb89",
+    "inventory": "7c8b148094eb8ea2d6916c961a0380fa463d9a463637a1debe403d10657b374b"
   },
   "inventory": {
-    "blocked_count": 105,
-    "candidate_count": 269,
-    "deferred_candidate_count": 151,
+    "blocked_count": 64,
+    "candidate_count": 310,
+    "deferred_candidate_count": 0,
     "excluded_files": [],
     "excluded_subtrees": [
       {
         "expires": "2027-08-23",
-        "hidden_candidate_count": 8,
+        "hidden_candidate_count": 10,
         "owner": "net-100-protocol-campaign",
         "path": "SparkEngine/Source/Engine/Networking",
         "ticket": "NET-100"
       },
       {
         "expires": "2027-08-23",
-        "hidden_candidate_count": 3,
+        "hidden_candidate_count": 2,
         "owner": "eng-200-scripting-campaign",
         "path": "SparkEngine/Source/Engine/Scripting",
         "ticket": "ENG-200"
       }
     ],
-    "fuzzed_count": 0,
-    "parser_count": 105,
+    "exempt_by_classification": {
+      "delegating-call-site": 70,
+      "developer-tooling": 3,
+      "helper": 10,
+      "not-a-parser": 31,
+      "same-process-data": 6
+    },
+    "exempt_candidate_count": 120,
+    "fuzzed_count": 75,
+    "parser_count": 139,
     "scan_roots": [
       "SparkEngine/Source",
       "SparkEditor/Source",
@@ -58,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 1979,
+    "scanned_file_count": 2194,
     "unclassified_candidate_count": 0
   },
   "passed": false,

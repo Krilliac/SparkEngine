@@ -414,7 +414,7 @@ def _validate_configure_argv(
     if not _same_recorded_path(values[0], executable):
         raise ExternalEvidenceError(f"{profile}: configure argv does not bind its CMake executable")
     if contract["preset"]:
-        if values[1:] != ["--preset", contract["preset"]]:
+        if values[1:] != ["--fresh", "--preset", contract["preset"]]:
             raise ExternalEvidenceError(f"{profile}: configure argv is not the canonical preset invocation")
         return values
     if len(values) != 13:

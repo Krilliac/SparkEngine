@@ -6,6 +6,7 @@
  */
 
 #include "InspectorPanel.h"
+#include "../AssetPipeline/EditorAssetDrag.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../CommandHistory.h"
@@ -14,6 +15,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
+#include <initializer_list>
 
 namespace SparkEditor
 {
@@ -179,6 +181,37 @@ namespace SparkEditor
                         },
                         "Assign Mesh Asset"));
                 }
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                    {
+                        std::string newPath;
+                        if (DecodeAssetDragPayload(payload->Data, payload->DataSize, EditorAssetKind::Mesh, newPath))
+                        {
+                            const std::string oldPath = mr->meshAssetPath;
+                            SceneFile* capturedScene = m_scene;
+                            ObjectID capturedID = m_inspectedObjectID;
+                            auto& history = Spark::Editor::CommandHistory::GetInstance();
+                            history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                                [capturedScene, capturedID, newPath]()
+                                {
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->meshAssetPath = newPath;
+                                },
+                                [capturedScene, capturedID, oldPath]()
+                                {
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->meshAssetPath = oldPath;
+                                },
+                                "Assign Mesh Asset"));
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
 
                 // Material path
                 char matBuf[256];
@@ -215,6 +248,38 @@ namespace SparkEditor
                             }
                         },
                         "Assign Material Asset"));
+                }
+                if (ImGui::BeginDragDropTarget())
+                {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                    {
+                        std::string newPath;
+                        if (DecodeAssetDragPayload(payload->Data, payload->DataSize, EditorAssetKind::Material,
+                                                   newPath))
+                        {
+                            const std::string oldPath = mr->materialAssetPath;
+                            SceneFile* capturedScene = m_scene;
+                            ObjectID capturedID = m_inspectedObjectID;
+                            auto& history = Spark::Editor::CommandHistory::GetInstance();
+                            history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                                [capturedScene, capturedID, newPath]()
+                                {
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->materialAssetPath = newPath;
+                                },
+                                [capturedScene, capturedID, oldPath]()
+                                {
+                                    if (Component* c =
+                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                            data->materialAssetPath = oldPath;
+                                },
+                                "Assign Material Asset"));
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
                 }
 
                 ImGui::Checkbox("Cast Shadows", &mr->castShadows);

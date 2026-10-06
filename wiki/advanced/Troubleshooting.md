@@ -74,9 +74,9 @@ git submodule update --init --recursive --force
 SparkEngine uses `/MD` (dynamic CRT). If third-party libraries were built with `/MT`, you get linker errors. Clean rebuild:
 
 ```batch
-rmdir /s /q build
-cmake -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
+rmdir /s /q build\windows-release
+cmake --preset windows-release
+cmake --build build\windows-release --config Release
 ```
 
 ### CMake Version Too Old
@@ -126,14 +126,14 @@ cmake -B build -DCMAKE_PREFIX_PATH=<install-prefix>
 # Check for issues
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format --dry-run --Werror 2>&1
 
 # Auto-fix
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format -i
 ```
@@ -433,7 +433,7 @@ cmake -B build -DENABLE_NETWORKING=ON ...
 
 **Solutions:**
 1. Verify `ENABLE_EDITOR` is ON in CMake
-2. Check that all 22 editor subsystems initialized: `editor_status`
+2. Check that all editor subsystems initialized: `editor_status`
 3. Reset panel layout: `editor_reset_layout`
 
 ### Editor Crash on Scene Load

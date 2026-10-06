@@ -7,7 +7,7 @@
  */
 
 #pragma once
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 
 #include <vector>
 #include <string>
@@ -93,6 +93,11 @@ namespace Spark
 
         /**
          * @brief Award XP from various sources
+         *
+         * Non-positive amounts are ignored, amounts above MAX_SINGLE_AWARD are clamped to it, and the
+         * multiplied award and running total are computed in wide arithmetic and saturate at INT_MAX,
+         * so no input can reach a signed overflow or an out-of-range float-to-int conversion.
+         *
          * @param amount Base XP amount (modified by multiplier)
          * @param source Description forwarded to onXPAwarded ("kill", "wave_clear", "quest").
          */
@@ -140,6 +145,10 @@ namespace Spark
         static constexpr int XP_PER_QUEST_COMPLETE = 300;
         static constexpr int XP_PER_ASSIST = 20;
 
+        /// Largest base amount one AwardXP call accepts. The console `xp` commands reject anything
+        /// outside [1, MAX_SINGLE_AWARD]; AwardXP clamps to it as a second line of defence.
+        static constexpr int MAX_SINGLE_AWARD = 1'000'000;
+
         // Console integration
         std::string Console_GetStatus() const;
 
@@ -148,6 +157,10 @@ namespace Spark
         void CheckLevelUp();
         void RecalculateBonuses();
         void BuildUnlockTable();
+
+        /// Whole-percent XP bonus at the current level (+1% per level above 1). AwardXP scales with
+        /// this integer so the award is exact; xpMultiplier is its float mirror for display.
+        int XPBonusPercent() const { return m_level - 1; }
 
         int m_level{1};
         int m_currentXP{0};

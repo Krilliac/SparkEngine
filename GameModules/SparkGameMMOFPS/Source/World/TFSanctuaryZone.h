@@ -85,6 +85,16 @@ namespace Terrafront
         return x >= kTFSanctuaryMinX && x <= kTFSanctuaryMaxX && z >= kTFSanctuaryMinZ && z <= kTFSanctuaryMaxZ;
     }
 
+    /// True on the flat sanctuary pad itself (inside the plateau radius, not its skirt). Only there is
+    /// TFTerrainHeightAt exactly kTFSanctuaryPadY on every continent: the rest of the sanctuary rectangle blends
+    /// into, or is, the continent's own ground, which differs by tens of meters between continents.
+    inline bool TFTravel_IsOnSharedPad(float x, float z)
+    {
+        const float dx = x - kTFSanctuaryCenterX;
+        const float dz = z - kTFSanctuaryCenterZ;
+        return dx * dx + dz * dz <= kTFSanctuaryPlateauRadius * kTFSanctuaryPlateauRadius;
+    }
+
     /// v1 positional mapId derivation (see file header).
     inline uint8_t TFTravel_MapIdAt(float x, float z)
     {

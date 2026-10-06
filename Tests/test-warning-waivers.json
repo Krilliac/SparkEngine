@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 3,
+  "waivers": [
+    {
+      "pattern": "ScopedTimer_MeasuresTime",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "ScopedTimer_ElapsedIncreases",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "FreezeDetector_WarningOnMissedHeartbeat",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "FreezeDetector_RecoveryRequestedOnFreeze",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "FreezeDetector_CriticalAfterMaxRecoveryAttempts",
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "CollabEdit_HostAndConnect",
+      "owner": "editor",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "LiveEditBridge_ConnectToRefusedPort",
+      "owner": "networking",
+      "expires": "2026-12-31"
+    },
+    {
+      "pattern": "Integration_NetworkingECS_ReplicationLatencyJitterPredictionReconciliation",
+      "owner": "networking",
+      "expires": "2026-12-31"
+    }
+  ],
+  "assertionWaivers": [
+    {
+      "file": "Tests/TestEngineLoadTest.cpp",
+      "test": "LoadTest_FullEngine_3000Frames",
+      "sites": 1,
+      "owner": "engine-core",
+      "expires": "2026-12-31"
+    }
+  ],
+  "skipReasons": [
+    {
+      "prefix": "Could not create a test window",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Could not write a temporary WAV file",
+      "owner": "audio",
+      "kind": "environment"
+    },
+    {
+      "prefix": "DXBC compilation needs d3dcompiler_47",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "ENABLE_NETWORKING is OFF in this configuration",
+      "owner": "networking",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Explicit OpenAL backend selection is covered on non-Windows platforms",
+      "owner": "audio",
+      "kind": "environment"
+    },
+    {
+      "prefix": "First input step ran after the 250 ms release deadline",
+      "owner": "input",
+      "kind": "flaky",
+      "expires": "2026-12-31"
+    },
+    {
+      "prefix": "GraphicsEngine::Initialize failed in this environment",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "HLSL compilation requires d3dcompiler_47",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Hot-reload compilation needs d3dcompiler_47",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "ICD does not expose VK_EXT_headless_surface",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Intentional regression coverage for dynamic skip accounting",
+      "owner": "engine-core",
+      "kind": "probe"
+    },
+    {
+      "prefix": "MemorySanitizer instrumentation is unavailable in this build",
+      "owner": "build",
+      "kind": "environment"
+    },
+    {
+      "prefix": "MemorySanitizer: system libEGL/Mesa is uninstrumented",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "No D3D11 device available",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "No D3D12 device available",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "No audio device available for XAudio2",
+      "owner": "audio",
+      "kind": "environment"
+    },
+    {
+      "prefix": "POSIX directory-sync path",
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "prefix": "POSIX file names are bytes",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Platform supplied no ",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Populating the cache needs the DXBC compiler",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Ray-tracing shaders not reachable from the test working directory",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Requires a copied primary in an explicitly owned decoder directory",
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "prefix": "SPARK_TESTS_EXPECTED_VERSION was not injected by the build system",
+      "owner": "build",
+      "kind": "environment"
+    },
+    {
+      "prefix": "SparkConsole was not built in this configuration",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "SparkEngine or libSparkGameMMOFPS.so was not built in this configuration",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "SparkEngine was not built in this configuration",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Unicode shader-cache path regression is Windows-specific",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Unicode user-profile path regression is Windows-specific",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "VK_LAYER_KHRONOS_validation is not installed",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "WARP D3D11 device unavailable",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Windows atomic-replace sharing regression",
+      "owner": "networking",
+      "kind": "environment"
+    },
+    {
+      "prefix": "Windows named-pipe recovery regression",
+      "owner": "networking",
+      "kind": "environment"
+    },
+    {
+      "prefix": "an owned EngineContext is installed process-wide",
+      "owner": "editor",
+      "kind": "flaky",
+      "expires": "2026-12-31"
+    },
+    {
+      "prefix": "cannot create a file symlink on this host",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "directory permission checks do not apply to root",
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "prefix": "filesystem cannot hold a name that is not well-formed UTF-16",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "filesystem does not support hard links",
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "prefix": "git --version failed: git is not installed",
+      "owner": "editor",
+      "kind": "environment"
+    },
+    {
+      "prefix": "no OpenGL context available",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "no Vulkan ICD available",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "no XAudio2 output device",
+      "owner": "audio",
+      "kind": "environment"
+    },
+    {
+      "prefix": "live audio voice assertion requires Windows XAudio2",
+      "owner": "audio",
+      "kind": "environment"
+    },
+    {
+      "prefix": "opengl-llvmpipe goldens need an llvmpipe context",
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "prefix": "root bypasses directory permissions",
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "prefix": "temp directory has no narrow spelling",
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "prefix": "vulkan-lavapipe goldens need the Lavapipe (llvmpipe) CPU device",
+      "owner": "rendering",
+      "kind": "environment"
+    }
+  ],
+  "dynamicSkips": [
+    {
+      "file": "Tests/OpenGLTestSupport.h",
+      "test": null,
+      "sites": 1,
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestDATA120BackupRestore.cpp",
+      "test": "Persistence_RecoveryDrill_KilledWriterReopensToLastAcknowledgedCommit",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestGatewaySecurity.cpp",
+      "test": null,
+      "sites": 1,
+      "owner": "networking",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestPrefabPersistence.cpp",
+      "test": "PrefabPersistence_SymlinkedProjectPrefabIsNotFollowed",
+      "sites": 1,
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestRHI240LinuxForwardPassReal.cpp",
+      "test": null,
+      "sites": 9,
+      "owner": "rendering",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestSEC3GameplayHardening.cpp",
+      "test": "SEC3Gameplay_ModScanRefusesSymlinkedManifest",
+      "sites": 1,
+      "owner": "platform",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120Residency.cpp",
+      "test": "TF120_Residency_DestinationKilledAfterClaimSourceReclaims",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120Residency.cpp",
+      "test": "TF120_Residency_PeerKilledMidClaimLeavesExactlyOneValidResident",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120Residency.cpp",
+      "test": "TF120_Residency_SourceKilledWhileResidentIsReclaimedWithLastCommit",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120SharedSaveRoot.cpp",
+      "test": "TF120_SharedRoot_PeerKilledMidTransactionLeavesCommittedStateUsable",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/TestTF120SharedSaveRoot.cpp",
+      "test": "TF120_SharedRoot_SpawnedAuthoritiesInterleaveWithoutLostUpdates",
+      "sites": 1,
+      "owner": "persistence",
+      "kind": "environment"
+    },
+    {
+      "file": "Tests/VulkanTestSupport.h",
+      "test": null,
+      "sites": 1,
+      "owner": "rendering",
+      "kind": "environment"
+    }
+  ]
+}

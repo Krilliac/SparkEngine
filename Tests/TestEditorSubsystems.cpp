@@ -6,6 +6,7 @@
  * UIDesignerSystem, LevelStreamingTypes, CommandPalette, VersionControlTypes.
  */
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Fixtures/ScopedEditorProfile.h"
 #include "Core/EditorTheme.h"
@@ -25,6 +26,7 @@
 #include "Utils/EditorProcessLaunch.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
 #include "Engine/ECS/Components.h"
+#include "Graphics/ProjectAssetPath.h"
 #include <Spark/PluginABI.h>
 #include <algorithm>
 #ifdef _WIN32
@@ -37,8 +39,11 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <set>
 #include <stdexcept>
+#include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -1456,6 +1461,98 @@ TEST(ProjectManager_RecentProjectPathsNormalizeForAddAndRemove)
     EXPECT_FALSE(ec);
 }
 
+// SEC4: recent-project paths are stored as UTF-8. RefreshRecentProjects (the
+// launcher's Refresh button) must decode them as UTF-8, not the active code page:
+// otherwise every non-ASCII project reads as missing and its launch buttons vanish,
+// and a DBCS code page can throw out of the ImGui frame. U+0915 is in no ANSI code
+// page, so the ACP decode can never find this file.
+TEST(SEC4Launcher_RecentRefreshDecodesUtf8Paths)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-sec4-refresh-" + std::to_string(stamp));
+    const fs::path profileDir = root / "profile";
+    const fs::path projectDir = root / fs::u8path("proj-\xE0\xA4\x95");
+    const fs::path projectFile = projectDir / "Recent.sparkproject";
+    fs::create_directories(profileDir);
+    fs::create_directories(projectDir);
+    std::ofstream(projectFile, std::ios::binary) << "{\"name\":\"Recent\",\"version\":\"1.0.0\"}";
+    {
+        std::ofstream seed(profileDir / "RecentProjects.json", std::ios::binary);
+        seed << R"({"recentProjects":[{"name":"Recent","path":")" << TestPathUtf8(projectFile)
+             << R"(","engineVersion":"1.0","lastOpened":1}]})";
+    }
+
+    ProjectManager manager(TestPathUtf8(profileDir));
+    EXPECT_TRUE(manager.Initialize());
+    const auto loaded = manager.GetRecentProjects();
+    EXPECT_EQ(loaded.size(), static_cast<size_t>(1));
+    if (!loaded.empty())
+        EXPECT_TRUE(loaded.front().valid);
+
+    EXPECT_NO_THROW(manager.RefreshRecentProjects());
+    const auto refreshed = manager.GetRecentProjects();
+    EXPECT_EQ(refreshed.size(), static_cast<size_t>(1));
+    if (!refreshed.empty())
+        EXPECT_TRUE(refreshed.front().valid);
+
+    // Refresh still reports a project that disappeared.
+    std::error_code removeEc;
+    fs::remove(projectFile, removeEc);
+    EXPECT_FALSE(removeEc);
+    EXPECT_NO_THROW(manager.RefreshRecentProjects());
+    const auto afterRemoval = manager.GetRecentProjects();
+    EXPECT_EQ(afterRemoval.size(), static_cast<size_t>(1));
+    if (!afterRemoval.empty())
+        EXPECT_FALSE(afterRemoval.front().valid);
+
+    manager.Shutdown();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
+// SEC4: RecentProjects.json is user-editable. An entry whose lastOpened overflows
+// uint64 (std::stoull throws on every platform) or whose path is not UTF-8
+// (PathFromUtf8 throws on Windows) must be dropped, not escape Initialize().
+TEST(SEC4Launcher_RecentLoadSkipsUnreadableEntries)
+{
+    namespace fs = std::filesystem;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const fs::path root = fs::temp_directory_path() / ("spark-sec4-load-" + std::to_string(stamp));
+    const fs::path profileDir = root / "profile";
+    fs::create_directories(profileDir);
+    const std::string good = TestPathUtf8(root / "Good.sparkproject");
+    {
+        std::ofstream seed(profileDir / "RecentProjects.json", std::ios::binary);
+        seed << R"({"recentProjects":[)" << R"({"name":"Overflow","path":")"
+             << TestPathUtf8(root / "Overflow.sparkproject")
+             << R"(","engineVersion":"1.0","lastOpened":999999999999999999999999999},)"
+             << R"({"name":"BadText","path":")" << TestPathUtf8(root) << "/bad\xFF\xFE.sparkproject"
+             << R"(","engineVersion":"1.0","lastOpened":2},)" << R"({"name":"Good","path":")" << good
+             << R"(","engineVersion":"1.0","lastOpened":3}]})";
+    }
+
+    ProjectManager manager(TestPathUtf8(profileDir));
+    bool initialized = false;
+    EXPECT_NO_THROW(initialized = manager.Initialize());
+    EXPECT_TRUE(initialized);
+    const auto recent = manager.GetRecentProjects();
+    const auto hasName = [&](const std::string& name)
+    { return std::any_of(recent.begin(), recent.end(), [&](const RecentProject& rp) { return rp.name == name; }); };
+    EXPECT_FALSE(hasName("Overflow"));
+    EXPECT_TRUE(hasName("Good"));
+#ifdef _WIN32
+    EXPECT_FALSE(hasName("BadText"));
+#endif
+    EXPECT_NO_THROW(manager.RefreshRecentProjects());
+
+    manager.Shutdown();
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    EXPECT_FALSE(ec);
+}
+
 TEST(ProjectManager_RecordOpenedScenePersistsProjectRelativePath)
 {
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -1633,6 +1730,20 @@ TEST(ProjectManager_ResolveProjectScenePathRejectsTraversalBeforeLoad)
         EXPECT_FALSE(manager.LoadProjectScene("Scenes/OutsideLink.sparkscene", linkedWorld, resolved));
         EXPECT_TRUE(resolved.empty());
     }
+
+    // A directory link out of the project runs on every host: an NTFS junction on
+    // Windows (no privilege needed, unlike the file symlink above), a symlink elsewhere.
+    const std::filesystem::path outsideDirectory = parent / "OutsideScenes";
+    std::filesystem::create_directories(outsideDirectory);
+    std::ofstream(outsideDirectory / "Escaped.sparkscene") << Spark::SerializeWorld(sourceWorld);
+    const std::filesystem::path linkedDirectory = root / "Scenes" / "LinkedScenes";
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(outsideDirectory, linkedDirectory));
+    EXPECT_FALSE(manager.ResolveProjectScenePath("Scenes/LinkedScenes/Escaped.sparkscene", resolved));
+    EXPECT_TRUE(resolved.empty());
+    World junctionWorld;
+    EXPECT_FALSE(manager.LoadProjectScene("Scenes/LinkedScenes/Escaped.sparkscene", junctionWorld, resolved));
+    EXPECT_TRUE(resolved.empty());
+    SparkTestLinks::RemoveDirectoryLink(linkedDirectory);
 
     manager.RemoveRecentProject((root / "Contained.sparkproject").string());
     manager.Shutdown();
@@ -2231,6 +2342,7 @@ TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
     EXPECT_FALSE(std::filesystem::exists(output / "stale-runtime.dll"));
     EXPECT_FALSE(std::filesystem::exists(output / "Assets" / "removed-asset.txt"));
     EXPECT_TRUE(std::filesystem::is_regular_file(output / "Startup.sparkscene"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output / "Scenes" / "Startup.sparkscene"));
     EXPECT_TRUE(std::filesystem::is_regular_file(output / "ScenePreview" / sceneHost));
 
     auto readText = [](const std::filesystem::path& path)
@@ -2249,7 +2361,7 @@ TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
     EXPECT_STR_CONTAINS(serverLauncher, "--manifest spark.modules.json");
     const std::string sceneLauncher = readText(output / sceneLauncherFilename);
     EXPECT_STR_CONTAINS(sceneLauncher, sceneHost);
-    EXPECT_STR_CONTAINS(sceneLauncher, "-scene Startup.sparkscene");
+    EXPECT_STR_CONTAINS(sceneLauncher, "-scene Scenes/Startup.sparkscene");
     const std::string readme = readText(output / "PACKAGE_README.txt");
     EXPECT_STR_CONTAINS(readme, "separate from module execution");
 
@@ -2272,6 +2384,153 @@ TEST(BuildPipeline_AssemblesRunnableModuleAndIsolatedScenePackage)
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     EXPECT_FALSE(ec);
+}
+
+namespace
+{
+    std::string PackageTestUtf8(const std::filesystem::path& path)
+    {
+        const auto utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    std::string PackageTestReadText(const std::filesystem::path& path)
+    {
+        std::ifstream file(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    }
+
+    // A project plus fabricated native host/module artifacts, packaged without
+    // a dedicated server. Removed on destruction.
+    struct ScenePackageFixture
+    {
+        std::filesystem::path root;
+        std::filesystem::path project;
+        std::filesystem::path host;
+        std::filesystem::path module;
+        std::filesystem::path output;
+
+        explicit ScenePackageFixture(const char* tag)
+        {
+#ifdef _WIN32
+            constexpr const char* hostFilename = "SparkEngine.exe";
+            constexpr const char* moduleFilename = "Runnable.dll";
+#elif defined(__APPLE__)
+            constexpr const char* hostFilename = "SparkEngine";
+            constexpr const char* moduleFilename = "Runnable.dylib";
+#else
+            constexpr const char* hostFilename = "SparkEngine";
+            constexpr const char* moduleFilename = "Runnable.so";
+#endif
+            const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+            root = std::filesystem::temp_directory_path() /
+                   (std::string("spark-scene-package-") + tag + "-" + std::to_string(stamp));
+            project = root / "Project";
+            const std::filesystem::path runtime = root / "Runtime";
+            const std::filesystem::path artifacts = root / "Artifacts";
+            output = root / "Output";
+            std::filesystem::create_directories(project / "Assets");
+            std::filesystem::create_directories(project / "Scenes");
+            std::filesystem::create_directories(runtime / "Shaders");
+            std::filesystem::create_directories(artifacts);
+            std::ofstream(project / "Assets" / "asset.txt") << "asset";
+            std::ofstream(project / "Scenes" / "Default.sparkscene") << "{\"entities\":[],\"tag\":\"default\"}";
+            std::ofstream(runtime / "Shaders" / "Basic.hlsl") << "shader";
+            host = runtime / hostFilename;
+            module = artifacts / moduleFilename;
+            std::ofstream(host) << "host";
+            std::ofstream(module) << "module";
+            std::ofstream(artifacts / (std::string(moduleFilename) + ".sparkabi")) << "abi";
+        }
+
+        ~ScenePackageFixture()
+        {
+            std::error_code ec;
+            std::filesystem::remove_all(root, ec);
+        }
+
+        ScenePackageFixture(const ScenePackageFixture&) = delete;
+        ScenePackageFixture& operator=(const ScenePackageFixture&) = delete;
+
+        void WriteProject(const std::string& json) const
+        {
+            std::ofstream(project / "Preview.sparkproject", std::ios::binary | std::ios::trunc) << json;
+        }
+
+        bool Assemble(std::string& error) const
+        {
+            BuildCookPanel::BuildSettings settings;
+            settings.platform = BuildPipeline::NativeTargetPlatform();
+            settings.executableName = "Preview Game";
+            settings.packageDedicatedServer = false;
+            settings.cookAssets = true;
+            return BuildPipeline::AssembleNativePackage(settings, project.string(), host.string(), module.string(),
+                                                        output.string(), &error);
+        }
+    };
+} // namespace
+
+TEST(BuildPipeline_PackagedStartupSceneDerivesProjectRootForAssets)
+{
+    ScenePackageFixture fixture("root");
+    fixture.WriteProject("{}");
+    std::string error;
+    ASSERT_TRUE(fixture.Assemble(error));
+
+    // The package-root copy is outside any Scenes/ directory, so a preview of it
+    // could never resolve Assets/... references; the Scenes/ copy can.
+    EXPECT_FALSE(
+        Spark::DeriveProjectRootFromScenePath(PackageTestUtf8(fixture.output / "Startup.sparkscene")).has_value());
+    const auto root =
+        Spark::DeriveProjectRootFromScenePath(PackageTestUtf8(fixture.output / "Scenes" / "Startup.sparkscene"));
+    ASSERT_TRUE(root.has_value());
+    const std::filesystem::path derived(std::u8string(reinterpret_cast<const char8_t*>(root->data()), root->size()));
+    std::error_code ec;
+    EXPECT_TRUE(std::filesystem::equivalent(derived, fixture.output, ec));
+    EXPECT_FALSE(ec);
+
+    const auto asset = Spark::ResolveProjectAssetPath(*root, "Assets/asset.txt");
+    ASSERT_TRUE(asset.has_value());
+    EXPECT_TRUE(std::filesystem::is_regular_file(asset->nativePath));
+}
+
+TEST(BuildPipeline_PackagedStartupScenePrefersProjectDefaultScene)
+{
+    ScenePackageFixture fixture("default");
+    const std::string arena = "{\"entities\":[],\"tag\":\"arena\"}";
+    const std::string defaultScene = "{\"entities\":[],\"tag\":\"default\"}";
+    std::filesystem::create_directories(fixture.project / "Scenes" / "Levels");
+    std::ofstream(fixture.project / "Scenes" / "Levels" / "Arena.sparkscene") << arena;
+    const std::filesystem::path previewScene = fixture.output / "Scenes" / "Startup.sparkscene";
+    std::string error;
+
+    // The authored defaultScene wins over the Default.sparkscene fallback, for
+    // both the game-module startup copy and the preview copy.
+    fixture.WriteProject(R"({"name": "Preview", "defaultScene": "Scenes/Levels/Arena.sparkscene"})");
+    ASSERT_TRUE(fixture.Assemble(error));
+    EXPECT_EQ(PackageTestReadText(previewScene), arena);
+    EXPECT_EQ(PackageTestReadText(fixture.output / "Startup.sparkscene"), arena);
+
+    // A defaultScene that escapes Scenes/ is ignored in favour of the fallback.
+    fixture.WriteProject(R"({"name": "Preview", "defaultScene": "Scenes/../Outside.sparkscene"})");
+    std::ofstream(fixture.project / "Outside.sparkscene") << arena;
+    ASSERT_TRUE(fixture.Assemble(error));
+    EXPECT_EQ(PackageTestReadText(previewScene), defaultScene);
+
+    // An authored Scenes/Startup.sparkscene that is not the startup scene is
+    // never overwritten: packaging fails and the last package stays intact.
+    const std::string authoredStartup = "{\"entities\":[],\"tag\":\"authored-startup\"}";
+    std::ofstream(fixture.project / "Scenes" / "Startup.sparkscene") << authoredStartup;
+    fixture.WriteProject(R"({"name": "Preview", "defaultScene": "Scenes/Levels/Arena.sparkscene"})");
+    EXPECT_FALSE(fixture.Assemble(error));
+    EXPECT_STR_CONTAINS(error, "Scenes/Startup.sparkscene");
+    EXPECT_EQ(PackageTestReadText(previewScene), defaultScene);
+
+    // Naming that scene as the defaultScene stages it in place.
+    fixture.WriteProject(R"({"name": "Preview", "defaultScene": "Scenes/Startup.sparkscene"})");
+    ASSERT_TRUE(fixture.Assemble(error));
+    EXPECT_EQ(PackageTestReadText(previewScene), authoredStartup);
+    EXPECT_EQ(PackageTestReadText(fixture.output / "Startup.sparkscene"), authoredStartup);
 }
 
 // ============================================================================

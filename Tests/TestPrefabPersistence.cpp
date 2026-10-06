@@ -1,0 +1,619 @@
+/**
+ * @file TestPrefabPersistence.cpp
+ * @brief SAVE-230: editor prefab (.sparkprefab) version gate, diagnostics and durable save.
+ *
+ * PrefabAsset::TryLoad must fail closed on a newer format version, name the component and
+ * line of a truncated or malformed file, never hand back a partially read prefab, and recover
+ * from the retained `.bak` when the primary is damaged. PrefabAsset::Save must leave the
+ * previous prefab byte-identical when the write fails. PrefabManager saves to and reloads from
+ * the open project's Prefabs directory, and never writes into the working directory.
+ */
+
+#include "TestFramework.h"
+#include "Prefabs/PrefabAsset.h"
+#include "Prefabs/PrefabManager.h"
+#include "Prefabs/PrefabTextFormat.h"
+
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <system_error>
+#include <variant>
+#include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
+
+namespace
+{
+    namespace fs = std::filesystem;
+
+    class PrefabScratch
+    {
+      public:
+        explicit PrefabScratch(const char* tag)
+        {
+            static std::atomic<unsigned int> sequence{0};
+            const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+            m_path = fs::temp_directory_path() / ("spark-prefab-persistence-" + std::string(tag) + "-" +
+                                                  std::to_string(stamp) + "-" + std::to_string(sequence++));
+            fs::create_directories(m_path);
+        }
+        ~PrefabScratch()
+        {
+            std::error_code ec;
+            fs::remove_all(m_path, ec);
+        }
+        PrefabScratch(const PrefabScratch&) = delete;
+        PrefabScratch& operator=(const PrefabScratch&) = delete;
+
+        fs::path Native(const char* name) const { return m_path / name; }
+
+        /// PrefabAsset takes UTF-8 paths; path::string() is the ANSI code page on Windows.
+        std::string Utf8(const char* name) const
+        {
+            const std::u8string utf8 = Native(name).u8string();
+            return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+        }
+
+      private:
+        fs::path m_path;
+    };
+
+    std::string ReadBytes(const fs::path& path)
+    {
+        std::ifstream input(path, std::ios::binary);
+        return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    }
+
+    void WriteBytes(const fs::path& path, const std::string& bytes)
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << bytes;
+    }
+
+    SparkEditor::PrefabAsset MakeCrate(float mass)
+    {
+        SparkEditor::PrefabAsset crate("Supply Crate");
+        SparkEditor::SerializedComponent transform;
+        transform.typeName = "Transform";
+        transform.properties["position"] = XMFLOAT3{1.0f, 2.0f, 3.0f};
+        crate.AddComponent(transform);
+        SparkEditor::SerializedComponent body;
+        body.typeName = "RigidBody";
+        body.properties["mass"] = mass;
+        body.properties["label"] = std::string("heavy crate");
+        crate.AddComponent(body);
+        return crate;
+    }
+
+    float MassOf(const SparkEditor::PrefabAsset& prefab)
+    {
+        const SparkEditor::SerializedComponent* body = prefab.GetComponent("RigidBody");
+        if (!body)
+            return -1.0f;
+        const auto it = body->properties.find("mass");
+        if (it == body->properties.end() || !std::holds_alternative<float>(it->second))
+            return -1.0f;
+        return std::get<float>(it->second);
+    }
+
+    /// A prefab the loader must not overwrite on failure.
+    SparkEditor::PrefabAsset Sentinel()
+    {
+        SparkEditor::PrefabAsset sentinel("Sentinel");
+        SparkEditor::SerializedComponent marker;
+        marker.typeName = "Marker";
+        sentinel.AddComponent(marker);
+        return sentinel;
+    }
+
+    bool IsUntouchedSentinel(const SparkEditor::PrefabAsset& prefab)
+    {
+        return prefab.GetName() == "Sentinel" && prefab.GetComponents().size() == 1 && prefab.HasComponent("Marker");
+    }
+
+    std::string PathUtf8(const fs::path& path)
+    {
+        const std::u8string utf8 = path.u8string();
+        return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+    }
+
+    /// A well-formed prefab whose one string property is @p payloadBytes long; the parser alone
+    /// accepts it at any size.
+    SparkEditor::PrefabAsset MakeBlob(const std::string& name, size_t payloadBytes)
+    {
+        SparkEditor::PrefabAsset blob(name);
+        SparkEditor::SerializedComponent data;
+        data.typeName = "Blob";
+        data.properties["payload"] = std::string(payloadBytes, 'x');
+        blob.AddComponent(data);
+        return blob;
+    }
+
+    std::string RenderBlob(const std::string& name, size_t payloadBytes)
+    {
+        const SparkEditor::PrefabAsset blob = MakeBlob(name, payloadBytes);
+        return SparkEditor::PrefabTextFormat::Render(blob.GetName(), blob.GetComponents());
+    }
+
+#if defined(_WIN32)
+    /// Holds @p path open without FILE_SHARE_DELETE, so MoveFileExW cannot replace it while
+    /// reads (and the .bak refresh's copy) still succeed.
+    class RenameBlocker
+    {
+      public:
+        explicit RenameBlocker(const fs::path& path)
+            : m_file(::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                                   FILE_ATTRIBUTE_NORMAL, nullptr))
+        {
+        }
+        ~RenameBlocker()
+        {
+            if (m_file != INVALID_HANDLE_VALUE)
+                ::CloseHandle(m_file);
+        }
+        RenameBlocker(const RenameBlocker&) = delete;
+        RenameBlocker& operator=(const RenameBlocker&) = delete;
+
+        bool Held() const { return m_file != INVALID_HANDLE_VALUE; }
+
+      private:
+        HANDLE m_file;
+    };
+#endif
+} // namespace
+
+TEST(PrefabPersistence_FutureVersionFailsClosedNamingVersionAndWindow)
+{
+    PrefabScratch scratch("future");
+    // A loadable previous-good copy is present, and must not be used: loading an older copy
+    // and saving over the newer file would discard the newer editor's data.
+    SparkEditor::PrefabAsset older = MakeCrate(10.0f);
+    ASSERT_TRUE(older.Save(scratch.Utf8("Future.sparkprefab")));
+    WriteBytes(scratch.Native("Future.sparkprefab.bak"), ReadBytes(scratch.Native("Future.sparkprefab")));
+    WriteBytes(scratch.Native("Future.sparkprefab"),
+               "SPARKPREFAB 3\nname Supply Crate\ncomponents 1\ncomponent Transform\nproperties 1\n"
+               "  orientation quat 0 0 0 1\n");
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    std::string error;
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Future.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "Future.sparkprefab");
+    EXPECT_STR_CONTAINS(error, "format version 3");
+    EXPECT_STR_CONTAINS(error, "reads versions 1 to 2");
+    EXPECT_STR_CONTAINS(error, "newer SparkEditor");
+    EXPECT_TRUE(error.find(".bak") == std::string::npos);
+}
+
+TEST(PrefabPersistence_TruncatedFileNamesComponentAndLeavesOutputUntouched)
+{
+    PrefabScratch scratch("truncated");
+    WriteBytes(scratch.Native("Cut.sparkprefab"), "SPARKPREFAB 1\nname Supply Crate\ncomponents 3\n"
+                                                  "component Transform\nproperties 1\n"
+                                                  "  position float3 1 2 3\n"
+                                                  "component RigidBody\nproperties 2\n"
+                                                  "  mass float 12.5\n");
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    std::string error;
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Cut.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "truncated at property 2 of 2 in component 2 of 3 ('RigidBody')");
+
+    // Cut between components: the next component header is missing.
+    WriteBytes(scratch.Native("Cut.sparkprefab"), "SPARKPREFAB 1\nname Supply Crate\ncomponents 2\n"
+                                                  "component Transform\nproperties 0\n");
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Cut.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "truncated at component 2 of 2");
+
+    // Trailing content past the declared components is damage too, not ignorable.
+    WriteBytes(scratch.Native("Cut.sparkprefab"), "SPARKPREFAB 1\nname Supply Crate\ncomponents 1\n"
+                                                  "component Transform\nproperties 0\ncomponent Stray\n");
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Cut.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "line 6 has content after the declared 1 components");
+}
+
+TEST(PrefabPersistence_UnknownPropertyTypeIsRejectedWithLocation)
+{
+    PrefabScratch scratch("unknown");
+    WriteBytes(scratch.Native("Quat.sparkprefab"), "SPARKPREFAB 1\nname Turret\ncomponents 1\n"
+                                                   "component Transform\nproperties 2\n"
+                                                   "  orientation quat 0 0 0 1\n"
+                                                   "  position float3 0 1 0\n");
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    std::string error;
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Quat.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "line 6: property 'orientation' of component 'Transform' has unknown type 'quat'");
+
+    // A known type with a value that does not parse is located the same way.
+    WriteBytes(scratch.Native("Quat.sparkprefab"), "SPARKPREFAB 1\nname Turret\ncomponents 1\n"
+                                                   "component Transform\nproperties 1\n"
+                                                   "  position float3 0 1\n");
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Quat.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "line 6: property 'position' of component 'Transform' has a malformed float3 value");
+}
+
+TEST(PrefabPersistence_FailedSaveKeepsPreviousPrefabByteIdentical)
+{
+    PrefabScratch scratch("failedsave");
+    const std::string path = scratch.Utf8("Crate.sparkprefab");
+
+    SparkEditor::PrefabAsset crate = MakeCrate(10.0f);
+    ASSERT_TRUE(crate.Save(path));
+    crate.GetComponents()[1].properties["mass"] = 20.0f;
+    ASSERT_TRUE(crate.Save(path));
+    const std::string primaryBefore = ReadBytes(scratch.Native("Crate.sparkprefab"));
+    const std::string backupBefore = ReadBytes(scratch.Native("Crate.sparkprefab.bak"));
+    ASSERT_FALSE(backupBefore.empty());
+
+    // Occupy the staging name with a non-empty directory so the staging write fails.
+    fs::create_directories(scratch.Native("Crate.sparkprefab.tmp"));
+    WriteBytes(scratch.Native("Crate.sparkprefab.tmp") / "occupant", "x");
+
+    crate.GetComponents()[1].properties["mass"] = 30.0f;
+    crate.SetModified(true);
+    EXPECT_FALSE(crate.Save(path));
+    EXPECT_TRUE(crate.IsModified());
+    EXPECT_EQ(ReadBytes(scratch.Native("Crate.sparkprefab")), primaryBefore);
+    EXPECT_EQ(ReadBytes(scratch.Native("Crate.sparkprefab.bak")), backupBefore);
+
+    SparkEditor::PrefabAsset reloaded;
+    std::string error;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(path, reloaded, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(MassOf(reloaded), 20.0f);
+}
+
+TEST(PrefabPersistence_CorruptPrimaryLoadsRetainedBackupAndReportsBothReasons)
+{
+    PrefabScratch scratch("recover");
+    const std::string path = scratch.Utf8("Crate.sparkprefab");
+
+    SparkEditor::PrefabAsset crate = MakeCrate(10.0f);
+    ASSERT_TRUE(crate.Save(path));
+    crate.GetComponents()[1].properties["mass"] = 20.0f;
+    ASSERT_TRUE(crate.Save(path)); // .bak now holds the mass-10 revision
+
+    // Damage the primary the way a torn external copy would: cut before the second component.
+    const std::string primary = ReadBytes(scratch.Native("Crate.sparkprefab"));
+    const size_t cut = primary.find("component \"RigidBody\"");
+    ASSERT_TRUE(cut != std::string::npos);
+    WriteBytes(scratch.Native("Crate.sparkprefab"), primary.substr(0, cut));
+
+    SparkEditor::PrefabManager manager;
+    std::string error;
+    SparkEditor::PrefabAsset* recovered = manager.LoadPrefab(path, &error);
+    ASSERT_TRUE(recovered != nullptr);
+    EXPECT_EQ(recovered->GetName(), std::string("Supply Crate"));
+    EXPECT_EQ(MassOf(*recovered), 10.0f);
+    EXPECT_TRUE(recovered->GetFilePath() == path);
+    EXPECT_STR_CONTAINS(error, "was rejected: the file is truncated at component 2 of 2");
+    EXPECT_STR_CONTAINS(error, "Loaded the previous-good backup");
+
+    // With the backup damaged as well, the load fails and names both reasons.
+    WriteBytes(scratch.Native("Crate.sparkprefab.bak"), "SPARKPREFAB one\n");
+    SparkEditor::PrefabManager empty;
+    EXPECT_TRUE(empty.LoadPrefab(path, &error) == nullptr);
+    EXPECT_EQ(empty.GetPrefabCount(), static_cast<size_t>(0));
+    EXPECT_STR_CONTAINS(error, "was rejected: the file is truncated at component 2 of 2");
+    EXPECT_STR_CONTAINS(error, "Crate.sparkprefab.bak' was not usable: line 1 is not a 'SPARKPREFAB <version>' header");
+}
+
+TEST(PrefabPersistence_SaveAfterBackupRecoveryKeepsGoodBackup)
+{
+    PrefabScratch scratch("recoversave");
+    const std::string path = scratch.Utf8("Crate.sparkprefab");
+    const fs::path primaryFile = scratch.Native("Crate.sparkprefab");
+    const fs::path backupFile = scratch.Native("Crate.sparkprefab.bak");
+
+    SparkEditor::PrefabAsset crate = MakeCrate(10.0f);
+    ASSERT_TRUE(crate.Save(path));
+    crate.GetComponents()[1].properties["mass"] = 20.0f;
+    ASSERT_TRUE(crate.Save(path)); // .bak holds the mass-10 revision
+    const std::string goodBackup = ReadBytes(backupFile);
+
+    const std::string primary = ReadBytes(primaryFile);
+    const std::string damaged = primary.substr(0, primary.find("component \"RigidBody\""));
+    WriteBytes(primaryFile, damaged);
+
+    SparkEditor::PrefabAsset recovered;
+    std::string error;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(path, recovered, error));
+    ASSERT_EQ(MassOf(recovered), 10.0f);
+    recovered.GetComponents()[1].properties["mass"] = 30.0f;
+
+#if defined(_WIN32)
+    {
+        // The final rename fails after the point where the .bak would be refreshed.
+        RenameBlocker blocker(primaryFile);
+        ASSERT_TRUE(blocker.Held());
+        EXPECT_FALSE(recovered.Save(path));
+    }
+    EXPECT_EQ(ReadBytes(primaryFile), damaged);
+    EXPECT_EQ(ReadBytes(backupFile), goodBackup);
+#endif
+
+    // The repairing save leaves the .bak on the last good revision, not the damaged primary.
+    ASSERT_TRUE(recovered.Save(path));
+    EXPECT_EQ(ReadBytes(backupFile), goodBackup);
+    SparkEditor::PrefabAsset reloaded;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(path, reloaded, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(MassOf(reloaded), 30.0f);
+
+    // Once the primary is good again, saves retain it as usual.
+    const std::string repaired = ReadBytes(primaryFile);
+    recovered.GetComponents()[1].properties["mass"] = 40.0f;
+    ASSERT_TRUE(recovered.Save(path));
+    EXPECT_EQ(ReadBytes(backupFile), repaired);
+}
+
+TEST(PrefabPersistence_SaveWithoutProjectFailsInsteadOfWritingToCwd)
+{
+    PrefabScratch scratch("noproject");
+    const fs::path previousCwd = fs::current_path();
+    fs::create_directories(scratch.Native("cwd"));
+    fs::current_path(scratch.Native("cwd"));
+    struct RestoreCwd
+    {
+        fs::path path;
+        ~RestoreCwd()
+        {
+            std::error_code ec;
+            fs::current_path(path, ec);
+        }
+    } restoreCwd{previousCwd};
+
+    SparkEditor::PrefabManager manager;
+    ASSERT_TRUE(manager.Initialize());
+    ASSERT_TRUE(manager.GetPrefab("Crate") != nullptr);
+
+    // No project is open: the editor's Save button used to drop ./Crate.sparkprefab here.
+    EXPECT_FALSE(manager.SavePrefab("Crate"));
+    EXPECT_TRUE(fs::is_empty(scratch.Native("cwd")));
+
+    // With a project open the default target is <project>/Prefabs, created on demand.
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+    manager.SetProjectPrefabDirectory(prefabs);
+    ASSERT_TRUE(manager.SavePrefab("Crate"));
+    EXPECT_TRUE(fs::is_regular_file(prefabs / "Crate.sparkprefab"));
+    EXPECT_TRUE(fs::is_empty(scratch.Native("cwd")));
+
+    // A name that is not a single file-name segment cannot escape the prefab directory.
+    ASSERT_TRUE(manager.CreateEmptyPrefab("../Escape") != nullptr);
+    EXPECT_FALSE(manager.SavePrefab("../Escape"));
+    EXPECT_FALSE(fs::exists(scratch.Native("Project") / "Escape.sparkprefab"));
+
+    // Closing the project clears the target again.
+    manager.SetProjectPrefabDirectory({});
+    EXPECT_FALSE(manager.SavePrefab("Crate"));
+    EXPECT_TRUE(fs::is_empty(scratch.Native("cwd")));
+}
+
+TEST(PrefabPersistence_ProjectPrefabsReloadAndRejectedFileKeepsLoadedPrefab)
+{
+    PrefabScratch scratch("projectload");
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+
+    // A prefab saved through the editor path reloads in a later session.
+    {
+        SparkEditor::PrefabManager author;
+        author.SetProjectPrefabDirectory(prefabs);
+        SparkEditor::PrefabAsset* watchtower = author.CreateEmptyPrefab("Watchtower");
+        ASSERT_TRUE(watchtower != nullptr);
+        watchtower->GetComponents()[0].properties["position"] = XMFLOAT3{4.0f, 0.0f, -2.5f};
+        ASSERT_TRUE(author.SavePrefab("Watchtower"));
+    }
+
+    // A damaged primary with a good .bak recovers from the .bak.
+    SparkEditor::PrefabAsset gatehouse = MakeCrate(1.0f);
+    gatehouse.SetName("Gatehouse");
+    const fs::path gatehouseFile = prefabs / "Gatehouse.sparkprefab";
+    const std::u8string gatehouseUtf8 = gatehouseFile.u8string();
+    const std::string gatehouseText(reinterpret_cast<const char*>(gatehouseUtf8.data()), gatehouseUtf8.size());
+    ASSERT_TRUE(gatehouse.Save(gatehouseText));
+    gatehouse.GetComponents()[1].properties["mass"] = 2.0f;
+    ASSERT_TRUE(gatehouse.Save(gatehouseText)); // .bak holds mass 1
+    const std::string primary = ReadBytes(gatehouseFile);
+    WriteBytes(gatehouseFile, primary.substr(0, primary.find("component \"RigidBody\"")));
+
+    // A newer-version file declaring an already-loaded prefab, plus files that are not prefabs.
+    WriteBytes(prefabs / "Crate.sparkprefab", "SPARKPREFAB 3\nname \"Crate\"\ncomponents 0\nend\n");
+    WriteBytes(prefabs / "notes.txt", "not a prefab");
+
+    SparkEditor::PrefabManager manager;
+    ASSERT_TRUE(manager.Initialize()); // the built-in "Crate" is already loaded
+    manager.SetProjectPrefabDirectory(prefabs);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(2));
+
+    const SparkEditor::PrefabAsset* reloaded = manager.GetPrefab("Watchtower");
+    ASSERT_TRUE(reloaded != nullptr);
+    const SparkEditor::SerializedComponent* transform = reloaded->GetComponent("Transform");
+    ASSERT_TRUE(transform != nullptr);
+    const auto position = transform->properties.find("position");
+    ASSERT_TRUE(position != transform->properties.end() && std::holds_alternative<XMFLOAT3>(position->second));
+    EXPECT_EQ(std::get<XMFLOAT3>(position->second).z, -2.5f);
+
+    const SparkEditor::PrefabAsset* recovered = manager.GetPrefab("Gatehouse");
+    ASSERT_TRUE(recovered != nullptr);
+    EXPECT_EQ(MassOf(*recovered), 1.0f);
+
+    // The rejected newer file did not replace the loaded "Crate" (built-in mass 25).
+    const SparkEditor::PrefabAsset* crate = manager.GetPrefab("Crate");
+    ASSERT_TRUE(crate != nullptr);
+    EXPECT_EQ(MassOf(*crate), 25.0f);
+
+    // One actionable line per rejected or recovered file, in file-name order.
+    ASSERT_EQ(diagnostics.size(), static_cast<size_t>(2));
+    EXPECT_STR_CONTAINS(diagnostics[0], "Crate.sparkprefab");
+    EXPECT_STR_CONTAINS(diagnostics[0], "format version 3");
+    EXPECT_STR_CONTAINS(diagnostics[1], "Gatehouse.sparkprefab' was rejected");
+    EXPECT_STR_CONTAINS(diagnostics[1], "Loaded the previous-good backup");
+
+    // Without an open project nothing is read.
+    SparkEditor::PrefabManager closed;
+    std::vector<std::string> none;
+    EXPECT_EQ(closed.LoadProjectPrefabs(none), static_cast<size_t>(0));
+    EXPECT_TRUE(none.empty());
+}
+
+// SEC4: a shared or downloaded project's Prefabs directory is untrusted and loads on project open.
+
+TEST(PrefabPersistence_OversizedFileIsRejectedBeforeItIsRead)
+{
+    PrefabScratch scratch("oversize");
+    const size_t cap = static_cast<size_t>(SparkEditor::PrefabAsset::kMaxPrefabFileBytes);
+    const size_t overhead = RenderBlob("Blob", 0).size();
+
+    // A file of exactly the limit still loads.
+    WriteBytes(scratch.Native("Fits.sparkprefab"), RenderBlob("Blob", cap - overhead));
+    ASSERT_EQ(static_cast<size_t>(fs::file_size(scratch.Native("Fits.sparkprefab"))), cap);
+    SparkEditor::PrefabAsset fits;
+    std::string error;
+    ASSERT_TRUE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Fits.sparkprefab"), fits, error));
+
+    // One byte more is refused by size, although the grammar alone accepts it.
+    const std::string over = RenderBlob("Blob", cap - overhead + 1);
+    SparkEditor::PrefabTextFormat::ParsedPrefab parsed;
+    std::string reason;
+    ASSERT_TRUE(SparkEditor::PrefabTextFormat::Parse(over, parsed, reason) ==
+                SparkEditor::PrefabTextFormat::ParseResult::Ok);
+    WriteBytes(scratch.Native("Big.sparkprefab"), over);
+    const std::string tooBig = "the file is " + std::to_string(cap + 1) + " bytes, larger than the " +
+                               std::to_string(cap) + "-byte prefab limit";
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Big.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "Big.sparkprefab' was rejected: " + tooBig);
+
+    // The .bak fallback is bounded the same way.
+    WriteBytes(scratch.Native("Big.sparkprefab"), "SPARKPREFAB one\n");
+    WriteBytes(scratch.Native("Big.sparkprefab.bak"), over);
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(scratch.Utf8("Big.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "Big.sparkprefab.bak' was not usable: " + tooBig);
+
+    // Save refuses a prefab TryLoad could not read back, and writes nothing.
+    SparkEditor::PrefabAsset big = MakeBlob("Blob", cap - overhead + 1);
+    EXPECT_FALSE(big.Save(scratch.Utf8("Saved.sparkprefab")));
+    EXPECT_FALSE(fs::exists(scratch.Native("Saved.sparkprefab")));
+}
+
+TEST(PrefabPersistence_SymlinkedProjectPrefabIsNotFollowed)
+{
+    PrefabScratch scratch("symlink");
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+    fs::create_directories(prefabs);
+    SparkEditor::PrefabAsset target = MakeCrate(5.0f);
+    target.SetName("Linked");
+    ASSERT_TRUE(target.Save(scratch.Utf8("Target.sparkprefab")));
+
+    std::error_code linkError;
+    fs::create_symlink(scratch.Native("Target.sparkprefab"), prefabs / "Linked.sparkprefab", linkError);
+    if (linkError)
+    {
+        SKIP_TEST("cannot create a symbolic link here: " + linkError.message());
+    }
+
+    SparkEditor::PrefabAsset out = Sentinel();
+    std::string error;
+    EXPECT_FALSE(SparkEditor::PrefabAsset::TryLoad(PathUtf8(prefabs / "Linked.sparkprefab"), out, error));
+    EXPECT_TRUE(IsUntouchedSentinel(out));
+    EXPECT_STR_CONTAINS(error, "the path is a symbolic link or not a regular file");
+
+    SparkEditor::PrefabManager manager;
+    manager.SetProjectPrefabDirectory(prefabs);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    EXPECT_TRUE(manager.GetPrefab("Linked") == nullptr);
+    ASSERT_EQ(diagnostics.size(), static_cast<size_t>(1));
+    EXPECT_STR_CONTAINS(diagnostics[0], "symbolic link");
+}
+
+TEST(PrefabPersistence_ProjectSweepStopsAtByteBudgetCountingBackups)
+{
+    PrefabScratch scratch("budget");
+    const std::uintmax_t cap = SparkEditor::PrefabAsset::kMaxPrefabFileBytes;
+    const size_t filesToFill = static_cast<size_t>(SparkEditor::PrefabManager::kMaxProjectPrefabBytes / cap);
+    ASSERT_TRUE(filesToFill > 1);
+
+    // Primaries that use the whole budget (zero-filled, so each is rejected once read) leave no
+    // room for a well-formed prefab that sorts after them.
+    const fs::path full = scratch.Native("Full") / "Prefabs";
+    fs::create_directories(full);
+    for (size_t i = 0; i < filesToFill; ++i)
+    {
+        const fs::path file = full / ("A" + std::to_string(i) + ".sparkprefab");
+        WriteBytes(file, "");
+        fs::resize_file(file, cap);
+    }
+    SparkEditor::PrefabAsset zed = MakeCrate(3.0f);
+    zed.SetName("Zed");
+    ASSERT_TRUE(zed.Save(PathUtf8(full / "Zed.sparkprefab")));
+
+    SparkEditor::PrefabManager manager;
+    manager.SetProjectPrefabDirectory(full);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    EXPECT_TRUE(manager.GetPrefab("Zed") == nullptr);
+    ASSERT_EQ(diagnostics.size(), filesToFill + 1);
+    EXPECT_STR_CONTAINS(diagnostics.back(), "1 prefab file(s) in '");
+    EXPECT_STR_CONTAINS(diagnostics.back(), "-byte load budget");
+
+    // Tiny damaged primaries cannot pull in full-size backups past the budget: every .bak their
+    // load may read is charged too, so the last one does not fit.
+    const fs::path backups = scratch.Native("Backups") / "Prefabs";
+    fs::create_directories(backups);
+    for (size_t i = 0; i < filesToFill; ++i)
+    {
+        const fs::path file = backups / ("B" + std::to_string(i) + ".sparkprefab");
+        WriteBytes(file, "x");
+        const fs::path backup = backups / ("B" + std::to_string(i) + ".sparkprefab.bak");
+        WriteBytes(backup, "");
+        fs::resize_file(backup, cap);
+    }
+    SparkEditor::PrefabManager second;
+    second.SetProjectPrefabDirectory(backups);
+    diagnostics.clear();
+    EXPECT_EQ(second.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    ASSERT_EQ(diagnostics.size(), filesToFill);
+    EXPECT_STR_CONTAINS(diagnostics.back(), "1 prefab file(s) in '");
+}
+
+TEST(PrefabPersistence_ProjectSweepConsidersAtMostMaxFiles)
+{
+    PrefabScratch scratch("count");
+    const fs::path prefabs = scratch.Native("Project") / "Prefabs";
+    fs::create_directories(prefabs);
+    const size_t cap = SparkEditor::PrefabManager::kMaxProjectPrefabFiles;
+    for (size_t i = 0; i <= cap; ++i)
+    {
+        WriteBytes(prefabs / ("P" + std::to_string(i) + ".sparkprefab"), "");
+    }
+
+    SparkEditor::PrefabManager manager;
+    manager.SetProjectPrefabDirectory(prefabs);
+    std::vector<std::string> diagnostics;
+    EXPECT_EQ(manager.LoadProjectPrefabs(diagnostics), static_cast<size_t>(0));
+    // One line for the limit, then one per considered (empty, so rejected) file.
+    ASSERT_EQ(diagnostics.size(), cap + 1);
+    EXPECT_STR_CONTAINS(diagnostics[0], "holds more than " + std::to_string(cap) + " prefab files");
+}

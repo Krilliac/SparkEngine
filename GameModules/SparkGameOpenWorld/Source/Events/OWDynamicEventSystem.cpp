@@ -4,8 +4,7 @@
  */
 
 #include "OWDynamicEventSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -25,10 +24,9 @@ namespace OpenWorld
         DefineEventTemplates();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Dynamic event system initialized: %zu event types",
-                       m_templates.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Events: " + std::to_string(m_templates.size()) +
-                                                    " event types registered");
+        Spark::ModuleLog::Info(m_context, "Dynamic event system initialized: {} event types", m_templates.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Events: " + std::to_string(m_templates.size()) + " event types registered");
         return true;
     }
 
@@ -207,9 +205,9 @@ namespace OpenWorld
         m_activeEvents[evt.eventId] = evt;
         m_cooldowns[templateId] = tmpl->cooldown;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] EVENT: " + tmpl->name + " in Region " +
-                                                    std::to_string(regionId) + " (id=" + std::to_string(evt.eventId) +
-                                                    ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] EVENT: " + tmpl->name + " in Region " + std::to_string(regionId) +
+                                   " (id=" + std::to_string(evt.eventId) + ")");
         return evt.eventId;
     }
 
@@ -221,8 +219,30 @@ namespace OpenWorld
 
         it->second.playerParticipating = true;
         it->second.state = EventState::Active;
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Joined event: " + it->second.name);
+        Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Joined event: " + it->second.name);
         return true;
+    }
+
+    uint32_t OWDynamicEventSystem::FindJoinableEventNear(float x, float z, float maxDistance) const
+    {
+        uint32_t bestId = 0;
+        float bestDistSq = maxDistance * maxDistance;
+        for (const auto& [id, evt] : m_activeEvents)
+        {
+            if (evt.state == EventState::Completed || evt.playerParticipating)
+            {
+                continue;
+            }
+            const float dx = evt.posX - x;
+            const float dz = evt.posZ - z;
+            const float distSq = dx * dx + dz * dz;
+            if (distSq < bestDistSq || (distSq == bestDistSq && bestId != 0 && id < bestId))
+            {
+                bestDistSq = distSq;
+                bestId = id;
+            }
+        }
+        return bestId;
     }
 
     DynamicEventSaveState OWDynamicEventSystem::CaptureSaveState() const
@@ -336,8 +356,8 @@ namespace OpenWorld
         m_totalEventsCompleted++;
 
         std::string result = it->second.playerParticipating ? "PARTICIPATED" : "MISSED";
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Event completed: " + it->second.name + " (" + result +
-                                                    ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Event completed: " + it->second.name + " (" + result + ")");
 
         m_activeEvents.erase(it);
     }

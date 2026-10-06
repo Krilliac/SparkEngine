@@ -16,9 +16,9 @@
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <exception>
 #include <filesystem>
-#include <fstream>
-#include <sstream>
+#include <system_error>
 
 namespace fs = std::filesystem;
 
@@ -26,35 +26,6 @@ namespace SparkLauncher
 {
     namespace
     {
-        std::string ReadSmallFile(const fs::path& p)
-        {
-            std::ifstream in(p);
-            if (!in)
-                return {};
-            std::ostringstream ss;
-            ss << in.rdbuf();
-            return ss.str();
-        }
-
-        // Very small JSON string-field extractor — matches ProjectManager.cpp's approach.
-        std::string ExtractJsonString(const std::string& json, const std::string& key)
-        {
-            const std::string search = "\"" + key + "\"";
-            size_t pos = json.find(search);
-            if (pos == std::string::npos)
-                return {};
-            pos = json.find(':', pos);
-            if (pos == std::string::npos)
-                return {};
-            pos = json.find('"', pos + 1);
-            if (pos == std::string::npos)
-                return {};
-            size_t end = json.find('"', pos + 1);
-            if (end == std::string::npos)
-                return {};
-            return json.substr(pos + 1, end - pos - 1);
-        }
-
         std::string FormatTimestamp(uint64_t epochSeconds)
         {
             if (epochSeconds == 0)
@@ -69,6 +40,18 @@ namespace SparkLauncher
 #endif
             std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
             return buf;
+        }
+
+        // Copies all of @p text or nothing: truncating UTF-8 could split a character
+        // and leave the buffer undecodable.
+        template <std::size_t N> bool CopyWhole(const std::string& text, char (&buffer)[N])
+        {
+            if (text.size() >= N)
+            {
+                return false;
+            }
+            std::memcpy(buffer, text.c_str(), text.size() + 1);
+            return true;
         }
     } // namespace
 
@@ -97,24 +80,21 @@ namespace SparkLauncher
         {
             return;
         }
-        for (const auto& entry : fs::directory_iterator(templatesDir))
+        // The error_code forms: a directory that cannot be listed, or an entry whose type cannot
+        // be read, ends or skips the scan instead of throwing out of Initialize.
+        std::error_code error;
+        for (fs::directory_iterator it(templatesDir, error), end; !error && it != end; it.increment(error))
         {
-            if (!entry.is_directory())
+            std::error_code typeError;
+            if (!it->is_directory(typeError) || typeError)
+            {
                 continue;
-            const fs::path manifest = entry.path() / "template.json";
-            if (!fs::exists(manifest))
-                continue;
-
-            const std::string json = ReadSmallFile(manifest);
-            TemplateEntry t;
-            t.directoryName = entry.path().filename().string();
-            t.displayName = ExtractJsonString(json, "name");
-            if (t.displayName.empty())
-                t.displayName = t.directoryName;
-            t.description = ExtractJsonString(json, "description");
-            t.genre = ExtractJsonString(json, "genre");
-            t.gameModule = ExtractJsonString(json, "gameModule");
-            m_templates.push_back(std::move(t));
+            }
+            auto entry = ReadTemplateEntry(it->path());
+            if (entry)
+            {
+                m_templates.push_back(std::move(*entry));
+            }
         }
         std::sort(m_templates.begin(), m_templates.end(),
                   [](const TemplateEntry& a, const TemplateEntry& b) { return a.displayName < b.displayName; });
@@ -127,10 +107,13 @@ namespace SparkLauncher
 #else
         const char* home = std::getenv("HOME");
 #endif
+        // getenv returns active-code-page text on Windows, which fs::path(const char*)
+        // decodes; the ImGui buffer holds UTF-8.
         fs::path base = home ? fs::path(home) / "SparkProjects" : fs::current_path();
-        std::string s = base.string();
-        std::strncpy(m_newProjectLocation, s.c_str(), sizeof(m_newProjectLocation) - 1);
-        m_newProjectLocation[sizeof(m_newProjectLocation) - 1] = '\0';
+        if (!CopyWhole(PathToUtf8(base), m_newProjectLocation))
+        {
+            m_newProjectLocation[0] = '\0';
+        }
     }
 
     void LauncherApp::DrawUI()
@@ -183,29 +166,36 @@ namespace SparkLauncher
             std::string folder;
             if (SparkEditor::Utils::BrowseForFolder(folder, "Select Project Folder"))
             {
+                // BrowseForFolder returns active-code-page text on Windows, which
+                // fs::path(std::string) decodes. From here on the project is a path, and
+                // it only becomes text again as UTF-8 (ProjectManager, status line).
+                const fs::path folderPath(folder);
                 // A project directory contains a single .sparkproject file.
                 fs::path chosen;
-                for (const auto& entry : fs::directory_iterator(folder))
+                std::error_code iterateError;
+                for (fs::directory_iterator it(folderPath, iterateError), end; !iterateError && it != end;
+                     it.increment(iterateError))
                 {
-                    if (entry.is_regular_file() && entry.path().extension() == ".sparkproject")
+                    std::error_code entryError;
+                    if (it->is_regular_file(entryError) && it->path().extension() == ".sparkproject")
                     {
-                        chosen = entry.path();
+                        chosen = it->path();
                         break;
                     }
                 }
                 if (chosen.empty())
                 {
-                    m_statusMessage = "No .sparkproject file found in " + folder;
+                    m_statusMessage = "No .sparkproject file found in " + PathToUtf8(folderPath);
                     m_statusIsError = true;
                 }
-                else if (!m_projectManager->OpenProject(chosen.string()))
+                else if (!m_projectManager->OpenProject(PathToUtf8(chosen)))
                 {
-                    m_statusMessage = "Failed to open " + chosen.string();
+                    m_statusMessage = "Failed to open " + PathToUtf8(chosen);
                     m_statusIsError = true;
                 }
                 else
                 {
-                    SpawnTarget(chosen.string(), LaunchTarget::Editor);
+                    SpawnTarget(chosen, LaunchTarget::Editor);
                 }
             }
         }
@@ -236,6 +226,19 @@ namespace SparkLauncher
 
             for (const auto& rp : recent)
             {
+                // ProjectManager stores recent-project paths as UTF-8 text.
+                const auto spawnRecent = [this, &rp](LaunchTarget target)
+                {
+                    auto projectFile = PathFromUtf8(rp.path);
+                    if (!projectFile)
+                    {
+                        m_statusMessage = projectFile.error() + ": " + rp.path;
+                        m_statusIsError = true;
+                        return;
+                    }
+                    SpawnTarget(*projectFile, target);
+                };
+
                 ImGui::TableNextRow();
                 ImGui::PushID(rp.path.c_str());
 
@@ -255,7 +258,7 @@ namespace SparkLauncher
                 if (rp.valid && ImGui::SmallButton("Editor"))
                 {
                     if (m_projectManager->OpenProject(rp.path))
-                        SpawnTarget(rp.path, LaunchTarget::Editor);
+                        spawnRecent(LaunchTarget::Editor);
                     else
                     {
                         m_statusMessage = "Failed to open " + rp.path;
@@ -264,13 +267,13 @@ namespace SparkLauncher
                 }
                 ImGui::SameLine();
                 if (rp.valid && ImGui::SmallButton("Play"))
-                    SpawnTarget(rp.path, LaunchTarget::Game);
+                    spawnRecent(LaunchTarget::Game);
                 ImGui::SameLine();
                 if (rp.valid && ImGui::SmallButton("Server"))
-                    SpawnTarget(rp.path, LaunchTarget::DedicatedServer);
+                    spawnRecent(LaunchTarget::DedicatedServer);
                 ImGui::SameLine();
                 if (rp.valid && ImGui::SmallButton("Services"))
-                    SpawnTarget(rp.path, LaunchTarget::ServiceTopology);
+                    spawnRecent(LaunchTarget::ServiceTopology);
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Remove"))
                 {
@@ -320,15 +323,32 @@ namespace SparkLauncher
             std::string folder;
             if (SparkEditor::Utils::BrowseForFolder(folder, "Select Parent Folder"))
             {
-                std::strncpy(m_newProjectLocation, folder.c_str(), sizeof(m_newProjectLocation) - 1);
-                m_newProjectLocation[sizeof(m_newProjectLocation) - 1] = '\0';
+                // Active-code-page text from the dialog; the ImGui buffer holds UTF-8.
+                if (!CopyWhole(PathToUtf8(fs::path(folder)), m_newProjectLocation))
+                {
+                    m_statusMessage = "Selected folder path is too long";
+                    m_statusIsError = true;
+                }
             }
         }
         ImGui::InputTextMultiline("Description", m_newProjectDescription, sizeof(m_newProjectDescription),
                                   ImVec2(0, ImGui::GetTextLineHeight() * 3));
 
-        const fs::path projectRoot = fs::path(m_newProjectLocation) / m_newProjectName;
-        ImGui::TextDisabled("Will be created at: %s", projectRoot.string().c_str());
+        // Both buffers are ImGui (UTF-8) text. fs::path(const char*) would read them as
+        // the active code page on Windows, and path::string() throws for characters
+        // outside it -- every frame, from whatever the user typed.
+        const auto location = PathFromUtf8(m_newProjectLocation);
+        const auto name = PathFromUtf8(m_newProjectName);
+        fs::path projectRoot;
+        if (location && name)
+        {
+            projectRoot = *location / *name;
+            ImGui::TextDisabled("Will be created at: %s", PathToUtf8(projectRoot).c_str());
+        }
+        else
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Project name and location must be valid UTF-8 text");
+        }
 
         ImGui::Separator();
         if (ImGui::Button("Create Project", ImVec2(160, 0)))
@@ -339,8 +359,14 @@ namespace SparkLauncher
                 m_statusIsError = true;
                 return;
             }
+            if (projectRoot.empty())
+            {
+                m_statusMessage = "Project name and location must be valid UTF-8 text";
+                m_statusIsError = true;
+                return;
+            }
             std::error_code ec;
-            fs::create_directories(fs::path(m_newProjectLocation), ec);
+            fs::create_directories(*location, ec);
             if (ec)
             {
                 m_statusMessage = "Cannot create directory: " + ec.message();
@@ -348,17 +374,21 @@ namespace SparkLauncher
                 return;
             }
 
-            if (!m_projectManager->CreateProjectFromTemplate(m_newProjectName, projectRoot.string(), tpl.directoryName))
+            if (!m_projectManager->CreateProjectFromTemplate(m_newProjectName, PathToUtf8(projectRoot),
+                                                             tpl.directoryName))
             {
                 m_statusMessage = "CreateProjectFromTemplate failed for " + tpl.directoryName;
                 m_statusIsError = true;
                 return;
             }
 
-            const std::string sparkproj = (projectRoot / (std::string(m_newProjectName) + ".sparkproject")).string();
-            if (!fs::exists(sparkproj))
+            fs::path projectFileName = *name;
+            projectFileName += ".sparkproject";
+            const fs::path sparkproj = projectRoot / projectFileName;
+            std::error_code existsError;
+            if (!fs::exists(sparkproj, existsError))
             {
-                m_statusMessage = "Project file not produced: " + sparkproj;
+                m_statusMessage = "Project file not produced: " + PathToUtf8(sparkproj);
                 m_statusIsError = true;
                 return;
             }
@@ -367,26 +397,38 @@ namespace SparkLauncher
         }
     }
 
-    bool LauncherApp::SpawnTarget(const std::string& projectFilePath, LaunchTarget target)
+    bool LauncherApp::SpawnTarget(const fs::path& projectFile, LaunchTarget target)
     {
-        const fs::path ownPath = GetLauncherExecutablePath();
-        if (ownPath.empty())
+        // This runs inside the ImGui frame with nothing above it to catch: a
+        // filesystem or encoding exception from an unusual project path must end as a
+        // status message, not std::terminate.
+        try
         {
-            m_statusMessage = "Could not determine launcher path";
-            m_statusIsError = true;
-            return false;
+            const fs::path ownPath = GetLauncherExecutablePath();
+            if (ownPath.empty())
+            {
+                m_statusMessage = "Could not determine launcher path";
+                m_statusIsError = true;
+                return false;
+            }
+            auto request = BuildLaunchRequest(ownPath.parent_path(), projectFile, target);
+            if (!request)
+            {
+                m_statusMessage = request.error();
+                m_statusIsError = true;
+                return false;
+            }
+            auto launched = LaunchDetached(*request);
+            if (!launched)
+            {
+                m_statusMessage = launched.error();
+                m_statusIsError = true;
+                return false;
+            }
         }
-        auto request = BuildLaunchRequest(ownPath.parent_path(), projectFilePath, target);
-        if (!request)
+        catch (const std::exception& exception)
         {
-            m_statusMessage = request.error();
-            m_statusIsError = true;
-            return false;
-        }
-        auto launched = LaunchDetached(*request);
-        if (!launched)
-        {
-            m_statusMessage = launched.error();
+            m_statusMessage = std::string("Could not launch ") + LaunchTargetName(target) + ": " + exception.what();
             m_statusIsError = true;
             return false;
         }

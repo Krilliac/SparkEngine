@@ -19,6 +19,7 @@
 #include "Graphics/GTAOEffect.h"
 
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 namespace
@@ -123,8 +124,9 @@ TEST(GTAO_OpenSkyFlatDepth_HasHighAO)
     // Sample the interior pixel where border clamping doesn't dominate.
     const auto& ao = effect.GetAOBuffer();
     float center = ao[(H / 2) * W + (W / 2)];
-    EXPECT_GT(center, 0.5f);
-    EXPECT_LT(center, 1.0001f);
+    // Both horizons lie on the plane (+/- pi/2 from the view vector) and the
+    // normal is the view vector, so every slice integrates to exactly 1.
+    EXPECT_NEAR(center, 1.0f, 0.001f);
 }
 
 // Zero-depth sky pixels: the reference early-outs with AO = 1.0.
@@ -161,9 +163,12 @@ TEST(GTAO_WallOccluder_LowersNearbyAO)
     s.radius = 4.0f; // Big enough that samples reach into the wall region.
     EXPECT_TRUE(effect.Initialize(W, H, s));
 
-    auto depth = MakeWallDepth(W, H, /*wallDepth=*/1.0f, /*farDepth=*/10.0f);
+    // A 1-unit step 0.25 units per pixel wide keeps the wall inside the falloff
+    // range of the pixels beside it (a 9-unit step at 2.5 units per pixel would
+    // be faded out entirely, leaving nothing to measure).
+    auto depth = MakeWallDepth(W, H, /*wallDepth=*/9.0f, /*farDepth=*/10.0f);
     auto normals = MakeFlatNormal(W, H);
-    effect.ComputeGTAO(depth.data(), normals.data(), /*projScale=*/4.0f);
+    effect.ComputeGTAO(depth.data(), normals.data(), /*projScale=*/40.0f);
 
     const auto& ao = effect.GetAOBuffer();
     // Pixel just past the wall (x = W/2 + 1, middle row) has the wall within
@@ -171,7 +176,10 @@ TEST(GTAO_WallOccluder_LowersNearbyAO)
     // the far right edge which has no occluders nearby.
     float nearWall = ao[(H / 2) * W + (W / 2 + 1)];
     float farFromWall = ao[(H / 2) * W + (W - 1)];
-    EXPECT_LT(nearWall, farFromWall + 0.0001f);
+    std::printf("[GTAO] wall occluder: near %.4f, far %.4f\n", nearWall, farFromWall);
+    // Far from the wall the plane is open; next to it the closer wall occludes.
+    EXPECT_NEAR(farFromWall, 1.0f, 0.001f);
+    EXPECT_LT(nearWall, farFromWall - 0.05f);
 }
 
 // Spatial denoiser must preserve constant-value AO buffers (every weight

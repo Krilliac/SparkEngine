@@ -1,10 +1,9 @@
 /**
  * @file Main.cpp
- * @brief SparkGameFPS DLL - IModule + IGameModule implementation and exports
+ * @brief SparkGameFPS DLL - installed SDK IModule implementation and exports
  *
- * This file implements the SparkGameModule class and exports both the new
- * (CreateModule/DestroyModule) and legacy (CreateGameModule/DestroyGameModule)
- * factory functions. The engine's ModuleManager will prefer the new exports.
+ * This file implements SparkGameModule and exports the installed SDK's
+ * CreateModule/DestroyModule factory functions.
  *
  * When the engine starts, it finds and loads SparkGameFPS.dll, calls
  * CreateModule() to get a SparkGameModule instance, then drives
@@ -12,8 +11,12 @@
  */
 
 #include "SparkGameFPS.h"
+#include "Core/FPSLog.h"
+#include "Console/FPSConsolePolicy.h"
+#include "Core/EngineWeatherAdapter.h"
 #include "Game/Game.h"
 #include "Game/GameMode.h"
+#include "Game/GameMechanics.h"
 #include "Game/InventorySystem.h"
 #include "Game/QuestSystem.h"
 #include "Game/WaveSpawner.h"
@@ -22,21 +25,19 @@
 #include "Game/Player.h"
 #include "Game/Enemy.h"
 #include "Game/FPSStateRules.h"
-#include "Core/EngineContext.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/Validate.h"
+#include <Spark/IConsole.h>
+#include <Spark/ModuleLog.h>
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
-#include "Utils/InvalidStateDetector.h"
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleRegistry.h>
-#include "Engine/ECS/Components.h"
 
+#include <optional>
 #include <utility>
 
 namespace
@@ -44,19 +45,28 @@ namespace
     class TrackedConsoleRegistrar
     {
       public:
-        TrackedConsoleRegistrar(Spark::SimpleConsole& console, std::vector<std::string>& registeredNames)
+        TrackedConsoleRegistrar(Spark::IConsole& console, std::vector<std::string>& registeredNames)
             : m_console(console), m_registeredNames(registeredNames)
         {
         }
 
-        template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
+        /// Registers @p name unless it is a developer command this build excludes
+        /// (see SparkFPS::ConsolePolicy::kDeveloperCommands).
+        void RegisterCommand(const std::string& name, Spark::IConsole::CommandHandler handler, std::string_view help,
+                             std::string_view category = "General", std::string_view usage = "")
         {
-            m_console.RegisterCommand(name, std::forward<Args>(args)...);
-            m_registeredNames.push_back(name);
+            if (!SparkFPS::ConsolePolicy::ShouldRegister(name, SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled))
+            {
+                return;
+            }
+            if (m_console.RegisterCommand(name, std::move(handler), help, category, usage))
+            {
+                m_registeredNames.push_back(name);
+            }
         }
 
       private:
-        Spark::SimpleConsole& m_console;
+        Spark::IConsole& m_console;
         std::vector<std::string>& m_registeredNames;
     };
 } // namespace
@@ -94,55 +104,92 @@ Spark::ModuleInfo SparkGameModule::GetModuleInfo() const
 
 bool SparkGameModule::OnLoad(Spark::IEngineContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, context, false);
-    m_context = context;
-
-    if (context->IsHeadless())
+    if (context == nullptr)
     {
-        // The stable-v1 headless source gate intentionally exposes no
-        // GraphicsEngine or InputManager. Still require the real CPU-only
-        // services the FPS module needs to participate in a bounded server
-        // lifecycle; a bare OnLoad success with an unusable context would be
-        // misleading evidence.
-        if (context->GetGraphics() != nullptr || context->GetInput() != nullptr || context->GetWorld() == nullptr ||
-            context->GetTimer() == nullptr || context->GetEventBus() == nullptr ||
-            context->GetSaveSystem() == nullptr || context->GetFileCache() == nullptr ||
-            context->GetAssetRegistry() == nullptr)
+        FPS_LOG_ERROR("{}: 'context' must not be null", __func__);
+        return false;
+    }
+    m_context = context;
+    // Every FPS_LOG_*/FPS_CONSOLE call (Core/FPSLog.h) reaches the host through this context until
+    // Shutdown or a failed load unbinds it.
+    Spark::ModuleLog::Bind(context);
+
+    try
+    {
+        if (context->IsHeadless())
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game,
-                            "SparkGameFPS headless context is missing required CPU-only services or exposes a "
-                            "render/input path");
+            // The stable-v1 headless source gate intentionally exposes no
+            // GraphicsEngine or InputManager. Still require the real CPU-only
+            // services the FPS module needs to participate in a bounded server
+            // lifecycle; a bare OnLoad success with an unusable context would be
+            // misleading evidence.
+            if (context->GetGraphics() != nullptr || context->GetInput() != nullptr || context->GetWorld() == nullptr ||
+                context->GetTimer() == nullptr || context->GetEventBus() == nullptr ||
+                context->GetSaveSystem() == nullptr || context->GetFileCache() == nullptr ||
+                context->GetAssetRegistry() == nullptr)
+            {
+                FPS_LOG_ERROR("SparkGameFPS headless context is missing required CPU-only services or exposes a "
+                              "render/input path");
+                m_context = nullptr;
+                Spark::ModuleLog::Bind(nullptr);
+                return false;
+            }
+
+            // The headless lifecycle still simulates the authored arena: scene
+            // data, respawn table and match rules, all without a render path.
+            if (!LoadHeadlessArena())
+            {
+                m_context = nullptr;
+                Spark::ModuleLog::Bind(nullptr);
+                return false;
+            }
+
+            // Local-profile persistence: the same level/xp/quicksave/quickload
+            // commands the windowed Game registers, on CPU-only state.
+            m_headlessProgression = std::make_unique<Spark::ProgressionSystem>();
+            m_headlessProgression->Initialize();
+            m_headlessPlayTime = 0.0f;
+            RegisterHeadlessPersistenceCommands();
+
+            m_initialized = true;
+            Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized for headless source execution");
+            return true;
+        }
+
+        if (!InitializeFromContext())
+        {
             m_context = nullptr;
+            Spark::ModuleLog::Bind(nullptr);
             return false;
         }
 
-        m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game,
-                       "SparkGameFPS module initialized for the no-render headless lifecycle");
-        Spark::SimpleConsole::GetInstance().LogSuccess("SparkGameFPS module initialized for headless source execution");
+        if (g_game)
+        {
+            // Pass the engine context to Game for proper SDK v2 subsystem access
+            g_game->SetEngineContext(context);
+
+            // Wire up EventBus so game systems can communicate via events
+            if (context->GetEventBus())
+            {
+                g_game->SetEventBus(context->GetEventBus());
+            }
+
+            // Wire up physics system for projectile area queries (explosions)
+            if (context->GetPhysics())
+            {
+                g_game->SetPhysicsSystem(context->GetPhysics());
+            }
+        }
+
         return true;
     }
-
-    // Delegate to the shared Initialize logic using the context's subsystems
-    if (!Initialize(context->GetGraphics(), context->GetInput()))
-        return false;
-
-    if (g_game)
+    catch (...)
     {
-        // Pass the engine context to Game for proper SDK v2 subsystem access
-        g_game->SetEngineContext(context);
-
-        // Wire up EventBus so game systems can communicate via events
-        if (context->GetEventBus())
-            g_game->SetEventBus(context->GetEventBus());
-
-        // Wire up physics system for projectile area queries (explosions)
-        if (context->GetPhysics())
-            g_game->SetPhysicsSystem(context->GetPhysics());
+        // The host handles load exceptions, but a failed load must never retain its
+        // borrowed logger context. Keep m_context available for existing teardown.
+        Spark::ModuleLog::Bind(nullptr);
+        throw;
     }
-
-    return true;
 }
 
 void SparkGameModule::OnUnload()
@@ -152,6 +199,15 @@ void SparkGameModule::OnUnload()
 
 void SparkGameModule::OnUpdate(float deltaTime)
 {
+    if (m_headlessMode && m_headlessRespawn)
+    {
+        m_headlessRespawn->Update(deltaTime);
+        m_headlessMode->Update(deltaTime);
+        ++m_headlessArenaTicks;
+        m_headlessPlayTime += deltaTime;
+        return;
+    }
+
     if (g_game && !g_game->IsPaused())
         g_game->Update(deltaTime);
 }
@@ -192,149 +248,135 @@ void SparkGameModule::OnImGui()
     g_game->RenderDebugUI();
 }
 
-// --- IGameModule interface (legacy) ---
-
-const char* SparkGameModule::GetGameName() const
+bool SparkGameModule::InitializeFromContext()
 {
-    return "Spark Arena";
-}
-
-const char* SparkGameModule::GetGameVersion() const
-{
-    return "1.0.0";
-}
-
-bool SparkGameModule::Initialize(GraphicsEngine* graphics, InputManager* input)
-{
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (m_initialized)
         return true; // Prevent double-init
 
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, graphics, false);
-    SPARK_VALIDATE_NOT_NULL_RET(Spark::LogCategory::Game, input, false);
+    GraphicsEngine* graphics = m_context ? m_context->GetGraphics() : nullptr;
+    InputManager* input = m_context ? m_context->GetInput() : nullptr;
+    if (graphics == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'graphics' must not be null", __func__);
+        return false;
+    }
+    if (input == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'input' must not be null", __func__);
+        return false;
+    }
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("Initializing SparkGameFPS module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing SparkGameFPS module");
+    Spark::ModuleLog::Info(m_context, "Initializing SparkGameFPS module...");
 
     g_game = new Game();
     HRESULT hr = g_game->Initialize(graphics, input);
     if (FAILED(hr))
     {
-        console.LogError("Game::Initialize() failed");
+        Spark::ModuleLog::Error(m_context, "Game::Initialize() failed");
         delete g_game;
         g_game = nullptr;
         return false;
     }
 
     // Register game-specific console commands
+    m_weatherAdapter = std::make_unique<SparkGameFPS::EngineWeatherAdapter>(m_context->GetWeatherService());
+    g_game->SetWeatherPort(m_weatherAdapter.get());
     RegisterGameConsoleCommands();
 
-    // Register FPS-specific state validation rules on the HOST's detector.
-    // SparkEngineLib is linked statically into this DLL, so
-    // InvalidStateDetector::GetInstance() here is a module-local copy the host
-    // never ticks: rules registered on it would never run and the module would
-    // report validation it does not have.
-    Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr;
-    if (!hostDetector)
+    // The host service retains rules registered before its detector starts.
+    // This optional capability must never fall back to a DLL-local singleton.
+    Spark::IStateValidation* stateDetector = m_context ? m_context->GetStateValidation() : nullptr;
+    if (!stateDetector)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game,
-                       "SparkGameFPS: host exposes no InvalidStateDetector; FPS state rules are not registered");
+        FPS_LOG_WARN("SparkGameFPS: host exposes no IStateValidation; FPS state rules are not registered");
         m_initialized = true;
-        console.LogSuccess("SparkGameFPS module initialized");
+        Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
         return true;
     }
-    Spark::InvalidStateDetector& stateDetector = *hostDetector;
 
     // The FPS actors are GameObjects with their own health, not ECS entities, so
     // these rules inspect the module's own state. Rules are removed in Shutdown()
     // before g_game is destroyed, so reading the global here stays safe.
-    stateDetector.AddRule({"FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error, true,
-                           [](World&, std::vector<Spark::StateViolation>& out)
-                           {
-                               const Player* player = g_game ? g_game->GetPlayer() : nullptr;
-                               if (!player)
-                                   return;
-                               const DirectX::XMFLOAT3 velocity = player->GetVelocity();
-                               if (Spark::FPSStateRules::DeadActorIsMoving(player->GetHealth(), velocity.x, velocity.z))
-                               {
-                                   out.push_back({"FPS.DeadPlayerMoving", 0u, "Dead player still moving horizontally",
-                                                  Spark::StateViolationSeverity::Error});
-                               }
-                           }});
+    const bool playerRuleRegistered = stateDetector->AddRule(
+        "FPS.DeadPlayerMoving", "FPS", Spark::StateViolationSeverity::Error,
+        [](World&, std::vector<Spark::StateViolation>& out)
+        {
+            const Player* player = g_game ? g_game->GetPlayer() : nullptr;
+            if (!player)
+                return;
+            const DirectX::XMFLOAT3 velocity = player->GetVelocity();
+            if (Spark::FPSStateRules::DeadActorIsMoving(player->GetHealth(), velocity.x, velocity.z))
+            {
+                out.push_back({"FPS.DeadPlayerMoving", 0u, "Dead player still moving horizontally",
+                               Spark::StateViolationSeverity::Error});
+            }
+        });
 
-    stateDetector.AddRule(
-        {"FPS.DeadEnemyActive", "FPS", Spark::StateViolationSeverity::Error, true,
-         [](World&, std::vector<Spark::StateViolation>& out)
-         {
-             if (!g_game)
-                 return;
-             uint32_t index = 0;
-             for (const Enemy* enemy : g_game->GetEnemies())
-             {
-                 const uint32_t id = index++;
-                 if (enemy && Spark::FPSStateRules::DeadActorStillActive(enemy->GetHealth(), enemy->IsActive()))
-                 {
-                     out.push_back({"FPS.DeadEnemyActive", id, "Dead enemy was never deactivated",
-                                    Spark::StateViolationSeverity::Error});
-                 }
-             }
-         }});
+    const bool enemyRuleRegistered = stateDetector->AddRule(
+        "FPS.DeadEnemyActive", "FPS", Spark::StateViolationSeverity::Error,
+        [](World&, std::vector<Spark::StateViolation>& out)
+        {
+            if (!g_game)
+                return;
+            uint32_t index = 0;
+            for (const Enemy* enemy : g_game->GetEnemies())
+            {
+                const uint32_t id = index++;
+                if (enemy && Spark::FPSStateRules::DeadActorStillActive(enemy->GetHealth(), enemy->IsActive()))
+                {
+                    out.push_back({"FPS.DeadEnemyActive", id, "Dead enemy was never deactivated",
+                                   Spark::StateViolationSeverity::Error});
+                }
+            }
+        });
+
+    // Validation is optional; report refusal without discarding an accepted sibling rule.
+    // Shutdown removes this module's FPS category whether one or both calls succeeded.
+    if (!playerRuleRegistered || !enemyRuleRegistered)
+    {
+        FPS_LOG_WARN("SparkGameFPS: host refused FPS state rules (player={}, enemy={})", playerRuleRegistered,
+                     enemyRuleRegistered);
+    }
 
     m_initialized = true;
-    console.LogSuccess("SparkGameFPS module initialized");
+    Spark::ModuleLog::Info(m_context, "SparkGameFPS module initialized");
     return true;
 }
 
 void SparkGameModule::Shutdown()
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
     if (!m_initialized)
         return;
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Shutting down SparkGameFPS module");
+    FPS_LOG_INFO("Shutting down SparkGameFPS module");
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    for (const auto& commandName : m_registeredConsoleCommands)
+    if (Spark::IConsole* console = m_context ? m_context->GetConsole() : nullptr)
     {
-        console.UnregisterCommand(commandName);
+        for (const auto& commandName : m_registeredConsoleCommands)
+        {
+            console->UnregisterCommand(commandName);
+        }
     }
     m_registeredConsoleCommands.clear();
-    // Same instance the rules were added to; the module-local singleton would
-    // silently remove nothing and leave the host holding rules that reference
-    // g_game after it is deleted below.
-    if (Spark::InvalidStateDetector* hostDetector = m_context ? m_context->GetInvalidStateDetector() : nullptr)
+    // Release module-owned callbacks before deleting the actors they inspect.
+    if (Spark::IStateValidation* rules = m_context ? m_context->GetStateValidation() : nullptr)
     {
-        hostDetector->RemoveRulesByCategory("FPS");
+        rules->RemoveRulesByCategory("FPS");
     }
 
     if (g_game)
     {
+        g_game->ClearWeatherPort();
         g_game->Shutdown();
         delete g_game;
         g_game = nullptr;
     }
+    ShutdownHeadlessArena();
+    m_weatherAdapter.reset();
+    Spark::ModuleLog::Info(m_context, "SparkGameFPS module shut down");
+    Spark::ModuleLog::Bind(nullptr);
     m_context = nullptr;
     m_initialized = false;
-
-    Spark::SimpleConsole::GetInstance().LogInfo("SparkGameFPS module shut down");
-}
-
-void SparkGameModule::Update(float deltaTime)
-{
-    if (g_game && !g_game->IsPaused())
-    {
-        g_game->Update(deltaTime);
-        // Legacy hosts do not call OnFixedUpdate, so advance fixed gameplay once per frame.
-        if (auto* vehicleSystem = g_game->GetVehicleSystem())
-            vehicleSystem->Update(deltaTime);
-    }
-}
-
-void SparkGameModule::Render()
-{
-    if (g_game)
-        g_game->Render();
 }
 
 void SparkGameModule::OnResize(int width, int height)
@@ -345,36 +387,52 @@ void SparkGameModule::OnResize(int width, int height)
     (void)height;
 }
 
-void SparkGameModule::Pause()
-{
-    if (g_game)
-        g_game->Pause();
-}
-
-void SparkGameModule::Resume()
-{
-    if (g_game)
-        g_game->Resume();
-}
-
-bool SparkGameModule::IsPaused() const
-{
-    return g_game ? g_game->IsPaused() : false;
-}
-
 // ===================================================================================
 // Game-specific console commands (registered when game module loads)
 // ===================================================================================
 void SparkGameModule::RegisterGameConsoleCommands()
 {
-    auto& simpleConsole = Spark::SimpleConsole::GetInstance();
-    TrackedConsoleRegistrar console(simpleConsole, m_registeredConsoleCommands);
+    Spark::IConsole* hostConsole = m_context ? m_context->GetConsole() : nullptr;
+    if (!hostConsole)
+    {
+        return;
+    }
+    TrackedConsoleRegistrar console(*hostConsole, m_registeredConsoleCommands);
     Game* game = g_game;
+    Spark::IEngineContext* context = m_context;
 
     console.RegisterCommand(
         "game_status", [game](const std::vector<std::string>&) -> std::string
         { return game ? game->GetStatusString() : "Game not available"; },
         "Show the live Spark Arena match, wave, player, and progression status");
+
+    console.RegisterCommand(
+        "scene_load",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: scene_load <level.scene|Scenes/level.scene>";
+            if (!game)
+                return "Game not available";
+            return game->LoadScene(args.front()) ? "Scene reloaded successfully: " + args.front()
+                                                 : "Scene reload failed: " + args.front();
+        },
+        "Reload a scene from the trusted FPS Assets/Scenes directory", "Scene",
+        "scene_load <level.scene|Scenes/level.scene>");
+
+    console.RegisterCommand(
+        "scene_save",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: scene_save <level.scene|Scenes/level.scene>";
+            if (!game)
+                return "Game not available";
+            return game->SaveScene(args.front()) ? "Scene saved: " + args.front()
+                                                 : "Scene save failed: " + args.front();
+        },
+        "Save the live scene inside the trusted FPS Assets/Scenes directory", "Scene",
+        "scene_save <level.scene|Scenes/level.scene>");
 
     console.RegisterCommand(
         "game_timescale",
@@ -384,16 +442,13 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: game_timescale <scale>";
             if (!game)
                 return "Game not available";
-            try
+            const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!scale)
             {
-                float scale = std::stof(args[0]);
-                game->SetTimeScale(scale);
-                return "Time scale set to " + std::to_string(scale);
+                return "Error: time scale must be a finite number, got '" + args[0] + "'";
             }
-            catch (const std::exception& e)
-            {
-                return std::string("Error: ") + e.what();
-            }
+            game->SetTimeScale(*scale);
+            return "Time scale set to " + std::to_string(*scale);
         },
         "Set game time scale");
 
@@ -405,20 +460,39 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: player_tp <x> <y> <z>";
             if (!game)
                 return "Game not available";
-            try
+            const auto x = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
+            if (!x || !y || !z)
             {
-                float x = std::stof(args[0]);
-                float y = std::stof(args[1]);
-                float z = std::stof(args[2]);
-                game->TeleportPlayer(x, y, z);
-                return "Teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
+                return "Error: player_tp coordinates must be finite numbers";
             }
-            catch (const std::exception& e)
-            {
-                return std::string("Error: ") + e.what();
-            }
+            game->TeleportPlayer(*x, *y, *z);
+            return "Teleported to (" + args[0] + ", " + args[1] + ", " + args[2] + ")";
         },
         "Teleport player to coordinates");
+
+    console.RegisterCommand(
+        "fps_autoplay",
+        [game](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+            {
+                return "Usage: fps_autoplay on|off";
+            }
+            if (!game)
+            {
+                return "Game not available";
+            }
+            const bool enable = args[0] == "on";
+            if (!game->SetArenaAutopilot(enable))
+            {
+                return "Error: fps_autoplay needs a live player, camera, input, game mode and respawn system";
+            }
+            return enable ? "Arena autopilot on" : "Arena autopilot off";
+        },
+        "Play the single-player arena loop (hunt, kill, die, respawn, score) through the real input path", "Gameplay",
+        "fps_autoplay on|off");
 
     console.RegisterCommand(
         "spawn",
@@ -428,27 +502,23 @@ void SparkGameModule::RegisterGameConsoleCommands()
                 return "Usage: spawn <type> <x> <y> <z>";
             if (!game)
                 return "Game not available";
-            try
+            const auto x = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
+            const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[3]);
+            if (!x || !y || !z)
             {
-                float x = std::stof(args[1]);
-                float y = std::stof(args[2]);
-                float z = std::stof(args[3]);
-                bool ok = game->SpawnObject(args[0], x, y, z);
-                return ok ? "Spawned " + args[0] : "Failed to spawn '" + args[0] + "'";
+                return "Error: spawn coordinates must be finite numbers";
             }
-            catch (const std::exception& e)
-            {
-                return std::string("Error: ") + e.what();
-            }
+            const bool ok = game->SpawnObject(args[0], *x, *y, *z);
+            return ok ? "Spawned " + args[0] : "Failed to spawn '" + args[0] + "'";
         },
         "Spawn an object at coordinates");
 
     // Cheat commands. The windows-shipping preset sets ENABLE_DEVCOMMANDS_IN_SHIPPING=OFF
     // (so SPARK_DEVCOMMANDS_IN_SHIPPING is not defined) and MinSizeRel defines
-    // SPARK_BUILD_SHIPPING; until something consumed those macros, god/noclip shipped in
-    // the Shipping product. Registration is where the switch has to live: a command that
-    // is never registered cannot be typed.
-#if defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING)
+    // SPARK_BUILD_SHIPPING. The registrar drops every name in
+    // SparkFPS::ConsolePolicy::kDeveloperCommands in that configuration — these two and
+    // the teleport/spawn/time-scale/item/progression/match/scene commands around them.
     console.RegisterCommand(
         "god",
         [game](const std::vector<std::string>& args) -> std::string
@@ -472,7 +542,6 @@ void SparkGameModule::RegisterGameConsoleCommands()
             return enable ? "Noclip enabled" : "Noclip disabled";
         },
         "Toggle noclip mode");
-#endif // dev commands
 
     console.RegisterCommand(
         "game_stats",
@@ -743,15 +812,12 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.size() < 2)
                 return "Usage: audio_volume <master|sfx|music> <0.0-1.0>";
-            float vol;
-            try
-            {
-                vol = std::stof(args[1]);
-            }
-            catch (const std::exception&)
+            const std::optional<float> parsedVolume = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            if (!parsedVolume)
             {
                 return "Invalid volume value: " + args[1];
             }
+            const float vol = *parsedVolume;
             auto& mixer = Spark::Audio::AudioBusMixer::GetInstance();
             if (args[0] == "master")
                 mixer.SetBusVolume(Spark::Audio::AudioBus::Master, vol);
@@ -767,24 +833,23 @@ void SparkGameModule::RegisterGameConsoleCommands()
 
     console.RegisterCommand(
         "weather",
-        [](const std::vector<std::string>& args) -> std::string
+        [game](const std::vector<std::string>& args) -> std::string
         {
             if (args.empty())
                 return "Usage: weather <clear|rain|snow|fog|storm>";
-            auto* ctx = EngineContext::Get();
-            auto* weather = ctx ? ctx->GetWeather() : nullptr;
-            if (!weather)
+            if (!game)
                 return "WeatherSystem not available";
-            Spark::WeatherType type = Spark::WeatherType::Clear;
+            SparkGameFPS::WeatherPreset type = SparkGameFPS::WeatherPreset::Clear;
             if (args[0] == "rain")
-                type = Spark::WeatherType::Rain;
+                type = SparkGameFPS::WeatherPreset::Rain;
             else if (args[0] == "snow")
-                type = Spark::WeatherType::Snow;
+                type = SparkGameFPS::WeatherPreset::Snow;
             else if (args[0] == "fog")
-                type = Spark::WeatherType::Fog;
+                type = SparkGameFPS::WeatherPreset::Fog;
             else if (args[0] == "storm")
-                type = Spark::WeatherType::Storm;
-            weather->SetWeather(type, 0.8f, 3.0f);
+                type = SparkGameFPS::WeatherPreset::Storm;
+            if (!game->SetWeatherPreset(type, 0.8f, 3.0f))
+                return "WeatherSystem not available";
             return "Weather set to " + args[0];
         },
         "Set weather (weather <clear|rain|snow|fog|storm>)");
@@ -837,12 +902,11 @@ void SparkGameModule::RegisterGameConsoleCommands()
 
     console.RegisterCommand(
         "dialogue_start",
-        [](const std::vector<std::string>& args) -> std::string
+        [context](const std::vector<std::string>& args) -> std::string
         {
             if (args.empty())
                 return "Usage: dialogue_start <tree_id>";
-            auto* ctx = EngineContext::Get();
-            auto* dialogue = ctx ? ctx->GetDialogue() : nullptr;
+            auto* dialogue = context ? context->GetDialogue() : nullptr;
             if (!dialogue)
                 return "DialogueSystem not available";
             dialogue->StartConversation(args[0]);
@@ -925,14 +989,12 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* seq = Spark::Cinematic::SequencerManager::GetInstance().GetSequence(args[0]);
             if (!seq)
                 return "Sequence not found: " + args[0];
-            try
-            {
-                seq->SetTime(std::stof(args[1]));
-            }
-            catch (const std::exception&)
+            const std::optional<float> seconds = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+            if (!seconds)
             {
                 return "Invalid time value: " + args[1];
             }
+            seq->SetTime(*seconds);
             return "Seeked " + args[0] + " to " + args[1] + "s";
         },
         "Seek a sequence to a specific time");
@@ -1009,16 +1071,12 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.empty())
                 return "Usage: replay_seek <seconds>";
-            float t;
-            try
-            {
-                t = std::stof(args[0]);
-            }
-            catch (const std::exception&)
+            const std::optional<float> t = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!t)
             {
                 return "Invalid time value: " + args[0];
             }
-            Spark::ReplaySystem::GetInstance().SeekTo(t);
+            Spark::ReplaySystem::GetInstance().SeekTo(*t);
             return "Seeked to " + args[0] + "s";
         },
         "Seek replay to time");
@@ -1029,17 +1087,13 @@ void SparkGameModule::RegisterGameConsoleCommands()
         {
             if (args.empty())
                 return "Usage: replay_speed <multiplier>";
-            float speed;
-            try
-            {
-                speed = std::stof(args[0]);
-            }
-            catch (const std::exception&)
+            const std::optional<float> speed = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!speed)
             {
                 return "Invalid speed value: " + args[0];
             }
-            Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(speed);
-            return "Playback speed set to " + std::to_string(speed) + "x";
+            Spark::ReplaySystem::GetInstance().SetPlaybackSpeed(*speed);
+            return "Playback speed set to " + std::to_string(*speed) + "x";
         },
         "Set replay playback speed");
 
@@ -1089,7 +1143,11 @@ void SparkGameModule::RegisterGameConsoleCommands()
                     return "Invalid wave number: " + args[0];
                 }
             }
-            ws->SkipToWave(wave);
+            if (wave < 1 || wave > ws->GetTotalWaves())
+            {
+                return "Wave number must be between 1 and " + std::to_string(ws->GetTotalWaves());
+            }
+            wave = ws->SkipToWave(wave);
             return "Skipping to wave " + std::to_string(wave);
         },
         "Skip to a specific wave (wave_skip [number])");
@@ -1105,17 +1163,17 @@ void SparkGameModule::RegisterGameConsoleCommands()
             auto* ws = game->GetWaveSpawner();
             if (!ws)
                 return "Wave spawner not initialized";
-            float scale;
-            try
-            {
-                scale = std::stof(args[0]);
-            }
-            catch (const std::exception&)
+            const std::optional<float> scale = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[0]);
+            if (!scale)
             {
                 return "Invalid scale value: " + args[0];
             }
-            ws->SetDifficultyScale(scale);
-            return "Difficulty scale set to " + std::to_string(scale);
+            if (!Spark::WaveComposition::IsValidDifficultyScale(*scale))
+            {
+                return "Difficulty scale must be between 1.0 and 3.0";
+            }
+            ws->SetDifficultyScale(*scale);
+            return "Difficulty scale set to " + std::to_string(*scale);
         },
         "Set wave difficulty scale (wave_difficulty <1.0-3.0>)");
 
@@ -1153,6 +1211,10 @@ void SparkGameModule::RegisterGameConsoleCommands()
             catch (const std::exception&)
             {
                 return "Invalid XP amount: " + args[0];
+            }
+            if (amount < 1 || amount > Spark::ProgressionSystem::MAX_SINGLE_AWARD)
+            {
+                return "XP amount must be between 1 and " + std::to_string(Spark::ProgressionSystem::MAX_SINGLE_AWARD);
             }
             prog->AwardXP(amount, "console");
             return "Awarded " + std::to_string(amount) + " XP (level " + std::to_string(prog->GetLevel()) + ")";
@@ -1308,7 +1370,7 @@ void SparkGameModule::RegisterGameConsoleCommands()
 }
 
 // ===================================================================================
-// DLL Exports - New API (preferred by ModuleManager)
+// DLL Exports - installed SDK module API
 // ===================================================================================
 
 SPARK_EXPORT_MODULE_COMPATIBILITY()
@@ -1324,25 +1386,6 @@ extern "C"
     SPARK_MODULE_API void DestroyModule(Spark::IModule* mod)
     {
         delete mod;
-    }
-
-} // extern "C"
-
-// ===================================================================================
-// DLL Exports - Legacy API (backward compatibility)
-// ===================================================================================
-
-extern "C"
-{
-
-    SPARK_GAME_API IGameModule* CreateGameModule()
-    {
-        return new SparkGameModule();
-    }
-
-    SPARK_GAME_API void DestroyGameModule(IGameModule* module)
-    {
-        delete module;
     }
 
 } // extern "C"

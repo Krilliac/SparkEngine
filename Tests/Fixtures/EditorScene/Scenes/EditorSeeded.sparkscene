@@ -1,0 +1,83 @@
+{
+  "entities": [
+    {
+      "components": [
+        {
+          "fields": {
+            "farPlane": "1000.000000",
+            "fov": "60.000000",
+            "isMainCamera": "true",
+            "nearPlane": "0.100000"
+          },
+          "type": "Camera"
+        },
+        {
+          "fields": {
+            "position": "0.000000,3.000000,-8.000000",
+            "rotation": "15.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 2,
+      "name": "Main Camera",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "castShadows": "true",
+            "emissive": "0.000000",
+            "materialPath": "",
+            "meshPath": "__spark_primitive_ground__.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        },
+        {
+          "fields": {
+            "position": "0.000000,0.000000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "10.000000,0.100000,10.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 1,
+      "name": "Ground",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "1.000000,1.000000,1.000000",
+            "intensity": "1.000000",
+            "range": "10.000000",
+            "shadowMapResolution": "1024",
+            "spotAngle": "45.000000",
+            "spotInnerAngle": "30.000000",
+            "type": "0"
+          },
+          "type": "LightComponent"
+        },
+        {
+          "fields": {
+            "position": "0.000000,10.000000,0.000000",
+            "rotation": "50.000000,-30.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 0,
+      "name": "Directional Light",
+      "parent": -1
+    }
+  ],
+  "version": 1
+}

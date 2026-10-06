@@ -263,9 +263,16 @@ RAW_SOCKET_ALLOWLIST = (
     ),
     RawSocketAllowance(
         "SparkEngine/Source/Utils/DaemonFraming.h",
-        "RecvAll",
+        "RecvAllUntil",
         (("recv", 1),),
         reviewed_exception="POSIX branch of the named-pipe/AF_UNIX daemon framing adapter",
+        family="unix",
+    ),
+    RawSocketAllowance(
+        "SparkEngine/Source/Utils/DaemonLifecycleSpawn.cpp",
+        "WaitForDaemonEndpoint",
+        (("socket", 1), ("connect", 1)),
+        (r"address\.sun_family\s*=\s*AF_UNIX", r"::socket\s*\(\s*AF_UNIX", r"::connect\s*\("),
         family="unix",
     ),
     RawSocketAllowance(
@@ -359,7 +366,12 @@ RAW_SOCKET_ALLOWLIST = (
         "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscoveryScan.cpp",
         "TFLanDiscovery::UpdateScanner",
         (("recvfrom", 2),),
-        (r"recvfrom\s*\(", r"m_endpointPolicy\.AllowsPeerAddress\s*\(", r"std::memcpy\s*\(\s*&beacon"),
+        (
+            r"recvfrom\s*\(",
+            r"m_endpointPolicy\.AllowsPeerAddress\s*\(",
+            r"DecodeLanBeacon\s*\(",
+            r"UpsertLanServer\s*\(",
+        ),
     ),
     RawSocketAllowance(
         "GameModules/SparkGameMMOFPS/Source/Game/TFLanDiscovery.cpp",
@@ -562,46 +574,46 @@ def report(path: Path, line: int, message: str, root: Path = ROOT) -> None:
     print(f"{display_path}:{line}: {message}")
 
 
+# One leftmost-first token per comment or literal.  The alternatives mirror a
+# left-to-right scanner exactly:
+#   - `//` runs to (not including) the next newline; no backslash splicing.
+#   - `/*` closes at the first `*/` that starts after the opener, so `/*/` does
+#     not close itself; an unterminated block runs to end of text.
+#   - a quote consumes `\` plus any following character (newline included)
+#     as one unit and stops after the matching quote; an unterminated literal
+#     runs to end of text, including a lone trailing backslash.
+# Each alternative is unrolled with disjoint character classes, so matching is
+# linear with no catastrophic backtracking.
+_CPP_MASK_TOKEN = re.compile(
+    r"(?P<line>//[^\n]*)"
+    r"|(?P<block>/\*[^*]*(?:\*+[^*/][^*]*)*(?:\*+/|\*+\Z|\Z))"
+    r"|(?P<literal>\"[^\"\\]*(?:\\[\s\S][^\"\\]*)*[\"\\]?"
+    r"|'[^'\\]*(?:\\[\s\S][^'\\]*)*['\\]?)"
+)
+_NON_NEWLINE = re.compile(r"[^\n]")
+
+
 def _mask_cpp(text: str, *, strings: bool) -> str:
     """Mask C/C++ comments and optionally literals while preserving offsets/newlines."""
 
-    output = list(text)
-    index = 0
-    while index < len(text):
-        if text.startswith("//", index):
-            end = text.find("\n", index + 2)
-            if end < 0:
-                end = len(text)
-            for cursor in range(index, end):
-                output[cursor] = " "
-            index = end
+    pieces: list[str] = []
+    cursor = 0
+    for match in _CPP_MASK_TOKEN.finditer(text):
+        kind = match.lastgroup
+        if kind == "literal" and not strings:
             continue
-        if text.startswith("/*", index):
-            end = text.find("*/", index + 2)
-            end = len(text) if end < 0 else end + 2
-            for cursor in range(index, end):
-                if output[cursor] != "\n":
-                    output[cursor] = " "
-            index = end
-            continue
-        if text[index] in {'"', "'"}:
-            quote = text[index]
-            end = index + 1
-            while end < len(text):
-                if text[end] == "\\":
-                    end += 2
-                    continue
-                end += 1
-                if text[end - 1] == quote:
-                    break
-            if strings:
-                for cursor in range(index, min(end, len(text))):
-                    if output[cursor] != "\n":
-                        output[cursor] = " "
-            index = end
-            continue
-        index += 1
-    return "".join(output)
+        start, end = match.span()
+        pieces.append(text[cursor:start])
+        token = match.group()
+        if kind == "line" or "\n" not in token:
+            pieces.append(" " * (end - start))
+        else:
+            pieces.append(_NON_NEWLINE.sub(" ", token))
+        cursor = end
+    if not pieces:
+        return text
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
 
 def _matching_delimiter(text: str, opening: int, left: str, right: str) -> Optional[int]:
@@ -768,8 +780,11 @@ def _source_files(source_roots: Iterable[Path]) -> Iterable[Path]:
                 yield path
 
 
+# FuzzerTests holds the libFuzzer harnesses that lived under Tests/Fuzz until
+# 8703fe9 moved them to the top level. They build only fuzz executables, never a
+# shipped payload, so they stay classified as test code exactly as before.
 NON_SHIPPED_TOP_LEVEL = {
-    ".claude", ".codex", ".git", ".github", "assets", "build", "docs", "resources", "scripts",
+    ".claude", ".codex", ".git", ".github", "assets", "build", "docs", "fuzzertests", "resources", "scripts",
     "shaders", "tests", "thirdparty", "wiki",
 }
 

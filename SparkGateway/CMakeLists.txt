@@ -23,10 +23,14 @@ endif()
 add_library(SparkGatewayCore STATIC
     src/GatewayAreaControl.cpp
     src/GatewayAreaControl.h
+    src/GatewayAreaControlState.cpp
+    src/GatewayAreaControlState.h
     src/GatewayApplication.cpp
     src/GatewayApplication.h
     src/GatewayCoordinator.cpp
     src/GatewayCoordinator.h
+    src/GatewayLocalAdapters.cpp
+    src/GatewayLocalAdapters.h
 )
 target_compile_features(SparkGatewayCore PUBLIC cxx_std_23)
 target_include_directories(SparkGatewayCore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -55,4 +59,5 @@ install(FILES config/gateway.example.ini DESTINATION share/SparkEngine/examples 
 if(BUILD_TESTS)
     enable_testing()
     add_test(NAME SparkGatewayHelp COMMAND $<TARGET_FILE:SparkGateway> --help)
+    set_tests_properties(SparkGatewayHelp PROPERTIES TIMEOUT 10 LABELS "gateway;cli;integration;process")
 endif()

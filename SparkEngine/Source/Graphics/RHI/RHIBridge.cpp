@@ -187,6 +187,8 @@ namespace Spark
             if (m_initialized)
                 Shutdown();
 
+            // A re-initialized bridge must not report the previous device's count.
+            m_nullResourcesLiveAtShutdown.reset();
             m_windowHandle = windowHandle;
             m_width = width;
             m_height = height;
@@ -392,6 +394,8 @@ namespace Spark
             {
                 m_device->WaitForIdle();
                 m_device->Shutdown();
+                if (const auto* nullDevice = dynamic_cast<const NullRHIDevice*>(m_device.get()))
+                    m_nullResourcesLiveAtShutdown = nullDevice->GetLiveResourceCountAtShutdown();
                 m_device.reset();
             }
 
@@ -515,7 +519,14 @@ namespace Spark
             desc.format = format;
             desc.usage = usage;
             desc.mipLevels = 1;
-            return m_device->CreateTexture(desc);
+            auto texture = m_device->CreateTexture(desc);
+            // The initial texels were accepted but never uploaded, so the engine's 1x1 white
+            // default texture sampled as uninitialized (black) memory.
+            if (texture && data)
+            {
+                m_device->UpdateTexture(texture.get(), data, 0);
+            }
+            return texture;
         }
 
         std::unique_ptr<IRHITexture> RHIBridge::CreateDepthBuffer(uint32_t width, uint32_t height, PixelFormat format)

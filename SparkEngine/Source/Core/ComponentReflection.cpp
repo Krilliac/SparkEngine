@@ -72,7 +72,9 @@ namespace Spark
 
     bool SetFieldFromString(void* component, const FieldInfo& field, const std::string& value)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Core, "SetFieldFromString: field='%s' value='%s'", field.name.c_str(),
+        // Trace, not Debug: this runs once per field of every loaded component, so a scene load
+        // at Debug level floods the log (tens of thousands of lines per document).
+        SPARK_LOG_TRACE(Spark::LogCategory::Core, "SetFieldFromString: field='%s' value='%s'", field.name.c_str(),
                         value.c_str());
         auto* dst = static_cast<char*>(component) + field.offset;
 

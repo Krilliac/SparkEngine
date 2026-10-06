@@ -22,7 +22,10 @@
  *  - Persistence: per-player {xp, rank, flux} under the "progression" key of
  *    `terrafront_state.<continent-key>.json` under SavePaths::Root(); territory uses its own
  *    file. This system read-modify-writes only its own key. Written with tmp+rename
- *    on change (2 s debounce) and on shutdown; loaded on boot. NOTE:
+ *    on change (2 s debounce) and on shutdown; loaded on boot. The file is
+ *    single-writer: LoadFromDisk takes a lifetime ExclusiveFileLock on it
+ *    before reading, so a second authority for the same continent latches its
+ *    writes off instead of racing the read-modify-write. NOTE:
  *    PlayerIds are session-scoped in W2, so persisted rows only re-attach
  *    within reconnects that reuse the same id (accounts are out of scope).
  *
@@ -72,6 +75,7 @@
 #include "Core/TFEvents.h"
 #include "Game/TFProgressionTypes.h"  // XP reasons, TFUnlockResult, wire msg, TFSuitDef
 #include "Persistence/TFPlayerMeta.h" // TFWeaponAggStats, TFLoadout, TFPlayerMetaStore
+#include "Persistence/TFSavePaths.h"
 
 #include <array>
 #include <cstddef>
@@ -129,8 +133,15 @@ namespace Terrafront
         /// Drop this player's runtime progression record (e.g. on disconnect,
         /// AFTER the final flush to the character has been persisted). Without
         /// this, a recycled PlayerId inherits the prior occupant's xp/flux and
-        /// leaks them onto a different account's character.
-        void ClearPlayer(PlayerId player);
+        /// leaks them onto a different account's character. `progressDurable`
+        /// is whether that final progress flush committed (TF-120: a parked
+        /// meta row whose progress was not durable never releases residency).
+        void ClearPlayer(PlayerId player, bool progressDurable);
+
+        /// TF-120: true while `charId` has meta that a failed disconnect flush parked for retry. Such a
+        /// character keeps its residency on this continent; SaveNow releases it once a sweep resolves the row
+        /// and the character's final progress was durable.
+        bool HasParkedMeta(uint64_t charId) const { return m_meta.IsParked(charId); }
 
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
@@ -266,7 +277,8 @@ namespace Terrafront
         float m_fluxAccum{0.0f}; ///< seconds toward the next flux income tick
         float m_sinceSave{0.0f}; ///< seconds since the last disk write
         bool m_dirty{false};
-        bool m_persistenceBlocked{false}; ///< qualified world save failed validation/read
+        bool m_persistenceBlocked{false};         ///< world save failed validation/read, or is owned elsewhere
+        SavePaths::ExclusiveFileLock m_saveLease; ///< single-writer lease on the state file, load to shutdown
         uint32_t m_awards{0};
         uint32_t m_saves{0};
         bool m_showDebug{false};

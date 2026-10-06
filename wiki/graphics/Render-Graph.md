@@ -4,7 +4,7 @@ SparkEngine uses a declarative render graph (frame graph) system to define the r
 
 **Source:** `SparkEngine/Source/Graphics/RenderGraph.h` (umbrella), `SparkEngine/Source/Graphics/RenderGraph/`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestRenderGraph.cpp` (25 test cases)
+**Tests:** `Tests/TestRenderGraph.cpp`
 
 ---
 

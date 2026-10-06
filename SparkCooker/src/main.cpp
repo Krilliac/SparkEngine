@@ -13,6 +13,10 @@
 #include <thread>
 #include <vector>
 
+#ifndef SPARK_COOKER_VERSION
+#error "SPARK_COOKER_VERSION must be supplied by the build system"
+#endif
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -53,7 +57,8 @@ namespace
 
     void PrintUsage()
     {
-        std::cout << "Usage: SparkCooker --source <dir> --output <dir> [--manifest <file>] [--dry-run] "
+        std::cout << "SparkCooker " SPARK_COOKER_VERSION "\n"
+                     "Usage: SparkCooker --source <dir> --output <dir> [--manifest <file>] [--dry-run] "
                      "[--worker <SparkWorker>] [--jobs <1-64>]\n";
     }
 
@@ -318,6 +323,12 @@ namespace
 
 int main(int argc, char** argv)
 {
+    if (argc == 2 && (std::string(argv[1]) == "--version" || std::string(argv[1]) == "-version"))
+    {
+        std::cout << "SparkCooker " SPARK_COOKER_VERSION "\n";
+        return 0;
+    }
+
     Spark::AssetPipeline::CookRequest request;
     std::filesystem::path worker;
     std::unique_ptr<ScratchDirectory> workerScratch;

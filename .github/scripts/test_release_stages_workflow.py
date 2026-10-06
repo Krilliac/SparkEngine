@@ -1,0 +1,220 @@
+"""Verify publication authority and consumer isolation in the executable workflow."""
+from pathlib import Path
+import re
+import unittest
+import yaml
+
+
+class WorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.workflow = yaml.safe_load((Path(__file__).parents[1] / "workflows/release.yml").read_text())
+
+    def test_stable_publisher_is_bound_to_named_environment(self):
+        publisher = self.workflow["jobs"]["release"]
+        self.assertEqual(publisher["environment"], "${{ needs.prepare.outputs.is_versioned == 'true' && 'stable-release' || 'nightly-release' }}")
+        scripts = "\n".join(step.get("run", "") for step in publisher["steps"])
+        # Candidate qualification runs in profile-required-gates; the publisher
+        # keeps only the recheck immediately before the acceptance PATCH.
+        self.assertEqual(scripts.count("--require-candidate-ready"), 1)
+        self.assertNotIn("--require-ready", scripts)
+        self.assertEqual(scripts.count("verify_release_environment.py"), 2)
+        publish = next(step["run"] for step in publisher["steps"] if step["name"] == "Publish complete stable versioned release")
+        self.assertLess(publish.index("verify_release_environment.py"), publish.index("release-acceptance-gate.py"))
+
+    def test_authority_preflight_precedes_builds(self):
+        prepare = self.workflow["jobs"]["prepare"]
+        preflight = next(step for step in prepare["steps"] if step["name"] == "Preflight stable publication authority before building")
+        self.assertEqual(preflight["if"], "steps.meta.outputs.is_versioned == 'true'")
+        self.assertEqual(preflight["run"], "python3 .github/scripts/verify_release_environment.py")
+
+    def test_incompatible_nightly_policy_fails_before_publication_mutations(self):
+        publisher = self.workflow["jobs"]["release"]
+        steps = publisher["steps"]
+        policy = next(step for step in steps if step["name"] == "Verify release channel policy before any publication mutation")
+        self.assertNotIn("if", policy)
+        self.assertEqual(policy["run"], "python3 .github/scripts/verify_release_policy.py")
+        self.assertLess(steps.index(policy), next(i for i, step in enumerate(steps)
+                                                if step["name"] == "Checkout canonical badge branch"))
+        self.assertNotIn("RELEASE_POLICY_READ_TOKEN", publisher.get("env", {}))
+        self.assertEqual(policy["env"]["RELEASE_POLICY_READ_TOKEN"], "${{ secrets.RELEASE_POLICY_READ_TOKEN }}")
+        self.assertNotIn("verify_release_policy.py", str(self.workflow["jobs"]["prepare"]))
+
+    def test_policy_secret_is_bound_only_to_steps_that_need_it(self):
+        helpers = ("guard_release_mutation.py", "verify_release_policy.py", "verify_v090_source_seal.py", "stage_release_draft.py",
+                   "release-acceptance-gate.py", "recover_release_publication.py")
+        recovery = yaml.safe_load((Path(__file__).parents[1] / "workflows/release-recovery.yml").read_text())
+        count = 0
+        for workflow in (self.workflow, recovery):
+            self.assertNotIn("RELEASE_POLICY_READ_TOKEN", workflow.get("env", {}))
+            for job in workflow["jobs"].values():
+                self.assertNotIn("RELEASE_POLICY_READ_TOKEN", job.get("env", {}))
+                for step in job.get("steps", []):
+                    needs_policy = any(helper in step.get("run", "") for helper in helpers)
+                    binding = step.get("env", {}).get("RELEASE_POLICY_READ_TOKEN")
+                    if needs_policy:
+                        self.assertEqual(binding, "${{ secrets.RELEASE_POLICY_READ_TOKEN }}", step["name"])
+                        count += 1
+                    else:
+                        self.assertIsNone(binding, step["name"])
+                    if "uses" in step:
+                        self.assertIsNone(binding, step["name"])
+        self.assertEqual(count, 19)
+
+    def test_every_shell_release_write_is_guarded_and_staging_is_not_opaque(self):
+        steps = self.workflow["jobs"]["release"]["steps"]
+        writes = []
+        for step in steps:
+            self.assertNotIn("softprops/action-gh-release", step.get("uses", ""))
+            for line in step.get("run", "").splitlines():
+                if re.search(r'(?:git -c .*\bpush\b|gh api --method (?:POST|PATCH|DELETE|PUT))', line):
+                    writes.append(line)
+                    self.assertIn("guard_release_mutation.py", line)
+        self.assertEqual(len(writes), 12)
+        for name in ("Stage new or interrupted stable versioned release as draft", "Stage nightly rolling release as draft"):
+            step = next(step for step in steps if step["name"] == name)
+            self.assertEqual(step["run"], "python3 .github/scripts/stage_release_draft.py")
+
+    def test_immutable_stable_failure_never_uses_redraft_recovery(self):
+        steps = self.workflow["jobs"]["release"]["steps"]
+        stable = next(step for step in steps if step["name"] == "Publish complete stable versioned release")
+        self.assertNotIn("recover_release_publication.py", stable["run"])
+        self.assertIn("quarantines only a proven mutable target", stable["run"])
+        recovery = next(step for step in steps if step["name"] == "Recover incomplete public release")
+        self.assertEqual(recovery["if"], "failure() && needs.prepare.outputs.is_versioned == 'false'")
+        attestation = next(step for step in steps if step["name"] == "Verify published release attestation as a consumer")
+        # Both stable and uniquely tagged nightly releases require consumer verification.
+        self.assertNotIn("if", attestation)
+
+    def test_profile_required_gates_block_the_publisher_without_authority(self):
+        gates = self.workflow["jobs"]["profile-required-gates"]
+        self.assertEqual(gates["needs"], ["prepare"])
+        self.assertEqual(gates["permissions"], {"actions": "read", "contents": "read", "statuses": "read"})
+        for key in ("if", "environment", "continue-on-error"):
+            self.assertNotIn(key, gates)
+        self.assertNotIn("secrets.", str(gates))
+        names = [step["name"] for step in gates["steps"]]
+        self.assertEqual(names, [
+            "Checkout exact candidate source",
+            "Verify candidate commit passed Required CI Gate",
+            "Verify stable-v1 candidate is qualified for versioned publication",
+            "Verify SEC-120 parser fuzz-policy closure",
+            "Qualify candidate and record the release qualification report",
+            "Retain the release qualification report",
+        ])
+        for step in gates["steps"]:
+            self.assertNotIn("continue-on-error", step)
+        self.assertIn("verify-exact-required-gate.py", gates["steps"][1]["run"])
+        self.assertNotIn("if", gates["steps"][1])
+        self.assertNotIn("if", gates["steps"][3])
+        qualify = gates["steps"][4]
+        self.assertIn("tools/release_qualification.py", qualify["run"])
+        self.assertIn("profile-required-gates-exact-ci.out", qualify["run"])
+        self.assertEqual(gates["steps"][5]["with"]["path"], "${{ runner.temp }}/release-qualification.json")
+        self.assertIn("profile-required-gates", self.workflow["jobs"]["release"]["needs"])
+        release_names = [step["name"] for step in self.workflow["jobs"]["release"]["steps"]]
+        self.assertNotIn("Verify stable-v1 candidate is qualified for versioned publication", release_names)
+        self.assertNotIn("Verify SEC-120 parser fuzz-policy closure", release_names)
+
+    def test_release_approval_job_blocks_the_publisher(self):
+        jobs = self.workflow["jobs"]
+        approval = jobs["release-approval"]
+        release = jobs["release"]
+        upstream = ["prepare", "profile-required-gates", "build-windows", "build-linux", "build-macos",
+                    "build-installer"]
+        self.assertEqual(approval["needs"], upstream)
+        self.assertEqual(release["needs"], upstream + ["release-approval"])
+        # Neither job may carry a job-level if or continue-on-error: the
+        # publisher then runs only when the approval job succeeded, and a
+        # versioned run cannot reach the approval job without the stable-release
+        # environment review.
+        for job in (approval, release):
+            for key in ("if", "continue-on-error"):
+                self.assertNotIn(key, job)
+        self.assertEqual(approval["environment"], release["environment"])
+        self.assertIn("'stable-release'", approval["environment"])
+        self.assertEqual(release["outputs"]["approval_record_sha256"], "${{ steps.release-approval.outputs.sha256 }}")
+
+    def test_independent_consumer_has_no_publication_authority(self):
+        consumer = self.workflow["jobs"]["verify-stable-publication"]
+        self.assertEqual(consumer["needs"], ["prepare", "release"])
+        self.assertEqual(consumer["permissions"], {"actions": "read", "contents": "read", "attestations": "read"})
+        self.assertNotIn("environment", consumer)
+        self.assertNotIn("RELEASE_POLICY_READ_TOKEN", str(consumer))
+        scripts = "\n".join(step.get("run", "") for step in consumer["steps"])
+        self.assertIn("verify_published_stable_release.py", scripts)
+        self.assertIn("verify-exact-required-gate.py", scripts)
+        self.assertNotIn("release-acceptance-gate.py", scripts)
+        self.assertNotIn("git push", scripts)
+        self.assertNotIn("download-artifact", str(consumer))
+        self.assertIn("--source-commit", scripts)
+        self.assertIn("--run-attempt", scripts)
+        retained = consumer["steps"][-1]
+        self.assertEqual(retained["with"]["if-no-files-found"], "error")
+        self.assertGreaterEqual(retained["with"]["retention-days"], 90)
+
+    def test_real_predecessor_requirement_is_retained(self):
+        build = self.workflow["jobs"]["build-windows"]
+        scripts = "\n".join(step.get("run", "") for step in build["steps"])
+        self.assertIn("provision-previous-windows-msi.py", scripts)
+        self.assertIn("--previous-package-manifest", scripts)
+
+    def test_v09_uses_only_the_explicit_bootstrap_qualifier_path(self):
+        build = self.workflow["jobs"]["build-windows"]
+        bootstrap = next(step for step in build["steps"]
+                         if step["name"].startswith("Qualify Windows v0.9.0 predecessor"))
+        self.assertEqual(
+            bootstrap["if"],
+            "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'",
+        )
+        self.assertIn("qualify-windows-msi.py", bootstrap["run"])
+        self.assertIn("--bootstrap-repair", bootstrap["run"])
+        self.assertNotIn("--previous-packages", bootstrap["run"])
+        self.assertNotIn("provision-previous-windows-msi.py", bootstrap["run"])
+
+        v1 = next(step for step in build["steps"]
+                  if step["name"] == "Qualify Windows stable MSI install upgrade rollback repair and uninstall")
+        self.assertEqual(
+            v1["if"],
+            "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version != '0.9.0'",
+        )
+        self.assertIn("provision-previous-windows-msi.py", v1["run"])
+        self.assertIn("--previous-package-manifest", v1["run"])
+
+    def test_all_versioned_readiness_boundaries_select_the_matching_stage(self):
+        release = self.workflow["jobs"]["release"]
+        scripts = "\n".join(step.get("run", "") for step in release["steps"])
+        self.assertEqual(scripts.count("--require-predecessor-candidate"), 1)
+        self.assertEqual(scripts.count("--require-candidate-ready"), 1)
+        self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', scripts)
+
+        gates = self.workflow["jobs"]["profile-required-gates"]
+        gate_scripts = "\n".join(step.get("run", "") for step in gates["steps"])
+        self.assertEqual(gate_scripts.count("--require-predecessor-candidate"), 1)
+        self.assertEqual(gate_scripts.count("--require-candidate-ready"), 1)
+        self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', gate_scripts)
+
+        consumer = self.workflow["jobs"]["verify-stable-publication"]
+        consumer_scripts = "\n".join(step.get("run", "") for step in consumer["steps"])
+        self.assertIn("--require-predecessor-candidate", consumer_scripts)
+        self.assertIn("--require-candidate-ready", consumer_scripts)
+
+    def test_v09_source_seal_is_checked_before_mutation_and_at_final_boundary(self):
+        release = self.workflow["jobs"]["release"]
+        steps = release["steps"]
+        seal = next(step for step in steps if step["name"] == "Verify v0.9.0 source seal before publication mutation")
+        self.assertEqual(
+            seal["if"],
+            "needs.prepare.outputs.is_versioned == 'true' && needs.prepare.outputs.version == '0.9.0'",
+        )
+        self.assertEqual(seal["env"]["RELEASE_POLICY_READ_TOKEN"], "${{ secrets.RELEASE_POLICY_READ_TOKEN }}")
+        self.assertIn("verify_v090_source_seal.py", seal["run"])
+        first_mutation = next(index for index, step in enumerate(steps)
+                              if "guard_release_mutation.py" in step.get("run", "") or "git push" in step.get("run", ""))
+        self.assertLess(steps.index(seal), first_mutation)
+        stable = next(step for step in steps if step["name"] == "Publish complete stable versioned release")
+        self.assertIn("verify_v090_source_seal.py", stable["run"])
+
+
+if __name__ == "__main__":
+    unittest.main()

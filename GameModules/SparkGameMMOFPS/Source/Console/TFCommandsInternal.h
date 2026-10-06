@@ -51,5 +51,12 @@ namespace Terrafront
             return ctx.clientNet != nullptr && ctx.clientNet->IsConnected();
         }
 
+        /// TF-110 harness commands (Console/TFCommandsHarness.cpp): tf_observe,
+        /// tf_walk, tf_aim_at, tf_give_raw, tf_vehicle_buy, tf_vehicle_seat,
+        /// tf_place_faction, tf_flux_floor, tf_damage_vehicles. Handlers keep
+        /// `ctx` by pointer, so they must be unregistered with the rest of the
+        /// module's commands.
+        void RegisterConsoleCommandsHarness(TFGameContext& ctx);
+
     } // namespace CommandDetail
 } // namespace Terrafront

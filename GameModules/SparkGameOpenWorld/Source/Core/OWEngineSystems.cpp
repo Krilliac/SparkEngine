@@ -17,8 +17,7 @@
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Audio/MusicManager.h"
 #include "Engine/Events/EventSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include "Persistence/OWPersistence.inl"
 
@@ -46,8 +45,8 @@ namespace OpenWorld
         SubscribeToEvents();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world engine systems integration initialized (6 subsystems)");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Engine systems wired (6 subsystems)");
+        Spark::ModuleLog::Info(m_context, "Open world engine systems integration initialized (6 subsystems)");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Engine systems wired (6 subsystems)");
         return true;
     }
 
@@ -84,7 +83,7 @@ namespace OpenWorld
         m_wildlife = nullptr;
         m_events = nullptr;
         m_initialized = false;
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Engine systems shut down");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Engine systems shut down");
     }
 
     void OWEngineSystems::RenderDebugUI()
@@ -156,9 +155,9 @@ namespace OpenWorld
             aiSystem->RegisterBehavior("ow_bandit", std::move(banditTree));
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world registered 5 behavior trees");
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[OpenWorld] Registered 5 behavior trees (herbivore, predator, guard, merchant, bandit)");
+        Spark::ModuleLog::Info(m_context, "Open world registered 5 behavior trees");
+        Spark::ModuleLog::Info(
+            m_context, "[OpenWorld] Registered 5 behavior trees (herbivore, predator, guard, merchant, bandit)");
     }
 
     // =========================================================================
@@ -217,7 +216,7 @@ namespace OpenWorld
             events->AddCue({6.0f, "ow_resume_gameplay", ""});
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Registered 2 cinematic sequences");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Registered 2 cinematic sequences");
     }
 
     // =========================================================================
@@ -239,7 +238,7 @@ namespace OpenWorld
             timeOfDay->SetTimeScale(40.0f); // 1 real second = 40 game seconds (~36 min day cycle)
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Weather and time configured (6:00 AM dawn, clear)");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Weather and time configured (6:00 AM dawn, clear)");
     }
 
     std::string OWEngineSystems::SetWeather(const std::string& weatherName)
@@ -308,19 +307,28 @@ namespace OpenWorld
         using Spark::Audio::MusicTrack;
 
         // Exploration tracks per biome
-        music->RegisterTrack({"meadow_dawn", "Assets/Audio/Music/ow_meadow_dawn.ogg", 80.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"forest_depths", "Assets/Audio/Music/ow_forest.ogg", 70.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"mountain_winds", "Assets/Audio/Music/ow_mountain.ogg", 65.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"desert_heat", "Assets/Audio/Music/ow_desert.ogg", 75.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"tundra_silence", "Assets/Audio/Music/ow_tundra.ogg", 55.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"coastal_breeze", "Assets/Audio/Music/ow_coast.ogg", 85.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"meadow_dawn", "Assets/Audio/OpenWorld/Music/ow_meadow_dawn.wav", 80.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"forest_depths", "Assets/Audio/OpenWorld/Music/ow_forest.wav", 70.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"mountain_winds", "Assets/Audio/OpenWorld/Music/ow_mountain.wav", 65.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"desert_heat", "Assets/Audio/OpenWorld/Music/ow_desert.wav", 75.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"tundra_silence", "Assets/Audio/OpenWorld/Music/ow_tundra.wav", 55.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"coastal_breeze", "Assets/Audio/OpenWorld/Music/ow_coast.wav", 85.0f, 0.0f, -1.0f, true, ""});
 
         // Action / event tracks
-        music->RegisterTrack({"combat_tension", "Assets/Audio/Music/ow_combat.ogg", 120.0f, 0.0f, -1.0f, true, ""});
-        music->RegisterTrack({"dragon_theme", "Assets/Audio/Music/ow_dragon.ogg", 140.0f, 0.0f, -1.0f, false, ""});
+        music->RegisterTrack(
+            {"combat_tension", "Assets/Audio/OpenWorld/Music/ow_combat.wav", 120.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"dragon_theme", "Assets/Audio/OpenWorld/Music/ow_dragon.wav", 140.0f, 0.0f, -1.0f, false, ""});
 
         // Settlement / safe area
-        music->RegisterTrack({"village_hearth", "Assets/Audio/Music/ow_village.ogg", 90.0f, 0.0f, -1.0f, true, ""});
+        music->RegisterTrack(
+            {"village_hearth", "Assets/Audio/OpenWorld/Music/ow_village.wav", 90.0f, 0.0f, -1.0f, true, ""});
 
         // Dynamic music state
         Spark::Audio::DynamicMusicState dynamicState;
@@ -331,7 +339,7 @@ namespace OpenWorld
         dynamicState.transitionDuration = 3.0f;
         music->SetDynamicMusicState(dynamicState);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Registered 9 music tracks with dynamic transitions");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Registered 9 music tracks with dynamic transitions");
     }
 
     // =========================================================================
@@ -346,39 +354,39 @@ namespace OpenWorld
 
         // Weather changes affect survival (temperature, visibility)
         m_eventHandles.push_back(eventBus->Subscribe<Spark::WeatherChangedEvent>(
-            [](const Spark::WeatherChangedEvent& evt)
+            [context = m_context](const Spark::WeatherChangedEvent& evt)
             {
-                Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Weather changed to type " +
-                                                            std::to_string(evt.newType) +
-                                                            " (intensity=" + std::to_string(evt.intensity) + ")");
+                Spark::ModuleLog::Info(context, "{}",
+                                       "[OpenWorld] Weather changed to type " + std::to_string(evt.newType) +
+                                           " (intensity=" + std::to_string(evt.intensity) + ")");
             }));
 
         // Time of day transitions (dawn/dusk affect wildlife behavior)
         m_eventHandles.push_back(eventBus->Subscribe<Spark::TimeOfDayChangedEvent>(
-            [](const Spark::TimeOfDayChangedEvent& evt)
+            [context = m_context](const Spark::TimeOfDayChangedEvent& evt)
             {
                 if (evt.currentHour >= 6.0f && evt.previousHour < 6.0f)
                 {
-                    Spark::SimpleConsole::GetInstance().LogInfo(
-                        "[OpenWorld] Dawn — diurnal wildlife active, nocturnal retreating");
+                    Spark::ModuleLog::Info(context, "[OpenWorld] Dawn — diurnal wildlife active, nocturnal retreating");
                 }
                 else if (evt.currentHour >= 20.0f && evt.previousHour < 20.0f)
                 {
-                    Spark::SimpleConsole::GetInstance().LogInfo(
-                        "[OpenWorld] Dusk — nocturnal predators emerging, increased danger");
+                    Spark::ModuleLog::Info(context,
+                                           "[OpenWorld] Dusk — nocturnal predators emerging, increased danger");
                 }
             }));
 
         // Entity killed (quest/hunting tracking)
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
-            [](const Spark::EntityKilledEvent& evt)
+            [context = m_context](const Spark::EntityKilledEvent& evt)
             {
-                Spark::SimpleConsole::GetInstance().LogInfo(
-                    "[OpenWorld] Entity killed: " + std::to_string(evt.entityId) + " (" + evt.cause + ")");
+                Spark::ModuleLog::Info(context, "{}",
+                                       "[OpenWorld] Entity killed: " + std::to_string(evt.entityId) + " (" + evt.cause +
+                                           ")");
             }));
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world subscribed to 3 engine events");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Subscribed to 3 engine events");
+        Spark::ModuleLog::Info(m_context, "Open world subscribed to 3 engine events");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Subscribed to 3 engine events");
     }
 
 } // namespace OpenWorld

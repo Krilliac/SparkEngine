@@ -1,9 +1,9 @@
 /**
  * @file MaterialSystemWindows.cpp
- * @brief Windows/D3D11 MaterialSystem methods — texture loading, binding, samplers, GPU state
+ * @brief Windows/D3D11 MaterialSystem methods — binding, samplers, GPU state
  *
- * Contains LoadTexture, UnloadTexture, GetSampler, BindMaterial,
- * CreateDefaultMaterials, CreateSampler, GetFileTimestamp, PerformPeriodicMaintenance.
+ * Contains GetSampler, BindMaterial, CreateDefaultMaterials, CreateSampler,
+ * PerformPeriodicMaintenance.
  * Platform-independent code (lifecycle, CRUD, metrics) stays in MaterialSystem.cpp.
  * Linux counterpart lives in MaterialSystemLinux.cpp.
  */
@@ -13,42 +13,8 @@
 
 #include "MaterialSystem.h"
 #include "../Utils/SparkConsole.h"
-#include "../Utils/LogMacros.h"
-#include "Utils/LocalFileCache.h"
+#include <chrono>
 #include <cstring>
-#include <filesystem>
-
-ComPtr<ID3D11ShaderResourceView> MaterialSystem::LoadTexture(const std::string& filePath)
-{
-    auto it = m_textureCache.find(filePath);
-    if (it != m_textureCache.end())
-    {
-        return it->second;
-    }
-
-    ComPtr<ID3D11ShaderResourceView> texture = LoadTextureFromFile(filePath);
-    if (texture)
-    {
-        m_textureCache[filePath] = texture;
-        Spark::SimpleConsole::GetInstance().LogInfo("Loaded texture: " + filePath);
-    }
-    else
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to load texture: " + filePath);
-    }
-
-    return texture;
-}
-
-void MaterialSystem::UnloadTexture(const std::string& filePath)
-{
-    auto it = m_textureCache.find(filePath);
-    if (it != m_textureCache.end())
-    {
-        m_textureCache.erase(it);
-        Spark::SimpleConsole::GetInstance().LogInfo("Unloaded texture: " + filePath);
-    }
-}
 
 ComPtr<ID3D11SamplerState> MaterialSystem::GetSampler(const TextureSampling& sampling)
 {
@@ -217,25 +183,6 @@ HRESULT MaterialSystem::CreateSampler(const TextureSampling& sampling, ID3D11Sam
     return m_device->CreateSamplerState(&desc, sampler);
 }
 
-uint64_t MaterialSystem::GetFileTimestamp(const std::string& filePath) const
-{
-    try
-    {
-        if (std::filesystem::exists(filePath))
-        {
-            auto time = std::filesystem::last_write_time(filePath);
-            return std::chrono::duration_cast<std::chrono::milliseconds>(time.time_since_epoch()).count();
-        }
-    }
-    catch (const std::exception&)
-    {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to get timestamp for file: %s", filePath.c_str());
-    }
-    return 0;
-}
-
-// LoadTextureFromFile is in MaterialTextureLoading.cpp (WIC-based, Windows only)
-
 void MaterialSystem::PerformPeriodicMaintenance()
 {
     static auto lastMaintenanceTime = std::chrono::high_resolution_clock::now();
@@ -250,13 +197,6 @@ void MaterialSystem::PerformPeriodicMaintenance()
         {
             Spark::SimpleConsole::GetInstance().LogInfo(
                 "MaterialSystem maintenance: " + std::to_string(m_samplerCache.size()) + " samplers in cache");
-        }
-
-        size_t estimatedMemory = m_textureCache.size() * 1024 * 1024;
-        if (estimatedMemory > 500 * 1024 * 1024)
-        {
-            Spark::SimpleConsole::GetInstance().LogWarning("MaterialSystem using high memory: ~" +
-                                                           std::to_string(estimatedMemory / 1024 / 1024) + "MB");
         }
     }
 }

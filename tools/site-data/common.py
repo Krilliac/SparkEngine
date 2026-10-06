@@ -37,6 +37,7 @@ METRIC_IDS = {
     "code.totalLines",
     "docs.authored",
     "editor.panels",
+    "editor.panelHeaders",
     "module.fps.files",
     "module.fps.lines",
     "module.mmofps.files",
@@ -58,6 +59,30 @@ METRIC_IDS = {
 
 class SiteDataError(RuntimeError):
     """A contract or generation error suitable for a concise CI message."""
+
+
+def collect_document_sources(catalog: dict[str, Any], repo_root: Path | None = None) -> list[Path]:
+    """The shared publication inventory for generation and public-claim validation."""
+    repo_root = REPO_ROOT if repo_root is None else repo_root
+    include = catalog["include"]
+    candidates = {
+        repo_root / value
+        for value in include.get("rootDocuments", [])
+        if (repo_root / value).is_file()
+    }
+    for value in include.get("recursiveMarkdownRoots", []):
+        root = repo_root / value
+        if root.is_file() and root.suffix.lower() == ".md":
+            candidates.add(root)
+        elif root.is_dir():
+            candidates.update(path for path in root.rglob("*.md") if path.is_file())
+    excluded_paths = set(catalog.get("excludePaths", []))
+    excluded_prefixes = tuple(catalog.get("excludePrefixes", []))
+    return sorted(
+        path for path in candidates
+        if path.relative_to(repo_root).as_posix() not in excluded_paths
+        and not path.relative_to(repo_root).as_posix().startswith(excluded_prefixes)
+    )
 
 
 MAX_CONTRACT_JSON_BYTES = 8 * 1024 * 1024
@@ -332,6 +357,17 @@ def load_contract() -> dict[str, Any]:
         "workItemFiles": work_item_files,
         "parityDimensions": parity_dimensions,
     }
+
+
+# Per-criterion progress of a work item. Only "evidenced" (an exact-commit CI run)
+# counts toward release; "implemented" means committed code plus a committed check.
+ACCEPTANCE_STATES = ("unmet", "implemented", "evidenced")
+ACCEPTANCE_CI_REFERENCE = re.compile(r"^ci:[A-Za-z0-9_.-]+/[0-9]+@[0-9a-f]{40}$")
+
+
+def criterion_digest(criterion: str) -> str:
+    """Short digest binding an acceptanceStatus entry to its criterion's exact wording."""
+    return "sha256:" + hashlib.sha256(criterion.encode("utf-8")).hexdigest()[:12]
 
 
 def canonical_json_bytes(value: Any) -> bytes:

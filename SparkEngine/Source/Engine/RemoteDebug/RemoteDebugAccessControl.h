@@ -11,6 +11,7 @@
 #pragma once
 
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -46,12 +47,10 @@ namespace Spark::RemoteDebug
         return static_cast<RemoteDebugCapability>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs));
     }
 
-    [[nodiscard]] constexpr bool HasRemoteDebugCapability(RemoteDebugCapability granted,
-                                                           RemoteDebugCapability required)
+    [[nodiscard]] constexpr bool HasRemoteDebugCapability(RemoteDebugCapability granted, RemoteDebugCapability required)
     {
         return required == RemoteDebugCapability::None ||
-               (static_cast<uint32_t>(granted) & static_cast<uint32_t>(required)) ==
-                   static_cast<uint32_t>(required);
+               (static_cast<uint32_t>(granted) & static_cast<uint32_t>(required)) == static_cast<uint32_t>(required);
     }
 
     [[nodiscard]] constexpr RemoteDebugCapability CapabilitiesForRemoteDebugRole(RemoteDebugRole role)
@@ -126,11 +125,25 @@ namespace Spark::RemoteDebug
         static constexpr uint32_t kMaxRequestsPerWindow = 8;
         static constexpr uint64_t kRateWindowMilliseconds = 1000;
         static constexpr uint64_t kDefaultLoopbackLifetimeMilliseconds = 5 * 60 * 1000;
+        static constexpr size_t kMaxAuditEvents = 256;
 
         [[nodiscard]] std::vector<RemoteDebugAuditEvent> GetAuditEvents() const
         {
             std::lock_guard lock(m_mutex);
             return m_auditEvents;
+        }
+
+        /**
+         * @brief Number of audit events evicted from the bounded ring since construction.
+         *
+         * The ring keeps the newest kMaxAuditEvents entries. A denial flood
+         * therefore cannot silently erase history: every eviction is counted
+         * here and never reset.
+         */
+        [[nodiscard]] uint64_t GetDroppedAuditEventCount() const
+        {
+            std::lock_guard lock(m_mutex);
+            return m_droppedAuditEvents;
         }
 
       private:
@@ -199,8 +212,7 @@ namespace Spark::RemoteDebug
                                            ? std::numeric_limits<uint64_t>::max()
                                            : now + lifetimeMilliseconds;
             const auto capabilities = CapabilitiesForRemoteDebugRole(role);
-            GrantState state{"trusted-local-loopback", "in-process-loopback", role, capabilities, expiresAt, 0, now,
-                             0};
+            GrantState state{"trusted-local-loopback", "in-process-loopback", role, capabilities, expiresAt, 0, now, 0};
             m_grants.emplace(grantId, state);
 
             RemoteDebugPrincipal principal;
@@ -213,9 +225,10 @@ namespace Spark::RemoteDebug
             return principal;
         }
 
-        [[nodiscard]] AuthorizationResult Authorize(const RemoteDebugPrincipal& principal, const std::string& commandType,
-                                                     uint32_t requestId, size_t payloadSize,
-                                                     RemoteDebugCapability requiredCapability)
+        [[nodiscard]] AuthorizationResult Authorize(const RemoteDebugPrincipal& principal,
+                                                    const std::string& commandType, uint32_t requestId,
+                                                    size_t payloadSize, float timestamp,
+                                                    RemoteDebugCapability requiredCapability)
         {
             std::lock_guard lock(m_mutex);
             if (!principal.IsAuthenticated())
@@ -242,7 +255,8 @@ namespace Spark::RemoteDebug
                 return {false, RemoteDebugAuditDecision::ExpiredPrincipalDenied};
             }
 
-            if (!IsWellFormedCommandType(commandType) || payloadSize > 4096 || requestId == 0)
+            if (!IsWellFormedCommandType(commandType) || payloadSize > 4096 || requestId == 0 ||
+                !std::isfinite(timestamp))
             {
                 RecordLocked(state.subject, state.source, SafeCommandType(commandType), requestId,
                              RemoteDebugAuditDecision::MalformedRequestDenied);
@@ -251,7 +265,8 @@ namespace Spark::RemoteDebug
 
             if (requestId <= state.highestRequestId)
             {
-                RecordLocked(state.subject, state.source, commandType, requestId, RemoteDebugAuditDecision::ReplayDenied);
+                RecordLocked(state.subject, state.source, commandType, requestId,
+                             RemoteDebugAuditDecision::ReplayDenied);
                 return {false, RemoteDebugAuditDecision::ReplayDenied};
             }
             state.highestRequestId = requestId;
@@ -310,15 +325,18 @@ namespace Spark::RemoteDebug
         void RecordLocked(const std::string& principal, const std::string& source, const std::string& commandType,
                           uint32_t requestId, RemoteDebugAuditDecision decision)
         {
-            constexpr size_t kMaxAuditEvents = 256;
             if (m_auditEvents.size() >= kMaxAuditEvents)
+            {
                 m_auditEvents.erase(m_auditEvents.begin());
+                ++m_droppedAuditEvents;
+            }
             m_auditEvents.push_back({principal, source, commandType, requestId, decision});
         }
 
         mutable std::mutex m_mutex;
         std::unordered_map<uint64_t, GrantState> m_grants;
         std::vector<RemoteDebugAuditEvent> m_auditEvents;
+        uint64_t m_droppedAuditEvents{0};
         uint64_t m_nextGrantId{1};
     };
 

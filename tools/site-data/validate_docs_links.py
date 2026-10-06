@@ -10,6 +10,7 @@ import html
 import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -21,6 +22,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 sys.path.insert(0, str(REPO_ROOT / "tools" / "site-data"))
 
 from common import SITE_CONTRACT_ROOT, github_heading_slug, load_json
+import docs_contract
 from docs_contract import validate_api_manifest
 
 MAX_DOCUMENTS = 1500
@@ -304,11 +306,103 @@ def is_external(target: str) -> tuple[bool, str | None]:
     return False, None
 
 
-def exact_case(path: Path, root: Path) -> bool:
+@dataclass(frozen=True)
+class TrackedTree:
+    """Exact-case repository paths recorded in the git index.
+
+    On a case-insensitive checkout (default APFS, NTFS) two tracked
+    directories that differ only by case (for example ``Tools/`` and
+    ``tools/``) share one on-disk directory whose stored spelling is
+    whichever was created first, so a directory listing cannot tell a
+    correctly cased link from a wrong-case one. The index can.
+    """
+
+    entries: frozenset[str]
+    folded: frozenset[str]
+
+
+def load_tracked_tree(repo_root: Path) -> TrackedTree | None:
+    """Return exact tracked paths, using the isolated snapshot manifest when supplied.
+
+    The isolated documentation snapshot has no Git metadata. Its NUL-delimited
+    inventory is authoritative and retains logical path casing even when the
+    checkout filesystem merges ``Tools/`` and ``tools/``.
+    """
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            check=False, capture_output=True, timeout=60,
+        )
+        git_available = not top.returncode and bool(top.stdout.strip()) and Path(
+            os.fsdecode(top.stdout.strip())
+        ).resolve() == repo_root.resolve()
+        listed = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--cached"],
+            check=False, capture_output=True, timeout=120,
+        ) if git_available else None
+    except (OSError, subprocess.TimeoutExpired):
+        listed = None
+    if listed is not None and listed.returncode == 0:
+        entries: set[str] = set()
+        for raw in listed.stdout.split(b"\x00"):
+            if not raw:
+                continue
+            logical = raw.decode("utf-8", errors="surrogateescape")
+            parts = logical.split("/")
+            for index in range(1, len(parts) + 1):
+                entries.add("/".join(parts[:index]))
+        return TrackedTree(frozenset(entries), frozenset(entry.casefold() for entry in entries))
+
+    external = os.environ.get("SPARK_DOC_TRACKED_PATHS")
+    if not external:
+        return None
+    manifest = Path(external)
+    try:
+        docs_contract.assert_contained(manifest, repo_root, label="tracked-path manifest")
+        raw = docs_contract.read_regular_bytes(
+            manifest, label="tracked-path manifest", maximum=docs_contract.MAX_JSON_BYTES
+        )
+        if not raw or not raw.endswith(b"\0"):
+            raise LinkContractError("tracked-path manifest must be NUL terminated")
+        leaves: set[str] = set()
+        folded_leaves: set[str] = set()
+        for item in raw[:-1].split(b"\0"):
+            if not item:
+                raise LinkContractError("tracked-path manifest contains an empty path")
+            try:
+                value = item.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise LinkContractError("tracked-path manifest has a non-UTF-8 path") from exc
+            logical = docs_contract.safe_relative(value).as_posix()
+            if logical in leaves or logical.casefold() in folded_leaves:
+                raise LinkContractError(f"tracked-path manifest contains duplicate path: {logical}")
+            leaves.add(logical)
+            folded_leaves.add(logical.casefold())
+        if not leaves:
+            raise LinkContractError("tracked-path manifest is empty")
+    except (docs_contract.ContractError, OSError) as exc:
+        if isinstance(exc, LinkContractError):
+            raise
+        raise LinkContractError(f"cannot read tracked-path manifest: {exc}") from exc
+    entries = set(leaves)
+    for logical in tuple(leaves):
+        parts = logical.split("/")
+        entries.update("/".join(parts[:index]) for index in range(1, len(parts)))
+    return TrackedTree(frozenset(entries), frozenset(entry.casefold() for entry in entries))
+
+
+def exact_case(path: Path, root: Path, tracked: TrackedTree | None = None) -> bool:
+    """True when *path* (lexical, never case-canonicalized) is spelled exactly as stored."""
     try:
         relative = path.relative_to(root)
     except ValueError:
         return False
+    if tracked is not None and relative.parts:
+        logical = relative.as_posix()
+        if logical in tracked.entries:
+            return True
+        if logical.casefold() in tracked.folded:
+            return False
     current = root
     for part in relative.parts:
         try:
@@ -360,6 +454,7 @@ def resolve_link(
     filesystem_cache: dict[str, str | None],
     line_count_cache: dict[str, int],
     repo_root: Path = REPO_ROOT,
+    tracked: TrackedTree | None = None,
 ) -> str | None:
     external, scheme_error = is_external(target)
     if scheme_error:
@@ -403,13 +498,16 @@ def resolve_link(
             except ValueError:
                 path_cache[path_key] = (None, "link escapes repository root")
                 return "link escapes repository root"
-            filesystem_key = str(normalized)
+            # Key on the spelling as written: Windows resolve() rewrites every
+            # component to its stored case, which would make the casing check
+            # below compare the filesystem with itself.
+            filesystem_key = str(lexical)
             if filesystem_key in filesystem_cache:
                 cached_error = filesystem_cache[filesystem_key]
             elif not normalized.exists():
                 cached_error = f"target does not exist: {raw_path}"
                 filesystem_cache[filesystem_key] = cached_error
-            elif not exact_case(normalized, root_resolved):
+            elif not exact_case(lexical, root_resolved, tracked):
                 cached_error = f"target path casing is not exact: {raw_path}"
                 filesystem_cache[filesystem_key] = cached_error
             else:
@@ -480,6 +578,15 @@ def validate_docs_links(
     path_cache: dict[tuple[str, str], tuple[Path | None, str | None]] = {}
     filesystem_cache: dict[str, str | None] = {}
     line_count_cache: dict[str, int] = {}
+    try:
+        tracked = load_tracked_tree(REPO_ROOT)
+    except LinkContractError as exc:
+        return errors + [{
+            "source": "SPARK_DOC_TRACKED_PATHS",
+            "line": 0,
+            "target": os.environ.get("SPARK_DOC_TRACKED_PATHS", ""),
+            "error": str(exc),
+        }]
     total_links = 0
     for document in documents:
         try:
@@ -510,6 +617,7 @@ def validate_docs_links(
                 filesystem_cache,
                 line_count_cache,
                 repo_root=REPO_ROOT,
+                tracked=tracked,
             )
             if error:
                 errors.append({**link, "error": error})

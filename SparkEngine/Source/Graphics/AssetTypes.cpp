@@ -8,14 +8,19 @@
  * Each guards itself with `#ifdef SPARK_PLATFORM_WINDOWS` so only the
  * correct one compiles.
  *
- * Methods that are pure C++ with no platform-specific APIs live here
+ * Methods that are pure C++ with no platform-specific APIs (including the
+ * shared glTF mesh import) live here
  * instead so they compile exactly once per translation unit and don't
  * need to be duplicated across the platform files.
  */
 
 #include "AssetPipeline.h"
 
+#include "GLTFSkinnedMeshLoader.h"
+#include "GLTFStaticMeshLoader.h"
 #include "RHI/RHIResources.h"
+
+#include <utility>
 
 // ---------------------------------------------------------------------------
 // MeshAsset — cross-platform accessors
@@ -53,3 +58,75 @@ void TextureAsset::SetRHITexture(std::unique_ptr<Spark::RHI::IRHITexture> tex)
 {
     m_rhiTexture = std::move(tex);
 }
+
+// ---------------------------------------------------------------------------
+// glTF mesh import shared by the D3D11 and portable MeshAsset
+// ---------------------------------------------------------------------------
+
+namespace Spark::Graphics::Detail
+{
+    bool ImportGLTFMeshAssetData(const std::filesystem::path& path, MeshAssetData& meshData, size_t& boneCount,
+                                 std::string& error)
+    {
+        meshData.vertices.clear();
+        meshData.indices.clear();
+        meshData.submeshes.clear();
+        boneCount = 0;
+
+        bool hasSkin = false;
+        if (!GLTFFileHasSkin(path, hasSkin, error))
+        {
+            return false;
+        }
+
+        if (hasSkin)
+        {
+            GLTFSkinnedMeshData imported;
+            if (!LoadGLTFSkinnedMesh(path, imported, error))
+            {
+                return false;
+            }
+            meshData.vertices.reserve(imported.vertices.size());
+            for (const auto& source : imported.vertices)
+            {
+                MeshAssetData::Vertex vertex{};
+                vertex.position = {source.position[0], source.position[1], source.position[2]};
+                vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+                vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+                vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+                vertex.boneIndices = {source.joints[0], source.joints[1], source.joints[2], source.joints[3]};
+                vertex.boneWeights = {source.weights[0], source.weights[1], source.weights[2], source.weights[3]};
+                meshData.vertices.push_back(vertex);
+            }
+            meshData.indices = std::move(imported.indices);
+            for (const auto& primitive : imported.primitives)
+            {
+                meshData.submeshes.push_back(primitive.indexStart);
+            }
+            boneCount = imported.skeleton.bones.size();
+            return true;
+        }
+
+        GLTFStaticMeshData imported;
+        if (!LoadGLTFStaticMesh(path, imported, error))
+        {
+            return false;
+        }
+        meshData.vertices.reserve(imported.vertices.size());
+        for (const auto& source : imported.vertices)
+        {
+            MeshAssetData::Vertex vertex{};
+            vertex.position = {source.position[0], source.position[1], source.position[2]};
+            vertex.normal = {source.normal[0], source.normal[1], source.normal[2]};
+            vertex.texCoord0 = {source.texCoord[0], source.texCoord[1]};
+            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            meshData.vertices.push_back(vertex);
+        }
+        meshData.indices = std::move(imported.indices);
+        for (const auto& primitive : imported.primitives)
+        {
+            meshData.submeshes.push_back(primitive.indexStart);
+        }
+        return true;
+    }
+} // namespace Spark::Graphics::Detail

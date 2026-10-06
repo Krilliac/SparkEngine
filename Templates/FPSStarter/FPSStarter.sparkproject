@@ -3,7 +3,7 @@
   "name": "FPSStarter",
   "version": "0.2.0",
   "description": "A playable first-person training range with authored arena props, hitscan combat, a live HUD, reloads, and round reset.",
-  "engineVersion": "1.0.0",
+  "engineVersion": "0.9.0",
   "template": "first-person",
   "defaultScene": "Scenes/Arena.sparkscene",
   "lastOpenedScene": "Scenes/Arena.sparkscene",

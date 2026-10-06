@@ -59,6 +59,28 @@ namespace
         p.EndFrame();
     }
 
+    // Like SimulateFrame, but the GPU time is gpuPerCpu times the CPU span actually measured.
+    // Classification depends on the CPU:GPU ratio, and a busy loop that is preempted runs
+    // long (a 4 ms target measured 12.6 ms on a loaded host, turning Balanced into
+    // CPU-bound), so a fixed GPU time would test the scheduler rather than the thresholds.
+    // The span measured here encloses the profiler's own CPU window.
+    void SimulateFrameWithGpuRatio(double cpuBusyMs, double gpuPerCpu)
+    {
+        auto& p = Spark::GPUStallProfiler::GetInstance();
+        const auto outerStart = std::chrono::high_resolution_clock::now();
+        p.BeginCPUWork();
+        const auto start = std::chrono::high_resolution_clock::now();
+        while (std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - start).count() <
+               cpuBusyMs)
+        {
+        }
+        p.EndCPUWork();
+        const double measuredCpuMs =
+            std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - outerStart).count();
+        p.RecordGPUFrameTime(gpuPerCpu * measuredCpuMs);
+        p.EndFrame();
+    }
+
 } // namespace
 
 TEST(GPUStallProfilerPhaseCC_SingletonReturnsSameInstance)
@@ -91,8 +113,8 @@ TEST(GPUStallProfilerPhaseCC_SimulateFramePopulatesHistory)
 TEST(GPUStallProfilerPhaseCC_CpuBoundClassification)
 {
     ResetProfiler();
-    // CPU >> GPU (ratio 0.2 : 1.0 < balanced-low; CPU util > 0.7).
-    SimulateFrame(/*cpu*/ 5.0, /*gpu*/ 0.5);
+    // CPU >> GPU (GPU util 0.1 < balanced-low; CPU util > 0.7).
+    SimulateFrameWithGpuRatio(/*cpu*/ 5.0, /*gpu per cpu*/ 0.1);
     EXPECT_EQ(static_cast<int>(Spark::GPUStallProfiler::GetInstance().GetCurrentBottleneck()),
               static_cast<int>(Spark::FrameBottleneck::CPUBound));
 }
@@ -101,7 +123,7 @@ TEST(GPUStallProfilerPhaseCC_GpuBoundClassification)
 {
     ResetProfiler();
     // GPU >> CPU. Use a tiny CPU busy wait and a large gpuFrameMs.
-    SimulateFrame(/*cpu*/ 0.1, /*gpu*/ 10.0);
+    SimulateFrameWithGpuRatio(/*cpu*/ 0.1, /*gpu per cpu*/ 100.0);
     EXPECT_EQ(static_cast<int>(Spark::GPUStallProfiler::GetInstance().GetCurrentBottleneck()),
               static_cast<int>(Spark::FrameBottleneck::GPUBound));
 }
@@ -111,11 +133,10 @@ TEST(GPUStallProfilerPhaseCC_BalancedClassification)
     ResetProfiler();
     // Both CPU and GPU at comparable busy levels — neither utilisation
     // exceeds 0.7 nor falls below 0.4 alone.
-    SimulateFrame(/*cpu*/ 4.0, /*gpu*/ 4.0);
+    SimulateFrameWithGpuRatio(/*cpu*/ 4.0, /*gpu per cpu*/ 1.0);
     const auto b = Spark::GPUStallProfiler::GetInstance().GetCurrentBottleneck();
-    // Balanced is the expected outcome, but the busy-loop clock has
-    // small variance; accept either Balanced or Unknown.
-    EXPECT_TRUE(b == Spark::FrameBottleneck::Balanced || b == Spark::FrameBottleneck::Unknown);
+    // The GPU time tracks the measured CPU span, so preemption cannot skew the ratio.
+    EXPECT_EQ(static_cast<int>(b), static_cast<int>(Spark::FrameBottleneck::Balanced));
 }
 
 TEST(GPUStallProfilerPhaseCC_UnknownOnZeroFrame)
@@ -140,9 +161,9 @@ TEST(GPUStallProfilerPhaseCC_DistributionSumsToOne)
     ResetProfiler();
     // Populate the history with mixed frames.
     for (int i = 0; i < 10; ++i)
-        SimulateFrame(3.0, 1.0); // CPU-bound
+        SimulateFrameWithGpuRatio(3.0, 1.0 / 3.0); // CPU-bound
     for (int i = 0; i < 10; ++i)
-        SimulateFrame(0.5, 8.0); // GPU-bound
+        SimulateFrameWithGpuRatio(0.5, 16.0); // GPU-bound
 
     auto dist = Spark::GPUStallProfiler::GetInstance().GetDistribution();
     float total = dist.cpuBoundPct + dist.gpuBoundPct + dist.balancedPct + dist.bubblePct;

@@ -16,6 +16,7 @@
 
 #include "../GameModules/SparkGamePlatformer/Source/Player/PlatformerPlayerController.h"
 #include "../GameModules/SparkGamePlatformer/Source/Checkpoint/PlatformerCheckpointSystem.h"
+#include "../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h"
 
 namespace Platformer
 {
@@ -142,8 +143,13 @@ namespace Platformer
         checkpoints.Initialize(nullptr);
         checkpoints.SetLevelSpawn(0.0f, 0.0f, 0.0f);
 
+        // Level 0's starting platform (top y = 0, x -5..5) is the floor; there is no implicit ground plane.
+        PlatformerLevelSystem level;
+        level.Initialize(nullptr);
+        level.LoadLevel(0);
+
         PlatformerPlayerController player;
-        player.Initialize(nullptr, &checkpoints);
+        player.Initialize(nullptr, &checkpoints, &level);
         player.Respawn();
         player.SetMovementInput(1.0f);
         player.FixedUpdate(0.1f);
@@ -155,6 +161,7 @@ namespace Platformer
         for (int i = 0; i < 10; ++i)
             player.FixedUpdate(0.1f);
         EXPECT_NEAR(player.GetPlayerVelocity().x, 12.0f, 0.001f);
+        level.Shutdown();
         checkpoints.Shutdown();
     }
 
@@ -164,14 +171,20 @@ namespace Platformer
         checkpoints.Initialize(nullptr);
         checkpoints.SetLevelSpawn(0.0f, 0.0f, 0.0f);
 
+        // Level 0's starting platform (top y = 0, x -5..5) is the floor; there is no implicit ground plane.
+        PlatformerLevelSystem level;
+        level.Initialize(nullptr);
+        level.LoadLevel(0);
+
         PlatformerPlayerController player;
-        player.Initialize(nullptr, &checkpoints);
+        player.Initialize(nullptr, &checkpoints, &level);
         player.Respawn();
         player.SetJumpInput(true);
         player.FixedUpdate(0.1f);
 
         EXPECT_TRUE(player.GetPlayerVelocity().y > 0.0f);
         EXPECT_EQ(player.GetStateString(), std::string("Jumping"));
+        level.Shutdown();
         checkpoints.Shutdown();
     }
 
@@ -181,8 +194,13 @@ namespace Platformer
         checkpoints.Initialize(nullptr);
         checkpoints.SetLevelSpawn(0.0f, 0.0f, 0.0f);
 
+        // Level 0's starting platform (top y = 0, x -5..5) is the floor; there is no implicit ground plane.
+        PlatformerLevelSystem level;
+        level.Initialize(nullptr);
+        level.LoadLevel(0);
+
         PlatformerPlayerController player;
-        player.Initialize(nullptr, &checkpoints);
+        player.Initialize(nullptr, &checkpoints, &level);
         player.Respawn();
         player.UnlockAbility(PowerUpType::Dash);
         player.SetMovementInput(-1.0f);
@@ -191,6 +209,7 @@ namespace Platformer
 
         EXPECT_EQ(player.GetStateString(), std::string("Dashing"));
         EXPECT_TRUE(player.GetPlayerPosition().x < -0.9f);
+        level.Shutdown();
         checkpoints.Shutdown();
     }
 
@@ -231,11 +250,12 @@ namespace Platformer
         checkpoints.CheckActivation(25.0f, 5.0f, 0.0f);
         EXPECT_EQ(checkpoints.GetActivatedCount(), 0u);
 
-        checkpoints.CheckActivation(30.0f, 1.0f, 0.0f);
+        // Level 1's first checkpoint sits above the rest ledge after the conveyor.
+        checkpoints.CheckActivation(29.0f, 1.0f, 0.0f);
         EXPECT_EQ(checkpoints.GetActivatedCount(), 1u);
         const auto respawn = checkpoints.GetLastCheckpointPosition();
-        EXPECT_EQ(respawn.x, 30.0f);
-        EXPECT_EQ(respawn.y, 1.0f);
+        EXPECT_EQ(respawn.x, 29.0f);
+        EXPECT_EQ(respawn.y, 2.0f);
         checkpoints.Shutdown();
     }
 

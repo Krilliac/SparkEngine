@@ -4,7 +4,7 @@ on:
   push:
     branches: [Working]
   pull_request:
-    branches: [Working, main, develop]
+    branches: [Working, main, develop, 'claude/**']
   workflow_dispatch:
 
 concurrency:
@@ -15,46 +15,6 @@ permissions:
   contents: read
 
 jobs:
-  docs-health:
-    name: Documentation exact-currentness
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout exact source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-
-      - name: Generate and validate exact-commit API documentation
-        env:
-          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
-          timeout 5m bash docs/generate-api-docs.sh generate
-          timeout 2m python3 tools/docs_contract.py validate \
-            --api-dir docs/api --wiki-root wiki
-          timeout 3m python3 tools/site-data/validate_docs_links.py \
-            --generated-root docs/api --source-sha "$GITHUB_SHA"
-
-      - name: Run hostile documentation contract tests
-        run: |
-          set -euo pipefail
-          timeout 3m python3 Tests/Tools/test_docs_health.py -v
-          timeout 5m python3 Tests/Tools/test_site_data_contract.py -v
-          timeout 3m python3 tools/site-data/validate.py --docs
-
-      - name: Prove isolated deterministic currentness and clean checkout
-        env:
-          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
-          before="$(git status --porcelain=v1 --untracked-files=no)"
-          timeout 10m bash docs/update-all-docs.sh check
-          after="$(git status --porcelain=v1 --untracked-files=no)"
-          test "$before" = "$after"
-
   site-data-validate:
     name: Validate repository site data
     runs-on: ubuntu-24.04
@@ -84,7 +44,7 @@ jobs:
           fi
           tracked="$(git ls-files -- tools/site-data | wc -l)"
           test "$tracked" -ge 6
-          python3 -c "import sys; sys.path.insert(0, 'tools/site-data'); import assets, contract_selectors, common"
+          python3 -c "import sys; sys.path.insert(0, 'tools/site-data'); import assets, contract_selectors, common, module_content"
 
       - name: Validate contract and generated handoff
         run: |
@@ -108,11 +68,6 @@ jobs:
             --generated-root docs/api --source-sha "$GITHUB_SHA"
           timeout 3m python3 tools/site-data/validate.py --docs
 
-      - name: Run readiness contract tests
-        run: |
-          set -euo pipefail
-          python3 Tests/Tools/test_site_data_contract.py -v
-
       - name: Validate documentation links and routes
         run: |
           set -euo pipefail
@@ -122,6 +77,28 @@ jobs:
         run: |
           set -euo pipefail
           python3 Tests/Tools/test_docs_health.py -v
+
+  # The exact-commit determinism proof runs in its own job: two generate.py
+  # runs plus site-data-validate's validation, docs and health steps no longer
+  # fit one 10-minute budget. Same checkout and generated API docs as
+  # site-data-validate, so generation sees the same tree it did there.
+  site-data-determinism:
+    name: Deterministic exact-commit generation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Generate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
 
       # Documentation health is excluded from THIS determinism claim (see the
       # --skip-doc-health note below). The publication path proves health too:
@@ -161,6 +138,81 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+
+  # The readiness contract suites run in their own job: together with
+  # site-data-validate's validation and docs steps they no longer fit one
+  # 10-minute budget. Same checkout and generated API docs as
+  # site-data-validate, so the suites see the same tree they did there.
+  site-data-contract-tests:
+    name: Readiness contract tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Generate exact-commit API documentation
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+
+      - name: Run readiness contract tests
+        run: |
+          set -euo pipefail
+          python3 Tests/Tools/test_site_data_contract.py -v
+          python3 Tests/Tools/test_module_content_inventory.py -v
+
+  # DOC-400: the reference runtime verifier and freshness classifier in
+  # tools/site-data/runtime, which the site runtime imports to refuse malformed,
+  # oversize, hash-invalid, or path-escaping publications and to label what it
+  # shows current/syncing/blocked/stale/unavailable. The suite runs over this
+  # commit's generated publication and tampered variants of it, and feeds every
+  # variant to validate.py validate_published_bundle so the two validators
+  # cannot drift. This proves the contract only; live consumption by the
+  # owner-deployed site is outside this repository.
+  site-runtime-contract:
+    name: Site runtime bundle contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      # The runner image's preinstalled Node.js; the module needs WebCrypto and
+      # node:test (package.json engines >=20) and has no dependencies to install.
+      - name: Require Node.js 20 or newer
+        run: |
+          set -euo pipefail
+          node --version
+          node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 20 ? 0 : 1)'
+
+      - name: Generate the exact-commit publication
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m python3 tools/site-data/generate.py \
+            --output "$RUNNER_TEMP/.site-data" \
+            --source-commit "$GITHUB_SHA" \
+            --source-branch "$SOURCE_BRANCH" \
+            --committed-at "$COMMITTED_AT" \
+            --skip-doc-health
+          python3 tools/site-data/validate.py --published "$RUNNER_TEMP/.site-data"
+
+      - name: Run the runtime verifier and freshness suites
+        env:
+          SPARK_SITE_DATA_DIR: ${{ runner.temp }}/.site-data
+        run: |
+          set -euo pipefail
+          timeout 10m npm test --prefix tools/site-data/runtime
 
   # RDY-020 names `asset-integrity` as a required CI job. No such job existed, so
   # the gate behind it could be neither red nor green. The executable check is

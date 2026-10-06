@@ -54,6 +54,11 @@ spark_expect_invalid(
     "[Area.Main]\nhost = 127.0.0.1\nport = 27015"
     "[Area.Main]\nhost = 127.0.0.1\nport = 27016")
 spark_expect_invalid(
+    noncanonical_area_host
+    "Config/gateway.ini"
+    "[Area.Main]\nhost = 127.0.0.1"
+    "[Area.Main]\nhost = localhost")
+spark_expect_invalid(
     duplicate_area
     "Config/gateway.ini"
     "[Status]"

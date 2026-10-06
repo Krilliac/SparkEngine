@@ -66,6 +66,9 @@ namespace Spark::Graphics
         static constexpr uint32_t kFrameLatency = 2;  ///< Frames of latency before results are available
         static constexpr uint32_t kHistorySize = 120; ///< Rolling history frames per pass
 
+        /// The slot being reused at frame N contains frame N - kFrameLatency.
+        static constexpr uint32_t FrameSlot(uint32_t frameIndex) noexcept { return frameIndex % kFrameLatency; }
+
         GPUTimestampQuery() = default;
         ~GPUTimestampQuery() { Shutdown(); }
 
@@ -130,6 +133,7 @@ namespace Spark::Graphics
                 }
 
                 frameData.timerNames.resize(maxTimers);
+                frameData.timerGenerations.resize(maxTimers);
                 frameData.activeCount = 0;
             }
 
@@ -149,12 +153,16 @@ namespace Spark::Graphics
                 frame.beginQueries.clear();
                 frame.endQueries.clear();
                 frame.timerNames.clear();
+                frame.timerGenerations.clear();
                 frame.activeCount = 0;
+                frame.resultsPending = false;
             }
 
             m_passTimes.clear();
             m_passHistory.clear();
+            m_passGenerations.clear();
             m_initialized = false;
+            m_timingThisFrame = false;
             m_frameIndex = 0;
         }
 
@@ -169,19 +177,22 @@ namespace Spark::Graphics
                 return;
             }
 
-            // Collect results from the oldest buffered frame (N-2)
-            uint32_t readFrame = (m_frameIndex + 1) % kFrameLatency;
-            if (m_frameIndex >= kFrameLatency)
+            // The slot being reused holds frame N - kFrameLatency: read it first. Beginning a
+            // disjoint query whose result is unread abandons it (debug-layer warning #408,
+            // QUERY_BEGIN_ABANDONING_PREVIOUS_RESULTS), so a slot whose results are still in
+            // flight is skipped for this frame instead of reused; timing resumes when the GPU
+            // catches up.
+            const uint32_t slot = FrameSlot(m_frameIndex);
+            auto& frameData = m_frames[slot];
+            if (frameData.resultsPending)
             {
-                CollectResults(context, readFrame);
+                CollectResults(context, slot);
             }
-
-            // Start current frame's disjoint query
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            auto& frameData = m_frames[writeFrame];
-            frameData.activeCount = 0;
-
-            context->Begin(frameData.disjointQuery.Get());
+            m_timingThisFrame = !frameData.resultsPending;
+            if (m_timingThisFrame)
+            {
+                frameData.activeCount = 0;
+            }
         }
 
         /**
@@ -195,9 +206,13 @@ namespace Spark::Graphics
                 return;
             }
 
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            context->End(m_frames[writeFrame].disjointQuery.Get());
-
+            auto& frameData = m_frames[FrameSlot(m_frameIndex)];
+            if (m_timingThisFrame && frameData.activeCount > 0)
+            {
+                context->End(frameData.disjointQuery.Get());
+                frameData.resultsPending = true;
+            }
+            m_timingThisFrame = false;
             m_frameIndex++;
         }
 
@@ -209,21 +224,28 @@ namespace Spark::Graphics
      */
         uint32_t BeginTimestamp(ID3D11DeviceContext* context, const char* name)
         {
-            if (!m_initialized || !context || !name)
+            if (!m_initialized || !context || !name || !m_timingThisFrame)
             {
                 return UINT32_MAX;
             }
 
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            auto& frameData = m_frames[writeFrame];
+            auto& frameData = m_frames[FrameSlot(m_frameIndex)];
 
             if (frameData.activeCount >= m_maxTimers)
             {
                 return UINT32_MAX; // Pool exhausted
             }
 
+            // The disjoint query brackets only frames that time something, so a frame
+            // without timers leaves no result behind for the next Begin to abandon.
+            if (frameData.activeCount == 0)
+            {
+                context->Begin(frameData.disjointQuery.Get());
+            }
+
             uint32_t timerID = frameData.activeCount;
             frameData.timerNames[timerID] = name;
+            frameData.timerGenerations[timerID] = GetPassGeneration(name);
             context->End(frameData.beginQueries[timerID].Get());
 
             frameData.activeCount++;
@@ -237,13 +259,12 @@ namespace Spark::Graphics
      */
         void EndTimestamp(ID3D11DeviceContext* context, uint32_t timerID)
         {
-            if (!m_initialized || !context || timerID == UINT32_MAX)
+            if (!m_initialized || !context || timerID == UINT32_MAX || !m_timingThisFrame)
             {
                 return;
             }
 
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            auto& frameData = m_frames[writeFrame];
+            auto& frameData = m_frames[FrameSlot(m_frameIndex)];
 
             if (timerID >= frameData.activeCount)
             {
@@ -296,6 +317,56 @@ namespace Spark::Graphics
             return sum / static_cast<float>(count);
         }
 
+        /// Number of completed valid samples retained for a named pass.
+        uint32_t GetPassSampleCount(const char* name) const
+        {
+            if (!name)
+                return 0;
+            const auto it = m_passHistory.find(name);
+            return it == m_passHistory.end() ? 0 : it->second.count;
+        }
+
+        /// Monotonic number of valid samples collected for a pass since reset.
+        uint64_t GetPassSampleSequence(const char* name) const
+        {
+            if (!name)
+                return 0;
+            const auto it = m_passHistory.find(name);
+            return it == m_passHistory.end() ? 0 : it->second.totalSamples;
+        }
+
+        /// Current reset generation for a named pass; in-flight samples retain their captured generation.
+        uint64_t GetPassGeneration(const char* name) const
+        {
+            if (!name)
+                return 0;
+            const auto it = m_passGenerations.find(name);
+            return it == m_passGenerations.end() ? 0 : it->second;
+        }
+
+        /// Return whether an in-flight sample belongs to the current reset generation.
+        static constexpr bool IsCurrentPassGeneration(uint64_t sampleGeneration, uint64_t currentGeneration) noexcept
+        {
+            return sampleGeneration == currentGeneration;
+        }
+
+        /**
+         * @brief Drop all completed samples for one named pass.
+         *
+         * Benchmark consumers use this at the first frame of a run so a
+         * result cannot accidentally reuse history from an earlier run. The
+         * in-flight D3D11 query slots remain untouched, but their captured
+         * generation prevents pre-reset results from entering the new history.
+         */
+        void ResetPassHistory(const char* name)
+        {
+            if (!name)
+                return;
+            ++m_passGenerations[name];
+            m_passTimes.erase(name);
+            m_passHistory.erase(name);
+        }
+
         /**
      * @brief Get all most-recent pass timings
      * @return Map of pass name to time in milliseconds
@@ -322,12 +393,11 @@ namespace Spark::Graphics
         /** @brief Get number of active timers in the current frame */
         uint32_t GetActiveTimerCount() const
         {
-            if (!m_initialized)
+            if (!m_initialized || !m_timingThisFrame)
             {
                 return 0;
             }
-            uint32_t writeFrame = m_frameIndex % kFrameLatency;
-            return m_frames[writeFrame].activeCount;
+            return m_frames[FrameSlot(m_frameIndex)].activeCount;
         }
 
         /**
@@ -374,6 +444,7 @@ namespace Spark::Graphics
             std::array<float, kHistorySize> samples = {};
             uint32_t writeIndex = 0;
             uint32_t count = 0;
+            uint64_t totalSamples = 0;
 
             void Push(float value)
             {
@@ -383,6 +454,7 @@ namespace Spark::Graphics
                 {
                     count++;
                 }
+                ++totalSamples;
             }
         };
 
@@ -395,7 +467,9 @@ namespace Spark::Graphics
             std::vector<ComPtr<ID3D11Query>> beginQueries;
             std::vector<ComPtr<ID3D11Query>> endQueries;
             std::vector<std::string> timerNames;
+            std::vector<uint64_t> timerGenerations;
             uint32_t activeCount = 0;
+            bool resultsPending = false; ///< Disjoint query ended with timers and not yet read back
         };
 
         /**
@@ -407,6 +481,7 @@ namespace Spark::Graphics
 
             if (frameData.activeCount == 0)
             {
+                frameData.resultsPending = false;
                 return;
             }
 
@@ -416,8 +491,9 @@ namespace Spark::Graphics
                                           D3D11_ASYNC_GETDATA_DONOTFLUSH);
             if (hr == S_FALSE)
             {
-                return; // Results not ready yet
+                return; // Results not ready yet; the slot stays pending
             }
+            frameData.resultsPending = false;
 
             if (FAILED(hr) || disjointData.Disjoint)
             {
@@ -449,16 +525,22 @@ namespace Spark::Graphics
                 float timeMs = static_cast<float>(static_cast<double>(endTicks - beginTicks) * ticksToMs);
 
                 const auto& name = frameData.timerNames[i];
+                if (!IsCurrentPassGeneration(frameData.timerGenerations[i], GetPassGeneration(name.c_str())))
+                {
+                    continue;
+                }
                 m_passTimes[name] = timeMs;
                 m_passHistory[name].Push(timeMs);
             }
         }
 
         std::array<FrameData, kFrameLatency> m_frames;
-        std::unordered_map<std::string, float> m_passTimes;         ///< Most recent results
-        std::unordered_map<std::string, PassHistory> m_passHistory; ///< Rolling history
+        std::unordered_map<std::string, float> m_passTimes;          ///< Most recent results
+        std::unordered_map<std::string, PassHistory> m_passHistory;  ///< Rolling history
+        std::unordered_map<std::string, uint64_t> m_passGenerations; ///< Reset epoch per pass
         uint32_t m_maxTimers = 0;
         uint32_t m_frameIndex = 0;
+        bool m_timingThisFrame = false; ///< BeginFrame found the slot free; timers may start
         bool m_initialized = false;
     };
 

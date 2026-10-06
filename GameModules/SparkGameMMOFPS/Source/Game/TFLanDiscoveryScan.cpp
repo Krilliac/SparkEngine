@@ -1,9 +1,10 @@
 /**
  * @file TFLanDiscoveryScan.cpp
  * @brief W11 server-browser lane: LAN scanner half (client side) — bind UDP
- *        27025, drain beacons non-blockingly, validate/dedupe them into the
- *        server list. Split from TFLanDiscovery.cpp; the shared WinSock/BSD
- *        socket shim lives in TFLanDiscoveryInternal.h.
+ *        27025, drain beacons non-blockingly, and hand each one to the
+ *        socket-free DecodeLanBeacon / UpsertLanServer (TFLanBeaconCodec.cpp).
+ *        Split from TFLanDiscovery.cpp; the shared WinSock/BSD socket shim
+ *        lives in TFLanDiscoveryInternal.h.
  */
 #include "Game/TFLanDiscovery.h"
 
@@ -23,7 +24,8 @@
 #endif
 #endif // ENABLE_NETWORKING
 
-#include <cstring>
+#include <optional>
+#include <span>
 
 namespace Terrafront
 {
@@ -133,60 +135,24 @@ namespace Terrafront
             }
             if (from.sin_family != AF_INET || !m_endpointPolicy.AllowsPeerAddress(ntohl(from.sin_addr.s_addr)))
                 continue;
-            if (static_cast<size_t>(n) != sizeof(TF_LanBeacon))
-                continue; // not ours (or a future/past size) — ignore silently
-
-            TF_LanBeacon beacon{};
-            std::memcpy(&beacon, buf, sizeof(beacon));
-            if (beacon.magic != kTFLanBeaconMagic || beacon.version != kTFLanBeaconVersion || beacon.gamePort == 0)
-                continue;
+            const std::optional<TF_LanBeacon> beacon = DecodeLanBeacon(
+                std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(buf), static_cast<size_t>(n)));
+            if (!beacon)
+                continue; // not ours (wrong size, magic, version or port) — ignore silently
 
             char srcIp[INET_ADDRSTRLEN]{};
             if (!inet_ntop(AF_INET, &from.sin_addr, srcIp, sizeof(srcIp)))
                 continue;
 
-            HandleDatagram(beacon, srcIp);
-        }
-#endif
-    }
-
-    void TFLanDiscovery::HandleDatagram(const TF_LanBeacon& b, const char* srcIp)
-    {
-        // Defensive NUL-termination — never trust wire strings.
-        char name[sizeof(b.serverName) + 1];
-        std::memcpy(name, b.serverName, sizeof(b.serverName));
-        name[sizeof(b.serverName)] = '\0';
-        char map[sizeof(b.mapName) + 1];
-        std::memcpy(map, b.mapName, sizeof(b.mapName));
-        map[sizeof(b.mapName)] = '\0';
-
-        // Dedupe by source IP + advertised game port (two servers on one box on
-        // different ports stay distinct; rebroadcasts refresh in place).
-        for (TFLanServerEntry& e : m_servers)
-        {
-            if (e.ip == srcIp && e.gamePort == b.gamePort)
+            const size_t knownServers = m_servers.size();
+            if (UpsertLanServer(m_servers, *beacon, srcIp, m_clock) && m_servers.size() > knownServers)
             {
-                e.name = name;
-                e.map = map;
-                e.players = b.playerCount;
-                e.maxPlayers = b.maxPlayers;
-                e.lastSeen = m_clock;
-                return;
+                const TFLanServerEntry& added = m_servers.back();
+                SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] lan: discovered server '%s' at %s:%u",
+                               added.name.c_str(), srcIp, static_cast<unsigned>(added.gamePort));
             }
         }
-
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] lan: discovered server '%s' at %s:%u", name, srcIp,
-                       static_cast<unsigned>(b.gamePort));
-
-        TFLanServerEntry entry;
-        entry.ip = srcIp;
-        entry.gamePort = b.gamePort;
-        entry.name = name;
-        entry.map = map;
-        entry.players = b.playerCount;
-        entry.maxPlayers = b.maxPlayers;
-        entry.lastSeen = m_clock;
-        m_servers.push_back(std::move(entry));
+#endif
     }
 
 } // namespace Terrafront

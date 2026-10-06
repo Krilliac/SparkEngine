@@ -20,12 +20,13 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import Any
 
 from build_binding import commands_named, parse_cmake
-from corpus_manifest import DEFAULT_CORPUS_MANIFEST, build_corpus_report
+from corpus_manifest import DEFAULT_CORPUS_MANIFEST, build_corpus_report, is_shallow_checkout
 from parser_inventory import DEFAULT_INVENTORY, build_inventory_report, load_inventory
 from policy_common import Deadline, PolicyError, load_json_document, read_confined_file
 
@@ -42,7 +43,8 @@ REQUIRED_JOB_COMMANDS = (
     "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
 )
 # Only meaningful once a fuzz target exists; asserted conditionally below.
-FUZZ_SMOKE_COMMAND = "ctest --test-dir build/fuzz-policy --output-on-failure -L fuzz -C Release"
+FUZZ_SMOKE_COMMAND = "ctest --test-dir build/fuzz-policy --output-on-failure -L '^fuzz$' --no-tests=error -C Release"
+FUZZ_BUILD_PREFIX = "cmake --build build/fuzz-policy --target"
 
 
 def _decode(root: Path, path: str, field: str, maximum: int = 2 * 1024 * 1024) -> str:
@@ -89,13 +91,13 @@ def _job_block(workflow: str, job_name: str) -> list[str]:
     return lines[start:end]
 
 
-def _run_commands(block: list[str]) -> set[str]:
+def _run_commands_in_order(block: list[str]) -> list[str]:
     """Collect the shell commands a job actually executes.
 
     A literal that appears in a comment, a job name or an ``echo`` is not a
     command; only ``run:`` scalars and ``run: |`` block bodies count.
     """
-    commands: set[str] = set()
+    commands: list[str] = []
     index = 0
     while index < len(block):
         line = _strip_yaml_comment(block[index])
@@ -105,7 +107,7 @@ def _run_commands(block: list[str]) -> set[str]:
             continue
         inline = match.group(2).strip()
         if inline and inline not in ("|", ">", "|-", ">-"):
-            commands.add(inline)
+            commands.append(inline)
             index += 1
             continue
         # A block scalar's body is every line indented at least as far as its
@@ -123,9 +125,14 @@ def _run_commands(block: list[str]) -> set[str]:
                 body_indent = leading
             elif not leading.startswith(body_indent):
                 break
-            commands.add(body.strip())
+            commands.append(body.strip())
             index += 1
     return commands
+
+
+def _run_commands(block: list[str]) -> set[str]:
+    """Return executable job commands as a set for membership checks."""
+    return set(_run_commands_in_order(block))
 
 
 def _assert_job_is_live(block: list[str], job_name: str) -> None:
@@ -143,16 +150,85 @@ def _assert_job_is_live(block: list[str], job_name: str) -> None:
             raise PolicyError(f"{job_name} job must not set continue-on-error: {value}")
 
 
-def validate_ci_and_cmake_binding(root: Path, *, fuzz_target_count: int) -> None:
+def _cmake_build_targets(commands: set[str]) -> set[str]:
+    """Return targets from actual standalone CMake build commands.
+
+    This deliberately rejects comments, ``echo`` output, shell composition,
+    options, redirections, and arbitrary strings. ``_run_commands`` has already
+    isolated executable ``run:`` lines, and this parser then requires the
+    command's first tokens to be the CMake build invocation and every remaining
+    token to be a target name. A command with any non-target suffix is ignored
+    as unsafe rather than partially credited.
+    """
+    targets: set[str] = set()
+    for command in commands:
+        try:
+            tokens = shlex.split(command, posix=True)
+        except ValueError:
+            continue
+        if len(tokens) < 4 or tokens[:4] != ["cmake", "--build", "build/fuzz-policy", "--target"]:
+            continue
+        command_targets = tokens[4:]
+        if not command_targets or any(
+            re.fullmatch(r"[A-Za-z][A-Za-z0-9_.+-]{2,63}", token) is None for token in command_targets
+        ):
+            continue
+        targets.update(command_targets)
+    return targets
+
+
+def validate_ci_and_cmake_binding(
+    root: Path, *, fuzz_target_count: int, fuzz_targets: tuple[str, ...] = ()
+) -> None:
     workflow = _decode(root, WORKFLOW, "build workflow")
     fuzz_job = _job_block(workflow, FUZZ_JOB)
     _assert_job_is_live(fuzz_job, FUZZ_JOB)
+    checkout = next((index for index, line in enumerate(fuzz_job) if line == "    - name: Checkout repository"), None)
+    if checkout is None:
+        raise PolicyError(f"{FUZZ_JOB} CI job must check out the repository")
+    next_step = next(
+        (index for index in range(checkout + 1, len(fuzz_job)) if fuzz_job[index].startswith("    - name: ")),
+        len(fuzz_job),
+    )
+    checkout_lines = [_strip_yaml_comment(line).rstrip() for line in fuzz_job[checkout:next_step]]
+    if "        fetch-depth: 0" not in checkout_lines:
+        raise PolicyError(f"{FUZZ_JOB} CI checkout must fetch full history for fixed_commit verification")
     if "    runs-on: ubuntu-24.04" not in [_strip_yaml_comment(line).rstrip() for line in fuzz_job]:
         raise PolicyError(f"{FUZZ_JOB} job must run on ubuntu-24.04")
-    commands = _run_commands(fuzz_job)
+    ordered_commands = _run_commands_in_order(fuzz_job)
+    commands = set(ordered_commands)
     for literal in REQUIRED_JOB_COMMANDS:
         if literal not in commands:
             raise PolicyError(f"{FUZZ_JOB} CI job does not run {literal!r}")
+    if fuzz_targets:
+        built_targets = _cmake_build_targets(commands)
+        missing = sorted(set(fuzz_targets) - built_targets)
+        if missing:
+            raise PolicyError(
+                f"{FUZZ_JOB} CI job does not build every inventoried fuzz target; missing: {', '.join(missing)}"
+            )
+        expected_targets = set(fuzz_targets)
+        build_indexes = [
+            index
+            for index, command in enumerate(ordered_commands)
+            if _cmake_build_targets({command}) >= expected_targets
+        ]
+        if not build_indexes:
+            raise PolicyError(f"{FUZZ_JOB} CI job has no complete fuzz-target build command")
+        build_index = min(build_indexes)
+        for ctest_command in (
+            "ctest --test-dir build/fuzz-policy --output-on-failure --no-tests=error -C Release",
+            FUZZ_SMOKE_COMMAND,
+        ):
+            ctest_indexes = [
+                index for index, command in enumerate(ordered_commands) if command == ctest_command
+            ]
+            if not ctest_indexes:
+                raise PolicyError(f"{FUZZ_JOB} CI job does not run {ctest_command!r}")
+            if build_index >= min(ctest_indexes):
+                raise PolicyError(
+                    f"{FUZZ_JOB} CI job must build all fuzz targets before {ctest_command!r}"
+                )
     if fuzz_target_count and FUZZ_SMOKE_COMMAND not in commands:
         raise PolicyError(
             f"{fuzz_target_count} fuzz targets are declared but the CI job never runs {FUZZ_SMOKE_COMMAND!r}"
@@ -206,13 +282,15 @@ def build_check_report(
     *,
     as_of: Any = None,
     deadline: Deadline | None = None,
+    verify_fix_commits: bool = True,
 ) -> dict[str, Any]:
     deadline = deadline or Deadline(GATE_SECONDS, "fuzz policy gate")
     # One read of the inventory feeds both halves of the report; two independent
     # reads could describe a manifest that was never target-validated.
     inventory_document = load_inventory(root, inventory_path, as_of=as_of)
     inventory = build_inventory_report(root, inventory_path, as_of=as_of, deadline=deadline)
-    corpus = build_corpus_report(root, inventory_document, corpus_path, as_of=as_of, deadline=deadline)
+    corpus = build_corpus_report(root, inventory_document, corpus_path, as_of=as_of, deadline=deadline,
+                                 verify_fix_commits=verify_fix_commits)
 
     blockers: list[str] = []
     if inventory["blocked_count"]:
@@ -245,6 +323,8 @@ def build_check_report(
                 "candidate_count",
                 "scanned_file_count",
                 "deferred_candidate_count",
+                "exempt_candidate_count",
+                "exempt_by_classification",
                 "unclassified_candidate_count",
                 "scan_roots",
                 "excluded_subtrees",
@@ -253,7 +333,14 @@ def build_check_report(
         },
         "corpus": {
             key: corpus[key]
-            for key in ("corpus_count", "seed_count", "seed_bytes", "bound_target_count", "max_staleness_days")
+            for key in (
+                "corpus_count",
+                "seed_count",
+                "seed_bytes",
+                "regression_count",
+                "bound_target_count",
+                "max_staleness_days",
+            )
         },
         "closure_blockers": blockers,
     }
@@ -298,9 +385,19 @@ def main(argv: list[str] | None = None) -> int:
         help="fail while SEC-120 closure blockers remain (the release gate)",
     )
     parser.add_argument("--emit-json", action="store_true")
+    parser.add_argument(
+        "--allow-shallow",
+        action="store_true",
+        help="in a shallow checkout, skip only the fixed_commit history check; the fuzz-policy job, "
+             "which must fetch full history, always runs it",
+    )
     parser.add_argument("--as-of-date", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(args.source_root)
+    verify_fix_commits = not (args.allow_shallow and is_shallow_checkout(root))
+    if not verify_fix_commits:
+        print("fuzz policy: NOTICE: shallow checkout, so fixed_commit history verification is skipped here; "
+              "the fuzz-policy job verifies it with full history", file=sys.stderr)
     as_of = None
     if args.as_of_date:
         from datetime import date
@@ -311,9 +408,20 @@ def main(argv: list[str] | None = None) -> int:
             print("invalid --as-of-date", file=sys.stderr)
             return 2
     try:
-        report = build_check_report(root, args.inventory, args.corpus, as_of=as_of)
+        report = build_check_report(root, args.inventory, args.corpus, as_of=as_of,
+                                    verify_fix_commits=verify_fix_commits)
         if args.ci:
-            validate_ci_and_cmake_binding(root, fuzz_target_count=report["inventory"]["fuzzed_count"])
+            inventory = load_inventory(root, args.inventory, as_of=as_of)
+            fuzz_targets = tuple(
+                parser.target["cmake_target"]
+                for parser in inventory.parsers
+                if parser.status == "fuzzed" and parser.target is not None
+            )
+            validate_ci_and_cmake_binding(
+                root,
+                fuzz_target_count=report["inventory"]["fuzzed_count"],
+                fuzz_targets=fuzz_targets,
+            )
             validate_evidence(root, report, args.evidence)
             validate_ledger(root, report, args.ledger)
     except (OSError, PolicyError) as exc:
@@ -331,7 +439,8 @@ def main(argv: list[str] | None = None) -> int:
             "fuzz policy: structural gate PASS "
             f"({report['inventory']['parser_count']} parsers, "
             f"{report['inventory']['fuzzed_count']} fuzzed, "
-            f"{report['inventory']['deferred_candidate_count']} deferred candidates); "
+            f"{report['inventory']['deferred_candidate_count']} deferred candidates, "
+            f"{report['inventory']['exempt_candidate_count']} OD-21 exemptions); "
             f"SEC-120 closure blockers: {len(report['closure_blockers'])}"
         )
     if args.require_closure and report["closure_blockers"]:

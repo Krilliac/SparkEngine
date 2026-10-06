@@ -226,10 +226,14 @@ namespace Spark
             return;
 
         SPARK_LOG_INFO(Spark::LogCategory::Core, "ConsoleProcessManager shutting down");
+        // The console thread never waits on the child for longer than
+        // kConsoleWriteSlice per write (see FlushPendingWrite), so this join
+        // completes even when the child has stopped reading its stdin.
         m_shouldStopThread = true;
         if (m_consoleThread.joinable())
             m_consoleThread.join();
         m_consoleRunning = false;
+        m_pendingWrite.clear();
 
         // Close stdin pipe to signal child, then let Process destructor handle cleanup
         if (m_process)

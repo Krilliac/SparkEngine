@@ -63,6 +63,11 @@ namespace Terrafront
         constexpr uint32_t kWeightFireOriginReject = 4;
         constexpr uint32_t kWeightFireRateReject = 2;
         constexpr uint32_t kWeightInputRateReject = 1;
+        // TF-110 forged state: a client claiming a weapon or loadout the
+        // server never granted has no jitter or packet-loss explanation, so
+        // four such packets (12) cross kKickThreshold on their own.
+        constexpr uint32_t kWeightForgedState = 3;
+        constexpr double kForgedLogThrottleSec = 1.0;
         // Requires accumulating several violations, never a single one (the
         // highest single weight above is 4): e.g. 3 movement spikes (9) still
         // doesn't trip, but 3 spikes + 1 fire-origin reject (13) does.
@@ -76,7 +81,7 @@ namespace Terrafront
     }
 
     void TFServerValidation::ValidateMovementTick(PlayerId player, const float prevPos[3], float pos[3],
-                                                   float maxHorizSpeed, float dt, double now)
+                                                  float maxHorizSpeed, float dt, double now)
     {
         if (auto ex = m_exemptOnce.find(player); ex != m_exemptOnce.end())
         {
@@ -131,7 +136,10 @@ namespace Terrafront
         }
     }
 
-    void TFServerValidation::NoteExemptTeleport(PlayerId player) { m_exemptOnce[player] = true; }
+    void TFServerValidation::NoteExemptTeleport(PlayerId player)
+    {
+        m_exemptOnce[player] = true;
+    }
 
     bool TFServerValidation::CheckFireOrigin(PlayerId player, const float claimed[3], const float trusted[3],
                                              float maxDivergenceM)
@@ -152,7 +160,48 @@ namespace Terrafront
         return false;
     }
 
-    void TFServerValidation::RecordFireRateReject(PlayerId player) { ++m_stats[player].fireRateRejects; }
+    void TFServerValidation::RecordFireRateReject(PlayerId player)
+    {
+        ++m_stats[player].fireRateRejects;
+    }
+
+    const char* ForgedStateName(TFForgedState kind)
+    {
+        switch (kind)
+        {
+        case TFForgedState::LoadoutUnknownWeapon:
+            return "loadout-unknown-weapon";
+        case TFForgedState::LoadoutIneligible:
+            return "loadout-ineligible";
+        case TFForgedState::LoadoutExtIneligible:
+            return "loadout-ext-ineligible";
+        case TFForgedState::FireWeaponNotInLoadout:
+            return "fire-weapon-not-in-loadout";
+        case TFForgedState::FireWeaponLocked:
+            return "fire-weapon-locked";
+        }
+        return "unknown";
+    }
+
+    void TFServerValidation::RecordForgedStateReject(PlayerId player, TFForgedState kind, double now)
+    {
+        TFViolationStats& st = m_stats[player];
+        ++st.forgedStateRejects;
+
+        if (m_audit.size() >= kForgedAuditCapacity)
+        {
+            m_audit.pop_front();
+        }
+        m_audit.push_back(TFForgedStateAudit{player, kind, now});
+
+        const auto [logIt, firstLog] = m_lastForgedLog.try_emplace(player, now);
+        if (firstLog || now - logIt->second >= kForgedLogThrottleSec)
+        {
+            logIt->second = now;
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF-AUDIT] forged-state kind=%s player=%u total=%u",
+                           ForgedStateName(kind), player, st.forgedStateRejects);
+        }
+    }
 
     bool TFServerValidation::AllowInput(PlayerId player, double now)
     {
@@ -193,10 +242,14 @@ namespace Terrafront
 
         const TFViolationStats& st = it->second;
         return st.movementSpikes * kWeightMovementSpike + st.fireOriginRejects * kWeightFireOriginReject +
-               st.fireRateRejects * kWeightFireRateReject + st.inputRateRejects * kWeightInputRateReject;
+               st.fireRateRejects * kWeightFireRateReject + st.inputRateRejects * kWeightInputRateReject +
+               st.forgedStateRejects * kWeightForgedState;
     }
 
-    bool TFServerValidation::ShouldKick(PlayerId player) const { return ViolationScore(player) >= kKickThreshold; }
+    bool TFServerValidation::ShouldKick(PlayerId player) const
+    {
+        return ViolationScore(player) >= kKickThreshold;
+    }
 
     void TFServerValidation::ClearPlayer(PlayerId player)
     {
@@ -206,6 +259,9 @@ namespace Terrafront
         m_inputTokens.erase(player);
         m_inputLastRefill.erase(player);
         m_lastInputRejectLog.erase(player);
+        m_lastForgedLog.erase(player);
+        // m_audit is deliberately kept: the forged-state trail must outlive
+        // the session that was kicked for it.
     }
 
 } // namespace Terrafront

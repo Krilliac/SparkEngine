@@ -51,6 +51,10 @@
         {
           "type": "package-smoke-log",
           "artifactPattern": "build/module-evidence/package-smoke.log"
+        },
+        {
+          "type": "sanitizer-report",
+          "artifactPattern": "build/module-evidence/sanitizer-asan/metadata.json"
         }
       ]
     },

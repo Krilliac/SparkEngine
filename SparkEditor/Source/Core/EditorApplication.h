@@ -8,6 +8,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -84,6 +85,18 @@ namespace SparkEditor
         void RequestExit();
 
         PerformanceMetrics GetPerformanceMetrics() const;
+        /** @brief Number of completed frame presentation calls (D3D11 success or OpenGL swap completion). */
+        uint64_t GetRenderedFrameCount() const { return m_renderedFrameCount; }
+        /** @brief Number of frame presentation failures reported by the active graphics backend. */
+        uint64_t GetPresentFailureCount() const { return m_presentFailureCount; }
+        std::string GetGraphicsBackend() const
+        {
+#ifdef _WIN32
+            return "d3d11";
+#else
+            return "opengl";
+#endif
+        }
         EditorPluginManager& GetPluginManager() { return m_pluginManager; }
         void OnWindowResize(int width, int height);
         bool OnShutdownRequested();
@@ -153,6 +166,8 @@ namespace SparkEditor
 
         // Performance tracking
         PerformanceMetrics m_performanceMetrics;
+        uint64_t m_renderedFrameCount = 0;
+        uint64_t m_presentFailureCount = 0;
         std::chrono::high_resolution_clock::time_point m_startTime;
         std::chrono::high_resolution_clock::time_point m_lastFrameTime;
     };

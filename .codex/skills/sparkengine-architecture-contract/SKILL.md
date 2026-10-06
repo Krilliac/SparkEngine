@@ -110,13 +110,12 @@ silent Release-only correctness bug.
 **How to add a subsystem correctly:**
 1. Add the owning `std::unique_ptr<T>` field to `EngineRuntime` (feature-gated
    systems get an `#ifdef` guard like `physics`).
-2. Create it on the startup path and register it with dependency-aware
-   registration:
-   `ctx.RegisterSubsystem<T>(ptr, DependsOn<Dep1, Dep2>{}, initFn, shutdownFn)`
-   so `InitializeAll()`/`ShutdownAll()` order it topologically. Follow the
-   existing wiring in `Core/EngineSetup.h` (e.g.
-   `RegisterSubsystem<Spark::UI::UISystem>(ui, DependsOn<Timer, Spark::EventBus>{})`).
-   Plain `RegisterSystem<T>(ptr)` is only for systems with no init/deps.
+2. Create and initialize it in the `LifecycleCompositionRoot` stage that owns
+   its phase (`Core/Lifecycle/`), tear it down in that stage's `Shutdown()`,
+   and publish it with `ctx.RegisterSystem<T>(ptr)` (or the named setter);
+   null the registration before the owner is destroyed. `EngineContext` has
+   no init/shutdown ordering of its own (`InitializeAll`/`ShutdownAll` were
+   deleted by OD-01).
 3. Never store the pointer in a file-scope global. Fetch via
    `EngineContext::Get()->GetSystem<T>()` at the call site.
 4. Wire its `Update()` into the real loop in the same change (Invariant 4).
@@ -307,9 +306,9 @@ CI.
 ## Quick self-check before committing an architecture-touching change
 
 - [ ] No new `g_*` file-scope subsystem global (Invariant 1).
-- [ ] New subsystem: owned in `EngineRuntime`, registered via
-      `RegisterSubsystem<T>(..., DependsOn<...>{}, ...)`, fetched via
-      `EngineContext::Get()` (Invariant 1).
+- [ ] New subsystem: owned in `EngineRuntime`, created and torn down in a
+      `LifecycleCompositionRoot` stage, published via `RegisterSystem<T>` /
+      named setter, fetched via `EngineContext::Get()` (Invariant 1).
 - [ ] Did not add `const` to `GetTypeId<T>()`'s `static char id` (Invariant 1).
 - [ ] Module-side access uses `EngineContext::Get()`; no new per-module
       `static T instance;` singleton (Invariant 2).
@@ -346,8 +345,8 @@ one-liners (run from the repo root):
 grep -n "unique_ptr\|GetEngineRuntime" SparkEngine/Source/Core/EngineRuntime.h
 # Invariant 1 — type-id must stay non-const; registry lock
 grep -n "static char id\|shared_mutex" SparkEngine/Source/Core/EngineContext.h
-# Invariant 1 — dependency-aware registration in use
-grep -n "RegisterSubsystem<" SparkEngine/Source/Core/EngineSetup.h | head
+# Invariant 1 — lifecycle owned by EngineRuntime + LifecycleCompositionRoot stages
+grep -rn "GetEngineRuntime\|RegisterSystem<" SparkEngine/Source/Core/Lifecycle | head
 # Invariant 2 — Get() prefers injected pointer; export + host consumption
 grep -n "g_injectedContext\|SetInjected" SparkEngine/Source/Core/EngineContext.cpp
 grep -n "SparkModuleInjectEngineContext" SparkSDK/Include/Spark/ModuleDllMain.h SparkEngine/Source/Core/ModuleManager.cpp

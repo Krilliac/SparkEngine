@@ -58,16 +58,16 @@ struct ActiveComponent
 /**
  * @brief Tracks entity health, death state, and provides damage/heal/revive operations.
  *
- * The LifecycleSystem watches for `isDead` transitions and fires death
- * callbacks. Once `deathProcessed` is set, the entity won't trigger
- * the callback again (prevents double-processing).
+ * The LifecycleSystem latches `deathProcessed` the first time it sees `isDead`,
+ * so invariant checks can tell a fresh death from one already observed. Anything
+ * that brings the entity back to life must clear both flags (Revive, SetHealth).
  */
 struct HealthComponent
 {
     float health = 100.0f;       ///< Current health points.
     float maxHealth = 100.0f;    ///< Maximum health cap (Heal cannot exceed this).
     bool isDead = false;         ///< Set to true when health reaches zero.
-    bool deathProcessed = false; ///< Set by LifecycleSystem after firing the death callback.
+    bool deathProcessed = false; ///< Set by LifecycleSystem once it has seen this death.
 
     void TakeDamage(float amount)
     {
@@ -92,6 +92,24 @@ struct HealthComponent
         health = (std::min)(healthAmount, maxHealth);
         isDead = false;
         deathProcessed = false;
+    }
+
+    /**
+     * @brief Apply an authoritative health value (server damage, replication snapshot, respawn).
+     *
+     * Unlike Heal(), this also brings a dead entity back when @p newHealth is positive, and
+     * then clears `deathProcessed` so the LifecycleSystem latches the entity's next death.
+     *
+     * @param newHealth  Health to store; zero or less marks the entity dead.
+     */
+    void SetHealth(float newHealth)
+    {
+        health = newHealth;
+        isDead = (health <= 0.0f);
+        if (!isDead)
+        {
+            deathProcessed = false;
+        }
     }
 
     /**

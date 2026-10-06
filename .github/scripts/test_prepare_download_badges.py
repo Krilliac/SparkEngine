@@ -2626,19 +2626,9 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
     def test_readme_nightly_downloads_are_required_before_staging(self):
         workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         readme = README.read_text(encoding="utf-8")
-        assets = set(
-            re.findall(r"releases/download/nightly/([^\s)]+)", readme)
-        )
-        self.assertEqual(
-            assets,
-            {
-                "SparkEngine-Windows-x64-Release-Installer.exe",
-                "SparkEngine-Windows-x64-Release.zip",
-                "SparkEngine-Windows-x64-Debug-Installer.exe",
-                "SparkEngine-Windows-x64-Debug.zip",
-                "SparkInstaller-Windows-x64.exe",
-            },
-        )
+        self.assertNotRegex(readme, r"releases/download/nightly/")
+        self.assertIn("releases)", readme)
+        self.assertIn("RELEASE_TAG: ${{ needs.prepare.outputs.tag }}", workflow)
         collect = workflow.index("    - name: Collect release assets")
         stage = workflow.index("    - name: Stage nightly rolling release as draft")
         collect_step = workflow[collect:stage]
@@ -2665,7 +2655,13 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                 f"SparkEngine-7.8.9-Windows-AMD64-{config}-Runtime.exe"
             )
         aliases["SparkInstaller-Windows-x64.exe"] = "SparkInstaller-Windows-x64.exe"
-        for missing in (None, *aliases.values()):
+        sbom = "supply-chain/SparkEngine-Lock-SBOM.spdx.json"
+        evidence = {
+            sbom: '{"spdxVersion":"SPDX-2.3"}\n',
+            "supply-chain/reconciliation/reconcile-windows.json": '{"fixture":"reconciliation"}\n',
+            "build-provenance/build-provenance-windows.json": '{"fixture":"toolchain"}\n',
+        }
+        for missing in (None, *aliases.values(), sbom):
             with self.subTest(missing=missing), tempfile.TemporaryDirectory() as raw:
                 root = Path(raw)
                 packages = root / "release-assets"
@@ -2674,6 +2670,11 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                 for source in aliases.values():
                     if source != missing:
                         (packages / source).write_text(source, encoding="utf-8")
+                for relative, contents in evidence.items():
+                    if relative != missing:
+                        destination = root / relative
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        destination.write_text(contents, encoding="utf-8")
                 result = subprocess.run(
                     [bash_executable(), "-c", script], cwd=root, text=True, capture_output=True,
                     env={**os.environ, "IS_VERSIONED": "false", "RELEASE_VERSION": "7.8.9",
@@ -2681,14 +2682,36 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
                 )
                 if missing:
                     self.assertNotEqual(result.returncode, 0, "Incomplete nightly must not publish")
-                    self.assertIn("Missing README nightly asset", result.stderr)
+                    if missing != sbom:
+                        self.assertIn("Missing README nightly asset", result.stderr)
                     self.assertFalse((root / "expected-release-assets.txt").exists())
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
                     assets = set((root / "expected-release-assets.txt").read_text().splitlines())
-                    self.assertEqual(assets, set(aliases) | set(aliases.values()) | {"SHA256SUMS"})
+                    evidence_names = {Path(relative).name for relative in evidence}
+                    self.assertEqual(
+                        assets, set(aliases) | set(aliases.values()) | evidence_names | {"SHA256SUMS"}
+                    )
                     for alias, source in aliases.items():
                         self.assertEqual((root / alias).read_text(), source)
+                    for relative, contents in evidence.items():
+                        self.assertEqual((root / Path(relative).name).read_text(), contents)
+                    for manifest, expected in (
+                        ("SHA256SUMS", assets - {"SHA256SUMS"}),
+                        ("expected-release-digests.txt", assets),
+                    ):
+                        digests = {}
+                        for line in (root / manifest).read_text().splitlines():
+                            # GNU sha256sum uses a space for text mode and '*' for
+                            # binary mode, including Git Bash's Windows default.
+                            match = re.fullmatch(r"([0-9a-f]{64}) [ *](.+)", line)
+                            self.assertIsNotNone(match, line)
+                            digest, name = match.groups()
+                            self.assertNotIn(name, digests)
+                            digests[name] = digest
+                        self.assertEqual(set(digests), expected)
+                        for name, digest in digests.items():
+                            self.assertEqual(digest, hashlib.sha256((root / name).read_bytes()).hexdigest())
 
     def test_rolling_release_uses_fail_closed_production_order(self):
         text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
@@ -2788,7 +2811,10 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn("TARGET_SHA: ${{ github.sha }}", publication_gate_step)
 
         nightly_step = text[stage:checkpoint]
-        self.assertIn("prerelease: true", nightly_step)
+        self.assertIn("RELEASE_TAG: ${{ needs.prepare.outputs.tag }}", nightly_step)
+        self.assertIn("stage_release_draft.py", nightly_step)
+        staging_source = (RELEASE_WORKFLOW.parents[1] / "scripts/stage_release_draft.py").read_text(encoding="utf-8")
+        self.assertIn('"prerelease": not is_versioned', staging_source)
         nightly_publish_step = text[publish:after_tag]
         self.assertIn("release-acceptance-gate.py", nightly_publish_step)
 
@@ -2812,8 +2838,9 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         )
 
         stage_step = text[stage:checkpoint]
-        self.assertIn("draft: true", stage_step)
-        self.assertIn("overwrite_files: true", stage_step)
+        self.assertIn("stage_release_draft.py", stage_step)
+        self.assertIn('"draft": True', staging_source)
+        self.assertIn('method="DELETE"', staging_source)
         checkpoint_step = text[checkpoint:staged_commit]
         self.assertIn('prepare-download-badges.py" stage', checkpoint_step)
         self.assertIn("--expected-assets-file", checkpoint_step)
@@ -2860,8 +2887,11 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         step = text[stage:nightly]
         self.assertIn("steps.release-freeze.outputs.target_exists != 'true'", step)
         self.assertIn("steps.release-freeze.outputs.target_is_draft == 'true'", step)
-        self.assertIn("overwrite_files: false", step)
-        self.assertIn("draft: true", step)
+        self.assertIn("stage_release_draft.py", step)
+        self.assertIn("EXPECTED_RELEASE_ID: ${{ steps.release-freeze.outputs.target_release_id }}", step)
+        staging_source = (RELEASE_WORKFLOW.parents[1] / "scripts/stage_release_draft.py").read_text(encoding="utf-8")
+        self.assertIn("stable draft assets must never be overwritten by staging", staging_source)
+        self.assertIn('"draft": True', staging_source)
         publish = text.index("    - name: Publish complete stable versioned release")
         nightly_publish = text.index("    - name: Publish complete nightly rolling release")
         publish_step = text[publish:nightly_publish]
@@ -2874,7 +2904,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "    - name: Verify exact source commit passed Required CI Gate"
         )
         readiness = text.index(
-            "    - name: Verify stable-v1 is ready for versioned publication"
+            "    - name: Verify stable-v1 candidate is qualified for versioned publication"
         )
         freeze = text.index("    - name: Freeze durable exact CI evidence release asset")
         mutation_manifest = text.index(
@@ -2937,9 +2967,14 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "    - name: Publish complete nightly rolling release"
         )
 
+        # REL-190: candidate qualification runs in the profile-required-gates
+        # job, which the release job needs, so it precedes every release step.
+        release_job = text.index("\n  release:\n")
+        gates_job = text.index("\n  profile-required-gates:\n")
+        self.assertLess(gates_job, readiness)
+        self.assertLess(readiness, release_job)
         ordered = (
             required,
-            readiness,
             freeze,
             collect,
             inspect,
@@ -3001,6 +3036,8 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn(f'if [[ "$artifact" != "{evidence}" ]]', collect_step)
         self.assertIn('sha256sum "$artifact" >> SHA256SUMS', collect_step)
         self.assertIn('printf \'%s\' "$FILES" > expected-release-assets.txt', collect_step)
+        self.assertIn('"shipping-package-manifest.json"', collect_step)
+        self.assertIn('-o -name "shipping-package-manifest.json"', collect_step)
         self.assertIn(
             'done < expected-release-assets.txt > expected-release-digests.txt',
             collect_step,
@@ -3116,7 +3153,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             'EXPECTED_UPLOADER_LOGIN = "github-actions[bot]"',
             'asset.get("size")',
             'asset.get("digest")',
-            'release.get("immutable") is False',
+            'release.get("immutable") is expected_immutable',
             "live_count >= ledger_count",
         ):
             self.assertIn(required, asset_boundary)
@@ -3181,13 +3218,17 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             self.assertIn("steps.badge-staged-commit.outputs.staged_commit", publish_step)
             self.assertIn("refs/tags/generated-release-counters", publish_step)
             self.assertIn('commits/Working" --jq', publish_step)
-            self.assertIn("redraft_failed_publication", publish_step)
-            self.assertIn("recover_release_publication.py", publish_step)
-            self.assertIn("--attempts 3", publish_step)
+            if publish_step == stable_publish_step:
+                self.assertIn("report_failed_immutable_publication", publish_step)
+                self.assertNotIn("recover_release_publication.py", publish_step)
+            else:
+                self.assertIn("redraft_failed_publication", publish_step)
+                self.assertIn("recover_release_publication.py", publish_step)
+                self.assertIn("--attempts 3", publish_step)
             self.assertNotIn("continue-on-error", publish_step)
             self.assertNotIn("|| true", publish_step)
 
-        self.assertIn("--expected-prerelease false", stable_publish_step)
+        self.assertIn("quarantines only a proven mutable target", stable_publish_step)
         self.assertIn("--expected-prerelease true", nightly_publish_step)
         for required in (
             "api.get_release(release_id)",
@@ -3213,8 +3254,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             'prepare-download-badges.py" "$phase"',
             'boundary_release_id" != "$RELEASE_ID"',
             'boundary_draft" != "$expected_draft"',
-            "immutable-releases",
-            ".enabled == false",
+            "verify_release_policy.py",
             "releases/$RELEASE_ID/assets?per_page=100",
             "verify_release_asset_boundary.py",
             '--expected-draft "$expected_draft"',
@@ -3229,7 +3269,7 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "    - name: Stage new or interrupted stable versioned release as draft"
         )
         nightly_stage = text.index("    - name: Stage nightly rolling release as draft")
-        self.assertIn("overwrite_files: false", text[stable_stage:nightly_stage])
+        self.assertIn("stage_release_draft.py", text[stable_stage:nightly_stage])
         for step in (
             text[replacement_preflight:delete],
             delete_step,
@@ -3264,6 +3304,180 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
             "generated-release-counters%2F.github%2Fbadges%2Finstaller-downloads.json",
             readme,
         )
+
+
+RELEASE_RECOVERY_WORKFLOW = (
+    Path(__file__).resolve().parents[1] / "workflows" / "release-recovery.yml"
+)
+COUNTER_STATE_REF = "refs/tags/generated-release-counters"
+
+
+def workflow_step_script(workflow: Path, step_name: str) -> str:
+    """Return the dedented `run: |` body of the uniquely named workflow step."""
+    text = workflow.read_text(encoding="utf-8")
+    marker = f"- name: {step_name}\n"
+    if text.count(marker) != 1:
+        raise AssertionError(f"step {step_name!r} is not unique in {workflow.name}")
+    start = text.index(marker)
+    line_start = text.rfind("\n", 0, start) + 1
+    indent = text[line_start:start]
+    end = text.find(f"\n{indent}- name:", start)
+    step = text[start:end if end != -1 else len(text)]
+    return textwrap.dedent(step.split("run: |\n", 1)[1])
+
+
+class CounterStateTagFailClosedTests(unittest.TestCase):
+    """A missing durable counter tag must never be reseeded from Working.
+
+    Working's checked-in ledger is an older, already-initialized snapshot, so a
+    silent fallback drops archived asset records and pending-publication
+    recovery markers. These run the real step scripts against a local origin.
+    """
+
+    def setUp(self):
+        self.git = shutil.which("git")
+        if self.git is None:
+            self.skipTest("git is required for counter-state tag fixtures")
+        self.bash = bash_executable()
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-counter-tag-")
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.origin = root / "origin.git"
+        self.work = root / "badge-repository"
+        self.outputs = root / "github-output"
+        self.runner_temp = root / "runner-temp"
+        self.runner_temp.mkdir()
+        self._git(root, "init", "-q", "--bare", str(self.origin))
+        self._git(root, "init", "-q", "-b", "Working", str(self.work))
+        for key, value in (
+            ("user.email", "fixture@example.invalid"),
+            ("user.name", "Counter Fixture"),
+            ("commit.gpgsign", "false"),
+            ("core.autocrlf", "false"),
+        ):
+            self._git(self.work, "config", key, value)
+        self._commit_ledger("stale Working ledger", total=3)
+        self._git(self.work, "remote", "add", "origin", self.origin.as_posix())
+        self._git(self.work, "push", "-q", "origin", "Working")
+        self.working_head = self._git(self.work, "rev-parse", "HEAD")
+
+    def _git(self, cwd: Path, *args: str) -> str:
+        done = subprocess.run(
+            [self.git, *args], cwd=str(cwd), capture_output=True, text=True, timeout=120
+        )
+        if done.returncode != 0:
+            raise AssertionError(f"git {args}: {done.stderr}")
+        return done.stdout.strip()
+
+    def _commit_ledger(self, message: str, *, total: int) -> None:
+        ledger = self.work / ".github" / "badges" / "downloads-data.json"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text(json.dumps({"schemaVersion": 2, "total": total}) + "\n", encoding="utf-8")
+        self._git(self.work, "add", "-A")
+        self._git(self.work, "commit", "-q", "-m", message)
+
+    def _publish_tag(self) -> str:
+        """Push a newer ledger to the tag only, leaving Working on the stale one."""
+        self._commit_ledger("durable tag ledger", total=42)
+        tagged = self._git(self.work, "rev-parse", "HEAD")
+        self._git(self.work, "push", "-q", "origin", f"{tagged}:{COUNTER_STATE_REF}")
+        self._git(self.work, "reset", "-q", "--hard", self.working_head)
+        return tagged
+
+    def _run(self, workflow: Path, step: str, **env: str):
+        self.outputs.write_text("", encoding="utf-8")
+        result = subprocess.run(
+            [self.bash, "-c", workflow_step_script(workflow, step)],
+            cwd=str(self.work), capture_output=True, text=True, timeout=120,
+            env={
+                **os.environ,
+                "GH_TOKEN": "fixture-token",
+                "STATE_REF": COUNTER_STATE_REF,
+                "GITHUB_OUTPUT": str(self.outputs),
+                "RUNNER_TEMP": str(self.runner_temp),
+                "BOOTSTRAP_SEED": "",
+                # Git Bash would otherwise rewrite `ref:path` arguments as paths.
+                "MSYS_NO_PATHCONV": "1",
+                **env,
+            },
+        )
+        outputs = dict(
+            line.split("=", 1)
+            for line in self.outputs.read_text(encoding="utf-8").splitlines()
+            if "=" in line
+        )
+        return result, outputs
+
+    def _load_update(self, **env: str):
+        return self._run(UPDATE_WORKFLOW, "Load durable download-counter state tag", **env)
+
+    def test_update_refuses_missing_tag_without_bootstrap_seed(self):
+        result, outputs = self._load_update()
+        self.assertNotEqual(result.returncode, 0, "missing tag must not reseed from Working")
+        self.assertIn("is missing", result.stderr)
+        self.assertNotIn("state_commit", outputs)
+
+    def test_update_bootstraps_missing_tag_only_from_named_working_head(self):
+        for seed, needle in (
+            ("b" * 40, "does not name the checked-out Working head"),
+            ("HEAD", "40-hex"),
+            (self.working_head.upper(), "40-hex"),
+        ):
+            with self.subTest(seed=seed):
+                result, outputs = self._load_update(BOOTSTRAP_SEED=seed)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(needle, result.stderr)
+                self.assertNotIn("state_commit", outputs)
+        result, outputs = self._load_update(BOOTSTRAP_SEED=self.working_head)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["remote_object"], "")
+        self.assertEqual(outputs["bootstrap_seed"], self.working_head)
+        self.assertEqual(outputs["state_commit"], self.working_head)
+
+    def test_update_loads_existing_tag_and_refuses_bootstrap_over_it(self):
+        tagged = self._publish_tag()
+        result, outputs = self._load_update()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["remote_object"], tagged)
+        self.assertEqual(outputs["state_commit"], tagged)
+        self.assertEqual(outputs["bootstrap_seed"], "")
+        result, _ = self._load_update(BOOTSTRAP_SEED=self.working_head)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("already exists", result.stderr)
+
+    def test_release_refuses_missing_tag_and_loads_existing_tag(self):
+        step = "Load durable download-counter state tag"
+        result, outputs = self._run(RELEASE_WORKFLOW, step)
+        self.assertNotEqual(result.returncode, 0, "release must not publish against Working's ledger")
+        self.assertIn("is missing", result.stderr)
+        self.assertNotIn("state_commit", outputs)
+        tagged = self._publish_tag()
+        result, outputs = self._run(RELEASE_WORKFLOW, step)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["state_commit"], tagged)
+
+    def test_recovery_refuses_to_conclude_nothing_pending_from_missing_tag(self):
+        step = "Load durable staged publication state"
+        result, outputs = self._run(RELEASE_RECOVERY_WORKFLOW, step)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is missing", result.stderr)
+        self.assertNotIn("found", outputs)
+        self._publish_tag()
+        result, outputs = self._run(RELEASE_RECOVERY_WORKFLOW, step)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs["found"], "true")
+        staged = json.loads((self.runner_temp / "downloads-data.json").read_text(encoding="utf-8"))
+        self.assertEqual(staged["total"], 42)
+
+    def test_update_refresh_creates_tag_only_on_recorded_bootstrap(self):
+        script = workflow_step_script(UPDATE_WORKFLOW, "Refresh download count badges")
+        guard = script.index('if test -z "$EXPECTED_REMOTE_OBJECT" && test -z "$BOOTSTRAP_SEED"; then')
+        self.assertLess(guard, script.index("api_get()"))
+        self.assertIn('-m "Counter-State-Bootstrap-Seed: $BOOTSTRAP_SEED"', script)
+        self.assertIn("--allow-empty", script)
+        text = UPDATE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("BOOTSTRAP_SEED: ${{ steps.badge-state.outputs.bootstrap_seed }}", text)
+        self.assertIn("BOOTSTRAP_SEED: ${{ inputs.bootstrap_counter_state_seed }}", text)
 
 
 class V2FakeApi:

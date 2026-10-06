@@ -259,6 +259,7 @@ namespace SparkEditor
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         SDL_GL_SwapWindow(m_window);
+        ++m_renderedFrameCount;
     }
 
     void EditorApplication::OnWindowResize(int width, int height)

@@ -30,10 +30,10 @@ jobs:
       statuses: read
     outputs:
       publish: ${{ steps.final-head.outputs.publish }}
-      evidence_conclusion: ${{ steps.staged-build.outputs.conclusion }}
+      evidence_conclusion: ${{ steps.resolve_evidence.outputs.conclusion }}
       source_commit: ${{ steps.resolve_evidence.outputs.source_commit }}
-      evidence_run_id: ${{ steps.staged-build.outputs.run_id }}
-      evidence_run_attempt: ${{ steps.staged-build.outputs.run_attempt }}
+      evidence_run_id: ${{ steps.resolve_evidence.outputs.run_id }}
+      evidence_run_attempt: ${{ steps.resolve_evidence.outputs.run_attempt }}
       site_state_object: ${{ steps.site-state.outputs.remote_object }}
     steps:
       - name: Attest current trusted site-data controller
@@ -112,7 +112,10 @@ jobs:
           assert run.get("head_branch") == "Working"
           assert run.get("event") in {"push", "workflow_dispatch"}
           assert run.get("status") == "completed"
-          assert run.get("conclusion") == "success"
+          assert run.get("conclusion") in {
+              "success", "failure", "cancelled", "timed_out", "action_required",
+              "neutral", "skipped", "stale",
+          }
           assert isinstance(run.get("run_attempt"), int) and run["run_attempt"] >= 1
           source_commit = run.get("head_sha", "")
           assert re.fullmatch(r"[0-9a-f]{40}", source_commit)
@@ -133,7 +136,43 @@ jobs:
                   stream.write(f"{key}={value}\n")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
               stream.write(f"source_commit={source_commit}\n")
+              stream.write(f"conclusion={run['conclusion']}\n")
+              stream.write(f"run_id={run['id']}\n")
+              stream.write(f"run_attempt={run['run_attempt']}\n")
           print(f"Validated {run['name']} run {run['id']} at {source_commit}")
+          PY
+
+      - name: Refuse a superseded Build run on the same commit
+        id: latest-run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUNS_FILE="$RUNNER_TEMP/build-runs-for-source.json"
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/runs?branch=Working&head_sha=${SOURCE_COMMIT}&per_page=100" \
+            --output "$RUNS_FILE"
+          python3 -I - "$RUNS_FILE" <<'PY'
+          import json
+          import os
+          import sys
+
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          runs = data.get("workflow_runs")
+          count = data.get("total_count")
+          assert type(count) is int and 1 <= count <= 100
+          assert isinstance(runs, list) and len(runs) == count
+          assert all(type(run.get("run_number")) is int and run["run_number"] > 0 for run in runs)
+          newest = max(runs, key=lambda run: run["run_number"])
+          latest = (newest.get("id") == int(os.environ["EVIDENCE_RUN_ID"]) and
+                    newest.get("run_attempt") == int(os.environ["EVIDENCE_RUN_ATTEMPT"]))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write(f"latest={'true' if latest else 'false'}\n")
+          if not latest:
+              print("Skipping superseded Build run on the same source commit")
           PY
 
       # Always check out the protected publication branch itself. The evidence
@@ -154,7 +193,8 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin Working:refs/remotes/origin/Working
-          if test "$SOURCE_COMMIT" = "$(git rev-parse refs/remotes/origin/Working)"; then
+          if test "${{ steps.latest-run.outputs.latest }}" = true && \
+             test "$SOURCE_COMMIT" = "$(git rev-parse refs/remotes/origin/Working)"; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
@@ -163,7 +203,7 @@ jobs:
 
       - name: Verify exact staged Build job and attempt evidence
         id: staged-build
-        if: steps.initial-head.outputs.publish == 'true'
+        if: steps.initial-head.outputs.publish == 'true' && steps.resolve_evidence.outputs.conclusion == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ steps.resolve_evidence.outputs.source_commit }}
@@ -173,7 +213,7 @@ jobs:
 
       - name: Wait for trusted exact-commit CI evidence
         id: exact-gate
-        if: steps.initial-head.outputs.publish == 'true'
+        if: steps.initial-head.outputs.publish == 'true' && steps.resolve_evidence.outputs.conclusion == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ steps.resolve_evidence.outputs.source_commit }}
@@ -191,7 +231,7 @@ jobs:
           done
 
       - name: Write durable exact CI evidence manifest
-        if: steps.initial-head.outputs.publish == 'true'
+        if: steps.initial-head.outputs.publish == 'true' && steps.resolve_evidence.outputs.conclusion == 'success'
         env:
           EXACT_SOURCE_COMMIT: ${{ steps.resolve_evidence.outputs.source_commit }}
           EXACT_BUILD_RUN_ID: ${{ steps.exact-gate.outputs.run_id }}
@@ -220,7 +260,7 @@ jobs:
             --output "$RUNNER_TEMP/exact-ci-evidence.json"
 
       - name: Repeat the complete repository proof
-        if: steps.initial-head.outputs.publish == 'true'
+        if: steps.initial-head.outputs.publish == 'true' && steps.resolve_evidence.outputs.conclusion == 'success'
         env:
           NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.staged-build.outputs.conclusion }}
         run: |
@@ -232,7 +272,6 @@ jobs:
           # reintroduce it to get a publication through.
           python3 tools/site-data/validate.py
           python3 tools/site-data/validate.py --assets
-          python3 tools/site-data/validate.py --docs
           python3 tools/site-data/validate.py --legal
           python3 tools/site-data/render_handoff.py --check
           COMMITTED_AT="$(git show -s --format=%cI "$SOURCE_COMMIT")"
@@ -263,6 +302,11 @@ jobs:
             test -s "$HEALTH_EVIDENCE"
             HEALTH_ARGS=(--doc-health-file "$HEALTH_EVIDENCE")
           done
+          # --docs consumes the ignored API corpus. The first generate.py call
+          # above is the producer on a clean checkout, so validate the docs
+          # surface only after that producer has materialized its exact-SHA
+          # output.
+          python3 tools/site-data/validate.py --docs
           diff --recursive --brief \
             "$RUNNER_TEMP/.site-data-proof-a" \
             "$RUNNER_TEMP/.site-data-proof-b"
@@ -272,15 +316,20 @@ jobs:
         if: steps.initial-head.outputs.publish == 'true'
         env:
           PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
-          STATE_REF: refs/tags/site-data
+          STATE_REF: ${{ vars.SITE_DATA_PUBLIC_REF || 'refs/tags/site-data' }}
         run: |
           set -euo pipefail
+          case "$STATE_REF" in
+            refs/tags/site-data|refs/heads/site-data) ;;
+            *) echo "SITE_DATA_PUBLIC_REF must be refs/tags/site-data or refs/heads/site-data" >&2; exit 1 ;;
+          esac
           mkdir -p "$PUBLISH_DIR"
           REMOTE_OBJECT="$(git ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
           if test -n "$REMOTE_OBJECT"; then
             git fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
             git archive "${STATE_REF}^{commit}" | tar -x -C "$PUBLISH_DIR"
-          elif git ls-remote --exit-code --refs origin refs/heads/site-data >/dev/null 2>&1; then
+          elif test "$STATE_REF" = refs/tags/site-data && \
+               git ls-remote --exit-code --refs origin refs/heads/site-data >/dev/null 2>&1; then
             # One-time migration seed. Once the tag exists, the legacy branch
             # is never read again and can be deleted after content verification.
             git fetch --no-tags origin refs/heads/site-data:refs/remotes/origin/site-data-legacy
@@ -289,7 +338,7 @@ jobs:
           echo "remote_object=$REMOTE_OBJECT" >> "$GITHUB_OUTPUT"
 
       - name: Fetch the exact-commit CTest report
-        if: steps.initial-head.outputs.publish == 'true'
+        if: steps.initial-head.outputs.publish == 'true' && steps.resolve_evidence.outputs.conclusion == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -311,7 +360,7 @@ jobs:
           fi
 
       - name: Generate and validate the retained publication payload
-        if: steps.initial-head.outputs.publish == 'true'
+        if: steps.initial-head.outputs.publish == 'true' && steps.resolve_evidence.outputs.conclusion == 'success'
         env:
           NORMALIZED_EVIDENCE_CONCLUSION: ${{ steps.staged-build.outputs.conclusion }}
           PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
@@ -344,6 +393,18 @@ jobs:
           python3 tools/site-data/validate.py \
             --published "$PUBLISH_DIR" \
             --require-exact-evidence
+
+      - name: Publish API-bound run status without replacing retained content
+        if: steps.initial-head.outputs.publish == 'true'
+        env:
+          PUBLISH_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
+        run: |
+          set -euo pipefail
+          python3 tools/site-data/publication_status.py write \
+            --run-file "$RUNNER_TEMP/build-evidence-run.json" \
+            --run-id "$EVIDENCE_RUN_ID" \
+            --run-attempt "$EVIDENCE_RUN_ATTEMPT" \
+            --payload-dir "$PUBLISH_DIR"
 
       - name: Recheck Working immediately before handing off the payload
         id: final-head
@@ -403,17 +464,85 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           PAYLOAD_DIR: ${{ runner.temp }}/sparkengine-site-data-payload
           PUBLISH_REPO: ${{ runner.temp }}/sparkengine-site-data-repository
-          STATE_REF: refs/tags/site-data
+          STATE_REF: ${{ vars.SITE_DATA_PUBLIC_REF || 'refs/tags/site-data' }}
         run: |
           set -euo pipefail
-          test -f "$PAYLOAD_DIR/latest.json"
-          test -d "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT"
+          case "$STATE_REF" in
+            refs/tags/site-data|refs/heads/site-data) ;;
+            *) echo "SITE_DATA_PUBLIC_REF must be refs/tags/site-data or refs/heads/site-data" >&2; exit 1 ;;
+          esac
+          test -f "$PAYLOAD_DIR/status.json"
+          test ! -L "$PAYLOAD_DIR/status.json"
           test ! -e "$PAYLOAD_DIR/.git"
-          python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/validate.py" \
-            --published "$PAYLOAD_DIR" \
-            --require-exact-evidence
+          RUN_FILE="$RUNNER_TEMP/site-data-publish-build-run.json"
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}" \
+            --output "$RUN_FILE"
+          python3 -I - "$PAYLOAD_DIR/status.json" "$RUN_FILE" <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          def unique(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError(f"duplicate JSON key: {key}")
+                  result[key] = value
+              return result
+
+          def read(path, limit):
+              with open(path, "rb") as stream:
+                  data = stream.read(limit + 1)
+              assert len(data) <= limit
+              return json.loads(data.decode("utf-8"), object_pairs_hook=unique)
+
+          status = read(sys.argv[1], 8192)
+          run = read(sys.argv[2], 2097152)
+          sha = os.environ["SOURCE_COMMIT"]
+          run_id = int(os.environ["EVIDENCE_RUN_ID"])
+          attempt = int(os.environ["EVIDENCE_RUN_ATTEMPT"])
+          conclusion = os.environ["EVIDENCE_CONCLUSION"]
+          repository = os.environ["GITHUB_REPOSITORY"]
+          assert re.fullmatch(r"[0-9a-f]{40}", sha)
+          assert repository == "Krilliac/SparkEngine"
+          assert set(status) == {"schemaVersion", "repository", "sourceCommit", "contentCommit", "state", "run"}
+          assert status["schemaVersion"] == 1 and status["repository"] == repository
+          assert status["sourceCommit"] == sha
+          assert status["contentCommit"] is None or re.fullmatch(r"[0-9a-f]{40}", status["contentCommit"])
+          assert set(status["run"]) == {"id", "attempt", "headSha", "conclusion", "url"}
+          assert status["run"] == {
+              "id": run_id,
+              "attempt": attempt,
+              "headSha": sha,
+              "conclusion": conclusion,
+              "url": f"https://github.com/{repository}/actions/runs/{run_id}/attempts/{attempt}",
+          }
+          assert status["state"] == ("current" if conclusion == "success" else "blocked")
+          assert conclusion in {"success", "failure", "cancelled", "timed_out", "action_required", "neutral", "skipped", "stale"}
+          assert status["state"] != "current" or status["contentCommit"] == sha
+          assert run["id"] == run_id and run["run_attempt"] == attempt
+          assert run["head_sha"] == sha and run["conclusion"] == conclusion and run["status"] == "completed"
+          assert run["name"] == "Build SparkEngine" and run["path"] == ".github/workflows/build.yml"
+          assert run["head_branch"] == "Working" and run["event"] in {"push", "workflow_dispatch"}
+          assert run["repository"]["full_name"] == repository
+          assert run["head_repository"]["full_name"] == repository
+          PY
+
+          if test "$EVIDENCE_CONCLUSION" = success; then
+            test -f "$PAYLOAD_DIR/latest.json"
+            test -d "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT"
+            python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/validate.py" \
+              --published "$PAYLOAD_DIR" \
+              --require-exact-evidence
+          fi
           EXPECTED_WORKFLOW_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}/attempts/${EVIDENCE_RUN_ATTEMPT}"
-          python3 -I - "$PAYLOAD_DIR/latest.json" "$EVIDENCE_CONCLUSION" "$SOURCE_COMMIT" "$EXPECTED_WORKFLOW_URL" <<'PY'
+          if test "$EVIDENCE_CONCLUSION" = success; then
+            python3 -I - "$PAYLOAD_DIR/latest.json" "$EVIDENCE_CONCLUSION" "$SOURCE_COMMIT" "$EXPECTED_WORKFLOW_URL" <<'PY'
           import json
           import sys
 
@@ -427,14 +556,40 @@ jobs:
           assert payload["publication"]["workflowUrl"] == workflow_url
           assert payload["publication"]["exactEvidence"]["sourceCommit"] == source_commit
           PY
+          fi
 
           if test "$(git -C "$GITHUB_WORKSPACE/trusted-source" rev-parse HEAD)" != "$SOURCE_COMMIT"; then
             echo "Trusted publisher checkout is not the exact source commit." >&2
             exit 1
           fi
-          GH_TOKEN="$GITHUB_TOKEN" \
-          TARGET_SHA="$SOURCE_COMMIT" \
-            python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
+          if test "$EVIDENCE_CONCLUSION" = success; then
+            GH_TOKEN="$GITHUB_TOKEN" \
+            TARGET_SHA="$SOURCE_COMMIT" \
+              python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
+          fi
+          # REL-200: a globally ready contract deploys only through the strict
+          # ready gate, which demands same-commit release-workflow evidence. The
+          # payload's exact evidence was verified by the --published call above.
+          # The state is read by an assignment so a missing file, bad JSON or a
+          # missing key aborts the step instead of reading as "not ready".
+          if test "$EVIDENCE_CONCLUSION" = success; then
+            release_state="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["globalRelease"]["state"])' \
+              "$GITHUB_WORKSPACE/trusted-source/docs/site/readiness.json")"
+            case "$release_state" in
+              ready)
+                python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/validate.py" --require-ready
+                python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-publication-evidence.py" \
+                  --repository "$GITHUB_REPOSITORY" \
+                  --source-sha "$SOURCE_COMMIT"
+                ;;
+              blocked|candidate)
+                ;;
+              *)
+                echo "Unknown globalRelease.state '$release_state'; refusing publication." >&2
+                exit 1
+                ;;
+            esac
+          fi
 
           git init "$PUBLISH_REPO"
           git -C "$PUBLISH_REPO" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
@@ -452,6 +607,12 @@ jobs:
           if test -n "$REMOTE_OBJECT"; then
             git -C "$PUBLISH_REPO" fetch --force --no-tags origin "+${STATE_REF}:${STATE_REF}"
             git -C "$PUBLISH_REPO" checkout --detach "$STATE_REF"
+            if test "$EVIDENCE_CONCLUSION" != success; then
+              # A failed run may change status.json only. The previous content
+              # and latest.json must stay byte-for-byte as they were served.
+              diff --recursive --brief --exclude=.git --exclude=status.json \
+                "$PAYLOAD_DIR" "$PUBLISH_REPO"
+            fi
             git -C "$PUBLISH_REPO" rm -r --force .
           else
             git -C "$PUBLISH_REPO" switch --orphan site-data-state
@@ -473,18 +634,53 @@ jobs:
             echo "Skipping superseded commit $SOURCE_COMMIT"
             exit 0
           fi
-          FINAL_GATE_OUTPUT="$RUNNER_TEMP/site-data-final-exact-gate.out"
-          : > "$FINAL_GATE_OUTPUT"
-          GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
-          GH_TOKEN="$GITHUB_TOKEN" \
-          TARGET_SHA="$SOURCE_COMMIT" \
-            python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
-          python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/exact_evidence.py" \
-            verify-gate-output \
-            --manifest "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT/exact-ci-evidence.json" \
-            --gate-output "$FINAL_GATE_OUTPUT" \
-            --repository "$GITHUB_REPOSITORY" \
-            --source-commit "$SOURCE_COMMIT"
+          if test "$EVIDENCE_CONCLUSION" = success; then
+            FINAL_GATE_OUTPUT="$RUNNER_TEMP/site-data-final-exact-gate.out"
+            : > "$FINAL_GATE_OUTPUT"
+            GITHUB_OUTPUT="$FINAL_GATE_OUTPUT" \
+            GH_TOKEN="$GITHUB_TOKEN" \
+            TARGET_SHA="$SOURCE_COMMIT" \
+              python3 "$GITHUB_WORKSPACE/trusted-source/.github/scripts/verify-exact-required-gate.py"
+            python3 "$GITHUB_WORKSPACE/trusted-source/tools/site-data/exact_evidence.py" \
+              verify-gate-output \
+              --manifest "$PAYLOAD_DIR/snapshots/$SOURCE_COMMIT/exact-ci-evidence.json" \
+              --gate-output "$FINAL_GATE_OUTPUT" \
+              --repository "$GITHUB_REPOSITORY" \
+              --source-commit "$SOURCE_COMMIT"
+          fi
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/runs/${EVIDENCE_RUN_ID}" \
+            --output "$RUN_FILE"
+          RUNS_FILE="$RUNNER_TEMP/site-data-final-build-runs.json"
+          curl --fail-with-body --silent --show-error --retry 3 --retry-all-errors \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/runs?branch=Working&head_sha=${SOURCE_COMMIT}&per_page=100" \
+            --output "$RUNS_FILE"
+          python3 -I - "$RUN_FILE" "$RUNS_FILE" <<'PY'
+          import json
+          import os
+          import sys
+
+          run = json.load(open(sys.argv[1], encoding="utf-8"))
+          listing = json.load(open(sys.argv[2], encoding="utf-8"))
+          assert run["id"] == int(os.environ["EVIDENCE_RUN_ID"])
+          assert run["run_attempt"] == int(os.environ["EVIDENCE_RUN_ATTEMPT"])
+          assert run["head_sha"] == os.environ["SOURCE_COMMIT"]
+          assert run["status"] == "completed"
+          assert run["conclusion"] == os.environ["EVIDENCE_CONCLUSION"]
+          runs = listing.get("workflow_runs")
+          count = listing.get("total_count")
+          assert type(count) is int and 1 <= count <= 100
+          assert isinstance(runs, list) and len(runs) == count
+          assert all(type(item.get("run_number")) is int and item["run_number"] > 0 for item in runs)
+          newest = max(runs, key=lambda item: item["run_number"])
+          assert newest["id"] == run["id"] and newest["run_attempt"] == run["run_attempt"]
+          PY
           REMOTE_OBJECT_NOW="$(git -C "$PUBLISH_REPO" ls-remote --refs origin "$STATE_REF" | awk 'NR == 1 { print $1 }')"
           if test "$REMOTE_OBJECT_NOW" != "$EXPECTED_SITE_OBJECT"; then
             echo "Site-data state advanced immediately before publication." >&2

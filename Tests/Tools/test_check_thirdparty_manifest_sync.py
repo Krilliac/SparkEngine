@@ -140,8 +140,15 @@ class ManifestSyncHarness(unittest.TestCase):
         else:
             env.pop("CI", None)
             env.pop("GITHUB_ACTIONS", None)
+        command = [self.bash, SCRIPT_REL]
+        if ci:
+            # On Windows, the resolved ``bash`` may be WSL Bash launched from
+            # native Python.  Environment additions in ``env`` are not
+            # consistently visible there, so exercise the script's explicit
+            # portable CI mode instead of silently testing worktree mode.
+            command.append("--ci")
         return subprocess.run(
-            [self.bash, SCRIPT_REL],
+            command,
             cwd=str(self.repo),
             capture_output=True,
             text=True,

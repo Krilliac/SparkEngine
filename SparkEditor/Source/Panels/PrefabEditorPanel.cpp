@@ -112,9 +112,11 @@ namespace SparkEditor
         ImGui::BeginDisabled(!hasSelection);
         if (ImGui::Button(ICON_FA_SAVE " Save"))
         {
-            if (m_prefabManager)
+            // SavePrefab logs the actionable reason (no project open, unusable name, write failure).
+            if (m_prefabManager && !m_prefabManager->SavePrefab(m_selectedPrefab))
             {
-                m_prefabManager->SavePrefab(m_selectedPrefab);
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PrefabEditorPanel: prefab '%s' was not saved",
+                                m_selectedPrefab.c_str());
             }
         }
         ImGui::SameLine();

@@ -1,8 +1,17 @@
 # Spark Engine
 
-A C++23 open-source 3D game engine with multiple graphics backends behind a shared RHI surface, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
+A C++23 source-available 3D game engine with multiple graphics backends behind a shared RHI surface, ECS (EnTT), Jolt Physics, AngelScript scripting, and an ImGui-based editor. Originally built around first-person shooters, it now includes genre templates for RPGs, MMOs, RTS, racing, open-world, and platformers.
 
 Website: [sparkengine.dev](https://sparkengine.dev/)
+
+MinGW/Wine is experimental; its advisory CI lane runs only on manual
+`workflow_dispatch`. It targets CPU rendering for GPU-less servers and AI agents
+in both the engine and editor. Current runtime proof is pending; the last
+documented hosted Wine tests failed. See the [MinGW/Wine guide](wiki/development/MinGW-Wine-Cross-Compilation.md).
+
+[![Explore the engine in 3D](https://img.shields.io/badge/Explore-the_engine_in_3D-8a2be2?style=for-the-badge&logo=threedotjs&logoColor=white)](https://krilliac.github.io/SparkEngine/)
+
+The **Code City** is an interactive 3D map of the source tree: every source file is a building sized by its line count, grouped into subsystem districts, with include-dependency arcs, recent churn and readiness work-item overlays. It is regenerated from `Working` by the `Code City Pages` workflow and is a visualization, not readiness evidence. To build it locally: `python3 tools/architecture-viz/generate_code_city.py`, then open `build/code-city/index.html`.
 
 [![Trusted exact-source CI](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml/badge.svg?branch=Working)](https://github.com/Krilliac/SparkEngine/actions/workflows/trusted-ci-aggregate.yml?query=branch%3AWorking)
 [![Test definitions](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FKrilliac%2FSparkEngine%2Fgenerated-repository-metrics%2F.github%2Fbadges%2Ftests.json&style=flat-square)](Tests)
@@ -17,22 +26,27 @@ Website: [sparkengine.dev](https://sparkengine.dev/)
 
 ## Getting Started
 
-Rolling Windows artifacts may be published for development evaluation. They are
-not a versioned release and do not certify `stable-v1`. Development artifacts may
-carry checksums and provenance attestations, but no versioned Shipping-configuration
-artifact has same-commit qualification across the required install, upgrade,
-rollback, and release gates.
+The release workflow is being migrated to immutable, uniquely tagged nightly
+prereleases for development evaluation. Until the repository immutability policy
+and `nightly-release` environment are configured, no new immutable nightly can
+publish; the historical rolling `nightly` release remains available and is not
+overwritten. Once enabled, choose the newest `nightly-<run>-<attempt>-<sha>`
+prerelease from the releases page. Nightlies do not certify `stable-v1`.
+Development artifacts may carry checksums and provenance attestations, but no
+versioned Shipping-configuration artifact has same-commit qualification across
+the required install, upgrade, rollback, and release gates.
 "Release" in an asset name denotes the build configuration only. Debug builds
 include additional runtime diagnostics. The bootstrap installer clones and builds
 the selected engine revision locally.
 
-[![Windows Release Installer](https://img.shields.io/badge/Download-Windows_Release_Installer-2ea44f?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release-Installer.exe)
-[![Windows Release ZIP](https://img.shields.io/badge/Download-Windows_Release_ZIP-0969da?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Release.zip)
-[![Windows Debug Installer](https://img.shields.io/badge/Download-Windows_Debug_Installer-8a2be2?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug-Installer.exe)
-[![Windows Debug ZIP](https://img.shields.io/badge/Download-Windows_Debug_ZIP-6f42c1?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkEngine-Windows-x64-Debug.zip)
-[![Bootstrap Installer](https://img.shields.io/badge/Download-Windows_Bootstrap_Installer-f97316?style=for-the-badge&logo=windows)](https://github.com/Krilliac/SparkEngine/releases/download/nightly/SparkInstaller-Windows-x64.exe)
+The planned stable Windows MSI uses a project-pinned self-signed certificate,
+not a publicly trusted code-signing certificate. Windows may show an untrusted
+or Unknown Publisher warning; verify the published checksum and certificate
+thumbprint before installing. No stable release is certified yet.
 
-[Current rolling artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases/tag/nightly) ·
+[![Browse release builds](https://img.shields.io/badge/Browse-Release_Builds-2ea44f?style=for-the-badge&logo=github)](https://github.com/Krilliac/SparkEngine/releases)
+
+[Available artifacts and checksums](https://github.com/Krilliac/SparkEngine/releases) ·
 [installer documentation](SparkInstaller/README.md)
 
 **Build from source:**
@@ -52,8 +66,9 @@ cmake --build --preset windows-release
 ./build.sh release
 ```
 
-Visual Studio and Ninja Multi-Config builds keep binaries isolated under
-`build/bin/<Config>` (for example, `build/bin/Release/SparkEditor.exe`).
+Each preset builds into `build/<preset>`; Visual Studio and Ninja Multi-Config builds keep
+binaries isolated under `bin/<Config>` there (for example,
+`build/windows-release/bin/Release/SparkEditor.exe`).
 
 Requirements: MSVC 19.36+ / GCC 13+ / Clang 17+, CMake 3.25+.  
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
@@ -61,7 +76,9 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for build issues.
 **Create a game module:**
 
 ```bash
-cmake --install build --prefix ~/SparkEngine-install
+# Install the engine you built above (pick the line for your build path)
+cmake --install build/windows-release --config Release --prefix ~/SparkEngine-install  # Windows preset
+cmake --install build --prefix ~/SparkEngine-install                                   # ./generate.sh + ./build.sh
 cp -r Templates/EmptyProject MyGame && cd MyGame
 cmake -B build -DCMAKE_PREFIX_PATH=~/SparkEngine-install
 cmake --build build --config Release
@@ -78,7 +95,7 @@ See [Templates/README.md](Templates/README.md) and [SparkTemplates](https://gith
 
 ![SparkEditor — Veyra Highlands region-map workflow](docs/screenshots/editor-region-map-veyra-highlands.jpg)
 
-The SparkEditor source inventory contains 65 `*Panel.h` classes spanning scene
+The SparkEditor source inventory contains 64 `*Panel.h` classes spanning scene
 construction, asset and shader workflows, profiling, multiplayer operations,
 collaboration, dedicated servers, world streaming, and live region design.
 That file count is not a claim that every class is registered, visible by default,
@@ -168,8 +185,8 @@ The active backend selection is XAudio2 on Windows or OpenAL on non-Windows host
 ### Scripting
 
 - **AngelScript** — hot-reload via file watcher, bindings for selected engine APIs, per-file module isolation, client/server context separation
-- **Visual scripting** — 64 node palette entries across 9 categories, compiles to AngelScript and uses the existing script runtime
-- **Shader Graph** — 35+ nodes, HLSL generation, live preview
+- **Visual scripting** — 69 node palette entries across 10 categories, compiles to AngelScript and uses the existing script runtime
+- **Shader Graph** — 34 node types, HLSL generation, live preview
 
 ### AI and Navigation
 
@@ -181,17 +198,17 @@ UDP client/server with entity replication, dirty property tracking, client-side 
 
 ### ECS and Gameplay
 
-EnTT-backed ECS with 75+ component types. Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
+EnTT-backed ECS; see the [generated component inventory](wiki/subsystems/Entity-Component-System.md). Includes: FPS weapons, damage model, HUD; vehicle physics; inventory, quests, achievements, dialogue trees; ability/cooldown/trigger system; destructible objects; replay recording (Transform/velocity/health frames while recording; playback only advances frames, no ghost-entity consumer yet); day/night cycle; weather; 2D/sprite rendering; tween system; async coroutine scheduler; save/load with ECS-aware serialization; async database-backed persistence.
 
 **Large worlds:** Source includes area-streaming and floating-point origin-rebasing implementations. "No load screens" and "100K+ entities per area" are design/load-test targets, not `stable-v1` evidence; the 100K entity-flood test validates entity-count correctness rather than per-area throughput or release performance.
 
-### Editor (65 panel header classes)
+### Editor (64 panel header classes)
 
 Scene hierarchy, Inspector, Asset browser, Game viewport, Gizmos (translate/rotate/scale), Node graphs (imnodes), Material editor, Visual script editor, Terrain editor, Weapon editor, Profiler, AI debugger, Physics debug overlay, Cinematic sequencer, Dialogue editor, Ability/condition editors, Destruction editor, 2D/tilemap editors, Audio mixer, Replay panel, Save system panel, Dedicated server panel, Version control integration, Build/deployment pipeline, Level streaming, Command palette (Ctrl+P), Prefab system, Event monitor, Coroutine debugger, Collaboration panel (multi-user with node locking and presence), and more. Collaboration, visual scripting, and their service paths are experimental and outside `stable-v1`; the asset drag/assign path and the author-to-package round trip remain open (`EDT-210`).
 
 ### Game Module Templates
 
-Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine templates are outside `stable-v1`. Separately, `GameModules/SparkGameFPS` is the blocked in-profile slice and does not yet build independently against the installed SDK:
+Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine templates are outside `stable-v1`. Separately, `GameModules/SparkGameFPS` is the blocked in-profile slice. Its installed public entrypoint consumer and source-boundary contract now pass, but the complete production DLL still uses private engine headers and links `SparkEngineLib`; clean-machine and exact-SHA hosted SDK-only proof remain open:
 
 | Template | Highlights |
 |---|---|
@@ -209,7 +226,7 @@ Nine in-tree template projects load as `.dll`/`.so` modules at runtime. All nine
 
 ## Quality Assurance
 
-**Tests:** 7,329 test definitions across 605 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and 50+ other subsystems.
+**Tests:** 8,563 test definitions across 741 files covering core utilities, ECS, physics, AI, animation, networking, gameplay, graphics, editor, and the other engine subsystems.
 
 ```bash
 ctest --test-dir build -C Release --output-on-failure --no-tests=error
@@ -249,7 +266,6 @@ Key CMake options:
 
 | Option | Default | Description |
 |---|:---:|---|
-| `ENABLE_GRAPHICS` | ON | Declared option, but currently not consumed by target/source selection; setting it OFF does not strip the RHI |
 | `ENABLE_EDITOR` | ON | ImGui editor |
 | `ENABLE_NETWORKING` | ON | UDP multiplayer |
 | `ENABLE_VULKAN` | ON | Vulkan backend |
@@ -271,7 +287,7 @@ cmake --build build --config Release
 ./build/bin/SparkEngine -headless -game <module-path>
 ```
 
-`ENABLE_GRAPHICS=OFF` is currently inert. Compile-time graphics removal remains
+There is no compile-time graphics switch; graphics removal remains
 unproven; the headless entry points use runtime wiring and `HEAD-220` is open.
 
 ---
@@ -286,7 +302,7 @@ below. Everything else in this table is experimental or uncertified.
 
 | | Minimum | Recommended |
 |---|---|---|
-| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 12+ | Windows 11 / Ubuntu 24.04 |
+| OS (build floor, not `stable-v1`) | Windows 10 / Ubuntu 24.04 / macOS 13.3+ | Windows 11 / Ubuntu 24.04 |
 | Compiler | MSVC 19.36, GCC 13, Clang 17 | MSVC 19.36+, GCC 13+, Clang 17+ |
 | C++ | C++23 | C++23 |
 | GPU | Any DirectX 11 capable | RTX 2080+ for ray tracing |
@@ -294,7 +310,7 @@ below. Everything else in this table is experimental or uncertified.
 | Storage | 5 GB | 10 GB with all game modules |
 | Build tools | CMake 3.25+ | CMake 3.25+, Ninja |
 
-The `stable-v1` contract targets the no-render `NullRHIDevice` path on Windows 11 x64, but the current Windows and `SparkServer` headless entry points pass a null graphics service and do not instantiate it (`HEAD-220` remains open). NullRHI itself rasterizes no pixels; use on every other host remains uncertified.
+The Windows engine and `SparkServer` headless entry points now own and tick a NullRHI bridge, while deliberately passing no windowed `GraphicsEngine` or `InputManager` through `EngineContext`. The generic server module runs; the FPS client module does not load through `SparkServer`. Packaged clean-host, soak, and recovery qualification remains open (`HEAD-220`). NullRHI rasterizes no pixels, and use on other hosts remains uncertified.
 
 **Platform support.** SparkEngine declares exactly one release profile, `stable-v1`:
 Windows 11 x64, the MSVC v143 toolset line, Direct3D 11, NullRHI for headless
@@ -331,7 +347,7 @@ uncertified.
 | Platform | Compiler | Backend | Declared support |
 |---|---|---|---|
 | Windows 11 x64 | MSVC v143 (VS 2022) | DirectX 11 | In `stable-v1` — primary implementation path; blocked and uncertified |
-| Windows 11 x64, headless | MSVC v143 (VS 2022) | NullRHI (no-render) target | In `stable-v1` — current host wiring still passes `nullptr` (`HEAD-220`); blocked and uncertified |
+| Windows 11 x64, headless | MSVC v143 (VS 2022) | NullRHI (no-render) target | In `stable-v1` — source bridge is wired; packaged qualification remains blocked (`HEAD-220`) |
 | Windows 10 x64 | MSVC v143 (VS 2022) | DirectX 11 | Outside `stable-v1` — documented build floor, uncertified |
 | Windows, any version | MSVC v145 (VS 2026) | DirectX 11/12 | Outside `stable-v1` — advisory CI lane only |
 | Linux | GCC 13+ / Clang 17+ | Vulkan/OpenGL | Outside `stable-v1` — experimental, CI tested |
@@ -354,7 +370,7 @@ uncertified.
 | [Versioned Plugin ABI](docs/guides/plugin-abi.md) | Versioned C plugin boundary, sidecar integrity, tasks, and hot reload |
 | [Game Module Guide](Templates/README.md) | Building standalone games with the SDK |
 | [Networking Config](wiki/subsystems/Networking.md) | UDP, replication, MMO server setup |
-| [Wiki](wiki/) | 198 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
+| [Wiki](wiki/) | 206 Markdown pages in the current source inventory (excluding `_Sidebar.md`); inventory is not support/readiness evidence |
 
 ---
 
@@ -375,11 +391,11 @@ SparkEngine/
 │       ├── Scripting/     AngelScript, Visual Scripting
 │       ├── Gameplay/      Weapons, Quests, Inventory
 │       └── 20+ other systems
-├── SparkEditor/Source/    65 *Panel.h classes, collaboration
+├── SparkEditor/Source/    64 *Panel.h classes, collaboration
 ├── SparkConsole/src/      Standalone debug console
 ├── GameModules/           11 in-tree module directories
-├── Tests/                 7,329 test definitions, 605 files
-├── wiki/                  198 Markdown pages excluding _Sidebar.md (inventory only)
+├── Tests/                 8,563 test definitions, 741 files
+├── wiki/                  206 Markdown pages excluding _Sidebar.md (inventory only)
 └── docs/                  API reference, guides
 ```
 

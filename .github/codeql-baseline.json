@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "policy": "Reviewed CodeQL findings accepted by the required analysis-regressions job (.github/scripts/check-analysis-results.py). Any finding not listed blocks the Required CI Gate; a listed finding that is no longer reported also blocks until its entry is removed. Adding an entry is a reviewed change: state why the finding is accepted.",
+  "source": "Seeded from the hosted CodeQL Advanced run 36455093304 (raw SARIF artifacts, codeql-action v4.37.9 buildless, ThirdParty paths-ignore) at commit 3d330173c1474d6becc6ce8cfd81a0fb4967e479; python and actions reported no results.",
+  "findings": [
+    {
+      "language": "c-cpp",
+      "ruleId": "cpp/integer-multiplication-cast-to-long",
+      "path": "ThirdParty/Utils/json/nlohmann_json.h",
+      "fingerprint": "9e985ab26c76a2e7:1",
+      "review": "Vendored nlohmann/json header reached through includes, so paths-ignore does not exclude it. Third-party code is updated only through the ThirdParty manifest, not patched locally."
+    },
+    {
+      "language": "c-cpp",
+      "ruleId": "cpp/integer-multiplication-cast-to-long",
+      "path": "ThirdParty/Utils/json/nlohmann_json.h",
+      "fingerprint": "5fc7daf84ff0dbf:1",
+      "review": "Vendored nlohmann/json header reached through includes, so paths-ignore does not exclude it. Third-party code is updated only through the ThirdParty manifest, not patched locally."
+    }
+  ]
+}

@@ -136,6 +136,41 @@
             }
         },
         {
+            "name": "linux-fuzz",
+            "displayName": "Linux Clang libFuzzer (SEC-120)",
+            "inherits": "linux-clang-debug",
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-stdlib=libstdc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libstdc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libstdc++",
+                "SPARK_ENABLE_FUZZ_TARGETS": "ON",
+                "BUILD_GAME_MODULES": "OFF",
+                "ENABLE_NETWORKING": "OFF",
+                "ENABLE_SERVER_PROCESSES": "OFF",
+                "ENABLE_DXR": "OFF",
+                "ENABLE_HYBRID_RT": "OFF",
+                "ENABLE_NEURAL_RENDERING": "OFF",
+                "ENABLE_ANGELSCRIPT": "OFF",
+                "ENABLE_RECAST": "OFF",
+                "ENABLE_VR": "OFF",
+                "ENABLE_MOBILE": "OFF",
+                "ENABLE_SDL2": "OFF",
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "OFF",
+                "ENABLE_LAUNCHER": "OFF",
+                "ENABLE_SPARKBUILD": "OFF",
+                "ENABLE_INSTALLER": "OFF",
+                "ENABLE_ASSET_PIPELINE_TOOLS": "OFF",
+                "ENABLE_AUTOMATION_HOST": "OFF",
+                "SPARK_STRICT_DEPS": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
             "name": "windows-shipping",
             "displayName": "Windows stable-v1 Shipping product set",
             "inherits": "default",
@@ -144,6 +179,7 @@
             "toolset": "v143",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "ENABLE_LTO": "OFF",
                 "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "ON",
                 "ENABLE_PROFILING": "OFF",
@@ -336,6 +372,34 @@
             }
         },
         {
+            "name": "macos-shipping",
+            "displayName": "macOS Shipping (Apple Silicon, experimental, no dev tools)",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_OSX_ARCHITECTURES": "arm64",
+                "CMAKE_OSX_DEPLOYMENT_TARGET": "13.3",
+                "SPARK_NATIVE_ARCH": "OFF",
+                "ENABLE_EDITOR": "OFF",
+                "ENABLE_PROFILING": "OFF",
+                "ENABLE_CONSOLE_IN_SHIPPING": "OFF",
+                "ENABLE_DEVCOMMANDS_IN_SHIPPING": "OFF",
+                "STRIP_DEBUG_SYMBOLS": "ON",
+                "SPARK_STRICT_DEPS": "ON",
+                "BUILD_TESTS": "OFF",
+                "ENABLE_VULKAN": "OFF",
+                "ENABLE_OPENGL": "ON",
+                "ENABLE_METAL": "ON",
+                "ENABLE_SDL2": "ON",
+                "ENABLE_DXR": "OFF"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            }
+        },
+        {
             "name": "minimal",
             "displayName": "Minimal Build (core only)",
             "inherits": "default",
@@ -395,6 +459,10 @@
             "configurePreset": "ci-linux-tsan"
         },
         {
+            "name": "linux-fuzz",
+            "configurePreset": "linux-fuzz"
+        },
+        {
             "name": "windows-shipping",
             "configurePreset": "windows-shipping",
             "configuration": "MinSizeRel"
@@ -427,6 +495,10 @@
         {
             "name": "macos-moltenvk",
             "configurePreset": "macos-moltenvk"
+        },
+        {
+            "name": "macos-shipping",
+            "configurePreset": "macos-shipping"
         },
         {
             "name": "linux-mingw-release",

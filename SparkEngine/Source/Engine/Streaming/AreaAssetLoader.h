@@ -91,6 +91,14 @@ namespace Spark::Streaming
          */
         bool HasManifest(AreaID areaId) const;
 
+        /**
+         * @brief Get the manifest registered for an area
+         * @param areaId The area to look up
+         * @return The registered manifest, or nullptr when the area has none. The pointer
+         *         is invalidated by the next SetManifest/RemoveManifest call.
+         */
+        const SceneManifest* GetManifest(AreaID areaId) const;
+
         // -- Loading operations --
 
         /**

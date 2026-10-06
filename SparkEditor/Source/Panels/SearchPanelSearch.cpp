@@ -7,11 +7,13 @@
 
 #include "Core/Reflection.h"
 #include "Engine/ECS/Components.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <optional>
 #include <utility>
 
 namespace SparkEditor
@@ -61,7 +63,12 @@ namespace SparkEditor
             if (!it->is_regular_file(entryEc) || entryEc)
                 continue;
 
-            m_assetIndex.push_back(it->path().string());
+            // Indexed paths are UTF-8 search/display text. path::string() throws on Windows
+            // for a name the ANSI code page cannot spell, which escaped the render path.
+            if (std::optional<std::string> assetPath = Spark::FileUtils::TryPathToUtf8(it->path()))
+            {
+                m_assetIndex.push_back(std::move(*assetPath));
+            }
         }
 
         // A failed increment leaves the iterator equal to end, so the error must be read after the
@@ -161,7 +168,7 @@ namespace SparkEditor
 
             for (const std::string& assetPath : m_assetIndex)
             {
-                const std::string fileName = std::filesystem::path(assetPath).filename().string();
+                const std::string fileName = Spark::FileUtils::GetFilename(assetPath);
                 const float score = CalculateRelevance(fileName, lowerQuery);
                 if (score <= 0.0f)
                     continue;

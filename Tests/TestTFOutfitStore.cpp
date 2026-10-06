@@ -19,6 +19,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -708,4 +709,95 @@ TEST(TFOutfitStore_DebouncedFlush)
 
     store.Close();
     fs::remove(path);
+}
+
+namespace
+{
+    std::string ReadOutfitFile(const fs::path& path)
+    {
+        std::ifstream in(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+
+    void WriteOutfitFile(const fs::path& path, const std::string& text)
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out << text;
+    }
+
+    constexpr const char* kOutfitRosterFixture =
+        R"json("nextOutfitId": 2, "outfits": [{"id": 1, "name": "Iron Vultures", "tag": "IVLT", "createdAtMs": 5,
+          "members": [{"charId": 1001, "name": "Raska", "rank": 2, "joinedAtMs": 5}]}])json";
+} // namespace
+
+TEST(Persistence_Migration_OutfitLegacyUnversionedUpgrades)
+{
+    // N-1 fixture: every outfit file written before DATA-120 versioning carries no schemaVersion.
+    const fs::path path = TempStorePath("tfoutfit_schema_v0");
+    RemoveOutfitRecoveryArtifacts(path);
+    WriteOutfitFile(path, std::string("{") + kOutfitRosterFixture + "}");
+    {
+        TFOutfitStore store;
+        ASSERT_TRUE(store.Open(path));
+        const TFOutfitRecord* legacy = store.FindById(1);
+        ASSERT_TRUE(legacy != nullptr);
+        EXPECT_TRUE(legacy->name == "Iron Vultures");
+        EXPECT_TRUE(store.AddMember(1, 2002, "Vex", TFOutfitRank::Member, 6));
+        EXPECT_TRUE(store.Close());
+    }
+
+    // The next save rewrites it in the current schema, and that file loads again with every row.
+    EXPECT_TRUE(ReadOutfitFile(path).find("\"schemaVersion\": " + std::to_string(TFOutfitStore::kSchemaVersion)) !=
+                std::string::npos);
+    TFOutfitStore reopened;
+    ASSERT_TRUE(reopened.Open(path));
+    const TFOutfitRecord* upgraded = reopened.FindById(1);
+    ASSERT_TRUE(upgraded != nullptr);
+    EXPECT_EQ(upgraded->members.size(), size_t{2});
+    EXPECT_TRUE(reopened.Close());
+    RemoveOutfitRecoveryArtifacts(path);
+}
+
+TEST(Persistence_Migration_OutfitNewerSchemaFailsClosedWithoutRewrite)
+{
+    // Rollback fixture: a newer build's file with a field this build does not know. Loading it and saving
+    // again would drop "treasury" silently, so it must be refused and left byte-identical.
+    const fs::path path = TempStorePath("tfoutfit_schema_newer");
+    RemoveOutfitRecoveryArtifacts(path);
+    const std::string newer = "{\"schemaVersion\": " + std::to_string(TFOutfitStore::kSchemaVersion + 1) + ", " +
+                              kOutfitRosterFixture + ", \"treasury\": [{\"outfitId\": 1, \"flux\": 900}]}";
+    WriteOutfitFile(path, newer);
+
+    TFOutfitStore store;
+    EXPECT_FALSE(store.Open(path));
+    EXPECT_FALSE(store.IsOpen());
+    EXPECT_EQ(store.OutfitCount(), size_t{0});
+    EXPECT_TRUE(ReadOutfitFile(path) == newer);
+
+    // Not treated as corruption: no quarantine copy is made.
+    fs::path quarantine;
+    std::error_code scanEc;
+    EXPECT_FALSE(SavePaths::FindRecoveryBackup(path, quarantine, scanEc));
+
+    // The instance stays latched, and the ownership lock was released rather than held by a refused store.
+    EXPECT_FALSE(store.Open(path));
+    SavePaths::ExclusiveFileLock probe;
+    std::error_code lockEc;
+    EXPECT_TRUE(probe.TryLock(path, lockEc));
+    probe.Unlock();
+    EXPECT_TRUE(ReadOutfitFile(path) == newer);
+
+    // Malformed versions are corruption, not "legacy" and not "newer".
+    for (const char* bad : {R"("1")", "0", "-1", "1.5"})
+    {
+        const fs::path badPath = TempStorePath("tfoutfit_schema_bad");
+        RemoveOutfitRecoveryArtifacts(badPath);
+        WriteOutfitFile(badPath, std::string("{\"schemaVersion\": ") + bad + ", " + kOutfitRosterFixture + "}");
+        TFOutfitStore badStore;
+        EXPECT_FALSE(badStore.Open(badPath));
+        fs::path badQuarantine;
+        EXPECT_TRUE(SavePaths::FindRecoveryBackup(badPath, badQuarantine, scanEc));
+        RemoveOutfitRecoveryArtifacts(badPath);
+    }
+    RemoveOutfitRecoveryArtifacts(path);
 }

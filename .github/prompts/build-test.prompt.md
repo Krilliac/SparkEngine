@@ -8,8 +8,8 @@ Context: `#prompt:copilot-instructions` for project overview. Console commands: 
 
 | Action | Windows | Linux |
 |--------|---------|-------|
-| Generate | `generate.bat` or `cmake -B build -G "Visual Studio 17 2022" -A x64` | `generate.sh` |
-| Build | `build.ps1` or `cmake --build build --config Release` | `build.sh` |
+| Generate | `generate.bat` or `cmake --preset windows-release` | `generate.sh` |
+| Build | `build.ps1` or `cmake --build build/windows-release --config Release` | `build.sh` |
 
 Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 
@@ -27,9 +27,8 @@ Presets: `cmake --preset <name>` (see `CMakePresets.json`).
 | `BUILD_GAME_MODULES` | ON | In-tree game-module targets |
 | `BUILD_TESTS` | ON | CTest unit tests |
 
-`ENABLE_GRAPHICS` is currently a compatibility cache variable, not a D3D11
-source-selection switch. `ENABLE_PHYSX`, `ENABLE_AI`, and `ENABLE_ANIMATION` are
-not root CMake options.
+There is no `ENABLE_GRAPHICS` switch; D3D11 sources are not option-selected.
+`ENABLE_PHYSX`, `ENABLE_AI`, and `ENABLE_ANIMATION` are not root CMake options.
 
 ### Build Targets
 
@@ -73,15 +72,15 @@ Workflow triggers and required/advisory matrix rows are defined in `.github/work
 
 ## Testing
 
-7,329 test definitions across 605 files in `Tests/` with internal framework + CTest.
+8,563 test definitions across 741 files in `Tests/` with internal framework + CTest.
 
 ```powershell
 # Registered CTest cases; an empty selection is an error.
-ctest --test-dir build -C Debug --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release --output-on-failure --no-tests=error
 
 # Filter cases inside the aggregate SparkTests executable by source file.
 $env:SPARK_TEST_FILE = "TestPhysics.cpp"
-.\build\bin\Debug\SparkTests.exe
+.\build\windows-release\bin\Release\SparkTests.exe
 Remove-Item Env:SPARK_TEST_FILE
 ```
 

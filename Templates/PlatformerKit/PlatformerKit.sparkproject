@@ -3,7 +3,7 @@
   "name": "PlatformerKit",
   "version": "0.2.0",
   "description": "A polished side-view platformer challenge with double jump, collectibles, hazards, checkpoint recovery, sprinting, and a gated finish.",
-  "engineVersion": "1.0.0",
+  "engineVersion": "0.9.0",
   "template": "platformer",
   "defaultScene": "Scenes/Level01.sparkscene",
   "lastOpenedScene": "Scenes/Level01.sparkscene",

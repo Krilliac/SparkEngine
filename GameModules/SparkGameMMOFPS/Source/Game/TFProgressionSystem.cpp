@@ -154,6 +154,7 @@ namespace Terrafront
         m_players.clear();
         m_meta.Clear();
         m_persistenceBlocked = false;
+        m_saveLease.Unlock(); // after the final checkpoint: a reloaded module takes it again in LoadFromDisk
         m_initialized = false;
         return true;
     }
@@ -282,14 +283,14 @@ namespace Terrafront
         }
     }
 
-    void TFProgressionSystem::ClearPlayer(PlayerId player)
+    void TFProgressionSystem::ClearPlayer(PlayerId player, bool progressDurable)
     {
         // W6: flush this player's meta to their character BEFORE dropping the
         // runtime record — TFServerSim::CleanupPlayerSession has already flushed
         // xp/rank/flux via PersistProgress but does not know about meta, and by
         // the time it calls us the m_activeCharacter binding is gone (we rely on
         // the charId cached in the meta record at seed time instead).
-        if (!m_meta.Detach(player, m_ctx ? m_ctx->db : nullptr))
+        if (!m_meta.Detach(player, m_ctx ? m_ctx->db : nullptr, progressDurable))
             SPARK_LOG_ERROR(
                 Spark::LogCategory::Game,
                 "[TF] queued dirty metadata by character after disconnect persistence failure for player %u", player);

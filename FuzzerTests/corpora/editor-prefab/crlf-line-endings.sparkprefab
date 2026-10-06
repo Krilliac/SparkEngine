@@ -1,0 +1,13 @@
+SPARKPREFAB 2
+name "Crate"
+components 2
+component "Transform"
+properties 2
+  "position" float3 1 2.5 -3
+  "scale" float 1.5
+component "Tag"
+properties 3
+  "enabled" bool true
+  "count" int -7
+  "label" string "wooden crate"
+end

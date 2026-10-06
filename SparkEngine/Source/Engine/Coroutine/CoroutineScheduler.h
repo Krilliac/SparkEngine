@@ -96,6 +96,11 @@ namespace Spark
 
         /**
          * @brief Cancel and remove all coroutines with the given name.
+         *
+         * Outside Update() the cancelled coroutines are destroyed before this returns, so an owner
+         * whose step callables live in a game-module image can stop them and then unload that image:
+         * nothing left in the scheduler still points into it. From inside Update() (a step stopping
+         * itself or a sibling) destruction is deferred to the end of that tick.
          */
         void StopCoroutine(const std::string& name)
         {
@@ -113,10 +118,12 @@ namespace Spark
                     co->Cancel();
                 }
             }
+            if (!m_updating)
+                RemoveCancelled();
         }
 
         /**
-         * @brief Cancel all running coroutines.
+         * @brief Cancel all running coroutines (destroyed immediately outside Update(), as StopCoroutine).
          */
         void StopAll()
         {
@@ -130,6 +137,8 @@ namespace Spark
                 if (co)
                     co->Cancel();
             }
+            if (!m_updating)
+                RemoveCancelled();
         }
 
         /**
@@ -169,6 +178,18 @@ namespace Spark
             // Coroutine objects live on the heap behind unique_ptr, so a reallocation
             // moves the unique_ptr slots but never the object a tick is running inside.
 
+            // A step may call StopCoroutine()/StopAll(); removal must then wait until
+            // the loops below are done with the vectors.
+            struct UpdatingScope
+            {
+                bool& updating;
+                bool previous;
+                explicit UpdatingScope(bool& flag) : updating(flag), previous(flag) { updating = true; }
+                ~UpdatingScope() { updating = previous; }
+                UpdatingScope(const UpdatingScope&) = delete;
+                UpdatingScope& operator=(const UpdatingScope&) = delete;
+            } updatingScope{m_updating};
+
             // Tick builder-pattern coroutines
             for (size_t i = 0, n = m_coroutines.size(); i < n; ++i)
             {
@@ -189,17 +210,9 @@ namespace Spark
                 }
             }
 
-            // Remove finished and cancelled builder coroutines
-            m_coroutines.erase(std::remove_if(m_coroutines.begin(), m_coroutines.end(),
-                                              [](const std::unique_ptr<Coroutine>& co)
-                                              { return !co || co->IsCancelled() || co->IsFinished(); }),
-                               m_coroutines.end());
-
-            // Remove finished and cancelled native coroutines
-            m_nativeCoroutines.erase(std::remove_if(m_nativeCoroutines.begin(), m_nativeCoroutines.end(),
-                                                    [](const std::unique_ptr<NativeCoroutineWrapper>& co)
-                                                    { return !co || co->IsCancelled() || co->IsFinished(); }),
-                                     m_nativeCoroutines.end());
+            // Nested Update() from inside a step leaves removal to the outermost tick.
+            if (!updatingScope.previous)
+                RemoveInactive();
         }
 
         /** @brief Number of active coroutines (builder + native). */
@@ -207,8 +220,33 @@ namespace Spark
 
       private:
         CoroutineScheduler() = default;
+
+        /** @brief Destroy every finished or cancelled coroutine. Never called while Update() iterates. */
+        void RemoveInactive()
+        {
+            std::erase_if(m_coroutines, [](const std::unique_ptr<Coroutine>& co)
+                          { return !co || co->IsCancelled() || co->IsFinished(); });
+            std::erase_if(m_nativeCoroutines, [](const std::unique_ptr<NativeCoroutineWrapper>& co)
+                          { return !co || co->IsCancelled() || co->IsFinished(); });
+        }
+
+        /**
+         * @brief Destroy only cancelled coroutines (the Stop*() path outside Update()).
+         *
+         * Finished entries are left for the next Update(): a builder coroutine whose steps are still being
+         * chained reports IsFinished() (zero steps), so erasing finished entries here would invalidate the
+         * reference StartCoroutine() returned to a caller that has not added its first step yet.
+         */
+        void RemoveCancelled()
+        {
+            std::erase_if(m_coroutines, [](const std::unique_ptr<Coroutine>& co) { return !co || co->IsCancelled(); });
+            std::erase_if(m_nativeCoroutines,
+                          [](const std::unique_ptr<NativeCoroutineWrapper>& co) { return !co || co->IsCancelled(); });
+        }
+
         std::vector<std::unique_ptr<Coroutine>> m_coroutines;
         std::vector<std::unique_ptr<NativeCoroutineWrapper>> m_nativeCoroutines;
+        bool m_updating = false;
     };
 
     // ============================================================================

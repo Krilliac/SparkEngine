@@ -5,6 +5,7 @@
 #include "../Utils/LogMacros.h"
 #include "../Utils/Validate.h"
 #include "../Graphics/GraphicsEngine.h"
+#include "../Graphics/OBJStaticMeshLoader.h"
 #include <tiny_obj_loader.h>
 #include <vector>
 #include <string>
@@ -46,6 +47,18 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     }
     SPARK_REQUIRE_MSG(Spark::LogCategory::Graphics, !shapes.empty(), "OBJ file contains no shapes");
 
+    // tinyobjloader accepts out-of-range positive face indices with only a
+    // warning; the loop below indexes the attribute arrays directly.
+    {
+        std::string indexError;
+        if (!Spark::Graphics::Detail::ValidateOBJIndices(attrib, shapes, indexError))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Model: OBJ rejected '%s': %s", fileUtf8.c_str(),
+                            indexError.c_str());
+            return E_FAIL;
+        }
+    }
+
     // ------------------------------------------------------------------
     //  Build vertex / index arrays
     // ------------------------------------------------------------------
@@ -58,21 +71,21 @@ HRESULT Model::LoadObj(const std::wstring& filename, ID3D11Device* device)
     {
         for (const auto& idx : shape.mesh.indices)
         {
-            XMFLOAT3 pos{attrib.vertices[3 * idx.vertex_index + 0], attrib.vertices[3 * idx.vertex_index + 1],
-                         attrib.vertices[3 * idx.vertex_index + 2]};
+            const size_t position = static_cast<size_t>(idx.vertex_index) * 3;
+            XMFLOAT3 pos{attrib.vertices[position + 0], attrib.vertices[position + 1], attrib.vertices[position + 2]};
 
             XMFLOAT3 norm{0.f, 0.f, 0.f};
             if (idx.normal_index >= 0)
             {
-                norm = XMFLOAT3(attrib.normals[3 * idx.normal_index + 0], attrib.normals[3 * idx.normal_index + 1],
-                                attrib.normals[3 * idx.normal_index + 2]);
+                const size_t normal = static_cast<size_t>(idx.normal_index) * 3;
+                norm = XMFLOAT3(attrib.normals[normal + 0], attrib.normals[normal + 1], attrib.normals[normal + 2]);
             }
 
             XMFLOAT2 uv{0.f, 0.f};
             if (idx.texcoord_index >= 0)
             {
-                uv = XMFLOAT2(attrib.texcoords[2 * idx.texcoord_index + 0],
-                              attrib.texcoords[2 * idx.texcoord_index + 1]);
+                const size_t texCoord = static_cast<size_t>(idx.texcoord_index) * 2;
+                uv = XMFLOAT2(attrib.texcoords[texCoord + 0], attrib.texcoords[texCoord + 1]);
             }
 
             verts.emplace_back(pos, norm, uv);

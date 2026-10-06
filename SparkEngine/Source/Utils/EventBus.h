@@ -53,6 +53,13 @@
 #include <unordered_map>
 #include <vector>
 
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#define SPARK_EVENTBUS_MSAN 1
+#endif
+#endif
+
 namespace Spark
 {
 
@@ -149,6 +156,11 @@ namespace Spark
       public:
         EventBus() = default;
 
+        // Handles may outlive a bus (notably during static destruction).  The
+        // token lets their callbacks become no-ops before the bus members are
+        // torn down instead of dereferencing a destroyed EventBus.
+        ~EventBus() { m_lifetime.reset(); }
+
         EventBus(const EventBus&) = delete;
         EventBus& operator=(const EventBus&) = delete;
         EventBus(EventBus&&) = delete;
@@ -179,7 +191,14 @@ namespace Spark
             uint64_t id = ++m_nextId;
             ch.entries.push_back({id, std::move(handler)});
 
-            return SubscriptionHandle([this](uint64_t subId) { DoUnsubscribe<E>(subId); }, id);
+            std::weak_ptr<LifetimeToken> lifetime = m_lifetime;
+            return SubscriptionHandle(
+                [this, lifetime = std::move(lifetime)](uint64_t subId)
+                {
+                    if (lifetime.lock())
+                        DoUnsubscribe<E>(subId);
+                },
+                id);
         }
 
         /**
@@ -197,6 +216,16 @@ namespace Spark
             // event type, the nested Publish is silently dropped.  Uses a thread_local
             // flag so independent threads can publish concurrently.
             thread_local bool publishing = false;
+#ifdef SPARK_EVENTBUS_MSAN
+            // MSan false positive, not an uninitialised read: `publishing` is
+            // constant-initialised and only ever assigned true/false.  In a
+            // dlopen'd module it lives in dynamic TLS that ld.so mallocs and
+            // zero-fills with uninstrumented code; MSan's __tls_get_addr hook
+            // unpoisons only the first block it sees per TLS module id, so after
+            // dlclose + re-dlopen (same id reused) the fresh block stays poisoned
+            // (compiler-rt sanitizer_tls_get_addr.cpp: `if (!dtv || dtv->beg)`).
+            __msan_unpoison(&publishing, sizeof(publishing));
+#endif
             if (publishing)
                 return;
 
@@ -270,6 +299,10 @@ namespace Spark
         }
 
       private:
+        struct LifetimeToken
+        {
+        };
+
         // Type-erased base so we can store channels in a single map
         struct IChannel
         {
@@ -332,6 +365,7 @@ namespace Spark
         mutable std::mutex m_channelsMutex;
         std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;
         std::atomic<uint64_t> m_nextId{0};
+        std::shared_ptr<LifetimeToken> m_lifetime = std::make_shared<LifetimeToken>();
     };
 
 } // namespace Spark

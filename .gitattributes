@@ -31,6 +31,93 @@ Templates/*/Assets/**/*.mtl text eol=lf
 # rewrite these on checkout and make the comparison fail for no real reason.
 docs/readiness/*.json text eol=lf
 docs/site/readiness.json text eol=lf
+# Fuzz corpus manifests hash seed bytes exactly. Keep JSON seeds LF-stable so
+# Windows autocrlf cannot invalidate the cross-platform content digest.
+FuzzerTests/corpora/json-utils/*.json text eol=lf
+FuzzerTests/corpora/material-editor-files/** -text
+FuzzerTests/corpora/crash-manifest/*.json text eol=lf
+# .sparkscene seeds deliberately carry CRLF, lone CR, NUL and non-UTF-8 bytes;
+# store them verbatim so neither normalization nor autocrlf rewrites a seed.
+FuzzerTests/corpora/scene-manifest/*.sparkscene -text
+# Reflected-scene compatibility fixtures are recorded with SHA-256 digests in their
+# README and v1-reflected-courtyard is byte-for-byte SerializeWorld output; keep them verbatim.
+Tests/Fixtures/Compatibility/ReflectedScene/*.sparkscene -text
+# .spk seeds are binary archives; autocrlf must never touch a byte of them.
+FuzzerTests/corpora/sparkpak-reader/*.spk -text
+# SEC-120 hardening corpora: the manifest digest pins exact seed bytes (some seeds carry
+# CRLF, lone CR or NUL on purpose), so no checkout may normalize them.
+FuzzerTests/corpora/shader-daemon-blob/** -text
+FuzzerTests/corpora/shader-service-protocol/** -text
+FuzzerTests/corpora/config-parser/** -text
+FuzzerTests/corpora/telemetry-spool-format/** -text
+FuzzerTests/corpora/save-system/** -text
+FuzzerTests/corpora/editor-prefab/** -text
+FuzzerTests/corpora/reflected-scene/** -text
+FuzzerTests/corpora/scene-manager-text/** -text
+FuzzerTests/corpora/mesh-fbx-importer/** -text
+FuzzerTests/corpora/mesh-gltf-loader/** -text
+FuzzerTests/corpora/audio-sound-effect/** -text
+FuzzerTests/corpora/texture-exr-loader/** -text
+FuzzerTests/corpora/texture-loader-linux/** -text
+FuzzerTests/corpora/mesh-obj-static-loader/** -text
+FuzzerTests/corpora/tf-lan-discovery-beacon/** -text
+FuzzerTests/corpora/mmo-chat-wire/** -text
+FuzzerTests/corpora/mmo-client-state-request/** -text
+FuzzerTests/corpora/mmo-player-entity-events/** -text
+FuzzerTests/corpora/sparkbuild-archive-download/** -text
+FuzzerTests/corpora/exec-script-file/** -text
+FuzzerTests/corpora/sparkbuild-config/** -text
+FuzzerTests/corpora/visual-script-graph/** -text
+FuzzerTests/corpora/navmesh-loader/** -text
+FuzzerTests/corpora/terrain-sparkterrain/** -text
+FuzzerTests/corpora/asset-service-protocol/** -text
+FuzzerTests/corpora/daemon-protocol-frame/** -text
+FuzzerTests/corpora/daemon-bounded-wire-codec/** -text
+FuzzerTests/corpora/binary-serializer/** -text
+FuzzerTests/corpora/datatable-system/** -text
+FuzzerTests/corpora/editor-collab-session-wire/** -text
+FuzzerTests/corpora/dialogue-system/** -text
+FuzzerTests/corpora/localization-system/** -text
+FuzzerTests/corpora/fps-multiplayer-player-state/** -text
+FuzzerTests/corpora/session-gate/** -text
+FuzzerTests/corpora/installer-state-manifest/** -text
+FuzzerTests/corpora/mod-manifest/** -text
+FuzzerTests/corpora/replay-system/** -text
+FuzzerTests/corpora/animation-skel-sanim/** -text
+FuzzerTests/corpora/daemon-orchestration-journal/** -text
+FuzzerTests/corpora/async-database-kv/** -text
+FuzzerTests/corpora/mmo-character-record/** -text
+FuzzerTests/corpora/gateway-area-control-state/** -text
+FuzzerTests/corpora/daemon-orchestrator-identity-state/** -text
+FuzzerTests/corpora/rts-save-snapshot/** -text
+FuzzerTests/corpora/material-loader/** -text
+FuzzerTests/corpora/engine-settings/** -text
+FuzzerTests/corpora/virtual-filesystem-mounts/** -text
+FuzzerTests/corpora/entity-archetype-loader/** -text
+FuzzerTests/corpora/module-abi-sidecar/** -text
+FuzzerTests/corpora/plugin-metadata-json/** -text
+FuzzerTests/corpora/reflection-binary-codec/** -text
+FuzzerTests/corpora/shader-disk-cache-blob/** -text
+# Editor parser seeds include binary noise, CRLF, and malformed encodings;
+# preserve exact bytes used by the SEC-120 corpus digests on every checkout.
+FuzzerTests/corpora/editor-scene-json/** -text
+FuzzerTests/corpora/editor-scene-load-dispatch/** -text
+FuzzerTests/corpora/editor-project-file/** -text
+FuzzerTests/corpora/editor-recovery-snapshot/** -text
+FuzzerTests/corpora/editor-scene-ini-import/** -text
+FuzzerTests/corpora/editor-theme-import/** -text
+FuzzerTests/corpora/editor-window-layout/** -text
+FuzzerTests/corpora/editor-layout/** -text
+FuzzerTests/corpora/runtime-prefab/** -text
+FuzzerTests/corpora/asset-migration/** -text
+FuzzerTests/corpora/ui-layout/** -text
+FuzzerTests/corpora/event-response-definitions/** -text
+FuzzerTests/corpora/achievement-definitions/** -text
+FuzzerTests/corpora/asset-cooker-input/** -text
+FuzzerTests/corpora/launcher-template-json/** -text
+FuzzerTests/corpora/launcher-module-manifest/** -text
+# Generated corpora are raw libFuzzer units (binary bytes, CR-only lines); keep them byte-exact.
+FuzzerTests/generated/** -text
 # Unified-diff context markers intentionally contain leading spaces before
 # upstream tab indentation. Git-apply separately enforces target whitespace.
 ThirdParty/Scripting/patches/angelscript-packed-bytecode.patch text eol=lf -whitespace
@@ -122,3 +209,6 @@ Assets/README.md -text
 # checkout; Windows autocrlf rewrote them and broke the asset-integrity job.
 GameModules/*/Assets/manifest.json text eol=lf
 GameModules/*/Assets/**/*.as text eol=lf
+# Visual-script graphs are hashed by the manifest and compared byte-for-byte
+# against their canonical serialization, so they stay LF as well.
+GameModules/*/Assets/**/*.vscript text eol=lf

@@ -557,6 +557,8 @@ The `LoadFromFile()` implementation enforces strict bounds to prevent out-of-mem
 | `kMaxEventCount` | 1,000,000 | Maximum discrete events |
 
 If any of these limits are exceeded during deserialization, `LoadFromFile()` returns `false` immediately without allocating further memory. Every `file.read()` call is followed by a stream validity check (`if (!file)`) to detect truncated files.
+`SaveToFile()` checks the same version, count, string and timeline limits
+before opening the output, so a successful save remains loadable by this reader.
 
 ## Frame Seeking Algorithm
 

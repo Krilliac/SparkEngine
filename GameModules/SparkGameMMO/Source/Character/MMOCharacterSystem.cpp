@@ -202,6 +202,13 @@ namespace MMO
 
     // === Character CRUD ===
 
+    bool MMOCharacterSystem::OwnsCharacter(uint32_t accountId, uint32_t characterId) const
+    {
+        const auto account = m_accountCharacters.find(accountId);
+        return accountId != 0 && characterId != 0 && account != m_accountCharacters.end() &&
+               std::find(account->second.begin(), account->second.end(), characterId) != account->second.end();
+    }
+
     bool MMOCharacterSystem::ValidateName(const std::string& name, std::string& errorOut) const
     {
         if (name.size() < MIN_NAME_LENGTH)
@@ -276,8 +283,15 @@ namespace MMO
         }
 
         // Create character
+        const uint32_t characterId = m_persistence ? m_persistence->AllocateCharacterId() : m_nextCharId++;
+        if (characterId == 0)
+        {
+            result.errorMessage = "Character id allocation failed";
+            return result;
+        }
+
         CharacterSummary summary;
-        summary.characterId = m_nextCharId++;
+        summary.characterId = characterId;
         summary.name = request.name;
         summary.race = request.race;
         summary.classId = request.classId;
@@ -316,6 +330,15 @@ namespace MMO
         auto it = std::find(charIds.begin(), charIds.end(), characterId);
         if (it == charIds.end())
             return false;
+
+        // Records exist once the character has been saved; deleting an unsaved
+        // character's (absent) records is a no-op that still succeeds.
+        if (m_persistence && m_persistence->IsInitialized() && !m_persistence->DeleteCharacter(characterId))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Character %u not deleted: persistence delete failed",
+                            characterId);
+            return false;
+        }
 
         charIds.erase(it);
 

@@ -4,8 +4,9 @@
  */
 
 #include "RTSMatchSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
+
+#include <cmath>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -21,8 +22,7 @@ namespace RTS
         m_matchTime = 0.0f;
         m_hasWinner = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS match system initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match system initialized");
+        Spark::ModuleLog::Info(m_context, "[RTS] Match system initialized");
         return true;
     }
 
@@ -59,8 +59,7 @@ namespace RTS
         m_matchTime = 0.0f;
         m_hasWinner = false;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match setup for " + std::to_string(playerCount) +
-                                                    " players");
+        Spark::ModuleLog::Info(m_context, "[RTS] Match setup for {} players", playerCount);
     }
 
     void RTSMatchSystem::SetPlayerFaction(int playerIndex, RTSFaction faction)
@@ -93,7 +92,7 @@ namespace RTS
     {
         if (m_players.size() < 2)
         {
-            Spark::SimpleConsole::GetInstance().LogError("[RTS] Need at least 2 players to start a match");
+            Spark::ModuleLog::Error(m_context, "[RTS] Need at least 2 players to start a match");
             return false;
         }
 
@@ -108,14 +107,23 @@ namespace RTS
             player.isEliminated = false;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS match started with %zu players", m_players.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match started!");
+        Spark::ModuleLog::Info(m_context, "[RTS] Match started with {} players", m_players.size());
         return true;
     }
 
     void RTSMatchSystem::EndMatch(RTSFaction winner)
     {
-        m_state = RTSMatchState::Victory;
+        // Victory/Defeat is reported from the local (non-AI) players' point of view.
+        bool hasLocalPlayer = false;
+        bool localPlayerWon = false;
+        for (const auto& player : m_players)
+        {
+            if (player.isAI)
+                continue;
+            hasLocalPlayer = true;
+            localPlayerWon = localPlayerWon || (player.faction == winner && !player.isEliminated);
+        }
+        m_state = hasLocalPlayer && !localPlayerWon ? RTSMatchState::Defeat : RTSMatchState::Victory;
         m_winner = winner;
         m_hasWinner = true;
 
@@ -123,10 +131,8 @@ namespace RTS
         int idx = static_cast<int>(winner);
         std::string name = (idx >= 0 && idx < 3) ? factionNames[idx] : "Unknown";
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS match ended — winner: %s (time: %ds)", name.c_str(),
-                       static_cast<int>(m_matchTime));
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Match ended! Winner: " + name +
-                                                    " (Time: " + std::to_string(static_cast<int>(m_matchTime)) + "s)");
+        Spark::ModuleLog::Info(m_context, "[RTS] Match ended! Winner: {} (Time: {}s)", name,
+                               static_cast<int>(m_matchTime));
     }
 
     void RTSMatchSystem::Surrender(int playerIndex)
@@ -137,7 +143,7 @@ namespace RTS
         m_players[static_cast<size_t>(playerIndex)].hasSurrendered = true;
         m_players[static_cast<size_t>(playerIndex)].isEliminated = true;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Player " + std::to_string(playerIndex) + " surrendered");
+        Spark::ModuleLog::Info(m_context, "[RTS] Player {} surrendered", playerIndex);
     }
 
     // === Queries ===
@@ -168,6 +174,38 @@ namespace RTS
     RTSFaction RTSMatchSystem::GetWinner() const
     {
         return m_winner;
+    }
+
+    bool RTSMatchSystem::HasWinner() const
+    {
+        return m_hasWinner;
+    }
+
+    RTSMatchSnapshot RTSMatchSystem::CaptureState() const
+    {
+        return {m_state, m_matchTime, m_winner, m_hasWinner, m_players};
+    }
+
+    bool RTSMatchSystem::RestoreState(const RTSMatchSnapshot& snapshot)
+    {
+        if (snapshot.state >= RTSMatchState::Count || snapshot.winner >= RTSFaction::Count ||
+            !std::isfinite(snapshot.matchTime) || snapshot.matchTime < 0.0f ||
+            snapshot.players.size() > static_cast<size_t>(MAX_PLAYERS))
+        {
+            return false;
+        }
+        for (const PlayerSetup& player : snapshot.players)
+        {
+            if (player.faction >= RTSFaction::Count || !std::isfinite(player.startX) || !std::isfinite(player.startY))
+                return false;
+        }
+
+        m_state = snapshot.state;
+        m_matchTime = snapshot.matchTime;
+        m_winner = snapshot.winner;
+        m_hasWinner = snapshot.hasWinner;
+        m_players = snapshot.players;
+        return true;
     }
 
     std::string RTSMatchSystem::GetMatchStatusString() const

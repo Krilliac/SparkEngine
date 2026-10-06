@@ -25,7 +25,11 @@ namespace
         std::cout << "SparkInstaller " << SparkInstaller::kInstallerVersion << " — bootstrap SparkEngine\n\n";
         std::cout << "Usage:\n";
         std::cout << "  sparkinstaller                      Interactive TUI\n";
+#ifdef SPARKINSTALLER_ENABLE_GUI
         std::cout << "  sparkinstaller --gui                Interactive GUI wizard\n";
+#else
+        std::cout << "  sparkinstaller --gui                GUI wizard (not in this build; source builds only)\n";
+#endif
         std::cout << "  sparkinstaller --headless --dest <dir> [--ref <branch|tag>]\n";
         std::cout << "                                      Non-interactive: accept flags, fail on missing input\n";
         std::cout << "  sparkinstaller --help               Show this help\n";

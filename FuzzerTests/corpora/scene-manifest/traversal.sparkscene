@@ -1,0 +1,10 @@
+name = Escape
+mesh = ../../../../Users/victim/.ssh/id_rsa
+mesh = models/../../outside.mesh
+mesh = /etc/passwd
+mesh = \\server\share\x.mesh
+texture = ..\..\windows\system32\config\sam
+texture = C:evil.dds
+texture = textures/logo.png:secret
+audio = models/./../audio/ok.wav
+audio = audio/ok.wav

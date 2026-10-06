@@ -1,0 +1,218 @@
+name: Corrected readiness Release qualification
+'on':
+  push:
+    branches:
+    - codex/readiness-corrected-release-20261003
+permissions:
+  contents: read
+concurrency:
+  group: readiness-corrected-release-20261003
+  cancel-in-progress: false
+jobs:
+  source-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - name: Checkout exact source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Verify source and existing Python environment
+      env:
+        EXPECTED_SOURCE: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+        git show -s --format='%H %T' HEAD
+        python3 -c 'import sys, yaml; print(sys.version, "PyYAML", yaml.__version__)'
+    - name: Verify Primary capture and mutation contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_rhi210_capture.py
+        python3 -B Tests/Tools/test_verify_approved_primary.py
+        python3 -B Tests/Tools/test_diagnostic_sccache_keys.py
+        python3 -B Tests/Tools/test_installed_module_abi_rejection.py
+        python3 -B Tests/Tools/test_installed_native_runner.py
+        python3 -B Tests/Tools/test_sdk_template_configuration.py
+    - name: Run cleanup and diagnostic contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_compare_build_outputs.py TwoTreeCleanupTests
+        python3 -B -m unittest discover -s Tests/Tools -p 'test_build_matrix_*diagnostics.py'
+        python3 -B Tests/Tools/test_build_matrix_report_upload.py
+    - name: Verify supply chain and workflow contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_supply_chain_license_policy.py
+        python3 -B .github/scripts/test-workflow-failure-propagation.py
+        python3 -B .github/scripts/test_workflow_privilege_boundaries.py
+    - name: Verify exact documentation and inventory
+      run: |
+        set -euo pipefail
+        bash docs/update-all-docs.sh check
+        python3 -B Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json
+        test -z "$(git status --porcelain)"
+    - name: Verify reconciled production contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_clang_tidy_budget.py
+        python3 -B Tests/Tools/test_ops100_crash_security.py CrashSecurityTests.test_runtime_limit_constants_remain_source_anchored
+        bash tools/check-test-registration.sh
+    - name: Verify extraction and arena acceptance contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_extract_sde_archive.py
+        cmake -DSPARK_FPS_ARENA_LOOP_PARSER_SELF_TEST=ON -P Tests/PackageSmoke/RunInstalledFPSArenaLoop.cmake
+    - name: Full Windows qualification contracts
+      run: python3 -B Tests/Tools/test_full_windows_qualification.py
+    - name: Reviewed ISA mapper and permanent native-byte fixture contracts
+      run: |
+        set -euo pipefail
+        python3 -B -m unittest Tests.Tools.test_isa_code_map Tests.Tools.test_isa_code_map_release_fixture Tests.Tools.test_check_isa_baseline.ClassifierTests
+    - name: Existing ISA diagnostic evidence contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_isa_failure_diagnostics.py
+        python3 -B Tests/Tools/test_isa_diagnostic_runner.py
+    - name: Complete CTest capture policy contract
+      run: |
+        python3 -B - <<'PY'
+        import ast
+        from pathlib import Path
+        import yaml
+        workflow = yaml.safe_load(Path('.github/workflows/readiness-corrected-release-qualification.yml').read_text())
+        steps = workflow['jobs']['windows']['steps']
+        capture = next(step for step in steps if step['name'] == 'Retain bounded successful CTest output')
+        code = capture['run'].split("@'\n", 1)[1].split("\n'@", 1)[0]
+        assignments = [node for node in ast.parse(code).body if isinstance(node, ast.Assign)]
+        data = next(ast.literal_eval(node.value) for node in assignments if any(isinstance(t, ast.Name) and t.id == 'data' for t in node.targets))
+        assert data == b'set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE 16384)\n'
+        assert "custom.open('xb')" in code and "'ctest-output-policy.json'" in code
+        assert steps.index(capture) > next(i for i, step in enumerate(steps) if step['name'] == 'configure')
+        assert steps.index(capture) < next(i for i, step in enumerate(steps) if step['name'] == 'test')
+        PY
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 240
+    env:
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - name: Initialize owned evidence and monotonic job budget
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $q = Join-Path $env:RUNNER_TEMP "spark-full-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+        if (Test-Path -LiteralPath $q) { throw 'Evidence root exists' }
+        New-Item -ItemType Directory -Path $q | Out-Null
+        "QUAL_ROOT=$q" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+        python -c "import json,time,pathlib; pathlib.Path(r'$q/clock.json').write_text(json.dumps({'deadline':time.monotonic()+240*60}))"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Checkout workflow helper
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+        sparse-checkout: .github/scripts
+    - name: Checkout exact combined product
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+        path: product
+        submodules: recursive
+        persist-credentials: false
+    - name: Require installed VS 2022 v143 environment and record host
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $q = $env:QUAL_ROOT
+        if (-not (Test-Path -LiteralPath "$q/clock.json")) { throw "Missing initialized evidence clock" }
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+        $vs = & $vswhere -latest -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Preinstalled VS 2022 v143 unavailable' }
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
+        Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+        if ($env:VCToolsVersion -notmatch '^14\.[34][0-9]\.') { throw 'Expected v143 toolset' }
+        foreach ($entry in Get-ChildItem env:) {
+          if ($entry.Name.StartsWith('=') -or $entry.Value -match "[`r`n]") { continue }
+          if ($before[$entry.Name] -ne $entry.Value) {
+            "$($entry.Name)=$($entry.Value)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          }
+        }
+        $tools = @{}
+        foreach ($name in @('cl.exe', 'cmake.exe', 'ninja.exe', 'python.exe', 'rc.exe')) {
+          $file = (Get-Command $name -ErrorAction Stop).Source
+          $tools[$name] = @{ path=$file; version=(Get-Item -LiteralPath $file).VersionInfo.FileVersion; sha256=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() }
+        }
+        $os = Get-CimInstance Win32_OperatingSystem
+        @{ vs=$vs; vcToolsVersion=$env:VCToolsVersion; windowsSdkVersion=$env:WindowsSDKVersion; tools=$tools; os=$os.Caption; osVersion=$os.Version; osBuild=$os.BuildNumber; totalMemoryKiB=$os.TotalVisibleMemorySize; freeMemoryKiB=$os.FreePhysicalMemory; runnerImage=$env:ImageVersion; workflowSha=$env:GITHUB_SHA } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$q/host.json" -Encoding utf8
+        cmake --version
+        if ($LASTEXITCODE -ne 0) { throw 'CMake unavailable' }
+        ninja --version
+        if ($LASTEXITCODE -ne 0) { throw 'Ninja unavailable' }
+        python --version
+        if ($LASTEXITCODE -ne 0) { throw 'Python unavailable' }
+      timeout-minutes: 5
+    - name: sde
+      timeout-minutes: 5
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+    - name: graphics
+      timeout-minutes: 10
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py graphics --source product --root "$env:QUAL_ROOT" --source-sha 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+    - name: configure
+      timeout-minutes: 15
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py configure --source product --root "$env:QUAL_ROOT" --source-sha 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+    - name: Retain bounded successful CTest output
+      timeout-minutes: 1
+      run: |
+        @'
+        from pathlib import Path
+        import hashlib,json,os
+        custom = Path('product/build/CTestCustom.cmake')
+        data = b'set(CTEST_CUSTOM_MAXIMUM_PASSED_TEST_OUTPUT_SIZE 16384)\n'
+        with custom.open('xb') as output:
+            output.write(data)
+        receipt = {
+            'path': str(custom.resolve()), 'content': data.decode('ascii'),
+            'sha256': hashlib.sha256(data).hexdigest(), 'passedOutputBytes': 16384,
+            'sourceSha': '46789281a0078ed9bb9ba17dede3ac07f4d82bb8',
+            'workflowSha': os.environ['GITHUB_SHA'], 'run': os.environ['GITHUB_RUN_ID'],
+            'attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+        }
+        with (Path(os.environ['QUAL_ROOT']) / 'ctest-output-policy.json').open('x', encoding='utf-8') as output:
+            output.write(json.dumps(receipt, indent=2) + '\n')
+        '@ | python -
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: build
+      timeout-minutes: 120
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py build --source product --root "$env:QUAL_ROOT" --source-sha 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+    - name: test
+      timeout-minutes: 80
+      run: |
+        if (Test-Path Env:SPARK_SHADOW_DEVICE_TRACE) { throw 'Unexpected opt-in shadow trace in ordinary qualification' }
+        python harness/.github/scripts/qualify-full-windows.py test --source product --root "$env:QUAL_ROOT" --source-sha 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: pack
+      timeout-minutes: 10
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT" --source-sha 46789281a0078ed9bb9ba17dede3ac07f4d82bb8
+      if: ${{ always() && env.QUAL_ROOT != '' }}
+    - name: Retain bounded text proof
+      if: ${{ always() && env.QUAL_ROOT != '' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: full-windows-release-text
+        path: ${{ env.QUAL_ROOT }}/qualification-text
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 6
+    needs: source-contracts

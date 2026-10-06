@@ -15,19 +15,23 @@
 #include "Skill/ARPGSkillSystem.h"
 #include "Monster/ARPGMonsterSystem.h"
 #include "Demo/ARPGDemoEncounter.h"
+#include "Demo/ARPGActorPresentation.h"
+#include "UI/ARPGHud.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Input/InputManager.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
-#include "Utils/InvalidStateDetector.h"
+#include <Spark/ModuleLog.h>
+#include <Spark/IConsole.h>
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/AIComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
 
 #include <unordered_map>
+#include <string_view>
+#include <utility>
 
 // =============================================================================
 // Module exports
@@ -64,15 +68,14 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[ARPG] Loading Spark ARPG module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module loading — initializing 7 subsystems");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Loading Spark ARPG module...");
+    Spark::ModuleLog::Info(m_context, "ARPG module loading — initializing 7 subsystems");
 
     // Initialize hero system (classes, stats, leveling)
     m_heroSystem = std::make_unique<ARPG::ARPGHeroSystem>();
     if (!m_heroSystem->Initialize(context))
     {
-        console.LogError("[ARPG] Failed to initialize hero system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize hero system");
         return false;
     }
 
@@ -80,7 +83,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_combatSystem = std::make_unique<ARPG::ARPGCombatSystem>();
     if (!m_combatSystem->Initialize(context))
     {
-        console.LogError("[ARPG] Failed to initialize combat system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize combat system");
         return false;
     }
 
@@ -88,7 +91,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_lootSystem = std::make_unique<ARPG::ARPGLootSystem>();
     if (!m_lootSystem->Initialize(context))
     {
-        console.LogError("[ARPG] Failed to initialize loot system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize loot system");
         return false;
     }
 
@@ -96,7 +99,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_dungeonSystem = std::make_unique<ARPG::ARPGDungeonSystem>();
     if (!m_dungeonSystem->Initialize(context))
     {
-        console.LogError("[ARPG] Failed to initialize dungeon system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize dungeon system");
         return false;
     }
 
@@ -104,7 +107,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_skillSystem = std::make_unique<ARPG::ARPGSkillSystem>();
     if (!m_skillSystem->Initialize(context, m_heroSystem.get()))
     {
-        console.LogError("[ARPG] Failed to initialize skill system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize skill system");
         return false;
     }
 
@@ -112,7 +115,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     m_monsterSystem = std::make_unique<ARPG::ARPGMonsterSystem>();
     if (!m_monsterSystem->Initialize(context))
     {
-        console.LogError("[ARPG] Failed to initialize monster system");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize monster system");
         return false;
     }
 
@@ -121,7 +124,7 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     if (!m_engineSystems->Initialize(context, m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
                                      m_dungeonSystem.get()))
     {
-        console.LogError("[ARPG] Failed to initialize engine systems integration");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize engine systems integration");
         return false;
     }
 
@@ -129,63 +132,83 @@ bool SparkGameARPGModule::OnLoad(Spark::IEngineContext* context)
     if (!m_demoEncounter->Initialize(m_heroSystem.get(), m_combatSystem.get(), m_lootSystem.get(),
                                      m_dungeonSystem.get(), m_skillSystem.get(), m_monsterSystem.get()))
     {
-        console.LogError("[ARPG] Failed to initialize the playable demo encounter");
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize the playable demo encounter");
         return false;
+    }
+
+    // Give the hero and live monsters bodies in the World (no-op without one, e.g. headless tooling contexts)
+    m_actorPresentation = std::make_unique<ARPG::ARPGActorPresentation>();
+    if (!m_actorPresentation->Initialize(context, m_demoEncounter.get(), m_monsterSystem.get()))
+    {
+        Spark::ModuleLog::Error(m_context, "[ARPG] Failed to initialize the hero/monster actor presentation");
+        return false;
+    }
+
+    // Player HUD on the engine's runtime UI canvas (absent in tooling contexts without a UISystem)
+    if (context->GetUI())
+    {
+        m_hud = std::make_unique<ARPG::ARPGHud>();
+        m_hud->Initialize(context->GetUI());
     }
 
     RegisterConsoleCommands();
 
     // Register ARPG-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule({"ARPG.DeadMobTargeting", "ARPG", Spark::StateViolationSeverity::Error, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   auto* ai = w.GetComponent<AIComponent>(entity);
-                                   if (h && ai && h->isDead && ai->targetEntity != entt::null)
-                                   {
-                                       out.push_back({"ARPG.DeadMobTargeting", static_cast<uint32_t>(entity),
-                                                      "Dead monster still has a target assigned",
-                                                      Spark::StateViolationSeverity::Error});
-                                   }
-                               }
-                           }});
-
-    stateDetector.AddRule(
-        {"ARPG.StaticBodyDynamic", "ARPG", Spark::StateViolationSeverity::Warning, true,
-         [](World& w, std::vector<Spark::StateViolation>& out)
-         {
-             for (auto entity : w.GetEntitiesWith<RigidBodyComponent, HealthComponent>())
-             {
-                 auto* rb = w.GetComponent<RigidBodyComponent>(entity);
-                 auto* h = w.GetComponent<HealthComponent>(entity);
-                 if (rb && h && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic && rb->mass > 0.0f)
-                 {
-                     float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
-                                     rb->linearVelocity.y * rb->linearVelocity.y +
-                                     rb->linearVelocity.z * rb->linearVelocity.z;
-                     if (speedSq > 25.0f)
-                     {
-                         out.push_back({"ARPG.StaticBodyDynamic", static_cast<uint32_t>(entity),
-                                        "Dead entity moving at high speed (speedSq=" + std::to_string(speedSq) + ")",
-                                        Spark::StateViolationSeverity::Warning});
-                     }
-                 }
-             }
-         }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("ARPG.DeadMobTargeting", "ARPG", Spark::StateViolationSeverity::Error,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, AIComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* ai = w.GetComponent<AIComponent>(entity);
+                                    if (h && ai && h->isDead && ai->targetEntity != entt::null)
+                                    {
+                                        out.push_back({"ARPG.DeadMobTargeting", static_cast<uint32_t>(entity),
+                                                       "Dead monster still has a target assigned",
+                                                       Spark::StateViolationSeverity::Error});
+                                    }
+                                }
+                            }) &&
+        stateRules->AddRule(
+            "ARPG.StaticBodyDynamic", "ARPG", Spark::StateViolationSeverity::Warning,
+            [](World& w, std::vector<Spark::StateViolation>& out)
+            {
+                for (auto entity : w.GetEntitiesWith<RigidBodyComponent, HealthComponent>())
+                {
+                    auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                    auto* h = w.GetComponent<HealthComponent>(entity);
+                    if (rb && h && h->isDead && rb->type == RigidBodyComponent::Type::Dynamic && rb->mass > 0.0f)
+                    {
+                        float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                        rb->linearVelocity.y * rb->linearVelocity.y +
+                                        rb->linearVelocity.z * rb->linearVelocity.z;
+                        if (speedSq > 25.0f)
+                        {
+                            out.push_back({"ARPG.StaticBodyDynamic", static_cast<uint32_t>(entity),
+                                           "Dead entity moving at high speed (speedSq=" + std::to_string(speedSq) + ")",
+                                           Spark::StateViolationSeverity::Warning});
+                        }
+                    }
+                }
+            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[ARPG] Host refused the ARPG state-validation rules");
+    }
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module loaded successfully — 7 subsystems active");
-    console.LogInfo("[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
-    console.LogInfo("[ARPG] Classes: " + std::to_string(m_heroSystem->GetClassCount()) +
-                    " | Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) +
-                    " | Monsters: " + std::to_string(m_monsterSystem->GetTemplateCount()) +
-                    " | Affixes: " + std::to_string(m_lootSystem->GetAffixPoolSize()) +
-                    " | Tiers: " + std::to_string(m_dungeonSystem->GetTierCount()));
-    console.LogInfo("[ARPG] Playable encounter ready — Space attack, Q skill, R restart");
+    Spark::ModuleLog::Info(m_context, "ARPG module loaded successfully — 7 subsystems active");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Spark ARPG module loaded successfully (7 subsystems)");
+    Spark::ModuleLog::Info(m_context, "{}",
+                           "[ARPG] Classes: " + std::to_string(m_heroSystem->GetClassCount()) +
+                               " | Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) +
+                               " | Monsters: " + std::to_string(m_monsterSystem->GetTemplateCount()) +
+                               " | Affixes: " + std::to_string(m_lootSystem->GetAffixPoolSize()) +
+                               " | Tiers: " + std::to_string(m_dungeonSystem->GetTierCount()));
+    Spark::ModuleLog::Info(m_context, "[ARPG] Playable encounter ready — Space attack, Q skill, R restart");
     return true;
 }
 
@@ -197,11 +220,25 @@ void SparkGameARPGModule::OnUnload()
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them while the module image is still mapped so hot unload/reload cannot
     // leave the host detector pointing at unmapped code.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("ARPG");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("ARPG");
+    }
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[ARPG] Unloading Spark ARPG module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module shutting down");
+    UnregisterConsoleCommands();
+    Spark::ModuleLog::Info(m_context, "[ARPG] Unloading Spark ARPG module...");
+    Spark::ModuleLog::Info(m_context, "ARPG module shutting down");
+
+    if (m_hud)
+    {
+        m_hud->Shutdown();
+        m_hud.reset();
+    }
+    if (m_actorPresentation)
+    {
+        m_actorPresentation->Shutdown();
+        m_actorPresentation.reset();
+    }
 
     if (m_demoEncounter)
     {
@@ -248,10 +285,10 @@ void SparkGameARPGModule::OnUnload()
         m_heroSystem.reset();
     }
 
+    Spark::ModuleLog::Info(m_context, "ARPG module unloaded");
+    Spark::ModuleLog::Info(m_context, "[ARPG] Spark ARPG module unloaded");
     m_context = nullptr;
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "ARPG module unloaded");
-    console.LogInfo("[ARPG] Spark ARPG module unloaded");
 }
 
 void SparkGameARPGModule::OnUpdate(float deltaTime)
@@ -267,6 +304,13 @@ void SparkGameARPGModule::OnUpdate(float deltaTime)
     m_monsterSystem->Update(deltaTime);
     m_engineSystems->Update(deltaTime);
     UpdateDemoInput();
+    // Last, so the World reflects this frame's attacks, kills, spawns and any console-driven restart or load.
+    m_actorPresentation->SyncActors();
+    // The HUD is a projection of the authoritative state, so a load or restart shows up on the next frame.
+    if (m_hud)
+    {
+        m_hud->Apply(ARPG::BuildHudModel(*m_demoEncounter, *m_dungeonSystem, *m_skillSystem));
+    }
 }
 
 void SparkGameARPGModule::OnFixedUpdate(float fixedDeltaTime)
@@ -315,147 +359,173 @@ void SparkGameARPGModule::OnImGui()
 
 void SparkGameARPGModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
-
-    console.RegisterCommand(
-        "arpg_status",
-        [this](const std::vector<std::string>&) -> std::string
+    auto* console = m_context ? m_context->GetConsole() : nullptr;
+    const auto registerCommand = [this, console](std::string_view name, Spark::IConsole::CommandHandler handler)
+    {
+        if (console && console->RegisterCommand(name, std::move(handler), "", "General", ""))
         {
-            if (!m_heroSystem)
-                return "ARPG module not initialized";
+            m_registeredConsoleCommands.emplace_back(name);
+        }
+    };
 
-            std::string status = "=== Spark ARPG Status ===\n";
-            status += "Hero classes: " + std::to_string(m_heroSystem->GetClassCount()) + "\n";
-            status += "Active heroes: " + std::to_string(m_heroSystem->GetHeroCount()) + "\n";
-            status += "Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) + "\n";
-            status += "Monster templates: " + std::to_string(m_monsterSystem->GetTemplateCount()) + "\n";
-            status += "Active monsters: " + std::to_string(m_monsterSystem->GetActiveMonsterCount()) + "\n";
-            status += "Affix pool: " + std::to_string(m_lootSystem->GetAffixPoolSize()) + "\n";
-            status += "Items generated: " + std::to_string(m_lootSystem->GetGeneratedItemCount()) + "\n";
-            status += "Dungeon floor: " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber()) + "\n";
-            status += "Attacks processed: " + std::to_string(m_combatSystem->GetAttacksProcessed()) + "\n";
-            status += "Hero animation: " + m_engineSystems->GetHeroAnimationState() + "\n";
-            status += "Engine ability bridge: " +
-                      std::string(m_engineSystems->HasEngineAbilityBridge() ? "active\n" : "unavailable\n");
-            return status;
-        });
+    registerCommand("arpg_status",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        if (!m_heroSystem)
+                            return "ARPG module not initialized";
 
-    console.RegisterCommand("arpg_heroes", [this](const std::vector<std::string>&) -> std::string
-                            { return m_heroSystem->GetHeroListString(); });
+                        std::string status = "=== Spark ARPG Status ===\n";
+                        status += "Hero classes: " + std::to_string(m_heroSystem->GetClassCount()) + "\n";
+                        status += "Active heroes: " + std::to_string(m_heroSystem->GetHeroCount()) + "\n";
+                        status += "Skills: " + std::to_string(m_skillSystem->GetTotalSkillCount()) + "\n";
+                        status += "Monster templates: " + std::to_string(m_monsterSystem->GetTemplateCount()) + "\n";
+                        status += "Active monsters: " + std::to_string(m_monsterSystem->GetActiveMonsterCount()) + "\n";
+                        status += "Affix pool: " + std::to_string(m_lootSystem->GetAffixPoolSize()) + "\n";
+                        status += "Items generated: " + std::to_string(m_lootSystem->GetGeneratedItemCount()) + "\n";
+                        status += "Dungeon floor: " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber()) + "\n";
+                        status += "Attacks processed: " + std::to_string(m_combatSystem->GetAttacksProcessed()) + "\n";
+                        status += "Hero animation: " + m_engineSystems->GetHeroAnimationState() + "\n";
+                        status += "Engine ability bridge: " +
+                                  std::string(m_engineSystems->HasEngineAbilityBridge() ? "active\n" : "unavailable\n");
+                        return status;
+                    });
 
-    console.RegisterCommand("arpg_loot", [this](const std::vector<std::string>&) -> std::string
-                            { return m_lootSystem->GetLootInfoString(); });
+    registerCommand("arpg_heroes", [this](const std::vector<std::string>&) -> std::string
+                    { return m_heroSystem->GetHeroListString(); });
 
-    console.RegisterCommand("arpg_dungeon", [this](const std::vector<std::string>&) -> std::string
-                            { return m_dungeonSystem->GetDungeonStatusString(); });
+    registerCommand("arpg_loot", [this](const std::vector<std::string>&) -> std::string
+                    { return m_lootSystem->GetLootInfoString(); });
 
-    console.RegisterCommand("arpg_skills", [this](const std::vector<std::string>&) -> std::string
-                            { return m_skillSystem->GetSkillListString(); });
+    registerCommand("arpg_dungeon", [this](const std::vector<std::string>&) -> std::string
+                    { return m_dungeonSystem->GetDungeonStatusString(); });
 
-    console.RegisterCommand("arpg_monsters", [this](const std::vector<std::string>&) -> std::string
-                            { return m_monsterSystem->GetMonsterListString(); });
+    registerCommand("arpg_skills", [this](const std::vector<std::string>&) -> std::string
+                    { return m_skillSystem->GetSkillListString(); });
 
-    console.RegisterCommand("arpg_encounter", [this](const std::vector<std::string>&) -> std::string
-                            { return m_demoEncounter->GetStatusString(); });
+    registerCommand("arpg_monsters", [this](const std::vector<std::string>&) -> std::string
+                    { return m_monsterSystem->GetMonsterListString(); });
 
-    console.RegisterCommand("arpg_attack",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (m_demoEncounter->BasicAttack())
-                                    m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::BasicAttack);
-                                return m_demoEncounter->GetStatusString();
-                            });
+    registerCommand("arpg_encounter", [this](const std::vector<std::string>&) -> std::string
+                    { return m_demoEncounter->GetStatusString(); });
 
-    console.RegisterCommand("arpg_cast",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                if (m_demoEncounter->UsePrimarySkill())
-                                    m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Cast);
-                                return m_demoEncounter->GetStatusString();
-                            });
+    registerCommand("arpg_attack",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        if (m_demoEncounter->BasicAttack())
+                            m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::BasicAttack);
+                        return m_demoEncounter->GetStatusString();
+                    });
 
-    console.RegisterCommand("arpg_restart",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                m_demoEncounter->Restart();
-                                m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Idle);
-                                return m_demoEncounter->GetStatusString();
-                            });
+    registerCommand("arpg_cast",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        if (m_demoEncounter->UsePrimarySkill())
+                            m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Cast);
+                        return m_demoEncounter->GetStatusString();
+                    });
 
-    console.RegisterCommand(
-        "arpg_save",
-        [this](const std::vector<std::string>& args) -> std::string
-        {
-            auto* saveSystem = m_context->GetSaveSystem();
-            if (!saveSystem)
-                return "Save system not available";
+    registerCommand("arpg_restart",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        m_demoEncounter->Restart();
+                        m_engineSystems->PlayHeroAction(ARPG::ARPGHeroAction::Idle);
+                        return m_demoEncounter->GetStatusString();
+                    });
 
-            auto* world = m_context->GetWorld();
-            if (!world)
-                return "World not available";
+    registerCommand("arpg_save",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        auto* saveSystem = m_context->GetSaveSystem();
+                        if (!saveSystem)
+                            return "Save system not available";
 
-            std::string slot = args.empty() ? "arpg_quicksave" : args[0];
-            Spark::SaveMetadata meta;
-            meta.saveName = "ARPG Save";
-            meta.sceneName = "Dungeon Floor " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber());
+                        auto* world = m_context->GetWorld();
+                        if (!world)
+                            return "World not available";
 
-            const std::string demoState = m_demoEncounter->SerializeState();
-            if (demoState.empty())
-                return "Failed to snapshot ARPG demo state";
-            const std::unordered_map<std::string, std::string> customState = {{"SparkGameARPG.demo.v1", demoState}};
+                        std::string slot = args.empty() ? "arpg_quicksave" : args[0];
+                        Spark::SaveMetadata meta;
+                        meta.saveName = "ARPG Save";
+                        meta.sceneName = "Dungeon Floor " + std::to_string(m_dungeonSystem->GetCurrentFloorNumber());
 
-            if (saveSystem->Save(slot, *world, meta, customState))
-                return "ARPG state saved to slot: " + slot;
-            return "Failed to save to slot: " + slot;
-        });
+                        const std::string demoState = m_demoEncounter->SerializeState();
+                        if (demoState.empty())
+                            return "Failed to snapshot ARPG demo state";
+                        const std::unordered_map<std::string, std::string> customState = {
+                            {"SparkGameARPG.demo.v1", demoState}};
 
-    console.RegisterCommand("arpg_load",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                auto* saveSystem = m_context->GetSaveSystem();
-                                if (!saveSystem)
-                                    return "Save system not available";
+                        if (saveSystem->Save(slot, *world, meta, customState))
+                            return "ARPG state saved to slot: " + slot;
+                        return "Failed to save to slot: " + slot;
+                    });
 
-                                auto* world = m_context->GetWorld();
-                                if (!world)
-                                    return "World not available";
+    registerCommand("arpg_load",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        auto* saveSystem = m_context->GetSaveSystem();
+                        if (!saveSystem)
+                            return "Save system not available";
 
-                                std::string slot = args.empty() ? "arpg_quicksave" : args[0];
-                                if (!saveSystem->SaveExists(slot))
-                                    return "No save found in slot: " + slot;
+                        auto* world = m_context->GetWorld();
+                        if (!world)
+                            return "World not available";
 
-                                std::unordered_map<std::string, std::string> customState;
-                                const auto validateDemoState =
-                                    [this](const std::unordered_map<std::string, std::string>& candidate)
-                                {
-                                    const auto state = candidate.find("SparkGameARPG.demo.v1");
-                                    return state != candidate.end() && m_demoEncounter->CanRestoreState(state->second);
-                                };
-                                if (saveSystem->Load(slot, *world, customState, validateDemoState))
-                                {
-                                    const auto state = customState.find("SparkGameARPG.demo.v1");
-                                    if (!m_demoEncounter->RestoreState(state->second))
-                                        return "ARPG demo restore failed after validated world load: " + slot;
-                                    return "ARPG state loaded from slot: " + slot;
-                                }
-                                return "Failed to validate or load ARPG state from slot: " + slot;
-                            });
+                        std::string slot = args.empty() ? "arpg_quicksave" : args[0];
+                        if (!saveSystem->SaveExists(slot))
+                            return "No save found in slot: " + slot;
 
-    console.RegisterCommand(
-        "arpg_abilities",
-        [this]([[maybe_unused]] const std::vector<std::string>& args) -> std::string
-        {
-            std::string info = "=== ARPG Abilities ===\n";
-            info += "Engine bridge: " +
-                    std::string(m_engineSystems->HasEngineAbilityBridge() ? "active\n" : "unavailable\n");
-            info += "Registered abilities: " + std::to_string(m_engineSystems->GetRegisteredAbilityCount()) +
-                    " (Fireball, Whirlwind, Raise Skeleton, Holy Light)\n";
-            info += "Registered auras: " + std::to_string(m_engineSystems->GetRegisteredAuraCount()) +
-                    " (Holy Shield, Bone Armor, Poison DoT, Fire Mastery)\n";
-            info += "Registered procs: " + std::to_string(m_engineSystems->GetRegisteredProcCount()) +
-                    " (Fire Mastery proc)\n";
-            return info;
-        });
+                        std::unordered_map<std::string, std::string> customState;
+                        const auto validateDemoState =
+                            [this](const std::unordered_map<std::string, std::string>& candidate)
+                        {
+                            const auto state = candidate.find("SparkGameARPG.demo.v1");
+                            return state != candidate.end() && m_demoEncounter->CanRestoreState(state->second);
+                        };
+                        if (saveSystem->Load(slot, *world, customState, validateDemoState))
+                        {
+                            const auto state = customState.find("SparkGameARPG.demo.v1");
+                            const bool restored = m_demoEncounter->RestoreState(state->second);
+                            // The load replaced every World entity: re-place the kit and the actors
+                            // from the gameplay state (even a failed restore falls back to a fresh run).
+                            m_dungeonSystem->RebuildCryptKitAfterWorldLoad();
+                            m_actorPresentation->RebuildAfterWorldLoad();
+                            if (!restored)
+                                return "ARPG demo restore failed after validated world load: " + slot;
+                            return "ARPG state loaded from slot: " + slot;
+                        }
+                        return "Failed to validate or load ARPG state from slot: " + slot;
+                    });
+
+    registerCommand("arpg_abilities",
+                    [this]([[maybe_unused]] const std::vector<std::string>& args) -> std::string
+                    {
+                        std::string info = "=== ARPG Abilities ===\n";
+                        info += "Engine bridge: " +
+                                std::string(m_engineSystems->HasEngineAbilityBridge() ? "active\n" : "unavailable\n");
+                        info +=
+                            "Registered abilities: " + std::to_string(m_engineSystems->GetRegisteredAbilityCount()) +
+                            " (Fireball, Whirlwind, Raise Skeleton, Holy Light)\n";
+                        info += "Registered auras: " + std::to_string(m_engineSystems->GetRegisteredAuraCount()) +
+                                " (Holy Shield, Bone Armor, Poison DoT, Fire Mastery)\n";
+                        info += "Registered procs: " + std::to_string(m_engineSystems->GetRegisteredProcCount()) +
+                                " (Fire Mastery proc)\n";
+                        return info;
+                    });
+}
+
+void SparkGameARPGModule::UnregisterConsoleCommands()
+{
+    auto* console = m_context ? m_context->GetConsole() : nullptr;
+    if (!console)
+    {
+        m_registeredConsoleCommands.clear();
+        return;
+    }
+    for (const std::string& commandName : m_registeredConsoleCommands)
+    {
+        console->UnregisterCommand(commandName);
+    }
+    m_registeredConsoleCommands.clear();
 }
 
 void SparkGameARPGModule::UpdateDemoInput()

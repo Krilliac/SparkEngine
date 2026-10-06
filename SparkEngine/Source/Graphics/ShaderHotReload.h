@@ -199,9 +199,10 @@ namespace Spark::Graphics
          */
         void RemoveWatchDirectory(std::string_view dir)
         {
-            std::string target(dir);
-            std::erase(m_watchDirectories, target);
-            m_watchDirectorySet.erase(CanonicalWatchKey(dir));
+            const std::string targetKey = CanonicalWatchKey(dir);
+            std::erase_if(m_watchDirectories,
+                          [&](const std::string& watched) { return CanonicalWatchKey(watched) == targetKey; });
+            m_watchDirectorySet.erase(targetKey);
         }
 
         // -- Actions --
@@ -316,10 +317,19 @@ namespace Spark::Graphics
         ShaderHotReload(const ShaderHotReload&) = delete;
         ShaderHotReload& operator=(const ShaderHotReload&) = delete;
 
+        // path::string() uses the Windows ANSI code page and throws when a
+        // valid shader path contains a character outside that code page.
+        // Engine string APIs are UTF-8, so make this conversion explicit.
+        [[nodiscard]] static std::string PathToUtf8(const std::filesystem::path& path)
+        {
+            const std::u8string utf8 = path.generic_u8string();
+            return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+        }
+
         /** @brief Classify a shader file by its extension. */
         static ShaderStageType ClassifyShader(const std::filesystem::path& filePath)
         {
-            auto ext = filePath.extension().string();
+            auto ext = PathToUtf8(filePath.extension());
             if (ext == ".vs" || ext == ".vert")
                 return ShaderStageType::Vertex;
             if (ext == ".ps" || ext == ".frag")
@@ -334,7 +344,7 @@ namespace Spark::Graphics
                 return ShaderStageType::Domain;
 
             // HLSL convention: inspect filename suffix before extension
-            auto stem = filePath.stem().string();
+            auto stem = PathToUtf8(filePath.stem());
             if (stem.ends_with("_VS"))
                 return ShaderStageType::Vertex;
             if (stem.ends_with("_PS"))
@@ -357,7 +367,7 @@ namespace Spark::Graphics
             static const std::vector<std::string> shaderExtensions = {".hlsl", ".glsl", ".vs",   ".ps",   ".gs",
                                                                       ".cs",   ".hs",   ".ds",   ".vert", ".frag",
                                                                       ".geom", ".comp", ".hull", ".domn"};
-            auto ext = filePath.extension().string();
+            auto ext = PathToUtf8(filePath.extension());
             for (const auto& se : shaderExtensions)
             {
                 if (ext == se)
@@ -389,7 +399,7 @@ namespace Spark::Graphics
 
         static Spark::RHI::ShaderLanguage DetermineSourceLanguage(const std::filesystem::path& filePath)
         {
-            const std::string ext = filePath.extension().string();
+            const std::string ext = PathToUtf8(filePath.extension());
             if (ext == ".hlsl" || ext == ".vs" || ext == ".ps" || ext == ".gs" || ext == ".cs" || ext == ".hs" ||
                 ext == ".ds")
             {
@@ -406,15 +416,15 @@ namespace Spark::Graphics
         static std::string CanonicalWatchKey(std::string_view dir)
         {
             std::error_code ec;
-            const auto canon = std::filesystem::weakly_canonical(std::filesystem::path(dir), ec);
-            return ec ? std::string(dir) : canon.string();
+            const auto canon = std::filesystem::weakly_canonical(std::filesystem::u8path(dir), ec);
+            return ec ? std::string(dir) : PathToUtf8(canon);
         }
 
         /// Directory names never descended into during a scan: user data, temp
         /// output and build trees can be huge and contain no engine shaders.
         static bool IsDeniedScanDirectory(const std::filesystem::path& dirName)
         {
-            const std::string name = dirName.string();
+            const std::string name = PathToUtf8(dirName);
             return name == "Saves" || name == "Temp" || name == "LivePackages" || name.rfind("build", 0) == 0;
         }
 
@@ -422,11 +432,11 @@ namespace Spark::Graphics
         void ScanDirectory(const std::string& directory)
         {
             std::error_code ec;
-            if (!std::filesystem::exists(directory, ec))
+            if (!std::filesystem::exists(std::filesystem::u8path(directory), ec))
                 return;
 
             constexpr int kMaxScanDepth = 6;
-            auto it = std::filesystem::recursive_directory_iterator(directory, ec);
+            auto it = std::filesystem::recursive_directory_iterator(std::filesystem::u8path(directory), ec);
             const std::filesystem::recursive_directory_iterator end;
             if (ec)
             {
@@ -461,7 +471,7 @@ namespace Spark::Graphics
                         if (probeEc)
                         {
                             Spark::SimpleConsole::GetInstance().LogWarning(
-                                "Shader scan skipped unreadable directory '" + entryPath.string() +
+                                "Shader scan skipped unreadable directory '" + PathToUtf8(entryPath) +
                                 "': " + probeEc.message());
                             it.disable_recursion_pending();
                         }
@@ -475,14 +485,14 @@ namespace Spark::Graphics
                     {
                         // No baseline timestamp means CheckForChanges could not tell a
                         // change from a stat failure; leave the file unwatched and say so.
-                        Spark::SimpleConsole::GetInstance().LogWarning("Shader scan skipped '" + entryPath.string() +
+                        Spark::SimpleConsole::GetInstance().LogWarning("Shader scan skipped '" + PathToUtf8(entryPath) +
                                                                        "': " + timeEc.message());
                     }
                     else
                     {
                         ShaderFileInfo info;
-                        info.path = entryPath.string();
-                        info.shaderName = entryPath.stem().string();
+                        info.path = PathToUtf8(entryPath);
+                        info.shaderName = PathToUtf8(entryPath.stem());
                         info.shaderType = ClassifyShader(entryPath);
                         info.lastWriteTime = static_cast<uint64_t>(ftime.time_since_epoch().count());
 
@@ -509,10 +519,10 @@ namespace Spark::Graphics
             std::error_code ec;
             for (auto& [name, info] : m_watchedFiles)
             {
-                if (!std::filesystem::exists(info.path, ec))
+                if (!std::filesystem::exists(std::filesystem::u8path(info.path), ec))
                     continue;
 
-                auto ftime = std::filesystem::last_write_time(info.path, ec);
+                auto ftime = std::filesystem::last_write_time(std::filesystem::u8path(info.path), ec);
                 uint64_t currentTime = static_cast<uint64_t>(ftime.time_since_epoch().count());
 
                 if (currentTime != info.lastWriteTime)
@@ -539,7 +549,7 @@ namespace Spark::Graphics
 
             // Validate that the file exists before attempting compilation
             std::error_code ec;
-            if (!std::filesystem::exists(info.path, ec))
+            if (!std::filesystem::exists(std::filesystem::u8path(info.path), ec))
             {
                 event.errorMessage = "Shader file not found: " + info.path;
                 event.compileLog = event.errorMessage;
@@ -557,7 +567,7 @@ namespace Spark::Graphics
             // Read shader source from disk
             std::string sourceCode;
             {
-                std::ifstream file(info.path, std::ios::binary);
+                std::ifstream file(std::filesystem::u8path(info.path), std::ios::binary);
                 if (!file.is_open())
                 {
                     event.errorMessage = "Failed to open shader file: " + info.path;
@@ -596,7 +606,7 @@ namespace Spark::Graphics
             options.sourceFile = info.path;
             options.sourceCode = sourceCode;
             options.entryPoint = "main";
-            options.sourceLanguage = DetermineSourceLanguage(std::filesystem::path(info.path));
+            options.sourceLanguage = DetermineSourceLanguage(std::filesystem::u8path(info.path));
             // Leave targetLanguage Auto: RHI::CompileShader derives it from the
             // backend (D3D -> DXBC via d3dcompiler) and falls back to the source
             // language only when the backend is unknown.

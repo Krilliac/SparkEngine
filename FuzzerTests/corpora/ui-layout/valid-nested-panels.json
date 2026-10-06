@@ -1,0 +1,6 @@
+{"children":[
+  {"type":"panel","name":"outer","x":5,"children":[
+    {"type":"label","name":"inner-label","text":"nested"},
+    {"type":"panel","name":"inner","children":[{"type":"button","name":"deep","text":"OK"}]}
+  ],"y":7}
+]}

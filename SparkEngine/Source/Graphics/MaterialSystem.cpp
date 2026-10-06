@@ -1,7 +1,9 @@
 /**
  * @file MaterialSystem.cpp
- * @brief Core MaterialSystem implementation — lifecycle, CRUD, texture loading, utilities
+ * @brief Core MaterialSystem implementation — lifecycle, CRUD, metrics, utilities
  *
+ * Materials are created and edited in memory (CreateMaterial / CreateMaterialInstance); the
+ * material system has no file import, export or hot-reload path of its own.
  * Material class implementation is in PBRMaterial.cpp.
  * Console inspection/listing/validation commands are in MaterialConsoleOps.cpp.
  * Console editing/texture/hot-reload commands are in MaterialConsoleEdit.cpp.
@@ -13,23 +15,17 @@
 #include "../Utils/Assert.h"
 #include "../Utils/Hash.h"
 #include "../Utils/Validate.h"
-#include <algorithm>
 #include <chrono>
 #include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
 
-// Platform-specific methods (LoadTexture, BindMaterial, CreateSampler, etc.)
+// Platform-specific methods (GetSampler, BindMaterial, CreateSampler, etc.)
 // live in MaterialSystemWindows.cpp and MaterialSystemLinux.cpp.
 
 // ============================================================================
 // PLATFORM-INDEPENDENT IMPLEMENTATIONS
 // ============================================================================
 
-MaterialSystem::MaterialSystem() : m_device(nullptr), m_context(nullptr), m_hotReloadEnabled(false)
+MaterialSystem::MaterialSystem() : m_device(nullptr), m_context(nullptr)
 {
     memset(&m_metrics, 0, sizeof(m_metrics));
 }
@@ -86,9 +82,7 @@ void MaterialSystem::Shutdown()
     SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "MaterialSystem shutting down (%zu materials)", m_materials.size());
     m_materials.clear();
-    m_textureCache.clear();
     m_samplerCache.clear();
-    m_fileTimestamps.clear();
     m_defaultMaterial.reset();
     m_errorMaterial.reset();
     // Phase P: drop the material CB manager alongside the other
@@ -117,48 +111,6 @@ std::shared_ptr<Material> MaterialSystem::CreateMaterial(const std::string& name
     return material;
 }
 
-std::shared_ptr<Material> MaterialSystem::LoadMaterial(const std::string& filePath)
-{
-    SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
-    SPARK_VALIDATE_RET(Spark::LogCategory::Graphics, !filePath.empty(), nullptr);
-
-    auto it = m_materials.find(filePath);
-    if (it != m_materials.end())
-    {
-        return it->second;
-    }
-
-    // Extract a material name from the filename
-    std::string name = filePath;
-    auto slashPos = filePath.find_last_of("/\\");
-    if (slashPos != std::string::npos)
-    {
-        name = filePath.substr(slashPos + 1);
-    }
-    auto dotPos = name.find_last_of('.');
-    if (dotPos != std::string::npos)
-    {
-        name = name.substr(0, dotPos);
-    }
-
-    auto material = std::make_shared<Material>(name);
-    if (material->LoadFromFile(filePath, m_device))
-    {
-        m_materials[filePath] = material;
-
-        if (m_hotReloadEnabled)
-        {
-            m_fileTimestamps[filePath] = GetFileTimestamp(filePath);
-        }
-
-        SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Loaded material from '%s'", filePath.c_str());
-        return material;
-    }
-
-    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load material: %s", filePath.c_str());
-    return m_errorMaterial;
-}
-
 std::shared_ptr<Material> MaterialSystem::GetMaterial(const std::string& name) const
 {
     auto it = m_materials.find(name);
@@ -169,7 +121,6 @@ void MaterialSystem::UnloadMaterial(const std::string& name)
 {
     SPARK_LOG_DEBUG(Spark::LogCategory::Graphics, "Unloading material '%s'", name.c_str());
     m_materials.erase(name);
-    m_fileTimestamps.erase(name);
     UpdateMetrics();
 }
 
@@ -177,71 +128,7 @@ void MaterialSystem::UnloadAllMaterials()
 {
     SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Unloading all materials (%zu total)", m_materials.size());
     m_materials.clear();
-    m_fileTimestamps.clear();
     UpdateMetrics();
-}
-
-void MaterialSystem::EnableHotReloading(bool enabled)
-{
-    m_hotReloadEnabled = enabled;
-    if (enabled)
-    {
-        for (const auto& pair : m_materials)
-        {
-            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
-        }
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload enabled");
-    }
-    else
-    {
-        m_fileTimestamps.clear();
-        SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reload disabled");
-    }
-}
-
-void MaterialSystem::UpdateHotReload()
-{
-    if (!m_hotReloadEnabled)
-        return;
-
-    for (auto& pair : m_fileTimestamps)
-    {
-        const std::string& filePath = pair.first;
-        uint64_t& lastTimestamp = pair.second;
-
-        uint64_t currentTimestamp = GetFileTimestamp(filePath);
-        if (currentTimestamp > lastTimestamp)
-        {
-            auto it = m_materials.find(filePath);
-            if (it != m_materials.end())
-            {
-                if (it->second->LoadFromFile(filePath, m_device))
-                {
-                    lastTimestamp = currentTimestamp;
-                    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Hot reloaded material: %s", filePath.c_str());
-                }
-                else
-                {
-                    SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to hot reload material: %s",
-                                    filePath.c_str());
-                }
-            }
-        }
-    }
-}
-
-int MaterialSystem::ReloadAllMaterials()
-{
-    int reloadedCount = 0;
-    for (auto& pair : m_materials)
-    {
-        if (pair.second->LoadFromFile(pair.first, m_device))
-        {
-            reloadedCount++;
-        }
-    }
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloaded %d materials", reloadedCount);
-    return reloadedCount;
 }
 
 void MaterialSystem::BeginFrame()
@@ -261,7 +148,6 @@ void MaterialSystem::BeginFrame()
     m_persistentCB.BeginFrame();
 
     UpdateMetrics();
-    UpdateHotReload();
     PerformPeriodicMaintenance();
 }
 
@@ -301,32 +187,11 @@ void MaterialSystem::BindMaterial(const std::string& name)
     BindMaterial(material);
 }
 
-bool MaterialSystem::ReloadMaterial(const std::string& name)
-{
-    auto it = m_materials.find(name);
-    if (it == m_materials.end() || !it->second)
-    {
-        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "ReloadMaterial: material not found: %s", name.c_str());
-        return false;
-    }
-
-    bool result = it->second->ReloadMaterial(m_device);
-
-    if (result && m_hotReloadEnabled)
-    {
-        m_fileTimestamps[name] = GetFileTimestamp(name);
-    }
-
-    return result;
-}
-
 MaterialSystem::MaterialMetrics MaterialSystem::GetMetrics() const
 {
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     MaterialMetrics metrics = m_metrics;
     metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    metrics.textureCount = static_cast<int>(m_textureCache.size());
-    metrics.hotReloadEnabled = m_hotReloadEnabled;
 
     int totalVariants = 0;
     for (const auto& pair : m_materials)
@@ -345,13 +210,6 @@ void MaterialSystem::UpdateMetrics()
 {
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     m_metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    m_metrics.textureCount = static_cast<int>(m_textureCache.size());
-    m_metrics.hotReloadEnabled = m_hotReloadEnabled;
-
-    size_t totalTextureMemory = 0;
-    // Estimate total texture memory from cache size (rough 1MB/texture)
-    totalTextureMemory = m_textureCache.size() * 1024 * 1024;
-    m_metrics.textureMemory = totalTextureMemory;
 
     int totalVariants = 0;
     for (const auto& pair : m_materials)
@@ -479,8 +337,7 @@ MaterialTextureType MaterialSystem::StringToTextureType(const std::string& str) 
     return MaterialTextureType::Albedo;
 }
 
-// Platform-specific implementations (LoadTexture, UnloadTexture, GetSampler,
-// BindMaterial, CreateDefaultMaterials, CreateSampler, GetFileTimestamp,
-// PerformPeriodicMaintenance) live in:
+// Platform-specific implementations (GetSampler, BindMaterial, CreateDefaultMaterials,
+// CreateSampler, PerformPeriodicMaintenance) live in:
 //   - MaterialSystemWindows.cpp (D3D11)
 //   - MaterialSystemLinux.cpp   (RHI stubs)

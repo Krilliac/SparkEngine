@@ -1,8 +1,9 @@
 #include "Utils/CrashHandler.h"
 #include "../Core/Platform.h"
 #include "../Core/RuntimePackage.h"
+#include "Utils/CrashArtifactRetention.h"
 #include "Utils/CrashHandlerSupport.h"
-#include "Utils/CrashReportUploader.h"
+#include "Utils/CrashSymbolication.h"
 #include "Utils/Assert.h"
 #include "Utils/Process.h"
 #include "Utils/SparkError.h"
@@ -10,13 +11,10 @@
 #include "Utils/StackTrace.h"
 #include "Validate.h"
 
-// Only include CURL when libcurl is available (detected by CMake)
-#ifdef SPARK_HAS_CURL
-#include <curl/curl.h>
-#endif
-
-#include <miniz.h>
+#include <algorithm>
+#include <array>
 #include <atomic>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -38,6 +36,7 @@
 #include <windows.h>
 #include <winternl.h>
 #include <dbghelp.h>
+#include "MiniDumpWithoutStacks.h"
 #include <dxgi.h>
 #include <d3d11.h>
 #include <wincodec.h>
@@ -50,6 +49,7 @@
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "dxgi.lib")
 #elif defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+#include <cerrno>
 #include <dirent.h>
 #include <signal.h>
 #include <unistd.h>
@@ -63,8 +63,13 @@
 #include <climits>
 #include <cstdlib>
 #ifdef SPARK_PLATFORM_LINUX
+#include <elf.h>
+#include <link.h>
+#include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <sys/sysinfo.h>
+#include <sys/uio.h>
+#include <ucontext.h>
 #endif
 #ifdef SPARK_PLATFORM_MACOS
 #include <sys/sysctl.h>
@@ -77,20 +82,25 @@ static CrashConfig g_cfg;
 static std::mutex g_lock;
 static bool g_triggerCrashOnAssert = false;
 static std::atomic<std::uint64_t> g_reportSequence{0};
-#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
-static volatile sig_atomic_t g_inSignalHandler = 0;
+#ifdef SPARK_PLATFORM_LINUX
+// The producer owns this private queue; reserve one of its 32 slots for a fatal signal.
+static bool g_reserveFatalManifest = false;
+static pid_t g_signalArtifactOwnerPid = 0;
 #endif
+#if defined(SPARK_PLATFORM_LINUX) || defined(SPARK_PLATFORM_MACOS)
+static std::atomic_flag g_inSignalHandler = ATOMIC_FLAG_INIT;
+static volatile sig_atomic_t g_posixCoreDumpPolicyEnforced = 1;
+#endif
+
+// Every faulting-thread frame line the stack-trace producers write starts with
+// this marker, so a reader of the crash log can tell the faulting stack apart
+// from the unmarked per-thread stacks written by ThreadStacks().
+static constexpr const char* kStackFrameMarker = "FRAME ";
+static constexpr const wchar_t* kStackFrameMarkerW = L"FRAME ";
 
 static void AssignCrashConfig(const CrashConfig& cfg)
 {
     g_cfg = cfg;
-    if (g_cfg.captureFullMemoryDump && !Spark::CrashHandlerDetail::CanCaptureFullMemoryDump(
-                                           true, g_cfg.githubToken, g_cfg.smtpPass, g_cfg.uploadURL, g_cfg.proxyURL))
-    {
-        g_cfg.captureFullMemoryDump = false;
-        SPARK_LOG_WARN(Spark::LogCategory::Core,
-                       "CrashHandler: full-memory dump disabled because automatic transport configuration is present");
-    }
 }
 
 
@@ -427,93 +437,6 @@ static PinnedFile CreateExclusiveOutputFile(const std::string& path)
     return result;
 }
 
-static bool ZipFilesUtf8(const std::string& zip, const std::vector<std::string>& files,
-                         const std::vector<PinnedFile*>& expectedInputs, PinnedFile* pinnedArchive = nullptr)
-{
-    if (files.empty() || files.size() != expectedInputs.size())
-        return false;
-    PinnedFile output = CreateExclusiveOutputFile(zip);
-    if (!output.stream)
-        return false;
-    mz_zip_archive za{};
-    if (!mz_zip_writer_init_cfile(&za, output.stream, 0))
-        return false;
-
-    bool success = true;
-    for (size_t index = 0; index < files.size(); ++index)
-    {
-        const std::string& f = files[index];
-        PinnedFile input = OpenPinnedInputFile(f);
-        const PinnedFile* expected = expectedInputs[index];
-        if (!input.stream || !expected || !expected->identityValid || input.device != expected->device ||
-            input.file != expected->file)
-        {
-            success = false;
-            break;
-        }
-        const std::string entry =
-            Spark::CrashHandlerDetail::PathToUtf8(Spark::CrashHandlerDetail::PathFromUtf8(f).filename());
-        if (!mz_zip_writer_add_cfile(&za, entry.c_str(), input.stream, input.size, nullptr, nullptr, 0,
-                                     MZ_BEST_COMPRESSION, nullptr, 0, nullptr, 0))
-        {
-            success = false;
-            break;
-        }
-    }
-
-    if (success)
-        success = mz_zip_writer_finalize_archive(&za) != 0;
-    mz_zip_writer_end(&za);
-
-    if (!success)
-    {
-        std::fclose(output.stream);
-        output.stream = nullptr;
-    }
-    else if (pinnedArchive)
-    {
-        if (std::fflush(output.stream) != 0)
-            return false;
-        *pinnedArchive = std::move(output);
-    }
-    return success;
-}
-
-static std::string StableUploadPath(PinnedFile& pinnedFile, const std::string& originalPath)
-{
-    if (!pinnedFile.stream || !pinnedFile.identityValid)
-        return {};
-#ifdef SPARK_PLATFORM_WINDOWS
-    const intptr_t osHandle = _get_osfhandle(_fileno(pinnedFile.stream));
-    BY_HANDLE_FILE_INFORMATION info{};
-    if (osHandle == -1 || !GetFileInformationByHandle(reinterpret_cast<HANDLE>(osHandle), &info) ||
-        info.nNumberOfLinks != 1 || info.dwVolumeSerialNumber != pinnedFile.device ||
-        ((static_cast<std::uint64_t>(info.nFileIndexHigh) << 32) | info.nFileIndexLow) != pinnedFile.file)
-    {
-        return {};
-    }
-#else
-    struct stat info
-    {
-    };
-    if (fstat(fileno(pinnedFile.stream), &info) != 0 || info.st_nlink != 1 ||
-        static_cast<std::uint64_t>(info.st_dev) != pinnedFile.device ||
-        static_cast<std::uint64_t>(info.st_ino) != pinnedFile.file)
-    {
-        return {};
-    }
-#endif
-    if (std::fseek(pinnedFile.stream, 0, SEEK_SET) != 0)
-        return {};
-#ifdef SPARK_PLATFORM_WINDOWS
-    return originalPath;
-#elif defined(SPARK_PLATFORM_LINUX)
-    return "/proc/self/fd/" + std::to_string(fileno(pinnedFile.stream));
-#else
-    return "/dev/fd/" + std::to_string(fileno(pinnedFile.stream));
-#endif
-}
-
 static bool WriteExclusiveFileUtf8(const std::string& path, const std::string& content)
 {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -579,7 +502,7 @@ static std::atomic<bool> g_crashReported{false};
 /// How a report leaves this process.
 enum class CrashReportDelivery
 {
-    Interactive, ///< May prompt for consent and upload from this process
+    Interactive, ///< May capture a screenshot and hand off to the read-only reporter
     ArtifactOnly ///< Dump/log/manifest only: no dialogs, no screenshot, no upload
 };
 
@@ -610,13 +533,22 @@ static unsigned long GetEnginePID()
 
 static bool InitializeCrashArtifactDirectory()
 {
-    std::error_code error;
-    const std::filesystem::path tempDirectory = std::filesystem::temp_directory_path(error);
-    if (error)
+    const std::filesystem::path baseDirectory = Spark::CrashHandlerDetail::ResolveCrashArtifactBaseDirectory();
+    if (baseDirectory.empty())
+    {
         return false;
+    }
+
+    // Each process leaves one directory behind. Before adding this one, drop
+    // the ones earlier, exited processes left empty or past the retention
+    // limits, so launches and crashes cannot accumulate artifacts unbounded.
+    const std::size_t pruned = Spark::CrashHandlerDetail::PruneStaleCrashArtifactDirectories(baseDirectory);
+    if (pruned != 0)
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "CrashHandler: removed %zu stale crash-artifact director%s", pruned,
+                       pruned == 1 ? "y" : "ies");
 
     const std::filesystem::path artifactDirectory =
-        Spark::CrashHandlerDetail::CreatePrivateCrashArtifactDirectory(tempDirectory, GetEnginePID());
+        Spark::CrashHandlerDetail::CreatePrivateCrashArtifactDirectory(baseDirectory, GetEnginePID());
     if (artifactDirectory.empty())
         return false;
 
@@ -657,14 +589,23 @@ static size_t CountPendingCrashManifests()
         close(duplicate);
         return Spark::CrashHandlerDetail::kMaxPendingCrashManifests;
     }
-    while (const dirent* entry = readdir(directory))
+    // dup shares the pinned directory offset; every capacity check starts at the beginning.
+    rewinddir(directory);
+    bool scanSucceeded = true;
+    while (count < Spark::CrashHandlerDetail::kMaxPendingCrashManifests)
     {
+        errno = 0;
+        const dirent* entry = readdir(directory);
+        if (!entry)
+        {
+            scanSucceeded = errno == 0;
+            break;
+        }
         if (Spark::CrashHandlerDetail::IsCrashManifestReadyName(entry->d_name))
             ++count;
-        if (count >= Spark::CrashHandlerDetail::kMaxPendingCrashManifests)
-            break;
     }
-    closedir(directory);
+    const bool directoryClosed = closedir(directory) == 0;
+    count = Spark::CrashHandlerDetail::CrashManifestCountOrFull(count, scanSucceeded && directoryClosed);
 #endif
     return count;
 }
@@ -672,7 +613,13 @@ static size_t CountPendingCrashManifests()
 static bool PublishCrashManifest(std::string_view reportId, const std::string& json)
 {
     const std::string readyName = Spark::CrashHandlerDetail::CrashManifestReadyName(reportId);
-    if (readyName.empty() || !Spark::CrashHandlerDetail::HasCrashManifestQueueCapacity(CountPendingCrashManifests()))
+    const size_t pending = CountPendingCrashManifests();
+#ifdef SPARK_PLATFORM_LINUX
+    const bool capacity = Spark::CrashHandlerDetail::HasNonfatalCrashManifestCapacity(pending, g_reserveFatalManifest);
+#else
+    const bool capacity = Spark::CrashHandlerDetail::HasCrashManifestQueueCapacity(pending);
+#endif
+    if (readyName.empty() || !capacity)
         return false;
 
     const std::string temporaryName = readyName + ".tmp";
@@ -696,8 +643,22 @@ static bool PublishCrashManifest(std::string_view reportId, const std::string& j
     renameInfo->RootDirectory = g_artifactRootHandle;
     renameInfo->FileNameLength = static_cast<DWORD>(readyNative.size() * sizeof(wchar_t));
     std::memcpy(renameInfo->FileName, readyNative.data(), renameInfo->FileNameLength);
-    const bool published = SetFileInformationByHandle(temporary, FileRenameInfo, renameInfo,
-                                                      static_cast<DWORD>(renameStorage.size())) != FALSE;
+    // Keep the destination relative to the pinned root. The Win32 rename
+    // wrapper rejects this RootDirectory form with ERROR_INVALID_PARAMETER;
+    // the native operation preserves the same authority used by NtCreateFile.
+    using NtSetInformationFileFn = NTSTATUS(NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, FILE_INFORMATION_CLASS);
+    static const auto ntSetInformationFile = []() -> NtSetInformationFileFn
+    {
+        const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+        return ntdll ? reinterpret_cast<NtSetInformationFileFn>(GetProcAddress(ntdll, "NtSetInformationFile"))
+                     : nullptr;
+    }();
+    IO_STATUS_BLOCK ioStatus{};
+    // FileRenameInformation is class 10; the user-mode SDK enum omits its name.
+    constexpr auto renameInformationClass = static_cast<FILE_INFORMATION_CLASS>(10);
+    const bool published = ntSetInformationFile &&
+                           ntSetInformationFile(temporary, &ioStatus, renameInfo,
+                                                static_cast<ULONG>(renameStorage.size()), renameInformationClass) >= 0;
     if (!published)
     {
         FILE_DISPOSITION_INFO disposition{};
@@ -763,7 +724,9 @@ static std::string MakeManifestJson(const std::string& dumpFile, const std::stri
     j << "  \"requireConsent\": " << (g_cfg.requireConsent ? "true" : "false") << ",\n";
     j << "  \"allowScreenshotRefusal\": " << (g_cfg.allowScreenshotRefusal ? "true" : "false") << ",\n";
     j << "  \"promptUserDescription\": " << (g_cfg.promptUserDescription ? "true" : "false") << ",\n";
-    j << "  \"fullMemoryDump\": " << (g_cfg.captureFullMemoryDump ? "true" : "false") << "\n";
+    // True only under the SPARK_CRASH_FULL_DUMP opt-in, whose dumps carry thread-stack memory; the
+    // reporter's consent text then discloses that the dump can contain data held in memory.
+    j << "  \"fullMemoryDump\": " << (g_cfg.includeStackMemory ? "true" : "false") << "\n";
     j << "}\n";
     return j.str();
 }
@@ -775,7 +738,24 @@ static bool WriteCrashManifest(std::string_view reportId, const std::string& dum
     if (g_manifestDir.empty())
         return false;
 
-    std::string json = MakeManifestJson(dumpFile, logFile, screenshotFile, zipFile, crashTitle);
+    // The pinned root is the authority; persist only its immediate child names.
+    // Keep absolute-path compatibility in the reader for older manifests.
+    const auto leafName = [](const std::string& path, std::string& output)
+    {
+        if (path.empty())
+            return true;
+        std::filesystem::path name;
+        if (!ArtifactNameInPinnedRoot(path, name))
+            return false;
+        output = Spark::CrashHandlerDetail::PathToUtf8(name);
+        return !output.empty();
+    };
+    std::string dumpName, logName, screenshotName, zipName;
+    if (logFile.empty() || !leafName(dumpFile, dumpName) || !leafName(logFile, logName) ||
+        !leafName(screenshotFile, screenshotName) || !leafName(zipFile, zipName))
+        return false;
+
+    std::string json = MakeManifestJson(dumpName, logName, screenshotName, zipName, crashTitle);
     return PublishCrashManifest(reportId, json);
 }
 
@@ -794,7 +774,7 @@ static bool LaunchCrashReporter()
     if (reporterPath.empty())
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Core,
-                        "CrashHandler: SparkCrashReporter not found, using in-process reporting");
+                        "CrashHandler: SparkCrashReporter not found, keeping crash artifacts local");
         return false;
     }
 
@@ -839,15 +819,13 @@ extern ID3D11DeviceContext* GetD3DContext();
 // Forward declarations
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep);
 static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, CrashReportDelivery delivery);
-static bool WriteMiniDump(const std::wstring& path, EXCEPTION_POINTERS* ep);
+static bool WriteMiniDump(const std::wstring& path, EXCEPTION_POINTERS* ep, DWORD* failureError = nullptr);
 static std::wstring MakeTimeStamp();
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep);
 static std::wstring SystemInfo();
 static std::wstring ThreadStacks(DWORD skipThreadId);
 static std::wstring ThreadStacksBounded(bool& outTimedOut);
 static bool SaveScreenshot(const std::wstring& file);
-static bool ZipFiles(const std::wstring& zip, const std::vector<std::wstring>& files,
-                     const std::vector<PinnedFile*>& expectedInputs, PinnedFile* pinnedArchive = nullptr);
 
 // ---------------------------------------------------------------------------
 // Teardown detection + bounded all-thread stack capture
@@ -960,10 +938,6 @@ void InstallCrashHandler(const CrashConfig& cfg)
             "CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled");
     }
 
-#ifdef SPARK_HAS_CURL
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-#endif
-
     // Teardown detection (see block comment above): resolve the ntdll probe up
     // front so the crash path never calls GetProcAddress, and set our own flag
     // as soon as normal exit processing starts.
@@ -984,9 +958,10 @@ void InstallCrashHandler(const CrashConfig& cfg)
 
     SetUnhandledExceptionFilter(CrashFilter);
 
-    // The external reporter is intentionally read-only. Keep consent and upload
-    // ownership in-process whenever reporting is enabled, and never show UI headlessly.
-    if (Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(g_cfg.enableCrashReporting, g_cfg.headlessMode))
+    // The external reporter is intentionally read-only. Launch it for every
+    // interactive process; headless processes keep artifacts local and never
+    // start a UI.
+    if (!g_cfg.headlessMode)
         g_reporterLaunched = LaunchCrashReporter();
 
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Crash handler installed successfully");
@@ -1070,6 +1045,11 @@ void SetAssertCrashBehavior(bool shouldCrash)
     }
 }
 
+void RefreshCrashModuleIdentities()
+{
+    // Minidumps record the loaded-module list (with PDB identity) themselves.
+}
+
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep)
 {
     HandleCrashInternal(ep, nullptr, CrashReportDelivery::Interactive);
@@ -1103,9 +1083,9 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     std::wstring dump = prefix + reportSuffix + L".dmp";
     std::wstring logFile = prefix + reportSuffix + L".log";
     std::wstring shot = prefix + reportSuffix + L".png";
-    std::wstring zipFile = prefix + reportSuffix + L".zip";
 
-    const bool dumpReady = WriteMiniDump(dump, ep);
+    DWORD dumpError = ERROR_SUCCESS;
+    const bool dumpReady = WriteMiniDump(dump, ep, &dumpError);
 
     std::wstringstream log;
     log << L"================================================================\n";
@@ -1120,11 +1100,23 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
         int len = MultiByteToWideChar(CP_UTF8, 0, assertMsg, -1, nullptr, 0);
         std::wstring wmsg(len, L'\0');
         MultiByteToWideChar(CP_UTF8, 0, assertMsg, -1, &wmsg[0], len);
-        log << L"*** ASSERTION FAILURE ***\n" << wmsg << L"\n\n";
+        // The -1 conversion includes a terminator; keep it out of the text log.
+        log << L"*** ASSERTION FAILURE ***\n" << wmsg.c_str() << L"\n\n";
     }
     else
     {
         log << L"*** CRASH DETECTED ***\n\n";
+    }
+
+    // Keep a bounded, path-free reason in the producer-owned log when the
+    // Windows dump API rejects the request.  The manifest intentionally
+    // carries an empty dumpFile in that case; this diagnostic lets the
+    // isolated security test distinguish an OS/API failure from a packaging
+    // or probe failure without exposing the artifact path.
+    if (!dumpReady)
+    {
+        log << L"Minidump capture failed (Win32=" << dumpError << L", HRESULT=0x" << std::hex
+            << static_cast<unsigned long>(HRESULT_FROM_WIN32(dumpError)) << std::dec << L")\n\n";
     }
 
     if (ep->ExceptionRecord)
@@ -1136,7 +1128,7 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
         MultiByteToWideChar(CP_UTF8, 0, codeName, -1, &wCodeName[0], codeNameLen);
 
         log << L"Exception Code    : 0x" << std::hex << code << std::dec << L"\n";
-        log << L"Exception Name    : " << wCodeName << L"\n";
+        log << L"Exception Name    : " << wCodeName.c_str() << L"\n";
         log << L"Exception Address : 0x" << std::hex
             << reinterpret_cast<uintptr_t>(ep->ExceptionRecord->ExceptionAddress) << std::dec << L"\n";
         log << L"Exception Flags   : " << ep->ExceptionRecord->ExceptionFlags << L"\n";
@@ -1186,6 +1178,15 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     if (g_cfg.captureAllThreads)
         log << ThreadStacksBounded(threadStacksTimedOut);
 
+    // Probe the writer's result before the log is finalized.  A successful
+    // MiniDumpWriteDump call can still leave an unusable artifact if the
+    // pinned-root consumer cannot reopen it; keep that failure distinct from
+    // the API failure above while preserving the fail-closed empty manifest
+    // field.
+    PinnedFile dumpProbe = dumpReady ? OpenPinnedInputFile(WideToUtf8(dump)) : PinnedFile{};
+    if (dumpReady && !dumpProbe.stream)
+        log << L"Minidump probe failed after writer reported success\n\n";
+
     // Skipped after a thread-stacks timeout: the console-process IPC can block
     // on the same suspended threads the wedged helper left behind.
     if (!threadStacksTimedOut)
@@ -1214,14 +1215,14 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     if (threadStacksTimedOut)
     {
         // The wedged helper may have left arbitrary threads suspended: the
-        // screenshot (render thread), zip/upload (heap, sockets) and dialog
+        // screenshot (render thread) and dialog
         // pumps below could all deadlock the same way. The process dump and log
-        // are already on disk — hand the manifest to the out-of-process
-        // reporter and die hard instead of zombieing (the historical failure
-        // mode this watchdog exists for).
-        if (g_reporterLaunched && logReady)
+        // are already on disk — publish the local manifest and die hard instead
+        // of zombieing (the historical failure mode this watchdog exists for).
+        if (logReady)
         {
-            WriteCrashManifest(reportId, dumpReady ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile), "", "",
+            WriteCrashManifest(reportId, dumpProbe.stream ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile), "",
+                               "",
                                assertMsg ? "Assertion Failure (thread-stack capture timed out)"
                                          : "Crash Detected (thread-stack capture timed out)");
         }
@@ -1235,147 +1236,24 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     const bool screenshotWritten =
         delivery == CrashReportDelivery::Interactive && g_cfg.captureScreenshot && SaveScreenshot(shot);
 
-    PinnedFile dumpProbe = dumpReady ? OpenPinnedInputFile(WideToUtf8(dump)) : PinnedFile{};
     PinnedFile logProbe = logReady ? OpenPinnedInputFile(WideToUtf8(logFile)) : PinnedFile{};
     PinnedFile screenshotProbe = screenshotWritten ? OpenPinnedInputFile(WideToUtf8(shot)) : PinnedFile{};
     const bool screenshotAvailable = screenshotProbe.stream != nullptr;
 
-    // Two ways this process writes artifacts and stops:
-    //   - the out-of-process reporter launched, and owns consent/archive/upload;
-    //   - ArtifactOnly delivery (the freeze watchdog), where there is no user to
-    //     answer a consent dialog and the caller is about to _Exit(). Blocking
-    //     that thread on a modal prompt plus a 30 s upload is what stopped
-    //     terminateOnFreeze from terminating. Transport is left to the reporter
-    //     or to the pending-manifest sweep on a later launch.
+    // Always publish the local manifest when the log is safely pinned. The
+    // read-only reporter owns interactive review when it is running; the
+    // artifact-only watchdog path returns without UI, and a failed reporter
+    // launch falls through to the generic local-capture notice below.
+    if (logProbe.stream)
+    {
+        const std::string crashTitle = delivery == CrashReportDelivery::ArtifactOnly
+                                           ? "Unattended Failure (watchdog)"
+                                           : (assertMsg ? "Assertion Failure" : "Crash Detected");
+        WriteCrashManifest(reportId, dumpProbe.stream ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile),
+                           screenshotAvailable ? WideToUtf8(shot) : std::string{}, "", crashTitle);
+    }
     if (g_reporterLaunched || delivery == CrashReportDelivery::ArtifactOnly)
-    {
-        if (logProbe.stream)
-        {
-            const std::string crashTitle = delivery == CrashReportDelivery::ArtifactOnly
-                                               ? "Unattended Failure (watchdog)"
-                                               : (assertMsg ? "Assertion Failure" : "Crash Detected");
-            WriteCrashManifest(reportId, dumpProbe.stream ? WideToUtf8(dump) : std::string{}, WideToUtf8(logFile),
-                               screenshotAvailable ? WideToUtf8(shot) : std::string{}, "", crashTitle);
-        }
         return;
-    }
-
-    // ---- Reporter-unavailable fallback: this process alone owns consent and upload. ----
-    bool ok = true;
-    if (g_cfg.enableCrashReporting)
-    {
-        bool userConsented = true;
-        bool includeScreenshot = true;
-
-        if (g_cfg.requireConsent && !g_cfg.headlessMode)
-        {
-            std::wstring consentMsg = L"SparkEngine has crashed. Would you like to send a crash report "
-                                      L"to help improve the engine?\n\nThe report can include ";
-            if (dumpReady && g_cfg.captureFullMemoryDump)
-            {
-                consentMsg += L"a full-memory process dump (which can contain application or user data held in "
-                              L"memory), ";
-            }
-            else if (dumpReady)
-            {
-                consentMsg += L"a minimal process dump (which can still contain limited memory and file paths), ";
-            }
-            consentMsg += L"stack traces and system/process information. These diagnostics may contain personal "
-                          L"or sensitive data.";
-            if (screenshotAvailable && g_cfg.allowScreenshotRefusal)
-            {
-                consentMsg += L"\n\nA screenshot was captured locally. You can choose whether to include it "
-                              L"in the next dialog.";
-            }
-            else if (screenshotAvailable)
-            {
-                consentMsg += L"\n\nThe report also includes a screenshot of the last rendered frame.";
-            }
-
-            int result = MessageBoxW(nullptr, consentMsg.c_str(), L"Crash Report", MB_YESNO | MB_ICONERROR);
-            userConsented = (result == IDYES);
-
-            // Screenshot opt-out dialog
-            if (userConsented && g_cfg.allowScreenshotRefusal && screenshotAvailable)
-            {
-                int ssResult = MessageBoxW(nullptr,
-                                           L"Include a screenshot of the last rendered frame with the "
-                                           L"crash report?",
-                                           L"Screenshot Consent", MB_YESNO | MB_ICONERROR);
-                includeScreenshot = (ssResult == IDYES);
-            }
-        }
-
-        if (userConsented)
-        {
-            bool archiveReady = !g_cfg.zipBeforeUpload;
-            PinnedFile archivePin;
-            if (g_cfg.zipBeforeUpload)
-            {
-                const std::vector<std::wstring> approvedFiles = Spark::CrashHandlerDetail::BuildCrashArchiveAllowlist(
-                    dumpProbe.stream ? dump : std::wstring{}, logProbe.stream ? logFile : std::wstring{}, shot,
-                    includeScreenshot && screenshotAvailable);
-                std::vector<PinnedFile*> approvedPins;
-                if (dumpProbe.stream)
-                    approvedPins.push_back(&dumpProbe);
-                if (logProbe.stream)
-                    approvedPins.push_back(&logProbe);
-                if (includeScreenshot && screenshotAvailable)
-                    approvedPins.push_back(&screenshotProbe);
-                archiveReady = ZipFiles(zipFile, approvedFiles, approvedPins, &archivePin);
-            }
-
-            // User description input (Windows: simple InputBox via a small console prompt)
-            // On Windows we can't easily show a text input without a full GUI framework,
-            // so we use a MessageBox prompt with a follow-up note in the crash log.
-            // The description is appended to the log content before upload.
-            std::string userDesc;
-            if (g_cfg.promptUserDescription && !g_cfg.headlessMode)
-            {
-                // Note: A proper implementation would use a text input dialog.
-                // For now, we add a placeholder that the out-of-process reporter
-                // (CrashReporter.exe) will replace with a real text input GUI.
-                int descResult = MessageBoxW(nullptr,
-                                             L"The crash report will be sent. If you'd like to describe "
-                                             L"what you were doing when the crash occurred, please note "
-                                             L"it and include it in a GitHub issue.\n\n"
-                                             L"(A future update will add a text input here.)",
-                                             L"Additional Information", MB_OK | MB_ICONERROR);
-                (void)descResult;
-            }
-
-            // Redact only the copy that leaves the machine. The local artifact
-            // written above keeps its full paths for the developer who owns it.
-            const auto redactionContext = Spark::CrashHandlerDetail::MakeCrashRedactionContext();
-            if (!Spark::CrashHandlerDetail::HasRedactionRules(redactionContext))
-            {
-                // Neither the environment nor the OS could tell us what to
-                // remove, so RedactCrashText() would return the log verbatim —
-                // profile path and account name included — to a public issue
-                // tracker. Keep the local artifact, refuse the transport.
-                // OutputDebugStringA, not SPARK_LOG_*: the logger's sinks are not
-                // safe to re-enter from the fault path.
-                OutputDebugStringA("[SPARK ENGINE] Crash upload skipped: no redaction rules could be derived, and an "
-                                   "unredacted report must not leave this machine.\n");
-                ok = false;
-            }
-            else
-            {
-                std::string logUtf8 =
-                    Spark::CrashHandlerDetail::RedactCrashText(WideToUtf8(log.str()), redactionContext);
-                if (!userDesc.empty())
-                    logUtf8 = "=== User Description ===\n" + userDesc + "\n\n" + logUtf8;
-
-                // Copy config and attach user description
-                CrashConfig uploadCfg = g_cfg;
-                uploadCfg.userDescription = userDesc;
-                const std::string archivePath = WideToUtf8(zipFile);
-                const std::string approvedArchive =
-                    g_cfg.zipBeforeUpload && archiveReady ? StableUploadPath(archivePin, archivePath) : std::string{};
-                ok = UploadCrashReport(uploadCfg, logUtf8, approvedArchive);
-            }
-        }
-    }
 
     if (!g_cfg.headlessMode)
     {
@@ -1385,24 +1263,70 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     }
 }
 
-static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep)
+static bool WriteMiniDump(const std::wstring& file, EXCEPTION_POINTERS* ep, DWORD* failureError)
 {
+    if (failureError)
+        *failureError = ERROR_SUCCESS;
+
+    // MiniDumpWriteDump shares DbgHelp's process-wide state with StackTrace.
+    // Never race a concurrent symbol lookup or block indefinitely when the
+    // faulting thread already owns the symbol lock.
+    Spark::StackTrace::SymbolLockLease symbolLock(true);
+    if (!symbolLock.owns_lock())
+    {
+        if (failureError)
+            *failureError = ERROR_BUSY;
+        return false;
+    }
+
     HANDLE h =
         CreateFileW(file.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE)
+    {
+        if (failureError)
+            *failureError = GetLastError();
         return false;
+    }
 
     MINIDUMP_EXCEPTION_INFORMATION info{GetCurrentThreadId(), ep, TRUE};
-    MINIDUMP_TYPE dumpType = MiniDumpNormal;
-    if (g_cfg.captureFullMemoryDump)
+    constexpr MINIDUMP_TYPE dumpType = MiniDumpNormal;
+    BOOL result = FALSE;
+    DWORD error = ERROR_SUCCESS;
+    // A minidump can race a transiently inaccessible page on a live process.
+    // Retry that one DbgHelp error once using the same private file; no failed
+    // or partial dump is ever advertised in the manifest.
+    for (int attempt = 0; attempt < 2; ++attempt)
     {
-        dumpType =
-            static_cast<MINIDUMP_TYPE>(MiniDumpWithFullMemory | MiniDumpWithHandleData | MiniDumpWithUnloadedModules);
+        if (attempt != 0)
+        {
+            // Give whatever made the page transiently unreadable (an exiting thread) time to finish.
+            Sleep(50);
+            LARGE_INTEGER start{};
+            if (!SetFilePointerEx(h, start, nullptr, FILE_BEGIN) || !SetEndOfFile(h))
+            {
+                error = GetLastError();
+                break;
+            }
+        }
+        // OPS-100: no thread-stack memory unless the SPARK_CRASH_FULL_DUMP opt-in asked for it.
+        // Either way DbgHelp runs on a dedicated writer thread, never on this (faulting) one.
+        if (g_cfg.includeStackMemory)
+        {
+            result = Spark::CrashDump::WriteOnWriterThread(h, dumpType, &info, false,
+                                                           Spark::CrashDump::kWriterStartTimeoutMs, &error);
+        }
+        else
+        {
+            result = Spark::CrashDump::WriteWithoutStacks(h, dumpType, &info, &error);
+        }
+        if (result ||
+            (error != ERROR_PARTIAL_COPY && error != static_cast<DWORD>(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))))
+            break;
     }
-    const bool written =
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), h, dumpType, &info, nullptr, nullptr) != FALSE;
     CloseHandle(h);
-    return written;
+    if (failureError)
+        *failureError = error;
+    return result != FALSE;
 }
 
 static std::wstring MakeTimeStamp()
@@ -1414,39 +1338,12 @@ static std::wstring MakeTimeStamp()
     return buf;
 }
 
-/// Acquire the shared DbgHelp lock without ever blocking the fault path.
-///
-/// DbgHelp is single-threaded, so the crash path shares StackTrace's one
-/// process-wide lock (and its one SymInitialize) instead of running a private
-/// SymInitialize/SymCleanup pair that tore down the symbol handler for everyone
-/// else the moment it returned. But StackTrace::ResolveSymbols() holds that same
-/// non-recursive lock across its whole resolve loop, and the synchronous Logger
-/// runs that on whichever thread logs an Error. A fault raised inside DbgHelp on
-/// such a thread re-enters this filter on the same thread, where a lock_guard
-/// wedges the process for good: no dump, no log, no exit code. Bounded try-lock;
-/// every caller must have an unsymbolized fallback.
-///
-/// @return true when @p lock owns the mutex on return.
-[[nodiscard]] static bool TryAcquireSymbolLock(std::unique_lock<std::mutex>& lock)
-{
-    constexpr int kSymbolLockAttempts = 50;
-    constexpr DWORD kSymbolLockSleepMs = 10; // 50 x 10 ms = 500 ms ceiling
-    for (int attempt = 0; attempt < kSymbolLockAttempts && !lock.owns_lock(); ++attempt)
-    {
-        if (lock.try_lock())
-            break;
-        Sleep(kSymbolLockSleepMs);
-    }
-    return lock.owns_lock();
-}
-
 static std::wstring SymStackTrace(EXCEPTION_POINTERS* ep)
 {
     // Never block on the shared DbgHelp lock here: fall back to unsymbolized
     // frames instead — the raw addresses still resolve offline against the
-    // minidump. See TryAcquireSymbolLock().
-    std::unique_lock<std::mutex> symbolLock(Spark::StackTrace::SymbolLock(), std::defer_lock);
-    (void)TryAcquireSymbolLock(symbolLock);
+    // minidump. The lease also rejects same-thread DbgHelp reentry.
+    Spark::StackTrace::SymbolLockLease symbolLock(true);
 
     std::wstringstream out;
     if (!symbolLock.owns_lock())
@@ -1563,8 +1460,8 @@ static std::wstring ThreadStacks(DWORD skipThreadId)
     //
     // These lines deliberately carry no frame marker: only the faulting thread's
     // stack feeds the crash hash.
-    std::unique_lock<std::mutex> symbolLock(Spark::StackTrace::SymbolLock(), std::defer_lock);
-    if (!TryAcquireSymbolLock(symbolLock))
+    Spark::StackTrace::SymbolLockLease symbolLock(true);
+    if (!symbolLock.owns_lock())
     {
         return L"*** THREAD STACKS ***\nSkipped: DbgHelp busy (symbol lock held elsewhere) — "
                L"resolve the other threads against the dump\n";
@@ -1729,17 +1626,6 @@ static bool SaveScreenshot(const std::wstring& file)
     ctx->Unmap(cpu.Get(), 0);
     return screenshotWritten;
 }
-
-static bool ZipFiles(const std::wstring& zip, const std::vector<std::wstring>& files,
-                     const std::vector<PinnedFile*>& expectedInputs, PinnedFile* pinnedArchive)
-{
-    std::string zipUtf = WideToUtf8(zip);
-    std::vector<std::string> utf8Files;
-    for (const auto& f : files)
-        utf8Files.push_back(WideToUtf8(f));
-    return ZipFilesUtf8(zipUtf, utf8Files, expectedInputs, pinnedArchive);
-}
-
 
 // ============================================================================
 // LINUX / MACOS IMPLEMENTATION (POSIX)
@@ -1910,22 +1796,835 @@ static void WriteStderr(const char* s)
     }
 }
 
+#ifdef SPARK_PLATFORM_LINUX
+// ----------------------------------------------------------------------------
+// Build-id module identity for offline symbolication (tools/ops/symbolicate_crash.py)
+// ----------------------------------------------------------------------------
+
+namespace
+{
+    using Spark::CrashHandlerDetail::CrashModuleIdentity;
+
+    /// Module identity captured outside the signal handler. Two tables, so a
+    /// refresh never rewrites the one a crashing thread may be reading.
+    struct CrashModuleTable
+    {
+        size_t count = 0;
+        std::array<CrashModuleIdentity, Spark::CrashHandlerDetail::kMaxCrashModules> modules{};
+    };
+
+    CrashModuleTable g_crashModuleTables[2];
+    std::atomic<int> g_activeCrashModuleTable{-1};
+    static_assert(std::atomic<int>::is_always_lock_free, "signal-path module table selection must be lock-free");
+    std::mutex g_crashModuleRefreshLock;
+
+    /// Signal-path output buffer; sized for kMaxSymbolicCrashFrames frames and
+    /// one module record per frame, so the section is never truncated.
+    char g_symbolicSectionBuffer[32 * 1024];
+
+    struct CrashModuleScan
+    {
+        CrashModuleTable* table = nullptr;
+        const char* mainProgramName = nullptr;
+    };
+
+    /// Copy a module basename, keeping the record a single whitespace-free token.
+    void CopyCrashModuleName(const char* path, CrashModuleIdentity& module)
+    {
+        const char* base = (path && *path) ? std::strrchr(path, '/') : nullptr;
+        base = base ? base + 1 : ((path && *path) ? path : "unknown");
+        size_t length = 0;
+        for (; base[length] != '\0' && length + 1 < module.name.size(); ++length)
+        {
+            const char character = base[length];
+            const bool safe = (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+                              (character >= '0' && character <= '9') || character == '.' || character == '_' ||
+                              character == '-' || character == '+';
+            module.name[length] = safe ? character : '_';
+        }
+        module.name[length] = '\0';
+    }
+
+    int CollectCrashModuleIdentity(dl_phdr_info* info, size_t /*size*/, void* userData)
+    {
+        auto& scan = *static_cast<CrashModuleScan*>(userData);
+        CrashModuleTable& table = *scan.table;
+        if (table.count >= table.modules.size())
+            return 1;
+
+        CrashModuleIdentity& module = table.modules[table.count];
+        module = CrashModuleIdentity{};
+        module.loadBias = static_cast<std::uintptr_t>(info->dlpi_addr);
+        std::uintptr_t lowest = std::numeric_limits<std::uintptr_t>::max();
+        std::uintptr_t highest = 0;
+        for (ElfW(Half) index = 0; index < info->dlpi_phnum; ++index)
+        {
+            const ElfW(Phdr)& header = info->dlpi_phdr[index];
+            const std::uintptr_t runtimeAddress = module.loadBias + static_cast<std::uintptr_t>(header.p_vaddr);
+            if (header.p_type == PT_LOAD && header.p_memsz > 0)
+            {
+                lowest = std::min(lowest, runtimeAddress);
+                highest = std::max(highest, runtimeAddress + static_cast<std::uintptr_t>(header.p_memsz));
+            }
+            else if (header.p_type == PT_NOTE && module.buildIdSize == 0)
+            {
+                module.buildIdSize =
+                    Spark::CrashHandlerDetail::FindGnuBuildIdNote(reinterpret_cast<const std::uint8_t*>(runtimeAddress),
+                                                                  static_cast<size_t>(header.p_memsz), module.buildId);
+            }
+        }
+        if (lowest >= highest)
+            return 0;
+
+        module.beginAddress = lowest;
+        module.endAddress = highest;
+        // The main program reports an empty dlpi_name.
+        const bool isMainProgram = !info->dlpi_name || info->dlpi_name[0] == '\0';
+        CopyCrashModuleName(isMainProgram ? scan.mainProgramName : info->dlpi_name, module);
+        ++table.count;
+        return 0;
+    }
+
+    /// Exact faulting instruction address from the signal context, or 0.
+    std::uintptr_t ContextProgramCounter(const void* context)
+    {
+        if (!context)
+            return 0;
+        const auto* userContext = static_cast<const ucontext_t*>(context);
+#if defined(__x86_64__)
+        return static_cast<std::uintptr_t>(userContext->uc_mcontext.gregs[REG_RIP]);
+#elif defined(__aarch64__)
+        return static_cast<std::uintptr_t>(userContext->uc_mcontext.pc);
+#else
+        (void)userContext;
+        return 0;
+#endif
+    }
+
+    /// Capture frames for the symbolic section. With a signal context the exact
+    /// faulting PC is frame 0 and the handler/trampoline frames above it are
+    /// dropped; everything else is a return address.
+    size_t CaptureSymbolicFrames(const void* context, std::uintptr_t* frames, bool& firstFrameIsExactPc, bool nonfatal)
+    {
+        constexpr size_t kMaxFrames = Spark::CrashHandlerDetail::kMaxSymbolicCrashFrames;
+        if (context)
+        {
+            const auto* captured = static_cast<const ucontext_t*>(context);
+            const std::uintptr_t pc = ContextProgramCounter(context);
+            firstFrameIsExactPc = pc != 0;
+            size_t count = 0;
+            if (pc)
+            {
+                frames[count++] = pc;
+            }
+            std::uintptr_t frame = 0;
+            std::uintptr_t stack = 0;
+#if defined(__x86_64__)
+            frame = static_cast<std::uintptr_t>(captured->uc_mcontext.gregs[REG_RBP]);
+            stack = static_cast<std::uintptr_t>(captured->uc_mcontext.gregs[REG_RSP]);
+#elif defined(__aarch64__)
+            frame = static_cast<std::uintptr_t>(captured->uc_mcontext.regs[29]);
+            stack = static_cast<std::uintptr_t>(captured->uc_mcontext.sp);
+#endif
+            // Read only two frame-chain words from this process. No stack payload
+            // is persisted, and invalid/omitted frame pointers stop at the exact PC.
+            constexpr std::uintptr_t kMaxStackWalkBytes = std::uintptr_t{8} * 1024 * 1024;
+            while (stack && frame >= stack && frame - stack < kMaxStackWalkBytes &&
+                   frame % alignof(std::uintptr_t) == 0 && count < kMaxFrames)
+            {
+                std::uintptr_t words[2]{};
+                iovec local{words, sizeof(words)};
+                // The kernel consumes the captured register's address bits, not a C++ dereference.
+                iovec remote{std::bit_cast<void*>(frame), sizeof(words)};
+                if (syscall(SYS_process_vm_readv, getpid(), &local, 1UL, &remote, 1UL, 0UL) !=
+                    static_cast<long>(sizeof(words)))
+                {
+                    break;
+                }
+                if (words[1] == 0)
+                {
+                    break;
+                }
+                frames[count++] = words[1];
+                if (words[0] <= frame)
+                {
+                    break;
+                }
+                frame = words[0];
+            }
+            return count;
+        }
+        if (!nonfatal)
+        {
+            firstFrameIsExactPc = false;
+            return 0;
+        }
+        void* raw[kMaxFrames];
+        const int rawCount = backtrace(raw, static_cast<int>(kMaxFrames));
+        const size_t available = rawCount > 0 ? static_cast<size_t>(rawCount) : 0;
+
+        size_t count = 0;
+        size_t firstReturnFrame = 0;
+        const std::uintptr_t pc = ContextProgramCounter(context);
+        firstFrameIsExactPc = pc != 0;
+        if (firstFrameIsExactPc)
+        {
+            frames[count++] = pc;
+            for (size_t index = 0; index < available; ++index)
+            {
+                if (reinterpret_cast<std::uintptr_t>(raw[index]) == pc)
+                {
+                    firstReturnFrame = index + 1;
+                    break;
+                }
+            }
+        }
+        for (size_t index = firstReturnFrame; index < available && count < kMaxFrames; ++index)
+            frames[count++] = reinterpret_cast<std::uintptr_t>(raw[index]);
+        return count;
+    }
+
+    /// Format the symbolic section into @p buffer using only precomputed module identity.
+    size_t FormatSymbolicSection(const void* context, char* buffer, size_t capacity, bool nonfatal = false)
+    {
+        std::uintptr_t frames[Spark::CrashHandlerDetail::kMaxSymbolicCrashFrames];
+        bool firstFrameIsExactPc = false;
+        const size_t frameCount = CaptureSymbolicFrames(context, frames, firstFrameIsExactPc, nonfatal);
+        const int active = g_activeCrashModuleTable.load(std::memory_order_acquire);
+        const CrashModuleTable* table = active >= 0 ? &g_crashModuleTables[active] : nullptr;
+        return Spark::CrashHandlerDetail::FormatSymbolicCrashFrames(table ? table->modules.data() : nullptr,
+                                                                    table ? table->count : 0, frames, frameCount,
+                                                                    firstFrameIsExactPc, buffer, capacity);
+    }
+} // namespace
+
+void RefreshCrashModuleIdentities()
+{
+    std::lock_guard<std::mutex> lock(g_crashModuleRefreshLock);
+    if (g_inSignalHandler.test(std::memory_order_acquire))
+        return;
+
+    char executablePath[PATH_MAX] = {};
+    const ssize_t pathLength = readlink("/proc/self/exe", executablePath, sizeof(executablePath) - 1);
+    executablePath[pathLength > 0 ? pathLength : 0] = '\0';
+
+    const int active = g_activeCrashModuleTable.load(std::memory_order_acquire);
+    const int next = active == 0 ? 1 : 0;
+    CrashModuleScan scan;
+    scan.table = &g_crashModuleTables[next];
+    scan.table->count = 0;
+    scan.mainProgramName = executablePath;
+    dl_iterate_phdr(CollectCrashModuleIdentity, &scan);
+    g_activeCrashModuleTable.store(next, std::memory_order_release);
+}
+#else
+void RefreshCrashModuleIdentities()
+{
+    // Build-id capture is ELF-specific; macOS reports keep the backtrace text only.
+}
+#endif
+
+// ----------------------------------------------------------------------------
+// Fatal-signal report
+//
+// A fatal signal often arrives while the crashing thread holds a malloc,
+// stdio, locale or loader lock. Linux uses only bounded buffers and descriptor
+// operations after installation; its optional sections are labeled snapshots.
+// The separately qualified macOS handler retains its two-stage behavior:
+//
+// 1. Async-signal-safe: arm a watchdog, then write the report's header, raw
+//    stack and symbolic-frame section to a new file with open()/write() only,
+//    using names and buffers prepared by InstallCrashHandler().
+// 2. Best effort: append system and thread information, write the core hint
+//    and publish the manifest. This stage allocates and may block on a lock
+//    the crashed thread holds. The watchdog bounds it: after
+//    kSignalReportBudgetSeconds the process is terminated by the original
+//    signal, so a crash never becomes a hang.
+// ----------------------------------------------------------------------------
+
+namespace
+{
+    /// Wall-clock budget for the whole signal report.
+    constexpr unsigned kSignalReportBudgetSeconds = 10;
+
+    /// Report file-name prefix (the configured dump-prefix basename), copied
+    /// at install time so the handler never builds a path on the heap.
+    char g_signalLogPrefix[128] = "GameEngineCrash";
+    /// "<prefix>_<16 hex>.log" for the report being written.
+    char g_signalLogName[sizeof(g_signalLogPrefix) + 32] = {};
+#ifdef SPARK_PLATFORM_LINUX
+    bool g_signalWriteFailed = false; // Only the atomic-flag winner writes report buffers.
+#endif
+
+    /// The fatal signal being reported; read by the watchdog.
+    volatile sig_atomic_t g_fatalSignal = 0;
+#ifdef SPARK_PLATFORM_LINUX
+    /// Own nonblocking open-file description; never changes the launcher's stderr flags.
+    int g_signalStderrHandle = -1;
+#endif
+
+    /// Test seam (CrashSymbolicationProbe --stall-report): block the
+    /// best-effort stage as a crash under a held malloc lock would.
+    volatile sig_atomic_t g_stallSignalReportForTesting = 0;
+
+    /// Alternate stack for the installing thread, so a stack-overflow SIGSEGV
+    /// still runs the handler.
+    alignas(16) unsigned char g_signalAlternateStack[256 * 1024];
+
+    static_assert(std::atomic<std::uint64_t>::is_always_lock_free,
+                  "the signal handler reserves report IDs with a lock-free atomic");
+
+    size_t SignalSafeLength(const char* text)
+    {
+        size_t length = 0;
+        while (text[length] != '\0')
+            ++length;
+        return length;
+    }
+
+    void SignalSafeWrite(int fd, const char* data, size_t length)
+    {
+        while (fd >= 0 && length > 0)
+        {
+            const ssize_t count = write(fd, data, length);
+            if (count < 0 && errno == EINTR)
+            {
+                continue;
+            }
+            if (count <= 0)
+            {
+#ifdef SPARK_PLATFORM_LINUX
+                g_signalWriteFailed = true;
+#endif
+                return;
+            }
+            data += count;
+            length -= static_cast<size_t>(count);
+        }
+    }
+
+    void SignalSafeWrite(int fd, const char* text)
+    {
+        SignalSafeWrite(fd, text, SignalSafeLength(text));
+    }
+
+    /// Fatal diagnostics must not wait for an unread pipe, including in the watchdog.
+    void WriteFatalStderr(const char* text)
+    {
+#ifdef SPARK_PLATFORM_LINUX
+        const int descriptor = g_signalStderrHandle;
+#else
+        // Reopening /dev/fd on other POSIX hosts may duplicate the shared description.
+        // Drop optional stderr diagnostics unless its existing mode is nonblocking.
+        const int flags = fcntl(STDERR_FILENO, F_GETFL, 0);
+        const int descriptor = flags >= 0 && (flags & O_NONBLOCK) != 0 ? STDERR_FILENO : -1;
+#endif
+        if (!text || descriptor < 0)
+        {
+            return;
+        }
+        // One attempt only: EINTR, EAGAIN and partial writes may drop a diagnostic.
+        constexpr size_t kMaxFatalDiagnosticBytes = 1024;
+        size_t length = 0;
+        while (length < kMaxFatalDiagnosticBytes && text[length] != '\0')
+        {
+            ++length;
+        }
+        (void)write(descriptor, text, length);
+    }
+
+    /// Append @p value in @p base (10 or 16, lowercase) without allocating.
+    void SignalSafeWriteNumber(int fd, std::uint64_t value, unsigned base, size_t minDigits = 1)
+    {
+        constexpr char kDigits[] = "0123456789abcdef";
+        char buffer[24];
+        size_t position = sizeof(buffer);
+        do
+        {
+            buffer[--position] = kDigits[value % base];
+            value /= base;
+        } while (value != 0 && position > 0);
+        while (sizeof(buffer) - position < minDigits && position > 0)
+        {
+            buffer[--position] = '0';
+        }
+        SignalSafeWrite(fd, buffer + position, sizeof(buffer) - position);
+    }
+
+    /// Terminate with the original fatal signal (default action: core dump).
+    [[noreturn]] void TerminateWithFatalSignal(int sig)
+    {
+        // If either startup control could not be applied, never re-raise the
+        // signal: doing so would hand control back to the kernel's core writer.
+        // The report remains available, but a failed policy cannot expose a
+        // full process image.
+        if (!g_posixCoreDumpPolicyEnforced)
+        {
+            _exit(128 + sig);
+        }
+        struct sigaction defaultAction;
+        memset(&defaultAction, 0, sizeof(defaultAction));
+        defaultAction.sa_handler = SIG_DFL;
+        sigemptyset(&defaultAction.sa_mask);
+        sigaction(sig, &defaultAction, nullptr);
+
+        sigset_t unblock;
+        sigemptyset(&unblock);
+        sigaddset(&unblock, sig);
+        sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
+        raise(sig);
+        _exit(128 + sig); // only if the signal did not terminate the process
+    }
+
+    bool ApplyPosixCoreDumpPolicy(bool allowFullDump)
+    {
+        if (allowFullDump)
+        {
+            return true;
+        }
+
+        bool enforced = true;
+        const struct rlimit disabledCore = {0, 0};
+        if (setrlimit(RLIMIT_CORE, &disabledCore) != 0)
+        {
+            enforced = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "CrashHandler: setrlimit(RLIMIT_CORE=0) failed; fatal signals will exit without re-raise");
+        }
+#ifdef SPARK_PLATFORM_LINUX
+        if (prctl(PR_SET_DUMPABLE, 0L, 0L, 0L, 0L) != 0)
+        {
+            enforced = false;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                            "CrashHandler: prctl(PR_SET_DUMPABLE=0) failed; fatal signals will exit without re-raise");
+        }
+#endif
+        return enforced;
+    }
+
+    /// SIGALRM: the report overran its budget, most likely deadlocked on a
+    /// lock the crashed thread holds. Finish the crash without the rest.
+    void OnSignalReportTimeout(int)
+    {
+        WriteFatalStderr("[SPARK ENGINE] Crash report timed out; terminating without the remaining sections.\n");
+        const int sig = g_fatalSignal != 0 ? static_cast<int>(g_fatalSignal) : SIGABRT;
+        TerminateWithFatalSignal(sig);
+    }
+
+    void ArmSignalReportWatchdog(int sig)
+    {
+        g_fatalSignal = sig;
+        // A closed stderr pipe must not replace the original fatal signal with SIGPIPE.
+        sigset_t brokenPipe;
+        sigemptyset(&brokenPipe);
+        sigaddset(&brokenPipe, SIGPIPE);
+        sigprocmask(SIG_BLOCK, &brokenPipe, nullptr);
+        struct sigaction timeoutAction;
+        memset(&timeoutAction, 0, sizeof(timeoutAction));
+        timeoutAction.sa_handler = OnSignalReportTimeout;
+        sigemptyset(&timeoutAction.sa_mask);
+        // SIGALRM can run on another thread, whose SIGPIPE mask differs.
+        sigaddset(&timeoutAction.sa_mask, SIGPIPE);
+        timeoutAction.sa_flags = SA_ONSTACK;
+        sigaction(SIGALRM, &timeoutAction, nullptr);
+
+        sigset_t unblock;
+        sigemptyset(&unblock);
+        sigaddset(&unblock, SIGALRM);
+        sigprocmask(SIG_UNBLOCK, &unblock, nullptr);
+        alarm(kSignalReportBudgetSeconds);
+    }
+
+    /// Create "<prefix>_<id>.log" in the pinned artifact root with open()
+    /// only. Returns -1 when no private root exists or the name is taken.
+    int OpenSignalReportLog(std::uint64_t reportSequence)
+    {
+#ifdef SPARK_PLATFORM_LINUX
+        // A fork child must install its own pinned directory before reporting.
+        if (getpid() != g_signalArtifactOwnerPid)
+        {
+            return -1;
+        }
+#endif
+        if (g_artifactRootHandle < 0)
+        {
+            return -1;
+        }
+        size_t length = 0;
+        const auto append = [&](const char* text)
+        {
+            for (; *text != '\0' && length + 1 < sizeof(g_signalLogName); ++text)
+            {
+                g_signalLogName[length++] = *text;
+            }
+        };
+        append(g_signalLogPrefix);
+        append("_");
+        constexpr char kDigits[] = "0123456789abcdef";
+        for (int shift = 60; shift >= 0 && length + 1 < sizeof(g_signalLogName); shift -= 4)
+        {
+            g_signalLogName[length++] = kDigits[(reportSequence >> shift) & 0xF];
+        }
+        append(".log");
+        g_signalLogName[length] = '\0';
+
+        int flags = O_WRONLY | O_CREAT | O_EXCL;
+#ifdef O_NOFOLLOW
+        flags |= O_NOFOLLOW;
+#endif
+#ifdef O_CLOEXEC
+        flags |= O_CLOEXEC;
+#endif
+        return openat(g_artifactRootHandle, g_signalLogName, flags, S_IRUSR | S_IWUSR);
+    }
+
+    /// Stage 1: everything a post-mortem needs, written with async-signal-safe calls only.
+    void WriteSignalSafeReport(int fd, int sig, const char* sigName, const siginfo_t* info, void* context)
+    {
+        SignalSafeWrite(fd, "================================================================\n"
+                            "           SPARK ENGINE CRASH REPORT (POSIX)\n"
+                            "================================================================\n\n");
+        SignalSafeWrite(fd, "Timestamp  : ");
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(time(nullptr)), 10);
+        SignalSafeWrite(fd, " (seconds since the Unix epoch, UTC)\nProcess ID : ");
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(getpid()), 10);
+        SignalSafeWrite(fd, "\nThread ID  : ");
+#ifdef SPARK_PLATFORM_LINUX
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(syscall(SYS_gettid)), 10);
+#else
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(pthread_mach_thread_np(pthread_self())), 10);
+#endif
+        SignalSafeWrite(fd, "\n\n*** CRASH DETECTED ***\nSignal     : ");
+        SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(sig), 10);
+        SignalSafeWrite(fd, " - ");
+        SignalSafeWrite(fd, sigName);
+        SignalSafeWrite(fd, "\n");
+        if (info)
+        {
+            SignalSafeWrite(fd, "Fault Addr : 0x");
+            SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(info->si_addr)), 16);
+            SignalSafeWrite(fd, "\nSignal Code: ");
+            if (info->si_code < 0)
+            {
+                SignalSafeWrite(fd, "-");
+                SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(-static_cast<std::int64_t>(info->si_code)), 10);
+            }
+            else
+            {
+                SignalSafeWriteNumber(fd, static_cast<std::uint64_t>(info->si_code), 10);
+            }
+            SignalSafeWrite(fd, "\n");
+        }
+
+        SignalSafeWrite(fd, "\n*** STACK TRACE ***\n");
+#ifndef SPARK_PLATFORM_LINUX
+        // The unchanged macOS backend remains separately qualified.
+        void* frames[64];
+        const int frameCount = backtrace(frames, 64);
+        for (int index = 0; index < frameCount; ++index)
+        {
+            SignalSafeWrite(fd, "  ");
+            SignalSafeWrite(fd, kStackFrameMarker);
+            backtrace_symbols_fd(&frames[index], 1, fd);
+        }
+#endif
+#ifdef SPARK_PLATFORM_LINUX
+        SignalSafeWrite(fd, "Context frames follow; an unavailable frame chain retains the exact PC only.\n");
+        SignalSafeWrite(fd, g_symbolicSectionBuffer,
+                        FormatSymbolicSection(context, g_symbolicSectionBuffer, sizeof(g_symbolicSectionBuffer)));
+#else
+        (void)context;
+#endif
+    }
+
+#ifdef SPARK_PLATFORM_LINUX
+    // Written during quiescent installation, before signal actions are exposed.
+    // No late config reads, allocations, directory scans or thread enumeration.
+    struct PreparedSignalArtifacts
+    {
+        Spark::CrashHandlerDetail::SignalCrashManifest manifest;
+        char optionalSections[16 * 1024]{};
+        size_t optionalSize = 0;
+        bool ready = false;
+    };
+    PreparedSignalArtifacts g_preparedSignalArtifacts;
+
+    int OpenSignalArtifact(const char* name)
+    {
+        if (g_artifactRootHandle < 0)
+        {
+            return -1;
+        }
+        return openat(g_artifactRootHandle, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
+                      S_IRUSR | S_IWUSR);
+    }
+
+    bool FinishSignalArtifact(int fd, bool complete)
+    {
+        struct stat metadata
+        {
+        };
+        const bool privateFile = fstat(fd, &metadata) == 0 && S_ISREG(metadata.st_mode) && metadata.st_nlink == 1 &&
+                                 metadata.st_uid == geteuid() && (metadata.st_mode & 0777) == 0600;
+        const bool closed = close(fd) == 0;
+        return complete && privateFile && closed;
+    }
+
+    void WriteBoundedSignalArtifacts(int fd, int sig, std::uint64_t sequence)
+    {
+        if (g_stallSignalReportForTesting)
+        {
+            for (;;)
+            {
+                pause();
+            }
+        }
+        const auto& prepared = g_preparedSignalArtifacts;
+        if (prepared.optionalSize)
+        {
+            SignalSafeWrite(fd, prepared.optionalSections, prepared.optionalSize);
+        }
+        const bool logReady = FinishSignalArtifact(fd, !g_signalWriteFailed);
+        if (!logReady || !prepared.ready)
+        {
+            WriteFatalStderr("[SPARK ENGINE] Incomplete signal log; manifest not published.\n");
+            return;
+        }
+
+        using Spark::CrashHandlerDetail::SignalArtifactBuffer;
+        char coreName[sizeof(g_signalLogName) + 16]{};
+        SignalArtifactBuffer core(coreName, sizeof(coreName));
+        core.Append(g_signalLogPrefix);
+        core.Append("_");
+        core.Number(sequence, 16, 16);
+        core.Append(".core_hint");
+        const char* hint = prepared.manifest.fullMemoryDump
+                               ? "Full-dump debugging opt-in: the OS core policy is unchanged.\n"
+                                 "On Linux check /proc/sys/kernel/core_pattern or coredumpctl list.\n"
+                               : "Kernel core dumps are disabled by the default crash privacy policy.\n";
+        const int coreFd = core.Size() ? OpenSignalArtifact(coreName) : -1;
+        bool coreReady = false;
+        if (coreFd >= 0)
+        {
+            g_signalWriteFailed = false;
+            SignalSafeWrite(coreFd, hint);
+            coreReady = FinishSignalArtifact(coreFd, !g_signalWriteFailed);
+        }
+
+        char readyName[64]{};
+        SignalArtifactBuffer ready(readyName, sizeof(readyName));
+        ready.Append("crash_manifest_");
+        ready.Number(sequence, 16, 16);
+        ready.Append(".json");
+        char temporaryName[72]{};
+        SignalArtifactBuffer temporary(temporaryName, sizeof(temporaryName));
+        temporary.Append(readyName);
+        temporary.Append(".tmp");
+        const time_t now = time(nullptr);
+        if (!ready.Size() || !temporary.Size() || now < 0)
+        {
+            return;
+        }
+        auto manifest = prepared.manifest;
+        manifest.processId = static_cast<std::uint64_t>(getpid());
+        manifest.epochSeconds = static_cast<std::uint64_t>(now);
+        manifest.logName = g_signalLogName;
+        manifest.coreHintName = coreReady ? std::string_view(coreName) : std::string_view{};
+        switch (sig)
+        {
+        case SIGSEGV:
+            manifest.title = "SIGSEGV";
+            break;
+        case SIGABRT:
+            manifest.title = "SIGABRT";
+            break;
+        case SIGFPE:
+            manifest.title = "SIGFPE";
+            break;
+        case SIGBUS:
+            manifest.title = "SIGBUS";
+            break;
+        case SIGILL:
+            manifest.title = "SIGILL";
+            break;
+        case SIGTRAP:
+            manifest.title = "SIGTRAP";
+            break;
+        default:
+            manifest.title = "Crash";
+            break;
+        }
+        char json[4096];
+        const size_t jsonSize = Spark::CrashHandlerDetail::FormatSignalCrashManifest(manifest, json, sizeof(json));
+        const int manifestFd = jsonSize ? OpenSignalArtifact(temporaryName) : -1;
+        if (manifestFd < 0)
+        {
+            return;
+        }
+        g_signalWriteFailed = false;
+        SignalSafeWrite(manifestFd, json, jsonSize);
+        const bool complete = FinishSignalArtifact(manifestFd, !g_signalWriteFailed);
+        // Linux renameat2 with RENAME_NOREPLACE publishes atomically without
+        // overwriting an existing report. Unsupported kernels fail closed.
+        constexpr unsigned kRenameNoReplace = 1;
+        if (!complete || syscall(SYS_renameat2, g_artifactRootHandle, temporaryName, g_artifactRootHandle, readyName,
+                                 kRenameNoReplace) != 0)
+        {
+            unlinkat(g_artifactRootHandle, temporaryName, 0);
+            WriteFatalStderr("[SPARK ENGINE] Signal manifest publication failed.\n");
+        }
+        WriteFatalStderr("Log file (private artifact directory): ");
+        WriteFatalStderr(g_signalLogName);
+        WriteFatalStderr("\n");
+    }
+#endif
+
+#ifndef SPARK_PLATFORM_LINUX
+    /// Stage 2: optional sections and the manifest. Allocates; bounded by the watchdog.
+    void WriteBestEffortReport(int fd, int sig)
+    {
+        if (g_stallSignalReportForTesting)
+        {
+            for (;;)
+            {
+                pause();
+            }
+        }
+
+        const std::string logName = g_signalLogName;
+        const std::string reportId = logName.substr(logName.size() - 20, 16); // "<id>.log"
+        if (g_cfg.captureSystemInfo)
+        {
+            const std::string section = LinuxSystemInfo();
+            SignalSafeWrite(fd, section.data(), section.size());
+        }
+        if (g_cfg.captureAllThreads)
+        {
+            const std::string section = LinuxThreadStacks();
+            SignalSafeWrite(fd, section.data(), section.size());
+        }
+        const bool logReady = close(fd) == 0;
+
+        const std::string prefix = GetCrashArtifactPrefix().string();
+        const std::string logFile = (g_artifactRootPath / logName).string();
+        const std::string coreFile = prefix + "_" + reportId + ".core_hint";
+        const std::string coreHint = g_cfg.includeStackMemory
+                                         ? "Full-dump debugging opt-in: the OS core policy is unchanged.\n"
+                                           "On Linux check /proc/sys/kernel/core_pattern or coredumpctl list.\n"
+                                         : "Kernel core dumps are disabled by the default crash privacy policy.\n";
+        const bool coreReady = WriteExclusiveFileUtf8(coreFile, coreHint);
+        PinnedFile coreProbe = coreReady ? OpenPinnedInputFile(coreFile) : PinnedFile{};
+        PinnedFile logProbe = logReady ? OpenPinnedInputFile(logFile) : PinnedFile{};
+
+        const std::string crashTitle = (sig == SIGSEGV)   ? "SIGSEGV"
+                                       : (sig == SIGABRT) ? "SIGABRT"
+                                       : (sig == SIGFPE)  ? "SIGFPE"
+                                                          : "Crash";
+
+        // Always publish the local manifest when the log is safely pinned. A
+        // non-headless process normally has a read-only reporter watching this
+        // directory; headless processes retain the same local artifacts without
+        // starting UI or transport work.
+        if (logProbe.stream)
+            WriteCrashManifest(reportId, coreProbe.stream ? coreFile : std::string{}, logFile, "", "", crashTitle);
+
+        WriteFatalStderr("Log file: ");
+        WriteFatalStderr(logFile.c_str());
+        WriteFatalStderr("\n");
+    }
+
+#endif
+
+    /// Prepare everything the signal handler reads, then give the installing
+    /// thread an alternate signal stack. Called from InstallCrashHandler().
+    void PrepareSignalReport()
+    {
+        const std::string prefix = GetCrashArtifactPrefix().filename().string();
+        const std::string safePrefix = prefix.empty() ? std::string("GameEngineCrash") : prefix;
+        const size_t length = std::min(safePrefix.size(), sizeof(g_signalLogPrefix) - 1);
+        memcpy(g_signalLogPrefix, safePrefix.data(), length);
+        g_signalLogPrefix[length] = '\0';
+#ifdef SPARK_PLATFORM_LINUX
+        // Install/reinstall is a quiescent lifecycle operation, as for the pinned root.
+        if (g_signalStderrHandle >= 0)
+        {
+            close(g_signalStderrHandle);
+            g_signalStderrHandle = -1;
+        }
+        // A fresh /proc open has its own status flags; dup() would share O_NONBLOCK.
+        // Append preserves existing regular-file stderr contents and its shared offset.
+        g_signalStderrHandle = open("/proc/self/fd/2", O_WRONLY | O_NONBLOCK | O_APPEND | O_CLOEXEC);
+        // Snapshot optional sections now; never enumerate threads or use stdio in a signal.
+        g_preparedSignalArtifacts = {};
+        auto& manifest = g_preparedSignalArtifacts.manifest;
+        manifest.requireConsent = g_cfg.requireConsent;
+        manifest.allowScreenshotRefusal = g_cfg.allowScreenshotRefusal;
+        manifest.promptUserDescription = g_cfg.promptUserDescription;
+        manifest.fullMemoryDump = g_cfg.includeStackMemory;
+        std::string sections;
+        if (g_cfg.captureSystemInfo || g_cfg.captureAllThreads)
+        {
+            sections = "\n*** INSTALL-TIME DIAGNOSTIC SNAPSHOT (NOT CRASH-TIME THREAD STATE) ***\n";
+            sections += MakeTimeStampUtf8() + "\n";
+            if (g_cfg.captureSystemInfo)
+            {
+                sections += LinuxSystemInfo();
+            }
+            if (g_cfg.captureAllThreads)
+            {
+                sections += LinuxThreadStacks();
+            }
+        }
+        constexpr std::string_view truncated = "\n[install-time snapshot truncated]\n";
+        const size_t available = sizeof(g_preparedSignalArtifacts.optionalSections) - truncated.size();
+        const size_t copied = std::min(sections.size(), available);
+        memcpy(g_preparedSignalArtifacts.optionalSections, sections.data(), copied);
+        g_preparedSignalArtifacts.optionalSize = copied;
+        if (sections.size() > copied)
+        {
+            memcpy(g_preparedSignalArtifacts.optionalSections + copied, truncated.data(), truncated.size());
+            g_preparedSignalArtifacts.optionalSize += truncated.size();
+        }
+        // Initialization creates a fresh private per-process root. Verify the
+        // empty-queue invariant before reserving a slot; scan failure disables publication.
+        g_preparedSignalArtifacts.ready = g_artifactRootHandle >= 0 && CountPendingCrashManifests() == 0;
+        g_reserveFatalManifest = g_preparedSignalArtifacts.ready;
+        g_signalArtifactOwnerPid = getpid();
+#endif
+
+        stack_t current;
+        memset(&current, 0, sizeof(current));
+        if (sigaltstack(nullptr, &current) == 0 && (current.ss_flags & SS_DISABLE) != 0)
+        {
+            stack_t alternate;
+            memset(&alternate, 0, sizeof(alternate));
+            alternate.ss_sp = g_signalAlternateStack;
+            alternate.ss_size = sizeof(g_signalAlternateStack);
+            sigaltstack(&alternate, nullptr);
+        }
+    }
+} // namespace
+
+namespace Spark::CrashHandlerDetail
+{
+    void SetSignalReportStallForTesting(bool stall) noexcept
+    {
+        g_stallSignalReportForTesting = stall ? 1 : 0;
+    }
+} // namespace Spark::CrashHandlerDetail
+
 static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 {
     // Prevent re-entrant crashes (e.g. crash inside the handler itself).
-    // sig_atomic_t is the only type guaranteed safe in signal handlers.
-    if (g_inSignalHandler)
+    // atomic_flag is always lock-free and also excludes another crashing thread.
+    if (g_inSignalHandler.test_and_set(std::memory_order_acq_rel))
     {
-        signal(sig, SIG_DFL);
-        raise(sig);
-        return;
+        TerminateWithFatalSignal(sig);
     }
-    g_inSignalHandler = 1;
 
-    // --- Async-signal-safe section ---
-    // Write a minimal crash notice to stderr using only write(), which is
-    // async-signal-safe.  This guarantees visible output even if the heap
-    // or iostream locks are corrupted.
+    // A deadlocked report must still end the process.
+    ArmSignalReportWatchdog(sig);
+
     const char* sigName = "UNKNOWN";
     switch (sig)
     {
@@ -1948,154 +2647,63 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
         sigName = "SIGTRAP (Trace/breakpoint trap)";
         break;
     }
-    WriteStderr("\n[SPARK ENGINE] CRASH: ");
-    WriteStderr(sigName);
-    WriteStderr("\n");
+    WriteFatalStderr("\n[SPARK ENGINE] CRASH: ");
+    WriteFatalStderr(sigName);
+    WriteFatalStderr("\n");
 
-    // --- Best-effort section ---
-    // The operations below use the heap and are technically not
-    // async-signal-safe.  However, they are wrapped in a try/catch and
-    // the process is about to terminate anyway, so this is acceptable
-    // best-effort behaviour (matching industry-standard crash reporters).
-    // We intentionally do NOT acquire g_lock here because the crashing
-    // thread may already hold it, which would deadlock.
+    // One report per process; the sequence is shared with nonfatal reports.
+    const std::uint64_t reportSequence = g_reportSequence.fetch_add(1, std::memory_order_relaxed) + 1;
+    const int fd = OpenSignalReportLog(reportSequence);
+    if (fd < 0)
+    {
+        WriteFatalStderr("[SPARK ENGINE] Private crash-artifact directory unavailable; report not written.\n");
+        TerminateWithFatalSignal(sig);
+    }
+#ifdef SPARK_PLATFORM_LINUX
+    g_signalWriteFailed = false;
+#endif
+    WriteSignalSafeReport(fd, sig, sigName, info, context);
+
+#ifdef SPARK_PLATFORM_LINUX
+    WriteBoundedSignalArtifacts(fd, sig, reportSequence);
+#else
+    // The macOS best-effort path is unchanged by the Linux signal-safety fix.
     try
     {
-        const std::string reportId = MakeCrashReportId();
-        const std::string timestamp = MakeTimeStampUtf8();
-        const std::string artifactSuffix = "_" + reportId;
-        std::string prefix = GetCrashArtifactPrefix().string();
-        if (prefix.empty())
-        {
-            WriteStderr("[SPARK ENGINE] Private crash-artifact directory unavailable; report not written.\n");
-            signal(sig, SIG_DFL);
-            raise(sig);
-            return;
-        }
-        std::string logFile = prefix + artifactSuffix + ".log";
-        std::string zipFile = prefix + artifactSuffix + ".zip";
-
-        std::ostringstream log;
-        log << "================================================================\n";
-        log << "           SPARK ENGINE CRASH REPORT (POSIX)\n";
-        log << "================================================================\n\n";
-        log << "Timestamp  : " << timestamp << "\n";
-        log << "Process ID : " << getpid() << "\n";
-#ifdef SPARK_PLATFORM_LINUX
-        log << "Thread ID  : " << static_cast<unsigned long>(syscall(SYS_gettid)) << "\n\n";
-#else
-        log << "Thread ID  : " << pthread_mach_thread_np(pthread_self()) << "\n\n";
-#endif
-
-        log << "*** CRASH DETECTED ***\n";
-        log << "Signal     : " << sig << " - " << sigName << "\n";
-        if (info)
-        {
-            log << "Fault Addr : 0x" << std::hex << reinterpret_cast<uintptr_t>(info->si_addr) << std::dec << "\n";
-            log << "Signal Code: " << info->si_code << "\n";
-        }
-        log << "\n";
-
-        log << CaptureStackTraceString();
-        if (g_cfg.captureSystemInfo)
-            log << LinuxSystemInfo();
-        if (g_cfg.captureAllThreads)
-            log << LinuxThreadStacks();
-
-        std::string logStr = log.str();
-        const bool logReady = WriteExclusiveFileUtf8(logFile, logStr);
-
-        // Write core dump path hint
-        std::string coreFile = prefix + artifactSuffix + ".core_hint";
-        static const char coreHint[] = "Core dump may be found at the system core dump location.\n"
-                                       "Check: /proc/sys/kernel/core_pattern\n"
-                                       "Or run: coredumpctl list\n";
-        const bool coreReady = WriteExclusiveFileUtf8(coreFile, std::string(coreHint, sizeof(coreHint) - 1));
-        PinnedFile coreProbe = coreReady ? OpenPinnedInputFile(coreFile) : PinnedFile{};
-        PinnedFile logProbe = logReady ? OpenPinnedInputFile(logFile) : PinnedFile{};
-
-        const std::string crashTitle = (sig == SIGSEGV)   ? "SIGSEGV"
-                                       : (sig == SIGABRT) ? "SIGABRT"
-                                       : (sig == SIGFPE)  ? "SIGFPE"
-                                                          : "Crash";
-
-        // Reporter launch success is the ownership switch. Emit only raw
-        // artifacts and never perform the in-process consent/archive/upload path.
-        if (g_reporterLaunched)
-        {
-            if (logProbe.stream)
-                WriteCrashManifest(reportId, coreProbe.stream ? coreFile : std::string{}, logFile, "", "", crashTitle);
-        }
-
-        // Reporter-unavailable fallback: this process alone owns consent,
-        // archive construction, and upload.
-        if (!g_reporterLaunched && g_cfg.enableCrashReporting)
-        {
-            bool userConsented = true;
-            if (g_cfg.requireConsent && !g_cfg.headlessMode)
-            {
-                int result = MessageBoxA(nullptr,
-                                         "SparkEngine has crashed. Would you like to send a crash report "
-                                         "to help improve the engine?\n\nThe report can include stack traces, "
-                                         "system and process information, and file paths. These diagnostics "
-                                         "may contain personal or sensitive data.",
-                                         "Crash Report", MB_YESNO | MB_ICONERROR);
-                userConsented = (result == IDYES);
-            }
-
-            if (userConsented)
-            {
-                bool archiveReady = !g_cfg.zipBeforeUpload;
-                PinnedFile archivePin;
-                if (g_cfg.zipBeforeUpload)
-                {
-                    const std::vector<std::string> approvedFiles =
-                        Spark::CrashHandlerDetail::BuildCrashArchiveAllowlist(
-                            coreProbe.stream ? coreFile : std::string{}, logProbe.stream ? logFile : std::string{},
-                            std::string{}, false);
-                    std::vector<PinnedFile*> approvedPins;
-                    if (coreProbe.stream)
-                        approvedPins.push_back(&coreProbe);
-                    if (logProbe.stream)
-                        approvedPins.push_back(&logProbe);
-                    archiveReady = ZipFilesUtf8(zipFile, approvedFiles, approvedPins, &archivePin);
-                }
-                CrashConfig uploadCfg = g_cfg;
-                const std::string approvedArchive =
-                    g_cfg.zipBeforeUpload && archiveReady ? StableUploadPath(archivePin, zipFile) : std::string{};
-                bool uploadOk = UploadCrashReport(uploadCfg, log.str(), approvedArchive);
-                if (uploadOk)
-                    WriteStderr("Crash report uploaded successfully.\n");
-                else
-                    WriteStderr("Crash report upload failed.\n");
-            }
-        }
-
-        // Print log to stderr
-        WriteStderr("Log file: ");
-        WriteStderr(logFile.c_str());
-        WriteStderr("\n");
+        WriteBestEffortReport(fd, sig);
     }
     catch (const std::exception& e)
     {
-        WriteStderr("[SPARK ENGINE] Exception: ");
-        WriteStderr(e.what());
-        WriteStderr("\n");
+        WriteFatalStderr("[SPARK ENGINE] Exception: ");
+        WriteFatalStderr(e.what());
+        WriteFatalStderr("\n");
     }
     catch (...)
     {
-        WriteStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
+        WriteFatalStderr("[SPARK ENGINE] Unknown exception in crash handler\n");
     }
 
-    // Re-raise to get core dump
-    signal(sig, SIG_DFL);
-    raise(sig);
+#endif
+    // Preserve fatal-signal termination; the default policy prevents kernel cores.
+    alarm(0);
+    TerminateWithFatalSignal(sig);
 }
 
 void InstallCrashHandler(const CrashConfig& cfg)
 {
     SPARK_LOG_INFO(Spark::LogCategory::Core, "Installing crash handler (Linux)");
     AssignCrashConfig(cfg);
+    // Kernel core files are a second crash producer outside the private
+    // artifact directory. Keep them disabled unless the explicit local-debug
+    // full-dump opt-in was selected by SparkEngine.cpp.
+    g_posixCoreDumpPolicyEnforced = ApplyPosixCoreDumpPolicy(cfg.includeStackMemory);
+    if (!g_posixCoreDumpPolicyEnforced)
+    {
+        // A nested fault can bypass a SA_RESETHAND handler. Do not continue
+        // startup with an unenforced kernel policy and rely on re-raise gating.
+        WriteStderr("[SPARK ENGINE] Cannot enforce kernel core-dump privacy; terminating startup.\n");
+        _exit(EXIT_FAILURE);
+    }
     g_triggerCrashOnAssert = cfg.triggerCrashOnAssert;
     g_reporterLaunched = false;
     g_manifestDir.clear();
@@ -2107,15 +2715,20 @@ void InstallCrashHandler(const CrashConfig& cfg)
             "CrashHandler: failed to create private crash-artifact directory; filesystem artifacts disabled");
     }
 
-#ifdef SPARK_HAS_CURL
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-#endif
+    // Capture module identity now so the signal handler only reads it, and
+    // prime backtrace(): its first call loads the unwinder, which allocates.
+    RefreshCrashModuleIdentities();
+    void* primeFrame[1];
+    (void)backtrace(primeFrame, 1);
+    PrepareSignalReport();
 
-    // Install signal handlers for common crash signals
+    // Install signal handlers for common crash signals. SA_ONSTACK runs the
+    // handler on the alternate stack PrepareSignalReport() gave this thread,
+    // so a stack overflow is reported too; other threads use their own stack.
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = HandleLinuxCrash;
-    sa.sa_flags = SA_SIGINFO | SA_RESETHAND; // SA_RESETHAND to avoid infinite loops
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND | SA_ONSTACK; // SA_RESETHAND to avoid infinite loops
     sigemptyset(&sa.sa_mask);
 
     sigaction(SIGSEGV, &sa, nullptr);
@@ -2125,9 +2738,10 @@ void InstallCrashHandler(const CrashConfig& cfg)
     sigaction(SIGILL, &sa, nullptr);
     sigaction(SIGTRAP, &sa, nullptr);
 
-    // The external reporter is intentionally read-only. Keep consent and upload
-    // ownership in-process whenever reporting is enabled, and never show UI headlessly.
-    if (Spark::CrashHandlerDetail::ShouldLaunchReadOnlyReporter(g_cfg.enableCrashReporting, g_cfg.headlessMode))
+    // The external reporter is intentionally read-only. Launch it for every
+    // interactive process; headless processes keep artifacts local and never
+    // start a UI.
+    if (!g_cfg.headlessMode)
         g_reporterLaunched = LaunchCrashReporter();
 }
 
@@ -2193,13 +2807,20 @@ void TriggerCrashReport(const char* reason)
     }
 
     log << CaptureStackTraceString();
+#ifdef SPARK_PLATFORM_LINUX
+    {
+        std::vector<char> section(sizeof(g_symbolicSectionBuffer));
+        log.write(section.data(),
+                  static_cast<std::streamsize>(FormatSymbolicSection(nullptr, section.data(), section.size(), true)));
+    }
+#endif
     if (g_cfg.captureSystemInfo)
         log << LinuxSystemInfo();
 
     const bool logReady = WriteExclusiveFileUtf8(logFile, log.str());
     if (!logReady)
         WriteStderr("[SPARK ENGINE] Failed to write assertion report safely.\n");
-    else if (g_reporterLaunched)
+    else
         WriteCrashManifest(reportId, "", logFile, "", "", "Assertion Failure");
 
     try
@@ -2279,4 +2900,6 @@ void SetAssertCrashBehavior(bool shouldCrash)
 {
     g_triggerCrashOnAssert = shouldCrash;
 }
+
+void RefreshCrashModuleIdentities() {}
 #endif

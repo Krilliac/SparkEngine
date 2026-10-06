@@ -4,6 +4,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace SparkInstaller
 {
@@ -16,7 +17,21 @@ namespace SparkInstaller
                    const LogSink& log) const;
 
         bool Fetch(const std::string& destination, const LogSink& log) const;
+        // Refuse an update when tracked or untracked local changes could make
+        // rollback ambiguous or cause checkout to replace user data. The only
+        // tolerated entries are untracked installer-owned files (the install
+        // marker, its atomic-write .tmp sibling, and the pending and
+        // repair-required markers), which the installer itself writes into
+        // the checkout; any other entry is dirty.
+        bool WorkingTreeClean(const std::string& destination, const LogSink& log) const;
+        // NUL-delimited Git inventory, including ignored user files that the
+        // cleanliness check intentionally does not classify as local edits.
+        bool IgnoredFiles(const std::string& destination, std::vector<std::string>& paths, const LogSink& log) const;
         bool CheckoutRef(const std::string& ref, const std::string& destination, const LogSink& log) const;
+        // Restore an exact previously observed commit without forcing away
+        // local changes. A failure is reported to the caller so update
+        // rollback cannot be mistaken for a successful recovery.
+        bool CheckoutCommit(const std::string& commit, const std::string& destination, const LogSink& log) const;
         bool UpdateSubmodules(const std::string& destination, const LogSink& log) const;
 
         // Resolve the current HEAD commit SHA.

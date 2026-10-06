@@ -111,6 +111,13 @@ namespace SparkEditor
     class ProjectManager
     {
       public:
+        /// Newest .sparkproject "projectFileVersion" this build reads, and the one it writes.
+        /// A document without the field is the legacy dialect and reads as this version.
+        static constexpr uint64_t kProjectFileVersion = 1;
+        /// Largest .sparkproject / spark.project.json (or its .bak) the editor reads. Project
+        /// documents are small metadata; a larger file is rejected before it is read.
+        static constexpr uint64_t kMaximumProjectDocumentBytes = 4ull * 1024ull * 1024ull;
+
         ProjectManager();
         /// [editor thread] Use a caller-selected recent-project history directory.
         /// The manager owns the path value, not the directory's lifetime.
@@ -126,12 +133,21 @@ namespace SparkEditor
                            const std::string& description = "");
         bool CreateProjectFromTemplate(const std::string& projectName, const std::string& projectPath,
                                        const std::string& templateName = "EmptyProject");
-        bool OpenProject(const std::string& sparkprojectPath);
+        /// @brief Open a .sparkproject (or a directory containing one) as the current project.
+        /// @param error When non-null: on failure, an actionable reason (a projectFileVersion
+        ///        newer than kProjectFileVersion, a damaged document and its unusable .bak, a
+        ///        missing file). On success after recovering from the retained
+        ///        `<file>.sparkproject.bak`, why the primary was rejected; otherwise cleared.
+        /// @return true when the project is open; false leaves the previous project open.
+        bool OpenProject(const std::string& sparkprojectPath, std::string* error = nullptr);
         bool SaveProject();
         /// @brief Resolve an existing scene only when it remains inside the open project root.
         bool ResolveProjectScenePath(const std::string& scenePath, std::string& resolvedPath) const;
         /// @brief Read and deserialize a contained scene from one verified file handle.
-        bool LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath) const;
+        /// @param error When non-null, set on failure to an actionable reason (containment,
+        ///        read failure, or the scene's version/schema rejection).
+        bool LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath,
+                              std::string* error = nullptr) const;
         /// @brief Persist a successfully opened/saved scene as project-relative state.
         /// Rejects missing files and paths outside the current project root.
         bool RecordOpenedScene(const std::string& scenePath);
@@ -190,8 +206,15 @@ namespace SparkEditor
         static std::string GetEditorDataDirectory(); ///< %APPDATA%/SparkEngine/Editor
 
       private:
-        bool LoadProjectFile(const std::string& sparkprojectPath);
-        bool SaveProjectFile();
+        /// Parses into m_currentProject only after the version and structure checks pass, so a
+        /// rejected document never replaces the loaded project. A damaged primary falls back to
+        /// its retained .bak; a newer projectFileVersion fails closed without it.
+        bool LoadProjectFile(const std::string& sparkprojectPath, std::string* error = nullptr);
+        /// Writes through SaveFileDurability::WriteFileAtomically; @p retainBackup keeps the
+        /// previous document as `<file>.bak`. It is ignored while the document at the target path
+        /// is one LoadProjectFile rejected and recovered from its `.bak`, so the refresh never
+        /// replaces the only good copy with the damaged document.
+        bool SaveProjectFile(bool retainBackup = true);
 
         /// @brief Template package root for this session, resolved once and cached.
         /// Empty when no template root could be located.
@@ -218,6 +241,11 @@ namespace SparkEditor
         // Preserve the exact normalized file selected/created so SaveProject()
         // never silently renames a project after loading its metadata.
         std::string m_currentProjectFilePath;
+        /// Normalized path of a document LoadProjectFile rejected and loaded from its `.bak`.
+        /// Keyed by path, not by the open project, because it describes the file on disk and must
+        /// survive the project rollbacks in Open/Create. Cleared by a clean load or a successful
+        /// save of that path.
+        std::string m_recoveredProjectFilePath;
         std::vector<RecentProject> m_recentProjects;
         mutable std::mutex m_recentProjectsMutex; ///< Protects m_recentProjects from concurrent access
         std::string m_engineRoot;

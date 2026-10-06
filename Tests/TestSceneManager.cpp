@@ -1,8 +1,9 @@
 // TestSceneManager.cpp - Tests for scene hierarchy, metadata, and dirty-state tracking
-// Standalone implementations for CI testing (no engine dependency)
+// (standalone model below), plus SceneManager's production text-scene parsers (SceneTextFormat.h)
 
 #include "TestFramework.h"
 #include "TestCommonMath.h"
+#include "SceneManager/SceneTextFormat.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -572,4 +573,80 @@ TEST(Scene_MutableNodeModification)
     EXPECT_NEAR(cn->position.x, 5.0f, 0.001f);
     EXPECT_NEAR(cn->position.y, 10.0f, 0.001f);
     EXPECT_EQ(cn->properties.at("speed"), std::string("42"));
+}
+
+// =============================================================================
+// Production text-scene parsers (SceneManager/SceneTextFormat.h)
+// =============================================================================
+
+// SphereObject requires slices >= 3 and stacks >= 2 (SPARK_REQUIRE aborts the
+// process otherwise), and every primitive requires positive dimensions. The
+// legacy object reader used to accept "Sphere x y z r 1 1", a non-positive size
+// and unbounded tessellation (2147483647 slices sized one mesh from one line).
+TEST(SceneManager_LegacySphereRejectsDegenerateOrHugeTessellation)
+{
+    std::vector<Spark::LegacyObjectRow> rows(1);
+    rows.front().type = "Untouched";
+    for (const char* rejected : {"Sphere 0 0 0 1 1 1\n", "Sphere 0 0 0 1 2 16\n", "Sphere 0 0 0 1 16 1\n",
+                                 "Sphere 0 0 0 1 257 16\n", "Sphere 0 0 0 1 16 257\n", "Sphere 0 0 0 1 2147483647 16\n",
+                                 "Sphere 0 0 0 0 16 16\n", "Sphere 0 0 0 -1 16 16\n", "Cube 0 0 0 0\n",
+                                 "Pyramid 0 0 0 -2\n", "Plane 0 0 0 -5 5\n", "Ramp 0 0 0 2 0\n", "Wall 0 0 0 1 inf\n"})
+    {
+        EXPECT_FALSE(Spark::ParseLegacyObjectLines(rejected, rows));
+        ASSERT_EQ(rows.size(), static_cast<size_t>(1));
+        EXPECT_EQ(rows.front().type, std::string("Untouched"));
+    }
+
+    ASSERT_TRUE(Spark::ParseLegacyObjectLines("Sphere 1 2 3 0.5 3 2\nSphere 0 0 0 2 256 256\nSphere 0 0 0\n", rows));
+    ASSERT_EQ(rows.size(), static_cast<size_t>(3));
+    EXPECT_EQ(rows[0].slices, Spark::kMinLegacySphereSlices);
+    EXPECT_EQ(rows[0].stacks, Spark::kMinLegacySphereStacks);
+    EXPECT_NEAR(rows[0].primary, 0.5f, 0.0001f);
+    EXPECT_NEAR(rows[0].position.z, 3.0f, 0.0001f);
+    EXPECT_EQ(rows[1].slices, Spark::kMaxLegacySphereTessellation);
+    EXPECT_EQ(rows[1].stacks, Spark::kMaxLegacySphereTessellation);
+    EXPECT_EQ(rows[2].slices, 16);
+    EXPECT_NEAR(rows[2].primary, 0.5f, 0.0001f);
+    EXPECT_EQ(rows[2].lineNumber, 3);
+}
+
+// Every text dialect is capped at kMaxSceneTextNodes rows. The exact-cap
+// versioned document is one parent chain, which the previous per-node
+// ancestor walk validated in quadratic time (about 5e9 steps at the cap).
+TEST(SceneManager_TextParsersRejectNodeCountAboveCap)
+{
+    const size_t cap = Spark::kMaxSceneTextNodes;
+    std::string versioned = "# SparkEngine Scene v1.0\n";
+    versioned.reserve(cap * 32);
+    for (size_t i = 0; i < cap; ++i)
+        versioned +=
+            "Cube n" + std::to_string(i) + " 0 0 0 0 0 0 1 1 1 " + std::to_string(static_cast<long long>(i) - 1) + "\n";
+
+    SceneMetadata metadata;
+    std::vector<SceneNode> nodes;
+    ASSERT_TRUE(Spark::ParseVersionedSceneText(versioned, metadata, nodes));
+    ASSERT_EQ(nodes.size(), cap);
+    EXPECT_EQ(nodes.back().parentIndex, static_cast<int>(cap) - 2);
+    ASSERT_EQ(nodes.front().childIndices.size(), static_cast<size_t>(1));
+    EXPECT_EQ(nodes.front().childIndices.front(), 1);
+
+    versioned += "Cube extra 0 0 0\n";
+    nodes.clear();
+    EXPECT_FALSE(Spark::ParseVersionedSceneText(versioned, metadata, nodes));
+    EXPECT_TRUE(nodes.empty());
+
+    std::string ini;
+    ini.reserve((cap + 1) * 40);
+    for (size_t i = 0; i <= cap; ++i)
+        ini += "[Object]\ntype = Cube\nname = n" + std::to_string(i) + "\n";
+    EXPECT_FALSE(Spark::ParseIniSceneText(ini, metadata, nodes));
+    EXPECT_TRUE(nodes.empty());
+
+    std::string legacy;
+    legacy.reserve((cap + 1) * 12);
+    for (size_t i = 0; i <= cap; ++i)
+        legacy += "Cube 0 0 0\n";
+    std::vector<Spark::LegacyObjectRow> rows;
+    EXPECT_FALSE(Spark::ParseLegacyObjectLines(legacy, rows));
+    EXPECT_TRUE(rows.empty());
 }

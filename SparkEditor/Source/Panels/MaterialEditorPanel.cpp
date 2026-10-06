@@ -5,9 +5,10 @@
  * @date 2025
  *
  * Contains: constructor, Initialize, Update, Render, Shutdown, HandleEvent,
- * OpenMaterial, CreateMaterial, SaveMaterial, HasUnsavedChanges,
+ * HasUnsavedChanges,
  * GetSelectedMaterial, RenderToolbar, RenderMaterialList.
  *
+ * File loading/saving lives in MaterialEditorFiles.cpp.
  * Parameter/texture editing lives in MaterialEditorParameters.cpp.
  * Preview, render state, and default materials live in MaterialEditorPreview.cpp.
  */
@@ -16,6 +17,7 @@
 #include "../Core/EditorIcons.h"
 #include "../Utils/ImGuiUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <iostream>
@@ -23,6 +25,7 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 
 namespace SparkEditor
 {
@@ -31,7 +34,10 @@ namespace SparkEditor
     // Construction / Lifecycle
     // ========================================================================
 
-    MaterialEditorPanel::MaterialEditorPanel() : EditorPanel("Material Editor", "material_editor_panel") {}
+    MaterialEditorPanel::MaterialEditorPanel() : EditorPanel("Material Editor", "material_editor_panel")
+    {
+        SetSize(900.0f, 650.0f);
+    }
 
     bool MaterialEditorPanel::Initialize()
     {
@@ -75,10 +81,19 @@ namespace SparkEditor
                 if (it->path().extension() != ".hlsl")
                     continue;
 
+                // info.path is handed to narrow std::string shader loading. A name the
+                // Windows ANSI code page cannot spell has no such path, and
+                // path::string() throws for it (which ended the scan): skip it. Name and
+                // description are ImGui text, so UTF-8.
+                if (!Spark::FileUtils::TryPathToNarrow(it->path()))
+                {
+                    continue;
+                }
+
                 ShaderInfo info;
-                info.name = it->path().stem().string();
+                info.name = Spark::FileUtils::TryPathToUtf8(it->path().stem()).value_or("?");
                 info.path = it->path().generic_string();
-                info.description = it->path().parent_path().generic_string();
+                info.description = Spark::FileUtils::TryPathToUtf8(it->path().parent_path()).value_or(info.path);
                 m_availableShaders.push_back(std::move(info));
             }
 
@@ -241,180 +256,6 @@ namespace SparkEditor
     // ========================================================================
     // Public API
     // ========================================================================
-
-    void MaterialEditorPanel::OpenMaterial(const std::string& materialPath)
-    {
-        // Check if the material is already loaded
-        for (int i = 0; i < static_cast<int>(m_materials.size()); ++i)
-        {
-            if (m_materials[i].filePath == materialPath)
-            {
-                m_selectedMaterialIndex = i;
-                SetVisible(true);
-                std::cout << "Material Editor: selected existing material '" << m_materials[i].name << "'\n";
-                return;
-            }
-        }
-
-        // Create material definition from the file path (file parsing deferred to runtime)
-        MaterialDefinition material;
-        material.filePath = materialPath;
-
-        // Extract name from path (e.g., "Assets/Materials/Brick.spkmat" -> "Brick")
-        std::string nameFromPath = materialPath;
-        auto lastSlash = nameFromPath.find_last_of("/\\");
-        if (lastSlash != std::string::npos)
-        {
-            nameFromPath = nameFromPath.substr(lastSlash + 1);
-        }
-        auto dotPos = nameFromPath.find_last_of('.');
-        if (dotPos != std::string::npos)
-        {
-            nameFromPath = nameFromPath.substr(0, dotPos);
-        }
-        material.name = nameFromPath;
-        material.shaderPath = "Shaders/StandardPBR.hlsl";
-        material.isModified = false;
-        material.isBuiltIn = false;
-
-        PopulateDefaultPBRParameters(material);
-
-        m_materials.push_back(std::move(material));
-        m_selectedMaterialIndex = static_cast<int>(m_materials.size()) - 1;
-        SetVisible(true);
-
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Material Editor: loaded material '%s' from '%s'",
-                       m_materials.back().name.c_str(), materialPath.c_str());
-    }
-
-    void MaterialEditorPanel::CreateMaterial(const std::string& name, const std::string& shaderPath)
-    {
-        MaterialDefinition material;
-        material.name = name;
-        material.shaderPath = shaderPath;
-        material.filePath = "Assets/Materials/" + name + ".spkmat";
-        material.isModified = true;
-        material.isBuiltIn = false;
-
-        PopulateDefaultPBRParameters(material);
-
-        m_materials.push_back(std::move(material));
-        m_selectedMaterialIndex = static_cast<int>(m_materials.size()) - 1;
-        SetModified(true);
-
-        SPARK_LOG_INFO(Spark::LogCategory::Editor, "Material Editor: created material '%s' (shader='%s')", name.c_str(),
-                       shaderPath.c_str());
-    }
-
-    bool MaterialEditorPanel::SaveMaterial()
-    {
-        MaterialDefinition* selected = GetSelectedMaterial();
-        if (selected == nullptr)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Material Editor: no material selected to save");
-            return false;
-        }
-
-        if (selected->isBuiltIn)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Material Editor: cannot save built-in material '%s'",
-                           selected->name.c_str());
-            return false;
-        }
-
-        // Serialize material to .spkmat file (simplified text format)
-        std::ofstream file(selected->filePath);
-        if (!file.is_open())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Material Editor: failed to open file '%s' for writing",
-                            selected->filePath.c_str());
-            return false;
-        }
-
-        file << "# SparkEngine Material\n";
-        file << "name: " << selected->name << "\n";
-        file << "shader: " << selected->shaderPath << "\n";
-        file << "\n";
-
-        // Write parameters
-        file << "# Parameters\n";
-        for (const auto& param : selected->parameters)
-        {
-            file << "param " << param.name << " ";
-            switch (param.type)
-            {
-            case ShaderParamType::Float:
-                file << "float " << param.floatValues[0] << "\n";
-                break;
-            case ShaderParamType::Float2:
-                file << "float2 " << param.floatValues[0] << " " << param.floatValues[1] << "\n";
-                break;
-            case ShaderParamType::Float3:
-                file << "float3 " << param.floatValues[0] << " " << param.floatValues[1] << " " << param.floatValues[2]
-                     << "\n";
-                break;
-            case ShaderParamType::Float4:
-                file << "float4 " << param.floatValues[0] << " " << param.floatValues[1] << " " << param.floatValues[2]
-                     << " " << param.floatValues[3] << "\n";
-                break;
-            case ShaderParamType::Color:
-                file << "color " << param.floatValues[0] << " " << param.floatValues[1] << " " << param.floatValues[2]
-                     << " " << param.floatValues[3] << "\n";
-                break;
-            case ShaderParamType::Int:
-                file << "int " << param.intValue << "\n";
-                break;
-            case ShaderParamType::Bool:
-                file << "bool " << (param.boolValue ? "true" : "false") << "\n";
-                break;
-            case ShaderParamType::Texture2D:
-                file << "texture2d " << (param.texturePath.empty() ? "none" : param.texturePath) << "\n";
-                break;
-            case ShaderParamType::TextureCube:
-                file << "texturecube " << (param.texturePath.empty() ? "none" : param.texturePath) << "\n";
-                break;
-            case ShaderParamType::Matrix4x4:
-                file << "matrix4x4";
-                for (int i = 0; i < 16; ++i)
-                {
-                    file << " " << param.floatValues[i];
-                }
-                file << "\n";
-                break;
-            }
-        }
-        file << "\n";
-
-        // Write texture slots
-        file << "# Texture Slots\n";
-        for (const auto& slot : selected->textureSlots)
-        {
-            file << "texture_slot " << slot.name << " " << slot.bindSlot << " "
-                 << (slot.texturePath.empty() ? "none" : slot.texturePath) << " " << slot.tilingU << " " << slot.tilingV
-                 << " " << slot.offsetU << " " << slot.offsetV << "\n";
-        }
-        file << "\n";
-
-        // Write render state
-        file << "# Render State\n";
-        file << "blend_mode " << static_cast<int>(selected->renderState.blendMode) << "\n";
-        file << "cull_mode " << static_cast<int>(selected->renderState.cullMode) << "\n";
-        file << "depth_write " << (selected->renderState.depthWrite ? "true" : "false") << "\n";
-        file << "depth_test " << (selected->renderState.depthTest ? "true" : "false") << "\n";
-        file << "cast_shadows " << (selected->renderState.castShadows ? "true" : "false") << "\n";
-        file << "receive_shadows " << (selected->renderState.receiveShadows ? "true" : "false") << "\n";
-        file << "alpha_clip " << selected->renderState.alphaClipThreshold << "\n";
-        file << "render_queue " << selected->renderState.renderQueue << "\n";
-
-        file.close();
-
-        selected->isModified = false;
-        SetModified(false);
-        NotifyStateChange();
-
-        std::cout << "Material Editor: saved material '" << selected->name << "' to '" << selected->filePath << "'\n";
-        return true;
-    }
 
     bool MaterialEditorPanel::HasUnsavedChanges() const
     {

@@ -90,6 +90,14 @@ _WINDOWS_PRODUCT_SUFFIX = {
     "SHARED_LIBRARY": ".dll",
     "MODULE_LIBRARY": ".dll",
 }
+# The readiness contract calls the Release configure ``windows-validation``
+# because it is a validation profile, while its reviewed CMake preset is named
+# ``windows-release``.  Accept the preset spelling at the CLI boundary so the
+# configure and inventory commands can use the same operator-facing name.  The
+# inventory remains canonicalized to the readiness profile id everywhere else.
+_PROFILE_ALIASES = {
+    "windows-release": "windows-validation",
+}
 
 
 class InventoryError(RuntimeError):
@@ -119,12 +127,17 @@ def _line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+_BRACKET_OPEN = re.compile(r"\[(=*)\[")
+
+
 def _read_bracket(text: str, start: int) -> tuple[str, int] | None:
-    match = re.match(r"\[(=*)\[", text[start:])
+    # Match in place: slicing text[start:] copied the rest of the file for every
+    # scanned character, which made command scanning quadratic in file size.
+    match = _BRACKET_OPEN.match(text, start)
     if not match:
         return None
     marker = "]" + match.group(1) + "]"
-    content_start = start + match.end()
+    content_start = match.end()
     end = text.find(marker, content_start)
     if end < 0:
         raise InventoryError(f"unterminated CMake bracket argument at line {_line_number(text, start)}")
@@ -135,6 +148,10 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
     """Yield CMake commands without silently skipping command syntax."""
     index = 0
     length = len(text)
+    # Command starts only move forward, so count newlines incrementally instead
+    # of rescanning the file from offset 0 for every command.
+    line = 1
+    line_offset = 0
     while index < length:
         char = text[index]
         if char.isspace():
@@ -197,7 +214,7 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
                     newline = text.find("\n", index)
                     index = length if newline < 0 else newline + 1
                 continue
-            bracket = _read_bracket(text, index)
+            bracket = _read_bracket(text, index) if char == "[" else None
             if bracket:
                 _, index = bracket
                 continue
@@ -208,12 +225,14 @@ def _iter_cmake_commands(text: str, source: str) -> Iterable[dict[str, Any]]:
                 if depth == 0:
                     body = text[body_start:index]
                     index += 1
+                    line += text.count("\n", line_offset, start)
+                    line_offset = start
                     yield {
                         "name": name.lower(),
                         "spelling": name,
                         "body": body,
                         "file": source,
-                        "line": _line_number(text, start),
+                        "line": line,
                     }
                     break
             index += 1
@@ -665,6 +684,62 @@ def extract_all_cmake_options(paths: Iterable[Path] | None = None) -> list[dict[
     return sorted(declarations, key=lambda item: (item["name"], item["file"], item["line"]))
 
 
+GUARDED_OPTION_PATTERN = re.compile(r"^(ENABLE|SPARK|BUILD)_")
+_CMAKE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# A forwarded "-DNAME=value" / "-UNAME" argument names NAME, not "DNAME".
+_DEFINE_FLAG = re.compile(r"(?<![A-Za-z0-9_])-[DU]")
+# Commands whose first argument names the variable being declared or written;
+# that argument is not a read of the variable. Every other argument is.
+_DECLARING_COMMANDS = {"option", "cmake_dependent_option", "set", "unset"}
+_TEMPLATE_READ_PATTERNS = (
+    re.compile(r"#cmakedefine(?:01)?[ \t]+([A-Za-z_][A-Za-z0-9_]*)"),
+    re.compile(r"@([A-Za-z_][A-Za-z0-9_]*)@"),
+    re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"),
+)
+
+
+def extract_cmake_option_reads_text(text: str, names: set[str], source: str = "<memory>") -> set[str]:
+    """Names from ``names`` that one CMake input reads anywhere but its declaration.
+
+    A read is any argument that mentions the name: if() conditions, ${} and
+    generator expressions, target_compile_definitions, configure_file inputs,
+    forwarded -D arguments, cmake_dependent_option() dependency lists.
+    """
+    reads: set[str] = set()
+    for command in _iter_cmake_commands(text, source):
+        tokens = _tokenize_cmake_arguments(command["body"])
+        if command["name"] in _DECLARING_COMMANDS:
+            tokens = tokens[1:]
+        for token in tokens:
+            reads.update(names.intersection(_CMAKE_IDENTIFIER.findall(_DEFINE_FLAG.sub(" ", token))))
+    return reads
+
+
+def extract_cmake_option_reads(
+    declarations: list[dict[str, Any]],
+    cmake_paths: Iterable[Path] | None = None,
+    template_paths: Iterable[Path] | None = None,
+) -> list[str]:
+    """Sorted guarded (ENABLE_/SPARK_/BUILD_) option names that something reads.
+
+    CMake inputs are scanned command by command; configure_file templates
+    (``*.in``) count through #cmakedefine, @NAME@ and ${NAME}. A declared
+    guarded option absent from this list is dead configuration surface: setting
+    it changes nothing, which check_parity reports as declared-option-unread.
+    """
+    names = {item["name"] for item in declarations if GUARDED_OPTION_PATTERN.match(item["name"])}
+    reads: set[str] = set()
+    for cmake_file in cmake_paths if cmake_paths is not None else _tracked_cmake_inputs():
+        reads |= extract_cmake_option_reads_text(
+            cmake_file.read_text(encoding="utf-8"), names, _source_label(cmake_file)
+        )
+    for template in template_paths if template_paths is not None else _git_ls_files("*.in"):
+        text = template.read_text(encoding="utf-8", errors="replace")
+        for pattern in _TEMPLATE_READ_PATTERNS:
+            reads.update(names.intersection(pattern.findall(text)))
+    return sorted(reads)
+
+
 def _evaluate_default(value: Any, context: dict[str, bool]) -> bool | str:
     if isinstance(value, bool):
         return value
@@ -963,15 +1038,15 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "Jolt",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1652,
+            "line": 1781,
             "conditionFrames": [
-                {"id": "CMakeLists.txt:1558", "branch": 0, "branches": ["JOLT_FOUND"]},
+                {"id": "CMakeLists.txt:1684", "branch": 0, "branches": ["JOLT_FOUND"]},
                 {
-                    "id": "CMakeLists.txt:1650",
+                    "id": "CMakeLists.txt:1779",
                     "branch": 0,
                     "branches": ["SPARK_SUPPRESS_THIRDPARTY_WARNINGS AND TARGET Jolt"],
                 },
-                {"id": "CMakeLists.txt:1651", "branch": 0, "branches": ["MSVC"]},
+                {"id": "CMakeLists.txt:1780", "branch": 0, "branches": ["MSVC"]},
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
@@ -984,16 +1059,65 @@ _REVIEWED_REQUIRED_TARGET_REFERENCE_CONTRACTS = {
             "target": "angelscript",
             "kind": "required_reference",
             "file": "CMakeLists.txt",
-            "line": 1004,
+            "line": 1053,
             "conditionFrames": [
                 {
-                    "id": "CMakeLists.txt:946",
+                    "id": "CMakeLists.txt:995",
                     "branch": 0,
                     "branches": ["ENABLE_ANGELSCRIPT AND _SPARK_ANGELSCRIPT_SDK_COMPLETE"],
                 }
             ],
             "definitionScope": [],
             "origin": "required-target-reference",
+            "resolved": True,
+        },
+    },
+}
+
+# These literal targets are created inside a called CMake function, so they are
+# absent from the top-level static target set even though the configured File
+# API reports them. Admit only this reviewed declaration in its active profile.
+_REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS = {
+    "CpuFloor_IsaBaseline": {
+        "profiles": frozenset({"windows-shipping", "windows-validation"}),
+        "requiredCache": {
+            "SPARK_NATIVE_ARCH": "OFF",
+            "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
+            "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "X64",
+        },
+        "requiredCall": {
+            "file": "CMakeLists.txt",
+            "name": "spark_register_isa_baseline_scan",
+            "arguments": ["${SPARK_SHIPPED_IMAGE_TARGETS}"],
+        },
+        "record": {
+            "target": "CpuFloor_IsaBaseline",
+            "kind": "utility",
+            "file": "cmake/SparkIsaBaseline.cmake",
+            "line": 49,
+            "conditionFrames": [],
+            "definitionScope": ["spark_register_isa_baseline_scan"],
+            "origin": "function-template",
+            "resolved": True,
+        },
+    },
+    "check-fuzz-policy": {
+        "profiles": frozenset({"windows-validation"}),
+        "requiredCache": {"SPARK_ENABLE_FUZZ_POLICY_CHECKS": "ON"},
+        "record": {
+            "target": "check-fuzz-policy",
+            "kind": "utility",
+            "file": "cmake/SparkFuzzPolicy.cmake",
+            "line": 30,
+            "conditionFrames": [
+                {
+                    "id": "cmake/SparkFuzzPolicy.cmake:29",
+                    "branch": 0,
+                    "branches": ["NOT TARGET check-fuzz-policy"],
+                }
+            ],
+            "definitionScope": ["spark_enable_fuzz_policy"],
+            "origin": "function-template",
             "resolved": True,
         },
     },
@@ -1145,6 +1269,50 @@ def reviewed_required_target_references(
             cache_variables.get("ENABLE_ANGELSCRIPT", "")
         ).upper() != "ON":
             continue
+        if declaration == contract["record"]:
+            reviewed.add(str(target))
+    return reviewed
+
+
+def reviewed_configured_function_targets(
+    declarations: list[dict[str, Any]],
+    profile: str,
+    cache_variables: dict[str, Any],
+) -> set[str]:
+    """Corroborate an exact function-scoped declaration only when enabled."""
+    reviewed: set[str] = set()
+    for declaration in declarations:
+        if not isinstance(declaration, dict):
+            continue
+        target = declaration.get("target")
+        contract = _REVIEWED_CONFIGURED_FUNCTION_TARGET_CONTRACTS.get(str(target))
+        if contract is None or profile not in contract["profiles"]:
+            continue
+        if not all(
+            str(cache_variables.get(name, "")).upper() == required
+            for name, required in contract["requiredCache"].items()
+        ):
+            continue
+        call = contract.get("requiredCall")
+        if call is not None:
+            # A literal target in an unused function is not a configured target.
+            # Require the real, unconditional root invocation; unknown guards,
+            # nested definitions, changed arguments, or duplicate calls fail closed.
+            try:
+                source = (REPO_ROOT / call["file"]).read_text(encoding="utf-8", errors="strict")
+                commands = list(_commands_with_conditions(source, call["file"]))
+            except (OSError, UnicodeError, InventoryError):
+                continue
+            calls = [command for command in commands if command["name"] == call["name"]]
+            if len(calls) != 1:
+                continue
+            invocation = calls[0]
+            if (
+                invocation.get("definitionScope")
+                or invocation.get("conditionFrames")
+                or _tokenize_cmake_arguments(invocation["body"]) != call["arguments"]
+            ):
+                continue
         if declaration == contract["record"]:
             reviewed.add(str(target))
     return reviewed
@@ -1425,6 +1593,21 @@ def extract_workflow_presets(path: Path | None = None) -> list[str]:
 # Cache variables worth binding evidence to. Bounded on purpose: the reply's
 # cache is attacker-sized input, and an unbounded copy would bloat the artifact.
 _BOUND_CACHE_PREFIXES = ("SPARK_", "ENABLE_", "BUILD_")
+_MSVC_TOOLCHAIN_CACHE_NAMES = (
+    "CMAKE_GENERATOR_INSTANCE",
+    "CMAKE_AR",
+    "CMAKE_LINKER",
+)
+# Root Visual Studio profiles publish these values from CMake's measured
+# compiler variables. They are deliberately separate from the path identity
+# names above because installed SDK consumers do not configure the engine root.
+_MSVC_COMPILER_PROVENANCE_CACHE_NAMES = (
+    "SPARK_TOOLCHAIN_CXX_COMPILER",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_ID",
+    "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION",
+    "SPARK_TOOLCHAIN_CXX_ARCHITECTURE",
+    "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION",
+)
 _BOUND_CACHE_NAMES = {
     "CMAKE_BUILD_TYPE",
     "CMAKE_GENERATOR",
@@ -1433,6 +1616,7 @@ _BOUND_CACHE_NAMES = {
     "CMAKE_HOME_DIRECTORY",
     "CMAKE_SYSTEM_NAME",
     "CMAKE_SIZEOF_VOID_P",
+    *_MSVC_TOOLCHAIN_CACHE_NAMES,
 }
 _MAX_CACHE_ENTRIES = 4096
 _MAX_REPLY_FILES = 8192
@@ -2405,7 +2589,7 @@ def parse_codemodel_targets(
     targets: dict[tuple[str, str], dict[str, Any]] = {}
     seen_configurations: set[str] = set()
     id_bindings: dict[tuple[str, str], tuple[str, str]] = {}
-    id_semantics: dict[str, tuple[str, str, bool]] = {}
+    id_semantics: dict[str, tuple[str, str, bool, bool]] = {}
     logical_targets: set[tuple[str, str]] = set()
     artifact_owners: dict[tuple[str, str], tuple[str, str]] = {}
     profile_data = load_stable_profile()
@@ -2485,7 +2669,14 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: codemodel target {name!r} has an invalid isGeneratorProvided marker"
                 )
-            semantics = (name, cmake_type, generator_provided)
+            imported_marker_present = "imported" in target
+            imported_value = target.get("imported", False)
+            if imported_marker_present and not isinstance(imported_value, bool):
+                raise InventoryError(
+                    f"{profile}: codemodel target {name!r} has an invalid imported marker"
+                )
+            imported = imported_value is True
+            semantics = (name, cmake_type, generator_provided, imported)
             previous_semantics = id_semantics.setdefault(reference_id, semantics)
             if previous_semantics != semantics:
                 raise InventoryError(
@@ -2594,15 +2785,16 @@ def parse_codemodel_targets(
                 raise InventoryError(
                     f"{profile}: utility target {name!r} declares linked artifact identity"
                 )
-            if generator_provided:
-                if kind != "utility":
-                    raise InventoryError(
-                        f"{profile}: generator-provided target {name!r} is not a utility"
-                    )
+            if generator_provided and kind != "utility":
+                raise InventoryError(
+                    f"{profile}: generator-provided target {name!r} is not a utility"
+                )
+            if generator_provided or imported:
                 # Generator plumbing remains cryptographically bound in the
                 # consumed raw reply and replyDigest, but is not a configured
-                # product. Omitting it prevents directory-scoped ALL_BUILD
-                # aggregates and ZERO_CHECK from fabricating product identity.
+                # product. Omitting it prevents imported dependencies,
+                # directory-scoped ALL_BUILD aggregates, and ZERO_CHECK from
+                # fabricating product identity.
                 continue
             key = (name, config_name)
             if key in logical_targets:
@@ -3212,6 +3404,16 @@ def _capture_material_errors(evidence: dict[str, Any], profile: str) -> list[str
         for name in preset.get("cacheVariables", {}):
             if not isinstance(cache, dict) or name not in cache:
                 errors.append(f"cacheVariables.{name}")
+    if (
+        str(evidence.get("generator", "")).casefold().startswith("visual studio")
+        or str(evidence.get("toolset", "")).casefold().startswith("v14")
+    ):
+        required_toolchain_names = list(_MSVC_TOOLCHAIN_CACHE_NAMES)
+        if config and config.get("preset"):
+            required_toolchain_names.extend(_MSVC_COMPILER_PROVENANCE_CACHE_NAMES)
+        for name in required_toolchain_names:
+            if not isinstance(cache, dict) or not cache.get(name):
+                errors.append(f"cacheVariables.{name}")
     return sorted(set(errors))
 
 
@@ -3573,7 +3775,7 @@ def _capture_plan(
         if not binary:
             raise InventoryError(f"capture preset {preset_name!r} has no binaryDir")
         expected_build = _absolute_directory(Path(binary.replace("${sourceDir}", str(source_dir))))
-        argv = [str(cmake_executable), "--preset", preset_name]
+        argv = [str(cmake_executable), "--fresh", "--preset", preset_name]
     else:
         source_dir = _absolute_directory(REPO_ROOT / str(config.get("sourceDirectory", "")))
         expected_build = _absolute_directory(REPO_ROOT / str(config.get("buildDirectory", "")))
@@ -3935,6 +4137,7 @@ def build_inventory(
         "cmakeOptionDeclarations": option_declarations,
         "cmakeOptions": effective_cmake_options(option_declarations),
         "allCmakeOptionDeclarations": all_option_declarations,
+        "cmakeOptionReads": extract_cmake_option_reads(all_option_declarations),
         "cmakePresets": extract_cmake_presets(),
         "cmakeTargetDeclarations": target_declarations,
         "cmakeTargets": aggregate_cmake_targets(target_declarations),
@@ -3965,10 +4168,15 @@ def _parse_key_value_args(values: list[str], flag: str) -> dict[str, str]:
 
 
 def _parse_codemodel_args(values: list[str]) -> dict[str, Path]:
-    return {
-        profile: Path(directory)
-        for profile, directory in _parse_key_value_args(values, "--codemodel").items()
-    }
+    result: dict[str, Path] = {}
+    for profile, directory in _parse_key_value_args(values, "--codemodel").items():
+        canonical = _PROFILE_ALIASES.get(profile, profile)
+        if canonical in result:
+            raise InventoryError(
+                f"--codemodel aliases {profile!r} and another value to the same profile {canonical!r}"
+            )
+        result[canonical] = Path(directory)
+    return result
 
 
 def _write_atomic(path: Path, payload: bytes) -> None:
@@ -4069,7 +4277,13 @@ def render_internal_error(error: Exception) -> bytes:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--codemodel", action="append", default=[], metavar="PROFILE=BUILD_DIR")
+    parser.add_argument(
+        "--codemodel",
+        action="append",
+        default=[],
+        metavar="PROFILE_OR_PRESET=BUILD_DIR",
+        help="configured File API tree; windows-release aliases windows-validation",
+    )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--check", type=Path, help="fail if generated bytes differ from this file")
     args = parser.parse_args(argv)

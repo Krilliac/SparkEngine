@@ -16,11 +16,14 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace OpenWorld
 {
     class OWWorldSetup;
     class OWPlayerSystem;
+    class OWPlayerController;
     class OWExplorationSystem;
     class OWWildlifeSystem;
     class OWSettlementSystem;
@@ -46,6 +49,11 @@ class SparkGameOpenWorldModule : public Spark::IModule
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
+    /// Transactional reload runs the replacement's OnLoad before this instance's
+    /// OnUnload. This module owns process-wide streaming regions keyed by
+    /// ID, not by owner, so the outgoing teardown would remove what the replacement just
+    /// registered. Refuse hot reload; a full restart is required.
+    bool SupportsHotReload() const override { return false; }
     void OnUpdate(float deltaTime) override;
     void OnFixedUpdate(float fixedDeltaTime) override;
     void OnRender() override;
@@ -69,6 +77,8 @@ class SparkGameOpenWorldModule : public Spark::IModule
     std::unique_ptr<OpenWorld::OWGatheringSystem> m_gatheringSystem;
     std::unique_ptr<OpenWorld::OWDynamicEventSystem> m_eventSystem;
     std::unique_ptr<OpenWorld::OWEngineSystems> m_engineSystems;
+    std::unique_ptr<OpenWorld::OWPlayerController> m_playerController;
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

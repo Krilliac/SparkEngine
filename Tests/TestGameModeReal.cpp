@@ -22,6 +22,7 @@ TEST(GameModeReal_PlayerScoreDefaults)
     EXPECT_EQ(ps.headshots, 0);
     EXPECT_EQ(ps.currentStreak, 0);
     EXPECT_NEAR(ps.damageDealt, 0.0f, 0.001f);
+    EXPECT_NEAR(ps.GetKDRatio(), 0.0f, 0.001f); // no kills, no deaths
 }
 
 TEST(GameModeReal_KDRatioZeroDeaths)
@@ -38,6 +39,14 @@ TEST(GameModeReal_KDRatioNormal)
     ps.kills = 10;
     ps.deaths = 4;
     EXPECT_NEAR(ps.GetKDRatio(), 2.5f, 0.001f);
+
+    ps.kills = 10;
+    ps.deaths = 10;
+    EXPECT_NEAR(ps.GetKDRatio(), 1.0f, 0.001f);
+
+    ps.kills = 3;
+    ps.deaths = 9; // below 1.0: the division is in floating point, not integer
+    EXPECT_NEAR(ps.GetKDRatio(), 1.0f / 3.0f, 0.001f);
 }
 
 // ============================================================================

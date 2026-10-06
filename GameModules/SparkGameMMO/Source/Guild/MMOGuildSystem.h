@@ -99,6 +99,17 @@ namespace MMO
         std::string GetGuildInfoString(uint32_t guildId) const;
         std::string GetGuildListString() const;
 
+        // === Persistence ===
+        /// Every guild, ordered by ID, for a world save.
+        std::vector<Guild> CaptureGuilds() const;
+        uint32_t GetNextGuildId() const { return m_nextGuildId; }
+        /// Replace every guild with loaded ones. Rank permissions are reset to
+        /// the defaults (they are never changed at runtime) and every member is
+        /// offline. Refuses a set with duplicate or zero IDs or names, an empty
+        /// or over-full guild, a player listed twice in one guild or a leader who is not its
+        /// Leader-rank member; then nothing changes and @p error says why.
+        bool RestoreGuilds(std::vector<Guild> guilds, uint32_t nextGuildId, std::string* error);
+
       private:
         Guild* GetGuildMut(uint32_t guildId);
         void SetDefaultPermissions(Guild& guild);

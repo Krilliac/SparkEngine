@@ -4,8 +4,8 @@
  *
  * Implements the SparkGameRacingModule class and exports the CreateModule/
  * DestroyModule factory functions for the engine's ModuleManager. The
- * race-flow orchestration helpers (SetupDefaultRaceRoster /
- * SyncRaceAndTrackState / ApplyAIDriverInputs) live in MainRaceFlow.cpp,
+ * race-flow orchestration (SetupDefaultRaceRoster / StepRace /
+ * UpdatePresentationState) lives in MainRaceFlow.cpp,
  * split per the repo file-size rule (MainFrame pattern — same class,
  * feature-owned translation units).
  */
@@ -18,14 +18,16 @@
 #include "AI/RacingAIDriver.h"
 #include "Camera/RacingCameraSystem.h"
 #include "HUD/RacingHUDSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
-#include "Utils/InvalidStateDetector.h"
+#include <Spark/ModuleLog.h>
+#include <Spark/IConsole.h>
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
+#include <string_view>
+#include <utility>
 
 // =============================================================================
 // Module exports
@@ -62,23 +64,22 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
 
     m_context = context;
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Racing] Loading Spark Racing module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module loading — initializing 7 subsystems");
+    Spark::ModuleLog::Info(m_context, "[Racing] Loading Spark Racing module...");
+    Spark::ModuleLog::Info(m_context, "Racing module loading — initializing 7 subsystems");
 
     // Initialize track system first (other systems query it)
     m_trackSystem = std::make_unique<Racing::RacingTrackSystem>();
     if (!m_trackSystem->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize track system");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize track system");
         return false;
     }
 
-    // Initialize vehicle system
+    // Initialize vehicle system (binds the engine's shared Jolt world; the module steps it in OnFixedUpdate)
     m_vehicleSystem = std::make_unique<Racing::RacingVehicleSystem>();
     if (!m_vehicleSystem->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize vehicle system");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize vehicle system (no live Jolt physics world)");
         return false;
     }
 
@@ -86,7 +87,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_raceManager = std::make_unique<Racing::RacingRaceManager>();
     if (!m_raceManager->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize race manager");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize race manager");
         return false;
     }
 
@@ -94,7 +95,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_aiDriver = std::make_unique<Racing::RacingAIDriver>();
     if (!m_aiDriver->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize AI driver system");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize AI driver system");
         return false;
     }
 
@@ -102,7 +103,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_cameraSystem = std::make_unique<Racing::RacingCameraSystem>();
     if (!m_cameraSystem->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize camera system");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize camera system");
         return false;
     }
 
@@ -110,7 +111,7 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     m_hudSystem = std::make_unique<Racing::RacingHUDSystem>();
     if (!m_hudSystem->Initialize(context))
     {
-        console.LogError("[Racing] Failed to initialize HUD system");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize HUD system");
         return false;
     }
 
@@ -119,58 +120,81 @@ bool SparkGameRacingModule::OnLoad(Spark::IEngineContext* context)
     if (!m_engineSystems->Initialize(context, m_vehicleSystem.get(), m_trackSystem.get(), m_raceManager.get(),
                                      m_aiDriver.get()))
     {
-        console.LogError("[Racing] Failed to initialize engine system integrations");
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to initialize engine system integrations");
         return false;
     }
 
+    if (!SetupDefaultRaceRoster())
+    {
+        Spark::ModuleLog::Error(m_context, "[Racing] Failed to build the starting grid");
+        return false;
+    }
     RegisterConsoleCommands();
-    SetupDefaultRaceRoster();
 
     // Register Racing-specific state validation rules
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-
-    stateDetector.AddRule({"Racing.StaticVehicleMoving", "Racing", Spark::StateViolationSeverity::Warning, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<RigidBodyComponent>())
-                               {
-                                   auto* rb = w.GetComponent<RigidBodyComponent>(entity);
-                                   if (!rb || rb->type != RigidBodyComponent::Type::Static)
-                                       continue;
-                                   float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
-                                                   rb->linearVelocity.y * rb->linearVelocity.y +
-                                                   rb->linearVelocity.z * rb->linearVelocity.z;
-                                   if (speedSq > 1.0f)
-                                   {
-                                       out.push_back(
-                                           {"Racing.StaticVehicleMoving", static_cast<uint32_t>(entity),
-                                            "Static body has velocity (speedSq=" + std::to_string(speedSq) + ")",
-                                            Spark::StateViolationSeverity::Warning});
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("Racing.StaticVehicleMoving", "Racing", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<RigidBodyComponent>())
+                                {
+                                    auto* rb = w.GetComponent<RigidBodyComponent>(entity);
+                                    if (!rb || rb->type != RigidBodyComponent::Type::Static)
+                                        continue;
+                                    float speedSq = rb->linearVelocity.x * rb->linearVelocity.x +
+                                                    rb->linearVelocity.y * rb->linearVelocity.y +
+                                                    rb->linearVelocity.z * rb->linearVelocity.z;
+                                    if (speedSq > 1.0f)
+                                    {
+                                        out.push_back(
+                                            {"Racing.StaticVehicleMoving", static_cast<uint32_t>(entity),
+                                             "Static body has velocity (speedSq=" + std::to_string(speedSq) + ")",
+                                             Spark::StateViolationSeverity::Warning});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[Racing] Host refused the Racing state-validation rules");
+    }
 
     m_initialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module loaded successfully");
-    console.LogInfo("[Racing] Spark Racing module loaded successfully (7 subsystems)");
-    console.LogInfo("[Racing] Tracks: " + std::to_string(m_trackSystem->GetTrackCount()) +
-                    " | Vehicles: " + std::to_string(m_vehicleSystem->GetVehicleCount()) +
-                    " | AI Drivers: " + std::to_string(m_aiDriver->GetDriverCount()));
+    Spark::ModuleLog::Info(m_context, "Racing module loaded successfully");
+    Spark::ModuleLog::Info(m_context, "[Racing] Spark Racing module loaded successfully (7 subsystems)");
+    Spark::ModuleLog::Info(m_context, "{}",
+                           "[Racing] Tracks: " + std::to_string(m_trackSystem->GetTrackCount()) +
+                               " | Vehicles: " + std::to_string(m_vehicleSystem->GetVehicleCount()) +
+                               " | AI Drivers: " + std::to_string(m_aiDriver->GetDriverCount()));
     return true;
 }
 
 void SparkGameRacingModule::OnUnload()
 {
     if (!m_initialized)
+    {
         return;
+    }
+
+    if (auto* console = m_context ? m_context->GetConsole() : nullptr)
+    {
+        for (const auto& command : m_registeredConsoleCommands)
+        {
+            console->UnregisterCommand(command);
+        }
+    }
+    m_registeredConsoleCommands.clear();
 
     // Validation callbacks are std::functions implemented in this DLL. Drop
     // them before the module image is unmapped during hot unload/reload.
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("Racing");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("Racing");
+    }
 
-    auto& console = Spark::SimpleConsole::GetInstance();
-    console.LogInfo("[Racing] Unloading Spark Racing module...");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module shutting down");
+    Spark::ModuleLog::Info(m_context, "[Racing] Unloading Spark Racing module...");
+    Spark::ModuleLog::Info(m_context, "Racing module shutting down");
 
     // Shutdown in reverse initialization order
     if (m_engineSystems)
@@ -209,10 +233,10 @@ void SparkGameRacingModule::OnUnload()
         m_trackSystem.reset();
     }
 
-    m_context = nullptr;
+    Spark::ModuleLog::Info(m_context, "Racing module unloaded");
+    Spark::ModuleLog::Info(m_context, "[Racing] Spark Racing module unloaded");
     m_initialized = false;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing module unloaded");
-    console.LogInfo("[Racing] Spark Racing module unloaded");
+    m_context = nullptr;
 }
 
 void SparkGameRacingModule::OnUpdate(float deltaTime)
@@ -222,12 +246,7 @@ void SparkGameRacingModule::OnUpdate(float deltaTime)
 
     m_engineSystems->Update(deltaTime);
     m_trackSystem->Update(deltaTime);
-    m_raceManager->Update(deltaTime);
-    SyncRaceAndTrackState();
-    m_aiDriver->Update(deltaTime);
-    ApplyPlayerInput(deltaTime);
-    ApplyAIDriverInputs(deltaTime);
-    m_vehicleSystem->Update(deltaTime);
+    StepRace(deltaTime);
     UpdatePresentationState();
     m_cameraSystem->Update(deltaTime);
     m_hudSystem->Update(deltaTime);
@@ -238,6 +257,7 @@ void SparkGameRacingModule::OnFixedUpdate(float fixedDeltaTime)
     if (!m_initialized || m_paused)
         return;
 
+    // Sole physics stepping owner in the Racing process: one shared-world tick per engine fixed step.
     m_vehicleSystem->FixedUpdate(fixedDeltaTime);
 }
 
@@ -282,9 +302,22 @@ void SparkGameRacingModule::OnImGui()
 
 void SparkGameRacingModule::RegisterConsoleCommands()
 {
-    auto& console = Spark::SimpleConsole::GetInstance();
+    auto* console = m_context ? m_context->GetConsole() : nullptr;
+    if (!console)
+    {
+        return;
+    }
+    const auto registerCommand = [this, console](std::string_view name, Spark::IConsole::CommandHandler handler,
+                                                 std::string_view help = {}, std::string_view category = "General",
+                                                 std::string_view usage = {})
+    {
+        if (console->RegisterCommand(name, std::move(handler), help, category, usage))
+        {
+            m_registeredConsoleCommands.emplace_back(name);
+        }
+    };
 
-    console.RegisterCommand(
+    registerCommand(
         "race_status",
         [this](const std::vector<std::string>&) -> std::string
         {
@@ -302,19 +335,19 @@ void SparkGameRacingModule::RegisterConsoleCommands()
             return status;
         });
 
-    console.RegisterCommand("race_vehicles", [this](const std::vector<std::string>&) -> std::string
-                            { return m_vehicleSystem->GetVehicleListString(); });
+    registerCommand("race_vehicles", [this](const std::vector<std::string>&) -> std::string
+                    { return m_vehicleSystem->GetVehicleListString(); });
 
-    console.RegisterCommand("race_tracks", [this](const std::vector<std::string>&) -> std::string
-                            { return m_trackSystem->GetTrackListString(); });
+    registerCommand("race_tracks", [this](const std::vector<std::string>&) -> std::string
+                    { return m_trackSystem->GetTrackListString(); });
 
-    console.RegisterCommand("race_standings", [this](const std::vector<std::string>&) -> std::string
-                            { return m_raceManager->GetStandingsString(); });
+    registerCommand("race_standings", [this](const std::vector<std::string>&) -> std::string
+                    { return m_raceManager->GetStandingsString(); });
 
-    console.RegisterCommand("race_ai", [this](const std::vector<std::string>&) -> std::string
-                            { return m_aiDriver->GetDriverListString(); });
+    registerCommand("race_ai", [this](const std::vector<std::string>&) -> std::string
+                    { return m_aiDriver->GetDriverListString(); });
 
-    console.RegisterCommand(
+    registerCommand(
         "race_camera",
         [this](const std::vector<std::string>& args) -> std::string
         {
@@ -339,70 +372,91 @@ void SparkGameRacingModule::RegisterConsoleCommands()
             return "Camera: " + std::string(Racing::RacingCameraSystem::ModeToString(m_cameraSystem->GetMode()));
         });
 
-    console.RegisterCommand("race_difficulty",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: race_difficulty <easy|medium|hard|expert>";
-                                if (args[0] == "easy")
-                                    m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Easy);
-                                else if (args[0] == "medium")
-                                    m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Medium);
-                                else if (args[0] == "hard")
-                                    m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Hard);
-                                else if (args[0] == "expert")
-                                    m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Expert);
-                                else
-                                    return "Unknown difficulty. Options: easy, medium, hard, expert";
-                                return "AI difficulty set to: " + args[0];
-                            });
+    registerCommand("race_difficulty",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: race_difficulty <easy|medium|hard|expert>";
+                        if (args[0] == "easy")
+                            m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Easy);
+                        else if (args[0] == "medium")
+                            m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Medium);
+                        else if (args[0] == "hard")
+                            m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Hard);
+                        else if (args[0] == "expert")
+                            m_aiDriver->SetGlobalDifficulty(Racing::AIDifficulty::Expert);
+                        else
+                            return "Unknown difficulty. Options: easy, medium, hard, expert";
+                        return "AI difficulty set to: " + args[0];
+                    });
 
     // --- Engine system commands ---
 
-    console.RegisterCommand("race_save",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: race_save <slot_name>";
-                                return m_engineSystems->SaveRaceData(args[0]);
-                            });
+    registerCommand("race_save",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: race_save <slot_name>";
+                        return m_engineSystems->SaveRaceData(args[0]);
+                    });
 
-    console.RegisterCommand("race_load",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: race_load <slot_name>";
-                                return m_engineSystems->LoadRaceData(args[0]);
-                            });
+    registerCommand("race_load",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: race_load <slot_name>";
+                        return m_engineSystems->LoadRaceData(args[0]);
+                    });
 
-    console.RegisterCommand("race_replay",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: race_replay <record|stop|play>";
-                                return m_engineSystems->ToggleReplay(args[0]);
-                            });
+    registerCommand("race_replay",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: race_replay <record|stop|play>";
+                        return m_engineSystems->ToggleReplay(args[0]);
+                    });
 
-    console.RegisterCommand("race_ghost",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: race_ghost <track_name>";
-                                return m_engineSystems->ToggleGhost(args[0]);
-                            });
+    registerCommand("race_ghost",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: race_ghost <track_name>";
+                        return m_engineSystems->ToggleGhost(args[0]);
+                    });
 
-    console.RegisterCommand("race_weather",
-                            [this](const std::vector<std::string>& args) -> std::string
-                            {
-                                if (args.empty())
-                                    return "Usage: race_weather <clear|rain|storm>";
-                                return m_engineSystems->SetWeather(args[0]);
-                            });
+    registerCommand("race_weather",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.empty())
+                            return "Usage: race_weather <clear|rain|storm>";
+                        return m_engineSystems->SetWeather(args[0]);
+                    });
 
-    console.RegisterCommand("race_restart",
-                            [this](const std::vector<std::string>&) -> std::string
-                            {
-                                SetupDefaultRaceRoster();
-                                return "Race roster rebuilt and race restarted";
-                            });
+    // Automated player for packaged runs: restart the race with the player car on the production autopilot.
+    registerCommand("race_autopilot",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        if (args.size() != 1 || (args[0] != "on" && args[0] != "off"))
+                        {
+                            return "Usage: race_autopilot on|off";
+                        }
+                        if (args[0] == "off")
+                        {
+                            m_autopilot = false;
+                            return "Autopilot off";
+                        }
+                        if (!SetupDefaultRaceRoster())
+                        {
+                            return "Autopilot failed: the race grid could not be rebuilt";
+                        }
+                        m_autopilot = true;
+                        return "Autopilot on: race restarted with the player on the racing line";
+                    });
+
+    registerCommand("race_restart",
+                    [this](const std::vector<std::string>&) -> std::string
+                    {
+                        SetupDefaultRaceRoster();
+                        return "Race roster rebuilt and race restarted";
+                    });
 }

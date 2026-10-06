@@ -9,10 +9,11 @@
  */
 
 #include "AdvancedConsoleCommands.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
+#include "FPSConsolePolicy.h"
 
-#include "Utils/SparkConsole.h"
-#include "Utils/Validate.h"
+#include <Spark/IConsole.h>
 #include "Game/Game.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Shader.h"
@@ -22,8 +23,9 @@
 #include "Graphics/PostProcessingPipeline.h"
 #include "Graphics/AssetPipeline.h"
 #include "Physics/PhysicsSystem.h"
-#include "Core/EngineContext.h"
+#include <optional>
 #include <sstream>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -31,30 +33,31 @@ namespace
 {
     std::vector<std::string> g_advancedCommandNames;
 
+    /// Registers through the host IConsole and remembers only the names the host accepted.
     class TrackedConsoleRegistrar
     {
       public:
-        explicit TrackedConsoleRegistrar(Spark::SimpleConsole& console) : m_console(console) {}
+        explicit TrackedConsoleRegistrar(Spark::IConsole& console) : m_console(console) {}
 
-        template <typename... Args> void RegisterCommand(const std::string& name, Args&&... args)
+        void RegisterCommand(const std::string& name, Spark::IConsole::CommandHandler handler, std::string_view help,
+                             std::string_view category = "General", std::string_view usage = "")
         {
-            m_console.RegisterCommand(name, std::forward<Args>(args)...);
-            g_advancedCommandNames.push_back(name);
+            if (m_console.RegisterCommand(name, std::move(handler), help, category, usage))
+            {
+                g_advancedCommandNames.push_back(name);
+            }
         }
 
       private:
-        Spark::SimpleConsole& m_console;
+        Spark::IConsole& m_console;
     };
 } // namespace
-
-// EngineContext accessed via EngineContext::Get()
 
 namespace SparkConsole
 {
 
-    void UnregisterAdvancedCommands()
+    void UnregisterAdvancedCommands(Spark::IConsole& console)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
         for (const auto& commandName : g_advancedCommandNames)
         {
             console.UnregisterCommand(commandName);
@@ -65,15 +68,17 @@ namespace SparkConsole
     /**
  * @brief Register all advanced console commands for the unified GraphicsEngine
  */
-    void RegisterAdvancedCommands(Game* game, GraphicsEngine* graphics)
+    void RegisterAdvancedCommands(Spark::IConsole& hostConsole, Game* game, GraphicsEngine* graphics)
     {
-        SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, graphics);
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Registering advanced console commands");
+        if (graphics == nullptr)
+        {
+            FPS_LOG_ERROR("{}: 'graphics' must not be null", __func__);
+            return;
+        }
+        FPS_LOG_INFO("Registering advanced console commands");
 
-        UnregisterAdvancedCommands();
-        auto& simpleConsole = Spark::SimpleConsole::GetInstance();
-        TrackedConsoleRegistrar console(simpleConsole);
+        UnregisterAdvancedCommands(hostConsole);
+        TrackedConsoleRegistrar console(hostConsole);
 
         // ========================================================================
         // TEXTURE SYSTEM COMMANDS (via GraphicsEngine)
@@ -128,16 +133,15 @@ namespace SparkConsole
                     return "Usage: tex_memory <mb>";
                 if (auto textureSystem = graphics->GetTextureSystem())
                 {
-                    try
-                    {
-                        size_t mb = static_cast<size_t>(std::stof(args[1]));
-                        textureSystem->Console_SetMemoryBudget(mb);
-                        return "Texture memory budget set to: " + args[1] + " MB";
-                    }
-                    catch (const std::exception&)
+                    // Casting a NaN, negative or out-of-range float to size_t is undefined.
+                    const std::optional<float> mb = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+                    constexpr float kMaxBudgetMb = 1024.0f * 1024.0f; // 1 TiB: far above any real budget.
+                    if (!mb || *mb < 0.0f || *mb > kMaxBudgetMb)
                     {
                         return "Invalid number: " + args[1];
                     }
+                    textureSystem->Console_SetMemoryBudget(static_cast<size_t>(*mb));
+                    return "Texture memory budget set to: " + args[1] + " MB";
                 }
                 return "Texture system not available";
             },
@@ -229,15 +233,13 @@ namespace SparkConsole
                     return "Usage: exposure <value>";
                 if (auto postProcessing = graphics->GetPostProcessingPipeline())
                 {
-                    try
-                    {
-                        postProcessing->Console_SetExposure(std::stof(args[1]));
-                        return "Exposure set to: " + args[1];
-                    }
-                    catch (const std::exception&)
+                    const std::optional<float> exposure = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+                    if (!exposure)
                     {
                         return "Invalid number: " + args[1];
                     }
+                    postProcessing->Console_SetExposure(*exposure);
+                    return "Exposure set to: " + args[1];
                 }
                 return "Post-processing system not available";
             },
@@ -292,9 +294,10 @@ namespace SparkConsole
 
         console.RegisterCommand(
             "physics_list",
-            [graphics](const std::vector<std::string>&) -> std::string
+            [game](const std::vector<std::string>&) -> std::string
             {
-                if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
+                auto* context = game ? game->GetEngineContext() : nullptr;
+                if (auto* physicsSystem = context ? context->GetPhysics() : nullptr)
                 {
                     return physicsSystem->Console_ListBodies();
                 }
@@ -304,21 +307,22 @@ namespace SparkConsole
 
         console.RegisterCommand(
             "gravity",
-            [graphics](const std::vector<std::string>& args) -> std::string
+            [game](const std::vector<std::string>& args) -> std::string
             {
                 if (args.size() < 4)
                     return "Usage: gravity <x> <y> <z>";
-                if (auto physicsSystem = EngineContext::Get() ? EngineContext::Get()->GetPhysics() : nullptr)
+                auto* context = game ? game->GetEngineContext() : nullptr;
+                if (auto* physicsSystem = context ? context->GetPhysics() : nullptr)
                 {
-                    try
-                    {
-                        physicsSystem->Console_SetGravity(std::stof(args[1]), std::stof(args[2]), std::stof(args[3]));
-                        return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
-                    }
-                    catch (const std::exception&)
+                    const auto x = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[1]);
+                    const auto y = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[2]);
+                    const auto z = SparkFPS::ConsolePolicy::ParseFiniteFloat(args[3]);
+                    if (!x || !y || !z)
                     {
                         return "Invalid number in arguments";
                     }
+                    physicsSystem->Console_SetGravity(*x, *y, *z);
+                    return "Gravity set to: (" + args[1] + ", " + args[2] + ", " + args[3] + ")";
                 }
                 return "Physics system not available";
             },
@@ -447,7 +451,7 @@ namespace SparkConsole
             },
             "Get comprehensive system metrics");
 
-        simpleConsole.Log("Advanced console commands registered for unified GraphicsEngine", "SUCCESS");
+        hostConsole.Print("Advanced console commands registered for unified GraphicsEngine", "SUCCESS");
     }
 
 } // namespace SparkConsole

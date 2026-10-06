@@ -16,7 +16,6 @@
 #include "Spark/SparkExport.h"
 #include "Spark/IEngineContext.h"
 #include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
-#include "Utils/Assert.h"
 #include "ClassSystem.h"
 #include "VehicleSystem.h"
 #include "GravitySystem.h"
@@ -31,7 +30,10 @@
 #include "ProgressionSystem.h"
 #include "LootSystem.h"
 #include "FPSLocalProfile.h"
+#include "FPSArenaAutopilot.h"
 #include "Engine/Networking/NetworkManager.h"
+#include "Game/FPSWeatherPort.h"
+#include "Game/FPSWeatherIntegration.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -40,7 +42,6 @@
 namespace Spark
 {
     class SubscriptionHandle;
-    class WeatherSystem;
     class DialogueSystem;
     class DestructionSystem;
     class SaveSystem;
@@ -330,6 +331,13 @@ class SPARK_GAME_API Game
      * @param context Engine service locator — stored for lifetime of Game
      */
     void SetEngineContext(Spark::IEngineContext* context);
+    /// Attach the non-owning module weather capability at the Core/Main boundary.
+    void SetWeatherPort(SparkGameFPS::IFPSWeatherPort* port) { m_weatherIntegration.Bind(port); }
+    void ClearWeatherPort() { m_weatherIntegration.Clear(); }
+    bool SetWeatherPreset(SparkGameFPS::WeatherPreset preset, float intensity, float transitionSeconds)
+    {
+        return m_weatherIntegration.SetWeather(preset, intensity, transitionSeconds);
+    }
 
     /** @brief Get the engine context */
     Spark::IEngineContext* GetEngineContext() const { return m_engineContext; }
@@ -478,6 +486,12 @@ class SPARK_GAME_API Game
     void RenderDebugUI();
 
     /**
+     * @brief Start or stop the arena autopilot (developer command `fps_autoplay`).
+     * @return false when there is no live player, camera, input, game mode or respawn system to drive.
+     */
+    bool SetArenaAutopilot(bool enabled);
+
+    /**
      * @brief Get current scene object count
      * @return Number of active game objects in scene
      */
@@ -538,7 +552,7 @@ class SPARK_GAME_API Game
 
     /**
      * @brief Get list of available scenes
-     * @return Vector of scene file paths
+     * @return Vector of scene file paths (UTF-8)
      */
     std::vector<std::string> GetAvailableScenes() const;
 
@@ -591,6 +605,28 @@ class SPARK_GAME_API Game
 #endif // ENABLE_NETWORKING
 
   private:
+    // One strict, locale-independent parser for authored camera clipping in
+    // both startup and scene reload paths.
+    static bool ParseAuthoredFiniteFloat(const std::string& text, float& value);
+
+    // Bind the trusted module project root after any scene load so authored
+    // material paths remain functional for both startup and console reloads.
+    void BindSceneMaterialRoots();
+
+    // Log the startup scene identity marker: the authored scene's name and node
+    // count, or that only the procedural fallback arena is live. Package smokes
+    // read this marker because the fallback arena renders a plausible frame.
+    void LogSceneIdentity(bool sceneLoaded, const std::wstring& scenePath) const;
+
+    // Invalidate cached authored/procedural BasicMaterials after a successful
+    // scene replacement so the next render observes on-disk material edits.
+    void InvalidateSceneBasicMaterials();
+
+    // Re-apply authored camera, respawn, and wave-spawn state after a console
+    // scene reload.  Startup performs the same bindings while constructing the
+    // systems; reloads must not leave those systems pointing at the old scene.
+    void RefreshAuthoredSceneRuntimeState();
+
     /**
      * @brief Update the camera based on input and game state
      * @param dt Delta time for frame-rate independent movement
@@ -608,6 +644,33 @@ class SPARK_GAME_API Game
      * @param dt Delta time for frame-rate independent input handling
      */
     void HandleInput(float dt);
+
+    // Default-off, read-only observations of actual production input dispatch.
+    void BeginInputObservation() noexcept;
+    void RecordInputObservation(const char* phase) noexcept;
+    void EndInputObservation() noexcept;
+    bool m_inputObservationChecked = false;
+    bool m_inputObservationEnabled = false;
+    bool m_inputObservationFailed = false;
+    bool m_inputObservationWanted = false;
+    bool m_inputObservationTransferred = false;
+    unsigned long long m_inputObservationUpdate = 0;
+    unsigned long long m_inputObservationOperation = 0;
+    unsigned int m_inputObservationRecords = 0;
+    size_t m_inputObservationBytes = 0;
+    unsigned int m_inputObservationMask = 0;
+    unsigned int m_inputObservationPreviousMask = ~0u;
+    unsigned int m_inputObservationStableFrames = 0;
+    unsigned int m_inputObservationPressed = 0;
+    unsigned int m_inputObservationReleased = 0;
+    int m_inputObservationAction = 0; // none/save/load/conflict = 0/1/2/3
+    int m_inputObservationResult = -1;
+    int m_inputObservationReason = 0; // none/missing quicksave = 0/1
+    Spark::FPSLocalProfile m_inputObservationTransfer;
+
+
+    /// @brief Step the arena autopilot when enabled and fire when it is on target.
+    void UpdateArenaAutopilot(float dt);
 
     /**
      * @brief Create initial test objects for the scene
@@ -643,9 +706,10 @@ class SPARK_GAME_API Game
 
     // Engine-side pointers (not owned)
     Spark::IEngineContext* m_engineContext{nullptr}; ///< SDK v2 engine context
-    bool m_engineSystemsInitialized{false};          ///< SDK-v2 services were wired after context attachment
-    GraphicsEngine* m_graphics{nullptr};             ///< Reference to graphics engine
-    InputManager* m_input{nullptr};                  ///< Reference to input manager
+    SparkGameFPS::FPSWeatherIntegration m_weatherIntegration;
+    bool m_engineSystemsInitialized{false}; ///< SDK-v2 services were wired after context attachment
+    GraphicsEngine* m_graphics{nullptr};    ///< Reference to graphics engine
+    InputManager* m_input{nullptr};         ///< Reference to input manager
 
     // Sub-systems owned by Game (unified system - no separate shader management)
     std::unique_ptr<SparkEngineCamera> m_camera;       ///< First-person camera system
@@ -677,12 +741,22 @@ class SPARK_GAME_API Game
     std::vector<Spark::SubscriptionHandle> m_eventSubscriptions; ///< Keeps EventBus callbacks active
 
 #ifdef ENABLE_NETWORKING
-    bool m_networkInitialized{false}; ///< Whether networking subsystem was initialized
+    /**
+     * @brief Tick the FPS multiplayer session and send local input at its fixed 60 Hz step.
+     * @param dt Frame delta (seconds)
+     */
+    void UpdateMultiplayer(float dt);
+
+    bool m_networkInitialized{false};      ///< Whether a multiplayer session initialized NetworkManager
+    float m_networkInputAccumulator{0.0f}; ///< Unsent simulated time toward the next 60 Hz input
 #endif
 
     // Scene objects
     std::vector<std::unique_ptr<GameObject>> m_gameObjects; ///< All game objects in the scene
     std::vector<Enemy*> m_enemies;                          ///< Non-owning refs to enemies in m_gameObjects
+
+    SparkFPS::FPSArenaAutopilot m_arenaAutopilot;           ///< Developer arena-loop driver (off by default)
+    std::vector<DirectX::XMFLOAT3> m_arenaAutopilotTargets; ///< Reused per-frame target list (no steady-state alloc)
 
     bool m_isPaused{false};   ///< Current pause state of the game
     bool m_isShutDown{false}; ///< Guards against double-shutdown

@@ -21,12 +21,16 @@ set(_SPARK_MODULE_ABI_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 # fallback here is unsafe: changing IModule can otherwise leave every module
 # advertising the previous ABI until somebody manually reconfigures CMake.
 set(_spark_sdk_version_header "")
-set(_spark_sdk_version_candidates
-    "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
-    "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
 if(DEFINED SPARK_ENGINE_INCLUDE_DIR)
-    list(PREPEND _spark_sdk_version_candidates
+    # The package config sets this to its installed include root. Do not fall
+    # back to the consumer's source tree: a local/stale SparkSDK header must
+    # not make an incomplete installed package configure successfully.
+    set(_spark_sdk_version_candidates
         "${SPARK_ENGINE_INCLUDE_DIR}/Spark/Version.h")
+else()
+    set(_spark_sdk_version_candidates
+        "${CMAKE_SOURCE_DIR}/SparkSDK/Include/Spark/Version.h"
+        "${_SPARK_MODULE_ABI_CMAKE_DIR}/../SparkSDK/Include/Spark/Version.h")
 endif()
 foreach(_candidate IN LISTS _spark_sdk_version_candidates)
     if(EXISTS "${_candidate}")
@@ -40,14 +44,55 @@ if(NOT _spark_sdk_version_header)
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${_spark_sdk_version_header}")
-file(STRINGS "${_spark_sdk_version_header}" _spark_sdk_version_line
-    REGEX "^#[ \t]*define[ \t]+SPARK_SDK_VERSION[ \t]+[0-9]+")
-if(NOT _spark_sdk_version_line MATCHES
-   "SPARK_SDK_VERSION[ \t]+([0-9]+)")
+
+# Reads `#define NAME <integer>` (decimal or 0x hex, optional u suffix) from
+# HEADER as a decimal string; the header must define NAME exactly once.
+function(_spark_read_sdk_define HEADER NAME OUTPUT_VARIABLE)
+    file(STRINGS "${HEADER}" _lines
+        REGEX "^#[ \t]*define[ \t]+${NAME}[ \t]+(0[xX][0-9A-Fa-f]+|[0-9]+)[uU]?([ \t]|$)")
+    list(LENGTH _lines _count)
+    file(STRINGS "${HEADER}" _all_definitions REGEX "^#[ \t]*define[ \t]+${NAME}([ \t]|$)")
+    list(LENGTH _all_definitions _all_count)
+    if(NOT _count EQUAL 1 OR NOT _all_count EQUAL 1 OR
+       NOT _lines MATCHES "${NAME}[ \t]+(0[xX][0-9A-Fa-f]+|[0-9]+)")
+        message(FATAL_ERROR
+            "SparkGameModule: ${HEADER} must contain exactly one ${NAME} definition")
+    endif()
+    math(EXPR _value "${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
+    set(${OUTPUT_VARIABLE} "${_value}" PARENT_SCOPE)
+endfunction()
+
+_spark_read_sdk_define("${_spark_sdk_version_header}" SPARK_SDK_VERSION _spark_sdk_version)
+set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${_spark_sdk_version}")
+
+# The descriptor format, size, magic and runtime ABI version live next to it in
+# Spark/ModuleABI.h. Deriving them here (rather than passing literals to the
+# sidecar writer) keeps a header bump from leaving every new module advertising
+# the previous descriptor and being rejected before load.
+get_filename_component(_spark_sdk_header_dir "${_spark_sdk_version_header}" DIRECTORY)
+set(_spark_module_abi_header "${_spark_sdk_header_dir}/ModuleABI.h")
+if(NOT EXISTS "${_spark_module_abi_header}")
     message(FATAL_ERROR
-        "SparkGameModule: could not parse SPARK_SDK_VERSION from ${_spark_sdk_version_header}")
+        "SparkGameModule: could not locate ${_spark_module_abi_header} to determine the module "
+        "compatibility descriptor")
 endif()
-set_property(GLOBAL PROPERTY SPARK_MODULE_CURRENT_SDK_VERSION "${CMAKE_MATCH_1}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_spark_module_abi_header}")
+
+foreach(_spark_abi_field IN ITEMS DESCRIPTOR_VERSION DESCRIPTOR_SIZE MAGIC)
+    _spark_read_sdk_define("${_spark_module_abi_header}" SPARK_MODULE_ABI_${_spark_abi_field} _spark_abi_value)
+    set_property(GLOBAL PROPERTY SPARK_MODULE_ABI_${_spark_abi_field} "${_spark_abi_value}")
+endforeach()
+_spark_read_sdk_define("${_spark_module_abi_header}" SPARK_MODULE_RUNTIME_ABI_VERSION _spark_abi_value)
+set_property(GLOBAL PROPERTY SPARK_MODULE_RUNTIME_ABI_VERSION "${_spark_abi_value}")
+
+# WriteSparkModuleABI.cmake stamps the FourCC itself; refuse to emit sidecars
+# the host would reject with "bad magic" if the header's value ever moves.
+get_property(_spark_abi_magic GLOBAL PROPERTY SPARK_MODULE_ABI_MAGIC)
+if(NOT _spark_abi_magic EQUAL 1263685715)
+    message(FATAL_ERROR
+        "SparkGameModule: SPARK_MODULE_ABI_MAGIC in ${_spark_module_abi_header} is ${_spark_abi_magic}, but "
+        "WriteSparkModuleABI.cmake writes magic=1263685715; update both together")
+endif()
 
 function(_spark_detect_cxx_language_abi OUTPUT_VARIABLE)
     if(DEFINED SPARK_MODULE_CXX_LANGUAGE_ABI)
@@ -109,6 +154,14 @@ function(spark_configure_module_abi TARGET_NAME)
         set(_sdk_version "${SPARK_ABI_SDK_VERSION}")
     endif()
 
+    get_property(_descriptor_version GLOBAL PROPERTY SPARK_MODULE_ABI_DESCRIPTOR_VERSION)
+    get_property(_descriptor_size GLOBAL PROPERTY SPARK_MODULE_ABI_DESCRIPTOR_SIZE)
+    get_property(_runtime_abi_version GLOBAL PROPERTY SPARK_MODULE_RUNTIME_ABI_VERSION)
+    if(NOT _descriptor_version OR NOT _descriptor_size OR NOT _runtime_abi_version)
+        message(FATAL_ERROR
+            "spark_configure_module_abi: Spark module ABI descriptor values were not initialized")
+    endif()
+
     if(MSVC)
         set(_compiler_family 1)
         set(_compiler_abi_version "${MSVC_VERSION}")
@@ -160,14 +213,23 @@ function(spark_configure_module_abi TARGET_NAME)
     _spark_detect_cxx_language_abi(_cxx_language_abi)
     target_compile_features(${TARGET_NAME} PRIVATE cxx_std_23)
 
+    # The sidecar binds binary_sha256 to the linked image. On ELF, `cmake
+    # --install` rewrites a build-tree RUNPATH to INSTALL_RPATH, so the
+    # installed module no longer matches its hash and ModuleManager rejects it
+    # before dlopen (PLT-210). Linking with the install RUNPATH keeps the build
+    # and installed images byte-identical, so the sidecar hashes both.
+    if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+        set_target_properties(${TARGET_NAME} PROPERTIES BUILD_WITH_INSTALL_RPATH ON)
+    endif()
+
     add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND}
             "-DMODULE_PATH=$<TARGET_FILE:${TARGET_NAME}>"
             "-DSIDECAR_PATH=$<TARGET_FILE:${TARGET_NAME}>.sparkabi"
-            "-DDESCRIPTOR_VERSION=1"
-            "-DDESCRIPTOR_SIZE=64"
+            "-DDESCRIPTOR_VERSION=${_descriptor_version}"
+            "-DDESCRIPTOR_SIZE=${_descriptor_size}"
             "-DSDK_VERSION=${_sdk_version}"
-            "-DRUNTIME_ABI_VERSION=1"
+            "-DRUNTIME_ABI_VERSION=${_runtime_abi_version}"
             "-DCOMPILER_FAMILY=${_compiler_family}"
             "-DCOMPILER_ABI_VERSION=${_compiler_abi_version}"
             "-DCXX_LANGUAGE_LEVEL=${_cxx_language_abi}"
@@ -223,6 +285,101 @@ function(spark_add_game_module TARGET_NAME)
 
     spark_configure_module_abi(${TARGET_NAME})
 
+    # Stable-v1 packages bind first-party game-module DLLs to the engine
+    # release version. Standalone consumers without the Windows resource helper
+    # retain the existing ABI-only behavior.
+    if(WIN32 AND COMMAND spark_target_windows_version_info)
+        spark_target_windows_version_info(${TARGET_NAME})
+    endif()
+
     message(STATUS
         "spark_add_game_module: ${TARGET_NAME} configured with ${_spark_module_link_target}")
 endfunction()
+
+#[=============================================================================[
+  spark_stage_game_module_content - stage a module's runtime content where the
+  engine executable reads it.
+
+    spark_stage_game_module_content(<target>
+        [DIRECTORIES <runtime-relative dir>...]
+        [COPY_DIRECTORIES <source dir> <runtime-relative dir> [...]]
+        [COPY_FILES <runtime-relative dir> <file>...])
+
+  Modules resolve content (Assets/..., Shaders/...) relative to the engine's
+  working directory, which is the directory of the SparkEngine executable. In an
+  in-tree build that is $<TARGET_FILE_DIR:SparkEngine>; on Windows it equals the
+  module DLL directory, but on ELF/Mach-O hosts the module is a LIBRARY and lands
+  in lib/ while the engine runs from bin/ (PLT-210). A standalone module build
+  has no SparkEngine target, so content is staged next to the module, which the
+  standalone projects place in their own bin/.
+
+  All steps run as POST_BUILD commands of <target>. $<TARGET_FILE_DIR:SparkEngine>
+  does not add a target dependency (CMP0112), so this cannot form a cycle with
+  the engine's own post-build copy of the module binary.
+#]=============================================================================]
+function(spark_stage_game_module_content TARGET_NAME)
+    if(NOT TARGET ${TARGET_NAME})
+        message(FATAL_ERROR "spark_stage_game_module_content: target '${TARGET_NAME}' does not exist")
+    endif()
+    cmake_parse_arguments(PARSE_ARGV 1 SPARK_STAGE "" "" "DIRECTORIES;COPY_DIRECTORIES;COPY_FILES")
+    if(SPARK_STAGE_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR
+            "spark_stage_game_module_content: unknown arguments: ${SPARK_STAGE_UNPARSED_ARGUMENTS}")
+    endif()
+
+    if(TARGET SparkEngine)
+        set(_runtime_dir "$<TARGET_FILE_DIR:SparkEngine>")
+    else()
+        set(_runtime_dir "$<TARGET_FILE_DIR:${TARGET_NAME}>")
+    endif()
+
+    set(_commands "")
+    foreach(_relative_dir IN LISTS SPARK_STAGE_DIRECTORIES)
+        list(APPEND _commands COMMAND "${CMAKE_COMMAND}" -E make_directory "${_runtime_dir}/${_relative_dir}")
+    endforeach()
+
+    list(LENGTH SPARK_STAGE_COPY_DIRECTORIES _copy_directory_length)
+    math(EXPR _copy_directory_odd "${_copy_directory_length} % 2")
+    if(_copy_directory_odd)
+        message(FATAL_ERROR
+            "spark_stage_game_module_content: COPY_DIRECTORIES needs <source dir> <runtime-relative dir> pairs")
+    endif()
+    while(SPARK_STAGE_COPY_DIRECTORIES)
+        list(POP_FRONT SPARK_STAGE_COPY_DIRECTORIES _source_dir _relative_dir)
+        if(NOT IS_DIRECTORY "${_source_dir}")
+            message(FATAL_ERROR "spark_stage_game_module_content: source directory '${_source_dir}' does not exist")
+        endif()
+        list(APPEND _commands
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_runtime_dir}/${_relative_dir}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_source_dir}" "${_runtime_dir}/${_relative_dir}")
+    endwhile()
+
+    if(SPARK_STAGE_COPY_FILES)
+        list(POP_FRONT SPARK_STAGE_COPY_FILES _relative_dir)
+        list(APPEND _commands COMMAND "${CMAKE_COMMAND}" -E make_directory "${_runtime_dir}/${_relative_dir}")
+        if(SPARK_STAGE_COPY_FILES)
+            list(APPEND _commands
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${SPARK_STAGE_COPY_FILES}
+                    "${_runtime_dir}/${_relative_dir}/")
+        endif()
+    endif()
+
+    if(NOT _commands)
+        message(FATAL_ERROR "spark_stage_game_module_content: nothing to stage for '${TARGET_NAME}'")
+    endif()
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        ${_commands}
+        COMMENT "Staging ${TARGET_NAME} runtime content"
+        VERBATIM)
+endfunction()
+
+# An explicit, untyped -DSPARK_MODULE_CXX_LANGUAGE_ABI=<value> override (the
+# cross-compiling path in _spark_detect_cxx_language_abi) is read with
+# if(DEFINED) and would otherwise stay UNINITIALIZED in the cache. Declaring it
+# without FORCE keeps the value and marks it consumed for SparkOptionGuard.cmake.
+get_property(_spark_abi_cache_type CACHE SPARK_MODULE_CXX_LANGUAGE_ABI PROPERTY TYPE)
+if(_spark_abi_cache_type STREQUAL "UNINITIALIZED")
+    set(SPARK_MODULE_CXX_LANGUAGE_ABI "${SPARK_MODULE_CXX_LANGUAGE_ABI}" CACHE STRING
+        "Exact _MSVC_LANG/__cplusplus value for Spark module compatibility (explicit override)")
+endif()
+unset(_spark_abi_cache_type)

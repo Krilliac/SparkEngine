@@ -32,7 +32,6 @@ available as an explicit fallback for ad-hoc sessions.
 |-------|--------|---------|
 | **Editor Collaboration** | `CollaborativeEditSession` + `StandaloneCollaborationClient` | Editor API backed by the standalone broker (or explicit peer fallback) |
 | **Collaboration Authority** | `SparkCollabServer` | Capability-authenticated presence, locks, ordered edit history, and snapshots |
-| **Editor ↔ Engine IPC** | `EngineInterface` | Named pipe communication with local engine process |
 | **Live Push** | `LiveEditBridge` | Forward edits to a running AreaServer for live game updates |
 
 These are intentionally separate systems. Editor collaboration uses TCP for reliable ordered delivery of edits. Game networking uses UDP for low-latency gameplay. The `LiveEditBridge` connects the two when live editing of a running game world is desired.
@@ -66,13 +65,22 @@ The C++ code examples below are **internal API reference** showing how the edito
 ```cpp
 SparkEditor::CollaborativeEditSession session;
 session.Host(27030, "Alice");  // Opens TCP listener on port 27030
+const std::string joinCode = session.GetJoinCode();  // 64 hex digits; share out of band
 ```
+
+The panel shows the join code (with a Copy button) while hosting; `SparkEditor --collab-server`
+prints it to its terminal (never to the console log).
 
 ### Connecting to a Session
 
 ```cpp
-session.Connect("192.168.1.100", 27030, "Bob");  // TCP connect with 5s timeout
+session.Connect("192.168.1.100", 27030, "Bob", joinCode);  // TCP connect + join handshake, 5s timeouts
 ```
+
+The host sends a random 32-byte nonce; the peer answers with
+`HMAC-SHA256(joinCode, "SparkCollabJoin/v1" || nonce || userName)`. Until that proof verifies
+the connection is not registered as a peer and nothing it sends is queued or relayed, and the host
+assigns the peer's ID. A wrong code, a missing handshake, or no answer within 5 s closes the socket.
 
 ### Node Locking
 
@@ -198,7 +206,9 @@ The **Collaboration** panel (View → Collaboration) provides:
 - **Connection controls**: Host or join a session with username and port
 - **Peer list**: Shows all connected editors with their colors and current selections
 - **Lock list**: Active locks with owner names, durations, and release buttons
-- **Edit log**: Recent edit activity across all peers
+- **Edit log**: Recent edit activity across all peers. This is an activity log only: a received
+  `EditMessage` carries the edit type and the sender's local node ID, and nothing applies it to the
+  receiving editor's scene, so peers' scenes are not kept in sync. Save from one editor at a time.
 - **Session stats**: Peer count, lock count, edit counts, session duration
 
 ## Viewport Peer Visualization
@@ -237,7 +247,18 @@ Messages are sent as length-prefixed TCP frames:
 [4 bytes: message length N] [N bytes: serialized InternalMessage]
 ```
 
-The serialization uses big-endian integers and length-prefixed strings. Maximum message size is 16 MB.
+The serialization uses big-endian integers and length-prefixed strings. Resource bounds on the
+legacy peer host (all in `CollaborativeEditSession.h`):
+
+| Limit | Value |
+|-------|-------|
+| Frame size (authenticated / during handshake) | 1 MiB / 4 KiB |
+| Identifier fields (node, user, component, property) | 4 KiB each; display names 128 bytes |
+| Concurrent connections, pending included | 16 |
+| Queued bytes per queue (oldest dropped first) | 64 MiB, plus 8192 entries |
+| Handshake deadline / frame completion after its first byte | 5 s / 10 s |
+
+Unknown message or edit types are rejected at deserialization.
 
 ## Thread Safety
 

@@ -425,6 +425,18 @@ class PhysicsSystem
     {
         m_triggerCallback = callback;
     }
+    /**
+     * @brief Publish contact events on @p bus (non-owning; nullptr stops publishing).
+     *
+     * Each step publishes Spark::CollisionEvent per solid contact and
+     * Spark::TriggerEnterEvent / Spark::TriggerExitEvent once per sensor overlap
+     * begin/end, with triggerId = the sensor body's entity. An overlap whose
+     * bodies have all gone to sleep (or are static) stays active, so a body
+     * resting inside a sensor gets no exit until it wakes and leaves. Bodies
+     * created outside the ECS report entity id 0 ("no entity"). Events are published
+     * whether or not the collision/trigger callbacks are installed, synchronously
+     * on the thread that steps the world (the game thread, per the stepping contract).
+     */
     void SetEventBus(Spark::EventBus* bus) { m_eventBus = bus; }
 
     // =========================================================================
@@ -490,10 +502,17 @@ class PhysicsSystem
     }
 
     /** @brief Get the Jolt physics system (for internal use by PhysicsBody). */
+#if SPARK_JOLT_PHYSICS_AVAILABLE
     JPH::PhysicsSystem* GetJoltSystem() const { return m_joltSystem.get(); }
 
     /** @brief Get the temp allocator (used by CharacterController). */
     JPH::TempAllocator* GetTempAllocator() const { return m_tempAllocator.get(); }
+#else
+    JPH::PhysicsSystem* GetJoltSystem() const { return nullptr; }
+
+    /** @brief Get the temp allocator (used by CharacterController). */
+    JPH::TempAllocator* GetTempAllocator() const { return nullptr; }
+#endif
 
     // =========================================================================
     // Character controller
@@ -515,7 +534,8 @@ class PhysicsSystem
      * @brief Create a vehicle with engine, transmission, and suspension.
      * @param body  The rigid body to attach the vehicle constraint to.
      * @param desc  Vehicle configuration (wheels, engine, transmission).
-     * @return      Unique pointer to the new VehiclePhysics.
+     * @return      The new VehiclePhysics, or nullptr when the body or descriptor is unusable
+     *              (for example a tracked layout without wheels on both sides).
      */
     std::unique_ptr<VehiclePhysics> CreateVehicle(std::shared_ptr<PhysicsBody> body, const VehicleDesc& desc);
 
@@ -671,6 +691,7 @@ class PhysicsSystem
     // Jolt Physics world objects
     // =========================================================================
 
+#if SPARK_JOLT_PHYSICS_AVAILABLE
     std::unique_ptr<JPH::PhysicsSystem> m_joltSystem;
     std::unique_ptr<JPH::TempAllocator> m_tempAllocator;
     std::unique_ptr<JPH::JobSystem> m_jobSystem;
@@ -679,6 +700,7 @@ class PhysicsSystem
     std::unique_ptr<JPH::ObjectLayerPairFilter> m_objectLayerPairFilter;
     std::unique_ptr<JPH::ContactListener> m_contactListener;
     std::unique_ptr<JPH::BodyActivationListener> m_bodyActivationListener;
+#endif
 
     // =========================================================================
     // Body and constraint registries

@@ -52,15 +52,36 @@ TEST(PacketValidatorReal_ConnectionAndAckSchemasMatchConsumers)
     PacketValidator validator;
     NetworkMessage message;
 
+    // ConnectAccepted (v2) is exactly client ID + server time + echoed protocol version + ServerHello.
     message.type = MessageType::ConnectAccepted;
-    message.payload.resize(3);
+    message.payload.resize(10); // the version-1 layout
     EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
-    message.payload.resize(4);
+    message.payload.resize(154);
+    EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
+    message.payload.resize(155);
     EXPECT_TRUE(validator.ValidatePacket(message, false, false).valid);
+    message.payload.resize(156);
+    EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
+
+    // ClientFinished (v2) is a length-prefixed name of at most 64 bytes, client to server only.
+    message.type = MessageType::ClientFinished;
+    message.payload.resize(1);
+    EXPECT_FALSE(validator.ValidatePacket(message, true, true).valid);
+    message.payload.resize(2);
+    EXPECT_TRUE(validator.ValidatePacket(message, true, true).valid);
+    message.payload.resize(2 + 64);
+    EXPECT_TRUE(validator.ValidatePacket(message, true, true).valid);
+    message.payload.resize(2 + 65);
+    EXPECT_FALSE(validator.ValidatePacket(message, true, true).valid);
+    message.payload.resize(2);
+    EXPECT_FALSE(validator.ValidatePacket(message, true, false).valid);
+
+    // Connect needs at least handshake magic + protocol version + an (empty) name prefix.
+    message.type = MessageType::Connect;
+    message.payload.resize(7);
+    EXPECT_FALSE(validator.ValidatePacket(message, false, true).valid);
     message.payload.resize(8);
-    EXPECT_TRUE(validator.ValidatePacket(message, false, false).valid);
-    message.payload.resize(9);
-    EXPECT_FALSE(validator.ValidatePacket(message, false, false).valid);
+    EXPECT_TRUE(validator.ValidatePacket(message, false, true).valid);
 
     message.type = MessageType::Ack;
     message.payload.resize(7);

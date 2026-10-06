@@ -12,7 +12,6 @@ GameModules/SparkGameFPS/Source/Game/HUDSystem.h
 GameModules/SparkGameFPS/Source/Game/InteractiveObject.cpp
 GameModules/SparkGameFPS/Source/Game/InteractiveObject.h
 GameModules/SparkGameFPS/Source/Game/InventorySystem.h
-GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.cpp
 GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h
 GameModules/SparkGameFPS/Source/Game/Player.cpp
 GameModules/SparkGameFPS/Source/Game/Player.h
@@ -49,8 +48,6 @@ SparkEditor/Source/AssetPipeline/AssetProcessors.cpp
 SparkEditor/Source/CommandHistory.h
 SparkEditor/Source/Communication/CollaborativeEditSession.cpp
 SparkEditor/Source/Communication/CollaborativeEditSession.h
-SparkEditor/Source/Communication/EngineInterface.cpp
-SparkEditor/Source/Communication/EngineInterface.h
 SparkEditor/Source/Core/EditorCrashHandler.cpp
 SparkEditor/Source/Core/EditorLayoutManager.cpp
 SparkEditor/Source/Core/EditorLogger.h
@@ -237,7 +234,6 @@ SparkEngine/Source/Graphics/FastNoiseLite.h
 SparkEngine/Source/Graphics/FoliageImpostorBaker.h
 SparkEngine/Source/Graphics/FoliageRenderer.h
 SparkEngine/Source/Graphics/FrustumCulling.h
-SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp
 SparkEngine/Source/Graphics/GPUDebugMarkers.h
 SparkEngine/Source/Graphics/GPUSceneBuffer.h
 SparkEngine/Source/Graphics/GPUTimestampQuery.h
@@ -283,7 +279,6 @@ SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h
 SparkEngine/Source/Graphics/RenderGraphTypes.h
 SparkEngine/Source/Graphics/RenderTarget.h
 SparkEngine/Source/Graphics/RenderTargetPool.h
-SparkEngine/Source/Graphics/SVGRenderer.h
 SparkEngine/Source/Graphics/ScreenCapture.h
 SparkEngine/Source/Graphics/ScreenSpaceEffects.h
 SparkEngine/Source/Graphics/Shader.h
@@ -325,7 +320,6 @@ SparkEngine/Source/Utils/ConfigParser.h
 SparkEngine/Source/Utils/ConsoleVariable.h
 SparkEngine/Source/Utils/CpuDebugger.h
 SparkEngine/Source/Utils/CrashHandler.cpp
-SparkEngine/Source/Utils/CrashReportUploader.cpp
 SparkEngine/Source/Utils/DaemonFraming.h
 SparkEngine/Source/Utils/DebugDraw.h
 SparkEngine/Source/Utils/DebugHookManager.h

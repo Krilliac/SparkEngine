@@ -95,7 +95,7 @@ Four mature engines, each with a distinct lesson:
 
 - **Wicked `wi::graphics`:** one `GraphicsDevice` interface spanning D3D11/D3D12/Vulkan/Metal — proof a single RHI can span legacy and modern APIs, exactly SparkEngine's shape.
 - **Wicked bindless descriptor arrays:** 500,000+ resources bound without per-draw descriptor updates; buffer index maps directly to shader resource index — the foundation for GPU-driven rendering.
-- **Wicked offline shader compiler:** ~428 shader types compiled into an embedded `wiShaderDump.h` with precompiled per-API blobs — ships with zero runtime-compile dependency.
+- **Wicked offline shader compiler:** a large set of shader types compiled into an embedded `wiShaderDump.h` with precompiled per-API blobs — ships with zero runtime-compile dependency.
 - **NVRHI two-tier binding:** binding layouts (templates) + immutable binding sets (instances) allocated once at creation; lightweight and validatable at draw time.
 - **NVRHI automatic resource-state tracking:** per-command-list barrier inference from declared initial/final states, with `setEnableAutomaticBarriers` to opt out on hot paths.
 - **Ogre-Next HLMS:** hand-written HLSL/GLSL templates + custom preprocessor (`@property`, `@piece`/`@insertpiece`, `@foreach`) generate permutations on demand instead of precompiling all combinations.

@@ -3,7 +3,7 @@
   "name": "RPGStarter",
   "version": "0.3.0",
   "description": "A complete village RPG quest with bounded exploration, dialogue, relic inventory, reactive combat, objective HUD, reward, and save/load.",
-  "engineVersion": "1.0.0",
+  "engineVersion": "0.9.0",
   "template": "rpg",
   "defaultScene": "Scenes/Village.sparkscene",
   "lastOpenedScene": "Scenes/Village.sparkscene",

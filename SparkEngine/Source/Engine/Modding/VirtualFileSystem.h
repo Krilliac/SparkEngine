@@ -56,14 +56,19 @@ namespace Spark
      *    no matter what directory prefix they carry, so opening one can block the
      *    loading thread on a serial port.
      *
+     * '\\' is treated as a separator on every host, so content validated on Linux
+     * cannot escape the root when it ships to Windows, and control bytes (NUL
+     * included, which c_str() consumers would silently truncate at) are rejected.
+     *
      * This predicate decides containment on the NORMALIZED path, so "a/../../etc"
      * is rejected for the '..' it actually resolves to rather than for the two
      * characters it contains. It is the policy gate for every untrusted path the
      * engine consumes — VFS mounts and .sparkscene manifests alike.
      *
      * @param virtualPath Mount-relative path from untrusted content.
-     * @return true when the path is relative, contains no escaping component, no
-     *         ':' and no reserved device name.
+     * @return true when the path is relative, contains no escaping component
+     *         (with either separator), no ':', no control byte and no reserved
+     *         device name.
      */
     [[nodiscard]] bool IsVirtualPathSafe(const std::string& virtualPath);
 
@@ -130,10 +135,25 @@ namespace Spark
                                            const std::string& extension = "") const override;
         std::string GetProviderName() const override;
 
+        /// Largest file ReadFile/ReadTextFile will read (1 GiB). The buffer is sized from the
+        /// opened file's own size, so this only bounds what one mod-named file can make the
+        /// engine allocate; it is four times the largest per-entry ceiling elsewhere in the
+        /// engine (SparkPak's 256 MB decompression budget).
+        static constexpr std::uint64_t kMaxFileBytes = std::uint64_t{1} << 30;
+
+        /// @brief Test seam: called with the resolved path after every containment check passed
+        ///        and immediately before the file is opened, so a test can swap the entry.
+        void SetOpenProbeForTesting(std::function<void(const std::string&)> probe);
+
       private:
         /// @brief Resolve a virtual path to the real filesystem path, or {} if it escapes the root.
         std::string ResolvePath(const std::string& virtualPath) const;
 
+        /// @brief Open the resolved file, verify on the opened handle that it is a regular file
+        ///        inside the mount root and within kMaxFileBytes, and read exactly its size.
+        bool ReadVerified(const std::string& virtualPath, std::vector<uint8_t>& bytes) const;
+
+        std::function<void(const std::string&)> m_openProbe;
         std::string m_rootPath;
         std::filesystem::path m_root;          ///< Normalized root, no trailing separator.
         std::filesystem::path m_canonicalRoot; ///< Root with symlinks resolved, for the containment check.

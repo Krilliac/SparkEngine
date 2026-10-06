@@ -86,9 +86,10 @@ namespace Spark
         uint32_t maxQueueSize = 10000;                     ///< Maximum queued events before dropping
         uint64_t maxQueueBytes = 4ull * 1024ull * 1024ull; ///< Maximum conservative in-memory queue budget
         std::string spoolDirectory; ///< Durable retry spool directory (empty disables persistence)
-        uint64_t maxSpoolBytes = 4ull * 1024ull * 1024ull; ///< Maximum committed spool artifact size
-        uint32_t maxSpoolEvents = 10000;                   ///< Maximum number of durably retained events
-        float retryIntervalSeconds = 5.0f;                 ///< Retry cadence after a deferred or failed delivery
+        uint64_t maxSpoolBytes = 4ull * 1024ull * 1024ull;          ///< Maximum committed spool artifact size
+        uint32_t maxSpoolEvents = 10000;                            ///< Maximum number of durably retained events
+        uint64_t maxSpoolAgeSeconds = 7ull * 24ull * 60ull * 60ull; ///< Maximum durable event age before drop
+        float retryIntervalSeconds = 5.0f; ///< Retry cadence after a deferred or failed delivery
     };
 
     /** @brief Result of one backend delivery attempt. */
@@ -1134,8 +1135,12 @@ namespace Spark
                 return true;
             }
 
-            const auto result =
-                m_spool.Configure(m_config.spoolDirectory, m_config.maxSpoolBytes, m_config.maxSpoolEvents);
+            const uint64_t maxAgeMilliseconds =
+                m_config.maxSpoolAgeSeconds > (std::numeric_limits<uint64_t>::max)() / 1000ull
+                    ? (std::numeric_limits<uint64_t>::max)()
+                    : m_config.maxSpoolAgeSeconds * 1000ull;
+            const auto result = m_spool.Configure(m_config.spoolDirectory, m_config.maxSpoolBytes,
+                                                  m_config.maxSpoolEvents, maxAgeMilliseconds);
             if (result == TelemetryDetail::TelemetrySpoolResult::Success)
             {
                 m_spoolConfigurePending = false;

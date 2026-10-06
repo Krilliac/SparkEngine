@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -545,7 +546,45 @@ def _validate_package_hygiene(package_root: Path) -> None:
         raise ValidationError(f"Forbidden package content found:\n  {joined}")
 
 
-def validate_package(package_root: Path, stage_root: Path | None, archive: Path | None) -> None:
+def _validate_runtime_asset_integrity(package_root: Path, package_profile: str = "default") -> None:
+    assets_root = package_root / "bin" / "Assets"
+    manifest = assets_root / "assets.integrity.json"
+    if _is_link_like(manifest) or not manifest.is_file():
+        raise ValidationError(f"Runtime asset integrity manifest is missing: {manifest}")
+    if not assets_root.is_dir() or _is_link_like(assets_root):
+        raise ValidationError(f"Runtime asset root is missing or link-like: {assets_root}")
+
+    verifier_path = Path(__file__).resolve().parents[2] / "tools" / "asset-integrity" / "verify_asset_integrity.py"
+    if _is_link_like(verifier_path) or not verifier_path.is_file():
+        raise ValidationError(f"Asset integrity verifier is missing: {verifier_path}")
+    spec = importlib.util.spec_from_file_location("_spark_package_asset_integrity", verifier_path)
+    if spec is None or spec.loader is None:
+        raise ValidationError(f"Asset integrity verifier could not be loaded: {verifier_path}")
+    verifier = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(verifier)
+        # OD-09: a stable-v1 package must ship no NOASSERTION asset, and every
+        # packaged entry must match the reviewed repository manifest.
+        verify_package_manifest = getattr(verifier, "verify_package_manifest", None)
+        if not callable(verify_package_manifest):
+            raise ValidationError("Asset integrity verifier exposes no verify_package_manifest function")
+        errors = verify_package_manifest(manifest, assets_root, package_profile)
+    except ValidationError:
+        raise
+    except Exception as error:  # noqa: BLE001 - package validation must fail closed.
+        raise ValidationError(f"Asset integrity verifier failed: {error}") from error
+    if errors:
+        details = "\n  ".join(str(error) for error in errors)
+        raise ValidationError(f"Asset integrity validation failed:\n  {details}")
+    print(f"OK: runtime asset integrity verified ({package_profile} profile): {manifest}")
+
+
+def validate_package(
+    package_root: Path,
+    stage_root: Path | None,
+    archive: Path | None,
+    package_profile: str = "default",
+) -> None:
     package_root = package_root.absolute()
     if _is_link_like(package_root):
         raise ValidationError(f"Extracted package root must not be link-like: {package_root}")
@@ -571,6 +610,7 @@ def validate_package(package_root: Path, stage_root: Path | None, archive: Path 
 
     template_root = package_root / "share" / "SparkEngine" / "templates"
     _validate_package_hygiene(package_root)
+    _validate_runtime_asset_integrity(package_root, package_profile)
     _validate_template_hygiene(template_root)
 
     file_count = 0
@@ -621,6 +661,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     mode.add_argument("--preflight-archive", type=Path)
     parser.add_argument("--stage-root", type=Path)
     parser.add_argument("--archive", type=Path)
+    parser.add_argument(
+        "--package-profile",
+        choices=("default", "stable-v1"),
+        default="default",
+        help="Trusted release profile; stable-v1 rejects NOASSERTION runtime assets (OD-09)",
+    )
     args = parser.parse_args(argv)
     if args.preflight_archive is not None and (
         args.stage_root is not None or args.archive is not None
@@ -635,7 +681,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.preflight_archive is not None:
             validate_archive(args.preflight_archive)
         else:
-            validate_package(args.package_root, args.stage_root, args.archive)
+            validate_package(args.package_root, args.stage_root, args.archive, args.package_profile)
     except (OSError, ValidationError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1

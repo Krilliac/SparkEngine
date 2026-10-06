@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -41,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
@@ -53,6 +55,11 @@ WORKFLOWS_DIR = ".github/workflows"
 LOCKFILE_VERSION = 2
 AUTHORITATIVE_ROOT = "ThirdParty"
 AUTHORITATIVE_ROOTS = frozenset({AUTHORITATIVE_ROOT})
+APPROVED_ROOT_FILES = frozenset({
+    "ThirdParty/POLICY.md",
+    "ThirdParty/dependencies.lock",
+    "ThirdParty/supply-chain.lock",
+})
 
 # ── Resource bounds ───────────────────────────────────────────────────
 # Every one of these is an order of magnitude above the real repository.  They
@@ -77,6 +84,8 @@ MAX_WALK_DEPTH = 24
 MAX_WORKFLOW_FILES = 512
 MAX_ACTION_PIN_KEYS = 512
 MAX_ACTION_PIN_SHAS = 32
+MAX_EXCEPTIONS = 256
+MAX_EXCEPTION_HORIZON_DAYS = 366
 MAX_VIOLATIONS = 500
 
 MIN_LICENSE_SIZE = 200
@@ -96,6 +105,7 @@ SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_\-./]+$")
 GIT_FILE_MODES = frozenset({"100644", "100755"})
 GIT_SYMLINK_MODE = "120000"
 GIT_GITLINK_MODE = "160000"
+SYMLINK_REJECTED = "symbolic link rejected"
 
 ACTION_REF_RE = re.compile(
     r"^(?P<repo>[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+)"
@@ -120,6 +130,150 @@ MANIFEST_FIELD_COUNT = 10
 ) = range(MANIFEST_FIELD_COUNT)
 
 VALID_SEVERITIES = frozenset({"ERROR", "WARN"})
+EXCEPTION_FIELDS = frozenset({"id", "scope", "owner", "justification", "expires"})
+EXCEPTION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
+EXCEPTION_SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{1,127}$")
+# A vulnerability exception names the package exactly as grype reports it, and
+# grype reports names such as "libstdc++", "@scope/pkg" or
+# "Microsoft Visual C++ 2022 X64 Minimum Runtime" (from PE version resources),
+# so the package part admits any printable text without edge whitespace.
+VULNERABILITY_SCOPE_PREFIX = "vulnerability:"
+MAX_VULNERABILITY_PACKAGE_LENGTH = 256
+EXCEPTION_PLACEHOLDER_OWNERS = frozenset({"", "none", "n/a", "tbd", "todo", "unknown", "unassigned"})
+
+# ── License policy (SEC-110) ──────────────────────────────────────────
+# The allow-list lives here, in reviewed code, and deliberately not in the
+# lockfile it polices: a dependency change must not be able to approve its own
+# license in the same data file.  Every identifier named anywhere in a
+# dependency's SPDX expression must be on this list -- including each arm of an
+# OR -- so an expression cannot carry an unreviewed license behind a
+# disjunction.  Identifiers match exactly (no case folding).  Widening the list
+# is a human policy decision (ThirdParty/POLICY.md).
+ALLOWED_SPDX_LICENSES = frozenset({
+    "Apache-2.0",
+    "BSD-3-Clause",
+    # ISC is pre-approved by ThirdParty/POLICY.md; added for libsodium (NET-100,
+    # owner decision OD-06, vendoring authorized by the owner on 2026-09-27).
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "Unlicense",
+    "Zlib",
+})
+LICENSE_POLICY_KEYS = frozenset({"dependencies"})
+LICENSE_POLICY_RECORD_FIELDS = frozenset({"declared", "spdx"})
+# Vulnerability identity for the lock-derived SBOM (tools/generate-sbom.py
+# requires it for every dependency): the upstream release a pin derives from,
+# the evidence for it, and an NVD CPE or the reason there is none.
+LICENSE_POLICY_IDENTITY_FIELDS = frozenset({
+    "upstream_version", "upstream_tag_commit", "upstream_version_source", "cpe", "cpe_unavailable_reason",
+})
+# A release version, optionally "+N": N commits past that release.
+UPSTREAM_VERSION_RE = re.compile(r"^(?P<release>[0-9]+(?:\.[0-9]+){0,3}[a-z]?)(?:\+(?P<ahead>[1-9][0-9]*))?$")
+CPE23_APPLICATION_RE = re.compile(r"^cpe:2\.3:a(?::[A-Za-z0-9._\-~*]+){10}$")
+MAX_SPDX_EXPRESSION_CHARS = 512
+MAX_LICENSE_DECLARATION_CHARS = 512
+SPDX_ID_RE = re.compile(r"^(?:LicenseRef-)?[A-Za-z0-9][A-Za-z0-9.+-]*$")
+SPDX_OPERATORS = frozenset({"AND", "OR"})
+
+# ── Dependencies outside ThirdParty/ (SEC-110) ────────────────────────
+# ``external_dependencies`` in the lockfile declares every system library,
+# CI system package, remote web runtime, and vendored file that lives outside
+# ThirdParty/.  Each class names the fields its records carry beyond the
+# common ones; identifier namespaces say where the checker observed the use.
+EXTERNAL_COMMON_FIELDS = frozenset({"name", "class", "license_spdx", "owner", "justification"})
+EXTERNAL_CLASS_FIELDS = {
+    "system_libraries": frozenset({"identifiers"}),
+    "ci_packages": frozenset({"identifiers"}),
+    "web_runtime": frozenset({"url", "sri"}),
+    "vendored_outside_thirdparty": frozenset({"paths"}),
+    "downloads": frozenset({"path", "pin_path", "command", "source_url", "url", "sha256", "verification", "output"}),
+}
+EXTERNAL_IDENTIFIER_NAMESPACES = {
+    "system_libraries": frozenset({"cmake", "pkg-config"}),
+    "ci_packages": frozenset({"apt", "brew", "pip"}),
+}
+EXTERNAL_IDENTIFIER_RE = re.compile(r"^(?P<ns>[a-z-]+):(?P<name>[A-Za-z0-9][A-Za-z0-9._+-]*)$")
+# Build-only CI packages are not distributed, so their records may state
+# NOASSERTION; every other class ships or loads code and needs a real SPDX
+# expression.
+NOASSERTION_CLASSES = frozenset({"ci_packages"})
+MAX_EXTERNAL_RECORDS = 512
+MAX_SCANNED_SOURCE_BYTES = 8 * 1024 * 1024
+# CMake packages that are this project or the build's own tooling, not a
+# dependency of the product.
+FIRST_PARTY_CMAKE_PACKAGES = {
+    "SparkEngine": "the engine's own installed package, consumed by templates and package smoke tests",
+    "Python3": "build and test tooling interpreter; nothing is linked or shipped",
+    "Git": "build tooling that stamps revisions; nothing is linked or shipped",
+    "PkgConfig": "CMake's pkg-config front end; the modules it finds are declared on their own",
+}
+CMAKE_PACKAGE_FILE_RE = re.compile(r"(?:^|/)(?:CMakeLists\.txt|[^/]+\.cmake(?:\.in)?)$")
+CMAKE_FIND_RE = re.compile(
+    r"\b(find_package|find_dependency|pkg_check_modules|pkg_search_module)\s*\(([^)]*)\)",
+    re.IGNORECASE,
+)
+PKG_CONFIG_KEYWORDS = frozenset({
+    "REQUIRED", "QUIET", "NO_CMAKE_PATH", "NO_CMAKE_ENVIRONMENT_PATH", "IMPORTED_TARGET", "GLOBAL",
+})
+PACKAGE_MANAGERS = {"apt-get": "apt", "apt": "apt", "brew": "brew", "pip": "pip", "pip3": "pip"}
+# pip options whose value is the next token rather than a package to install.
+PIP_VALUE_OPTIONS = frozenset({"-r", "--requirement", "-c", "--constraint"})
+# The only requirement line a CI requirements file may hold: one exact version
+# and at least one wheel/sdist hash, so pip runs in hash-checking mode.
+PIP_REQUIREMENT_RE = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==[A-Za-z0-9.+!-]+(?:\s+--hash=sha256:[0-9a-f]{64})+$"
+)
+SHELL_COMMAND_BREAKS = ("&&", "||", ";", "|", ">", "<", "&")
+WEB_SOURCE_RE = re.compile(r"\.(?:html?|m?js)$")
+REMOTE_URL_RE = re.compile(r"^(?:https?:)?//", re.IGNORECASE)
+# An exact package version in a CDN path: name@1.2.3/ (no ranges, tags, or latest).
+PINNED_WEB_VERSION_RE = re.compile(r"@[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?/")
+SRI_RE = re.compile(r"^sha(?:384|512)-[A-Za-z0-9+/]+={0,2}$")
+DOWNLOAD_VERIFICATIONS = frozenset({
+    "sha256sum", "get-file-hash", "cmake-sha256", "cmake-url-hash", "cmake-expected-hash",
+})
+MUTABLE_DOWNLOAD_URL_RE = re.compile(
+    r"/(?:main|master|HEAD|latest)(?:/|$)|/refs/heads/|@latest(?:/|$)|"
+    r"[?&](?:ref|branch|rev)=", re.I,
+)
+# A package-manager install command, up to the next shell separator: the
+# packages it names (`curl`, `wget`) are not fetches.
+PACKAGE_INSTALL_SEGMENT_RE = re.compile(
+    r"\b(?:apt-get|apt|apk|dnf|yum|zypper|pacman|brew|choco|winget|pip3?)\b[^;&|\n]*?\binstall\b[^;&|\n]*",
+    re.IGNORECASE,
+)
+# sha256sum checking "<sha>  <file>" lines read from stdin. Its verdict must end
+# the line, end an `if` condition (`; then`) or gate the next command (`&&`);
+# `|| true` or a bare `;` would discard it.
+SHA256SUM_STDIN_CHECK_RE = re.compile(
+    r"\bsha256sum\s+(?:--(?:strict|quiet|status|warn)\s+)*(?:-c|--check)"
+    r"(?:\s+--(?:strict|quiet|status|warn))*\s+-(?=\s*$|\s*;\s*then\b|\s*&&)"
+)
+# A static shell assignment of `api_url`, as the publication workflows write it.
+API_URL_ASSIGNMENT_RE = re.compile(r"""(?m)^\s*(?:local\s+)?api_url=(["']?)([^"'\s]*)\1\s*(?:#.*)?$""")
+GITHUB_API_ORIGIN = "https://api.github.com/"
+JS_STATIC_IMPORT_RE = re.compile(
+    r"""\b(?:import|export)\b[^'";]*?\bfrom\s*(['"])([^'"]+)\1"""
+    r"""|\bimport\s*\(?\s*(['"])([^'"]+)\3""",
+)
+# Header phrases that mark text copied from an MIT, Apache, or BSD project.
+FOREIGN_LICENSE_PHRASES = (
+    "Permission is hereby granted, free of charge",
+    "Licensed under the Apache License",
+    "Redistribution and use in source and binary forms",
+)
+# Tracked files outside ThirdParty/ allowed to quote those phrases, each with
+# the reason it is not vendored code.  This list is reviewed code, not lockfile
+# data, so a change cannot exempt itself.
+FOREIGN_LICENSE_EXEMPTIONS = (
+    (re.compile(r"^Tests/"), "test sources and fixtures quote license text to exercise license detection"),
+    (re.compile(r"^\.github/scripts/test_[^/]+$"), "CI script tests quote license text as fixtures"),
+    (re.compile(r"^cmake/Test[^/]+\.cmake$"), "CMake script tests quote license text as fixtures"),
+    (re.compile(r"^THIRD_PARTY_NOTICES$"), "the generated notice file reproduces third-party license texts"),
+    (re.compile(r"^LICENSE$"), "SparkEngine's own license"),
+    (re.compile(r"^tools/check-supply-chain\.py$"), "this checker defines the phrases it searches for"),
+)
 
 
 def _fatal(msg: str) -> None:
@@ -324,7 +478,7 @@ def link_reason(path: Path) -> str | None:
     except OSError as e:
         return f"cannot lstat path: {e}"
     if stat.S_ISLNK(st.st_mode):
-        return "symbolic link rejected"
+        return SYMLINK_REJECTED
     attributes = getattr(st, "st_file_attributes", 0)
     reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     if reparse_flag and (attributes & reparse_flag):
@@ -333,12 +487,173 @@ def link_reason(path: Path) -> str | None:
     return None
 
 
-def check_link_hygiene(root: Path, result: CheckResult) -> None:
+def verified_submodule_gitlinks(
+    lockfile: dict[str, Any], tracked: list[TrackedEntry]
+) -> dict[str, str]:
+    """Submodules whose superproject gitlink matches the lockfile exactly.
+
+    A submodule's identity is its mode-160000 gitlink, which is present in the
+    superproject index whether or not the submodule is initialized.  Only a
+    gitlink that agrees with the lock earns the in-submodule link allowance in
+    check_link_hygiene; any disagreement is reported by check_tracked_inventory.
+    """
+    locked = lockfile["submodule_gitlinks"]
+    return {
+        entry.path: entry.blob
+        for entry in tracked
+        if entry.mode == GIT_GITLINK_MODE and locked.get(entry.path) == entry.blob
+    }
+
+
+def _git_object_id(kind: str, payload: bytes, hex_length: int) -> str:
+    """Object id git assigns to `payload`, in the repository's hash algorithm."""
+    algorithm = "sha1" if hex_length == 40 else "sha256"
+    header = f"{kind} {len(payload)}\0".encode("ascii")
+    return hashlib.new(algorithm, header + payload).hexdigest()
+
+
+def _submodule_locked_links(
+    root: Path, submodule_rel: str, locked_sha: str
+) -> tuple[dict[str, str], str | None]:
+    """Mode-120000 entries of the submodule's LOCKED commit, as {path: blob}.
+
+    The allowance is derived from the pinned commit, never from the
+    submodule's mutable index or checked-out HEAD, so a link added locally or
+    by moving the submodule off its pin is not accepted.  Returns the map and
+    an error string when the locked tree cannot be read.
+    """
+    sub_dir = root / submodule_rel
+    try:
+        toplevel = Path(git_cmd(["rev-parse", "--show-toplevel"], sub_dir)).resolve()
+    except RuntimeError as e:
+        return {}, f"cannot identify submodule repository: {e}"
+    if toplevel != sub_dir.resolve():
+        # git fell through to an enclosing repository: the submodule is not
+        # an initialized repository of its own, so nothing vouches for links.
+        return {}, "submodule directory is not its own git repository"
+    try:
+        # --no-replace-objects: a refs/replace/* entry in the submodule's own
+        # object store could otherwise substitute a forged tree for the pin.
+        raw = _git_raw(
+            ["--no-replace-objects", "-c", "core.quotePath=false", "ls-tree",
+             "-r", "-z", "--full-tree", locked_sha],
+            sub_dir,
+        )
+    except RuntimeError as e:
+        return {}, f"cannot read locked submodule tree {locked_sha}: {e}"
+
+    records = _split_nul(raw)
+    if len(records) > MAX_TRACKED_PATHS:
+        return {}, (
+            f"locked submodule tree has {len(records)} entries, exceeding "
+            f"MAX_TRACKED_PATHS ({MAX_TRACKED_PATHS})"
+        )
+    links: dict[str, str] = {}
+    for record in records:
+        meta, _, path = record.partition("\t")
+        parts = meta.split()
+        if not path or len(parts) != 3:
+            return {}, f"unparseable git ls-tree record: {record!r}"
+        if parts[0] == GIT_SYMLINK_MODE:
+            links[path] = parts[2]
+    return links, None
+
+
+def _git_link_target(on_disk_target: str, separator: str) -> str:
+    """The link target as git stores it in the mode-120000 blob.
+
+    Git always records '/' separators; Git for Windows (core.symlinks=true)
+    writes the on-disk link with '\\' instead, so readlink must be mapped back
+    before the blob comparison or every legitimate tracked link would fail.
+    Python's readlink also returns an absolute target in the Win32 namespace
+    form ('\\\\?\\C:\\x', '\\\\?\\UNC\\host\\share'), whose prefix Git for
+    Windows strips before storing the blob ('C:/x', '//host/share').
+    """
+    if separator == "\\":
+        for prefix in ("\\\\?\\", "\\??\\"):
+            if on_disk_target.startswith(prefix):
+                on_disk_target = on_disk_target[len(prefix):]
+                if on_disk_target[:4].upper() == "UNC\\":
+                    on_disk_target = "\\\\" + on_disk_target[4:]
+                break
+        return on_disk_target.replace("\\", "/")
+    return on_disk_target
+
+
+def _submodule_link_violation(
+    link_path: Path,
+    rel_in_submodule: str,
+    submodule_root: Path,
+    locked_links: dict[str, str],
+    tree_error: str | None,
+) -> str | None:
+    """Why a symlink inside an initialized submodule is rejected, or None.
+
+    Accepted only when all hold: it is a true symbolic link (never a junction
+    or other reparse point), the locked submodule commit tracks it at this
+    exact path as mode 120000, its on-disk target is the tracked target, and
+    that target resolves to an existing path inside the submodule root.
+    """
+    if tree_error:
+        return f"symbolic link rejected — {tree_error}"
+    expected_blob = locked_links.get(rel_in_submodule)
+    if expected_blob is None:
+        return (
+            "symbolic link rejected — not tracked as a symlink in the locked "
+            "submodule commit"
+        )
+    try:
+        target = _git_link_target(os.readlink(link_path), os.sep)
+    except OSError as e:
+        return f"symbolic link rejected — cannot read link target: {e}"
+    actual_blob = _git_object_id(
+        "blob", os.fsencode(target), len(expected_blob)
+    )
+    if actual_blob != expected_blob:
+        return (
+            "symbolic link rejected — on-disk target differs from the locked "
+            "submodule commit"
+        )
+    # splitdrive catches Windows drive-relative targets such as "C:foo",
+    # which isabs reports as relative.
+    if (os.path.isabs(target) or os.path.splitdrive(target)[0]
+            or target.startswith(("/", "\\"))):
+        return "symbolic link rejected — absolute target"
+    lexical = os.path.normpath(os.path.join(os.path.dirname(link_path), target))
+    root_text = os.path.normpath(str(submodule_root))
+    try:
+        escapes = os.path.commonpath([root_text, lexical]) != root_text
+    except ValueError:
+        # Different drives (Windows) or a mix of absolute and relative paths.
+        escapes = True
+    if escapes:
+        return "symbolic link rejected — target escapes the submodule root"
+    try:
+        resolved = link_path.resolve(strict=True)
+        resolved.relative_to(submodule_root.resolve(strict=True))
+    except (OSError, RuntimeError):
+        return "symbolic link rejected — target does not resolve"
+    except ValueError:
+        return "symbolic link rejected — target escapes the submodule root"
+    return None
+
+
+def check_link_hygiene(
+    root: Path, result: CheckResult, submodules: dict[str, str]
+) -> None:
     """Reject any symlink or reparse point anywhere under ThirdParty/.
 
     A junction redirects a whole managed directory at content-read time while
     every tracked-path check still sees the in-repo name.  The walk is bounded
     in depth and entry count and never descends through a rejected entry.
+
+    `submodules` maps each verified submodule path to its locked commit.  Its
+    content is pinned by that gitlink, so an uninitialized submodule is simply
+    an empty directory here.  When it IS initialized, the only links accepted
+    are the ones the locked upstream commit itself tracks and that stay inside
+    the submodule; see _submodule_link_violation.  Initializing a submodule at
+    its pin therefore cannot change the verdict, while an untracked link, a
+    retargeted link, an escaping link, and any junction still fail.
     """
     base = root / AUTHORITATIVE_ROOT
     if not base.is_dir():
@@ -352,9 +667,13 @@ def check_link_hygiene(root: Path, result: CheckResult) -> None:
         return
 
     seen = 0
-    stack: list[tuple[Path, str, int]] = [(base, AUTHORITATIVE_ROOT, 0)]
+    link_trees: dict[str, tuple[dict[str, str], str | None]] = {}
+    # Each stack frame carries the submodule it is inside (or None).
+    stack: list[tuple[Path, str, int, str | None]] = [
+        (base, AUTHORITATIVE_ROOT, 0, None)
+    ]
     while stack:
-        current, current_rel, depth = stack.pop()
+        current, current_rel, depth, submodule = stack.pop()
         if depth >= MAX_WALK_DEPTH:
             result.error(
                 "bounds", current_rel,
@@ -376,6 +695,23 @@ def check_link_hygiene(root: Path, result: CheckResult) -> None:
                 )
             rel = f"{current_rel}/{entry.name}"
             reason = link_reason(Path(entry.path))
+            if reason and submodule is not None and reason == SYMLINK_REJECTED:
+                if submodule not in link_trees:
+                    link_trees[submodule] = _submodule_locked_links(
+                        root, submodule, submodules[submodule]
+                    )
+                locked_links, tree_error = link_trees[submodule]
+                reason = _submodule_link_violation(
+                    Path(entry.path),
+                    rel[len(submodule) + 1:],
+                    root / submodule,
+                    locked_links,
+                    tree_error,
+                )
+                if reason is None:
+                    # Accepted link: never descended, so its target is only
+                    # ever reached under its own in-submodule path.
+                    continue
             if reason:
                 result.error("link", rel, reason)
                 continue
@@ -387,7 +723,8 @@ def check_link_hygiene(root: Path, result: CheckResult) -> None:
                 result.error("inventory", rel, f"cannot stat entry: {e}")
                 continue
             if is_dir:
-                stack.append((Path(entry.path), rel, depth + 1))
+                inner = rel if submodule is None and rel in submodules else submodule
+                stack.append((Path(entry.path), rel, depth + 1, inner))
 
 
 # ── Path safety ───────────────────────────────────────────────────────
@@ -607,6 +944,460 @@ def validate_lockfile_schema(data: dict[str, Any]) -> None:
             if not isinstance(sha, str) or not SHA40_HEX_RE.match(sha):
                 _fatal(f"action_pins[{repo!r}]: invalid SHA: {sha!r}")
 
+    exception_errors = validate_exception_records(data.get("exceptions"))
+    if exception_errors:
+        _fatal(exception_errors[0])
+
+    _validate_license_policy_schema(data)
+    _validate_external_dependencies_schema(data)
+
+
+def _is_valid_exception_scope(scope: Any) -> bool:
+    if not isinstance(scope, str):
+        return False
+    if scope.startswith(VULNERABILITY_SCOPE_PREFIX):
+        package = scope[len(VULNERABILITY_SCOPE_PREFIX):]
+        return (0 < len(package) <= MAX_VULNERABILITY_PACKAGE_LENGTH and package == package.strip()
+                and package.isprintable())
+    return EXCEPTION_SCOPE_RE.fullmatch(scope) is not None
+
+
+def validate_exception_records(exceptions: Any) -> list[str]:
+    """Return schema errors for a reviewed-exception list; empty means valid.
+
+    This is the single definition of the exception record contract.  The
+    lockfile loader treats the first error as a checker failure, and the
+    release vulnerability gate (.github/scripts/verify_vulnerability_findings.py)
+    imports this function so both consumers accept exactly the same records.
+    Expiry against today's date is a separate policy check, not schema.
+    """
+    if not isinstance(exceptions, list):
+        return ["lockfile missing or invalid list field: exceptions"]
+    if len(exceptions) > MAX_EXCEPTIONS:
+        return [f"exception count exceeds MAX_EXCEPTIONS ({MAX_EXCEPTIONS})"]
+
+    errors: list[str] = []
+    # Reviewed-exception ids are unique across the lockfile, except that one
+    # advisory can affect several packages (zlib and zlib-ng, or one library
+    # cataloged under two names): vulnerability records are unique on their
+    # (id, scope) pair, so each affected package gets its own owned record.
+    other_ids: set[str] = set()
+    vulnerability_ids: set[str] = set()
+    vulnerability_keys: set[tuple[str, str]] = set()
+    for index, exception in enumerate(exceptions):
+        label = f"exceptions[{index}]"
+        if not isinstance(exception, dict):
+            errors.append(f"{label}: entry must be an object")
+            continue
+        missing = sorted(EXCEPTION_FIELDS - exception.keys())
+        unknown = sorted(exception.keys() - EXCEPTION_FIELDS)
+        if missing or unknown:
+            errors.append(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+            continue
+
+        exception_id = exception["id"]
+        id_valid = isinstance(exception_id, str) and EXCEPTION_ID_RE.fullmatch(exception_id) is not None
+        if not id_valid:
+            errors.append(f"{label}.id: invalid exception id: {exception_id!r}")
+
+        scope = exception["scope"]
+        scope_valid = _is_valid_exception_scope(scope)
+        if not scope_valid:
+            errors.append(f"{label}.scope: invalid exception scope: {scope!r}")
+
+        if id_valid and scope_valid:
+            normalized_id = exception_id.casefold()
+            is_vulnerability = scope.startswith(VULNERABILITY_SCOPE_PREFIX)
+            if is_vulnerability:
+                key = (normalized_id, scope.casefold())
+                duplicate = key in vulnerability_keys or normalized_id in other_ids
+                vulnerability_keys.add(key)
+                vulnerability_ids.add(normalized_id)
+            else:
+                duplicate = normalized_id in other_ids or normalized_id in vulnerability_ids
+                other_ids.add(normalized_id)
+            if duplicate:
+                errors.append(f"{label}: duplicate exception id: {exception_id!r} (scope {scope!r})")
+
+        owner = exception["owner"]
+        if (not isinstance(owner, str) or not owner.strip() or
+                owner.strip().casefold() in EXCEPTION_PLACEHOLDER_OWNERS):
+            errors.append(f"{label}.owner: exception must be owned by a named maintainer")
+        elif len(owner.strip()) > 128:
+            errors.append(f"{label}.owner: owner is too long")
+
+        justification = exception["justification"]
+        if not isinstance(justification, str) or len(justification.strip()) < 16:
+            errors.append(f"{label}.justification: justification must contain at least 16 characters")
+        elif len(justification) > 2048:
+            errors.append(f"{label}.justification: justification is too long")
+
+        expires = exception["expires"]
+        if not isinstance(expires, str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", expires):
+            errors.append(f"{label}.expires: expected an ISO date YYYY-MM-DD")
+        else:
+            try:
+                date.fromisoformat(expires)
+            except ValueError:
+                errors.append(f"{label}.expires: invalid ISO date: {expires!r}")
+    return errors
+
+
+def _validate_license_policy_schema(data: dict[str, Any]) -> None:
+    """Shape of the optional reviewed SPDX mapping.  Absent means empty."""
+    if "license_policy" not in data:
+        return
+    policy = data["license_policy"]
+    if not isinstance(policy, dict):
+        _fatal("license_policy must be an object")
+    unknown = sorted(policy.keys() - LICENSE_POLICY_KEYS)
+    missing = sorted(LICENSE_POLICY_KEYS - policy.keys())
+    if unknown or missing:
+        _fatal(
+            f"license_policy: invalid fields; missing={missing}, unknown={unknown} "
+            "(the SPDX allow-list is defined by the checker, not the lockfile)"
+        )
+    records = policy["dependencies"]
+    if not isinstance(records, dict):
+        _fatal("license_policy.dependencies must be an object")
+    if len(records) > MAX_MANIFEST_ENTRIES:
+        _fatal(f"license_policy.dependencies exceeds MAX_MANIFEST_ENTRIES ({MAX_MANIFEST_ENTRIES})")
+    for name, record in records.items():
+        label = f"license_policy.dependencies[{name!r}]"
+        if not isinstance(name, str) or not name.strip() or len(name) > 256:
+            _fatal(f"{label}: invalid dependency name")
+        if not isinstance(record, dict):
+            _fatal(f"{label}: entry must be an object")
+        unknown = sorted(record.keys() - LICENSE_POLICY_RECORD_FIELDS - LICENSE_POLICY_IDENTITY_FIELDS)
+        missing = sorted(LICENSE_POLICY_RECORD_FIELDS - record.keys())
+        if unknown or missing:
+            _fatal(f"{label}: invalid fields; missing={missing}, unknown={unknown}")
+        for key, limit in (("declared", MAX_LICENSE_DECLARATION_CHARS),
+                           ("spdx", MAX_SPDX_EXPRESSION_CHARS)):
+            value = record[key]
+            if not isinstance(value, str) or not value.strip() or len(value) > limit:
+                _fatal(f"{label}.{key}: expected a non-empty string of at most {limit} characters")
+        _validate_vulnerability_identity(label, record)
+
+
+def _validate_vulnerability_identity(label: str, record: dict[str, Any]) -> None:
+    """Shape of the optional upstream-version and CPE fields of one record."""
+    for key in ("upstream_version_source", "cpe_unavailable_reason"):
+        value = record.get(key)
+        if value is not None and (not isinstance(value, str) or not 16 <= len(value.strip()) <= 512):
+            _fatal(f"{label}.{key}: expected a reviewed explanation of 16 to 512 characters")
+    version = record.get("upstream_version")
+    match = UPSTREAM_VERSION_RE.fullmatch(version) if isinstance(version, str) else None
+    if version is not None and match is None:
+        _fatal(f"{label}.upstream_version: expected a release version such as 2.32.0 or 2.32.0+231, got {version!r}")
+    tag_commit = record.get("upstream_tag_commit")
+    if tag_commit is not None and (not isinstance(tag_commit, str) or not SHA40_HEX_RE.match(tag_commit)):
+        _fatal(f"{label}.upstream_tag_commit: expected a 40-character lowercase commit SHA")
+    evidence = [key for key in ("upstream_tag_commit", "upstream_version_source") if key in record]
+    if version is None and evidence:
+        _fatal(f"{label}: {evidence[0]} needs an upstream_version")
+    if len(evidence) > 1:
+        _fatal(f"{label}: give upstream_tag_commit or upstream_version_source, not both")
+
+    has_cpe, has_reason = "cpe" in record, "cpe_unavailable_reason" in record
+    if has_cpe and has_reason:
+        _fatal(f"{label}: give cpe or cpe_unavailable_reason, not both")
+    if has_cpe:
+        cpe = record["cpe"]
+        if not isinstance(cpe, str) or not CPE23_APPLICATION_RE.fullmatch(cpe):
+            _fatal(f"{label}.cpe: expected a CPE 2.3 application name (cpe:2.3:a:vendor:product:version:...)")
+        if match is None:
+            _fatal(f"{label}.cpe: a CPE needs the upstream_version it names")
+        if cpe.split(":")[5] != match.group("release"):
+            _fatal(f"{label}.cpe: version {cpe.split(':')[5]!r} is not the upstream release {match.group('release')!r}")
+
+
+def _external_string_list(label: str, value: Any) -> list[str]:
+    if (not isinstance(value, list) or not value
+            or not all(isinstance(item, str) and item for item in value)):
+        _fatal(f"{label}: expected a non-empty list of strings")
+    return value
+
+
+def _validate_external_dependencies_schema(data: dict[str, Any]) -> None:
+    """Shape of the declared dependencies outside ThirdParty/.  Absent means empty.
+
+    Names, identifiers, URLs, and paths are each unique without regard to
+    case, so two records can never split or shadow one dependency.
+    """
+    if "external_dependencies" not in data:
+        return
+    records = data["external_dependencies"]
+    if not isinstance(records, list):
+        _fatal("external_dependencies must be a list")
+    if len(records) > MAX_EXTERNAL_RECORDS:
+        _fatal(f"external_dependencies exceeds MAX_EXTERNAL_RECORDS ({MAX_EXTERNAL_RECORDS})")
+    seen: dict[str, str] = {}
+
+    def claim(kind: str, value: str, label: str) -> None:
+        key = f"{kind}\0{value.casefold()}"
+        if key in seen:
+            _fatal(f"{label}: {kind} {value!r} collides with {seen[key]} (compared without case)")
+        seen[key] = label
+
+    for index, record in enumerate(records):
+        label = f"external_dependencies[{index}]"
+        if not isinstance(record, dict):
+            _fatal(f"{label}: entry must be an object")
+        kind = record.get("class")
+        if kind not in EXTERNAL_CLASS_FIELDS:
+            _fatal(f"{label}.class: expected one of {sorted(EXTERNAL_CLASS_FIELDS)}, got {kind!r}")
+        expected = EXTERNAL_COMMON_FIELDS | EXTERNAL_CLASS_FIELDS[kind]
+        missing, unknown = sorted(expected - record.keys()), sorted(record.keys() - expected)
+        if missing or unknown:
+            _fatal(f"{label}: invalid fields for class {kind!r}; missing={missing}, unknown={unknown}")
+
+        name = record["name"]
+        if not isinstance(name, str) or not name.strip() or len(name) > 256:
+            _fatal(f"{label}.name: expected a non-empty name of at most 256 characters")
+        claim("name", name, label)
+        owner = record["owner"]
+        if (not isinstance(owner, str) or not owner.strip()
+                or owner.strip().casefold() in EXCEPTION_PLACEHOLDER_OWNERS or len(owner) > 128):
+            _fatal(f"{label}.owner: a declared dependency must be owned by a named maintainer")
+        justification = record["justification"]
+        if not isinstance(justification, str) or not 16 <= len(justification.strip()) <= 2048:
+            _fatal(f"{label}.justification: expected 16 to 2048 characters")
+        license_spdx = record["license_spdx"]
+        if not (license_spdx == "NOASSERTION" and kind in NOASSERTION_CLASSES):
+            try:
+                identifiers = parse_spdx_expression(license_spdx)
+            except ValueError as exc:
+                _fatal(f"{label}.license_spdx: {license_spdx!r} is not an SPDX expression ({exc})")
+            if {"NOASSERTION", "NONE"} & set(identifiers):
+                _fatal(f"{label}.license_spdx: class {kind!r} ships or loads code and needs an identified license")
+
+        if kind in EXTERNAL_IDENTIFIER_NAMESPACES:
+            for identifier in _external_string_list(f"{label}.identifiers", record["identifiers"]):
+                match = EXTERNAL_IDENTIFIER_RE.fullmatch(identifier)
+                if not match or match.group("ns") not in EXTERNAL_IDENTIFIER_NAMESPACES[kind]:
+                    _fatal(
+                        f"{label}.identifiers: {identifier!r} is not <namespace>:<name> with a "
+                        f"namespace in {sorted(EXTERNAL_IDENTIFIER_NAMESPACES[kind])}"
+                    )
+                claim("identifier", identifier, label)
+        elif kind == "web_runtime":
+            url, sri = record["url"], record["sri"]
+            if (not isinstance(url, str) or not url.startswith("https://")
+                    or not PINNED_WEB_VERSION_RE.search(url) or any(c.isspace() for c in url)):
+                _fatal(f"{label}.url: expected an https URL naming an exact version (name@1.2.3/), got {url!r}")
+            if not isinstance(sri, str) or not SRI_RE.fullmatch(sri):
+                _fatal(f"{label}.sri: expected a sha384-/sha512- subresource-integrity value")
+            claim("url", url, label)
+        elif kind == "downloads":
+            for field_name in ("path", "pin_path"):
+                path = record[field_name]
+                if not isinstance(path, str) or validate_repo_relative_path(path) or _under_root(path, AUTHORITATIVE_ROOT):
+                    _fatal(f"{label}.{field_name}: expected a tracked path outside ThirdParty/")
+            command = record["command"]
+            if not isinstance(command, str) or not command.strip() or len(command) > 1024 or "\n" in command:
+                _fatal(f"{label}.command: expected one bounded, normalized command")
+            claim("download-command", f"{record['path']}:{command}", label)
+            output = record["output"]
+            if not isinstance(output, str) or not output or len(output) > 256 or any(char.isspace() for char in output):
+                _fatal(f"{label}.output: expected a bounded destination name or variable")
+            for field_name in ("url", "source_url"):
+                url = record[field_name]
+                if (not isinstance(url, str) or not url.startswith("https://") or len(url) > 1024
+                        or any(char.isspace() for char in url) or MUTABLE_DOWNLOAD_URL_RE.search(url)):
+                    _fatal(f"{label}.{field_name}: expected an immutable https URL, got {url!r}")
+            if not isinstance(record["sha256"], str) or not SHA256_HEX_RE.fullmatch(record["sha256"]):
+                _fatal(f"{label}.sha256: expected lowercase SHA-256")
+            if record["verification"] not in DOWNLOAD_VERIFICATIONS:
+                _fatal(f"{label}.verification: expected one of {sorted(DOWNLOAD_VERIFICATIONS)}")
+        else:
+            for path in _external_string_list(f"{label}.paths", record["paths"]):
+                err = validate_repo_relative_path(path.removesuffix("/"))
+                if err or _under_root(path, AUTHORITATIVE_ROOT):
+                    _fatal(f"{label}.paths: {path!r}: {err or 'ThirdParty/ is governed by its own containers'}")
+                claim("path", path, label)
+
+
+def _under_root(path: str, root: str) -> bool:
+    return path == root or path.startswith(root + "/")
+
+
+def parse_spdx_expression(expression: str) -> list[str]:
+    """Parse an SPDX license expression; return its identifiers in order.
+
+    Supported grammar (a deliberate subset of SPDX 2.3 Annex D):
+
+        expr := term ("OR" term)*
+        term := atom ("AND" atom)*
+        atom := "(" expr ")" | license-id
+
+    ``WITH`` exception clauses are rejected rather than half-understood: an
+    exception changes what the license permits, and no dependency needs one
+    today.  Anything that is not exactly this grammar -- prose, lowercase
+    operators, dangling operators, juxtaposed identifiers -- raises ValueError.
+    """
+    if not isinstance(expression, str):
+        raise ValueError("license expression must be a string")
+    if len(expression) > MAX_SPDX_EXPRESSION_CHARS:
+        raise ValueError(
+            f"license expression exceeds {MAX_SPDX_EXPRESSION_CHARS} characters"
+        )
+    tokens = re.findall(r"\(|\)|[^\s()]+", expression)
+    if not tokens:
+        raise ValueError("license expression is empty")
+
+    leaves: list[str] = []
+    position = 0
+
+    def peek() -> str | None:
+        return tokens[position] if position < len(tokens) else None
+
+    def take() -> str:
+        nonlocal position
+        token = tokens[position]
+        position += 1
+        return token
+
+    def atom(depth: int) -> None:
+        if depth > MAX_JSON_DEPTH:
+            raise ValueError("license expression nests too deeply")
+        token = peek()
+        if token is None:
+            raise ValueError("license expression ends where a license was expected")
+        if token == "(":
+            take()
+            expr(depth + 1)
+            if peek() != ")":
+                raise ValueError("unbalanced parenthesis in license expression")
+            take()
+            return
+        if token == "WITH":
+            raise ValueError("WITH exception clauses are not supported by this policy")
+        if token in SPDX_OPERATORS or token == ")":
+            raise ValueError(f"unexpected {token!r} where a license was expected")
+        if not SPDX_ID_RE.fullmatch(token):
+            raise ValueError(f"{token!r} is not an SPDX license identifier")
+        leaves.append(take())
+
+    def term(depth: int) -> None:
+        atom(depth)
+        while peek() == "AND":
+            take()
+            atom(depth)
+
+    def expr(depth: int) -> None:
+        term(depth)
+        while peek() == "OR":
+            take()
+            term(depth)
+
+    expr(0)
+    if position != len(tokens):
+        token = tokens[position]
+        if token == "WITH":
+            raise ValueError("WITH exception clauses are not supported by this policy")
+        raise ValueError(f"unexpected {token!r} after a complete license expression")
+    return leaves
+
+
+def check_license_policy(
+    lockfile: dict[str, Any],
+    entries: list[list[str]],
+    result: CheckResult,
+) -> list[dict[str, str]]:
+    """Resolve every dependency to an SPDX expression on the allow-list.
+
+    Resolution order: a reviewed ``license_policy.dependencies`` record for the
+    dependency name, which must pin the manifest's declared license string
+    exactly; otherwise the manifest's license field itself, which must then be
+    a well-formed SPDX expression.  Returns the resolved inventory sorted by
+    dependency name so the machine-readable output is deterministic.
+    """
+    records = lockfile.get("license_policy", {}).get("dependencies", {})
+    resolved: dict[str, str] = {}
+    seen: set[str] = set()
+
+    for fields in entries:
+        if len(fields) != MANIFEST_FIELD_COUNT:
+            continue  # reported by manifest reconciliation
+        name = fields[F_NAME].strip()
+        declared = fields[F_LICENSE].strip()
+        if not name or name in seen or not declared:
+            continue  # reported by manifest reconciliation
+        seen.add(name)
+
+        record = records.get(name)
+        if record is not None:
+            if record["declared"] != declared:
+                result.error(
+                    "license", f"{LOCKFILE_REL}:license_policy.dependencies[{name!r}]",
+                    f"dependency {name!r} declared license changed from "
+                    f"{record['declared']!r} to {declared!r} in {MANIFEST_REL}; "
+                    "re-review the SPDX mapping against the license text",
+                )
+                continue
+            expression = record["spdx"]
+            origin = f"{LOCKFILE_REL}:license_policy.dependencies[{name!r}].spdx"
+        else:
+            expression = declared
+            origin = f"{MANIFEST_REL}:{name}"
+
+        try:
+            identifiers = parse_spdx_expression(expression)
+        except ValueError as exc:
+            hint = (
+                "" if record is not None else
+                f"; record a reviewed SPDX mapping under license_policy in {LOCKFILE_REL}"
+            )
+            result.error(
+                "license", origin,
+                f"dependency {name!r} license {expression!r} is not an SPDX "
+                f"expression ({exc}){hint}",
+            )
+            continue
+
+        rejected = [i for i in identifiers if i not in ALLOWED_SPDX_LICENSES]
+        if rejected:
+            result.error(
+                "license", origin,
+                f"dependency {name!r} license {', '.join(repr(i) for i in rejected)} "
+                f"is not on the license allow-list "
+                f"({', '.join(sorted(ALLOWED_SPDX_LICENSES))})",
+            )
+            continue
+        resolved[name] = expression
+
+    for name in sorted(records):
+        if name not in seen:
+            result.error(
+                "license", f"{LOCKFILE_REL}:license_policy.dependencies[{name!r}]",
+                f"license mapping for {name!r} has no dependencies.lock entry — "
+                "remove the stale mapping",
+            )
+
+    return [{"name": name, "spdx": resolved[name]} for name in sorted(resolved)]
+
+
+def check_exception_expiry(lockfile: dict[str, Any], result: CheckResult) -> None:
+    # UTC, the same day boundary the release vulnerability gate applies.
+    today = datetime.now(timezone.utc).date()
+    latest = today + timedelta(days=MAX_EXCEPTION_HORIZON_DAYS)
+    for index, exception in enumerate(lockfile["exceptions"]):
+        expiry = date.fromisoformat(exception["expires"])
+        if expiry < today:
+            result.error(
+                "exception",
+                f"{LOCKFILE_REL}:exceptions[{index}]",
+                f"exception {exception['id']!r} expired on {exception['expires']}",
+            )
+        elif expiry > latest:
+            result.error(
+                "exception",
+                f"{LOCKFILE_REL}:exceptions[{index}]",
+                f"exception {exception['id']!r} expires beyond the "
+                f"{MAX_EXCEPTION_HORIZON_DAYS}-day maximum on {exception['expires']}",
+            )
+
 
 # ── Container model ───────────────────────────────────────────────────
 
@@ -665,6 +1456,31 @@ def check_container_model(lockfile: dict[str, Any], result: CheckResult) -> None
                 "aliases verify on case-insensitive filesystems only",
             )
         lowered.setdefault(key, path)
+
+
+def check_allowed_root_files(lockfile: dict[str, Any], result: CheckResult) -> None:
+    """Keep the payload-coverage exception limited to governance metadata."""
+    allowed = lockfile["allowed_root_files"]
+    listed = set(allowed)
+    unexpected = sorted(listed - APPROVED_ROOT_FILES)
+    missing = sorted(APPROVED_ROOT_FILES - listed)
+    duplicate_count = len(allowed) - len(listed)
+    if not unexpected and not missing and duplicate_count == 0:
+        return
+
+    details: list[str] = []
+    if unexpected:
+        details.append(f"unexpected={unexpected}")
+    if missing:
+        details.append(f"missing={missing}")
+    if duplicate_count:
+        details.append(f"duplicate_entries={duplicate_count}")
+    result.error(
+        "inventory",
+        LOCKFILE_REL,
+        "allowed_root_files must exactly match the approved governance files "
+        f"({'; '.join(details)})",
+    )
 
 
 # ── Check: complete tracked inventory and tree digests ────────────────
@@ -1021,6 +1837,20 @@ def _load_yaml_module() -> Any:
     return yaml
 
 
+def _iter_key(node: Any, wanted: str, trail: str = "") -> Iterable[tuple[str, Any]]:
+    """Yield every value of mapping key ``wanted`` anywhere in a parsed document."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{trail}.{key}" if trail else str(key)
+            if key == wanted:
+                yield child, value
+            else:
+                yield from _iter_key(value, wanted, child)
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _iter_key(value, wanted, f"{trail}[{index}]")
+
+
 def _iter_uses(node: Any, trail: str = "") -> Iterable[tuple[str, Any]]:
     """Yield every `uses` value anywhere in a parsed workflow document.
 
@@ -1030,16 +1860,7 @@ def _iter_uses(node: Any, trail: str = "") -> Iterable[tuple[str, Any]]:
     that merely looks like `uses:` inside a `run:` script is a string value,
     never a mapping key, so it is correctly ignored.
     """
-    if isinstance(node, dict):
-        for key, value in node.items():
-            child = f"{trail}.{key}" if trail else str(key)
-            if key == "uses":
-                yield child, value
-            else:
-                yield from _iter_uses(value, child)
-    elif isinstance(node, list):
-        for index, value in enumerate(node):
-            yield from _iter_uses(value, f"{trail}[{index}]")
+    return _iter_key(node, "uses", trail)
 
 
 def _workflow_and_action_files(root: Path) -> list[str]:
@@ -1087,7 +1908,10 @@ def check_action_pins(
         return
 
     pins: dict[str, list[str]] = lockfile["action_pins"]
-    observed: set[str] = set()
+    # (owner/repo, sha) pairs actually used.  The lockfile must equal this set
+    # exactly: a dormant recorded SHA would let a later repin land without the
+    # lockfile diff that forces a reviewer to look at the new identity.
+    observed: set[tuple[str, str]] = set()
 
     for rel in files:
         filepath = root / rel
@@ -1111,11 +1935,22 @@ def check_action_pins(
             for trail, value in _iter_uses(document):
                 _check_one_use(root, rel, trail, value, pins, observed, result)
 
-    for repo in sorted(set(pins) - observed):
-        result.warn(
-            "actions", LOCKFILE_REL,
-            f"action_pins entry {repo!r} is not referenced by any workflow",
-        )
+    observed_repos = {repo for repo, _ in observed}
+    for repo in sorted(pins):
+        if repo not in observed_repos:
+            result.error(
+                "actions", LOCKFILE_REL,
+                f"action_pins entry {repo!r} is not referenced by any workflow — "
+                "remove it (run --update) so a later adoption shows up as a lockfile diff",
+            )
+            continue
+        for sha in sorted(set(pins[repo])):
+            if (repo, sha) not in observed:
+                result.error(
+                    "actions", LOCKFILE_REL,
+                    f"action_pins entry {repo!r} records dormant SHA {sha} that no workflow uses — "
+                    "remove it (run --update) so a later repin shows up as a lockfile diff",
+                )
 
 
 def _check_one_use(
@@ -1124,7 +1959,7 @@ def _check_one_use(
     trail: str,
     value: Any,
     pins: dict[str, list[str]],
-    observed: set[str],
+    observed: set[tuple[str, str]],
     result: CheckResult,
 ) -> None:
     where = f"{rel}:{trail}"
@@ -1165,7 +2000,7 @@ def _check_one_use(
 
     repo = match.group("repo")
     sha = match.group("sha")
-    observed.add(repo)
+    observed.add((repo, sha))
     allowed = pins.get(repo)
     if allowed is None:
         result.error(
@@ -1289,7 +2124,7 @@ def check_gitmodules_consistency(
 
 # ── Check: dependencies.lock reconciliation ───────────────────────────
 
-def export_manifest_entries(root: Path) -> list[list[str]]:
+def export_manifest_entries(root: Path, root_resolved: Path) -> list[list[str]]:
     """Read the manifest through CMake, the parser that actually evaluates it.
 
     A text scrape sees neither `list(APPEND ...)` after the closing paren, nor
@@ -1305,8 +2140,9 @@ def export_manifest_entries(root: Path) -> list[list[str]]:
         )
 
     manifest = root / MANIFEST_REL
-    if not manifest.is_file():
-        _fatal(f"{MANIFEST_REL} not found")
+    file_err = assert_regular_file_no_escape(manifest, root_resolved)
+    if file_err:
+        _fatal(f"{MANIFEST_REL}: {file_err}")
     _bounded_size(manifest, MAX_MANIFEST_BYTES, "dependency manifest")
 
     handle, out_path = tempfile.mkstemp(prefix="spark-tp-entries-", suffix=".txt")
@@ -1593,6 +2429,727 @@ def _check_manifest_fields(
             )
 
 
+# ── Check: dependencies outside ThirdParty/ ───────────────────────────
+# Every scan reads the Git index, like the ThirdParty inventory: the tracked
+# set is what a checkout builds, identical on every machine.
+
+def git_tracked_paths(root: Path) -> list[str]:
+    try:
+        raw = _git_raw(["-c", "core.quotePath=false", "ls-files", "-z"], root)
+    except RuntimeError as e:
+        _fatal(f"cannot enumerate tracked paths: {e}")
+    paths = _split_nul(raw)
+    if len(paths) > MAX_TRACKED_PATHS:
+        _fatal(f"tracked path count {len(paths)} exceeds MAX_TRACKED_PATHS ({MAX_TRACKED_PATHS})")
+    return sorted(paths)
+
+
+def _git_index_texts(root: Path, paths: list[str]) -> dict[str, str]:
+    """Index content of ``paths`` as UTF-8 text, read in one ``git cat-file`` call."""
+    if not paths:
+        return {}
+    request = "".join(f":{path}\n" for path in paths).encode("utf-8")
+    try:
+        done = subprocess.run(
+            ["git", "cat-file", "--batch"], input=request,
+            capture_output=True, cwd=str(root), timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _fatal(f"git cat-file --batch: {e}")
+    if done.returncode != 0:
+        _fatal(f"git cat-file --batch exited {done.returncode}: {done.stderr.decode(errors='replace')}")
+    out, position, texts = done.stdout, 0, {}
+    for path in paths:
+        header_end = out.index(b"\n", position)
+        header = out[position:header_end].decode("utf-8", errors="replace").split()
+        if len(header) != 3 or header[1] != "blob":
+            _fatal(f"cannot read index blob for {path}: {' '.join(header)}")
+        size = int(header[2])
+        if size > MAX_SCANNED_SOURCE_BYTES:
+            _fatal(f"{path} is {size} bytes, exceeding the {MAX_SCANNED_SOURCE_BYTES}-byte scan limit")
+        body = out[header_end + 1:header_end + 1 + size]
+        position = header_end + 1 + size + 1
+        try:
+            texts[path] = body.decode("utf-8")
+        except UnicodeDecodeError as e:
+            _fatal(f"{path} is not valid UTF-8: {e}")
+    return texts
+
+
+def _external_records(lockfile: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    return [r for r in lockfile.get("external_dependencies", []) if r["class"] == kind]
+
+
+def _api_url_is_github_api(source: str) -> bool:
+    """Every static assignment of `api_url` starts at the GitHub API origin or extends itself.
+
+    A mention of the API anywhere in the file (a comment, another variable) is not
+    evidence about where `$api_url` points, so only the assignments count.
+    """
+    values = [match.group(2) for match in API_URL_ASSIGNMENT_RE.finditer(source)]
+    return bool(values) and all(
+        value.startswith((GITHUB_API_ORIGIN, "$api_url/", "${api_url}/")) for value in values)
+
+
+def _raw_download_commands(text: str, *, cmake: bool = False) -> list[str]:
+    """Return normalized artifact-fetch calls, including shell line continuations."""
+    if cmake:
+        source = _strip_cmake_comments(text)
+        pattern = re.compile(r"\b(?:file\s*\(\s*DOWNLOAD|FetchContent_Declare\s*\(|ExternalProject_Add\s*\()"
+                             r"[^)]*\)", re.IGNORECASE | re.DOTALL)
+        return [" ".join(match.group().split()) for match in pattern.finditer(source)]
+    else:
+        source = re.sub(r"\\\r?\n\s*", " ", text)
+        pattern = re.compile(r"(?<![\w\"'])\b(?:curl|wget|Invoke-WebRequest|iwr)\b(?![\"'])", re.IGNORECASE)
+    commands = []
+    for line in source.splitlines():
+        stripped = line.strip()
+        # A package-manager install that merely names a fetch tool as a package
+        # (`apt-get install -y curl`) is not a download; drop that segment before
+        # matching, so a fetch chained after it with ; && || | still counts.
+        scanned = PACKAGE_INSTALL_SEGMENT_RE.sub(" ", stripped) if not cmake else stripped
+        if not stripped or stripped.startswith(("#", "\"", "'")) or not pattern.search(scanned):
+            continue
+        if "GITHUB_API_URL" in stripped or "$api_url" in stripped:
+            # The publication workflows fetch GitHub API JSON, then validate its
+            # fields. These responses are not executable third-party inputs.
+            if ("application/vnd.github+json" in stripped and
+                    ("GITHUB_API_URL" in stripped or _api_url_is_github_api(source))):
+                continue
+        commands.append(" ".join(stripped.split()))
+    return commands
+
+
+def _resolved_download_url(template: str, source: str) -> set[str]:
+    """Resolve only static shell/PowerShell variables used in reviewed URL pins."""
+    token = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$env:([A-Za-z_][A-Za-z0-9_]*)|"
+                       r"\$([A-Za-z_][A-Za-z0-9_]*)", re.IGNORECASE)
+
+    def lookup(name: str, depth: int, anchor: int) -> str:
+        if depth > 6:
+            raise ValueError(f"download URL variable {name} is recursive")
+        escaped = re.escape(name)
+        expressions = (
+            rf"(?m)^\s*{escaped}:\s*([^#\r\n]+)",
+            rf"(?m)^\s*(?:local\s+)?{escaped}=(?:\"([^\"]*)\"|'([^']*)'|([^\s#]+))",
+            rf"(?m)^\s*\${escaped}\s*=\s*\"([^\"]*)\"",
+        )
+        values: list[tuple[int, str]] = []
+        for expression in expressions:
+            for match in re.finditer(expression, source, re.IGNORECASE):
+                if match.start() >= anchor:
+                    continue
+                value = next(group for group in match.groups() if group is not None).strip().strip("\"'")
+                values.append((match.start(), value))
+        if not values:
+            raise ValueError(f"download URL variable {name} has no preceding static value")
+        return expand(max(values)[1], depth + 1, anchor)
+
+    def expand(value: str, depth: int, anchor: int) -> str:
+        return token.sub(lambda match: lookup(next(part for part in match.groups() if part), depth, anchor), value)
+
+    return {expand(template, 0, match.start()) for match in re.finditer(re.escape(template), source)}
+
+
+def _artifact_name(value: str) -> str:
+    value = value.strip("\"';")
+    match = re.fullmatch(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", value)
+    return match.group(1) if match else value
+
+
+def _command_output(command: str) -> str | None:
+    if re.match(r"^(?:FetchContent_Declare|ExternalProject_Add)\s*\(", command, re.IGNORECASE):
+        return "cmake-managed"
+    patterns = (
+        r"\bfile\s*\(\s*DOWNLOAD\s+\S+\s+(\S+)",
+        r"\bInvoke-WebRequest\b[^\n]*?-OutFile\s+(\S+)",
+        # Flags are case-sensitive (wget -o names its log, curl -O keeps the remote
+        # name), and a short-flag cluster starts with one dash (not --proto).
+        r"\bwget\b[^\n]*?(?-i:-O)\s+(\S+)",
+        r"\bcurl\b[^\n]*?(?:--output|(?<![\w-])(?-i:-[A-Za-z]*o))\s+(\S+)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, command, re.IGNORECASE)
+        if match:
+            return _artifact_name(match.group(1))
+    return None
+
+
+def _hash_reference_matches(reference: str, source: str, sha256: str) -> bool:
+    reference = reference.strip("\"'")
+    if reference.startswith("${") and reference.endswith("}"):
+        reference = "$" + reference[2:-1]
+    if reference == sha256:
+        return True
+    match = re.fullmatch(r"\$(?:env:)?([A-Za-z_][A-Za-z0-9_]*)", reference, re.IGNORECASE)
+    if not match:
+        return False
+    name = re.escape(match.group(1))
+    return any(re.search(pattern, source, re.IGNORECASE) for pattern in (
+        rf"(?m)^\s*{name}:\s*[\"']?{sha256}[\"']?\s*$",
+        rf"(?m)^\s*(?:local\s+)?{name}=[\"']?{sha256}[\"']?\s*$",
+        rf"(?m)^\s*\${name}\s*=\s*[\"']{sha256}[\"']\s*$",
+    ))
+
+
+def _url_consumed(command: str, context: str, record: dict[str, Any], pin_text: str) -> bool:
+    source_url = record["source_url"]
+    literal_urls = re.findall(r"https?://[^\s\"']+", command)
+    if literal_urls:
+        return literal_urls == [source_url]
+    if record["verification"] == "cmake-sha256":
+        if '"${url}"' not in command:
+            return False
+        calls = re.findall(r"\bspark_fetch_verified_directxmath\s*\((.*?)\)", pin_text,
+                           re.IGNORECASE | re.DOTALL)
+        if not calls:
+            return False
+        args = [re.findall(r'"([^"]+)"', body) for body in calls]
+        return all(len(parts) >= 3 and parts[1:3] == [record["url"], record["sha256"]] for parts in args)
+    # Otherwise the command passes a variable whose latest static assignment
+    # before the call is the locked URL expression (`url=...`, `$url = "..."`,
+    # `DXVK_URL="..."`). Search the text the way commands were extracted
+    # (continuations joined, whitespace collapsed) so a wrapped call is found.
+    joined = re.sub(r"\\\r?\n\s*", " ", context)
+    normalized = "\n".join(" ".join(line.split()) for line in joined.splitlines())
+    position = normalized.find(command)
+    if position < 0:
+        return False
+    prefix = normalized[:position]
+    for name in dict.fromkeys(re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", command)):
+        assignments = list(re.finditer(
+            rf"(?m)^\s*(?:local\s+)?\$?{re.escape(name)}\s*=\s*[\"']([^\"']+)[\"']", prefix, re.IGNORECASE))
+        if assignments and assignments[-1].group(1) == source_url:
+            return True
+    return False
+
+
+def _download_verified(context: str, record: dict[str, Any], pin_text: str) -> bool:
+    output = record["output"]
+    if _command_output(record["command"]) != output:
+        return False
+    verification = record["verification"]
+    if verification.startswith("cmake-"):
+        context = _strip_cmake_comments(context)
+    else:
+        context = "\n".join(line for line in context.splitlines() if not line.lstrip().startswith("#"))
+    if verification == "cmake-expected-hash":
+        return re.search(rf"\bEXPECTED_HASH\s+SHA256={re.escape(record['sha256'])}\b",
+                         record["command"], re.IGNORECASE) is not None
+    if verification == "cmake-url-hash":
+        return (output == "cmake-managed" and re.search(
+            rf"\bURL_HASH\s+SHA256={re.escape(record['sha256'])}\b", record["command"], re.IGNORECASE
+        ) is not None)
+    if verification == "sha256sum":
+        for line in context.splitlines():
+            if not SHA256SUM_STDIN_CHECK_RE.search(line):
+                continue
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", output):
+                target_found = re.search(rf"\$(?:\{{{re.escape(output)}\}}|{re.escape(output)}\b)", line) is not None
+            else:
+                target_found = re.search(rf"(?<![\w./-]){re.escape(output)}(?![\w./-])", line) is not None
+            if not target_found:
+                continue
+            references = re.findall(r"\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|[0-9a-f]{64}", line)
+            if any(_hash_reference_matches(reference, pin_text, record["sha256"]) for reference in references):
+                return True
+        return False
+    if verification == "get-file-hash":
+        hash_line = re.search(r"(?m)^\s*\$(\w+)\s*=\s*\(Get-FileHash\s+-Algorithm\s+SHA256\s+"
+                              r"-Path\s+([^\s)]+)\).*?$", context, re.IGNORECASE)
+        if not hash_line or _artifact_name(hash_line.group(2)) != output:
+            return False
+        comparison = re.search(rf"\bif\s*\(\s*\${re.escape(hash_line.group(1))}\s+-ne\s+([^\s)]+)\s*\)"
+                               r"\s*\{\s*throw\b", context, re.IGNORECASE)
+        return bool(comparison) and _hash_reference_matches(comparison.group(1), pin_text, record["sha256"])
+    hashes = re.finditer(r"\bfile\s*\(\s*SHA256\s+(\S+)\s+(\w+)\s*\)", context, re.IGNORECASE)
+    hash_line = next((match for match in hashes if _artifact_name(match.group(1)) == output), None)
+    if not hash_line:
+        return False
+    return (re.search(rf"\bif\s*\(\s*NOT\s+{re.escape(hash_line.group(2))}\s+STREQUAL\s+_expected\s*\)",
+                      context, re.IGNORECASE) is not None and "FATAL_ERROR" in context
+            and "expected_sha256" in context)
+
+
+def check_raw_downloads(
+    root: Path, root_resolved: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> set[str]:
+    """Require each executable artifact fetch to match a reviewed URL and hash."""
+    yaml = _load_yaml_module()
+    tracked_set = set(tracked)
+    workflow_set = set(_workflow_and_action_files(root))
+    selected = [path for path in tracked if not _under_root(path, AUTHORITATIVE_ROOT)
+                and (path in workflow_set or path.endswith((".sh", ".ps1"))
+                     or CMAKE_PACKAGE_FILE_RE.search(path))]
+    texts: dict[str, str] = {}
+    observed: list[tuple[str, str, str]] = []
+    for path in selected:
+        reason = assert_regular_file_no_escape(root / path, root_resolved)
+        if reason:
+            result.error("download", path, f"cannot scan tracked source: {reason}")
+            continue
+        _bounded_size(root / path, MAX_SCANNED_SOURCE_BYTES, f"download source {path}")
+        try:
+            source = (root / path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            result.error("download", path, f"cannot decode tracked source: {error}")
+            continue
+        texts[path] = source
+        if path in workflow_set:
+            try:
+                for document in yaml.safe_load_all(source):
+                    for _, script in _iter_key(document, "run"):
+                        if isinstance(script, str):
+                            observed.extend((path, call, script) for call in _raw_download_commands(script))
+            except yaml.YAMLError as error:
+                result.error("download", path, f"cannot parse workflow YAML: {error}")
+        elif CMAKE_PACKAGE_FILE_RE.search(path):
+            observed.extend((path, call, source) for call in _raw_download_commands(source, cmake=True))
+        else:
+            observed.extend((path, call, source) for call in _raw_download_commands(source))
+
+    declared = {(record["path"], record["command"]): record
+                for record in _external_records(lockfile, "downloads")}
+    exception_keys = {(record["scope"], record["id"]): record for record in lockfile["exceptions"]
+                      if record["id"].startswith("download-")}
+    used_exceptions: set[tuple[str, str]] = set()
+    used_downloads: set[tuple[str, str]] = set()
+    for path, command, context in observed:
+        key = (path, command)
+        record = declared.get(key)
+        if record is None:
+            exception_id = "download-" + hashlib.sha256(f"{path}\0{command}".encode()).hexdigest()[:16]
+            exception_key = (path, exception_id)
+            if exception_key in exception_keys:
+                used_exceptions.add(exception_key)
+                result.warn("download", path, f"temporary owned exception {exception_id} covers {command!r}")
+            else:
+                result.error("download", path, f"unmanaged raw download {command!r}; declare URL and SHA-256 "
+                             f"(temporary exception id {exception_id})")
+            continue
+        used_downloads.add(key)
+        pin_path = record["pin_path"]
+        if pin_path not in tracked_set:
+            result.error("download", pin_path, "download pin source is not tracked")
+            continue
+        if pin_path not in texts:
+            reason = assert_regular_file_no_escape(root / pin_path, root_resolved)
+            if reason:
+                result.error("download", pin_path, f"cannot read pin source: {reason}")
+                continue
+            _bounded_size(root / pin_path, MAX_SCANNED_SOURCE_BYTES, f"download pin {pin_path}")
+            try:
+                texts[pin_path] = (root / pin_path).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                result.error("download", pin_path, f"cannot decode pin source: {error}")
+                continue
+        pin_text = texts[pin_path]
+        if record["source_url"] not in pin_text or (pin_path == path and record["source_url"] not in context):
+            result.error("download", pin_path, f"download URL expression for {record['name']!r} changed")
+        else:
+            try:
+                resolved_urls = _resolved_download_url(record["source_url"], pin_text)
+            except ValueError as error:
+                result.error("download", pin_path, str(error))
+            else:
+                if resolved_urls != {record["url"]}:
+                    result.error("download", pin_path, f"download URL for {record['name']!r} is not lock-pinned")
+        if record["sha256"] not in pin_text:
+            result.error("download", pin_path, f"download SHA-256 for {record['name']!r} is not in pin source")
+        if not _url_consumed(command, context, record, pin_text):
+            result.error("download", path, f"download {record['name']!r} does not consume its locked URL")
+        if not _download_verified(context, record, pin_text):
+            result.error("download", path, f"download {record['name']!r} has no in-file SHA-256 comparison")
+    for key, record in declared.items():
+        if key not in used_downloads:
+            result.error("download", record["path"], f"declared download {record['name']!r} has no matching command")
+    for key in exception_keys:
+        if key not in used_exceptions:
+            result.error("download", key[0], f"temporary download exception {key[1]!r} is unused; remove it")
+    return {record["url"] for key, record in declared.items() if key in used_downloads}
+
+
+def _declared_identifiers(lockfile: dict[str, Any], kind: str) -> dict[str, str]:
+    return {i: r["name"] for r in _external_records(lockfile, kind) for i in r["identifiers"]}
+
+
+def _strip_cmake_comments(text: str) -> str:
+    """Drop CMake bracket and line comments; quoted text is kept intact."""
+    text = re.sub(r"#\[(=*)\[.*?\]\1\]", " ", text, flags=re.DOTALL)
+    lines = []
+    for line in text.split("\n"):
+        in_quote = False
+        for index, char in enumerate(line):
+            if char == '"' and (index == 0 or line[index - 1] != "\\"):
+                in_quote = not in_quote
+            elif char == "#" and not in_quote:
+                line = line[:index]
+                break
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def cmake_package_uses(text: str) -> list[str]:
+    """Namespaced package identifiers a CMake file asks the host system for."""
+    uses: list[str] = []
+    for command, arguments in CMAKE_FIND_RE.findall(_strip_cmake_comments(text)):
+        tokens = [t.strip('"') for t in arguments.split()]
+        if not tokens:
+            continue
+        if command.lower() in ("find_package", "find_dependency"):
+            uses.append(f"cmake:{tokens[0]}")
+            continue
+        for token in tokens[1:]:  # tokens[0] is the result-variable prefix
+            if token not in PKG_CONFIG_KEYWORDS:
+                uses.append(f"pkg-config:{re.split(r'[<>=]', token, maxsplit=1)[0]}")
+    return uses
+
+
+def check_cmake_external_packages(
+    root: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> set[str]:
+    declared = _declared_identifiers(lockfile, "system_libraries")
+    files = [p for p in tracked if CMAKE_PACKAGE_FILE_RE.search(p)]
+    if not files:
+        result.error("external", ".", "no tracked CMake files found to scan for system packages")
+    observed: set[str] = set()
+    for rel, text in _git_index_texts(root, files).items():
+        for identifier in cmake_package_uses(text):
+            name = identifier.split(":", 1)[1]
+            if identifier.startswith("cmake:") and name in FIRST_PARTY_CMAKE_PACKAGES:
+                continue
+            observed.add(identifier)
+            if identifier not in declared:
+                result.error(
+                    "external", rel,
+                    f"system package {identifier!r} is not declared in {LOCKFILE_REL} "
+                    "external_dependencies (class system_libraries)",
+                )
+    return observed
+
+
+def _shell_install_commands(script: str) -> list[tuple[str, list[str]]]:
+    """(manager, arguments) for every ``apt-get``/``apt``/``brew``/``pip install`` in a script.
+
+    Backslash continuations are joined first, so a multi-line install is one
+    command.  Arguments stop at a comment or a shell operator.
+    """
+    commands: list[tuple[str, list[str]]] = []
+    for line in re.sub(r"\\\r?\n", " ", script).split("\n"):
+        tokens = line.split()
+        comment = next((i for i, token in enumerate(tokens) if token.startswith("#")), len(tokens))
+        tokens = tokens[:comment]
+        for index, token in enumerate(tokens):
+            manager = PACKAGE_MANAGERS.get(token)
+            if manager is None:
+                continue
+            position = index + 1
+            while position < len(tokens) and tokens[position].startswith("-"):
+                position += 1
+            if position >= len(tokens) or tokens[position] != "install":
+                continue
+            arguments: list[str] = []
+            for argument in tokens[position + 1:]:
+                if argument in SHELL_COMMAND_BREAKS:
+                    break
+                ends_command = argument.endswith(";")
+                argument = argument.rstrip(";")
+                if argument:
+                    arguments.append(argument)
+                if ends_command:
+                    break
+            commands.append((manager, arguments))
+    return commands
+
+
+def shell_package_installs(script: str) -> list[str]:
+    """Namespaced packages that install commands in a script name on their command line."""
+    installs: list[str] = []
+    for manager, arguments in _shell_install_commands(script):
+        skip_value = False
+        for argument in arguments:
+            if skip_value:
+                skip_value = False
+            elif manager == "pip" and argument in PIP_VALUE_OPTIONS:
+                skip_value = True
+            elif not argument.startswith("-"):
+                installs.append(f"{manager}:{argument.split('=', 1)[0]}")
+    return installs
+
+
+def pip_requirement_files(script: str) -> list[str]:
+    """Requirements files (``-r``/``--requirement``) that ``pip install`` commands in a script read."""
+    files: list[str] = []
+    for manager, arguments in _shell_install_commands(script):
+        if manager != "pip":
+            continue
+        for index, argument in enumerate(arguments):
+            if argument in ("-r", "--requirement") and index + 1 < len(arguments):
+                files.append(arguments[index + 1])
+            elif argument.startswith("--requirement="):
+                files.append(argument.split("=", 1)[1])
+    return files
+
+
+def pip_requirement_packages(text: str) -> tuple[list[str], list[str]]:
+    """``pip:<name>`` identifiers in a requirements file, and every line that is not hash-pinned.
+
+    Only ``name==version --hash=sha256:...`` lines are accepted: an option line
+    (another index, a nested file) or an unpinned or unhashed requirement could
+    install code no hash in the repository names.
+    """
+    packages: list[str] = []
+    rejected: list[str] = []
+    for line in re.sub(r"\\\r?\n", " ", text).split("\n"):
+        line = re.sub(r"(?:^|\s)#.*$", "", line).strip()
+        if not line:
+            continue
+        match = PIP_REQUIREMENT_RE.match(" ".join(line.split()))
+        if match:
+            packages.append(f"pip:{match.group('name')}")
+        else:
+            rejected.append(line)
+    return packages, rejected
+
+
+def _check_pip_requirement_file(
+    root: Path, root_resolved: Path, rel: str, location: str, result: CheckResult
+) -> list[str]:
+    """Identifiers a workflow's pip requirements file installs; violations are reported on <location>."""
+    requirement = PurePosixPath(rel.replace("\\", "/"))
+    if requirement.is_absolute() or ".." in requirement.parts or re.match(r"^[A-Za-z]:", rel):
+        result.error("external", location, f"pip requirements file {rel!r} must be a repository-relative path")
+        return []
+    filepath = root / requirement
+    reason = assert_regular_file_no_escape(filepath, root_resolved)
+    if reason:
+        result.error("external", location, f"pip requirements file {rel!r}: {reason}")
+        return []
+    _bounded_size(filepath, MAX_WORKFLOW_BYTES, f"pip requirements file {rel}")
+    try:
+        text = filepath.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        result.error("external", location, f"cannot read pip requirements file {rel!r}: {e}")
+        return []
+    packages, rejected = pip_requirement_packages(text)
+    for line in rejected:
+        result.error(
+            "external", str(requirement),
+            f"pip requirement {line!r} is not an exact name==version pin with --hash=sha256 digests",
+        )
+    if not packages and not rejected:
+        result.error("external", str(requirement), "pip requirements file names no package")
+    return packages
+
+
+def check_ci_system_packages(
+    root: Path, root_resolved: Path, lockfile: dict[str, Any], result: CheckResult
+) -> set[str]:
+    yaml = _load_yaml_module()
+    declared = _declared_identifiers(lockfile, "ci_packages")
+    observed: set[str] = set()
+    for rel in _workflow_and_action_files(root):
+        filepath = root / rel
+        if assert_regular_file_no_escape(filepath, root_resolved):
+            continue  # reported by the action-pin check
+        _bounded_size(filepath, MAX_WORKFLOW_BYTES, f"workflow {rel}")
+        try:
+            documents = list(yaml.safe_load_all(filepath.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            continue  # reported by the action-pin check
+        for document in documents:
+            for trail, script in _iter_key(document, "run"):
+                if not isinstance(script, str):
+                    continue
+                location = f"{rel}:{trail}"
+                identifiers = shell_package_installs(script)
+                for identifier in identifiers:
+                    if identifier.startswith("pip:"):
+                        # A command-line requirement cannot carry --hash.
+                        result.error(
+                            "external", location,
+                            f"PyPI package {identifier!r} is installed by name; install it from a "
+                            "hash-pinned requirements file (pip install -r <file>)",
+                        )
+                for requirements in pip_requirement_files(script):
+                    identifiers.extend(_check_pip_requirement_file(root, root_resolved, requirements, location, result))
+                for identifier in identifiers:
+                    observed.add(identifier)
+                    if identifier not in declared:
+                        result.error(
+                            "external", location,
+                            f"CI system package {identifier!r} is not declared in {LOCKFILE_REL} "
+                            "external_dependencies (class ci_packages)",
+                        )
+    return observed
+
+
+class _ScriptCollector(HTMLParser):
+    """Collects <script> elements: their attributes and inline text."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.scripts: list[tuple[dict[str, str], str]] = []
+        self._current: dict[str, str] | None = None
+        self._text: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script":
+            self._current = {k: v or "" for k, v in attrs}
+            self._text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._current is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._current is not None:
+            self.scripts.append((self._current, "".join(self._text)))
+            self._current = None
+
+
+def _js_import_specifiers(text: str) -> list[str]:
+    return [m.group(2) or m.group(4) for m in JS_STATIC_IMPORT_RE.finditer(text)]
+
+
+def _resolve_import(specifier: str, imports: dict[str, str]) -> str | None:
+    if specifier in imports:
+        return imports[specifier]
+    prefixes = [k for k in imports if k.endswith("/") and specifier.startswith(k)]
+    if prefixes:
+        best = max(prefixes, key=len)
+        return imports[best] + specifier[len(best):]
+    return specifier if REMOTE_URL_RE.match(specifier) else None
+
+
+def web_remote_loads(rel: str, text: str) -> tuple[list[tuple[str, str | None]], list[str]]:
+    """Remote script URLs a page or module loads, each with the SRI it carries.
+
+    Returns ``(loads, problems)``.  An HTML page's module imports are resolved
+    through its import map, whose ``integrity`` section supplies their SRI.
+    A plain JavaScript module cannot carry SRI for what it imports.
+    """
+    if not rel.lower().endswith((".html", ".htm")):
+        return [(s, None) for s in _js_import_specifiers(text) if REMOTE_URL_RE.match(s)], []
+    parser = _ScriptCollector()
+    parser.feed(text)
+    parser.close()
+    imports: dict[str, str] = {}
+    integrity: dict[str, str] = {}
+    loads: list[tuple[str, str | None]] = []
+    problems: list[str] = []
+    for attrs, body in parser.scripts:
+        if attrs.get("type", "").lower() != "importmap":
+            continue
+        try:
+            import_map = json.loads(body)
+        except json.JSONDecodeError as e:
+            problems.append(f"import map is not valid JSON: {e}")
+            continue
+        imports.update(import_map.get("imports") or {})
+        integrity.update(import_map.get("integrity") or {})
+    for key, target in imports.items():
+        if key.endswith("/") and REMOTE_URL_RE.match(target) and not PINNED_WEB_VERSION_RE.search(target):
+            problems.append(f"import map prefix {key!r} -> {target!r} does not name an exact version")
+    for attrs, body in parser.scripts:
+        src = attrs.get("src", "")
+        if REMOTE_URL_RE.match(src):
+            loads.append((src, attrs.get("integrity") or None))
+        if attrs.get("type", "").lower() == "module":
+            for specifier in _js_import_specifiers(body):
+                url = _resolve_import(specifier, imports)
+                if url is not None and REMOTE_URL_RE.match(url):
+                    loads.append((url, integrity.get(url)))
+    return loads, problems
+
+
+def check_web_runtime_urls(
+    root: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> set[str]:
+    records = {r["url"]: r for r in _external_records(lockfile, "web_runtime")}
+    observed: set[str] = set()
+    files = [p for p in tracked if WEB_SOURCE_RE.search(p.lower())]
+    for rel, text in _git_index_texts(root, files).items():
+        loads, problems = web_remote_loads(rel, text)
+        for problem in problems:
+            result.error("external", rel, problem)
+        for url, sri in loads:
+            observed.add(url)
+            record = records.get(url)
+            if not PINNED_WEB_VERSION_RE.search(url):
+                result.error("external", rel, f"remote script {url!r} does not name an exact version")
+            elif record is None:
+                result.error(
+                    "external", rel,
+                    f"remote script {url!r} is not declared in {LOCKFILE_REL} "
+                    "external_dependencies (class web_runtime)",
+                )
+            elif sri != record["sri"]:
+                result.error(
+                    "external", rel,
+                    f"remote script {url!r} is loaded without its declared subresource-integrity "
+                    f"hash (page carries {sri!r})",
+                )
+    return observed
+
+
+def check_vendored_outside_thirdparty(
+    root: Path, lockfile: dict[str, Any], tracked: list[str], result: CheckResult
+) -> None:
+    """Tracked files outside ThirdParty/ that carry a foreign license header."""
+    args = ["grep", "--cached", "-l", "-z", "-F"]
+    for phrase in FOREIGN_LICENSE_PHRASES:
+        args += ["-e", phrase]
+    try:
+        done = subprocess.run(
+            ["git", *args, "--", ".", f":(exclude){AUTHORITATIVE_ROOT}/"],
+            capture_output=True, text=True, cwd=str(root), timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        _fatal(f"git grep for foreign license headers: {e}")
+    if done.returncode not in (0, 1):  # 1 means no match
+        _fatal(f"git grep for foreign license headers exited {done.returncode}: {done.stderr.strip()}")
+
+    declared = [p for r in _external_records(lockfile, "vendored_outside_thirdparty") for p in r["paths"]]
+    for rel in _split_nul(done.stdout):
+        if any(pattern.search(rel) for pattern, _reason in FOREIGN_LICENSE_EXEMPTIONS):
+            continue
+        if not any(rel == p or (p.endswith("/") and rel.startswith(p)) for p in declared):
+            result.error(
+                "external", rel,
+                f"file outside {AUTHORITATIVE_ROOT}/ carries a third-party license header but is not "
+                f"declared in {LOCKFILE_REL} external_dependencies (class vendored_outside_thirdparty)",
+            )
+    tracked_set = set(tracked)
+    for path in declared:
+        if path.endswith("/") and not any(p.startswith(path) for p in tracked):
+            result.error("external", LOCKFILE_REL, f"declared vendored path {path!r} has no tracked files")
+        elif not path.endswith("/") and path not in tracked_set:
+            result.error("external", LOCKFILE_REL, f"declared vendored file {path!r} is not tracked")
+
+
+def check_external_dependencies(
+    root: Path, root_resolved: Path, lockfile: dict[str, Any], result: CheckResult
+) -> None:
+    tracked = git_tracked_paths(root)
+    observed = (
+        check_cmake_external_packages(root, lockfile, tracked, result)
+        | check_ci_system_packages(root, root_resolved, lockfile, result)
+        | check_web_runtime_urls(root, lockfile, tracked, result)
+        | check_raw_downloads(root, root_resolved, lockfile, tracked, result)
+    )
+    check_vendored_outside_thirdparty(root, lockfile, tracked, result)
+    for record in lockfile.get("external_dependencies", []):
+        unused = [i for i in record.get("identifiers", []) if i not in observed]
+        if record["class"] == "web_runtime" and record["url"] not in observed:
+            unused.append(record["url"])
+        for item in unused:
+            result.warn(
+                "external", LOCKFILE_REL,
+                f"external dependency {record['name']!r} declares {item!r}, which nothing uses; remove it",
+            )
+
+
 # ── Lockfile regeneration ─────────────────────────────────────────────
 
 def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> dict[str, Any]:
@@ -1659,7 +3216,9 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
         digest, count = _tree_digest(assigned[container])
         digests[container] = {"digest": digest, "file_count": count}
 
-    sentinel_paths = _discover_sentinel_paths(root, existing, containers)
+    sentinel_paths = _discover_sentinel_paths(
+        root, root_resolved, existing, containers
+    )
     sentinels = _build_sentinels(root, root_resolved, sentinel_paths, quiet=quiet)
     action_pins = _discover_action_pins(root, root_resolved)
 
@@ -1671,6 +3230,7 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
             "tools/check-supply-chain.py on every CI run. Update with: "
             "python tools/check-supply-chain.py --update",
         ),
+        "exceptions": existing["exceptions"],
         "submodule_gitlinks": dict(sorted(gitlinks.items())),
         "managed_vendored_dirs": managed,
         "project_owned_dirs": owned,
@@ -1679,17 +3239,31 @@ def update_lockfile(root: Path, root_resolved: Path, *, quiet: bool = False) -> 
         "sentinel_files": sentinels,
         "action_pins": action_pins,
     }
+    # The reviewed SPDX mapping is a human decision, never derived: carry it
+    # through unchanged so a refresh cannot erase or invent license verdicts.
+    if "license_policy" in existing:
+        lockfile_data["license_policy"] = {
+            "dependencies": dict(sorted(
+                existing["license_policy"]["dependencies"].items()
+            )),
+        }
+    # Declared dependencies outside ThirdParty/ are human decisions as well.
+    if "external_dependencies" in existing:
+        lockfile_data["external_dependencies"] = existing["external_dependencies"]
 
     _write_atomic(lockpath, json.dumps(lockfile_data, indent=2) + "\n")
     return lockfile_data
 
 
 def _discover_sentinel_paths(
-    root: Path, existing: dict[str, Any], containers: dict[str, str]
+    root: Path,
+    root_resolved: Path,
+    existing: dict[str, Any],
+    containers: dict[str, str],
 ) -> list[str]:
     """Sentinels come from the manifest, not from the file being replaced."""
     paths: set[str] = set()
-    for fields in export_manifest_entries(root):
+    for fields in export_manifest_entries(root, root_resolved):
         if len(fields) != MANIFEST_FIELD_COUNT:
             continue
         local_path = fields[F_LOCAL_PATH].strip()
@@ -1811,25 +3385,36 @@ def _write_atomic(target: Path, content: str) -> None:
 
 # ── Verification driver ───────────────────────────────────────────────
 
-def run_all_checks(root: Path, root_resolved: Path) -> tuple[CheckResult, dict[str, Any]]:
+def run_all_checks(
+    root: Path, root_resolved: Path
+) -> tuple[CheckResult, dict[str, Any], list[dict[str, str]]]:
     lockfile = load_lockfile(root, root_resolved)
     result = CheckResult()
 
+    check_exception_expiry(lockfile, result)
     check_container_model(lockfile, result)
-    check_link_hygiene(root, result)
+    check_allowed_root_files(lockfile, result)
     tracked = git_tracked_thirdparty(root)
+    check_link_hygiene(root, result, verified_submodule_gitlinks(lockfile, tracked))
     assigned = check_tracked_inventory(root, lockfile, tracked, result)
     check_tree_digests(lockfile, assigned, result)
     check_sentinel_files(root, root_resolved, lockfile, result)
     check_action_pins(root, root_resolved, lockfile, result)
     modules = _parse_gitmodules(root, root_resolved)
     check_gitmodules_consistency(modules, lockfile, result)
-    entries = export_manifest_entries(root)
+    entries = export_manifest_entries(root, root_resolved)
     check_manifest_reconciliation(root, lockfile, entries, modules, result)
-    return result, lockfile
+    licenses = check_license_policy(lockfile, entries, result)
+    check_external_dependencies(root, root_resolved, lockfile, result)
+    return result, lockfile, licenses
 
 
-def _emit_json(result: CheckResult, lockfile: dict[str, Any], extra: dict[str, Any]) -> None:
+def _emit_json(
+    result: CheckResult,
+    lockfile: dict[str, Any],
+    licenses: list[dict[str, str]],
+    extra: dict[str, Any],
+) -> None:
     payload = {
         "passed": result.passed,
         "violation_count": len(result.violations),
@@ -1837,6 +3422,9 @@ def _emit_json(result: CheckResult, lockfile: dict[str, Any], extra: dict[str, A
         "submodule_count": len(lockfile.get("submodule_gitlinks", {})),
         "tree_digest_count": len(lockfile.get("tree_digests", {})),
         "action_pin_count": len(lockfile.get("action_pins", {})),
+        "external_dependency_count": len(lockfile.get("external_dependencies", [])),
+        "allowed_spdx_licenses": sorted(ALLOWED_SPDX_LICENSES),
+        "dependency_licenses": licenses,
         "violations": [
             {
                 "category": v.category,
@@ -1852,7 +3440,9 @@ def _emit_json(result: CheckResult, lockfile: dict[str, Any], extra: dict[str, A
     print()
 
 
-def _emit_text(result: CheckResult, lockfile: dict[str, Any]) -> None:
+def _emit_text(
+    result: CheckResult, lockfile: dict[str, Any], licenses: list[dict[str, str]]
+) -> None:
     RED, GREEN, YELLOW, NC = "\033[0;31m", "\033[0;32m", "\033[1;33m", "\033[0m"
     errors = [v for v in result.violations if v.severity == "error"]
     warnings = [v for v in result.violations if v.severity == "warning"]
@@ -1876,7 +3466,9 @@ def _emit_text(result: CheckResult, lockfile: dict[str, Any]) -> None:
             f"({len(lockfile['sentinel_files'])} sentinel files, "
             f"{len(lockfile['submodule_gitlinks'])} submodules, "
             f"{len(lockfile['tree_digests'])} tree digests, "
-            f"{len(lockfile['action_pins'])} pinned actions)"
+            f"{len(lockfile['action_pins'])} pinned actions, "
+            f"{len(lockfile.get('external_dependencies', []))} declared external dependencies, "
+            f"{len(licenses)} allow-listed dependency licenses)"
         )
     else:
         print(
@@ -1914,12 +3506,12 @@ def main() -> int:
 
     # An update that is not verified is an update that reports success without
     # establishing anything. The exit code below is the verification's.
-    result, lockfile = run_all_checks(root, root_resolved)
+    result, lockfile, licenses = run_all_checks(root, root_resolved)
 
     if args.json:
-        _emit_json(result, lockfile, extra)
+        _emit_json(result, lockfile, licenses, extra)
     else:
-        _emit_text(result, lockfile)
+        _emit_text(result, lockfile, licenses)
     return 0 if result.passed else 1
 
 

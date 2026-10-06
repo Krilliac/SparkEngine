@@ -4,8 +4,7 @@
  */
 
 #include "RPGCharacterSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -25,9 +24,9 @@ namespace RPG
         m_nextCharId = 1;
         RegisterDefaultClasses();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG character system initialized with %zu classes", m_classes.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Character system initialized (" +
-                                                    std::to_string(m_classes.size()) + " classes)");
+        Spark::ModuleLog::Info(m_context, "RPG character system initialized with {} classes", m_classes.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] Character system initialized (" + std::to_string(m_classes.size()) + " classes)");
         return true;
     }
 
@@ -221,9 +220,8 @@ namespace RPG
         m_characters[id] = character;
         RecalculateDerivedStats(m_characters[id]);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG character created: %s (%s)", name.c_str(),
-                       classDef->name.c_str());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Character created: " + name + " (" + classDef->name + ")");
+        Spark::ModuleLog::Info(m_context, "RPG character created: {} ({})", name.c_str(), classDef->name.c_str());
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Character created: " + name + " (" + classDef->name + ")");
         return id;
     }
 
@@ -295,9 +293,9 @@ namespace RPG
             character.currentMana = character.maxMana;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG %s reached level %d", character.name.c_str(), character.level);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] " + character.name + " reached level " +
-                                                    std::to_string(character.level));
+        Spark::ModuleLog::Info(m_context, "RPG {} reached level {}", character.name.c_str(), character.level);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] " + character.name + " reached level " + std::to_string(character.level));
     }
 
     void RPGCharacterSystem::AllocateStatPoint(uint32_t characterId, const std::string& statName)
@@ -322,8 +320,8 @@ namespace RPG
             return;
 
         character->freeStatPoints--;
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RPG stat point allocated: %s for character %u", statName.c_str(),
-                        characterId);
+        Spark::ModuleLog::Debug(m_context, "RPG stat point allocated: {} for character {}", statName.c_str(),
+                                characterId);
         RecalculateDerivedStats(*character);
     }
 

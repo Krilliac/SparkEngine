@@ -1,0 +1,13 @@
+diff --git a/scripts/coverage-report.sh b/scripts/coverage-report.sh
+index d189952cc..c15e42d5b 100755
+--- a/scripts/coverage-report.sh
++++ b/scripts/coverage-report.sh
+@@ -48,7 +48,7 @@ declare -A SUBSYSTEMS=(
+ 
+ # Define per-subsystem thresholds (minimum acceptable line coverage %)
+ declare -A THRESHOLDS=(
+-    ["Core"]=40
++    ["Core"]=100
+     ["Graphics"]=30
+     ["Utils"]=60
+     ["Camera"]=40

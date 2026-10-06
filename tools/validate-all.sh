@@ -56,6 +56,7 @@ case "${1:-check}" in
         echo "  tools/check-di-singletons.sh      DI singleton guardrails"
         echo "  tools/check-wiki-quality.sh       Wiki quality and stale-metric checks"
         echo "  tools/check-module-evidence.sh    Module evidence manifest (RDY-010)"
+        echo "  tools/check-module-asset-refs.py  Module asset references (MOD-360; fails for enforced modules)"
         exit 0
         ;;
 esac
@@ -82,7 +83,10 @@ run_check() {
 
     log_header "$name"
 
-    if bash "$full_path" "${args[@]}" 2>&1; then
+    local runner=bash
+    [[ "$script" == *.py ]] && runner=python3
+
+    if "$runner" "$full_path" "${args[@]}" 2>&1; then
         PASSED=$((PASSED + 1))
     else
         FAILED=$((FAILED + 1))
@@ -107,6 +111,7 @@ run_check "Cross-Utilization Boundaries" "check-cross-utilization.sh"
 run_check "DI Singleton Guardrails"     "check-di-singletons.sh"
 run_check "Wiki Quality (Warn-Only)"    "check-wiki-quality.sh" "--warn-only"
 run_check "Module Evidence Manifest"    "check-module-evidence.sh"
+run_check "Module Asset References"     "check-module-asset-refs.py"
 
 # Summary
 echo ""

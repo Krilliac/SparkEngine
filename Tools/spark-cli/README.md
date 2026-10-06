@@ -1,6 +1,6 @@
 # Spark CLI
 
-`spark_cli.py` creates, builds, runs, validates, migrates, and packages standalone SparkEngine projects.
+`spark_cli.py` creates, builds, runs, validates, audits, and packages standalone SparkEngine projects.
 Run it from a project root containing `CMakeLists.txt`, one `*.sparkproject` descriptor, and
 `spark.modules.json`.
 
@@ -18,6 +18,33 @@ python <engine-root>/Tools/spark-cli/spark_cli.py cooker --config Release -- --h
 
 Resolution is bounded to `SPARKENGINE_TOOL_DIR` and the engine's known build/install layouts. Use
 `--executable <path>` for an operator-selected binary or `--dry-run` to inspect the exact invocation.
+
+## Create a project
+
+```powershell
+python <prefix>/tools/spark-cli/spark_cli.py templates
+python <prefix>/tools/spark-cli/spark_cli.py new MyGame --template EmptyProject --output D:/Games
+```
+
+`new` copies a template into `<output>/<name>` (the current directory without `--output`) and rewrites every
+occurrence of the template name, in file contents and file names, to the project name, which must be a C++
+identifier. The engine root is `SPARK_ENGINE_DIR` when set; otherwise the CLI walks up from its own location
+and accepts either an install prefix (a directory holding `lib/cmake/SparkEngine/SparkEngineConfig.cmake`,
+which is where the `tools` install component puts the CLI, at `<prefix>/tools/spark-cli`) or a source
+checkout (a directory holding `SparkSDK/` and `SparkEngine/`). An install takes templates from
+`share/SparkEngine/templates` (the `templates` component), or from `share/SparkEngine/sdk/examples` when only
+the `sdk` component is installed; a checkout takes them from `Templates/`. From an install, `new` prints the
+exact `-DSparkEngine_DIR=<prefix>/lib/cmake/SparkEngine` to configure the generated project with.
+`templates` lists the available templates and `info` reports the engine root the CLI resolved.
+
+## Build a project
+
+```powershell
+python <engine-root>/Tools/spark-cli/spark_cli.py build --config Release
+```
+
+`build` reuses an already configured tree at `build/<config>` or `build` (the layouts SparkEditor creates),
+otherwise configures `build` once, and then builds the selected `--config` (default `Debug`).
 
 ## Run a project
 
@@ -73,12 +100,13 @@ runnable-package layout containing:
 - a generated `spark.modules.json` that preserves root and per-module metadata while rewriting module paths
   to their packaged filenames;
 - runtime `Shaders`, optional `Resources`, and engine branding assets;
-- project `Assets`, `Scenes`, `Config`, and the active project descriptor;
+- project `Assets`, `Scenes`, `Config`, `Data` archives, and the active project descriptor;
 - `Startup.sparkscene` plus an isolated scene-preview host when a startup scene exists;
 - native game/scene launchers, package guidance, and a `manifest.json` whose entrypoint is the game launcher
   with `workingDirectory` set to the package root.
 
-Packaging rejects cross-platform requests without a matching native toolchain, ambiguous module outputs,
+`--platform` defaults to the host; naming another platform fails before anything is built, because packaging
+has no cross-platform toolchain. Packaging also rejects ambiguous module outputs,
 unsafe project names, linked content that escapes the project/runtime roots, and output paths inside live
 `Assets`, `Scenes`, or `Config`. It also rejects output that overlaps the project root, active build tree,
 or runtime-host source directory. Final package paths that are symlinks, junctions, or reparse points are
@@ -101,6 +129,25 @@ dependencies according to the target platform's deployment policy.
 `--strip` remains accepted and omits external PDB files, but does not mutate module bytes because doing so
 would invalidate the pre-load ABI hash. `--compress` also remains accepted; the current runnable-package
 contract keeps assets raw and records both requested and effective states in `manifest.json`.
+
+## Validate references and audit asset headers
+
+```powershell
+python <engine-root>/Tools/spark-cli/spark_cli.py validate . --format json
+python <engine-root>/Tools/spark-cli/spark_cli.py migrate Assets
+```
+
+`validate` parses every `.sparkscene`, `.scene`, and `.material` file under the given path and checks each
+`*Path` field (and legacy `mesh`/texture keys) against the project root, i.e. the nearest directory holding
+the `*.sparkproject` descriptor. Missing files, absolute paths, and references escaping the project are
+errors; only the renderer's built-in `__spark_primitive_*` meshes are exempt. Only parsed scene/material
+files are counted, and a run that inspects none of them exits 1. Every finding is an error, so `--strict` is
+accepted for compatibility and changes nothing (the JSON report's `warnings` list is always empty).
+
+`migrate` is a read-only audit of the 32-byte `AssetFileHeader` from `Core/AssetMigration.h` (magic bytes
+`KRPS` on disk). The engine ships no migration steps, so it never rewrites or backs up files: outdated,
+newer, truncated, or over-claiming headers are reported and make the command exit 1. `--dry-run` and
+`--backup` are accepted for compatibility and change nothing.
 
 ## Inspect SparkPak archives
 

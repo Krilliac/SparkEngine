@@ -4,17 +4,17 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif
 
 #include "WaveSpawner.h"
 #include "Game.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <random>
 #include <sstream>
 
@@ -23,33 +23,38 @@ using namespace DirectX;
 namespace Spark
 {
 
-    WaveSpawner::WaveSpawner() = default;
-
-    void WaveSpawner::Initialize(const std::vector<XMFLOAT3>& spawnPoints)
+    namespace
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing wave spawner with %zu spawn points", spawnPoints.size());
-        m_spawnPoints = spawnPoints;
-        if (m_spawnPoints.empty())
+        // Used only when the loaded scene carries no SpawnPoint nodes tagged
+        // wave_spawn (Assets/Scenes/level1.scene authors ten); it rings the
+        // arena perimeter so a scene without wave spawns can still run waves.
+        std::vector<XMFLOAT3> MakeFallbackWaveSpawnPoints()
         {
-            // Fallback spawn points around the arena perimeter
-            m_spawnPoints = {
+            return {
                 {20.0f, 1.0f, 20.0f}, {-20.0f, 1.0f, 20.0f}, {20.0f, 1.0f, -20.0f}, {-20.0f, 1.0f, -20.0f},
                 {25.0f, 1.0f, 0.0f},  {-25.0f, 1.0f, 0.0f},  {0.0f, 1.0f, 25.0f},   {0.0f, 1.0f, -25.0f},
             };
         }
+    } // namespace
+
+    WaveSpawner::WaveSpawner() = default;
+
+    void WaveSpawner::Initialize(const std::vector<XMFLOAT3>& spawnPoints)
+    {
+        FPS_LOG_INFO("Initializing wave spawner with {} spawn points", spawnPoints.size());
+        m_spawnPoints = spawnPoints.empty() ? MakeFallbackWaveSpawnPoints() : spawnPoints;
         m_state = WaveState::Idle;
     }
 
     void WaveSpawner::Start()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Wave spawner started (%d total waves)", m_totalWaves);
+        FPS_LOG_INFO("Wave spawner started ({} total waves)", m_totalWaves);
         m_currentWave = 0;
         m_totalEnemiesKilled = 0;
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f; // Short initial countdown
         m_waveTransitionReady = false;
-        m_waveScheduler.ClearAll();
-        (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        m_waveRestRemaining = 3.0f;
     }
 
     void WaveSpawner::Update(float dt, size_t aliveEnemies, Game* game)
@@ -57,7 +62,17 @@ namespace Spark
         if (m_paused || m_state == WaveState::Idle || m_state == WaveState::Completed || m_state == WaveState::Failed)
             return;
 
-        m_waveScheduler.Update(dt);
+        // One-shot rest countdown, armed by Start, SkipToWave and wave completion: raises
+        // m_waveTransitionReady once when it expires.
+        if (m_waveRestRemaining.has_value() && dt >= 0.0f)
+        {
+            *m_waveRestRemaining -= dt;
+            if (*m_waveRestRemaining <= 0.0f)
+            {
+                m_waveRestRemaining.reset();
+                m_waveTransitionReady = true;
+            }
+        }
 
         switch (m_state)
         {
@@ -68,7 +83,7 @@ namespace Spark
             if (m_callbacks.onCountdownTick)
                 m_callbacks.onCountdownTick(m_countdownTimer);
 
-            // Scheduler fires m_waveTransitionReady when countdown expires
+            // The rest countdown raises m_waveTransitionReady when it expires
             if (m_waveTransitionReady)
             {
                 m_waveTransitionReady = false;
@@ -98,8 +113,7 @@ namespace Spark
             // Wave complete when all spawned enemies are dead
             if (aliveEnemies == 0 && m_enemiesSpawnedThisWave > 0)
             {
-                SPARK_LOG_INFO(Spark::LogCategory::Game, "Wave %d complete: %d enemies killed", m_currentWave,
-                               m_enemiesKilledThisWave);
+                FPS_LOG_INFO("Wave {} complete: {} enemies killed", m_currentWave, m_enemiesKilledThisWave);
             }
             if (aliveEnemies == 0)
             {
@@ -119,8 +133,7 @@ namespace Spark
                     m_state = WaveState::Countdown;
                     m_countdownTimer = m_restDuration;
                     m_waveTransitionReady = false;
-                    m_waveScheduler.ClearAll();
-                    (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, m_restDuration);
+                    m_waveRestRemaining = std::max(m_restDuration, 0.0f);
                 }
             }
             break;
@@ -131,14 +144,17 @@ namespace Spark
         }
     }
 
-    void WaveSpawner::SkipToWave(int waveNum)
+    int WaveSpawner::SkipToWave(int waveNum)
     {
-        m_currentWave = std::max(0, waveNum - 1);
+        // Clamp before subtracting: waveNum - 1 overflows for INT_MIN, and a wave past the configured total
+        // would bypass the end-of-match check in Update.
+        const int target = std::clamp(waveNum, 1, std::max(1, m_totalWaves));
+        m_currentWave = target - 1;
         m_state = WaveState::Countdown;
         m_countdownTimer = 3.0f;
         m_waveTransitionReady = false;
-        m_waveScheduler.ClearAll();
-        (void)m_waveScheduler.Schedule([this] { m_waveTransitionReady = true; }, 3.0f);
+        m_waveRestRemaining = 3.0f;
+        return target;
     }
 
     void WaveSpawner::Reset()
@@ -159,54 +175,9 @@ namespace Spark
 
     WaveDefinition WaveSpawner::GenerateWave(int waveNumber) const
     {
-        WaveDefinition wave;
-        wave.waveNumber = waveNumber;
-
-        float difficulty = 1.0f + (waveNumber - 1) * 0.15f * m_difficultyScale;
-        wave.healthMultiplier = 1.0f + (waveNumber - 1) * 0.1f * m_difficultyScale;
-        wave.damageMultiplier = 1.0f + (waveNumber - 1) * 0.08f * m_difficultyScale;
-        wave.speedMultiplier = 1.0f + (waveNumber - 1) * 0.03f * m_difficultyScale;
-
-        bool isBoss = (waveNumber % 5 == 0);
-        wave.isBossWave = isBoss;
-
-        if (isBoss)
-        {
-            // Boss waves: fewer but tougher enemies + a heavy
-            wave.gruntCount = waveNumber / 2;
-            wave.guardCount = waveNumber / 3;
-            wave.heavyCount = 1 + waveNumber / 5;
-            wave.healthMultiplier *= 1.5f;
-            wave.announcement = "BOSS WAVE " + std::to_string(waveNumber) + "!";
-        }
-        else
-        {
-            // Normal waves: scaling composition
-            wave.gruntCount = 2 + waveNumber;
-            wave.scoutCount = (waveNumber >= 3) ? (waveNumber / 2) : 0;
-            wave.guardCount = (waveNumber >= 5) ? (waveNumber / 3) : 0;
-            wave.sniperCount = (waveNumber >= 7) ? (waveNumber / 4) : 0;
-            wave.medicCount = (waveNumber >= 8) ? (waveNumber / 5) : 0;
-            wave.heavyCount = (waveNumber >= 10) ? (waveNumber / 6) : 0;
-            wave.announcement = "Wave " + std::to_string(waveNumber);
-        }
-
-        // Cap total enemies per wave to prevent overwhelming spawns
-        int total =
-            wave.gruntCount + wave.scoutCount + wave.guardCount + wave.heavyCount + wave.sniperCount + wave.medicCount;
-        constexpr int MAX_PER_WAVE = 30;
-        if (total > MAX_PER_WAVE)
-        {
-            float scale = static_cast<float>(MAX_PER_WAVE) / total;
-            wave.gruntCount = static_cast<int>(wave.gruntCount * scale);
-            wave.scoutCount = static_cast<int>(wave.scoutCount * scale);
-            wave.guardCount = static_cast<int>(wave.guardCount * scale);
-            wave.heavyCount = std::max(wave.heavyCount, 1); // Always keep at least 1 heavy on boss
-            wave.sniperCount = static_cast<int>(wave.sniperCount * scale);
-            wave.medicCount = static_cast<int>(wave.medicCount * scale);
-        }
-
-        return wave;
+        // Composition, difficulty scaling and the per-wave enemy cap live in WaveComposition so they are
+        // bounded for every input and testable without a Game.
+        return WaveComposition::Compose(waveNumber, m_difficultyScale);
     }
 
     void WaveSpawner::SpawnWave(const WaveDefinition& wave, Game* game)
@@ -225,8 +196,8 @@ namespace Spark
             }
         };
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Spawning wave %d: %d grunts, %d scouts, %d guards, %d heavies",
-                       wave.waveNumber, wave.gruntCount, wave.scoutCount, wave.guardCount, wave.heavyCount);
+        FPS_LOG_INFO("Spawning wave {}: {} grunts, {} scouts, {} guards, {} heavies", wave.waveNumber, wave.gruntCount,
+                     wave.scoutCount, wave.guardCount, wave.heavyCount);
         spawnGroup(EnemyType::Grunt, wave.gruntCount);
         spawnGroup(EnemyType::Scout, wave.scoutCount);
         spawnGroup(EnemyType::Guard, wave.guardCount);
@@ -234,9 +205,9 @@ namespace Spark
         spawnGroup(EnemyType::Sniper, wave.sniperCount);
         spawnGroup(EnemyType::Medic, wave.medicCount);
 
-        std::wstring msg = L"Wave " + std::to_wstring(wave.waveNumber) + L": spawned " +
-                           std::to_wstring(m_enemiesSpawnedThisWave) + L" enemies";
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"INFO");
+        std::string msg = "Wave " + std::to_string(wave.waveNumber) + ": spawned " +
+                          std::to_string(m_enemiesSpawnedThisWave) + " enemies";
+        FPS_CONSOLE(msg, "INFO");
     }
 
     XMFLOAT3 WaveSpawner::GetRandomSpawnPoint() const
@@ -272,6 +243,14 @@ namespace Spark
            << "\n";
         ss << "Total Kills: " << m_totalEnemiesKilled << "\n";
         ss << "Difficulty Scale: " << m_difficultyScale << "\n";
+        ss << "Wave Spawn Points: " << m_spawnPoints.size();
+        if (!m_spawnPoints.empty())
+        {
+            const auto& first = m_spawnPoints.front();
+            ss << "; first (" << std::fixed << std::setprecision(1) << first.x << ", " << first.y << ", " << first.z
+               << ")";
+        }
+        ss << "\n";
 
         if (m_state == WaveState::Countdown)
             ss << "Next wave in: " << m_countdownTimer << "s\n";

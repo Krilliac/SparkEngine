@@ -8,17 +8,29 @@
  * It demonstrates all major engine subsystems: rendering, physics, AI,
  * animation, audio, networking, ECS, vehicles, and class-based FPS gameplay.
  *
- * Implements both the new IModule interface (via Spark::IModule) and
- * the legacy IGameModule interface for backward compatibility.
+ * Implements the installed SDK's Spark::IModule interface.
  */
 
 #pragma once
 
 #include "Spark/SparkSDK.h"
-#include "Core/IGameModule.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
+#include <memory>
+
+namespace SparkGameFPS
+{
+    class EngineWeatherAdapter;
+}
+
+namespace Spark
+{
+    class GameMode;
+    class ProgressionSystem;
+    class RespawnSystem;
+} // namespace Spark
 
 // Forward declarations
 class Game;
@@ -31,17 +43,14 @@ extern SPARK_GAME_API Game* g_game;
 /**
  * @brief Game module implementation for SparkGame
  *
- * Implements both the new Spark::IModule interface and the legacy IGameModule.
- * The new interface receives an IEngineContext; the legacy interface receives
- * individual system pointers. Both paths ultimately initialize the same Game.
+ * Receives all engine services through the injected public IEngineContext.
  */
-class SparkGameModule : public Spark::IModule, public IGameModule
+class SparkGameModule : public Spark::IModule
 {
   public:
     SparkGameModule();
     ~SparkGameModule() override;
 
-    // --- Spark::IModule interface (new, SDK v2) ---
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
@@ -53,36 +62,66 @@ class SparkGameModule : public Spark::IModule, public IGameModule
     void OnResume() override;
     void OnImGui() override;
 
-    // --- IGameModule interface (legacy) ---
-    const char* GetGameName() const override;
-    const char* GetGameVersion() const override;
-    bool Initialize(GraphicsEngine* graphics, InputManager* input) override;
-    void Shutdown() override;
-    void Update(float deltaTime) override;
-    void Render() override;
-    // OnResize is shared via override above
-    void Pause() override;
-    void Resume() override;
-    bool IsPaused() const override;
-
   private:
+    bool InitializeFromContext();
+    void Shutdown();
     void RegisterGameConsoleCommands();
 
+    /**
+     * @brief Load the authored arena for the no-render headless lifecycle.
+     *
+     * Parses Scenes/level1.scene through the data-only SceneManager path (no
+     * GraphicsEngine or InputManager), binds the RespawnSystem and GameMode to
+     * its authored default spawns and starts a Deathmatch match that OnUpdate
+     * ticks. Fails closed when the scene or its spawns are unusable.
+     */
+    bool LoadHeadlessArena();
+
+    /**
+     * @brief Print the SPARK_FPS_HEADLESS_ARENA record and release the arena.
+     *
+     * Emitted once, only when LoadHeadlessArena() succeeded, so the record is
+     * evidence of a real scene load plus the ticks that followed it.
+     */
+    void ShutdownHeadlessArena();
+
+    /**
+     * @brief Register the headless level/xp/quicksave/quickload commands.
+     *
+     * Same names and output text as the windowed commands, backed by the
+     * headless ProgressionSystem and arena scoreboard (HeadlessPersistence.cpp).
+     * Tracked in m_registeredConsoleCommands, so Shutdown() removes them before
+     * the state they capture is released.
+     */
+    void RegisterHeadlessPersistenceCommands();
+
+    /// Write the local profile to the fps_quicksave slot; returns the console result text.
+    std::string HeadlessQuickSave() const;
+
+    /// Restore progression, play time and score from fps_quicksave; returns the console result text.
+    std::string HeadlessQuickLoad();
+
     Spark::IEngineContext* m_context{nullptr};
+    std::unique_ptr<SparkGameFPS::EngineWeatherAdapter> m_weatherAdapter;
     std::vector<std::string> m_registeredConsoleCommands;
     bool m_initialized{false};
+
+    // Headless arena simulation state (null outside the headless lifecycle).
+    std::unique_ptr<Spark::RespawnSystem> m_headlessRespawn;
+    std::unique_ptr<Spark::GameMode> m_headlessMode;
+    int m_headlessArenaObjects{0};
+    int m_headlessArenaSpawns{0};
+    int m_headlessArenaBoundSpawns{0};
+    std::uint64_t m_headlessArenaTicks{0};
+
+    // Headless local-profile state persisted by quicksave/quickload.
+    std::unique_ptr<Spark::ProgressionSystem> m_headlessProgression;
+    float m_headlessPlayTime{0.0f};
 };
 
-// New module exports (preferred by ModuleManager)
+// Installed SDK module exports consumed by ModuleManager.
 extern "C"
 {
     SPARK_MODULE_API Spark::IModule* CreateModule();
     SPARK_MODULE_API void DestroyModule(Spark::IModule* mod);
-}
-
-// Legacy exports (backward compatibility)
-extern "C"
-{
-    SPARK_GAME_API IGameModule* CreateGameModule();
-    SPARK_GAME_API void DestroyGameModule(IGameModule* module);
 }

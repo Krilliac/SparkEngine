@@ -4,6 +4,14 @@ This page explains how to use SparkEngine's built-in profiling tools to identify
 
 **Source:** `SparkEngine/Source/Utils/Profiler.h`, `ChromeTracing.h`, `MemoryDebugger.h`, `DebugOverlay.h`, `FrameInspector.h`
 
+`performance-budget-governance` is a required CI job. It validates
+`perf-budgets/v1` and runs the comparator's adversarial and CLI regression tests,
+including an over-budget result that must exit nonzero. CTest also registers the
+hardening suite as `PerformanceBudget_Hardening`. This is policy enforcement:
+the committed metrics are still `pending_measurement`, with no certified
+hardware rows or accepted measured baselines. No runtime performance gate is
+claimed until a real result producer and certified baseline are available.
+
 ---
 
 ## Quick Start
@@ -93,6 +101,28 @@ profiler.EndGPUSection("ShadowPass");
 // Read results (available next frame due to GPU latency)
 float shadowMs = profiler.GetGPUSectionTime("ShadowPass");
 ```
+
+On the Windows D3D11 game path, `gfx_benchmark <seconds>` (1-300) observes
+actual successful swap-chain presents while normal gameplay continues. The
+command returns a start acknowledgement; the final console entry reports the
+successful present count, elapsed wall-clock FPS, CPU time from
+`BeginFrame()` through `Present()`, and (on D3D11 when timestamp results are
+valid) the average GPU render interval from up to 60 valid D3D11 timestamp
+samples, collected two frames after submission. This interval ends before the
+pre-Present overlay and swap-chain `Present()`; it is not GPU wall-clock frame
+time. The result labels GPU timing unavailable when the driver/device returns
+no valid samples.
+If rendering stops before the requested interval, the result is explicitly
+incomplete.
+
+Compare runs only with the same scene/workload, VSync state, resolution,
+graphics settings, backend, and hardware; the wall-clock Present-call rate
+is not a cross-configuration GPU benchmark.
+
+`gfx_screenshot [filename]` likewise acknowledges a queued request, not a
+saved file. The next D3D11 frame is captured after the game overlay and
+before `Present()`; the console then reports the saved path or a failure. A
+request still queued at renderer shutdown is reported as not saved.
 
 ---
 
@@ -245,6 +275,26 @@ All profiling tools are accessible via the debug console:
 2. Check `profiler.hotspots 20` for excessive allocation sites
 3. Consider object pooling for frequently allocated types
 4. Run `profiler.leaks` at shutdown to catch leaks
+
+### Headless NullRHI Soak (PERF-100)
+
+`tools/perf-budget/run_nullrhi_soak.py` runs the real headless host
+(`-headless -game <module> -require-game -test-frames N`) for `--duration`
+seconds and watches it from outside. It fails on a crash, a hang, a memory
+slope above the provisional `--max-leak-bytes-per-hour` ceiling, or NullRHI
+resources still live at device shutdown (the host's single
+`SPARK_HEADLESS_NULLRHI_RESOURCES live=N` record must say `live=0`).
+
+| Host | Memory series | Main-thread heartbeat | Output |
+|---|---|---|---|
+| Linux | `VmRSS` from `/proc` | voluntary context switches and CPU time | `--report`, and `--out` for a >= 1 h run on the `linux-nullrhi-ci` row |
+| Windows | `PrivateUsage` from `K32GetProcessMemoryInfo` | `QueryThreadCycleTime` of the earliest-created thread | `--report` only; no Windows soak metric row is defined yet |
+
+A main thread blocked on a lock advances neither heartbeat and is declared
+hung after `--heartbeat-timeout`. Unbounded queue growth inside the host shows
+up only as a rising memory slope. `ctest -L nullrhi-soak` runs the 120 s
+`Soak_NullRHIHeadlessSmoke` on both hosts; its budgets are provisional harness
+guards, and `nullrhi.soak.*` stay `pending_measurement` in `perf-budgets/v1`.
 
 ### Frame Spikes
 

@@ -4,14 +4,13 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif
 
 #include "LootSystem.h"
 #include "Player.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
 
 #include <algorithm>
 #include <cmath>
@@ -35,11 +34,11 @@ namespace Spark
 
     void LootSystem::Initialize()
     {
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing loot system");
+        FPS_LOG_INFO("Initializing loot system");
         m_worldDrops.clear();
         m_activeBuffs.clear();
         BuildLootTable();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Loot system initialized", L"SUCCESS");
+        FPS_CONSOLE("Loot system initialized", "SUCCESS");
     }
 
     void LootSystem::BuildLootTable()
@@ -122,8 +121,8 @@ namespace Spark
         std::uniform_real_distribution<float> chance(0.0f, 1.0f);
         std::uniform_real_distribution<float> offset(-1.5f, 1.5f);
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Spawning enemy loot at (%.1f, %.1f, %.1f), boss=%d", position.x,
-                        position.y, position.z, isBossWave);
+        FPS_LOG_DEBUG("Spawning enemy loot at ({:.1f}, {:.1f}, {:.1f}), boss={}", position.x, position.y, position.z,
+                      static_cast<int>(isBossWave));
 
         const auto& table = isBossWave ? m_bossLootTable : m_lootTable;
 
@@ -172,8 +171,7 @@ namespace Spark
 
     void LootSystem::CollectDrop(WorldDrop& drop, Player* player)
     {
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Player collected loot drop type=%d, value=%.1f",
-                        static_cast<int>(drop.type), drop.value);
+        FPS_LOG_DEBUG("Player collected loot drop type={}, value={:.1f}", static_cast<int>(drop.type), drop.value);
         drop.collected = true;
 
         switch (drop.type)
@@ -253,10 +251,10 @@ namespace Spark
         if (m_callbacks.onPowerUpCollected)
             m_callbacks.onPowerUpCollected(type, duration);
 
-        std::wstring msg = L"Power-up: ";
-        msg += std::wstring(GetPowerUpName(type), GetPowerUpName(type) + strlen(GetPowerUpName(type)));
-        msg += L" (" + std::to_wstring(static_cast<int>(duration)) + L"s)";
-        LOG_TO_CONSOLE_IMMEDIATE(msg, L"SUCCESS");
+        std::string msg = "Power-up: ";
+        msg += std::string(GetPowerUpName(type), GetPowerUpName(type) + strlen(GetPowerUpName(type)));
+        msg += " (" + std::to_string(static_cast<int>(duration)) + "s)";
+        FPS_CONSOLE(msg, "SUCCESS");
     }
 
     bool LootSystem::HasBuff(PowerUpType type) const

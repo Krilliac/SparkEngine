@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Fail closed on final stable Windows outer installer signatures; never signs files."""
+"""Fail closed on final stable Windows outer installer signatures; never signs files.
+
+Stable Windows artifacts use a project-pinned self-signed Authenticode
+certificate.  The certificate must be installed in the protected release
+runner's trust store, so Windows may still display ``Unknown Publisher`` to
+ordinary users; that warning is an intentional, documented policy choice.
+"""
 from __future__ import annotations
 
 import argparse
@@ -11,9 +17,12 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import tempfile
 
 SIGNATURE_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
+# Module-loading progress is CLIXML on stderr, not part of the JSON evidence.
+$ProgressPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 # This verifier launches the Windows PowerShell binary by absolute path. Pin
 # its built-in security module as well: an inherited PSModulePath can otherwise
@@ -21,11 +30,29 @@ $ErrorActionPreference = 'Stop'
 $systemSecurityModule = Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1'
 Import-Module -Name $systemSecurityModule -Force -ErrorAction Stop
 $signature = Get-AuthenticodeSignature -LiteralPath $env:SPARK_SIGNATURE_PATH
+$signer = $signature.SignerCertificate
+$trustModel = if ($signer -and $signer.Subject -eq $signer.Issuer) { 'self-signed' } else { 'ca' }
+$chain = $null
+$chainBuild = $false
+$chainRootThumbprint = $null
+if ($signer) {
+    $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
+    $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+    $chainBuild = $chain.Build($signer)
+    if ($chain.ChainElements.Count -gt 0) {
+        $chainRootThumbprint = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate.Thumbprint
+    }
+}
 @{
     Status = [string]$signature.Status
     SignatureType = [string]$signature.SignatureType
-    SignerThumbprint = $signature.SignerCertificate.Thumbprint
-    SignerSubject = $signature.SignerCertificate.Subject
+    SignerThumbprint = if ($signer) { $signer.Thumbprint } else { $null }
+    SignerSubject = if ($signer) { $signer.Subject } else { $null }
+    SignerIssuer = if ($signer) { $signer.Issuer } else { $null }
+    TrustModel = $trustModel
+    ChainBuild = [string]$chainBuild
+    ChainRootThumbprint = $chainRootThumbprint
+    PublisherWarning = 'Unknown Publisher may be shown because the stable certificate is self-signed.'
     TimestampThumbprint = $signature.TimeStamperCertificate.Thumbprint
     TimestampSubject = $signature.TimeStamperCertificate.Subject
 } | ConvertTo-Json -Compress
@@ -78,12 +105,81 @@ def digest(path):
         return state.hexdigest()
 
 
-def verify(packages, version, source_sha, thumbprint, report_path, *, powershell, runner=subprocess.run):
+def _reject_duplicate_json_keys(pairs):
+    document = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        document[key] = value
+    return document
+
+
+def _validate_signature_evidence(signature, thumbprint, artifact_name, trust_model="self-signed"):
+    """Validate the identity fields retained from native Authenticode output."""
+    if not isinstance(signature, dict):
+        raise ValueError(f"Invalid signature evidence for {artifact_name}")
+    if signature.get("Status") != "Valid":
+        raise ValueError(f"Unacceptable signature status for {artifact_name}: {signature.get('Status')}")
+    if signature.get("SignatureType") != "Authenticode":
+        raise ValueError(f"Embedded Authenticode signature required: {artifact_name}")
+    if trust_model != "self-signed":
+        raise ValueError("SPARK_RELEASE_TRUST_MODEL must be exactly self-signed")
+    if signature.get("TrustModel") != "self-signed":
+        raise ValueError(f"Self-signed publisher certificate required: {artifact_name}")
+    signer = signature.get("SignerThumbprint")
+    if not isinstance(signer, str) or signer.upper() != thumbprint.upper():
+        raise ValueError(f"Unexpected publisher certificate: {artifact_name}")
+    timestamp = signature.get("TimestampThumbprint")
+    if not isinstance(timestamp, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", timestamp):
+        raise ValueError(f"Timestamp certificate required: {artifact_name}")
+    if any(not isinstance(signature.get(key), str) or not signature[key]
+           for key in ("SignerSubject", "SignerIssuer", "TimestampSubject")):
+        raise ValueError("Invalid signature certificate evidence schema")
+    if signature["SignerSubject"] != signature["SignerIssuer"]:
+        raise ValueError(f"Publisher certificate is not self-signed: {artifact_name}")
+    if signature.get("PublisherWarning") != "Unknown Publisher may be shown because the stable certificate is self-signed.":
+        raise ValueError("Self-signed publisher warning disclosure is required")
+    if signature.get("ChainBuild") != "True":
+        raise ValueError(f"Publisher certificate chain did not validate: {artifact_name}")
+    root = signature.get("ChainRootThumbprint")
+    if not isinstance(root, str) or root.upper() != signer.upper():
+        raise ValueError(f"Publisher chain is not anchored by the pinned self-signed certificate: {artifact_name}")
+
+
+def _write_report(report_path, report):
+    """Publish diagnostics without following a redirected report path."""
+    report_path = Path(report_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    if report_path.exists() or report_path.is_symlink():
+        regular_file(report_path)
+    elif _has_link_component(report_path.parent):
+        raise ValueError(f"Signature report path contains link traversal: {report_path}")
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{report_path.name}.", dir=report_path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(report, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, report_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def verify(packages, version, source_sha, thumbprint, report_path, *, powershell,
+           runner=subprocess.run, trust_model="self-signed"):
     report = {"scope": "stable-windows-outer-installers-only", "version": version, "source_sha": source_sha,
-              "publisher_thumbprint": thumbprint.upper(), "passed": False, "artifacts": [], "errors": []}
+              "publisher_thumbprint": thumbprint.upper(), "trust_model": trust_model,
+              "passed": False, "artifacts": [], "errors": []}
     try:
         if not re.fullmatch(r"[0-9a-fA-F]{40}", thumbprint):
             raise ValueError("SPARK_RELEASE_SIGNER_THUMBPRINT must configure the publisher certificate's 40-hex thumbprint")
+        if trust_model != "self-signed":
+            raise ValueError("SPARK_RELEASE_TRUST_MODEL must be exactly self-signed")
         files = selected_packages(packages, version, source_sha)
         encoded = base64.b64encode(SIGNATURE_SCRIPT.encode("utf-16-le")).decode("ascii")
         for path in files:
@@ -97,42 +193,52 @@ def verify(packages, version, source_sha, thumbprint, report_path, *, powershell
                 raise ValueError(f"Installer changed during signature verification: {path.name}")
             if result.returncode != 0:
                 raise ValueError(f"Authenticode process failed with exit {result.returncode}: {path.name}")
-            signature = json.loads(result.stdout)
+            signature = json.loads(
+                result.stdout, object_pairs_hook=_reject_duplicate_json_keys,
+            )
             if not isinstance(signature, dict):
                 raise ValueError("Invalid signature evidence schema")
             entry["signature"] = signature
-            if signature.get("Status") != "Valid":
-                raise ValueError(f"Unacceptable signature status for {path.name}: {signature.get('Status')}")
-            if signature.get("SignatureType") != "Authenticode":
-                raise ValueError(f"Embedded Authenticode signature required: {path.name}")
-            signer = signature.get("SignerThumbprint")
-            if not isinstance(signer, str) or signer.upper() != thumbprint.upper():
-                raise ValueError(f"Unexpected publisher certificate: {path.name}")
-            timestamp = signature.get("TimestampThumbprint")
-            if not isinstance(timestamp, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", timestamp):
-                raise ValueError(f"Timestamp certificate required: {path.name}")
-            if any(not isinstance(signature.get(key), str) or not signature[key]
-                   for key in ("SignerSubject", "TimestampSubject")):
-                raise ValueError("Invalid signature certificate evidence schema")
+            _validate_signature_evidence(signature, thumbprint, path.name, trust_model)
         report["passed"] = True
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         report["errors"].append(str(error))
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    try:
+        _write_report(report_path, report)
+    except (OSError, ValueError):
+        return 1
     return int(not report["passed"])
 
 
 def check_hashes(packages, version, source_sha, report_path):
-    """Require the bytes verified earlier to survive native qualification unchanged."""
+    """Require signed identity and bytes to survive native qualification unchanged."""
     try:
+        thumbprint = os.environ.get("SPARK_RELEASE_SIGNER_THUMBPRINT", "")
+        trust_model = os.environ.get("SPARK_RELEASE_TRUST_MODEL", "")
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", thumbprint):
+            raise ValueError("SPARK_RELEASE_SIGNER_THUMBPRINT must configure the publisher certificate's 40-hex thumbprint")
         files = selected_packages(packages, version, source_sha)
-        report = json.loads(report_path.read_text(encoding="utf-8"))
+        regular_file(report_path)
+        report = json.loads(
+            report_path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_json_keys,
+        )
         if (not isinstance(report, dict) or report.get("passed") is not True
                 or report.get("version") != version or report.get("source_sha") != source_sha
-                or report.get("scope") != "stable-windows-outer-installers-only"):
+                or report.get("scope") != "stable-windows-outer-installers-only"
+                or report.get("publisher_thumbprint") != thumbprint.upper()
+                or report.get("trust_model") != trust_model):
             raise ValueError("Signature report identity or result is invalid")
         expected = [{"name": p.name, "sha256": digest(p)} for p in files]
-        actual = [{"name": item["name"], "sha256": item["sha256"]} for item in report["artifacts"]]
+        artifacts = report.get("artifacts")
+        if not isinstance(artifacts, list) or len(artifacts) != len(files):
+            raise ValueError("Signature report artifact evidence is invalid")
+        actual = []
+        for item in artifacts:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                raise ValueError("Signature report artifact evidence is invalid")
+            _validate_signature_evidence(item.get("signature"), thumbprint, item["name"], trust_model)
+            actual.append({"name": item["name"], "sha256": item["sha256"]})
         if actual != expected:
             raise ValueError("Installer bytes changed after signature verification")
     except (OSError, ValueError, KeyError, TypeError) as error:
@@ -156,7 +262,9 @@ def main():
     except (ValueError, KeyError) as error:
         parser.error(str(error))
     result = verify(args.packages, args.version, args.source_sha,
-                    os.environ.get("SPARK_RELEASE_SIGNER_THUMBPRINT", ""), args.report, powershell=powershell)
+                    os.environ.get("SPARK_RELEASE_SIGNER_THUMBPRINT", ""), args.report,
+                    powershell=powershell,
+                    trust_model=os.environ.get("SPARK_RELEASE_TRUST_MODEL", ""))
     if result:
         print(args.report.read_text(encoding="utf-8"))
     return result

@@ -1,0 +1,20 @@
+{
+  "projectFileVersion": 1,
+  "name": "V1Project",
+  "version": "2.3.4",
+  "description": "SAVE-230 editor-state fixture",
+  "engineVersion": "0.9.0",
+  "template": "first-person",
+  "defaultScene": "Scenes/Main.sparkscene",
+  "lastOpenedScene": "Scenes/Arena.sparkscene",
+  "createdTime": 1767225600,
+  "lastModified": 1767312000,
+  "modules": [
+    "V1Project",
+    "SharedGameplay"
+  ],
+  "scenes": [
+    "Scenes/Main.sparkscene",
+    "Scenes/Arena.sparkscene"
+  ]
+}

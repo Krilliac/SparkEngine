@@ -15,7 +15,7 @@ Concrete time and effort savers for build, CI diagnosis, and git workflows. Thes
 Always pass `--parallel $(nproc)` to `cmake --build` to exploit all available CPU cores:
 
 ```bash
-cmake --build build --config Release --parallel $(nproc)
+cmake --build build/linux-gcc-release --config Release --parallel $(nproc)
 ```
 
 Without this flag, CMake builds single-threaded by default on some configurations, which is dramatically slower on multi-core hosts.
@@ -97,7 +97,7 @@ Useful for verifying which CMake toggles (`ENABLE_NETWORKING`, `ENABLE_DXR`, etc
 **Notes:**
 
 - Much faster than a full configure when you just need to check a flag.
-- Many toggles are OFF by default (e.g. `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL`, `ENABLE_DXR`, `SPARK_DOUBLE_PRECISION_PHYSICS`); `ENABLE_NETWORKING`, `ENABLE_EDITOR`, `ENABLE_GRAPHICS`, and `BUILD_GAME_MODULES` are ON. See `CLAUDE.md` "Build" for the authoritative toggle list.
+- Many toggles are OFF by default (e.g. `ENABLE_VULKAN`, `ENABLE_OPENGL`, `ENABLE_METAL`, `ENABLE_DXR`, `SPARK_DOUBLE_PRECISION_PHYSICS`); `ENABLE_NETWORKING`, `ENABLE_EDITOR`, and `BUILD_GAME_MODULES` are ON. See `CLAUDE.md` "Build" for the authoritative toggle list.
 
 ## Compiler Caching in CI (ccache / sccache)
 

@@ -4,8 +4,7 @@
  */
 
 #include "RacingRaceManager.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -23,9 +22,8 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing race manager initialized");
-        console.LogInfo("[Racing Race] Race manager initialized");
+        Spark::ModuleLog::Info(m_context, "Racing race manager initialized");
+        Spark::ModuleLog::Info(m_context, "[Racing Race] Race manager initialized");
         return true;
     }
 
@@ -91,10 +89,10 @@ namespace Racing
             racer.finishTime = 0.0f;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Race starting: %zu racers, %u laps", m_racers.size(), totalLaps);
-        console.LogInfo("[Racing Race] Race starting: " + std::to_string(m_racers.size()) + " racers, " +
-                        std::to_string(totalLaps) + " laps");
+        Spark::ModuleLog::Info(m_context, "Race starting: {} racers, {} laps", m_racers.size(), totalLaps);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing Race] Race starting: " + std::to_string(m_racers.size()) + " racers, " +
+                                   std::to_string(totalLaps) + " laps");
     }
 
     void RacingRaceManager::OnCheckpointCrossed(uint32_t vehicleId, uint32_t checkpointIndex)
@@ -255,6 +253,43 @@ namespace Racing
             for (float lap : racer.lapTimes)
                 if (!std::isfinite(lap) || lap < 0.0f)
                     return false;
+
+            // Lap records must be the ones OnLapCompleted produces: one lap time per completed lap, the best lap
+            // is the fastest of them (-1 before the first lap), and a racer finishes exactly on the final lap at
+            // a race time the clock has reached. A save that edits a best lap or a finishing result is refused.
+            if (racer.lapTimes.size() != racer.currentLap)
+            {
+                return false;
+            }
+            const float fastestLap = racer.lapTimes.empty() ? -1.0f : *std::ranges::min_element(racer.lapTimes);
+            if (racer.bestLapTime != fastestLap)
+            {
+                return false;
+            }
+            if (racer.finished &&
+                (racer.dnf || racer.currentLap != snapshot.totalLaps || racer.finishTime > snapshot.raceTime))
+            {
+                return false;
+            }
+            if (!racer.finished && (racer.currentLap >= snapshot.totalLaps || racer.finishTime != 0.0f))
+            {
+                return false;
+            }
+        }
+
+        // Placings are a permutation of 1..N, and a finished race has no racer still on track.
+        std::vector<bool> placingTaken(snapshot.racers.size(), false);
+        for (const RacerState& racer : snapshot.racers)
+        {
+            if (racer.position == 0 || racer.position > placingTaken.size() || placingTaken[racer.position - 1])
+            {
+                return false;
+            }
+            placingTaken[racer.position - 1] = true;
+            if (snapshot.state == RaceState::Finished && !racer.finished && !racer.dnf)
+            {
+                return false;
+            }
         }
 
         std::unordered_set<uint32_t> championshipIds;
@@ -322,9 +357,8 @@ namespace Racing
         {
             m_countdownTimer = 0.0f;
             m_state = RaceState::Racing;
-            auto& console = Spark::SimpleConsole::GetInstance();
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Race GO!");
-            console.LogInfo("[Racing Race] GO!");
+            Spark::ModuleLog::Info(m_context, "Race GO!");
+            Spark::ModuleLog::Info(m_context, "[Racing Race] GO!");
         }
     }
 
@@ -411,9 +445,8 @@ namespace Racing
             m_state = RaceState::Finished;
             AwardChampionshipPoints();
 
-            auto& console = Spark::SimpleConsole::GetInstance();
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Race finished!");
-            console.LogInfo("[Racing Race] Race finished!");
+            Spark::ModuleLog::Info(m_context, "Race finished!");
+            Spark::ModuleLog::Info(m_context, "[Racing Race] Race finished!");
         }
     }
 

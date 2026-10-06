@@ -15,7 +15,7 @@ SparkEngine's networking stack provides:
 - **Client-side prediction** with input buffering and server reconciliation
 - **Lag compensation** via server-side hitbox history rewinding
 - **Reliable and unreliable** message channels with ACK-based retransmission
-- **Dedicated server** support with RCON, map rotation, and LAN discovery
+- **Dedicated server** support with trusted local administration (remote RCON is unavailable), map rotation, and LAN discovery
 - **Instability simulation** for testing under packet loss, latency, and jitter
 
 All networking types live in `Spark::Net`. The `ClientPrediction` class lives in `Spark`.
@@ -279,7 +279,7 @@ config.maxClients = 24;
 config.tickRate = 64.0f;
 config.gameMode = Spark::Net::GameModeType::TeamDeathmatch;
 config.mapRotation = {"dm_arena", "dm_warehouse", "dm_rooftop"};
-config.rconPassword = "admin123";
+// There is no RCON password or port field: remote RCON is permanently unavailable (OD-05).
 
 server.Start(config);  // launches tick loop on background thread
 ```
@@ -291,11 +291,14 @@ server.Start(config);  // launches tick loop on background thread
 ./SparkServer --manifest spark.modules.json --port 27015 --max-clients 32  # compile-time headless (built-in)
 ```
 
-For the built-in server, build with `-DENABLE_GRAPHICS=OFF -DENABLE_SERVER_PROCESSES=ON`.
+For the built-in server, build with `-DENABLE_SERVER_PROCESSES=ON`.
 Every `SparkServer` launch must select game code with either `--manifest <path>`
 or `--module <game-library>`. See [Dedicated Server](Dedicated-Server.md) for full details.
 
-**RCON** -- built-in commands: `help`, `status`, `kick`, `ban`, `map`, `say`. Add custom ones:
+**Local administration (legacy RCON API names)** -- built-in commands: `help`, `status`, `kick`, `ban`, `map`, `say`.
+These commands are available only to trusted in-process host/control code. There is no network RCON listener,
+remote administration is permanently unavailable in stable-v1 (OD-05) with no config or command-line switch to
+enable it, and client chat cannot invoke administrative commands. Add custom ones:
 
 ```cpp
 server.RegisterRconCommand("restart", "Restart match",
@@ -310,7 +313,9 @@ server.RegisterRconCommand("restart", "Restart match",
 
 ### InstabilitySimulator
 
-Inject artificial latency, packet loss, jitter, and reordering via code or console:
+Inject artificial latency, packet loss, jitter, duplication and reordering via code, console or settings.
+`NetworkManager` applies it to every outgoing datagram, including server unicasts (`SendToClient`),
+and each server destination gets its own drop/delay/duplicate decision:
 
 ```cpp
 auto& sim = Spark::Net::InstabilitySimulator::GetInstance();
@@ -319,10 +324,19 @@ settings.enabled = true;
 settings.latencyMs = 100.0f;       // 100ms added latency
 settings.jitterMs = 20.0f;         // +/- 20ms variance
 settings.packetLossPercent = 5.0f; // 5% packet loss
+settings.duplicatePercent = 2.0f;  // 2% of packets sent twice
+settings.reorderPercent = 10.0f;   // 10% held reorderHoldMs (40 ms) so later packets overtake
+settings.seed = 1234;              // non-zero: reproducible decisions
 sim.SetSettings(settings);
 ```
 
-Or use console commands for live tuning: `net.lag 100`, `net.loss 5`, `net.jitter 20`, `net.reorder 10`.
+Console commands (dev only) write the `[Network]` settings and apply them immediately:
+`net_lag 100`, `net_loss 0.05` (a 0-1 fraction), `net_jitter 20`, `net_reorder 10`, `net_dup 2`,
+`net_impair_seed 1234`, `net_impair_off`, and `net_impair` to print the live state. Invalid values
+are rejected and leave the state unchanged. The same keys (`SimulatedLatencyMs`, `SimulatedPacketLoss`,
+`SimulatedJitterMs`, `SimulatedReorderPercent`, `SimulatedDuplicatePercent`, `SimulatedImpairmentSeed`)
+in a settings file take effect at network start-up, and the engine logs a warning whenever impairment
+is enabled.
 
 ### Two-Instance Local Test
 
@@ -355,7 +369,6 @@ net.SetAutoReconnect(reconnect);
 | `net_host [port] [max]` | Start server on port (default 27015) |
 | `net_connect <addr> [port]` | Connect to a server |
 | `net_disconnect` | Disconnect from current server |
-| `net_stack_status` | Show transport and legacy XOR-prototype status |
 | `prediction_status` | Show pending input count and correction magnitude |
 | `server_status` | Show DedicatedServer uptime, players, map, match state |
 | `net.lag <ms>` | Set simulated latency |

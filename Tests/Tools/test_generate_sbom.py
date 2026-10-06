@@ -1,0 +1,775 @@
+#!/usr/bin/env python3
+"""SEC-110: tools/generate-sbom.py SPDX generation and package reconciliation.
+
+Generation runs against a fake repository that tools/check-supply-chain.py
+passes (the fixture from Tests/test_check_supply_chain.py) plus the real
+repository lock. Reconciliation runs against synthetic packages classified by
+a small rule set with the real GOV-400 rule schema, and each negative case
+changes exactly one thing from a package that reconciles cleanly: a forged
+third-party payload, a component the lock does not know, a locked dependency
+missing from the package, a stale ``--not-configured`` declaration, or a
+notice inventory built from a different lock.
+
+Run:  python3 -m unittest Tests.Tools.test_generate_sbom -v
+      python3 Tests/Tools/test_generate_sbom.py
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+import zipfile
+from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
+from unittest import mock
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _load(name: str, rel: str):
+    spec = importlib.util.spec_from_file_location(name, str(PROJECT_ROOT / rel))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+sbom = _load("spark_generate_sbom_under_test", "tools/generate-sbom.py")
+base = _load("spark_sbom_supply_chain_fixture", "Tests/test_check_supply_chain.py")
+vulnerability_gate = _load("spark_sbom_vulnerability_gate", ".github/scripts/verify_vulnerability_findings.py")
+
+RULES_TEXT = json.dumps(
+    {
+        "schema": 1,
+        "fontSuffixes": [".ttf"],
+        "licenseText": {
+            "minimumBytes": 10,
+            "copyrightPattern": "[Cc]opyright",
+            "operativeTermsPattern": "Permission",
+        },
+        "thirdPartyRoots": ["^include/Vendor/"],
+        "payloadRules": [
+            {"pattern": "^include/Vendor/glue\\.h$", "firstParty": "repository-authored integration header"},
+            {"pattern": "^include/Vendor/alpha/", "component": "Alpha"},
+            {"pattern": "^lib/(lib)?alpha\\.(a|lib)$", "component": "Alpha"},
+            {"pattern": "^(bin|lib)/(lib)?Beta[^/]*$", "component": "Beta"},
+        ],
+        # GOV-400 rules must declare the fonts third-party code compiles into binaries; the
+        # fixture package embeds none, so no marker ever matches.
+        "embeddedFonts": {
+            "markers": ["FixtureEmbedded.ttf"],
+            "scanPattern": "^(bin|lib)/",
+            "maximumScanBytes": 1048576,
+        },
+    }
+)
+
+GOOD_FILES = [
+    "bin/SparkEngine",
+    "bin/libBeta-2.0.so",
+    "include/Vendor/alpha/alpha.h",
+    "include/Vendor/glue.h",
+    "lib/libalpha.a",
+    "share/fonts/Editor.ttf",
+    "THIRD_PARTY_NOTICES.txt",
+]
+
+
+def dependency(name: str, version: str):
+    return sbom.Dependency(
+        name=name,
+        source=f"https://github.com/example/{name.lower()}",
+        version=version,
+        declared_license="MIT",
+        spdx_license="MIT",
+        local_path=f"ThirdParty/{name}",
+        kind="vendored",
+        pin="0" * 64,
+        file_count=1,
+    )
+
+
+INVENTORY = [dependency("Alpha", "v1.0.0"), dependency("Beta", "b" * 40), dependency("Gamma", "snapshot")]
+
+
+def notice_text(entries: dict[str, str]) -> str:
+    body = "".join(
+        f"{name}\n  Source: x\n  Version: {version}\n  License: MIT\n\n" for name, version in entries.items()
+    )
+    return (
+        "SparkEngine Third-Party Notices\n================================\n\n"
+        "Dependency inventory\n--------------------\n\n"
+        f"{body}"
+        "Complete license and notice texts\n=================================\n\n"
+    )
+
+
+GOOD_NOTICE = {"Alpha": "v1.0.0", "Beta": "b" * 40, "Gamma": "snapshot"}
+
+RUNTIME_RULES_TEXT = json.dumps(
+    {
+        **json.loads(RULES_TEXT),
+        "payloadRules": [
+            *json.loads(RULES_TEXT)["payloadRules"],
+            {"pattern": "^bin/(vcruntime140|msvcp140)\\.dll$", "systemRuntime": "Microsoft Visual C++ Runtime"},
+        ],
+    }
+)
+
+
+class ReconcileCase(unittest.TestCase):
+    """A synthetic package that reconciles; each test changes one thing."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sbom-rec-")
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.rules = sbom.notices.parse_package_rules(RULES_TEXT, "fixture rules")
+        self.notice = self.tmp / "THIRD_PARTY_NOTICES.txt"
+        self.write_notice(GOOD_NOTICE)
+
+    def write_notice(self, entries: dict[str, str]) -> None:
+        self.notice.write_text(notice_text(entries), encoding="utf-8")
+
+    def run_reconcile(self, files=None, not_configured=(), inventory=None) -> dict:
+        return sbom.reconcile(
+            INVENTORY if inventory is None else inventory,
+            self.rules,
+            sorted(GOOD_FILES if files is None else files),
+            self.notice,
+            list(not_configured),
+        )
+
+    def assert_error(self, report: dict, *needles: str) -> None:
+        blob = "\n".join(report["errors"])
+        self.assertTrue(report["errors"], "expected a reconciliation error")
+        for needle in needles:
+            self.assertIn(needle, blob)
+
+
+class TestReconcileBaseline(ReconcileCase):
+    def test_clean_package_reconciles(self) -> None:
+        report = self.run_reconcile()
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["components"], {"Alpha": 2, "Beta": 1})
+        self.assertEqual(report["firstPartyExemptFiles"], 1)
+        # Gamma has no install payload rule: reported, never claimed as verified.
+        self.assertEqual(report["compiledInOnly"], ["Gamma"])
+        self.assertEqual(report["schema"], sbom.RECONCILE_SCHEMA)
+
+
+class TestReconcileForgedPayload(ReconcileCase):
+    def test_unmapped_file_under_third_party_root_fails(self) -> None:
+        report = self.run_reconcile(GOOD_FILES + ["include/Vendor/evil/backdoor.h"])
+        self.assert_error(report, "include/Vendor/evil/backdoor.h", "no package rule maps")
+
+    def test_file_of_an_unlocked_component_fails(self) -> None:
+        inventory = [dep for dep in INVENTORY if dep.name != "Beta"]
+        self.write_notice({k: v for k, v in GOOD_NOTICE.items() if k != "Beta"})
+        report = self.run_reconcile(inventory=inventory)
+        self.assert_error(report, "bin/libBeta-2.0.so: ships component 'Beta'", "does not lock")
+
+    def test_rule_for_an_unlocked_component_fails_even_without_files(self) -> None:
+        inventory = [dep for dep in INVENTORY if dep.name != "Beta"]
+        self.write_notice({k: v for k, v in GOOD_NOTICE.items() if k != "Beta"})
+        files = [f for f in GOOD_FILES if "Beta" not in f]
+        report = self.run_reconcile(files, inventory=inventory)
+        self.assert_error(report, "package rule names component 'Beta'")
+
+    def test_first_party_exemption_is_exact(self) -> None:
+        report = self.run_reconcile(GOOD_FILES + ["include/Vendor/glue2.h"])
+        self.assert_error(report, "include/Vendor/glue2.h")
+
+
+class TestReconcileMissingDependency(ReconcileCase):
+    def test_locked_shipped_dependency_absent_fails(self) -> None:
+        files = [f for f in GOOD_FILES if "Beta" not in f]
+        report = self.run_reconcile(files)
+        self.assert_error(report, "locked dependency 'Beta'", "ships no file")
+
+    def test_not_configured_declaration_accepts_a_real_absence(self) -> None:
+        files = [f for f in GOOD_FILES if "Beta" not in f]
+        report = self.run_reconcile(files, not_configured=["Beta"])
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["notConfigured"], ["Beta"])
+
+    def test_stale_not_configured_declaration_fails(self) -> None:
+        report = self.run_reconcile(not_configured=["Beta"])
+        self.assert_error(report, "--not-configured Beta", "ships 1 file")
+
+    def test_not_configured_cannot_name_a_compiled_in_or_unknown_dependency(self) -> None:
+        for name in ("Gamma", "Nonexistent"):
+            with self.subTest(name=name):
+                report = self.run_reconcile(not_configured=[name])
+                self.assert_error(report, f"--not-configured {name}", "not a locked dependency with install payload")
+
+
+class TestReconcileNoticeInventory(ReconcileCase):
+    def test_notice_version_from_a_different_lock_fails(self) -> None:
+        self.write_notice({**GOOD_NOTICE, "Alpha": "v0.9.0"})
+        self.assert_error(self.run_reconcile(), "lists 'Alpha' at version 'v0.9.0'", "'v1.0.0'")
+
+    def test_notice_missing_a_locked_dependency_fails(self) -> None:
+        self.write_notice({k: v for k, v in GOOD_NOTICE.items() if k != "Gamma"})
+        self.assert_error(self.run_reconcile(), "does not list locked dependency 'Gamma'")
+
+    def test_notice_listing_an_unlocked_dependency_fails(self) -> None:
+        self.write_notice({**GOOD_NOTICE, "Delta": "1.0"})
+        self.assert_error(self.run_reconcile(), "lists 'Delta', which dependencies.lock does not lock")
+
+    def test_notice_font_entries_are_reported_not_failed(self) -> None:
+        # cmake/SparkThirdPartyAudit.cmake adds these; fonts are the GOV-400 notice gate's, not the lock's.
+        fonts = {"Roboto (editor font)": "3.0", "ProggyClean (font embedded in Dear ImGui)": "1"}
+        self.write_notice({**GOOD_NOTICE, **fonts})
+        report = self.run_reconcile()
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["fontEntries"], sorted(fonts))
+        # Only the exact CMake shapes are fonts; anything else unlocked still fails.
+        self.write_notice({**GOOD_NOTICE, "Fonty (editor fonts)": "1"})
+        self.assert_error(self.run_reconcile(), "lists 'Fonty (editor fonts)', which dependencies.lock does not lock")
+
+    def test_missing_notice_is_a_failure(self) -> None:
+        self.notice.unlink()
+        with self.assertRaises(sbom.SbomError):
+            self.run_reconcile()
+
+    def test_notice_without_generated_inventory_is_an_input_error(self) -> None:
+        self.notice.write_text("hand-written notices\n", encoding="utf-8")
+        with self.assertRaises(sbom.InputError):
+            self.run_reconcile()
+
+    def test_authoritative_system_runtime_notice_is_not_lock_dependency(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        runtime_notice = (
+            notice_text(GOOD_NOTICE).replace("Complete license and notice texts\n=================================\n\n", "")
+            + "Microsoft Visual C++ Runtime\n"
+            "  Source: Microsoft Visual C++ Redistributable\n"
+            "  Version: MSVC 14.44\n"
+            "  License: Microsoft Software License Terms\n"
+            "  Terms: Redistributed unmodified under the Microsoft Software License Terms\n"
+            "  Files: vcruntime140.dll\n\n"
+            "Complete license and notice texts\n=================================\n\n"
+        )
+        self.notice.write_text(runtime_notice, encoding="utf-8")
+        files = GOOD_FILES + ["bin/vcruntime140.dll"]
+        report = sbom.reconcile(INVENTORY, rules, sorted(files), self.notice, [])
+        self.assertEqual(report["errors"], [])
+
+    def test_runtime_notice_without_terms_remains_fail_closed(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        self.notice.write_text(
+            notice_text(GOOD_NOTICE).replace("Complete license and notice texts\n=================================\n\n", "")
+            + "Microsoft Visual C++ Runtime\n"
+            "  Source: Microsoft Visual C++ Redistributable\n"
+            "  Version: MSVC 14.44\n"
+            "  Files: vcruntime140.dll\n\n"
+            "Complete license and notice texts\n=================================\n\n",
+            encoding="utf-8",
+        )
+        report = sbom.reconcile(INVENTORY, rules, sorted(GOOD_FILES + ["bin/vcruntime140.dll"]), self.notice, [])
+        self.assertIn("authoritative Terms line", "\n".join(report["errors"]))
+
+    def test_shipped_runtime_requires_an_inventory_entry(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        report = sbom.reconcile(
+            INVENTORY,
+            rules,
+            sorted(GOOD_FILES + ["bin/vcruntime140.dll"]),
+            self.notice,
+            [],
+        )
+        self.assertIn("no authoritative system runtime entry", "\n".join(report["errors"]))
+
+    def test_runtime_entry_without_payload_is_not_an_authorization(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        notice = notice_text(GOOD_NOTICE).replace(
+            "Complete license and notice texts\n=================================\n\n", ""
+        ) + (
+            "Microsoft Visual C++ Runtime\n"
+            "  Source: Microsoft Visual C++ Redistributable\n"
+            "  Version: MSVC 14.44\n"
+            "  Terms: Redistributed unmodified under the Microsoft Software License Terms\n"
+            "  Files: vcruntime140.dll\n\n"
+            "Complete license and notice texts\n=================================\n\n"
+        )
+        self.notice.write_text(notice, encoding="utf-8")
+        report = sbom.reconcile(INVENTORY, rules, sorted(GOOD_FILES), self.notice, [])
+        self.assertIn("ships no runtime files", "\n".join(report["errors"]))
+
+    def test_unreviewed_runtime_looking_notice_stays_unknown(self) -> None:
+        rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
+        notice = notice_text({**GOOD_NOTICE, "Microsoft Visual C++ Runtime (unreviewed)": "MSVC 14.44"})
+        self.notice.write_text(notice, encoding="utf-8")
+        report = sbom.reconcile(INVENTORY, rules, sorted(GOOD_FILES), self.notice, [])
+        self.assertIn("Microsoft Visual C++ Runtime (unreviewed)", "\n".join(report["errors"]))
+
+
+class TestInstallManifestAndTree(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sbom-inv-")
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+
+    def manifest(self, lines: list[str]) -> Path:
+        path = self.tmp / "install_manifest.txt"
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return path
+
+    def test_prefix_is_the_shortest_notice_directory(self) -> None:
+        prefix = "/opt/stage"
+        path = self.manifest(
+            [
+                f"{prefix}/bin/SparkEngine",
+                f"{prefix}/share/sdk/THIRD_PARTY_NOTICES.txt",
+                f"{prefix}/THIRD_PARTY_NOTICES.txt",
+            ]
+        )
+        files, found = sbom._read_install_manifest(path, None)
+        self.assertEqual(found, Path(prefix))
+        self.assertEqual(files, ["THIRD_PARTY_NOTICES.txt", "bin/SparkEngine", "share/sdk/THIRD_PARTY_NOTICES.txt"])
+
+    def test_windows_manifest_paths_are_normalized(self) -> None:
+        path = self.manifest(["C:/stage/bin/SDL2.dll", "C:\\stage\\THIRD_PARTY_NOTICES.txt"])
+        files, found = sbom._read_install_manifest(path, None)
+        self.assertEqual(found.as_posix(), "C:/stage")
+        self.assertIn("bin/SDL2.dll", files)
+
+    def test_file_outside_the_prefix_is_rejected(self) -> None:
+        path = self.manifest(["/opt/stage/THIRD_PARTY_NOTICES.txt", "/etc/passwd"])
+        with self.assertRaisesRegex(sbom.InputError, "outside install prefix"):
+            sbom._read_install_manifest(path, None)
+
+    def test_dot_segments_are_rejected(self) -> None:
+        path = self.manifest(["/opt/stage/THIRD_PARTY_NOTICES.txt", "/opt/stage/lib/../../evil"])
+        with self.assertRaisesRegex(sbom.InputError, "not a normalized path"):
+            sbom._read_install_manifest(path, None)
+
+    def test_manifest_without_notice_requires_an_explicit_prefix(self) -> None:
+        path = self.manifest(["/opt/stage/bin/SparkEngine"])
+        with self.assertRaisesRegex(sbom.InputError, "--install-prefix"):
+            sbom._read_install_manifest(path, None)
+        files, _ = sbom._read_install_manifest(path, "/opt/stage")
+        self.assertEqual(files, ["bin/SparkEngine"])
+
+    def test_empty_manifest_is_rejected(self) -> None:
+        with self.assertRaisesRegex(sbom.InputError, "lists no installed file"):
+            sbom._read_install_manifest(self.manifest([]), "/opt/stage")
+
+    @unittest.skipIf(os.name == "nt", "symlink creation needs privileges on Windows")
+    def test_tree_walk_reports_a_symlinked_directory_without_descending(self) -> None:
+        root = self.tmp / "pkg"
+        (root / "include" / "Vendor").mkdir(parents=True)
+        outside = self.tmp / "outside"
+        (outside / "deep").mkdir(parents=True)
+        (outside / "deep" / "hidden.h").write_text("x", encoding="utf-8")
+        os.symlink(outside, root / "include" / "Vendor" / "linked")
+        self.assertEqual(sbom._walk_package(root), ["include/Vendor/linked"])
+
+
+class TestReconcileCli(unittest.TestCase):
+    """End to end through main(): exit codes and the JSON report."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sbom-cli-")
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.prefix = self.tmp / "stage"
+        self.prefix.mkdir()
+        (self.prefix / "THIRD_PARTY_NOTICES.txt").write_text(notice_text(GOOD_NOTICE), encoding="utf-8")
+        rules = sbom.notices.parse_package_rules(RULES_TEXT, "fixture rules")
+        patches = [
+            mock.patch.object(sbom, "load_inventory", return_value=INVENTORY),
+            mock.patch.object(sbom, "load_rules", return_value=rules),
+        ]
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def run_main(self, files: list[str], *extra: str) -> tuple[int, str]:
+        manifest = self.tmp / "install_manifest.txt"
+        manifest.write_text("".join(f"{self.prefix.as_posix()}/{rel}\n" for rel in files), encoding="utf-8")
+        err = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = sbom.main(["reconcile", "--install-manifest", str(manifest), *extra])
+        return code, err.getvalue()
+
+    def test_clean_manifest_exits_zero_and_writes_report(self) -> None:
+        report_path = self.tmp / "report.json"
+        code, err = self.run_main(GOOD_FILES, "--json-report", str(report_path))
+        self.assertEqual(code, 0, err)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["packageFiles"], len(GOOD_FILES))
+
+    def test_forged_payload_exits_one(self) -> None:
+        code, err = self.run_main(GOOD_FILES + ["include/Vendor/evil.h"])
+        self.assertEqual(code, 1)
+        self.assertIn("include/Vendor/evil.h", err)
+
+    def test_missing_dependency_exits_one(self) -> None:
+        code, err = self.run_main([f for f in GOOD_FILES if "alpha" not in f])
+        self.assertEqual(code, 1)
+        self.assertIn("locked dependency 'Alpha'", err)
+
+    def test_malformed_manifest_exits_two(self) -> None:
+        code, err = self.run_main(GOOD_FILES, "--install-prefix", "/somewhere/else")
+        self.assertEqual(code, 2)
+        self.assertIn("outside install prefix", err)
+
+    def make_archive(self, suffix: str, *, traversal: bool = False) -> Path:
+        for rel in GOOD_FILES:
+            target = self.prefix / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if rel != "THIRD_PARTY_NOTICES.txt":
+                target.write_bytes(b"fixture\n")
+        archive = self.tmp / f"SparkEngine-test{suffix}"
+        if suffix == ".zip":
+            with zipfile.ZipFile(archive, "w") as bundle:
+                for path in self.prefix.rglob("*"):
+                    if path.is_file():
+                        name = path.relative_to(self.prefix).as_posix()
+                        bundle.write(path, name)
+                if traversal:
+                    bundle.writestr("../escape.txt", b"bad")
+        else:
+            with tarfile.open(archive, "w:gz") as bundle:
+                bundle.add(self.prefix, arcname="package")
+                if traversal:
+                    info = tarfile.TarInfo("../escape.txt")
+                    info.size = 3
+                    bundle.addfile(info, io.BytesIO(b"bad"))
+        return archive
+
+    def run_archive(self, archive: Path, *extra: str) -> tuple[int, str, Path]:
+        report_path = self.tmp / "archive-report.json"
+        err = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = sbom.main(["reconcile", "--archive", str(archive), "--json-report", str(report_path), *extra])
+        return code, err.getvalue(), report_path
+
+    def test_final_zip_report_binds_archive_and_source_lock(self) -> None:
+        archive = self.make_archive(".zip")
+        code, err, report_path = self.run_archive(archive)
+        self.assertEqual(code, 0, err)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["artifact"]["name"], archive.name)
+        self.assertEqual(report["artifact"]["format"], "zip")
+        self.assertEqual(report["artifact"]["sha256"], sbom.hashlib.sha256(archive.read_bytes()).hexdigest())
+        self.assertRegex(report["source"]["sha"], r"^[0-9a-f]{40}$")
+        self.assertRegex(report["source"]["dependencyLockSha256"], r"^[0-9a-f]{64}$")
+
+    def test_final_tarball_reconciles(self) -> None:
+        archive = self.make_archive(".tar.gz")
+        code, err, report_path = self.run_archive(archive)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(report_path.read_text(encoding="utf-8"))["artifact"]["format"], "tar.gz")
+
+    def test_archive_path_traversal_is_rejected(self) -> None:
+        for suffix in (".zip", ".tar.gz"):
+            with self.subTest(suffix=suffix):
+                code, err, _ = self.run_archive(self.make_archive(suffix, traversal=True))
+                self.assertEqual(code, 2)
+                self.assertIn("not a normalized relative path", err)
+
+
+class TestRealRepositoryLock(unittest.TestCase):
+    """The committed lock, license policy and GOV-400 rules agree today."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        base._require("cmake")
+        cls.inventory = sbom.load_inventory(PROJECT_ROOT)
+
+    def test_every_package_rule_component_is_locked(self) -> None:
+        names = {dep.name for dep in self.inventory}
+        rules = sbom.load_rules()
+        unlocked = sorted({r.component for r in rules.payload if r.component} - names)
+        self.assertEqual(unlocked, [])
+
+    def test_submodule_versions_are_the_locked_gitlinks(self) -> None:
+        lock = json.loads((PROJECT_ROOT / "ThirdParty/supply-chain.lock").read_text(encoding="utf-8"))
+        submodules = {dep.local_path: dep for dep in self.inventory if dep.kind == "submodule"}
+        self.assertEqual(set(submodules), set(lock["submodule_gitlinks"]))
+        for path, dep in submodules.items():
+            self.assertEqual(dep.version, lock["submodule_gitlinks"][path])
+            self.assertEqual(dep.pin, dep.version)
+
+    def test_every_locked_dependency_is_matchable_by_a_vulnerability_scan(self) -> None:
+        self.assertTrue(self.inventory)
+        for dep in self.inventory:
+            self.assertTrue(bool(dep.cpe) != bool(dep.cpe_unavailable_reason), f"{dep.name}: cpe xor reason")
+            if dep.kind == "submodule":
+                self.assertTrue(dep.upstream_version, f"{dep.name}: a submodule pin needs its upstream release")
+        self.assertTrue(any(dep.cpe for dep in self.inventory), "no dependency carries a CPE; the scan is vacuous")
+
+    def test_generated_document_describes_the_whole_lock(self) -> None:
+        dirty = subprocess.run(
+            ["git", "-C", str(PROJECT_ROOT), "diff", "--quiet", "HEAD", "--", "ThirdParty/dependencies.lock",
+             "ThirdParty/supply-chain.lock"],
+            capture_output=True,
+            check=False,
+        )
+        if dirty.returncode != 0:
+            self.skipTest("lockfiles have uncommitted edits; generation correctly refuses them")
+        first = sbom.render(sbom.generate(PROJECT_ROOT))
+        self.assertEqual(first, sbom.render(sbom.generate(PROJECT_ROOT)), "generation must be deterministic")
+        document = json.loads(first)
+        self.assertEqual(document["spdxVersion"], "SPDX-2.3")
+        packages = {p["name"]: p for p in document["packages"] if p["SPDXID"] != sbom.ROOT_SPDX_ID}
+        self.assertEqual(set(packages), {dep.name for dep in self.inventory})
+        for dep in self.inventory:
+            self.assertEqual(packages[dep.name]["licenseDeclared"], dep.spdx_license)
+            self.assertEqual(packages[dep.name]["versionInfo"], dep.upstream_version or dep.version)
+            cpes = [ref["referenceLocator"] for ref in packages[dep.name].get("externalRefs", [])
+                    if ref["referenceType"] == "cpe23Type"]
+            self.assertEqual(cpes, [dep.cpe] if dep.cpe else [])
+        ids = [p["SPDXID"] for p in document["packages"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        # The dependency-policy CI job feeds this document to the vulnerability gate.
+        self.assertEqual(vulnerability_gate.validate_sbom(document), {p["name"] for p in document["packages"]})
+        head = subprocess.run(["git", "-C", str(PROJECT_ROOT), "rev-parse", "HEAD"], capture_output=True,
+                              text=True, check=True).stdout.strip()
+        lock_digest = sbom.provenance._committed_lock_digest(PROJECT_ROOT, head)
+        self.assertEqual(document["documentNamespace"], f"urn:spark-engine:spdx:{head}:{lock_digest}")
+
+
+class TestGenerateFakeRepository(base.FakeRepoCase):
+    """Generation against a fake repository the real supply-chain checker passes."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write("CMakeLists.txt", 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "version")\n')
+        self.write("LICENSE", "Fixture Open License 1.0\n\nCopyright (c) 2026 fixture\n")
+        self.set_policy(cpe_unavailable_reason="The fixture dependency has no NVD product.")
+        self.commit("sbom inputs")
+
+    def set_policy(self, **fields: str) -> None:
+        data = self.lock()
+        data["license_policy"] = {"dependencies": {"demo": {"declared": "MIT", "spdx": "MIT", **fields}}}
+        self.set_lock(data)
+
+    def run_main(self, *args: str) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            try:
+                code = sbom.main(["--source-root", str(self.repo), *args])
+            except SystemExit as exit_:
+                code = int(exit_.code)
+        return code, out.getvalue(), err.getvalue()
+
+    def head(self) -> str:
+        return subprocess.run(["git", "-C", str(self.repo), "rev-parse", "HEAD"], capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    def test_document_binds_to_commit_and_committed_lock_digest(self) -> None:
+        code, out, err = self.run_main()
+        self.assertEqual(code, 0, err)
+        document = json.loads(out)
+        head = self.head()
+        lock_digest = sbom.provenance._committed_lock_digest(self.repo, head)
+        self.assertEqual(document["documentNamespace"], f"urn:spark-engine:spdx:{head}:{lock_digest}")
+        self.assertIn(lock_digest, document["creationInfo"]["comment"])
+        root, demo = document["packages"]
+        self.assertEqual((root["name"], root["versionInfo"]), ("SparkEngine", "1.2.3"))
+        self.assertEqual(root["licenseDeclared"], "LicenseRef-Fixture-Open-License-1.0")
+        self.assertEqual(document["hasExtractedLicensingInfos"][0]["licenseId"], root["licenseDeclared"])
+        self.assertEqual(demo["name"], "demo")
+        self.assertEqual(demo["licenseDeclared"], "MIT")
+        self.assertEqual(demo["downloadLocation"], "https://github.com/example/demo")
+        self.assertNotIn("externalRefs", demo, "a vendored snapshot without an upstream version asserts no purl")
+        self.assertIn("No CPE: The fixture dependency has no NVD product.", demo["comment"])
+        digest = self.lock()["tree_digests"]["ThirdParty/Utils/demo"]["digest"]
+        self.assertIn(f"sha256:{digest}", demo["sourceInfo"])
+        self.assertEqual(
+            document["relationships"],
+            [
+                {"relatedSpdxElement": "SPDXRef-SparkEngine", "relationshipType": "DESCRIBES",
+                 "spdxElementId": "SPDXRef-DOCUMENT"},
+                {"relatedSpdxElement": "SPDXRef-Package-demo", "relationshipType": "DEPENDS_ON",
+                 "spdxElementId": "SPDXRef-SparkEngine"},
+            ],
+        )
+
+    def test_check_reproduces_and_detects_tampering(self) -> None:
+        target = Path(self._tmp.name) / "sbom.spdx.json"
+        self.assertEqual(self.run_main("--out", str(target))[0], 0)
+        self.assertEqual(self.run_main("--check", str(target))[0], 0)
+        document = json.loads(target.read_text(encoding="utf-8"))
+        document["packages"][1]["licenseDeclared"] = "Unlicense"
+        target.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        code, _, err = self.run_main("--check", str(target))
+        self.assertEqual(code, 1)
+        self.assertIn("does not equal", err)
+
+    def test_check_rejects_newline_translated_copy(self) -> None:
+        target = Path(self._tmp.name) / "sbom.spdx.json"
+        self.assertEqual(self.run_main("--out", str(target))[0], 0)
+        target.write_bytes(target.read_bytes().replace(b"\n", b"\r\n"))
+        code, _, err = self.run_main("--check", str(target))
+        self.assertEqual(code, 1)
+        self.assertIn("does not equal", err)
+
+    def test_uncommitted_lock_edit_is_refused(self) -> None:
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        manifest.write_text(manifest.read_text(encoding="utf-8").replace("v1.2.3", "v9.9.9"), encoding="utf-8")
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("differs from the committed blob", err)
+
+    def test_source_sha_other_than_head_is_refused(self) -> None:
+        code, _, err = self.run_main("--source-sha", "0" * 40)
+        self.assertEqual(code, 1)
+        self.assertIn("is not the declared source SHA", err)
+
+    def test_locked_container_without_manifest_entry_is_refused(self) -> None:
+        data = self.lock()
+        data["managed_vendored_dirs"].append("ThirdParty/Extra")
+        self.set_lock(data)
+        self.write("ThirdParty/Extra/thing.h", "/* payload */\n")
+        self.commit()
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("ThirdParty/Extra is locked in supply-chain.lock but has no dependencies.lock entry", err)
+
+    def test_unresolvable_license_is_refused(self) -> None:
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        manifest.write_text(manifest.read_text(encoding="utf-8").replace("|MIT|", "|Proprietary|"), encoding="utf-8")
+        self.set_policy(declared="Proprietary", spdx="LicenseRef-Proprietary", cpe_unavailable_reason="x" * 16)
+        self.commit()
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("allow-list", err)
+
+    def test_dependency_without_cpe_or_reason_is_refused(self) -> None:
+        self.set_policy()
+        self.commit()
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("names no cpe or cpe_unavailable_reason", err)
+
+    def test_cpe_is_emitted_as_a_security_reference_with_the_upstream_version(self) -> None:
+        cpe = "cpe:2.3:a:example:demo:1.2.3:*:*:*:*:*:*:*"
+        self.set_policy(upstream_version="1.2.3", cpe=cpe)
+        self.commit()
+        code, out, err = self.run_main()
+        self.assertEqual(code, 0, err)
+        demo = json.loads(out)["packages"][1]
+        self.assertEqual(demo["versionInfo"], "1.2.3")
+        self.assertIn("v1.2.3 (vendored snapshot)", demo["comment"])
+        self.assertEqual(
+            demo["externalRefs"],
+            [
+                {"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": cpe},
+                {"referenceCategory": "PACKAGE-MANAGER", "referenceType": "purl",
+                 "referenceLocator": "pkg:generic/demo@1.2.3"},
+            ],
+        )
+
+    def test_empty_license_field_is_refused(self) -> None:
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        manifest.write_text(manifest.read_text(encoding="utf-8").replace("|MIT|", "||"), encoding="utf-8")
+        self.commit()
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("empty name or license", err)
+
+
+class TestInventoryConsistency(unittest.TestCase):
+    """Lock disagreements that the fake repository cannot express with a real submodule."""
+
+    CPE = "cpe:2.3:a:example:sub:1.0.0:*:*:*:*:*:*:*"
+    RECORD = {"declared": "MIT", "spdx": "MIT", "upstream_version": "1.0.0", "upstream_tag_commit": "a" * 40,
+              "cpe": CPE}
+
+    def inventory(self, fields: list[str], record: dict | None = None):
+        lock = {
+            "submodule_gitlinks": {"ThirdParty/Sub": "a" * 40},
+            "managed_vendored_dirs": [],
+            "tree_digests": {},
+            "license_policy": {"dependencies": {"Sub": self.RECORD if record is None else record}},
+        }
+        with mock.patch.object(sbom.supply_chain, "load_lockfile", return_value=lock), mock.patch.object(
+            sbom.supply_chain, "export_manifest_entries", return_value=[fields]
+        ):
+            return sbom.load_inventory(PROJECT_ROOT)
+
+    def record(self, **changes: str | None) -> dict:
+        record = {**self.RECORD, **changes}
+        return {key: value for key, value in record.items() if value is not None}
+
+    def fields(self, version: str, path: str = "ThirdParty/Sub") -> list[str]:
+        return ["Sub", "https://github.com/example/sub.git", version, "MIT", path, "x.h", "M", "F", "WARN", "L"]
+
+    def test_matching_gitlink_yields_a_purl_pinned_package(self) -> None:
+        (dep,) = self.inventory(self.fields("a" * 40))
+        package = sbom._package(dep)
+        self.assertEqual(package["downloadLocation"], f"git+https://github.com/example/sub.git@{'a' * 40}")
+        self.assertEqual(package["versionInfo"], "1.0.0")
+        self.assertEqual(
+            [ref["referenceLocator"] for ref in package["externalRefs"]],
+            [self.CPE, f"pkg:github/example/sub@{'a' * 40}", "pkg:generic/Sub@1.0.0"],
+        )
+
+    def test_submodule_without_upstream_version_is_refused(self) -> None:
+        for label, record in (
+            ("no version", self.record(upstream_version=None, upstream_tag_commit=None, cpe=None,
+                                       cpe_unavailable_reason="The fixture has no NVD product.")),
+            ("no evidence", self.record(upstream_tag_commit=None)),
+        ):
+            with self.subTest(label), self.assertRaisesRegex(sbom.SbomError, "needs an upstream_version"):
+                self.inventory(self.fields("a" * 40), record)
+
+    def test_dependency_without_cpe_or_reason_is_refused(self) -> None:
+        with self.assertRaisesRegex(sbom.SbomError, "names no cpe or cpe_unavailable_reason"):
+            self.inventory(self.fields("a" * 40), self.record(cpe=None))
+
+    def test_upstream_version_must_agree_with_the_tag_commit(self) -> None:
+        with self.assertRaisesRegex(sbom.SbomError, "must not claim commits past it"):
+            self.inventory(self.fields("a" * 40), self.record(upstream_version="1.0.0+3"))
+        with self.assertRaisesRegex(sbom.SbomError, "record the commits past it"):
+            self.inventory(self.fields("a" * 40), self.record(upstream_tag_commit="c" * 40))
+        (dep,) = self.inventory(self.fields("a" * 40), self.record(upstream_version="1.0.0+3",
+                                                                   upstream_tag_commit="c" * 40))
+        self.assertEqual(sbom._package(dep)["versionInfo"], "1.0.0+3")
+
+    def test_a_reviewed_version_source_stands_in_for_a_tag(self) -> None:
+        (dep,) = self.inventory(self.fields("a" * 40), self.record(
+            upstream_tag_commit=None, upstream_version_source="VERSION macro in the pinned header."))
+        self.assertEqual(dep.upstream_version, "1.0.0")
+
+    def test_manifest_revision_disagreeing_with_locked_gitlink_is_refused(self) -> None:
+        with self.assertRaisesRegex(sbom.SbomError, "pins gitlink"):
+            self.inventory(self.fields("b" * 40))
+
+    def test_manifest_path_outside_every_locked_container_is_refused(self) -> None:
+        with self.assertRaisesRegex(sbom.SbomError, "neither a locked submodule gitlink nor a managed vendored"):
+            self.inventory(self.fields("a" * 40, path="ThirdParty/Elsewhere"))
+
+
+class ArchiveBoundaryPureTests(unittest.TestCase):
+    def test_unsafe_names_are_rejected_before_any_extraction(self):
+        for name in ("../escape", "/absolute", "a/./b", "a//b", "C:stream", "a\\b",
+                     "dir/file:stream", "dir/NUL.txt", "dir/evil.", "dir/evil ", "bad\x00name"):
+            with self.subTest(name=name), self.assertRaises(sbom.InputError):
+                sbom._archive_member_path(name)
+        member, key = sbom._archive_member_path("Package/bin/SparkEngine.exe")
+        self.assertEqual(member.as_posix(), "Package/bin/SparkEngine.exe")
+        self.assertEqual(key, "package/bin/sparkengine.exe")
+
+    def test_package_root_cannot_ignore_sibling_metadata_payload(self):
+        root = mock.MagicMock(spec=Path)
+        (root / sbom.NOTICE_NAME).is_file.return_value = False
+        root.iterdir.return_value = [Path("Package"), Path("__MACOSX")]
+        with self.assertRaisesRegex(sbom.InputError, "exactly one top-level"):
+            sbom._archive_package_root(root)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

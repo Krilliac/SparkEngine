@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include "Spark/ServiceInterfaces.h"
+#include "Spark/IWeatherService.h"
 #include "Spark/Version.h"
 
 // Forward declarations — engine types accessible through the context.
@@ -75,6 +76,9 @@ namespace Spark
     }
 
     class VirtualFileSystem;
+    class ILogger;
+    class IConsole;
+    class IStateValidation;
 
     namespace Net
     {
@@ -321,28 +325,6 @@ namespace Spark
         virtual uint64_t GetFrameNumber() const { return 0; }
 
         // =====================================================================
-        // Subsystem lifecycle
-        // =====================================================================
-
-        /**
-         * @brief Initialize all registered subsystems in dependency order
-         *
-         * Performs a topological sort of subsystems based on declared dependencies
-         * and calls Initialize() on each in the correct order.
-         *
-         * @return true if all subsystems initialized successfully
-         */
-        virtual bool InitializeAll() { return true; }
-
-        /**
-         * @brief Shut down all subsystems in reverse dependency order
-         *
-         * Calls Shutdown() on each subsystem in reverse topological order,
-         * ensuring dependents are shut down before their dependencies.
-         */
-        virtual void ShutdownAll() {}
-
-        // =====================================================================
         // Host-owned registries (appended last to keep earlier vtable slots stable)
         // =====================================================================
 
@@ -351,7 +333,8 @@ namespace Spark
          *
          * SparkEngineLib is linked statically into every game-module DLL, so
          * InvalidStateDetector::GetInstance() inside a module is a DLL-local copy
-         * the host never ticks. Modules must register rules on this instance.
+         * the host never ticks. Modules register rules through GetStateValidation(),
+         * which needs no engine-private header; this accessor serves engine code.
          */
         virtual InvalidStateDetector* GetInvalidStateDetector() { return nullptr; }
         virtual const InvalidStateDetector* GetInvalidStateDetector() const { return nullptr; }
@@ -365,21 +348,55 @@ namespace Spark
          */
         virtual ComponentSerializerRegistry* GetComponentSerializers() { return nullptr; }
         virtual const ComponentSerializerRegistry* GetComponentSerializers() const { return nullptr; }
+
+        /**
+         * @brief Get the host's logger
+         *
+         * Routes a module's messages to the host's log sinks (log file, stderr,
+         * console). Prefer the Spark::ModuleLog helpers in <Spark/ModuleLog.h>,
+         * which format with std::format and do nothing when this returns nullptr.
+         */
+        virtual ILogger* GetLogger() { return nullptr; }
+
+        /**
+         * @brief Get the host's console command registry
+         *
+         * Modules register and unregister their console commands here instead of
+         * including the engine-private Utils/SparkConsole.h. Every command a module
+         * registers must be unregistered in its OnUnload (see <Spark/IConsole.h>).
+         */
+        virtual IConsole* GetConsole() { return nullptr; }
+
+        /**
+         * @brief Get the host's ECS state-invariant rule registry
+         *
+         * Modules add and remove their invalid-state rules here instead of including
+         * the engine-private Utils/InvalidStateDetector.h. Every category a module
+         * adds must be removed in its OnUnload (see <Spark/IStateValidation.h>).
+         */
+        virtual IStateValidation* GetStateValidation() { return nullptr; }
+
+        /// Optional host-owned weather commands. Borrowed until context destruction; game thread only.
+        /// Added in SDK 10. Existing concrete GetWeather() slots retain their original meaning.
+        virtual IWeatherService* GetWeatherService() { return nullptr; }
     };
 
     /**
      * @brief Number of virtual functions IEngineContext declares, destructor included.
      *
-     * A module calls the host's IEngineContext through this vtable, so appending a
-     * virtual is a binary-incompatible change: a module built against the longer
-     * interface calls past the end of an older host's vtable. IsSDKCompatible is
-     * exact equality and is the only thing standing between the two layouts, so the
-     * count is pinned to the SDK version below. When you add (or remove) a virtual
-     * here, update this count *and* bump SPARK_SDK_VERSION in Spark/Version.h.
+     * A module calls the host's IEngineContext through this vtable, so adding,
+     * removing or reordering a virtual is a binary-incompatible change: a module
+     * built against the longer interface calls past the end of an older host's
+     * vtable. IsSDKCompatible is exact equality and is the only thing standing
+     * between the two layouts. C++ cannot count a class's virtuals at compile time,
+     * so SparkSDK/Tools/sdk_abi_surface.py (ctest SparkSDKABISurface) extracts the
+     * real slot order from this header and fails when this count is stale or the
+     * vtable changed without a SPARK_SDK_VERSION bump re-pinned in
+     * SparkSDK/ABI/sdk-abi-surface.json.
      */
-    inline constexpr uint32_t EngineContextVirtualCount = 90;
+    inline constexpr uint32_t EngineContextVirtualCount = 92;
 
-    static_assert(EngineContextVirtualCount == 90 && SPARK_SDK_VERSION == 4,
+    static_assert(EngineContextVirtualCount == 92 && SPARK_SDK_VERSION == 10,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

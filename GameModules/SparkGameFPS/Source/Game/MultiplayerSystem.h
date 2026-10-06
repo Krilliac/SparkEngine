@@ -9,9 +9,25 @@
  * validation, scoreboard, and respawn logic.
  *
  * ## Architecture
- * - Server mode: authoritative simulation, broadcasts state at 20Hz
+ * - Server mode: authoritative simulation, broadcasts one state batch at 20Hz
  * - Client mode: sends input, receives state, interpolates remote players
- * - Message-based protocol on top of NetworkManager's reliable/unreliable channels
+ * - FPSMultiplayerSystem is the FPS module's only network path. It registers its
+ *   handlers with NetworkManager (the engine transport SparkGameMMOFPS also uses) on
+ *   every StartServer/Connect: admission (Connect), departure (Disconnect, timeout),
+ *   FPSMessageType::PlayerInput (server) and FPSMessageType::StateSnapshot (client).
+ *
+ * ## Contract
+ * - Thread affinity: game thread only. NetworkManager::Update runs inside Update(),
+ *   and the handlers run synchronously from it.
+ * - Ownership: process-lifetime singleton; the registered handlers capture it.
+ * - Allocation: per-player maps grow on join; each 20Hz snapshot builds one payload.
+ * - Scalability: at most kMaxPlayers players per session (the batch size limit).
+ *
+ * ## Game integration (open, MOD-315)
+ * The FPS Game only feeds this system: it ticks it and sends the local player's input.
+ * Nothing in the game reads the authoritative state back yet: the rendered local Player
+ * keeps its own movement and health, remote players are not rendered, and server-side
+ * hits do not change the local Player. Convergence evidence covers this system's state.
  */
 
 #pragma once
@@ -67,21 +83,23 @@ namespace SparkFPS
     // Message Types
     // ============================================================================
 
-    /** @brief Network message types for FPS multiplayer protocol. */
-    enum class FPSMessageType : uint8_t
+    /**
+     * @brief FPS message types carried on NetworkManager.
+     *
+     * Built-in types below MessageType::UserDefined are rejected by the engine's packet
+     * validator, and custom types are accepted only from admitted peers.
+     */
+    enum class FPSMessageType : uint16_t
     {
-        PlayerJoin = 50,
-        PlayerLeave = 51,
-        PlayerState = 52,
-        PlayerInput = 53,
-        ProjectileFired = 54,
-        PlayerDamaged = 55,
-        PlayerKilled = 56,
-        PlayerRespawn = 57,
-        GameStateSync = 58,
-        ScoreboardUpdate = 59,
-        ChatMessage = 60
+        /// Client to server, unreliable: one PlayerInput (PlayerInput::SerializedSize bytes).
+        PlayerInput = static_cast<uint16_t>(Spark::Net::MessageType::UserDefined) + 53,
+        /// Server to clients, unreliable: u32 batch sequence, u16 player count, then per
+        /// player a NetworkPlayerState followed by kills, deaths, assists (u32) and score (i32).
+        StateSnapshot = static_cast<uint16_t>(Spark::Net::MessageType::UserDefined) + 58
     };
+
+    /// Most players one session holds; also the largest snapshot batch a client accepts.
+    inline constexpr uint32_t kMaxPlayers = 256;
 
     // ============================================================================
     // Player State
@@ -115,57 +133,10 @@ namespace SparkFPS
         uint32_t sequenceNumber = 0;
 
         /** @brief Serialize state into byte buffer. */
-        std::vector<uint8_t> Serialize() const
-        {
-            std::vector<uint8_t> bytes;
-            bytes.reserve(SerializedSize);
-            Detail::WriteU32(bytes, clientId);
-            Detail::WriteFloat(bytes, posX);
-            Detail::WriteFloat(bytes, posY);
-            Detail::WriteFloat(bytes, posZ);
-            Detail::WriteFloat(bytes, velX);
-            Detail::WriteFloat(bytes, velY);
-            Detail::WriteFloat(bytes, velZ);
-            Detail::WriteFloat(bytes, yaw);
-            Detail::WriteFloat(bytes, pitch);
-            Detail::WriteFloat(bytes, health);
-            Detail::WriteU32(bytes, actionFlags);
-            Detail::WriteU32(bytes, acknowledgedInputSequence);
-            bytes.push_back(currentWeapon);
-            bytes.push_back(static_cast<uint8_t>(isAlive));
-            bytes.push_back(static_cast<uint8_t>(isCrouching));
-            Detail::WriteU32(bytes, sequenceNumber);
-            return bytes;
-        }
+        std::vector<uint8_t> Serialize() const;
 
         /** @brief Deserialize state from byte buffer. */
-        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size)
-        {
-            if (!data || size < SerializedSize)
-            {
-                return {};
-            }
-
-            NetworkPlayerState state;
-            size_t offset = 0;
-            state.clientId = Detail::ReadU32(data, offset);
-            state.posX = Detail::ReadFloat(data, offset);
-            state.posY = Detail::ReadFloat(data, offset);
-            state.posZ = Detail::ReadFloat(data, offset);
-            state.velX = Detail::ReadFloat(data, offset);
-            state.velY = Detail::ReadFloat(data, offset);
-            state.velZ = Detail::ReadFloat(data, offset);
-            state.yaw = Detail::ReadFloat(data, offset);
-            state.pitch = Detail::ReadFloat(data, offset);
-            state.health = Detail::ReadFloat(data, offset);
-            state.actionFlags = Detail::ReadU32(data, offset);
-            state.acknowledgedInputSequence = Detail::ReadU32(data, offset);
-            state.currentWeapon = data[offset++];
-            state.isAlive = data[offset++] != 0;
-            state.isCrouching = data[offset++] != 0;
-            state.sequenceNumber = Detail::ReadU32(data, offset);
-            return state;
-        }
+        static NetworkPlayerState Deserialize(const uint8_t* data, size_t size);
     };
 
     /** @brief Client input sent to server each tick. */
@@ -183,42 +154,9 @@ namespace SparkFPS
         bool crouch = false;
         uint32_t sequenceNumber = 0;
 
-        std::vector<uint8_t> Serialize() const
-        {
-            std::vector<uint8_t> bytes;
-            bytes.reserve(SerializedSize);
-            Detail::WriteFloat(bytes, forward);
-            Detail::WriteFloat(bytes, strafe);
-            Detail::WriteFloat(bytes, yaw);
-            Detail::WriteFloat(bytes, pitch);
-            bytes.push_back(static_cast<uint8_t>(jump));
-            bytes.push_back(static_cast<uint8_t>(fire));
-            bytes.push_back(static_cast<uint8_t>(reload));
-            bytes.push_back(static_cast<uint8_t>(crouch));
-            Detail::WriteU32(bytes, sequenceNumber);
-            return bytes;
-        }
+        std::vector<uint8_t> Serialize() const;
 
-        static PlayerInput Deserialize(const uint8_t* data, size_t size)
-        {
-            if (!data || size < SerializedSize)
-            {
-                return {};
-            }
-
-            PlayerInput input;
-            size_t offset = 0;
-            input.forward = Detail::ReadFloat(data, offset);
-            input.strafe = Detail::ReadFloat(data, offset);
-            input.yaw = Detail::ReadFloat(data, offset);
-            input.pitch = Detail::ReadFloat(data, offset);
-            input.jump = data[offset++] != 0;
-            input.fire = data[offset++] != 0;
-            input.reload = data[offset++] != 0;
-            input.crouch = data[offset++] != 0;
-            input.sequenceNumber = Detail::ReadU32(data, offset);
-            return input;
-        }
+        static PlayerInput Deserialize(const uint8_t* data, size_t size);
     };
 
     /** @brief Per-player score tracking. */
@@ -232,6 +170,10 @@ namespace SparkFPS
         int32_t score = 0;
         uint32_t ping = 0;
     };
+
+    /** @brief Decode and validate one complete peer-supplied state snapshot batch. */
+    bool DecodeSnapshotBatch(const uint8_t* data, size_t size, uint32_t& outBatch,
+                             std::vector<NetworkPlayerState>& outStates, std::vector<PlayerScore>& outScores);
 
     /** @brief Projectile replication data. */
     struct ProjectileData
@@ -289,7 +231,12 @@ namespace SparkFPS
 
         // -- Server API --
 
-        /** @brief Start hosting a game on the specified port. */
+        /**
+         * @brief Start hosting a game on the specified port and register the network handlers.
+         * @param port UDP port; 0 binds an ephemeral port.
+         * @param maxPlayers Client slots, 1..kMaxPlayers - 1 (the host holds one more player).
+         * @return false when the arguments are out of range or NetworkManager cannot host.
+         */
         bool StartServer(uint16_t port = 27015, uint32_t maxPlayers = 16);
 
         /** @brief Stop the server. */
@@ -297,13 +244,21 @@ namespace SparkFPS
 
         // -- Client API --
 
-        /** @brief Connect to a server. */
+        /** @brief Start connecting to a server and register the network handlers. */
         bool Connect(const std::string& address, uint16_t port = 27015);
 
         /** @brief Disconnect from the server. */
         void Disconnect();
 
-        /** @brief Send local player input to server. */
+        /**
+         * @brief Predict and send local player input to the server.
+         *
+         * The input sequence number is assigned by client prediction (monotonic within
+         * a session, reset by Initialize) and overrides @p input.sequenceNumber, so the server's acknowledged
+         * sequence always names an input the client still holds for reconciliation. Each call simulates one
+         * 1/60 s step, so callers send at 60Hz. A client sends nothing until the handshake assigns its id;
+         * on a listen server the input drives the host's own player directly.
+         */
         void SendInput(const PlayerInput& input);
 
         // -- Shared API --
@@ -320,8 +275,21 @@ namespace SparkFPS
         /** @brief Check if this instance is the server. */
         bool IsServer() const { return m_isServer; }
 
-        /** @brief Check if connected (client) or hosting (server). */
+        /**
+         * @brief Check if a session is open: hosting (server), or connecting or connected (client).
+         *
+         * A client session that the server rejects, that times out, or that the server closes
+         * ends on the next Update, so IsActive() never outlives the transport session.
+         */
         bool IsActive() const { return m_isActive; }
+
+        /**
+         * @brief Check if the session is live: hosting (server), or admitted with an assigned id (client).
+         *
+         * False while a client handshake is still pending, so callers never treat a queued
+         * ClientHello as a connection.
+         */
+        bool IsConnected() const;
 
         /** @brief Get local client ID. */
         uint32_t GetLocalClientId() const { return m_localClientId; }
@@ -343,17 +311,59 @@ namespace SparkFPS
       private:
         FPSMultiplayerSystem() = default;
 
+        // Constants shared by the implementation files (MultiplayerSystem, MultiplayerClient,
+        // MultiplayerCombat and MultiplayerNetFlow .cpp).
+        /// Every input is one fixed simulation step on the client's prediction and on the server.
+        static constexpr float kInputStep = 1.0f / 60.0f;
+        /// Slack when comparing the input budget and fire cooldown against whole steps.
+        static constexpr float kInputBudgetEpsilon = 1e-4f;
+        /// Authoritative snapshots kept per player for interpolation.
+        static constexpr size_t kMaxSnapshotHistory = 4;
+
+        // Narrow test seam (Tests/TestFPSMultiplayer.cpp) that invokes the private
+        // message handlers the way NetworkManager dispatch will; it adds no behavior.
+        friend struct FPSMultiplayerSystemTestAccess;
+
         // -- Message handlers --
         void OnPlayerJoined(uint32_t clientId);
         void OnPlayerLeft(uint32_t clientId);
         void OnPlayerInputReceived(uint32_t clientId, const PlayerInput& input);
         void OnProjectileFired(uint32_t clientId, const ProjectileData& proj);
         void OnPlayerDamaged(uint32_t attackerId, uint32_t victimId, float damage);
+        /// Client: accept one authoritative player snapshot from the server. The local
+        /// player's snapshot is reconciled on the next ClientUpdate; remote snapshots feed
+        /// interpolation. Snapshots older than the newest one already accepted, and every
+        /// snapshot that arrives before the handshake assigns this client an id, are dropped.
+        void OnStateSnapshotReceived(const NetworkPlayerState& snapshot);
+
+        // -- NetworkManager message flow --
+        /// Register this system's observers (and the timeout handler) with NetworkManager.
+        void RegisterNetworkHandlers();
+        /// Remove everything RegisterNetworkHandlers installed. StopServer and Disconnect call it, so no
+        /// callback into this object or module image survives the session.
+        void UnregisterNetworkHandlers();
+        /// Server: decode one client's PlayerInput. Malformed and over-rate inputs are dropped
+        /// here; ApplyClientInput rejects or sanitizes the rest, and only an applied input
+        /// spends the sender's input budget.
+        void HandleInputMessage(const Spark::Net::NetworkMessage& message);
+        /// Client: decode one snapshot batch. Malformed or stale batches are dropped whole;
+        /// remote players absent from an accepted batch have left the session.
+        void HandleSnapshotMessage(const Spark::Net::NetworkMessage& message);
+        /// Admitted peer disconnected (server) or the server closed the session (client).
+        void HandlePeerDisconnected(uint32_t clientId);
 
         // -- Server logic --
         void ServerUpdate(float dt);
+        /// Record every living player's hitbox into NetworkManager's lag compensator at the
+        /// current server time so ValidateHit has a server-owned world state to rewind.
+        void RecordLagCompensationHistory();
         void SendStateSnapshot();
-        void ApplyClientInput(uint32_t clientId, const PlayerInput& input, float dt);
+        /// Server: the single entry point from any input to authoritative player state. Rejects
+        /// input for an absent or dead player, any non-finite field, and a sequence that is 0 or
+        /// not newer than the last applied one; clamps movement axes to [-1, 1] and pitch to
+        /// [-pi/2, pi/2] and wraps yaw into [-pi, pi]. Fire spawns at most one projectile per
+        /// server-owned fire interval. @return true when the input was applied.
+        bool ApplyClientInput(uint32_t clientId, const PlayerInput& rawInput, float dt);
         void ValidateHit(uint32_t attackerId, uint32_t victimId, float damage);
         void UpdateProjectiles(float dt);
         SpawnPoint GetRandomSpawnPoint() const;
@@ -363,6 +373,7 @@ namespace SparkFPS
         void ClientUpdate(float dt);
         void InterpolateRemotePlayers(float dt);
         void ReconcileToAuthoritativeState(const NetworkPlayerState& authoritativeState);
+        void CopyPredictedMotionToLocal();
 
         bool m_isServer = false;
         bool m_isActive = false;
@@ -383,6 +394,17 @@ namespace SparkFPS
         uint32_t m_nextProjectileId = 1;
         Spark::ClientPrediction m_clientPrediction;
         Spark::PredictedState m_localPredictedState{};
+        NetworkPlayerState m_pendingLocalAuthority{};
+        bool m_hasPendingLocalAuthority = false;
+        uint32_t m_lastLocalAuthoritySequence = 0;
+        uint32_t m_lastSnapshotBatch = 0;
+        /// Client: reused snapshot decode buffers, so a received batch does not allocate once warmed up.
+        std::vector<NetworkPlayerState> m_snapshotStates;
+        std::vector<PlayerScore> m_snapshotScores;
+        /// Server: simulated seconds of input each player may still submit (anti speed-hack).
+        std::unordered_map<uint32_t, float> m_inputBudget;
+        /// Server: seconds of applied input until each player may fire again (fire-rate limit).
+        std::unordered_map<uint32_t, float> m_fireCooldown;
         uint32_t m_correctionCount = 0;
     };
 

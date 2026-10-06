@@ -1,0 +1,67 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGamePlatformer",
+  "description": "Every asset path SparkGamePlatformer source names (the Blender Level 0 toybox kit under Models/Platformer/Kit: platforms, spring pads and the goal flag placed per level by PlatformerLevelFlow::PlaceLevelKit, spike tiles placed over spike pits by PlatformerHazardSystem::PlaceSpikeTiles, coins placed by PlatformerCollectibleSystem::PlaceCoinMeshes; music tracks in PlatformerEngineSystems), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/Platformer/Music/boss_theme.wav",
+      "sha256": "a9900471e8d68262e22ca2dd2a1844bd60dc116565aa28e6906bcd8585031492",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Platformer/Music/game_over.wav",
+      "sha256": "db0a9ba1c5fbf027914e657b27f60bb3374ac45228891d6b93d3823b9f8566a3",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Platformer/Music/victory_jingle.wav",
+      "sha256": "18c841f60feb4c65dc816691b5fa0d2a2a91fddd3ef51fe7b1794959bf2d7127",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Platformer/Music/world_1_theme.wav",
+      "sha256": "606b0b90442b58af9a4a910887d2b383d0e545fdfdf0f505ad04509a3260bf04",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/Platformer/Music/world_2_theme.wav",
+      "sha256": "b467102729977188688ca7ec60cbead55c55d97e46fe3fe0eda98fb690908f76",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Models/Platformer/Kit/coin.obj",
+      "sha256": "f7a5f18d42e68f727eccf37f77b57bbec1d0d65516830bf4907dcb0f1af1fd5b",
+      "kind": "coin collectible prop mesh (OBJ + MTL)",
+      "provenanceRule": "platformer-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Platformer/Kit/floating_platform.obj",
+      "sha256": "e0e160888fc1c669f9b12803a17b2aa32602cacf85b16ff9b218de33befeaa07",
+      "kind": "level platform prop mesh (OBJ + MTL)",
+      "provenanceRule": "platformer-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Platformer/Kit/goal_flag.obj",
+      "sha256": "dce87c34bf4efdc09a81203fa8e331621c7a5b0a8c632dfc6ef36fc686238192",
+      "kind": "level goal prop mesh (OBJ + MTL)",
+      "provenanceRule": "platformer-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Platformer/Kit/spike_hazard.obj",
+      "sha256": "e5a018a249dfb819373c26d745c9a67a84a4feb9e16da02f59ddf35fa0bd882c",
+      "kind": "spike pit hazard tile mesh (OBJ + MTL)",
+      "provenanceRule": "platformer-blender-kit"
+    },
+    {
+      "path": "Assets/Models/Platformer/Kit/spring_pad.obj",
+      "sha256": "8a025fd8ae3a9fb09f23a0bbc5260db203adaee57e1cd4bcff0a29e182ae514b",
+      "kind": "bouncy platform prop mesh (OBJ + MTL)",
+      "provenanceRule": "platformer-blender-kit"
+    }
+  ]
+}

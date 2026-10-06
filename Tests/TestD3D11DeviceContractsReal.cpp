@@ -27,10 +27,13 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/RHI/D3D11/D3D11Device.h"
+#include "ScopedLoggerBaseline.h"
+#include "Utils/Logger.h"
 #include <filesystem>
 #include <fstream>
 #include <windows.h>
@@ -263,6 +266,112 @@ TEST(D3D11DeviceReal_SampledDepthTextureGetsTypelessResourceAndDepthSRV)
     device.Shutdown();
 }
 
+TEST(D3D11DeviceReal_Texture2DArrayCreatesArrayViews)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    Spark::RHI::RHITextureDesc desc;
+    desc.width = 32;
+    desc.height = 32;
+    desc.arraySize = 3;
+    desc.type = Spark::RHI::RHITextureType::Texture2DArray;
+    desc.format = Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
+    desc.usage = Spark::RHI::RHITextureUsage::RenderTarget | Spark::RHI::RHITextureUsage::ShaderResource;
+    desc.debugName = "ContractTest_Texture2DArray";
+
+    auto texture = device.CreateTexture(desc);
+    ASSERT_TRUE(texture != nullptr);
+    EXPECT_TRUE(texture->GetShaderResourceView() != nullptr);
+    EXPECT_TRUE(texture->GetRenderTargetView() != nullptr);
+
+    auto* colorSrv = static_cast<ID3D11ShaderResourceView*>(texture->GetShaderResourceView());
+    ASSERT_TRUE(colorSrv != nullptr);
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    colorSrv->GetDesc(&srvDesc);
+    EXPECT_EQ(srvDesc.ViewDimension, D3D11_SRV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(srvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    auto* colorRtv = static_cast<ID3D11RenderTargetView*>(texture->GetRenderTargetView());
+    ASSERT_TRUE(colorRtv != nullptr);
+    D3D11_RENDER_TARGET_VIEW_DESC rtvDesc{};
+    colorRtv->GetDesc(&rtvDesc);
+    EXPECT_EQ(rtvDesc.ViewDimension, D3D11_RTV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(rtvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    texture.reset();
+
+    desc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
+    desc.usage = Spark::RHI::RHITextureUsage::DepthStencil | Spark::RHI::RHITextureUsage::ShaderResource;
+    desc.debugName = "ContractTest_DepthTexture2DArray";
+    texture = device.CreateTexture(desc);
+    ASSERT_TRUE(texture != nullptr);
+    EXPECT_TRUE(texture->GetShaderResourceView() != nullptr);
+    EXPECT_TRUE(texture->GetDepthStencilView() != nullptr);
+
+    auto* depthDsv = static_cast<ID3D11DepthStencilView*>(texture->GetDepthStencilView());
+    ASSERT_TRUE(depthDsv != nullptr);
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+    depthDsv->GetDesc(&dsvDesc);
+    EXPECT_EQ(dsvDesc.ViewDimension, D3D11_DSV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(dsvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    device.Shutdown();
+}
+
+TEST(D3D11DeviceReal_WrapNativeTextureCreatesArrayDepthViews)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    D3D11_TEXTURE2D_DESC nativeDesc{};
+    nativeDesc.Width = 32;
+    nativeDesc.Height = 32;
+    nativeDesc.MipLevels = 2;
+    nativeDesc.ArraySize = 3;
+    nativeDesc.Format = DXGI_FORMAT_R24G8_TYPELESS;
+    nativeDesc.SampleDesc.Count = 1;
+    nativeDesc.Usage = D3D11_USAGE_DEFAULT;
+    nativeDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL;
+
+    ComPtr<ID3D11Texture2D> nativeTexture;
+    ASSERT_TRUE(SUCCEEDED(device.GetD3D11Device()->CreateTexture2D(&nativeDesc, nullptr, &nativeTexture)));
+
+    Spark::RHI::RHITextureDesc desc;
+    desc.width = nativeDesc.Width;
+    desc.height = nativeDesc.Height;
+    desc.mipLevels = nativeDesc.MipLevels;
+    desc.arraySize = nativeDesc.ArraySize;
+    desc.type = Spark::RHI::RHITextureType::Texture2DArray;
+    desc.format = Spark::RHI::PixelFormat::D24_UNORM_S8_UINT;
+    desc.usage = Spark::RHI::RHITextureUsage::ShaderResource | Spark::RHI::RHITextureUsage::DepthStencil;
+    desc.debugName = "ContractTest_WrappedDepthTexture2DArray";
+
+    auto wrapped = device.WrapNativeTexture(nativeTexture.Get(), desc);
+    ASSERT_TRUE(wrapped != nullptr);
+
+    auto* srv = static_cast<ID3D11ShaderResourceView*>(wrapped->GetShaderResourceView());
+    ASSERT_TRUE(srv != nullptr);
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+    srv->GetDesc(&srvDesc);
+    EXPECT_EQ(srvDesc.ViewDimension, D3D11_SRV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(srvDesc.Texture2DArray.MipLevels, desc.mipLevels);
+    EXPECT_EQ(srvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    auto* dsv = static_cast<ID3D11DepthStencilView*>(wrapped->GetDepthStencilView());
+    ASSERT_TRUE(dsv != nullptr);
+    D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
+    dsv->GetDesc(&dsvDesc);
+    EXPECT_EQ(dsvDesc.ViewDimension, D3D11_DSV_DIMENSION_TEXTURE2DARRAY);
+    EXPECT_EQ(dsvDesc.Texture2DArray.ArraySize, desc.arraySize);
+
+    wrapped.reset();
+    nativeTexture.Reset();
+    device.Shutdown();
+}
+
 TEST(D3D11DeviceReal_RejectsUnimplementedTextureTypes)
 {
     Spark::RHI::D3D11::D3D11Device device;
@@ -420,6 +529,108 @@ TEST(GraphicsEngineReal_InitializeStoresWindowHandleForDeviceLostRecovery)
     }
 
     DestroyWindow(hwnd);
+}
+
+// ============================================================================
+// D3D11Device::CreateShader source name (D3D11_ShaderCompile_)
+// ============================================================================
+// D3DCompile with an empty source name and D3D_COMPILE_STANDARD_FILE_INCLUDE fails with
+// 0x8007007B (ERROR_INVALID_NAME) and no error blob, so a shader without a debugName came
+// back nullptr and logged nothing.
+
+namespace
+{
+    constexpr const char* kTrivialVertexShader =
+        "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0); }";
+
+    /// Captures every log line while alive; restores the process-wide Logger afterwards.
+    class ScopedLogLines
+    {
+      public:
+        ScopedLogLines()
+        {
+            Spark::Logger::Get().AddSink(std::make_unique<Spark::CallbackSink>(
+                [this](const Spark::LogMessage& message) { m_lines.push_back(message.message); }));
+        }
+
+        bool Contains(const std::string& needle) const
+        {
+            for (const std::string& line : m_lines)
+            {
+                if (line.find(needle) != std::string::npos)
+                    return true;
+            }
+            return false;
+        }
+
+      private:
+        ScopedLoggerBaseline m_baseline;
+        std::vector<std::string> m_lines;
+    };
+} // namespace
+
+TEST(D3D11_ShaderCompile_EmptyDebugNameCompilesFromSource)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    Spark::RHI::RHIShaderDesc desc;
+    desc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    desc.entryPoint = "main";
+    desc.sourceCode = kTrivialVertexShader;
+    ASSERT_TRUE(desc.debugName.empty());
+    ASSERT_TRUE(desc.filePath.empty());
+
+    EXPECT_TRUE(device.CreateShader(desc) != nullptr);
+    device.Shutdown();
+}
+
+TEST(D3D11_ShaderCompile_FilePathNamesTheSourceForRelativeIncludes)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    // The include resolves only relative to the shader's own file, so this compiles only when
+    // filePath (not the working directory) names the source.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "SparkTests_D3D11ShaderCompile_Include";
+    std::filesystem::create_directories(dir);
+    {
+        std::ofstream header(dir / "SparkTestsShaderInclude.hlsli", std::ios::trunc);
+        header << "float4 SparkTestsExtend(float3 p) { return float4(p, 1.0); }\n";
+    }
+
+    Spark::RHI::RHIShaderDesc desc;
+    desc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    desc.entryPoint = "main";
+    desc.filePath = (dir / "SparkTestsShader.hlsl").string();
+    desc.sourceCode = "#include \"SparkTestsShaderInclude.hlsli\"\n"
+                      "float4 main(float3 position : POSITION) : SV_Position { return SparkTestsExtend(position); }\n";
+
+    EXPECT_TRUE(device.CreateShader(desc) != nullptr);
+    device.Shutdown();
+    std::error_code ignored;
+    std::filesystem::remove_all(dir, ignored);
+}
+
+TEST(D3D11_ShaderCompile_FailureLogsTheHResult)
+{
+    Spark::RHI::D3D11::D3D11Device device;
+    if (!TryCreateD3D11Device(device))
+        SKIP_TEST("No D3D11 device available (hardware or WARP)");
+
+    ScopedLogLines log;
+    Spark::RHI::RHIShaderDesc desc;
+    desc.stage = Spark::RHI::RHIShaderStage::Vertex;
+    desc.entryPoint = "main";
+    desc.debugName = "SparkTestsBrokenShader";
+    desc.sourceCode = "float4 main( : SV_Position {";
+
+    EXPECT_TRUE(device.CreateShader(desc) == nullptr);
+    EXPECT_TRUE(log.Contains("SparkTestsBrokenShader"));
+    EXPECT_TRUE(log.Contains("hr=0x"));
+    device.Shutdown();
 }
 
 #endif // _WIN32

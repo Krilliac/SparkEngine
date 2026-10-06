@@ -4,8 +4,7 @@
  */
 
 #include "RPGQuestSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -21,8 +20,8 @@ namespace RPG
         m_context = context;
         RegisterDefaultQuests();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest system initialized (" +
-                                                    std::to_string(m_quests.size()) + " quests)");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] Quest system initialized (" + std::to_string(m_quests.size()) + " quests)");
         return true;
     }
 
@@ -164,8 +163,8 @@ namespace RPG
 
         charProgress[questId] = progress;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest accepted: %s (id=%u)", def->name.c_str(), questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest accepted: " + def->name);
+        Spark::ModuleLog::Info(m_context, "RPG quest accepted: {} (id={})", def->name.c_str(), questId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Quest accepted: " + def->name);
         return true;
     }
 
@@ -184,9 +183,8 @@ namespace RPG
         questIt->second.state = QuestState::Failed;
 
         const auto* def = GetQuestDef(questId);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest abandoned: %s (id=%u)", def ? def->name.c_str() : "?",
-                       questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest abandoned: " + (def ? def->name : "?"));
+        Spark::ModuleLog::Info(m_context, "RPG quest abandoned: {} (id={})", def ? def->name.c_str() : "?", questId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Quest abandoned: " + (def ? def->name : "?"));
         return true;
     }
 
@@ -214,7 +212,7 @@ namespace RPG
 
                     if (obj.IsComplete())
                     {
-                        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Objective complete: " + obj.description);
+                        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Objective complete: " + obj.description);
                     }
                 }
             }
@@ -239,9 +237,8 @@ namespace RPG
         questIt->second.state = QuestState::Completed;
 
         const auto* def = GetQuestDef(questId);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest completed: %s (id=%u)", def ? def->name.c_str() : "?",
-                       questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest completed: " + (def ? def->name : "?"));
+        Spark::ModuleLog::Info(m_context, "RPG quest completed: {} (id={})", def ? def->name.c_str() : "?", questId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Quest completed: " + (def ? def->name : "?"));
         return true;
     }
 

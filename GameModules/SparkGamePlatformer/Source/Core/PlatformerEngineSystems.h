@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "Core/PlatformerProgress.h"
 #include "Spark/SparkSDK.h"
 #include "Utils/EventBus.h"
 
@@ -39,10 +40,12 @@ namespace Platformer
 
         /**
          * @brief Initialize all engine-system integrations.
-         * @param context  Engine context providing access to subsystems.
+         * @param context   Engine context providing access to subsystems.
+         * @param progress  Gameplay systems whose progress SaveProgress/LoadProgress persist (non-owning; they
+         *                  must outlive this object). Without them saving and loading fail.
          * @return true on success, false if a required subsystem is missing.
          */
-        bool Initialize(Spark::IEngineContext* context);
+        bool Initialize(Spark::IEngineContext* context, const PlatformerProgressSystems& progress = {});
 
         /**
          * @brief Per-frame update for engine-system integrations.
@@ -55,10 +58,19 @@ namespace Platformer
 
         // --- Save / Load helpers exposed for console commands ---
 
-        /** @brief Save the platformer progress to the given slot. */
+        /**
+         * @brief Save the ECS world plus platformer progress (PlatformerProgress::StateKey) to a slot.
+         * @return false when the slot name is invalid, a subsystem or gameplay system is missing, or the write fails
+         */
         bool SaveProgress(const std::string& slotName) const;
 
-        /** @brief Load platformer progress from the given slot. */
+        /**
+         * @brief Load a slot and restore platformer progress.
+         *
+         * The progress entry is decoded and validated against the live systems before the SaveSystem commits the
+         * world, so a missing, corrupt, or incompatible entry leaves both the world and the gameplay systems
+         * unchanged.
+         */
         bool LoadProgress(const std::string& slotName) const;
 
         // --- Replay helpers exposed for console commands ---
@@ -83,6 +95,7 @@ namespace Platformer
         void SetupLocalization();
 
         Spark::IEngineContext* m_context{nullptr};
+        PlatformerProgressSystems m_progressSystems{};
 
         // RAII event subscription handles (auto-unsubscribe on destruction)
         std::vector<Spark::SubscriptionHandle> m_eventHandles;

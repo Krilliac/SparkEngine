@@ -4,12 +4,16 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <climits>
+#include <cstdint>
 #include <cstring>
 #include <cwctype>
 #include <fstream>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -58,14 +62,20 @@ namespace Spark::AssetPipeline
                 if (m_bufferSize > 56)
                 {
                     while (m_bufferSize < 64)
+                    {
                         m_buffer[m_bufferSize++] = 0;
+                    }
                     Transform(m_buffer.data());
                     m_bufferSize = 0;
                 }
                 while (m_bufferSize < 56)
+                {
                     m_buffer[m_bufferSize++] = 0;
+                }
                 for (size_t i = 0; i < 8; ++i)
+                {
                     m_buffer[63 - i] = static_cast<uint8_t>(m_bitLength >> (i * 8u));
+                }
                 Transform(m_buffer.data());
                 constexpr char kHex[] = "0123456789abcdef";
                 std::string result(64, '0');
@@ -73,7 +83,7 @@ namespace Spark::AssetPipeline
                 {
                     for (size_t byte = 0; byte < 4; ++byte)
                     {
-                        const uint8_t value = static_cast<uint8_t>(m_state[i] >> ((3u - byte) * 8u));
+                        const auto value = static_cast<uint8_t>(m_state[i] >> ((3u - byte) * 8u));
                         const size_t offset = (i * 8u) + (byte * 2u);
                         result[offset] = kHex[value >> 4u];
                         result[offset + 1] = kHex[value & 0x0fu];
@@ -169,11 +179,15 @@ namespace Spark::AssetPipeline
         {
             const auto relative = ComparisonForm(child).lexically_relative(ComparisonForm(parent));
             if (relative.empty() || relative.is_absolute())
+            {
                 return false;
+            }
             for (const auto& component : relative)
             {
                 if (component == "..")
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -183,7 +197,9 @@ namespace Spark::AssetPipeline
             std::error_code ec;
             const auto status = std::filesystem::symlink_status(path, ec);
             if (!ec && std::filesystem::is_symlink(status))
+            {
                 return true;
+            }
 #if defined(_WIN32)
             const DWORD attributes = ::GetFileAttributesW(path.c_str());
             return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
@@ -195,10 +211,346 @@ namespace Spark::AssetPipeline
         bool IsUnsafeOutputLink(const std::filesystem::path& path)
         {
             if (IsLinkLike(path))
+            {
                 return true;
+            }
             std::error_code ec;
             return std::filesystem::is_regular_file(path, ec) && !ec &&
                    std::filesystem::hard_link_count(path, ec) > 1 && !ec;
+        }
+
+        /// @p path as UTF-8 for an error message. On Windows, path::string() converts to the ANSI
+        /// code page and throws std::system_error for a name that page cannot hold (a CJK name
+        /// under code page 1252), which ended the whole cook before the error was reported.
+        std::string PathText(const std::filesystem::path& path)
+        {
+            try
+            {
+                const std::u8string utf8 = path.u8string();
+                return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
+            }
+            catch (const std::system_error&)
+            {
+                // MSVC throws for an unpaired UTF-16 surrogate, which no UTF-8 text can carry.
+                return "<path not representable as UTF-8>";
+            }
+        }
+
+#if defined(_WIN32)
+        /// Owns one Win32 handle (the pattern of SparkEngine's Engine/Modding/HeldHandles.h).
+        class ScopedHandle
+        {
+          public:
+            explicit ScopedHandle(HANDLE handle) : m_handle(handle) {}
+            ~ScopedHandle()
+            {
+                if (IsValid())
+                {
+                    ::CloseHandle(m_handle);
+                }
+            }
+            ScopedHandle(const ScopedHandle&) = delete;
+            ScopedHandle& operator=(const ScopedHandle&) = delete;
+
+            [[nodiscard]] HANDLE Get() const { return m_handle; }
+            [[nodiscard]] bool IsValid() const { return m_handle != nullptr && m_handle != INVALID_HANDLE_VALUE; }
+
+          private:
+            HANDLE m_handle;
+        };
+
+        /// NT-namespace final path of an open handle, or empty when it cannot be queried.
+        std::wstring FinalPathOf(HANDLE handle)
+        {
+            std::wstring buffer(512, L'\0');
+            for (;;)
+            {
+                const DWORD length = ::GetFinalPathNameByHandleW(
+                    handle, buffer.data(), static_cast<DWORD>(buffer.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+                if (length == 0)
+                {
+                    return {};
+                }
+                if (length < buffer.size())
+                {
+                    buffer.resize(length);
+                    return buffer;
+                }
+                buffer.resize(static_cast<size_t>(length) + 1);
+            }
+        }
+
+        /// True when @p child names an entry anywhere below @p parent (both final paths).
+        bool IsDescendantFinalPath(const std::wstring& child, std::wstring parent)
+        {
+            while (!parent.empty() && parent.back() == L'\\')
+            {
+                parent.pop_back();
+            }
+            return !parent.empty() && child.size() > parent.size() + 1 &&
+                   child.compare(0, parent.size(), parent) == 0 && child[parent.size()] == L'\\';
+        }
+#else
+        /// Owns one POSIX file descriptor.
+        class ScopedFd
+        {
+          public:
+            explicit ScopedFd(int fd) : m_fd(fd) {}
+            ~ScopedFd()
+            {
+                if (m_fd >= 0)
+                {
+                    ::close(m_fd);
+                }
+            }
+            ScopedFd(const ScopedFd&) = delete;
+            ScopedFd& operator=(const ScopedFd&) = delete;
+
+            [[nodiscard]] int Get() const { return m_fd; }
+
+            /// Close now and report whether the close succeeded (a deferred write error).
+            bool Close()
+            {
+                const int fd = m_fd;
+                m_fd = -1;
+                return ::close(fd) == 0;
+            }
+
+          private:
+            int m_fd;
+        };
+
+        /// Path the kernel reports for an open descriptor, or empty when it cannot say.
+        std::filesystem::path PathOfDescriptor(int fd)
+        {
+#if defined(__APPLE__)
+            char buffer[PATH_MAX] = {};
+            if (::fcntl(fd, F_GETPATH, buffer) == -1)
+            {
+                return {};
+            }
+            return std::filesystem::path(buffer);
+#else
+            std::error_code ec;
+            std::filesystem::path path = std::filesystem::read_symlink("/proc/self/fd/" + std::to_string(fd), ec);
+            return ec ? std::filesystem::path() : path;
+#endif
+        }
+#endif
+
+        /// Copy one source asset into the new file @p destination through a handle that is opened
+        /// first and checked afterwards. It must be a regular file (a FIFO or device is refused
+        /// without blocking); with a @p sourceRoot, it must also not be a link and must still lie
+        /// inside that root. The source walk checked a path, and copying by that name copied
+        /// whatever replaced the entry in between, such as a link to a file outside the tree.
+        /// A destination this call created is removed again when the copy fails.
+        bool CopySourceAsset(const std::filesystem::path& source, const std::filesystem::path& sourceRoot,
+                             const std::filesystem::path& destination, std::string& error)
+        {
+            const std::string changed = "source asset changed while cooking: '" + PathText(source) + "'";
+#if defined(_WIN32)
+            const DWORD openFlags = FILE_FLAG_SEQUENTIAL_SCAN | (sourceRoot.empty() ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
+            const ScopedHandle input(::CreateFileW(source.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                                   nullptr, OPEN_EXISTING, openFlags, nullptr));
+            if (!input.IsValid())
+            {
+                const DWORD openError = ::GetLastError();
+                error =
+                    "failed to open source asset '" + PathText(source) + "' (error " + std::to_string(openError) + ")";
+                return false;
+            }
+            BY_HANDLE_FILE_INFORMATION info{};
+            if (::GetFileType(input.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(input.Get(), &info) ||
+                (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+            {
+                error = "source asset is not a regular file: '" + PathText(source) + "'";
+                return false;
+            }
+            if (!sourceRoot.empty())
+            {
+                const ScopedHandle root(::CreateFileW(sourceRoot.c_str(), FILE_READ_ATTRIBUTES,
+                                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+                const std::wstring rootFinal = root.IsValid() ? FinalPathOf(root.Get()) : std::wstring();
+                if ((info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 || rootFinal.empty() ||
+                    !IsDescendantFinalPath(FinalPathOf(input.Get()), rootFinal))
+                {
+                    error = changed;
+                    return false;
+                }
+            }
+            const auto sameMetadata =
+                [](const BY_HANDLE_FILE_INFORMATION& before, const BY_HANDLE_FILE_INFORMATION& after)
+            {
+                return before.dwVolumeSerialNumber == after.dwVolumeSerialNumber &&
+                       before.nFileIndexHigh == after.nFileIndexHigh && before.nFileIndexLow == after.nFileIndexLow &&
+                       before.nFileSizeHigh == after.nFileSizeHigh && before.nFileSizeLow == after.nFileSizeLow &&
+                       before.ftLastWriteTime.dwHighDateTime == after.ftLastWriteTime.dwHighDateTime &&
+                       before.ftLastWriteTime.dwLowDateTime == after.ftLastWriteTime.dwLowDateTime;
+            };
+            bool copied = false;
+            {
+                const ScopedHandle output(::CreateFileW(destination.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                                        FILE_ATTRIBUTE_NORMAL, nullptr));
+                if (!output.IsValid())
+                {
+                    const DWORD createError = ::GetLastError();
+                    error =
+                        "failed to create '" + PathText(destination) + "' (error " + std::to_string(createError) + ")";
+                    return false;
+                }
+                std::vector<char> buffer(64 * 1024);
+                for (;;)
+                {
+                    DWORD got = 0;
+                    if (!::ReadFile(input.Get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr))
+                    {
+                        error = "failed while reading '" + PathText(source) + "'";
+                        break;
+                    }
+                    if (got == 0)
+                    {
+                        copied = true;
+                        break;
+                    }
+                    DWORD written = 0;
+                    if (!::WriteFile(output.Get(), buffer.data(), got, &written, nullptr) || written != got)
+                    {
+                        error = "failed while writing '" + PathText(destination) + "'";
+                        break;
+                    }
+                }
+                BY_HANDLE_FILE_INFORMATION after{};
+                if (!::GetFileInformationByHandle(input.Get(), &after) || !sameMetadata(info, after))
+                {
+                    error = changed;
+                    copied = false;
+                }
+            }
+            if (!copied)
+            {
+                ::DeleteFileW(destination.c_str());
+            }
+            return copied;
+#else
+            int openFlags = O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC;
+            if (!sourceRoot.empty())
+            {
+                openFlags |= O_NOFOLLOW;
+            }
+            const ScopedFd input(::open(source.c_str(), openFlags));
+            if (input.Get() < 0)
+            {
+                error = (errno == ELOOP)
+                            ? changed
+                            : "failed to open source asset '" + PathText(source) + "': " + std::strerror(errno);
+                return false;
+            }
+            struct stat info = {};
+            if (::fstat(input.Get(), &info) != 0 || !S_ISREG(info.st_mode))
+            {
+                error = "source asset is not a regular file: '" + PathText(source) + "'";
+                return false;
+            }
+            if (!sourceRoot.empty())
+            {
+                // The opened file must live inside the source root, and that path must still
+                // name the very file that was opened.
+                const std::filesystem::path opened = PathOfDescriptor(input.Get());
+                struct stat named = {};
+                if (opened.empty() || !IsContained(opened, sourceRoot) || ::stat(opened.c_str(), &named) != 0 ||
+                    named.st_dev != info.st_dev || named.st_ino != info.st_ino)
+                {
+                    error = changed;
+                    return false;
+                }
+            }
+            ScopedFd output(::open(destination.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, S_IRUSR | S_IWUSR));
+            if (output.Get() < 0)
+            {
+                error = "failed to create '" + PathText(destination) + "': " + std::strerror(errno);
+                return false;
+            }
+            const auto fail = [&](const std::string& what)
+            {
+                error = what + ": " + std::strerror(errno);
+                output.Close();
+                ::unlink(destination.c_str());
+                return false;
+            };
+            std::vector<char> buffer(static_cast<size_t>(64 * 1024));
+            for (;;)
+            {
+                const ssize_t got = ::read(input.Get(), buffer.data(), buffer.size());
+                if (got < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                if (got < 0)
+                {
+                    return fail("failed while reading '" + PathText(source) + "'");
+                }
+                if (got == 0)
+                {
+                    break;
+                }
+                size_t written = 0;
+                while (written < static_cast<size_t>(got))
+                {
+                    const ssize_t put =
+                        ::write(output.Get(), buffer.data() + written, static_cast<size_t>(got) - written);
+                    if (put < 0 && errno == EINTR)
+                    {
+                        continue;
+                    }
+                    if (put <= 0)
+                    {
+                        return fail("failed while writing '" + PathText(destination) + "'");
+                    }
+                    written += static_cast<size_t>(put);
+                }
+            }
+            struct stat after = {};
+            if (::fstat(input.Get(), &after) != 0)
+            {
+                error = changed;
+                output.Close();
+                ::unlink(destination.c_str());
+                return false;
+            }
+#if defined(__APPLE__)
+            const auto sameTimestamp = [](const timespec& before, const timespec& after)
+            { return before.tv_sec == after.tv_sec && before.tv_nsec == after.tv_nsec; };
+            const bool timestampsUnchanged = sameTimestamp(info.st_mtimespec, after.st_mtimespec) &&
+                                             sameTimestamp(info.st_ctimespec, after.st_ctimespec);
+#else
+            const auto sameTimestamp = [](const timespec& before, const timespec& after)
+            { return before.tv_sec == after.tv_sec && before.tv_nsec == after.tv_nsec; };
+            const bool timestampsUnchanged =
+                sameTimestamp(info.st_mtim, after.st_mtim) && sameTimestamp(info.st_ctim, after.st_ctim);
+#endif
+            if (after.st_dev != info.st_dev || after.st_ino != info.st_ino || after.st_size != info.st_size ||
+                !timestampsUnchanged)
+            {
+                error = changed;
+                output.Close();
+                ::unlink(destination.c_str());
+                return false;
+            }
+            // Keep the source's permission bits, as std::filesystem::copy_file did, without its
+            // set-id and sticky bits.
+            if (::fchmod(output.Get(), info.st_mode & 0777) != 0)
+            {
+                return fail("failed to set the mode of '" + PathText(destination) + "'");
+            }
+            if (!output.Close())
+            {
+                error = "failed to finish '" + PathText(destination) + "': " + std::strerror(errno);
+                ::unlink(destination.c_str());
+                return false;
+            }
+            return true;
+#endif
         }
 
         bool ValidateOutputTarget(const std::filesystem::path& target, const std::filesystem::path& outputRoot,
@@ -218,7 +570,7 @@ namespace Spark::AssetPipeline
                 current /= component;
                 if (IsUnsafeOutputLink(current))
                 {
-                    error = "refusing linked " + std::string(label) + " target '" + current.string() + "'";
+                    error = "refusing linked " + std::string(label) + " target '" + PathText(current) + "'";
                     return false;
                 }
             }
@@ -240,14 +592,15 @@ namespace Spark::AssetPipeline
         {
             if (IsUnsafeOutputLink(destination))
             {
-                error = "refusing to replace linked output '" + destination.string() + "'";
+                error = "refusing to replace linked output '" + PathText(destination) + "'";
                 return false;
             }
 #if defined(_WIN32)
             if (!::MoveFileExW(stage.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             {
-                error = "failed to atomically replace '" + destination.string() + "' (error " +
-                        std::to_string(::GetLastError()) + ")";
+                const DWORD moveError = ::GetLastError();
+                error = "failed to atomically replace '" + PathText(destination) + "' (error " +
+                        std::to_string(moveError) + ")";
                 return false;
             }
 #else
@@ -255,10 +608,70 @@ namespace Spark::AssetPipeline
             std::filesystem::rename(stage, destination, ec);
             if (ec)
             {
-                error = "failed to atomically replace '" + destination.string() + "': " + ec.message();
+                error = "failed to atomically replace '" + PathText(destination) + "': " + ec.message();
                 return false;
             }
 #endif
+            return true;
+        }
+
+        /// Strict UTF-8 (RFC 3629): no stray continuation bytes, overlong forms, surrogates or
+        /// code points past U+10FFFF.
+        bool IsValidUtf8(std::string_view text)
+        {
+            size_t index = 0;
+            while (index < text.size())
+            {
+                const auto lead = static_cast<unsigned char>(text[index]);
+                if (lead < 0x80u)
+                {
+                    ++index;
+                    continue;
+                }
+                size_t length = 0;
+                uint32_t codepoint = 0;
+                uint32_t minimum = 0;
+                if ((lead & 0xE0u) == 0xC0u)
+                {
+                    length = 2;
+                    codepoint = lead & 0x1Fu;
+                    minimum = 0x80u;
+                }
+                else if ((lead & 0xF0u) == 0xE0u)
+                {
+                    length = 3;
+                    codepoint = lead & 0x0Fu;
+                    minimum = 0x800u;
+                }
+                else if ((lead & 0xF8u) == 0xF0u)
+                {
+                    length = 4;
+                    codepoint = lead & 0x07u;
+                    minimum = 0x10000u;
+                }
+                else
+                {
+                    return false;
+                }
+                if (text.size() - index < length)
+                {
+                    return false;
+                }
+                for (size_t offset = 1; offset < length; ++offset)
+                {
+                    const auto next = static_cast<unsigned char>(text[index + offset]);
+                    if ((next & 0xC0u) != 0x80u)
+                    {
+                        return false;
+                    }
+                    codepoint = (codepoint << 6u) | (next & 0x3Fu);
+                }
+                if (codepoint < minimum || codepoint > 0x10FFFFu || (codepoint >= 0xD800u && codepoint <= 0xDFFFu))
+                {
+                    return false;
+                }
+                index += length;
+            }
             return true;
         }
 
@@ -410,7 +823,9 @@ namespace Spark::AssetPipeline
                 while (::flock(m_fd, LOCK_EX) != 0)
                 {
                     if (errno == EINTR)
+                    {
                         continue;
+                    }
                     error = "failed to acquire cook lock: " + std::string(std::strerror(errno));
                     return false;
                 }
@@ -457,7 +872,9 @@ namespace Spark::AssetPipeline
                 generation = MakeStagePath(outputRoot);
                 std::error_code ec;
                 if (std::filesystem::create_directory(generation, ec))
+                {
                     return true;
+                }
                 if (ec && ec != std::errc::file_exists)
                 {
                     error = "failed to create cook generation directory: " + ec.message();
@@ -468,7 +885,11 @@ namespace Spark::AssetPipeline
             return false;
         }
 
-        bool CopyGenerationFile(const std::filesystem::path& source, const std::filesystem::path& generationOutput,
+        bool ComputeFileSha256Opened(const std::filesystem::path& path, const std::filesystem::path& containmentRoot,
+                                     std::string& digest, std::string& error, bool& missing);
+
+        bool CopyGenerationFile(const std::filesystem::path& source, const std::filesystem::path& sourceRoot,
+                                const std::filesystem::path& generationOutput,
                                 const std::filesystem::path& previousOutput,
                                 const std::filesystem::path& previousOutputRoot, bool& updated,
                                 std::string& actualSha256, std::uintmax_t& actualSize, std::string& error)
@@ -480,16 +901,19 @@ namespace Spark::AssetPipeline
                 error = "failed to create generation output directory: " + ec.message();
                 return false;
             }
-            if (!std::filesystem::copy_file(source, generationOutput, std::filesystem::copy_options::none, ec))
+            if (!CopySourceAsset(source, sourceRoot, generationOutput, error))
             {
-                error = "failed to copy asset into cook generation: " + ec.message();
                 return false;
             }
             actualSize = std::filesystem::file_size(generationOutput, ec);
-            if (ec || !ComputeFileSha256(generationOutput, actualSha256, error))
+            bool generationMissing = false;
+            if (ec || !ComputeFileSha256Opened(generationOutput, generationOutput.parent_path(), actualSha256, error,
+                                               generationMissing))
             {
                 if (ec)
+                {
                     error = "failed to inspect generated asset: " + ec.message();
+                }
                 return false;
             }
 
@@ -497,12 +921,23 @@ namespace Spark::AssetPipeline
             std::string validationError;
             const bool safePrevious =
                 ValidateOutputTarget(previousOutput, previousOutputRoot, validationError, "previous cooked output");
-            if (safePrevious && std::filesystem::is_regular_file(previousOutput, ec) && !ec)
+            if (safePrevious)
             {
                 std::string previousSha256;
-                if (!ComputeFileSha256(previousOutput, previousSha256, error))
+                bool missing = false;
+                if (!ComputeFileSha256Opened(previousOutput, previousOutputRoot, previousSha256, error, missing) &&
+                    !missing)
+                {
                     return false;
-                updated = previousSha256 != actualSha256;
+                }
+                if (!missing)
+                {
+                    updated = previousSha256 != actualSha256;
+                }
+                else
+                {
+                    error.clear();
+                }
             }
             return true;
         }
@@ -528,8 +963,8 @@ namespace Spark::AssetPipeline
             for (size_t i = 0; i < records.size(); ++i)
             {
                 const auto& record = records[i];
-                stream << "    {\"path\": \"" << EscapeJson(record.path) << "\", \"sha256\": \"" << record.sha256
-                       << "\", \"size\": " << record.size << "}" << (i + 1 == records.size() ? "\n" : ",\n");
+                stream << R"(    {"path": ")" << EscapeJson(record.path) << R"(", "sha256": ")" << record.sha256
+                       << R"(", "size": )" << record.size << "}" << (i + 1 == records.size() ? "\n" : ",\n");
             }
             stream << "  ]\n}\n";
             stream.flush();
@@ -565,7 +1000,9 @@ namespace Spark::AssetPipeline
                 {
                     backup = MakeStagePath(outputRoot);
                     if (!std::filesystem::exists(backup, ec) && !ec)
+                    {
                         break;
+                    }
                     ec.clear();
                     backup.clear();
                 }
@@ -613,16 +1050,18 @@ namespace Spark::AssetPipeline
         {
             std::ostringstream body;
             for (const auto& record : records)
+            {
                 body << record.path << '\0' << record.sha256 << '\0' << record.size << '\n';
+            }
             const std::string bytes = body.str();
             Sha256 sha;
             sha.Update(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
             return sha.Finalize();
         }
 
-        bool StageAndCookFile(const std::filesystem::path& source, const std::filesystem::path& output,
-                              const std::string& expectedSha256, bool dryRun, bool& updated, std::string& actualSha256,
-                              std::uintmax_t& actualSize, std::string& error)
+        bool StageAndCookFile(const std::filesystem::path& source, const std::filesystem::path& sourceRoot,
+                              const std::filesystem::path& output, const std::string& expectedSha256, bool dryRun,
+                              bool& updated, std::string& actualSha256, std::uintmax_t& actualSize, std::string& error)
         {
             updated = true;
             std::error_code ec;
@@ -651,9 +1090,9 @@ namespace Spark::AssetPipeline
                 stage = MakeStagePath(output);
             }
 
-            if (!std::filesystem::copy_file(source, stage, std::filesystem::copy_options::none, ec))
+            if (!CopySourceAsset(source, sourceRoot, stage, error))
             {
-                error = "failed to stage '" + source.string() + "': " + ec.message();
+                error = "failed to stage '" + PathText(source) + "': " + error;
                 return false;
             }
             const auto removeStage = [&]
@@ -663,10 +1102,13 @@ namespace Spark::AssetPipeline
             };
 
             actualSize = std::filesystem::file_size(stage, ec);
-            if (ec || !ComputeFileSha256(stage, actualSha256, error))
+            bool stagedMissing = false;
+            if (ec || !ComputeFileSha256Opened(stage, stage.parent_path(), actualSha256, error, stagedMissing))
             {
                 if (ec)
+                {
                     error = "failed to inspect staged asset: " + ec.message();
+                }
                 removeStage();
                 return false;
             }
@@ -677,20 +1119,25 @@ namespace Spark::AssetPipeline
                 return false;
             }
 
-            if (std::filesystem::is_regular_file(output, ec) && !ec)
+            std::string current;
+            bool outputMissing = false;
+            if (ComputeFileSha256Opened(output, output.parent_path(), current, error, outputMissing))
             {
-                std::string current;
-                if (!ComputeFileSha256(output, current, error))
-                {
-                    removeStage();
-                    return false;
-                }
                 if (current == actualSha256)
                 {
                     updated = false;
                     removeStage();
                     return true;
                 }
+            }
+            else if (!outputMissing)
+            {
+                removeStage();
+                return false;
+            }
+            else
+            {
+                error.clear();
             }
             if (dryRun)
             {
@@ -704,31 +1151,144 @@ namespace Spark::AssetPipeline
             }
             return true;
         }
+
+        bool ComputeFileSha256Opened(const std::filesystem::path& path, const std::filesystem::path& containmentRoot,
+                                     std::string& digest, std::string& error, bool& missing)
+        {
+            missing = false;
+            Sha256 sha;
+            std::vector<uint8_t> buffer(static_cast<size_t>(64 * 1024));
+#if defined(_WIN32)
+            const DWORD openFlags =
+                FILE_FLAG_SEQUENTIAL_SCAN | (containmentRoot.empty() ? 0 : FILE_FLAG_OPEN_REPARSE_POINT);
+            const HANDLE handle =
+                ::CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                              nullptr, OPEN_EXISTING, openFlags, nullptr);
+            if (handle == INVALID_HANDLE_VALUE)
+            {
+                const DWORD openError = ::GetLastError();
+                missing = openError == ERROR_FILE_NOT_FOUND || openError == ERROR_PATH_NOT_FOUND;
+                error = "failed to open '" + PathText(path) + "'";
+                return false;
+            }
+            const ScopedHandle input(handle);
+            BY_HANDLE_FILE_INFORMATION before{};
+            if (::GetFileType(input.Get()) != FILE_TYPE_DISK || !::GetFileInformationByHandle(input.Get(), &before) ||
+                (before.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+            {
+                error = "source is not a regular file: '" + PathText(path) + "'";
+                return false;
+            }
+            if (!containmentRoot.empty())
+            {
+                const ScopedHandle root(::CreateFileW(containmentRoot.c_str(), FILE_READ_ATTRIBUTES,
+                                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                      OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+                if (!root.IsValid() || (before.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 ||
+                    !IsDescendantFinalPath(FinalPathOf(input.Get()), FinalPathOf(root.Get())))
+                {
+                    error = "source asset escapes its containment root: '" + PathText(path) + "'";
+                    return false;
+                }
+            }
+            for (;;)
+            {
+                DWORD got = 0;
+                if (!::ReadFile(input.Get(), buffer.data(), static_cast<DWORD>(buffer.size()), &got, nullptr))
+                {
+                    error = "failed while reading '" + PathText(path) + "'";
+                    return false;
+                }
+                if (got == 0)
+                {
+                    break;
+                }
+                sha.Update(buffer.data(), got);
+            }
+            BY_HANDLE_FILE_INFORMATION after{};
+            if (!::GetFileInformationByHandle(input.Get(), &after) ||
+                before.dwVolumeSerialNumber != after.dwVolumeSerialNumber ||
+                before.nFileIndexHigh != after.nFileIndexHigh || before.nFileIndexLow != after.nFileIndexLow ||
+                before.nFileSizeHigh != after.nFileSizeHigh || before.nFileSizeLow != after.nFileSizeLow ||
+                before.ftLastWriteTime.dwHighDateTime != after.ftLastWriteTime.dwHighDateTime ||
+                before.ftLastWriteTime.dwLowDateTime != after.ftLastWriteTime.dwLowDateTime)
+            {
+                error = "source asset changed while hashing: '" + PathText(path) + "'";
+                return false;
+            }
+#else
+            const int fd = ::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC |
+                                                    (containmentRoot.empty() ? 0 : O_NOFOLLOW));
+            if (fd < 0)
+            {
+                missing = errno == ENOENT || errno == ENOTDIR;
+                error = "failed to open '" + PathText(path) + "'";
+                return false;
+            }
+            const ScopedFd input(fd);
+            struct stat before = {};
+            if (::fstat(input.Get(), &before) != 0 || !S_ISREG(before.st_mode))
+            {
+                error = "source is not a regular file: '" + PathText(path) + "'";
+                return false;
+            }
+            if (!containmentRoot.empty())
+            {
+                const std::filesystem::path opened = PathOfDescriptor(input.Get());
+                if (opened.empty() || !IsContained(opened, containmentRoot))
+                {
+                    error = "source asset escapes its containment root: '" + PathText(path) + "'";
+                    return false;
+                }
+            }
+            for (;;)
+            {
+                const ssize_t got = ::read(input.Get(), buffer.data(), buffer.size());
+                if (got < 0 && errno == EINTR)
+                {
+                    continue;
+                }
+                if (got < 0)
+                {
+                    error = "failed while reading '" + PathText(path) + "'";
+                    return false;
+                }
+                if (got == 0)
+                {
+                    break;
+                }
+                sha.Update(buffer.data(), static_cast<size_t>(got));
+            }
+            struct stat after = {};
+            if (::fstat(input.Get(), &after) != 0 || after.st_dev != before.st_dev || after.st_ino != before.st_ino ||
+                after.st_size != before.st_size)
+            {
+                error = "source asset changed while hashing: '" + PathText(path) + "'";
+                return false;
+            }
+#if defined(__APPLE__)
+            if (after.st_mtimespec.tv_sec != before.st_mtimespec.tv_sec ||
+                after.st_mtimespec.tv_nsec != before.st_mtimespec.tv_nsec ||
+                after.st_ctimespec.tv_sec != before.st_ctimespec.tv_sec ||
+                after.st_ctimespec.tv_nsec != before.st_ctimespec.tv_nsec)
+#else
+            if (after.st_mtim.tv_sec != before.st_mtim.tv_sec || after.st_mtim.tv_nsec != before.st_mtim.tv_nsec ||
+                after.st_ctim.tv_sec != before.st_ctim.tv_sec || after.st_ctim.tv_nsec != before.st_ctim.tv_nsec)
+#endif
+            {
+                error = "source asset changed while hashing: '" + PathText(path) + "'";
+                return false;
+            }
+#endif
+            digest = sha.Finalize();
+            return true;
+        }
     } // namespace
 
     bool ComputeFileSha256(const std::filesystem::path& path, std::string& digest, std::string& error)
     {
-        std::ifstream file(path, std::ios::binary);
-        if (!file)
-        {
-            error = "failed to open '" + path.string() + "'";
-            return false;
-        }
-        Sha256 sha;
-        std::vector<uint8_t> buffer(64 * 1024);
-        while (file)
-        {
-            file.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()));
-            if (const auto count = file.gcount(); count > 0)
-                sha.Update(buffer.data(), static_cast<size_t>(count));
-        }
-        if (!file.eof())
-        {
-            error = "failed while reading '" + path.string() + "'";
-            return false;
-        }
-        digest = sha.Finalize();
-        return true;
+        bool missing = false;
+        return ComputeFileSha256Opened(path, {}, digest, error, missing);
     }
 
     bool CookFile(const std::filesystem::path& source, const std::filesystem::path& output,
@@ -736,12 +1296,14 @@ namespace Spark::AssetPipeline
     {
         if (IsUnsafeOutputLink(output))
         {
-            error = "refusing to replace linked output '" + output.string() + "'";
+            error = "refusing to replace linked output '" + PathText(output) + "'";
             return false;
         }
         std::string actualSha256;
         std::uintmax_t actualSize = 0;
-        return StageAndCookFile(source, output, expectedSha256, dryRun, updated, actualSha256, actualSize, error);
+        // A single file named by the caller has no source tree to stay inside; it is still read
+        // through the handle (regular files only, never blocking on a FIFO).
+        return StageAndCookFile(source, {}, output, expectedSha256, dryRun, updated, actualSha256, actualSize, error);
     }
 
     CookResult CookAssets(const CookRequest& request)
@@ -792,7 +1354,9 @@ namespace Spark::AssetPipeline
 
         CookOutputLock outputLock;
         if (!outputLock.Acquire(output, result.error))
+        {
             return result;
+        }
         if (IsLinkLike(output))
         {
             result.error = "output root must not be a link or reparse point";
@@ -813,7 +1377,9 @@ namespace Spark::AssetPipeline
             !ValidateOutputTarget(manifestLexical, outputLexical, result.error, "cook manifest"))
         {
             if (result.error.empty())
+            {
                 result.error = "cook manifest escapes the output root";
+            }
             return result;
         }
         const auto manifest = std::filesystem::weakly_canonical(manifestLexical, ec);
@@ -823,7 +1389,9 @@ namespace Spark::AssetPipeline
             return result;
         }
         if (!ValidateOutputTarget(manifest, output, result.error, "cook manifest"))
+        {
             return result;
+        }
 
         struct SourceEntry
         {
@@ -837,13 +1405,22 @@ namespace Spark::AssetPipeline
             {
                 const std::u8string utf8 = path.lexically_relative(root).generic_u8string();
                 portable.assign(reinterpret_cast<const char*>(utf8.data()), utf8.size());
-                return !portable.empty();
             }
-            catch (const std::filesystem::filesystem_error& exception)
+            catch (const std::system_error& exception)
             {
+                // std::filesystem::filesystem_error derives from std::system_error, and MSVC's
+                // UTF-16 -> UTF-8 conversion of an unpaired surrogate throws the base type.
                 result.error = "asset path is not representable as portable UTF-8: " + std::string(exception.what());
                 return false;
             }
+            // A POSIX name is bytes, and generic_u8string() copies them unchecked: a name that is
+            // not UTF-8 was written raw into the JSON manifest, which no strict reader accepts.
+            if (!IsValidUtf8(portable))
+            {
+                result.error = "asset path is not representable as portable UTF-8: " + PathText(path);
+                return false;
+            }
+            return !portable.empty();
         };
 
         std::vector<SourceEntry> files;
@@ -852,7 +1429,9 @@ namespace Spark::AssetPipeline
         {
             const auto status = iterator->symlink_status(ec);
             if (ec)
+            {
                 break;
+            }
             if (std::filesystem::is_symlink(status) || IsLinkLike(iterator->path()))
             {
                 iterator.disable_recursion_pending();
@@ -868,7 +1447,9 @@ namespace Spark::AssetPipeline
                 SourceEntry entry;
                 entry.path = canonical;
                 if (!makePortableRelative(canonical, source, entry.portablePath))
+                {
                     return result;
+                }
                 files.push_back(std::move(entry));
             }
             iterator.increment(ec);
@@ -886,7 +1467,9 @@ namespace Spark::AssetPipeline
         if (!request.dryRun)
         {
             if (!CreateGenerationDirectory(output, generation, result.error))
+            {
                 return result;
+            }
             generationCleanup = std::make_unique<ScopedDirectoryCleanup>(generation);
         }
         for (const auto& file : files)
@@ -898,26 +1481,32 @@ namespace Spark::AssetPipeline
             if (request.dryRun)
             {
                 if (!ValidateOutputTarget(previousDestination, output, result.error, "cooked output") ||
-                    !StageAndCookFile(file.path, previousDestination, {}, true, record.updated, record.sha256,
+                    !StageAndCookFile(file.path, source, previousDestination, {}, true, record.updated, record.sha256,
                                       record.size, result.error))
+                {
                     return result;
+                }
             }
             else
             {
                 const auto generationDestination = generation / relativePath;
                 if (!IsContained(generationDestination.lexically_normal(), generation) ||
-                    !CopyGenerationFile(file.path, generationDestination, previousDestination, output, record.updated,
-                                        record.sha256, record.size, result.error))
+                    !CopyGenerationFile(file.path, source, generationDestination, previousDestination, output,
+                                        record.updated, record.sha256, record.size, result.error))
                 {
                     if (result.error.empty())
+                    {
                         result.error = "cooked output escapes the generation directory";
+                    }
                     return result;
                 }
             }
             record.updated ? ++result.updatedCount : ++result.unchangedCount;
             result.records.push_back(std::move(record));
             if (request.onProgress)
+            {
                 request.onProgress(result.records.back(), result.records.size(), files.size());
+            }
         }
         result.manifestSha256 = HashRecords(result.records);
         if (!request.dryRun)
@@ -926,7 +1515,9 @@ namespace Spark::AssetPipeline
             const auto generationManifest = (generation / manifestRelative).lexically_normal();
             std::string manifestRecordPath;
             if (!makePortableRelative(manifest, output, manifestRecordPath))
+            {
                 return result;
+            }
             const bool conflictsWithAsset =
                 std::any_of(result.records.begin(), result.records.end(),
                             [&](const CookRecord& record) { return record.path == manifestRecordPath; });
@@ -939,11 +1530,15 @@ namespace Spark::AssetPipeline
                 !WriteManifest(generationManifest, result.records, result.manifestSha256, result.error))
             {
                 if (result.error.empty())
+                {
                     result.error = "cook manifest escapes the generation directory";
+                }
                 return result;
             }
             if (!PublishGeneration(generation, output, result.error))
+            {
                 return result;
+            }
             generationCleanup->Release();
         }
         return result;

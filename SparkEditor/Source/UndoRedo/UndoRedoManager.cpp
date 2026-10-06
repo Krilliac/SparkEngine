@@ -15,7 +15,13 @@ namespace SparkEditor
     namespace
     {
         thread_local int g_dispatchDepth = 0;
-    }
+
+        struct DispatchScope final
+        {
+            DispatchScope() { ++g_dispatchDepth; }
+            ~DispatchScope() { --g_dispatchDepth; }
+        };
+    } // namespace
 
     UndoRedoManager& UndoRedoManager::GetInstance()
     {
@@ -44,9 +50,8 @@ namespace SparkEditor
 
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Executing command: '%s'", command->GetDescription().c_str());
         // Execute the command
-        ++g_dispatchDepth;
+        DispatchScope dispatchScope;
         command->Execute();
-        --g_dispatchDepth;
 
         // Push onto undo stack
         m_undoStack.push_back(std::move(command));
@@ -76,9 +81,8 @@ namespace SparkEditor
         m_undoStack.pop_back();
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Undoing command: '%s' (stack depth: %zu)",
                         command->GetDescription().c_str(), m_undoStack.size());
-        ++g_dispatchDepth;
+        DispatchScope dispatchScope;
         command->Undo();
-        --g_dispatchDepth;
 
         m_redoStack.push_back(std::move(command));
         ++m_editSequence;
@@ -99,9 +103,8 @@ namespace SparkEditor
         auto command = std::move(m_redoStack.back());
         m_redoStack.pop_back();
 
-        ++g_dispatchDepth;
+        DispatchScope dispatchScope;
         command->Execute();
-        --g_dispatchDepth;
 
         m_undoStack.push_back(std::move(command));
         ++m_editSequence;

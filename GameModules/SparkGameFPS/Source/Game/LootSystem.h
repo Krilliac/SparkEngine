@@ -9,7 +9,7 @@
 
 #pragma once
 #include "Core/Platform.h"
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"

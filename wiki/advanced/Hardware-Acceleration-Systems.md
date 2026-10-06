@@ -17,7 +17,7 @@ All files confirmed present 2026-06-08.
 | System | Header | Impl | Shaders | Tests |
 |---|---|---|---|---|
 | GPU Compute Particles | `Graphics/GPUParticleSystem.h` | `GPUParticleSystem.cpp` | `ParticleSimulate/Emit/BitonicSort.hlsl` | `TestGPUParticleSystem.cpp` (11) |
-| GPU Skinning | `Graphics/GPUSkinning.h` | `GPUSkinning.cpp` | `SkinningCS.hlsl` | `TestGPUSkinning.cpp` (9) |
+| GPU Skinning | `Graphics/GPUSkinning.h` | `GPUSkinning.cpp` | `SkinningCS.hlsl` | `TestENG220GPUSkinningD3D11Real.cpp` (4, WARP) |
 | Async Compute | `Graphics/AsyncComputeScheduler.h` | `AsyncComputeScheduler.cpp` | — | `TestAsyncComputeScheduler.cpp` (9) |
 | GPU-Driven Renderer | `Graphics/GPUDrivenRenderer.h` | `GPUDrivenRenderer.cpp` | `GPUCull.hlsl`, `HiZBuild.hlsl` | `TestGPUDrivenRenderer.cpp` (12) |
 | GPU Cluster Culling | `Graphics/GPUClusterCulling.h` | `GPUClusterCulling.cpp` | `ClusterCull.hlsl` | `TestGPUClusterCulling.cpp` (11) |
@@ -46,7 +46,7 @@ All files confirmed present 2026-06-08.
 - Mesh shaders: `Shaders/HLSL/MeshShaders/`
 - C++ systems: `SparkEngine/Source/Graphics/`
 - DirectStorage: `SparkEngine/Source/Engine/Streaming/`
-- Tests: `Tests/` (7 files, ~72 tests)
+- Tests: dedicated hardware-acceleration test sources in `Tests/`
 
 ## Notes
 
@@ -61,7 +61,7 @@ All files confirmed present 2026-06-08.
 
 Status changes / verifications found during freshening:
 
-- All 7 new-system header/impl pairs and all 7 test files confirmed present.
+- All 7 new-system header/impl pairs and the corresponding test files confirmed present.
 - **DXR wiring moved file:** now in `GraphicsEngineWindows.cpp` (the renderer was split per-platform), not `GraphicsEngine.cpp`. `BuildTLAS` per-frame call and `SPARK_HARDWARE_RT` gate confirmed.
 - DirectStorage still on the fallback path (SDK not linked) — confirmed by in-file comments.
 - Metal ray-tracing backend (`MetalRayTracing.mm`) now present alongside the DXR/HybridRT paths.

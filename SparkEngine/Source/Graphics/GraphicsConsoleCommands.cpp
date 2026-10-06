@@ -23,6 +23,15 @@
 namespace Spark::Graphics
 {
 
+    std::string Detail::ScreenshotCommandResponse(bool success)
+    {
+#ifdef SPARK_PLATFORM_WINDOWS
+        return success ? "Screenshot queued for next frame" : "Screenshot could not be queued";
+#else
+        return success ? "Screenshot saved" : "Failed to save screenshot";
+#endif
+    }
+
     void RegisterGraphicsConsoleCommands(GraphicsEngine& engine)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
@@ -81,7 +90,7 @@ namespace Spark::Graphics
             {
                 std::string filename = args.empty() ? "" : args[0];
                 bool success = engine.Console_Screenshot(filename);
-                return success ? "Screenshot saved" : "Failed to save screenshot";
+                return Detail::ScreenshotCommandResponse(success);
             },
             "Take a screenshot");
 

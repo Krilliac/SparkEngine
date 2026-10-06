@@ -12,7 +12,9 @@
 
 #include "PrefabAsset.h"
 #include "../SceneSystem/SceneFile.h"
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -81,19 +83,51 @@ namespace SparkEditor
         uint64_t InstantiatePrefab(const std::string& prefabName);
 
         /**
-         * @brief Save a prefab to disk
-         * @param name Prefab name
-         * @param directory Directory to save into
+         * @brief Save a prefab to `<directory>/<name>.sparkprefab`
+         * @param name Prefab name; must be a single safe file-name segment (no separators, ':', or "..")
+         * @param directory UTF-8 directory to save into. Empty means the project prefab directory,
+         *                  which is created on demand; with no project open the save fails rather
+         *                  than writing into the process working directory.
          * @return true on success
          */
         bool SavePrefab(const std::string& name, const std::string& directory = "");
 
         /**
-         * @brief Load a prefab from disk
-         * @param filePath Path to the .sparkprefab file
-         * @return Pointer to the loaded prefab, or nullptr on failure
+         * @brief Set the open project's prefab directory (`<project>/Prefabs`); empty when no project is open
          */
-        PrefabAsset* LoadPrefab(const std::string& filePath);
+        void SetProjectPrefabDirectory(std::filesystem::path directory);
+
+        /**
+         * @brief Load every `*.sparkprefab` directly in the project prefab directory, in file-name order
+         *
+         * Each file goes through LoadPrefab, so a damaged file falls back to its `.bak` and a
+         * rejected file leaves any already-loaded prefab of the same name in place.
+         *
+         * The directory comes from an untrusted project, so the sweep is bounded: symbolic links
+         * are rejected unread by TryLoad, at most kMaxProjectPrefabFiles files are considered, and
+         * a file whose readable bytes (primary plus `.bak`) would take the sweep past
+         * kMaxProjectPrefabBytes is skipped. A file over PrefabAsset::kMaxPrefabFileBytes is
+         * rejected unread and costs nothing. Anything left out is reported in @p diagnostics.
+         *
+         * @param diagnostics Receives one actionable message per rejected file and per file loaded
+         *                    from its `.bak`, plus one per limit that left files unloaded
+         * @return Number of prefabs loaded
+         */
+        size_t LoadProjectPrefabs(std::vector<std::string>& diagnostics);
+
+        /// Most `*.sparkprefab` files LoadProjectPrefabs considers in one project.
+        static constexpr size_t kMaxProjectPrefabFiles = 2048;
+        /// Most bytes of project prefab files LoadProjectPrefabs reads in one sweep.
+        static constexpr std::uintmax_t kMaxProjectPrefabBytes = std::uintmax_t{32} * 1024u * 1024u;
+
+        /**
+         * @brief Load a prefab from disk (see PrefabAsset::TryLoad for validation and recovery)
+         * @param filePath UTF-8 path to the .sparkprefab file
+         * @param error When non-null, receives the actionable reason on failure, or why the
+         *              primary was rejected when the retained `.bak` was loaded instead
+         * @return Pointer to the loaded prefab, or nullptr on failure (the registry is unchanged)
+         */
+        PrefabAsset* LoadPrefab(const std::string& filePath, std::string* error = nullptr);
 
         /**
          * @brief Delete a prefab by name
@@ -217,7 +251,8 @@ namespace SparkEditor
         std::unordered_map<std::string, PrefabAsset> m_prefabs;
         std::vector<PrefabInstance> m_instances;
         std::function<void()> m_onPrefabsChanged;
-        SceneFile* m_scene = nullptr; ///< Non-owning pointer to the active scene
+        SceneFile* m_scene = nullptr;                   ///< Non-owning pointer to the active scene
+        std::filesystem::path m_projectPrefabDirectory; ///< Empty while no project is open
 
         void NotifyPrefabsChanged();
 

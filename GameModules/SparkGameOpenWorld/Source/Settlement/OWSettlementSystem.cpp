@@ -4,8 +4,7 @@
  */
 
 #include "OWSettlementSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -25,10 +24,10 @@ namespace OpenWorld
         DefineSettlements();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Settlement system initialized: %zu settlements",
-                       m_settlements.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Settlements: " + std::to_string(m_settlements.size()) +
-                                                    " | NPCs: " + std::to_string(GetTotalNPCCount()));
+        Spark::ModuleLog::Info(m_context, "Settlement system initialized: {} settlements", m_settlements.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Settlements: " + std::to_string(m_settlements.size()) +
+                                   " | NPCs: " + std::to_string(GetTotalNPCCount()));
         return true;
     }
 
@@ -241,6 +240,7 @@ namespace OpenWorld
 
         m_settlements.clear();
         m_camps.clear();
+        m_visitedSettlements.clear();
         m_initialized = false;
     }
 
@@ -281,6 +281,32 @@ namespace OpenWorld
         return nearest;
     }
 
+    const Settlement* OWSettlementSystem::FindSettlementAt(float x, float z) const
+    {
+        const Settlement* nearest = GetNearestSettlement(x, z);
+        if (!nearest)
+        {
+            return nullptr;
+        }
+        const float dx = x - nearest->centerX;
+        const float dz = z - nearest->centerZ;
+        return dx * dx + dz * dz <= nearest->radius * nearest->radius ? nearest : nullptr;
+    }
+
+    bool OWSettlementSystem::VisitSettlement(uint32_t settlementId)
+    {
+        const Settlement* settlement = GetSettlement(settlementId);
+        if (!settlement)
+        {
+            return false;
+        }
+        if (m_visitedSettlements.insert(settlementId).second)
+        {
+            Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Visited settlement: " + settlement->name);
+        }
+        return true;
+    }
+
     uint32_t OWSettlementSystem::PlaceCamp(const std::string& name, float x, float y, float z, uint32_t regionId)
     {
         PlayerCamp camp{};
@@ -295,8 +321,8 @@ namespace OpenWorld
 
         m_camps[camp.campId] = camp;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + name +
-                                                    "' placed (id=" + std::to_string(camp.campId) + ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Camp '" + name + "' placed (id=" + std::to_string(camp.campId) + ")");
         return camp.campId;
     }
 
@@ -321,8 +347,9 @@ namespace OpenWorld
         if (camp.tier >= CampTier::Cabin)
             camp.hasCraftingStation = true;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
-                                                    std::to_string(static_cast<int>(camp.tier)));
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
+                                   std::to_string(static_cast<int>(camp.tier)));
         return true;
     }
 
@@ -390,6 +417,10 @@ namespace OpenWorld
                 ss << " | Blacksmith";
             if (s.hasInn)
                 ss << " | Inn";
+            if (IsSettlementVisited(s.settlementId))
+            {
+                ss << " | Visited";
+            }
             ss << "\n";
         }
         return ss.str();

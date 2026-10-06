@@ -40,7 +40,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 TOOLS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_DIR.parents[1]
@@ -77,8 +77,20 @@ _ENTRY_LINE_RE = re.compile(r'^\s*"(.*)"\s*$')
 _VARIABLE_RE = re.compile(r"\$\{([A-Za-z0-9_]+)\}")
 _GITLINK_RECORD_RE = re.compile(r"^160000 commit ([0-9a-f]{40})\s")
 _SHA1_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+# A manifest version that pins a single tracked file: "(<file> blob <40-hex>)".
+_BLOB_CLAIM_RE = re.compile(r"\(([^()\s]+) blob ([0-9a-f]{40})\)")
+_BLOB_RECORD_RE = re.compile(r"^100(?:644|755) blob ([0-9a-f]{40})\t")
 
 _SET_OPEN = "set(SPARK_THIRDPARTY_AUDIT_ENTRIES"
+
+# Reviewed Windows image names of vendored libraries that ship as their own
+# DLL in the application directory, keyed by manifest name.  A package-local
+# DLL can only be tied to a closure identity through this table: the import
+# graph measures file names ("sdl2.dll"), the manifest names projects
+# ("SDL2").  It is empty because every vendored library is linked statically
+# into the Windows binaries today (SDL2 is only built off Windows), so a
+# third-party DLL in a Windows package is refused until it is reviewed here.
+THIRD_PARTY_PACKAGE_IMAGES: dict[str, tuple[str, ...]] = {}
 
 
 class AuthorityError(Exception):
@@ -213,6 +225,67 @@ def sha256_file(path: Path) -> str:
     return manifest_digest(raw)
 
 
+def head_blob_lookup(repo_root: Path) -> Callable[[str], str | None]:
+    """Return a lookup of the blob id HEAD records for a repository-relative file."""
+
+    def _lookup(relative: str) -> str | None:
+        try:
+            completed = subprocess.run(
+                ["git", "ls-tree", "HEAD", "--", relative],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as exc:  # pragma: no cover - git absent
+            raise AuthorityError(f"cannot run git to resolve {relative!r}: {exc}") from exc
+        if completed.returncode != 0:
+            raise AuthorityError(
+                f"git ls-tree failed for {relative!r}: {completed.stderr.strip()[:200]}"
+            )
+        match = _BLOB_RECORD_RE.match(completed.stdout.strip())
+        return match.group(1) if match else None
+
+    return _lookup
+
+
+def verify_blob_claims(
+    entries: list[dict[str, str]], lookup: Callable[[str], str | None]
+) -> int:
+    """Refuse a manifest version that names a file blob HEAD does not hold.
+
+    A version such as ``snapshot (stb_image.h blob <40-hex>)`` is an identity
+    claim about a tracked file under the entry's local path.  When that file
+    is rewritten the claim goes stale silently, and every record derived from
+    the manifest (this authority, THIRD_PARTY_NOTICES) then ships a blob that
+    no longer exists at that path.  Returns the number of claims verified.
+    """
+    verified = 0
+    for entry in entries:
+        claims = _BLOB_CLAIM_RE.findall(entry["version"])
+        for file_name, claimed in claims:
+            if "/" in file_name or "\\" in file_name or file_name in (".", ".."):
+                raise AuthorityError(
+                    f"manifest entry {entry['name']!r} names blob file {file_name!r}; "
+                    "use a bare file name under the entry's local path"
+                )
+            relative = f"{entry['localPath'].strip().rstrip('/')}/{file_name}"
+            actual = lookup(relative)
+            if actual is None:
+                raise AuthorityError(
+                    f"manifest entry {entry['name']!r} claims blob {claimed} for "
+                    f"{relative!r}, but HEAD tracks no such file"
+                )
+            if actual != claimed:
+                raise AuthorityError(
+                    f"manifest entry {entry['name']!r} claims blob {claimed} for "
+                    f"{relative!r}, but HEAD holds blob {actual}; update the version "
+                    f"in {LOCK_RELPATH} and regenerate the derived records"
+                )
+            verified += 1
+    return verified
+
+
 def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
     """Derive the third-party section of the authority from the manifest."""
     lock_path = repo_root / LOCK_RELPATH
@@ -225,6 +298,7 @@ def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
 
     entries, gitlink_vars = parse_lock(text)
     resolved = resolve_gitlinks(repo_root, gitlink_vars)
+    verify_blob_claims(entries, head_blob_lookup(repo_root))
 
     derived: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -234,19 +308,23 @@ def build_third_party(repo_root: Path) -> tuple[list[dict[str, Any]], str]:
         if key in seen:
             raise AuthorityError(f"manifest declares {name!r} twice")
         seen.add(key)
-        derived.append(
-            {
-                "name": name,
-                "version": substitute(entry["version"].strip(), resolved),
-                "source": "bundled",
-                "localPath": entry["localPath"].strip(),
-                "severity": entry["severity"],
-                # Vendored third-party code is compiled into the engine
-                # binaries, so it is legitimate to *name* in a closure but is
-                # never a separate runtime file a row must ship.
-                "requiredForRows": [],
-            }
-        )
+        item: dict[str, Any] = {
+            "name": name,
+            "version": substitute(entry["version"].strip(), resolved),
+            "source": "bundled",
+            "localPath": entry["localPath"].strip(),
+            "severity": entry["severity"],
+            # Vendored third-party code is compiled into the engine
+            # binaries, so it is legitimate to *name* in a closure but is
+            # never a separate runtime file a row must ship.
+            "requiredForRows": [],
+        }
+        if name in THIRD_PARTY_PACKAGE_IMAGES:
+            item["imageNames"] = sorted(THIRD_PARTY_PACKAGE_IMAGES[name])
+        derived.append(item)
+    stale = sorted(set(THIRD_PARTY_PACKAGE_IMAGES) - {item["name"] for item in derived})
+    if stale:
+        raise AuthorityError(f"THIRD_PARTY_PACKAGE_IMAGES names no manifest entry: {stale}")
     derived.sort(key=lambda item: item["name"].casefold())
     return derived, manifest_digest(raw)
 
@@ -259,11 +337,33 @@ def default_platform_runtime() -> list[dict[str, Any]]:
     entry pins a bounded anchored *shape* rather than an exact string; the
     file's real bytes are still measured out of the evidence bundle, so an
     entry that matches the shape but not a real file cannot certify.
+
+    The 'system' entries are the operating-system DLLs the MSVC v143 images
+    import, read from their PE import tables with pe_imports.py (a
+    windows-release Release bin/ of 2026-09-28, a windows-shipping MinSizeRel
+    bin/ of 2026-09-23, and the app-local VC143 CRT the redist component
+    installs).  A DLL is required
+    for both rows when SparkEngine.exe, the product executable of both rows,
+    imports it in both trees; it is authorised but not row-required when
+    only the editor or a tool imports it.  SparkEngine.exe statically imports
+    d3d11.dll, dxgi.dll and d3dcompiler_47.dll, so the NullRHI row needs them
+    on the host too even though it never renders (HEAD-220).
     """
     d3d11_row = "win11-x64-msvc143-d3d11"
     nullrhi_row = "win11-x64-msvc143-nullrhi"
+    both_rows = [d3d11_row, nullrhi_row]
     msvc_pattern = r"^14\.[0-9]{1,3}\.[0-9]{1,5}\.[0-9]{1,5}$"
     os_pattern = r"^10\.0\.[0-9]{1,6}\.[0-9]{1,6}$"
+
+    def system(name: str, rows: list[str], justification: str) -> dict[str, Any]:
+        return {
+            "name": name,
+            "versionPattern": os_pattern,
+            "source": "system",
+            "requiredForRows": list(rows),
+            "justification": justification,
+        }
+
     return [
         {
             "name": "msvcp140.dll",
@@ -286,34 +386,62 @@ def default_platform_runtime() -> list[dict[str, Any]]:
             "requiredForRows": [d3d11_row, nullrhi_row],
             "justification": "MSVC x64 exception-handling runtime.",
         },
-        {
-            "name": "d3d11.dll",
-            "versionPattern": os_pattern,
-            "source": "system",
-            "requiredForRows": [d3d11_row],
-            "justification": "Direct3D 11 runtime for the primary RHI backend.",
-        },
-        {
-            "name": "dxgi.dll",
-            "versionPattern": os_pattern,
-            "source": "system",
-            "requiredForRows": [d3d11_row],
-            "justification": "DXGI adapter/swapchain runtime used by the D3D11 backend.",
-        },
-        {
-            "name": "d3dcompiler_47.dll",
-            "versionPattern": os_pattern,
-            "source": "directx",
-            "requiredForRows": [d3d11_row],
-            "justification": "Runtime HLSL compilation path in SparkShaderCompiler.",
-        },
-        {
-            "name": "xaudio2_9.dll",
-            "versionPattern": os_pattern,
-            "source": "system",
-            "requiredForRows": [d3d11_row],
-            "justification": "XAudio2 backend; the NullRHI row declares audio api 'none'.",
-        },
+        system(
+            "d3d11.dll",
+            both_rows,
+            "Direct3D 11 runtime for the primary RHI backend; SparkEngine.exe imports it "
+            "statically, so the NullRHI row loads it too.",
+        ),
+        system(
+            "dxgi.dll",
+            both_rows,
+            "DXGI adapter/swapchain runtime; SparkEngine.exe imports it statically.",
+        ),
+        system(
+            "d3dcompiler_47.dll",
+            both_rows,
+            "HLSL-to-DXBC compiler (Spark::RHI::CompileShader). No install component ships "
+            "it; the loader takes the Windows 10+ in-box copy from System32.",
+        ),
+        system(
+            "d3d12.dll",
+            both_rows,
+            "Direct3D 12 runtime; SparkEngine.exe imports it statically for the D3D12 backend.",
+        ),
+        system(
+            "xaudio2_9.dll",
+            [],
+            "XAudio2 backend. The Windows SDK's inline XAudio2Create loads it with "
+            "LoadLibraryEx(LOAD_LIBRARY_SEARCH_SYSTEM32), so it is in no image's import "
+            "table and a measured PE closure can never contain it; requiring it for a row "
+            "would make that row uncertifiable.",
+        ),
+        system("kernel32.dll", both_rows, "Win32 base API; every image imports it."),
+        system("user32.dll", both_rows, "Win32 windowing and input."),
+        system("gdi32.dll", both_rows, "Win32 GDI."),
+        system("imm32.dll", both_rows, "Win32 Input Method Manager."),
+        system("advapi32.dll", both_rows, "Win32 registry and security APIs."),
+        system("ole32.dll", both_rows, "COM runtime."),
+        system("shell32.dll", both_rows, "Win32 shell API (CommandLineToArgvW)."),
+        system("bcrypt.dll", both_rows, "CNG random numbers (BCryptGenRandom)."),
+        system("dbghelp.dll", both_rows, "Crash-dump writing and stack symbolisation."),
+        system("winmm.dll", both_rows, "Windows multimedia API, linked by SparkEngineLib."),
+        system(
+            "comdlg32.dll",
+            [],
+            "Common file dialogs; only SparkEditor.exe imports it.",
+        ),
+        system(
+            "ws2_32.dll",
+            [],
+            "Winsock; SparkEditor.exe imports it, and SparkEngine.exe does only when "
+            "ENABLE_NETWORKING is ON, which windows-shipping turns off.",
+        ),
+        system(
+            "winhttp.dll",
+            [],
+            "HTTP client; only SparkInstaller.exe and SparkBuild.exe import it.",
+        ),
     ]
 
 
@@ -354,6 +482,8 @@ class Authority:
         self.document = document
         self.by_identity: dict[tuple[str, str], dict[str, Any]] = {}
         self.required_for_row: dict[str, list[tuple[str, str]]] = {}
+        # Package-local DLL file name -> the (name, source) identity it ships.
+        self.package_images: dict[str, tuple[str, str]] = {}
 
         for section in ("thirdParty", "platformRuntime"):
             for entry in document[section]:
@@ -366,6 +496,15 @@ class Authority:
                 self.by_identity[key] = entry
                 for row_id in entry.get("requiredForRows", []):
                     self.required_for_row.setdefault(row_id, []).append(key)
+
+        platform_names = {entry["name"].casefold() for entry in document["platformRuntime"]}
+        for entry in document["thirdParty"]:
+            for image in entry.get("imageNames", []):
+                if image in self.package_images or image in platform_names:
+                    raise AuthorityError(
+                        f"dependency authority maps image {image!r} to more than one dependency"
+                    )
+                self.package_images[image] = (entry["name"], entry["source"])
 
     def names(self) -> set[str]:
         return {name for name, _ in self.by_identity}
@@ -427,14 +566,39 @@ def validate_authority_document(document: Any) -> dict[str, Any]:
 
     for index, entry in enumerate(third_party):
         _validate_entry(entry, f"thirdParty[{index}]", exact_version=True)
+        if "imageNames" in entry:
+            _validate_image_names(entry["imageNames"], f"thirdParty[{index}]")
     for index, entry in enumerate(runtime):
         _validate_entry(entry, f"platformRuntime[{index}]", exact_version=False)
+        _require(
+            "imageNames" not in entry,
+            f"platformRuntime[{index}]: imageNames belongs to thirdParty entries only",
+        )
     return document
+
+
+def _validate_image_names(images: Any, context: str) -> None:
+    """A thirdParty entry's package-local DLL names: bare, case-folded file names."""
+    _require(
+        isinstance(images, list) and 0 < len(images) <= 16,
+        f"{context}: imageNames must be a non-empty list of at most 16 names",
+    )
+    for image in images:
+        _require(
+            isinstance(image, str) and _IMAGE_NAME_RE.match(image) is not None,
+            f"{context}: imageNames entry {image!r} is not a lower-case .dll file name",
+        )
+        _require(
+            not image.startswith(("api-ms-win-", "ext-ms-")),
+            f"{context}: imageNames entry {image!r} is an operating-system API set",
+        )
+    _require(images == sorted(set(images)), f"{context}: imageNames must be sorted and unique")
 
 
 _SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 _DEP_NAME_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9 ._+/-]{0,259}\Z")
 _ROW_ID_RE = re.compile(r"\A[a-z0-9][a-z0-9._-]{0,63}\Z")
+_IMAGE_NAME_RE = re.compile(r"\A[a-z0-9_][a-z0-9_.+-]{0,250}\.dll\Z")
 VALID_SOURCES = frozenset({"system", "bundled", "vcredist", "directx", "sdk"})
 
 

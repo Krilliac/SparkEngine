@@ -137,6 +137,10 @@ namespace SparkEditor
         /// The package contains two deliberately separate launch modes: the
         /// renamed host plus module manifest for game-module execution, and an
         /// isolated scene-preview host with no manifest so `-scene` is honored.
+        /// The startup scene (the project's `defaultScene`, else the first
+        /// reflected scene) is staged as `Startup.sparkscene` for game modules
+        /// and as `Scenes/Startup.sparkscene` for the preview, where the
+        /// runtime can derive the package root and resolve `Assets/...` paths.
         /// Exposed for focused filesystem regression tests.
         static bool AssembleNativePackage(const BuildSettings& settings, const std::string& projectRoot,
                                           const std::string& runtimeHost, const std::string& moduleBinary,

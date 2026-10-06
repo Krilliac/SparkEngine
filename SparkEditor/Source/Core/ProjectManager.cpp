@@ -6,11 +6,16 @@
  */
 
 #include "ProjectManager.h"
+#include "ProjectDocument.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Validate.h"
 #include "Engine/ECS/Components.h"
+#include "Utils/SaveFileDurability.h"
 #include "SceneManager/ReflectedSceneSerializer.h"
+#include <charconv>
+#include <string_view>
+#include <system_error>
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -21,8 +26,10 @@
 #include <random>
 #include <set>
 #include <array>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #ifdef _WIN32
 #include <shlobj.h>
@@ -39,6 +46,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
+
+#include "../Utils/EditorFileRead.h"
 
 namespace fs = std::filesystem;
 
@@ -63,271 +72,6 @@ namespace SparkEditor
         return static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
                 .count());
-    }
-
-    // ------------------------------------------------------------------
-    // Simple JSON helpers (write-only, no dependency)
-    // ------------------------------------------------------------------
-    static std::string EscapeJsonString(const std::string& s)
-    {
-        std::string out;
-        out.reserve(s.size() + 8);
-        for (char c : s)
-        {
-            switch (c)
-            {
-            case '\"':
-                out += "\\\"";
-                break;
-            case '\\':
-                out += "\\\\";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            case '\b':
-                out += "\\b";
-                break;
-            case '\f':
-                out += "\\f";
-                break;
-            default:
-                if (static_cast<unsigned char>(c) < 0x20)
-                {
-                    constexpr char hex[] = "0123456789ABCDEF";
-                    const unsigned char value = static_cast<unsigned char>(c);
-                    out += "\\u00";
-                    out += hex[value >> 4];
-                    out += hex[value & 0x0F];
-                }
-                else
-                {
-                    out += c;
-                }
-                break;
-            }
-        }
-        return out;
-    }
-
-    static int JsonHexValue(char c)
-    {
-        if (c >= '0' && c <= '9')
-            return c - '0';
-        if (c >= 'a' && c <= 'f')
-            return c - 'a' + 10;
-        if (c >= 'A' && c <= 'F')
-            return c - 'A' + 10;
-        return -1;
-    }
-
-    static bool ParseJsonHex4(const std::string& json, size_t offset, uint32_t& value)
-    {
-        if (offset + 4 > json.size())
-            return false;
-        value = 0;
-        for (size_t index = 0; index < 4; ++index)
-        {
-            const int digit = JsonHexValue(json[offset + index]);
-            if (digit < 0)
-                return false;
-            value = (value << 4) | static_cast<uint32_t>(digit);
-        }
-        return true;
-    }
-
-    static bool AppendUtf8(uint32_t codePoint, std::string& output)
-    {
-        if (codePoint > 0x10FFFF || (codePoint >= 0xD800 && codePoint <= 0xDFFF))
-            return false;
-        if (codePoint <= 0x7F)
-            output.push_back(static_cast<char>(codePoint));
-        else if (codePoint <= 0x7FF)
-        {
-            output.push_back(static_cast<char>(0xC0 | (codePoint >> 6)));
-            output.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
-        }
-        else if (codePoint <= 0xFFFF)
-        {
-            output.push_back(static_cast<char>(0xE0 | (codePoint >> 12)));
-            output.push_back(static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F)));
-            output.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
-        }
-        else
-        {
-            output.push_back(static_cast<char>(0xF0 | (codePoint >> 18)));
-            output.push_back(static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F)));
-            output.push_back(static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F)));
-            output.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
-        }
-        return true;
-    }
-
-    // `index` points at the character immediately after a JSON backslash and
-    // advances across any consumed unicode digits/surrogate pair.
-    static bool DecodeJsonEscape(const std::string& json, size_t& index, std::string& output)
-    {
-        switch (json[index])
-        {
-        case '"':
-            output += '"';
-            return true;
-        case '\\':
-            output += '\\';
-            return true;
-        case '/':
-            output += '/';
-            return true;
-        case 'b':
-            output += '\b';
-            return true;
-        case 'f':
-            output += '\f';
-            return true;
-        case 'n':
-            output += '\n';
-            return true;
-        case 'r':
-            output += '\r';
-            return true;
-        case 't':
-            output += '\t';
-            return true;
-        case 'u':
-        {
-            uint32_t first = 0;
-            if (!ParseJsonHex4(json, index + 1, first))
-                return false;
-            index += 4;
-            if (first >= 0xD800 && first <= 0xDBFF)
-            {
-                if (index + 6 >= json.size() || json[index + 1] != '\\' || json[index + 2] != 'u')
-                    return false;
-                uint32_t second = 0;
-                if (!ParseJsonHex4(json, index + 3, second) || second < 0xDC00 || second > 0xDFFF)
-                    return false;
-                first = 0x10000 + ((first - 0xD800) << 10) + (second - 0xDC00);
-                index += 6;
-            }
-            else if (first >= 0xDC00 && first <= 0xDFFF)
-            {
-                return false;
-            }
-            return AppendUtf8(first, output);
-        }
-        default:
-            return false;
-        }
-    }
-
-    static std::string ExtractJsonString(const std::string& json, const std::string& key)
-    {
-        std::string search = "\"" + key + "\"";
-        size_t pos = json.find(search);
-        if (pos == std::string::npos)
-            return "";
-        pos = json.find(':', pos);
-        if (pos == std::string::npos)
-            return "";
-        pos = json.find('\"', pos + 1);
-        if (pos == std::string::npos)
-            return "";
-        std::string result;
-        for (size_t i = pos + 1; i < json.size(); ++i)
-        {
-            const char c = json[i];
-            if (c == '\"')
-                return result;
-            if (c != '\\')
-            {
-                result += c;
-                continue;
-            }
-            if (++i >= json.size())
-                return "";
-            if (!DecodeJsonEscape(json, i, result))
-                return "";
-        }
-        return "";
-    }
-
-    static uint64_t ExtractJsonUint64(const std::string& json, const std::string& key)
-    {
-        std::string search = "\"" + key + "\"";
-        size_t pos = json.find(search);
-        if (pos == std::string::npos)
-            return 0;
-        pos = json.find(':', pos);
-        if (pos == std::string::npos)
-            return 0;
-        pos++;
-        while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t'))
-            pos++;
-        std::string numStr;
-        while (pos < json.size() && json[pos] >= '0' && json[pos] <= '9')
-        {
-            numStr += json[pos++];
-        }
-        if (numStr.empty())
-            return 0;
-        return std::stoull(numStr);
-    }
-
-    static std::vector<std::string> ExtractJsonStringArray(const std::string& json, const std::string& key)
-    {
-        std::vector<std::string> result;
-        std::string search = "\"" + key + "\"";
-        size_t pos = json.find(search);
-        if (pos == std::string::npos)
-            return result;
-        pos = json.find('[', pos);
-        if (pos == std::string::npos)
-            return result;
-        size_t end = json.find(']', pos);
-        if (end == std::string::npos)
-            return result;
-
-        size_t i = pos + 1;
-        while (i < end)
-        {
-            size_t qStart = json.find('\"', i);
-            if (qStart == std::string::npos || qStart >= end)
-                break;
-            std::string value;
-            bool closed = false;
-            for (i = qStart + 1; i < end; ++i)
-            {
-                char c = json[i];
-                if (c == '\"')
-                {
-                    ++i;
-                    closed = true;
-                    break;
-                }
-                if (c == '\\' && i + 1 < end)
-                {
-                    ++i;
-                    if (!DecodeJsonEscape(json, i, value) || i >= end)
-                        return {};
-                    continue;
-                }
-                else if (c == '\\')
-                {
-                    return {};
-                }
-                value += c;
-            }
-            if (!closed)
-                break;
-            result.push_back(std::move(value));
-        }
-        return result;
     }
 
     // ------------------------------------------------------------------
@@ -615,7 +359,7 @@ namespace SparkEditor
                    candidateText[rootText.size()] == '/';
         }
 
-        constexpr uint64_t kMaximumSceneDocumentBytes = 64ull * 1024ull * 1024ull;
+        constexpr uint64_t kMaximumSceneDocumentBytes = Spark::kMaxSceneDocumentBytes;
 
         bool ReadContainedFileFromHandle(const fs::path& projectRoot, const fs::path& candidate,
                                          std::string& resolvedPath, std::string& contents)
@@ -698,7 +442,9 @@ namespace SparkEditor
                 ~DescriptorCloser() { ::close(descriptor); }
             } closer{descriptor};
 
-            struct stat information{};
+            struct stat information
+            {
+            };
             if (::fstat(descriptor, &information) != 0 || !S_ISREG(information.st_mode) || information.st_size < 0 ||
                 static_cast<uint64_t>(information.st_size) > kMaximumSceneDocumentBytes)
             {
@@ -1336,8 +1082,7 @@ namespace SparkEditor
                     std::string storedPath = PathToUtf8(relative);
                     std::replace(storedPath.begin(), storedPath.end(), '\\', '/');
                     if (std::none_of(m_currentProject.scenes.begin(), m_currentProject.scenes.end(),
-                                     [&](const std::string& scene)
-                                     {
+                                     [&](const std::string& scene) {
                                          return ProjectPathsEqual(PathToUtf8(staging / PathFromUtf8(scene)),
                                                                   PathToUtf8(candidate));
                                      }))
@@ -1349,7 +1094,9 @@ namespace SparkEditor
                 m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
             }
 
-            if (!SaveProjectFile())
+            // The staged document is the template package's copy, not user state; retaining it
+            // as a .bak would ship the template's metadata inside the new project.
+            if (!SaveProjectFile(false))
                 return fail("Could not write the canonical project document.");
             if (!LoadProjectFile(PathToUtf8(canonicalProjectFile)))
                 return fail("Could not validate the canonical project document.");
@@ -1579,9 +1326,13 @@ namespace SparkEditor
         }
     }
 
-    bool ProjectManager::OpenProject(const std::string& sparkprojectPath)
+    bool ProjectManager::OpenProject(const std::string& sparkprojectPath, std::string* error)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        if (error)
+        {
+            error->clear();
+        }
         SPARK_VALIDATE_RET(Spark::LogCategory::Editor, !sparkprojectPath.empty(), false);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Loading project from '%s'", sparkprojectPath.c_str());
         std::cout << "Opening project: " << sparkprojectPath << "\n";
@@ -1627,10 +1378,14 @@ namespace SparkEditor
             if (!fs::is_regular_file(PathFromUtf8(resolvedPath)))
             {
                 std::cerr << "Project file not found: " << resolvedPath << "\n";
+                if (error)
+                {
+                    *error = "Project file not found: " + resolvedPath;
+                }
                 return false;
             }
 
-            if (!LoadProjectFile(resolvedPath))
+            if (!LoadProjectFile(resolvedPath, error))
             {
                 restorePreviousProject();
                 return false;
@@ -1641,6 +1396,10 @@ namespace SparkEditor
             // scripts or module sources.
             if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
             {
+                if (error)
+                {
+                    *error = "Could not add the missing build scaffold to project '" + m_currentProject.path + "'";
+                }
                 restorePreviousProject();
                 return false;
             }
@@ -1663,6 +1422,10 @@ namespace SparkEditor
         {
             restorePreviousProject();
             std::cerr << "Error opening project: " << e.what() << "\n";
+            if (error)
+            {
+                *error = std::string("Error opening project: ") + e.what();
+            }
             return false;
         }
 
@@ -1745,11 +1508,20 @@ namespace SparkEditor
         return true;
     }
 
-    bool ProjectManager::LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath) const
+    bool ProjectManager::LoadProjectScene(const std::string& scenePath, ::World& world, std::string& resolvedPath,
+                                          std::string* error) const
     {
         resolvedPath.clear();
-        if (!m_hasOpenProject || scenePath.empty())
+        const auto fail = [error](std::string message)
+        {
+            if (error)
+                *error = std::move(message);
             return false;
+        };
+        if (error)
+            error->clear();
+        if (!m_hasOpenProject || scenePath.empty())
+            return fail("no project is open or the scene path is empty");
 
         const fs::path projectRoot = PathFromUtf8(NormalizeProjectPath(m_currentProject.path));
         fs::path candidate = PathFromUtf8(scenePath);
@@ -1761,15 +1533,17 @@ namespace SparkEditor
         // The handle-derived final path below remains the security authority
         // for symlinks, junctions, and concurrent path replacement.
         if (!IsPathInsideRoot(projectRoot, candidate))
-            return false;
+            return fail("Scene '" + scenePath + "' is outside the open project");
 
         std::string sceneDocument;
         if (!ReadContainedFileFromHandle(projectRoot, candidate, resolvedPath, sceneDocument))
-            return false;
-        if (!Spark::DeserializeInto(world, sceneDocument))
+            return fail("Scene '" + scenePath + "' could not be read inside the open project");
+        std::string reason;
+        if (!Spark::DeserializeInto(world, sceneDocument, Spark::SceneDeserializeMode::Permissive, &reason))
         {
+            const std::string rejectedPath = resolvedPath;
             resolvedPath.clear();
-            return false;
+            return fail("Scene '" + rejectedPath + "' was rejected: " + reason);
         }
         return true;
     }
@@ -1896,7 +1670,20 @@ namespace SparkEditor
         std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
         for (auto& rp : m_recentProjects)
         {
-            rp.valid = fs::exists(rp.path);
+            // rp.path is UTF-8 (NormalizeProjectPath output). fs::exists(std::string)
+            // would decode it with the active code page on Windows: every non-ASCII
+            // entry would read as missing, and on a DBCS code page the conversion can
+            // throw out of the launcher's ImGui frame. Decode it as UTF-8 and use the
+            // non-throwing overload; an undecodable path is simply not valid.
+            try
+            {
+                std::error_code existsEc;
+                rp.valid = fs::exists(PathFromUtf8(rp.path), existsEc) && !existsEc;
+            }
+            catch (const std::exception&)
+            {
+                rp.valid = false;
+            }
         }
     }
 
@@ -1954,42 +1741,85 @@ namespace SparkEditor
     // ------------------------------------------------------------------
     // Project file I/O (.sparkproject)
     // ------------------------------------------------------------------
-    bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath)
+    bool ProjectManager::LoadProjectFile(const std::string& sparkprojectPath, std::string* error)
     {
-        std::string content;
-
-        if (m_fileCache)
+        if (error)
         {
-            auto result = m_fileCache->ReadText(sparkprojectPath);
-            if (result.IsOk())
-            {
-                content = result.Value();
-            }
+            error->clear();
         }
-
-        if (content.empty())
+        const auto report = [error](const std::string& message)
         {
-            std::ifstream file(PathFromUtf8(sparkprojectPath));
-            if (!file.is_open())
+            std::cerr << message << "\n";
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "%s", message.c_str());
+            if (error)
             {
-                std::cerr << "Could not open project file: " << sparkprojectPath << "\n";
+                *error = message;
+            }
+        };
+
+        // Read through one opened handle and decide on it. A by-path size check followed by a
+        // by-path read let a document swapped or grown in between be materialized whole (the file
+        // cache's read is unbounded), and the cache could serve a copy of a document that changed
+        // on disk after it was cached.
+        const auto readDocument = [](const std::string& path, ProjectDocumentFields& fields, std::string& reason)
+        {
+            std::string content;
+            switch (ReadRegularFileBounded(PathFromUtf8(path), kMaximumProjectDocumentBytes, content))
+            {
+            case BoundedReadStatus::Ok:
+                break;
+            case BoundedReadStatus::Missing:
+                reason = "the file does not exist";
+                return ProjectDocumentStatus::Rejected;
+            case BoundedReadStatus::NotRegularFile:
+                reason = "the file is not a regular file";
+                return ProjectDocumentStatus::Rejected;
+            case BoundedReadStatus::TooLarge:
+                reason = "the file exceeds " + std::to_string(kMaximumProjectDocumentBytes) + " bytes";
+                return ProjectDocumentStatus::Rejected;
+            case BoundedReadStatus::Failed:
+                reason = "the file could not be read";
+                return ProjectDocumentStatus::Rejected;
+            }
+            const ProjectDocumentStatus status = CheckProjectDocument(content, reason);
+            if (status != ProjectDocumentStatus::Ok)
+            {
+                return status;
+            }
+            return ReadProjectDocumentFields(content, fields, reason) ? ProjectDocumentStatus::Ok
+                                                                      : ProjectDocumentStatus::Rejected;
+        };
+
+        ProjectDocumentFields fields;
+        std::string primaryReason;
+        const ProjectDocumentStatus primaryStatus = readDocument(sparkprojectPath, fields, primaryReason);
+        if (primaryStatus == ProjectDocumentStatus::NewerVersion)
+        {
+            // Fail closed without the retained copy: loading the older .bak and saving would
+            // overwrite the newer editor's document.
+            report("Project file '" + sparkprojectPath + "': " + primaryReason + ".");
+            return false;
+        }
+        if (primaryStatus != ProjectDocumentStatus::Ok)
+        {
+            const std::string backupPath =
+                PathToUtf8(Spark::SaveFileDurability::BackupPathFor(PathFromUtf8(sparkprojectPath)));
+            std::string backupReason;
+            if (readDocument(backupPath, fields, backupReason) != ProjectDocumentStatus::Ok)
+            {
+                report("Project file '" + sparkprojectPath + "' was rejected: " + primaryReason +
+                       ". Previous-good backup '" + backupPath + "' was not usable: " + backupReason + ".");
                 return false;
             }
-            content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            file.close();
+            const std::string recovered = "Project file '" + sparkprojectPath + "' was rejected: " + primaryReason +
+                                          ". Loaded the previous-good backup '" + backupPath + "' instead.";
+            std::cerr << recovered << "\n";
+            SPARK_LOG_WARN(Spark::LogCategory::Editor, "%s", recovered.c_str());
+            if (error)
+            {
+                *error = recovered;
+            }
         }
-
-        std::string name = ExtractJsonString(content, "name");
-        std::string version = ExtractJsonString(content, "version");
-        std::string description = ExtractJsonString(content, "description");
-        std::string engineVer = ExtractJsonString(content, "engineVersion");
-        std::string templateId = ExtractJsonString(content, "template");
-        std::string defaultScene = ExtractJsonString(content, "defaultScene");
-        std::string lastScene = ExtractJsonString(content, "lastOpenedScene");
-        uint64_t lastModified = ExtractJsonUint64(content, "lastModified");
-        uint64_t createdTime = ExtractJsonUint64(content, "createdTime");
-        auto scenes = ExtractJsonStringArray(content, "scenes");
-        auto modules = ExtractJsonStringArray(content, "modules");
 
         // Preserve the selected document path independently from its display
         // name. On macOS, normalization also resolves /var -> /private/var;
@@ -1998,20 +1828,30 @@ namespace SparkEditor
         const fs::path projectRootPath = PathFromUtf8(normalizedProjectFile).parent_path();
         std::string projectRoot = PathToUtf8(projectRootPath);
 
+        if (primaryStatus != ProjectDocumentStatus::Ok)
+        {
+            m_recoveredProjectFilePath = normalizedProjectFile;
+        }
+        else if (m_recoveredProjectFilePath == normalizedProjectFile)
+        {
+            m_recoveredProjectFilePath.clear();
+        }
+
         m_currentProject = ProjectInfo{};
         m_currentProjectFilePath = normalizedProjectFile;
-        m_currentProject.name = name.empty() ? PathToUtf8(projectRootPath.filename()) : name;
+        m_currentProject.name = fields.name.empty() ? PathToUtf8(projectRootPath.filename()) : fields.name;
         m_currentProject.path = projectRoot;
-        m_currentProject.version = version.empty() ? "1.0.0" : version;
-        m_currentProject.description = description.empty() ? "Spark Engine Project" : description;
-        m_currentProject.engineVersion = engineVer.empty() ? GetCurrentEngineVersion().ToString() : engineVer;
-        m_currentProject.defaultScene = defaultScene;
-        m_currentProject.lastOpenedScene = lastScene;
-        m_currentProject.lastModified = lastModified;
-        m_currentProject.createdTime = createdTime;
-        m_currentProject.scenes = scenes;
-        m_currentProject.modules = modules;
-        if (const auto* descriptor = FindProjectTemplateDescriptor(templateId))
+        m_currentProject.version = fields.version.empty() ? "1.0.0" : fields.version;
+        m_currentProject.description = fields.description.empty() ? "Spark Engine Project" : fields.description;
+        m_currentProject.engineVersion =
+            fields.engineVersion.empty() ? GetCurrentEngineVersion().ToString() : fields.engineVersion;
+        m_currentProject.defaultScene = fields.defaultScene;
+        m_currentProject.lastOpenedScene = fields.lastOpenedScene;
+        m_currentProject.lastModified = fields.lastModified;
+        m_currentProject.createdTime = fields.createdTime;
+        m_currentProject.scenes = fields.scenes;
+        m_currentProject.modules = fields.modules;
+        if (const auto* descriptor = FindProjectTemplateDescriptor(fields.templateId))
         {
             m_currentProject.templateType = descriptor->type;
             m_currentProject.hasTemplateIdentity = true;
@@ -2032,7 +1872,7 @@ namespace SparkEditor
         return m_resolvedTemplateRoot;
     }
 
-    bool ProjectManager::SaveProjectFile()
+    bool ProjectManager::SaveProjectFile(bool retainBackup)
     {
         std::string filePath = GetProjectFilePath();
 
@@ -2070,61 +1910,44 @@ namespace SparkEditor
             const fs::path nativeFilePath = PathFromUtf8(filePath);
             fs::create_directories(nativeFilePath.parent_path());
 
-            std::ofstream file(nativeFilePath);
-            if (!file.is_open())
-            {
-                std::cerr << "Failed to open project file for writing: " << filePath << "\n";
-                return false;
-            }
-
-            file << "{\n";
-            file << "  \"projectFileVersion\": 1,\n";
-            file << "  \"name\": \"" << EscapeJsonString(m_currentProject.name) << "\",\n";
-            file << "  \"version\": \"" << EscapeJsonString(m_currentProject.version) << "\",\n";
-            file << "  \"description\": \"" << EscapeJsonString(m_currentProject.description) << "\",\n";
-            file << "  \"engineVersion\": \"" << EscapeJsonString(m_currentProject.engineVersion) << "\",\n";
+            ProjectDocumentFields fields;
+            fields.name = m_currentProject.name;
+            fields.version = m_currentProject.version;
+            fields.description = m_currentProject.description;
+            fields.engineVersion = m_currentProject.engineVersion;
             if (m_currentProject.hasTemplateIdentity)
+            {
                 if (const auto* descriptor = FindProjectTemplateDescriptor(m_currentProject.templateType))
-                    file << "  \"template\": \"" << EscapeJsonString(std::string(descriptor->stableId)) << "\",\n";
-            file << "  \"defaultScene\": \"" << EscapeJsonString(m_currentProject.defaultScene) << "\",\n";
-            file << "  \"lastOpenedScene\": \"" << EscapeJsonString(m_currentProject.lastOpenedScene) << "\",\n";
-            file << "  \"createdTime\": " << m_currentProject.createdTime << ",\n";
-            file << "  \"lastModified\": " << m_currentProject.lastModified << ",\n";
-
-            // modules array
-            file << "  \"modules\": [\n";
-            for (size_t i = 0; i < m_currentProject.modules.size(); ++i)
-            {
-                file << "    \"" << EscapeJsonString(m_currentProject.modules[i]) << "\"";
-                if (i + 1 < m_currentProject.modules.size())
-                    file << ",";
-                file << "\n";
+                {
+                    fields.templateId = std::string(descriptor->stableId);
+                }
             }
-            file << "  ],\n";
+            fields.defaultScene = m_currentProject.defaultScene;
+            fields.lastOpenedScene = m_currentProject.lastOpenedScene;
+            fields.createdTime = m_currentProject.createdTime;
+            fields.lastModified = m_currentProject.lastModified;
+            fields.modules = m_currentProject.modules;
+            fields.scenes = m_currentProject.scenes;
 
-            // scenes array
-            file << "  \"scenes\": [\n";
-            for (size_t i = 0; i < m_currentProject.scenes.size(); ++i)
+            // Staged, flushed and renamed over the previous document, which is kept as
+            // <file>.bak; a failed write leaves the document unchanged. A document recovered
+            // from its .bak is not copied over it: a failed rename after that refresh would
+            // leave no good copy.
+            const bool recoveredDocument = !filePath.empty() && filePath == m_recoveredProjectFilePath;
+            std::error_code writeError;
+            if (!Spark::SaveFileDurability::WriteFileAtomically(nativeFilePath, WriteProjectDocument(fields),
+                                                                retainBackup && !recoveredDocument, writeError))
             {
-                file << "    \"" << EscapeJsonString(m_currentProject.scenes[i]) << "\"";
-                if (i + 1 < m_currentProject.scenes.size())
-                    file << ",";
-                file << "\n";
-            }
-            file << "  ]\n";
-            file << "}\n";
-
-            file.flush();
-            if (!file.good())
-            {
-                std::cerr << "Failed while writing project file: " << filePath << "\n";
+                std::cerr << "Failed to write project file " << filePath << ": " << writeError.message()
+                          << ". The previous project file is unchanged.\n";
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor,
+                                "Failed to write project file '%s': %s. The previous project file is unchanged",
+                                filePath.c_str(), writeError.message().c_str());
                 return false;
             }
-            file.close();
-            if (file.fail())
+            if (recoveredDocument)
             {
-                std::cerr << "Failed while closing project file: " << filePath << "\n";
-                return false;
+                m_recoveredProjectFilePath.clear();
             }
 
             if (m_fileCache)
@@ -2344,8 +2167,8 @@ namespace SparkEditor
 
             std::ostringstream modules;
             modules << "{\n  \"modules\": [\n    {\n"
-                    << "      \"name\": \"" << EscapeJsonString(target) << "\",\n"
-                    << "      \"path\": \"" << EscapeJsonString(target) << ".dll\",\n"
+                    << "      \"name\": \"" << EscapeProjectJsonString(target) << "\",\n"
+                    << "      \"path\": \"" << EscapeProjectJsonString(target) << ".dll\",\n"
                     << "      \"loadOrder\": 1000\n"
                     << "    }\n  ]\n}\n";
 
@@ -2422,85 +2245,53 @@ namespace SparkEditor
     {
         std::lock_guard<std::mutex> lock(m_recentProjectsMutex);
         m_recentProjects.clear();
-        std::string filePath = GetRecentProjectsFilePath();
-
-        std::string content;
-
-        if (m_fileCache)
-        {
-            auto result = m_fileCache->ReadText(filePath);
-            if (result.IsOk())
-            {
-                content = result.Value();
-            }
-        }
+        const std::string filePath = GetRecentProjectsFilePath();
 
         // A recent-projects list is a handful of entries; anything huge is a
         // corrupt/runaway file (a 3 GB one was found in the wild after
-        // repeated load/save cycles). Start fresh rather than parse it.
+        // repeated load/save cycles). Start fresh rather than parse it. The size is
+        // decided on the opened handle before any byte is read: the file cache used to
+        // read the whole file first and only then was its size checked.
+        constexpr uint64_t kMaximumRecentProjectsBytes = uint64_t{1024} * 1024;
+        std::string content;
+        const BoundedReadStatus status =
+            ReadRegularFileBounded(PathFromUtf8(filePath), kMaximumRecentProjectsBytes, content);
+        if (status == BoundedReadStatus::TooLarge)
         {
-            std::error_code sizeEc;
-            const auto sz = fs::file_size(PathFromUtf8(filePath), sizeEc);
-            if (!sizeEc && sz > 1024 * 1024)
-            {
-                std::cerr << "RecentProjects.json is " << sz << " bytes - corrupt/runaway, resetting.\n";
-                std::error_code rmEc;
-                fs::remove(PathFromUtf8(filePath), rmEc);
-                return;
-            }
+            std::cerr << "RecentProjects.json exceeds " << kMaximumRecentProjectsBytes
+                      << " bytes - corrupt/runaway, resetting.\n";
+            std::error_code rmEc;
+            fs::remove(PathFromUtf8(filePath), rmEc);
+            return;
+        }
+        if (status != BoundedReadStatus::Ok)
+        {
+            return;
         }
 
-        if (content.empty())
+        for (RecentProject& rp : ReadRecentProjectsDocument(content))
         {
-            std::ifstream file(PathFromUtf8(filePath));
-            if (!file.is_open())
-                return;
-            content.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            file.close();
-        }
-
-        // Parse array of recent projects (simple parser)
-        // Format: { "recentProjects": [ { "name": ..., "path": ..., ... }, ... ] }
-        size_t pos = 0;
-        while (true)
-        {
-            pos = content.find('{', pos);
-            if (pos == std::string::npos)
-                break;
-
-            // Skip the outer object
-            if (content.contains("\"recentProjects\"") && pos == 0)
+            if (m_recentProjects.size() >= kMaxRecentProjects)
             {
-                pos++;
-                continue;
-            }
-
-            size_t end = content.find('}', pos);
-            if (end == std::string::npos)
-                break;
-
-            std::string entry = content.substr(pos, end - pos + 1);
-            std::string name = ExtractJsonString(entry, "name");
-            std::string path = ExtractJsonString(entry, "path");
-            std::string engineVer = ExtractJsonString(entry, "engineVersion");
-            uint64_t lastOpened = ExtractJsonUint64(entry, "lastOpened");
-
-            if (m_recentProjects.size() >= 15)
                 break; // hard cap - the UI never shows more
-
-            if (!path.empty())
-            {
-                RecentProject rp;
-                rp.name = name;
-                rp.path = NormalizeProjectPath(path);
-                rp.engineVersion = engineVer;
-                rp.lastOpened = lastOpened;
-                std::error_code existsEc;
-                rp.valid = fs::exists(PathFromUtf8(path), existsEc) && !existsEc;
-                m_recentProjects.push_back(rp);
             }
 
-            pos = end + 1;
+            // RecentProjects.json is user-editable. A path that is not valid UTF-8
+            // (PathFromUtf8 throws on Windows) would otherwise escape Initialize();
+            // drop just that entry. ReadRecentProjectsDocument already dropped every
+            // entry whose lastOpened overflows.
+            try
+            {
+                const std::string storedPath = rp.path;
+                rp.path = NormalizeProjectPath(storedPath);
+                std::error_code existsEc;
+                rp.valid = fs::exists(PathFromUtf8(storedPath), existsEc) && !existsEc;
+                m_recentProjects.push_back(std::move(rp));
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "Skipping unreadable recent-project entry: " << e.what() << "\n";
+            }
         }
 
         std::cout << "Loaded " << m_recentProjects.size() << " recent projects\n";
@@ -2518,25 +2309,7 @@ namespace SparkEditor
             std::ofstream file(nativeFilePath);
             if (!file.is_open())
                 return;
-
-            file << "{\n";
-            file << "  \"recentProjects\": [\n";
-            const size_t count = std::min<size_t>(m_recentProjects.size(), 15);
-            for (size_t i = 0; i < count; ++i)
-            {
-                const auto& rp = m_recentProjects[i];
-                file << "    {\n";
-                file << "      \"name\": \"" << EscapeJsonString(rp.name) << "\",\n";
-                file << "      \"path\": \"" << EscapeJsonString(rp.path) << "\",\n";
-                file << "      \"engineVersion\": \"" << EscapeJsonString(rp.engineVersion) << "\",\n";
-                file << "      \"lastOpened\": " << rp.lastOpened << "\n";
-                file << "    }";
-                if (i + 1 < count)
-                    file << ",";
-                file << "\n";
-            }
-            file << "  ]\n";
-            file << "}\n";
+            file << WriteRecentProjectsDocument(m_recentProjects);
             file.close();
 
             if (m_fileCache)

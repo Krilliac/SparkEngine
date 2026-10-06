@@ -18,9 +18,9 @@ A naming note: the original plan proposed `*GPU.cpp` suffixes for the extracted 
 
 | Phase | Scope | Status | Evidence |
 |-------|-------|--------|----------|
-| 1 | Complete the 4 deferred file splits | **Completed** | `AssetTypesWindows.cpp` + `AssetTypesLinux.cpp`, `MaterialSystemWindows.cpp` + `MaterialSystemLinux.cpp`, `PBRMaterialLightingWindows.cpp` + `PBRMaterialLightingLinux.cpp`, `GPUParticleSystemWindows.cpp` + `GPUParticleSystemLinux.cpp` all exist under `SparkEngine/Source/Graphics/` |
+| 1 | Complete the deferred file splits | **Completed** | `AssetTypesWindows.cpp` + `AssetTypesLinux.cpp`, `MaterialSystemWindows.cpp` + `MaterialSystemLinux.cpp`, `PBRMaterialLightingWindows.cpp` + `PBRMaterialLightingLinux.cpp` (both later deleted with the unwired material file loader), `GPUParticleSystemWindows.cpp` + `GPUParticleSystemLinux.cpp` all exist under `SparkEngine/Source/Graphics/` |
 | 2 | Unguard CPU-portable headers | **Likely Completed / N/A** | Earlier splits (Foliage, PostProcessing, TextureSystem, UpscalingSystem) now ship as `*Windows.cpp` companions; portable headers compile on Linux. Not separately re-audited line-by-line. |
-| 3 | Wire 6 lifecycle-only systems to the GPU pipeline | **Partial** | `BVHAccelerator::FrustumQuery` is now called from `SceneRenderer.cpp:132`. GTAO, VCT (`TraceDiffuse`/`TraceSpecular`), `ShaderVariantSystem::RequestVariant`, and the denoiser remain documented as not called from any render pass (see their header comments). |
+| 3 | Wire the lifecycle-only systems to the GPU pipeline | **Partial** | `BVHAccelerator::FrustumQuery` is now called from `SceneRenderer.cpp:132`. GTAO, VCT (`TraceDiffuse`/`TraceSpecular`), `ShaderVariantSystem::RequestVariant`, and the denoiser remain documented as not called from any render pass (see their header comments). |
 | 4 | RHI backend parity (Vulkan/OpenGL/D3D12/Metal) | **Partial / Uncertified** | `RHIFactory` has concrete creation paths for D3D12, Vulkan, OpenGL, and Metal behind platform/build guards, but those implementations remain experimental and outside `stable-v1`; parity and release evidence are incomplete. `RHIBridge` can force or fall back to `NullRHIDevice`, while the current Windows and `SparkServer` headless hosts still pass a null graphics service instead of instantiating that bridge/device (`HEAD-220`). |
 
 The earlier-completed splits described in the original "Current State" section (FoliageRenderer, FoliageImpostorBaker, PostProcessingPipeline, TextureSystem, UpscalingSystem) are confirmed present, now as `*Windows.cpp` companion files rather than `*GPU.cpp`.
@@ -65,8 +65,8 @@ The per-platform split remains the enabler for backend-specific companions such 
 
 ## Verification (per phase)
 
-1. `cmake --preset linux-gcc-release && cmake --build build --config Release`
-2. `cd build && ctest --output-on-failure --no-tests=error`
+1. `cmake --preset linux-gcc-release && cmake --build build/linux-gcc-release`
+2. `ctest --test-dir build/linux-gcc-release --output-on-failure --no-tests=error`
 3. `tools/validate-all.sh --warn-only`
 4. `clang-format -i` on modified files
 

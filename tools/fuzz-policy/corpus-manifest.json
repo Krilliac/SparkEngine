@@ -1,4 +1,1825 @@
 {
   "schema_version": 1,
-  "corpora": []
+  "corpora": [
+    {
+      "id": "json-utils-corpus",
+      "parser_id": "json-utils",
+      "corpus_dir": "FuzzerTests/corpora/json-utils",
+      "last_verified": "2026-09-14",
+      "content_digest": "c9a8317ce64055793baa0da29bd6f346bedc163642f087238cbc9624ee4d1b55",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "neural-weights-nnw-corpus",
+      "parser_id": "neural-weights-nnw",
+      "corpus_dir": "FuzzerTests/corpora/neural-weights-nnw",
+      "last_verified": "2026-09-20",
+      "content_digest": "28efc755da640ddc629106eefcecd05a4b438428f0e425a9befb97058a1457e5",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 8,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "crash-manifest-corpus",
+      "parser_id": "crash-manifest-parser",
+      "corpus_dir": "FuzzerTests/corpora/crash-manifest",
+      "last_verified": "2026-09-21",
+      "content_digest": "acdd36dc74a39858672ab3884251658b202190e116b2bda45f00ba00c2a4c216",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 16,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "texture-stex-corpus",
+      "parser_id": "texture-stex-compressor",
+      "corpus_dir": "FuzzerTests/corpora/texture-stex",
+      "last_verified": "2026-09-23",
+      "content_digest": "fd47c5daa0af506e84cb1e945c2e05aee2da6e53f7e7cf88934c422a1ff3cd07",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 15,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-mip-size-mismatch.stex",
+          "finding": "A mip smaller than its dimensions require was accepted, so consumers read past the buffer.",
+          "found_by": "review",
+          "guard_test": "SecurityParsers_StexMipSizeNotMatchingDimensionsRejected",
+          "fixed_commit": "e5f857c210a667435f4d3c81859fb05de400a442"
+        },
+        {
+          "file": "regression-miplevels-bomb.stex",
+          "finding": "mipLevels=0xFFFFFFFF sized a 16 GiB mip-size table allocation from a 21-byte file.",
+          "found_by": "review",
+          "guard_test": "SecurityParsers_StexHeaderCountsDoNotSizeAllocations",
+          "fixed_commit": "e5f857c210a667435f4d3c81859fb05de400a442"
+        },
+        {
+          "file": "regression-mipsize-bomb.stex",
+          "finding": "One mip declaring 0xFFFFFFF0 bytes allocated about 4 GiB before the short file was detected.",
+          "found_by": "review",
+          "guard_test": "SecurityParsers_StexHeaderCountsDoNotSizeAllocations",
+          "fixed_commit": "e5f857c210a667435f4d3c81859fb05de400a442"
+        }
+      ]
+    },
+    {
+      "id": "scene-manifest-corpus",
+      "parser_id": "scene-manifest",
+      "corpus_dir": "FuzzerTests/corpora/scene-manifest",
+      "last_verified": "2026-09-25",
+      "content_digest": "7f1209bf4d198c11a80a93b22119deadb7fba01fafcfdbd78e1f2bdfbd5e0611",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "sparkpak-reader-corpus",
+      "parser_id": "sparkpak-reader",
+      "corpus_dir": "FuzzerTests/corpora/sparkpak-reader",
+      "last_verified": "2026-09-25",
+      "content_digest": "d160d5c7e350f4db0020320bb8189c54e6f3e2aecbc55692545a2170c46cdfd6",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 512,
+        "max_depth": 1,
+        "max_corpus_entries": 11,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-deflate-empty-output.spk",
+          "finding": "A deflate entry declaring zero output bytes made ReadFile hand miniz a null destination (UBSan).",
+          "found_by": "campaign",
+          "guard_test": "FuzzArchiveSmoke",
+          "fixed_commit": "721cc1935a289f03f25f874a5fd66195e8c0fd2d"
+        },
+        {
+          "file": "regression-toc-ratio-bomb.spk",
+          "finding": "ReadTOC allocated the header's tocRawSize (up to 256 MB) from a TOC stream of any size.",
+          "found_by": "campaign",
+          "guard_test": "SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput",
+          "fixed_commit": "721cc1935a289f03f25f874a5fd66195e8c0fd2d"
+        }
+      ]
+    },
+    {
+      "id": "shader-daemon-blob-corpus",
+      "parser_id": "shader-daemon-blob",
+      "corpus_dir": "FuzzerTests/corpora/shader-daemon-blob",
+      "last_verified": "2026-09-27",
+      "content_digest": "cfdedcfa2b1abbee8e93560a2da91b25a41d2ebb67a14457ab40ea83c77ebfb9",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "shader-service-protocol-corpus",
+      "parser_id": "shader-service-protocol",
+      "corpus_dir": "FuzzerTests/corpora/shader-service-protocol",
+      "last_verified": "2026-09-27",
+      "content_digest": "bae9d3107944b1431be8fb0adc179a8635e8f2bcaa67abac5be03c25f227b580",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "config-parser-corpus",
+      "parser_id": "config-parser",
+      "corpus_dir": "FuzzerTests/corpora/config-parser",
+      "last_verified": "2026-09-27",
+      "content_digest": "ca86771a4f995c7d305651df44d04e21751a9a8cab377f895820ca12fb652696",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-midfile-bom-key.ini",
+          "finding": "A key that began with a UTF-8 BOM mid-document was accepted, but SaveToString emitted it as the first line and the reload stripped the BOM and rejected the empty key.",
+          "found_by": "review",
+          "guard_test": "ConfigParserReal_KeyStartingWithByteOrderMarkIsRejected",
+          "fixed_commit": "f3762ca8ee1b7468780a40d9a044ce11397c3b23"
+        }
+      ]
+    },
+    {
+      "id": "telemetry-spool-format-corpus",
+      "parser_id": "telemetry-spool-format",
+      "corpus_dir": "FuzzerTests/corpora/telemetry-spool-format",
+      "last_verified": "2026-09-27",
+      "content_digest": "a74317f29019b5beebe7f1df5e937dcbb29ed6a4d2699f82220244196cd35f28",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "save-system-corpus",
+      "parser_id": "save-system",
+      "corpus_dir": "FuzzerTests/corpora/save-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "1295f0749b11837b0d26b1500122925e247b5389aba412161fd73af061a19671",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-metadata-carriage-return.save",
+          "finding": "A save whose sceneName held a CR was read and listed, but the writer refuses the field, so every Load failed in DeserializeWorld without trying the .bak and the next Save rotated the unloadable primary over it; the reader now accepts only metadata the writer can re-render.",
+          "found_by": "campaign",
+          "guard_test": "SaveSystemRoundTripReal_MetadataCarriageReturnSlotFallsBackToTheRetainedCopy",
+          "fixed_commit": "9db0644d54deffad0f420be60efe0e2fd9269d02"
+        }
+      ]
+    },
+    {
+      "id": "editor-prefab-corpus",
+      "parser_id": "editor-prefab",
+      "corpus_dir": "FuzzerTests/corpora/editor-prefab",
+      "last_verified": "2026-09-28",
+      "content_digest": "5e43e4efafe152c2522e80f2337df42749568dc03d87e93ecc20b0220332611e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "scene-serializer-corpus",
+      "parser_id": "scene-serializer",
+      "corpus_dir": "FuzzerTests/corpora/reflected-scene",
+      "last_verified": "2026-09-28",
+      "content_digest": "779bc48bc6e81a9fdba3ac8f7a72d3b5aa222b411689192dadd3bfa67eb3da88",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 256,
+        "max_corpus_entries": 10,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "scene-manager-text-corpus",
+      "parser_id": "scene-manager-text",
+      "corpus_dir": "FuzzerTests/corpora/scene-manager-text",
+      "last_verified": "2026-09-28",
+      "content_digest": "c1b5b8c11d07364cd86f9a1a32d8e8db4257e769bf8ca90a80cd3d9d4d6c31c5",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 10,
+        "max_corpus_bytes": 16384,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mesh-fbx-importer-corpus",
+      "parser_id": "mesh-fbx-importer",
+      "corpus_dir": "FuzzerTests/corpora/mesh-fbx-importer",
+      "last_verified": "2026-09-28",
+      "content_digest": "5854e27c2441a5f496059cded49f0b4d0a03c0246cef0ae2119c8c8dbdbf6f9a",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 16384,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mesh-gltf-loader-corpus",
+      "parser_id": "mesh-gltf-loader",
+      "corpus_dir": "FuzzerTests/corpora/mesh-gltf-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "8e203e86a284699d0c7ce6b75c7b0d9892ed9df8329e20143f25484e94ce9a03",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 256,
+        "max_corpus_entries": 13,
+        "max_corpus_bytes": 16384,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-data-uri-length-overclaim.gltf",
+          "finding": "A base64 data URI declaring a 300 MB byteLength made cgltf_load_buffers allocate the declared size (up to 1 GiB) from a 373-byte file before decoding; ValidateDocumentStructure now rejects a byteLength the payload cannot fill.",
+          "found_by": "smoke",
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "8ac7feed8cc9e9c38aac103078ff34fa9a1d1540"
+        },
+        {
+          "file": "regression-misaligned-index-accessor.glb",
+          "finding": "A uint16 index accessor at an odd buffer-view byteOffset made cgltf_validate read indices through a misaligned typed pointer (UBSan); ValidateAccessorBounds now requires view offset, accessor offset and stride to be multiples of the component size.",
+          "found_by": "campaign",
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "9bd763ca533947d8bd91994e2d498710e3f26f27"
+        },
+        {
+          "file": "regression-glb-bin-unaligned.glb",
+          "finding": "A GLB whose JSON chunk length is not a multiple of 4 placed the in-place BIN buffer at an odd address, so every typed accessor read was misaligned (UBSan); ValidateDocumentStructure now rejects an unaligned BIN chunk.",
+          "found_by": "review",
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "9bd763ca533947d8bd91994e2d498710e3f26f27"
+        },
+        {
+          "file": "regression-generated-normal-overflow.glb",
+          "finding": "A static mesh without NORMAL whose finite positions reach ~1e29 overflowed the float cross products in GenerateNormals, so LoadGLTFStaticMesh published NaN normals; the normals are now accumulated and normalized in double.",
+          "found_by": "campaign",
+          "guard_test": "FuzzGltfSmoke",
+          "fixed_commit": "e3fe039b1f14b3c7fd1c48653ce4cc0117bb49b7"
+        }
+      ]
+    },
+    {
+      "id": "audio-sound-effect-corpus",
+      "parser_id": "audio-sound-effect",
+      "corpus_dir": "FuzzerTests/corpora/audio-sound-effect",
+      "last_verified": "2026-09-28",
+      "content_digest": "f1add8af62efd5ab9377e97979faff9d6e9cb5b44082427944f0fec4350c86f3",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "texture-exr-loader-corpus",
+      "parser_id": "texture-exr-loader",
+      "corpus_dir": "FuzzerTests/corpora/texture-exr-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "f162ac167941efc979bdbebac6a46307b963e313af6cae30c20e805999c62a4b",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 10,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-header-error-leak.exr",
+          "finding": "EXRLoader passed an error out-parameter to ParseEXRHeaderFromMemory, which overwrites its first strdup'd message when a second header check also fails, so every such file leaked it.",
+          "found_by": "campaign",
+          "guard_test": "FuzzExrSmoke",
+          "fixed_commit": "2b7826d5ed15d454415556ffe3d8d05c63115209"
+        }
+      ]
+    },
+    {
+      "id": "texture-loader-linux-corpus",
+      "parser_id": "texture-loader-linux",
+      "corpus_dir": "FuzzerTests/corpora/texture-loader-linux",
+      "last_verified": "2026-09-28",
+      "content_digest": "99d6094959461954533b4f3e41ae17c84aa45578ddbffbda597ac1aedea6994f",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 9,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-undecodable-reports-loaded.png",
+          "finding": "Texture::CreateFromFile returned S_OK for a file stb_image could not decode and marked it loaded with a size estimated from the requested description, so TextureSystem cached a texture that held no pixels.",
+          "found_by": "review",
+          "guard_test": "AssetSec_TextureUndecodableFileFailsClosed",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
+        }
+      ]
+    },
+    {
+      "id": "mesh-obj-static-loader-corpus",
+      "parser_id": "mesh-obj-static-loader",
+      "corpus_dir": "FuzzerTests/corpora/mesh-obj-static-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "d7630dc44e821e2de0373cedf51413e0b08b5513c957b1de52dda27f20df7f39",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 11,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-mtllib-parent-escape.obj",
+          "finding": "tinyobjloader's default material reader joined any mtllib name onto the OBJ's directory, so a ../ name read a file outside the asset tree (and ../../dev/zero an unbounded device).",
+          "found_by": "review",
+          "guard_test": "AssetSec_ObjStaticRejectsMtllibOutsideDirectory",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
+        },
+        {
+          "file": "regression-ngon-quadratic-time.obj",
+          "finding": "Every polygon was ear-clipped in O(n^2): one 3000-corner star in a 49 KiB file took over 4 s under ASan, and larger files grew without bound. Polygons over 96 corners are now fanned.",
+          "found_by": "review",
+          "guard_test": "FuzzObjStaticSmoke",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
+        },
+        {
+          "file": "regression-normal-float-overflow.obj",
+          "finding": "Normals were normalized in float: a finite authored component such as 1e20 squared to infinity and gave a zero normal, and large positions gave NaN face normals.",
+          "found_by": "review",
+          "guard_test": "FuzzObjStaticSmoke",
+          "fixed_commit": "95bb4a21b5df45f38c7da23f35d47f2c7703147e"
+        }
+      ]
+    },
+    {
+      "id": "mmo-client-state-request-corpus",
+      "parser_id": "mmo-client-state-request",
+      "corpus_dir": "FuzzerTests/corpora/mmo-client-state-request",
+      "last_verified": "2026-09-28",
+      "content_digest": "ee457f6c0435ca8e548ac98865cdd677d4793f165b3d4ac1ea6a71a3daa3bed5",
+      "budget": {
+        "max_input_bytes": 1024,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mmo-chat-wire-corpus",
+      "parser_id": "mmo-chat-wire",
+      "corpus_dir": "FuzzerTests/corpora/mmo-chat-wire",
+      "last_verified": "2026-09-28",
+      "content_digest": "cca0aa5dfb53373173045f63309c7c77c75334039111024bad2dc26dc7bcb489",
+      "budget": {
+        "max_input_bytes": 1024,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "mmo-player-entity-events-corpus",
+      "parser_id": "mmo-player-entity-events",
+      "corpus_dir": "FuzzerTests/corpora/mmo-player-entity-events",
+      "last_verified": "2026-09-28",
+      "content_digest": "103dce30e95b5ffc297c979c930876d6958c78dab6de394e7965758d227acc86",
+      "budget": {
+        "max_input_bytes": 1024,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-spawn-nan-position.bin",
+          "finding": "An EntitySpawn whose position was NaN decoded successfully and seeded a remote player's current and target position; the decoder now rejects non-finite positions.",
+          "found_by": "review",
+          "guard_test": "MMOEntityEvents_SpawnRejectsNonFinitePosition",
+          "fixed_commit": "c643b39c7a4458a7003152912aa57fa0444ffc14"
+        }
+      ]
+    },
+    {
+      "id": "tf-lan-discovery-beacon-corpus",
+      "parser_id": "tf-lan-discovery-beacon",
+      "corpus_dir": "FuzzerTests/corpora/tf-lan-discovery-beacon",
+      "last_verified": "2026-09-28",
+      "content_digest": "58aeb1f3bbda2149f7dc4cee624507c2d965434f4cf7e7cec1d540c82f26a62b",
+      "budget": {
+        "max_input_bytes": 8192,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 8192,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "sparkbuild-archive-download-corpus",
+      "parser_id": "sparkbuild-archive-download",
+      "corpus_dir": "FuzzerTests/corpora/sparkbuild-archive-download",
+      "last_verified": "2026-09-28",
+      "content_digest": "e89c7ab145412c00dd43069173ff6388555a78c2037f0426d94692c16136ee77",
+      "budget": {
+        "max_input_bytes": 131072,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 9,
+        "max_corpus_bytes": 131072,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "exec-script-file-corpus",
+      "parser_id": "exec-script-file",
+      "corpus_dir": "FuzzerTests/corpora/exec-script-file",
+      "last_verified": "2026-09-28",
+      "content_digest": "96b133fe61a51226a1a25eb5de2bfcf467d5bd9b84d6a961610db036098a99c7",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 7,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "sparkbuild-config-corpus",
+      "parser_id": "sparkbuild-config",
+      "corpus_dir": "FuzzerTests/corpora/sparkbuild-config",
+      "last_verified": "2026-09-28",
+      "content_digest": "32bf6241668afc4b448b7a94da47f1e6d4485537aed78a77968a45d07997f31c",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "visual-script-graph-corpus",
+      "parser_id": "visual-script-graph",
+      "corpus_dir": "FuzzerTests/corpora/visual-script-graph",
+      "last_verified": "2026-09-28",
+      "content_digest": "bb9f017e254c8ba0d1b8d91e3fe9529e8c5b7331765669d75e4e6c5595b38c83",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "navmesh-loader-corpus",
+      "parser_id": "navmesh-loader",
+      "corpus_dir": "FuzzerTests/corpora/navmesh-loader",
+      "last_verified": "2026-09-28",
+      "content_digest": "89b8d288ff54e10323ca616d2aef4ef83a68dcc2c010596df68c8bb66457bfc7",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-adjacency-past-triangles.snav",
+          "finding": "A dynamic adjacency entry naming a triangle past the triangle array was accepted and the mesh registered.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_NavMeshRejectsAdjacencyPastTriangles",
+          "fixed_commit": "758f7345ce002e70a4dfe5a3eb3aab78c72a5ab5"
+        },
+        {
+          "file": "regression-tri-index-past-vertices.snav",
+          "finding": "A triangle naming a vertex past the vertex array was accepted and the mesh registered.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_NavMeshRejectsTriangleIndexPastVertices",
+          "fixed_commit": "758f7345ce002e70a4dfe5a3eb3aab78c72a5ab5"
+        }
+      ]
+    },
+    {
+      "id": "terrain-sparkterrain-corpus",
+      "parser_id": "terrain-sparkterrain",
+      "corpus_dir": "FuzzerTests/corpora/terrain-sparkterrain",
+      "last_verified": "2026-09-28",
+      "content_digest": "783e4d442b0366f5d83feaea5c8ab3606008bfb0483ddd8a607b2e60944b1f09",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonsquare-8x2.sparkterrain",
+          "finding": "An 8x2 heightmap was accepted and published as resolution 8, so the clipmap indexed 64 samples of a 16-sample heightmap.",
+          "found_by": "review",
+          "guard_test": "SparkTerrainFormat_RejectsNonSquareHeightmap",
+          "fixed_commit": "a061abfd465bb3e0b281baab67225c7cb24dc06c"
+        }
+      ]
+    },
+    {
+      "id": "asset-service-protocol-corpus",
+      "parser_id": "asset-service-protocol",
+      "corpus_dir": "FuzzerTests/corpora/asset-service-protocol",
+      "last_verified": "2026-09-28",
+      "content_digest": "cfd0369d1d24ab11d303cffe29223d09a903d5a84e50af5c94d39f4315fd6101",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-get-request-missing-platform.bin",
+          "finding": "A GetAssetRequest missing its platform byte was rejected only after the decoded path had been written into the caller's struct; the path, invalidate and stats decoders shared the partial-publish pattern.",
+          "found_by": "review",
+          "guard_test": "AssetServiceProtocol_RejectedDecodeLeavesOutputUntouched",
+          "fixed_commit": "533a4bbe6fa76a8754812bd3a4a379a5be193b58"
+        }
+      ]
+    },
+    {
+      "id": "daemon-protocol-frame-corpus",
+      "parser_id": "daemon-protocol-frame",
+      "corpus_dir": "FuzzerTests/corpora/daemon-protocol-frame",
+      "last_verified": "2026-09-28",
+      "content_digest": "872e86c5b535e7c49c3390120aa549b938f81b2a052ef19a293fc229bd08cb3c",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-header-claims-max-payload.bin",
+          "finding": "RecvFrame resized the payload to the header's claimed size before any payload byte arrived, so an 8-byte header from any local peer forced a 16 MiB allocation per frame.",
+          "found_by": "review",
+          "guard_test": "DaemonFraming_RecvFrameAllocationTracksReceivedBytes",
+          "fixed_commit": "a64c658325db1ad688d8f25b7a02e5991f5eeb86"
+        }
+      ]
+    },
+    {
+      "id": "daemon-bounded-wire-codec-corpus",
+      "parser_id": "daemon-bounded-wire-codec",
+      "corpus_dir": "FuzzerTests/corpora/daemon-bounded-wire-codec",
+      "last_verified": "2026-09-28",
+      "content_digest": "4ee0db8c7b37ac58de524f45681e09165240863ae52e2fffcc905ceda77e3076",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-snapshot-edit-count-overclaim.bin",
+          "finding": "DecodeSnapshot reserved up to 65,536 peers, locks or edits from the wire count before checking the bytes existed, so a 20-byte snapshot reserved several MiB; process status and argument lists were sized the same way.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "59617a9036aa43e8a18591af40a5c6eb7c830015"
+        }
+      ]
+    },
+    {
+      "id": "binary-serializer-corpus",
+      "parser_id": "binary-serializer",
+      "corpus_dir": "FuzzerTests/corpora/binary-serializer",
+      "last_verified": "2026-09-28",
+      "content_digest": "44f2f792c12621e6f23f36cbf5429f58fc465239579a22f7caf29837ecea9c9f",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "datatable-system-corpus",
+      "parser_id": "datatable-system",
+      "corpus_dir": "FuzzerTests/corpora/datatable-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "c8473d15775fc3fc8ec71f34396f7d50f8809241c731c5f98bbe608127ba7bfa",
+      "budget": {
+        "max_input_bytes": 8388609,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 16777216,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-oversized.csv",
+          "finding": "The CSV loader accepted a document larger than the new 8 MiB production limit without bounding its read and parse work.",
+          "found_by": "review",
+          "guard_test": "DataTableRegistry_RejectsOversizedValidFileBeforeReading",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        },
+        {
+          "file": "regression-trailing-json.json",
+          "finding": "The JSON loader accepted a valid prefix followed by malformed trailing bytes and published partial table data.",
+          "found_by": "review",
+          "guard_test": "DataTable_RejectsTrailingJSONWithoutPartialRows",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        },
+        {
+          "file": "regression-noncanonical-number.json",
+          "finding": "A numeric-looking JSON string such as 001 was inferred as an integer and serialized as an invalid bare JSON number.",
+          "found_by": "review",
+          "guard_test": "DataTable_NumericLookingStringRoundTripsAsValidJSON",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        },
+        {
+          "file": "regression-empty-single-cell-row.csv",
+          "finding": "SaveToCSV wrote a single-column row with an empty cell as a blank line, which LoadFromCSV skips, so the row was lost on reload.",
+          "found_by": "campaign",
+          "guard_test": "DataTable_CsvRoundTripKeepsEmptySingleCellRow",
+          "fixed_commit": "537024d523a05fa1df39c9d428c48b4ac2a802bc"
+        },
+        {
+          "file": "regression-trailing-cr-cell.csv",
+          "finding": "SaveToCSV wrote a last-column cell ending in CR unquoted, and LoadFromCSV stripped that CR as a line ending on reload.",
+          "found_by": "campaign",
+          "guard_test": "DataTable_CsvRoundTripKeepsTrailingCarriageReturn",
+          "fixed_commit": "a1c64432deb94cfa586608436c0924967d6977b0"
+        }
+      ]
+    },
+    {
+      "id": "editor-collab-session-wire-corpus",
+      "parser_id": "editor-collab-session-wire",
+      "corpus_dir": "FuzzerTests/corpora/editor-collab-session-wire",
+      "last_verified": "2026-09-28",
+      "content_digest": "ea66abcb4fd0763455f411f64158852383395b00052e37083264480d227e21f7",
+      "budget": {
+        "max_input_bytes": 1048576,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-partial-output-write.bin",
+          "finding": "A truncated collaboration frame changed the caller's type and peer before the decoder rejected its incomplete node ID.",
+          "found_by": "review",
+          "guard_test": "Editor_Collab_MalformedFrame_DoesNotPartiallyPublish",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        }
+      ]
+    },
+    {
+      "id": "localization-system-corpus",
+      "parser_id": "localization-system",
+      "corpus_dir": "FuzzerTests/corpora/localization-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "b86bb5fa5f5fe2fb911771e2601bf82e25cd9f1d99bb25cb5bacc2c708bd28ed",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-partial-write.json",
+          "finding": "The localization loader published an earlier entry from a malformed catalog instead of preserving the previous table.",
+          "found_by": "review",
+          "guard_test": "StringTable_MalformedReloadIsTransactional",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        }
+      ]
+    },
+    {
+      "id": "dialogue-system-corpus",
+      "parser_id": "dialogue-system",
+      "corpus_dir": "FuzzerTests/corpora/dialogue-system",
+      "last_verified": "2026-09-28",
+      "content_digest": "f08402b99f226b27fd9ad9904c1faf9d24bd3c48d2b320ef7b50b0d526471507",
+      "budget": {
+        "max_input_bytes": 8388609,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 8,
+        "max_corpus_bytes": 16777216,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-oversized.json",
+          "finding": "The dialogue loader read and parsed a document larger than the new 8 MiB production limit without a file-size bound.",
+          "found_by": "review",
+          "guard_test": "Dialogue_RejectsOversizedValidDocumentBeforeParsing",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        },
+        {
+          "file": "regression-partial-tree.json",
+          "finding": "A dialogue document whose nodes field is not an array replaced the loaded tree's ID and start node before the loader rejected it.",
+          "found_by": "review",
+          "guard_test": "Dialogue_LoadFailureDoesNotPartiallyReplaceTree",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        }
+      ]
+    },
+    {
+      "id": "fps-multiplayer-player-state-corpus",
+      "parser_id": "fps-multiplayer-player-state",
+      "corpus_dir": "FuzzerTests/corpora/fps-multiplayer-player-state",
+      "last_verified": "2026-09-28",
+      "content_digest": "ab45c8a0c5c0cdd4bb3fb95555bde57885b1e946ae74e87875cef80a17514059",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 12,
+        "max_corpus_bytes": 32768,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-invalid-action-flags.bin",
+          "finding": "The FPS player-state decoder accepted unknown action bits in a peer-supplied snapshot record.",
+          "found_by": "review",
+          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        },
+        {
+          "file": "regression-invalid-bool.bin",
+          "finding": "The FPS player-state decoder coerced a noncanonical boolean wire byte instead of rejecting the record.",
+          "found_by": "review",
+          "guard_test": "FPSMultiplayer_WireDecoderRejectsInvalidBooleanAndActionBits",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        },
+        {
+          "file": "regression-batch-zero-invalid-bool.bin",
+          "finding": "An invalid boolean wire byte decoded to a default state whose zero sequence matched batch zero, so a malformed snapshot was accepted.",
+          "found_by": "review",
+          "guard_test": "FPSMultiplayer_SnapshotDecoderRejectsMalformedRecordWhenBatchIsZero",
+          "fixed_commit": "caf94ce0a0bd9b1a499b0481edadde4260325cd7"
+        }
+      ]
+    },
+    {
+      "id": "mmo-session-gate-protocol-corpus",
+      "parser_id": "mmo-session-gate-protocol",
+      "corpus_dir": "FuzzerTests/corpora/session-gate",
+      "last_verified": "2026-09-29",
+      "content_digest": "d7020ad20a08a83426cc37eef561ad3918ee098c0f130a4240e3fb8f2f6f40bb",
+      "budget": {
+        "max_input_bytes": 512,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "installer-state-manifest-corpus",
+      "parser_id": "installer-state-manifest",
+      "corpus_dir": "FuzzerTests/corpora/installer-state-manifest",
+      "last_verified": "2026-09-29",
+      "content_digest": "9cee8a618c0bed56095c9c2e5b3fa18b8b768d6ff2f156b21059b85a5b83a0d6",
+      "budget": {
+        "max_input_bytes": 65537,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-schema-overflow.json",
+          "finding": "The schema field was read with std::atoi over any run of digits; atoi of 4294967297 is undefined and LP64 glibc returned 1, so the reader accepted the file as schema 1. The reader now parses the integer with std::from_chars, range-checked.",
+          "found_by": "review",
+          "guard_test": "SparkInstallerInstallStateTests",
+          "fixed_commit": "e77dabcf98e8b48fdb505864633f1c3038a7ddc5"
+        },
+        {
+          "file": "regression-escaped-quote.json",
+          "finding": "String fields ended at the first quote and were never unescaped, so a ref holding an escaped quote read back as its prefix up to the backslash. The reader now unescapes exactly the escapes Save writes and refuses any other.",
+          "found_by": "review",
+          "guard_test": "SparkInstallerInstallStateTests",
+          "fixed_commit": "e77dabcf98e8b48fdb505864633f1c3038a7ddc5"
+        },
+        {
+          "file": "regression-windows-destination.json",
+          "finding": "Backslashes were not unescaped, so every Windows destination and a generator holding a backslash read back doubled and changed on each Save and Load round trip.",
+          "found_by": "review",
+          "guard_test": "SparkInstallerInstallStateTests",
+          "fixed_commit": "e77dabcf98e8b48fdb505864633f1c3038a7ddc5"
+        }
+      ]
+    },
+    {
+      "id": "mod-manifest-corpus",
+      "parser_id": "mod-manifest",
+      "corpus_dir": "FuzzerTests/corpora/mod-manifest",
+      "last_verified": "2026-09-29",
+      "content_digest": "a6c72361303985428f0c736cd0e46666f8bfb53e4e44048141b0979a54dcb01d",
+      "budget": {
+        "max_input_bytes": 131073,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 16,
+        "max_corpus_entries": 6,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-control-byte-id.json",
+          "finding": "A mod id had no policy beyond non-empty, so an id holding a control byte (or NUL, a path separator or 64 KiB) was published as the map key, log argument, config field and UI label. Ids are now 1-128 characters of [A-Za-z0-9._-], not '.' or '..'.",
+          "found_by": "review",
+          "guard_test": "ModSystem_RejectsIdWithControlOrSeparatorBytes",
+          "fixed_commit": "d5e0163a6f885f0981e1771eb6f7db1c695aa0c0"
+        },
+        {
+          "file": "regression-duplicate-id-pair.bin",
+          "finding": "Two mod directories declaring one id were both counted but only the one the directory iterator reached last was registered, so a dropped-in mod could shadow an installed one. An id claimed twice is now published from neither directory.",
+          "found_by": "review",
+          "guard_test": "ModSystem_DuplicateIdAcrossDirectoriesIsNotPublished",
+          "fixed_commit": "d5e0163a6f885f0981e1771eb6f7db1c695aa0c0"
+        }
+      ]
+    },
+    {
+      "id": "replay-system-corpus",
+      "parser_id": "replay-system",
+      "corpus_dir": "FuzzerTests/corpora/replay-system",
+      "last_verified": "2026-09-29",
+      "content_digest": "bf954daebe680c5ea97fac23b359118e122b2203edfc5a8cebc0d8bb89492d5d",
+      "budget": {
+        "max_input_bytes": 1048577,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-duration.replay",
+          "finding": "LoadFromFile accepted a NaN duration, so UpdatePlayback never reached the end, and a negative one broke the std::clamp precondition in SeekTo and the kill cam.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_ReplayRejectsNonFiniteOrNegativeDuration",
+          "fixed_commit": "bb66907681673116ffffd102d46f141c8ac198e7"
+        },
+        {
+          "file": "regression-descending-timestamps.replay",
+          "finding": "LoadFromFile accepted descending frame timestamps, breaking the sorted-range precondition of the std::lower_bound in FindFrameIndex so playback jumped backwards.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_ReplayRejectsOutOfOrderFrameTimestamps",
+          "fixed_commit": "bb66907681673116ffffd102d46f141c8ac198e7"
+        },
+        {
+          "file": "regression-unknown-version.replay",
+          "finding": "LoadFromFile read the version field and never checked it, decoding any future or corrupt layout as version 1.",
+          "found_by": "review",
+          "guard_test": "SEC3Gameplay_ReplayRejectsUnknownVersion",
+          "fixed_commit": "bb66907681673116ffffd102d46f141c8ac198e7"
+        }
+      ]
+    },
+    {
+      "id": "animation-skel-sanim-corpus",
+      "parser_id": "animation-skel-sanim",
+      "corpus_dir": "FuzzerTests/corpora/animation-skel-sanim",
+      "last_verified": "2026-09-29",
+      "content_digest": "8e9dac8e346d14362d78519aca8a399eb6a87dda2f54dd96cb8357ce157b929b",
+      "budget": {
+        "max_input_bytes": 1048577,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 32,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-key-count-amplification.sanim",
+          "finding": "The streaming .sanim loader resized a track to its declared key count before reading any key, so a 60-byte file forced a 20 MB allocation before truncation was detected.",
+          "found_by": "review",
+          "guard_test": "Animation_DecodeClips_RejectsKeyCountBeyondInput",
+          "fixed_commit": "80230ac7e871094de705a795d1710d2f784d635e"
+        },
+        {
+          "file": "regression-nonfinite-clip-timing.sanim",
+          "finding": "The .sanim loader accepted a NaN clip duration, which playback feeds to fmod and divides by.",
+          "found_by": "review",
+          "guard_test": "Animation_LoadAnimations_RejectsNonFiniteClipTiming",
+          "fixed_commit": "80230ac7e871094de705a795d1710d2f784d635e"
+        },
+        {
+          "file": "regression-decreasing-key-times.sanim",
+          "finding": "The .sanim loader accepted decreasing key times, which the key search assumes are sorted ascending.",
+          "found_by": "review",
+          "guard_test": "Animation_LoadAnimations_RejectsDecreasingKeyTimes",
+          "fixed_commit": "80230ac7e871094de705a795d1710d2f784d635e"
+        }
+      ]
+    },
+    {
+      "id": "daemon-orchestration-journal-corpus",
+      "parser_id": "daemon-orchestration-journal",
+      "corpus_dir": "FuzzerTests/corpora/daemon-orchestration-journal",
+      "last_verified": "2026-09-30",
+      "content_digest": "c0d4a635c8377792e0cf3771e7547018c42f7199d1bcd932058b1f21f79f77e6",
+      "budget": {
+        "max_input_bytes": 262144,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-duplicate-client-instance.bin",
+          "finding": "LoadOrchestrationJournal accepted two committed mutations for one client instance, which the service's keyed replay table silently collapsed to whichever came last.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        },
+        {
+          "file": "regression-duplicate-process-id.bin",
+          "finding": "LoadOrchestrationJournal accepted two snapshot records for one process id; the writer serializes a keyed map and cannot produce that.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        },
+        {
+          "file": "regression-empty-client-instance.bin",
+          "finding": "LoadOrchestrationJournal accepted a committed mutation with an empty client instance, a key ReadMutationKey refuses everywhere else.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        },
+        {
+          "file": "regression-unrepresentable-crash-timestamp.bin",
+          "finding": "LoadOrchestrationJournal accepted an INT64_MIN crash timestamp, and OrchestrationService's conversion to a system_clock time point overflowed (signed-overflow UB).",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        },
+        {
+          "file": "regression-unrepresentable-drain-deadline.bin",
+          "finding": "LoadOrchestrationJournal accepted an INT64_MAX drain deadline, which overflows the same system_clock conversion when a draining process is reconciled.",
+          "found_by": "review",
+          "guard_test": "SparkDaemonServiceTests",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        }
+      ]
+    },
+    {
+      "id": "async-database-kv-corpus",
+      "parser_id": "async-database-kv",
+      "corpus_dir": "FuzzerTests/corpora/async-database-kv",
+      "last_verified": "2026-09-30",
+      "content_digest": "f3e46877eb61c15ebc2b5264f24c4f2aad19ae414d8af381ffb25847fbbf6905",
+      "budget": {
+        "max_input_bytes": 65537,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-legacy-rewrite-over-budget.db",
+          "finding": "SQLiteConnection::Open accepted a legacy store whose escaped rewrite exceeds the store budget, so every later SET, DELETE and commit failed to publish.",
+          "found_by": "review",
+          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        },
+        {
+          "file": "regression-raw-tab-rewrite-over-budget.db",
+          "finding": "SQLiteConnection::Open accepted an escaped-format store whose raw tabs double when rewritten, past the store budget, leaving the store unwritable.",
+          "found_by": "review",
+          "guard_test": "SEC2Persist_AsyncDatabaseRefusesStoreItCouldNotRepublish",
+          "fixed_commit": "9eb46c593b2dfec9726534b73021087f29b64b53"
+        }
+      ]
+    },
+    {
+      "id": "mmo-character-record-corpus",
+      "parser_id": "mmo-character-record",
+      "corpus_dir": "FuzzerTests/corpora/mmo-character-record",
+      "last_verified": "2026-09-30",
+      "content_digest": "6de5fc4cc07a1fb7a2ba54c0d4df75534afe61ae97aef88403d7103499e092da",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-extra-fields.row",
+          "finding": "The character row reader accepted rows with more than 15 fields and silently ignored the extra ones.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        },
+        {
+          "file": "regression-lossy-float.row",
+          "finding": "BuildCharacterSave wrote positions and stats with iostream's 6 significant digits, so a load-save cycle moved the character and changed its stats.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowKeepsExactFloatsThroughColdRestart",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        },
+        {
+          "file": "regression-negative-account.row",
+          "finding": "std::stoul accepted -1 for the account id and wrapped it to 4294967295.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        },
+        {
+          "file": "regression-nonfinite-stat.row",
+          "finding": "std::stof accepted nan for a position, so a NaN location reached gameplay on login.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        },
+        {
+          "file": "regression-trailing-text.row",
+          "finding": "std::stoi stopped at the first non-digit, so a level of 12abc loaded as 12.",
+          "found_by": "review",
+          "guard_test": "MMOPersistence_CharacterRowDecoderRejectsDamagedRows",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        }
+      ]
+    },
+    {
+      "id": "gateway-area-control-state-corpus",
+      "parser_id": "gateway-area-control-state",
+      "corpus_dir": "FuzzerTests/corpora/gateway-area-control-state",
+      "last_verified": "2026-09-30",
+      "content_digest": "ce885fc47cedf132ab7099afd5d03a98161079a5de451ac4150c79fb914195c1",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-negative-epoch.state",
+          "finding": "std::istream negated -1 into the unsigned epoch, loading UINT64_MAX so no later Prepare could ever advance that session's fence.",
+          "found_by": "review",
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        },
+        {
+          "file": "regression-signed-area.state",
+          "finding": "The epoch state reader accepted a leading plus sign on an area id.",
+          "found_by": "review",
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        },
+        {
+          "file": "regression-wrapped-phase.state",
+          "finding": "std::istream wrapped -4294967295 to phase 1, restoring a Prepare fence the file never recorded.",
+          "found_by": "review",
+          "guard_test": "GatewayAreaControl_EpochStateRejectsSignedNumbers",
+          "fixed_commit": "e7282034693e33344580bb5039823d056dd148ec"
+        }
+      ]
+    },
+    {
+      "id": "rts-save-snapshot-corpus",
+      "parser_id": "rts-save-snapshot",
+      "corpus_dir": "FuzzerTests/corpora/rts-save-snapshot",
+      "last_verified": "2026-09-30",
+      "content_digest": "d0252b46c8a4e48925c5821ad96c011fbdfdbed8f5c02b6d80090ff57d32a712",
+      "budget": {
+        "max_input_bytes": 262144,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "daemon-orchestrator-identity-state-corpus",
+      "parser_id": "daemon-orchestrator-identity-state",
+      "corpus_dir": "FuzzerTests/corpora/daemon-orchestrator-identity-state",
+      "last_verified": "2026-09-30",
+      "content_digest": "17b7adcf56b8174cb7f513cca2b780346a3f69db7bcfed279355ed2d43699038",
+      "budget": {
+        "max_input_bytes": 257,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 16,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "material-loader-corpus",
+      "parser_id": "material-loader",
+      "corpus_dir": "FuzzerTests/corpora/material-loader",
+      "last_verified": "2026-09-30",
+      "content_digest": "2bcfdbb6aa54a717ecba658bf174d5c21ff2e27ee4845e73fab0f53039b9b3d6",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-factor.sparkmat",
+          "finding": "ParseSparkMatDefinition accepted nan/inf factors (std::stof), which RegisterMaterial's std::clamp passes through to the GPU constant buffers; non-finite factors now keep their value.",
+          "found_by": "smoke",
+          "guard_test": "SecurityParsers_MaterialNonFiniteFactorsKeepTheirDefaults",
+          "fixed_commit": "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
+        }
+      ]
+    },
+    {
+      "id": "engine-settings-corpus",
+      "parser_id": "engine-settings",
+      "corpus_dir": "FuzzerTests/corpora/engine-settings",
+      "last_verified": "2026-09-30",
+      "content_digest": "9231199e13a11c830b9a4f3d9aa795fefaba5a543e98682e1e4fd40e0b349623",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "virtual-filesystem-mounts-corpus",
+      "parser_id": "virtual-filesystem-mounts",
+      "corpus_dir": "FuzzerTests/corpora/virtual-filesystem-mounts",
+      "last_verified": "2026-09-30",
+      "content_digest": "7c3dac7207195da9a57e1322db0994a10e775ca142b8f1f9cf4e2391eeccf0d3",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-mount-root-directory.path",
+          "finding": "LocalFileProvider::ReadFile opened the mount root directory on Linux and sized its buffer from the INT64_MAX ext4 directory end offset, aborting the process; only regular files are read now.",
+          "found_by": "smoke",
+          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing",
+          "fixed_commit": "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
+        },
+        {
+          "file": "regression-subdirectory.path",
+          "finding": "A virtual path naming a mounted subdirectory reached the same INT64_MAX allocation in LocalFileProvider::ReadFile on ext4; directories now read as nothing.",
+          "found_by": "smoke",
+          "guard_test": "SecurityParsers_VfsDirectoryPathReadsAsNothing",
+          "fixed_commit": "1ea4d894626117e0b3ac7a362e41379e6d57f10e"
+        }
+      ]
+    },
+    {
+      "id": "entity-archetype-loader-corpus",
+      "parser_id": "entity-archetype-loader",
+      "corpus_dir": "FuzzerTests/corpora/entity-archetype-loader",
+      "last_verified": "2026-09-30",
+      "content_digest": "9872ed634056ff97d8a9ebe37c5e23239f741fd1359a95543a2324b62b76e46e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "module-abi-sidecar-corpus",
+      "parser_id": "module-abi-sidecar",
+      "corpus_dir": "FuzzerTests/corpora/module-abi-sidecar",
+      "last_verified": "2026-09-30",
+      "content_digest": "b906244be185814f358201a85945905831650704b621d7c682fd4007f2d3ff3c",
+      "budget": {
+        "max_input_bytes": 8192,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "plugin-metadata-json-corpus",
+      "parser_id": "plugin-metadata-json",
+      "corpus_dir": "FuzzerTests/corpora/plugin-metadata-json",
+      "last_verified": "2026-09-30",
+      "content_digest": "ba626d072dfd80d5c364882e494674b20d3eb4ca4049d5a3d150432819648502",
+      "budget": {
+        "max_input_bytes": 70000,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "reflection-binary-codec-corpus",
+      "parser_id": "reflection-binary-codec",
+      "corpus_dir": "FuzzerTests/corpora/reflection-binary-codec",
+      "last_verified": "2026-09-30",
+      "content_digest": "87f28dfee6f027a4ac4002a8c6f674956495c0c73f43c24d7d196ef26f5436df",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "shader-disk-cache-blob-corpus",
+      "parser_id": "shader-disk-cache-blob",
+      "corpus_dir": "FuzzerTests/corpora/shader-disk-cache-blob",
+      "last_verified": "2026-09-30",
+      "content_digest": "b7ecc59fa690c4524fccb85792d09b7b4e2b83515c61adf1b9e3bb692947dea7",
+      "budget": {
+        "max_input_bytes": 1048576,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-scene-json-corpus",
+      "parser_id": "editor-scene-json",
+      "corpus_dir": "FuzzerTests/corpora/editor-scene-json",
+      "last_verified": "2026-10-01",
+      "content_digest": "5aa208022235c0081bd994560e08cab2c64651135777370a2dca29e1939b6181",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-scene-load-dispatch-corpus",
+      "parser_id": "editor-scene-load-dispatch",
+      "corpus_dir": "FuzzerTests/corpora/editor-scene-load-dispatch",
+      "last_verified": "2026-10-01",
+      "content_digest": "65dcf43dd42f48d72fb3f9963f2e8080c901e1387575f92a662ab8c7296ef6d1",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-project-file-corpus",
+      "parser_id": "editor-project-file",
+      "corpus_dir": "FuzzerTests/corpora/editor-project-file",
+      "last_verified": "2026-10-01",
+      "content_digest": "5f3ebf1afa5bef8a2b2c3510d61e0f2c689cd387f1106b2139c6049c4fd10744",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-brace-in-recent-name.json",
+          "finding": "A brace inside a quoted recent-project name truncated the hand-rolled field scan; the reader now retains the field boundary.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorProjectFileSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        },
+        {
+          "file": "regression-bracket-in-scene-path.sparkproject",
+          "finding": "A bracket inside a quoted scene path disrupted the project-field scan; the reader now retains the complete path.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorProjectFileSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        },
+        {
+          "file": "regression-timestamp-overflow.sparkproject",
+          "finding": "An oversized project timestamp could throw during numeric conversion; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorProjectFileSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        }
+      ]
+    },
+    {
+      "id": "editor-recovery-snapshot-corpus",
+      "parser_id": "editor-recovery-snapshot",
+      "corpus_dir": "FuzzerTests/corpora/editor-recovery-snapshot",
+      "last_verified": "2026-10-01",
+      "content_digest": "b430edb306242c3c5ef57f0ff1cb3b757347fc2cc6a6b90057e1e8ab8b2bd6ea",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 64,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "editor-scene-ini-import-corpus",
+      "parser_id": "editor-scene-ini-import",
+      "corpus_dir": "FuzzerTests/corpora/editor-scene-ini-import",
+      "last_verified": "2026-10-01",
+      "content_digest": "24b6ffa2c25ccdccc7462e6b030f5a1b788673a76416b14b6d784c020777c85a",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-transform.scene",
+          "finding": "An INI scene transform could import non-finite coordinates; the reader now rejects them.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorSceneImportSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        }
+      ]
+    },
+    {
+      "id": "editor-theme-import-corpus",
+      "parser_id": "editor-theme-import",
+      "corpus_dir": "FuzzerTests/corpora/editor-theme-import",
+      "last_verified": "2026-10-01",
+      "content_digest": "d0da7bbe63dbf1199a14f8c3b2d75406bbf648c892aad191e7be2302b81d2f1a",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-nonfinite-color.json",
+          "finding": "A theme colour could import non-finite components; the reader now rejects them.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorThemeImportSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        }
+      ]
+    },
+    {
+      "id": "editor-window-layout-corpus",
+      "parser_id": "editor-window-layout",
+      "corpus_dir": "FuzzerTests/corpora/editor-window-layout",
+      "last_verified": "2026-10-01",
+      "content_digest": "904f85ffc4b36393392693386d28b37bddb06685420f98c1757443c58fd16d4e",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-monitor-index-overflow.json",
+          "finding": "A window monitor index outside int32 range could narrow with undefined behavior; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorWindowLayoutSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        }
+      ]
+    },
+    {
+      "id": "editor-layout-corpus",
+      "parser_id": "editor-layout",
+      "corpus_dir": "FuzzerTests/corpora/editor-layout",
+      "last_verified": "2026-10-01",
+      "content_digest": "ca93efe4b4ffd1f6faefcc1ca34e1f59242adaa0393adbd03f72d99951350f2d",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 3,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": [
+        {
+          "file": "regression-dock-overflow.json",
+          "finding": "An overflowing dock coordinate could throw or become non-finite; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorLayoutSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        },
+        {
+          "file": "regression-size-overflow.json",
+          "finding": "An overflowing layout size could throw or become non-finite; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorLayoutSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        },
+        {
+          "file": "regression-tab-order-overflow.json",
+          "finding": "An overflowing tab order could narrow outside its integer range; the reader now rejects it.",
+          "found_by": "review",
+          "guard_test": "FuzzEditorLayoutSmoke",
+          "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
+        }
+      ]
+    },
+    {
+      "id": "runtime-prefab-corpus",
+      "parser_id": "runtime-prefab",
+      "corpus_dir": "FuzzerTests/corpora/runtime-prefab",
+      "last_verified": "2026-10-01",
+      "content_digest": "1412a2c05029e2ac81c569d53ac1e51541e62b093a83f93dcca55f8d91f0a572",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 2,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "asset-migration-corpus",
+      "parser_id": "asset-migration",
+      "corpus_dir": "FuzzerTests/corpora/asset-migration",
+      "last_verified": "2026-10-01",
+      "content_digest": "34fd5aee40f2f4ce8587c67a454729965060b09af8f93b528ba52e34c8e41ed5",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "ui-layout-corpus",
+      "parser_id": "ui-layout",
+      "corpus_dir": "FuzzerTests/corpora/ui-layout",
+      "last_verified": "2026-10-01",
+      "content_digest": "0b45365658408fccbe874f1a0af0e05bc84958032ed7679d94599edd7ff2b643",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 64,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "event-response-definitions-corpus",
+      "parser_id": "event-response-definitions",
+      "corpus_dir": "FuzzerTests/corpora/event-response-definitions",
+      "last_verified": "2026-10-01",
+      "content_digest": "e2ed7a74553bad670a525530e9483d964153f96bd6cae6e5f4c1ced35d5af2cc",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 8192,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "achievement-definitions-corpus",
+      "parser_id": "achievement-definitions",
+      "corpus_dir": "FuzzerTests/corpora/achievement-definitions",
+      "last_verified": "2026-10-01",
+      "content_digest": "a43d28aec1121a7594b71bf2de2ffc40da2a0fbfa7a254c95844f32ebece4d94",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "asset-cooker-input-corpus",
+      "parser_id": "asset-cooker-input",
+      "corpus_dir": "FuzzerTests/corpora/asset-cooker-input",
+      "last_verified": "2026-10-01",
+      "content_digest": "24dc941882b260b17bfa26f2e9dda32e10d4f5246be4cb11c7bcfaf862978486",
+      "budget": {
+        "max_input_bytes": 4096,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 6,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "launcher-template-json-corpus",
+      "parser_id": "launcher-template-json",
+      "corpus_dir": "FuzzerTests/corpora/launcher-template-json",
+      "last_verified": "2026-10-01",
+      "content_digest": "8d97895241dc7fa9ef9747fbffc535f673fd386652a2a333cf3000254cd6a6bf",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "launcher-module-manifest-corpus",
+      "parser_id": "launcher-module-manifest",
+      "corpus_dir": "FuzzerTests/corpora/launcher-module-manifest",
+      "last_verified": "2026-10-01",
+      "content_digest": "8545316ca801e26539734ebedae069ce945fdc8c19eb041293dd509391163db6",
+      "budget": {
+        "max_input_bytes": 1048576,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 128,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4096,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "material-editor-spkmat-corpus",
+      "parser_id": "material-editor-spkmat-parser",
+      "corpus_dir": "FuzzerTests/corpora/material-editor-files",
+      "last_verified": "2026-10-06",
+      "content_digest": "d5e7a50b854ec91df80254ad564135ce3922d4f5c4e95657d6753cbff709be40",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    }
+  ]
 }

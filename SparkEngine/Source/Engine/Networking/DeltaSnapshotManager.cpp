@@ -39,15 +39,19 @@ namespace Spark::Net
     {
         std::lock_guard lock(m_mutex);
 
-        if (m_connections.contains(connectionId))
-        {
-            return;
-        }
-
+        // (Re)registration always starts from an empty baseline: a connection ID
+        // reused after an unclean teardown must never inherit a previous peer's
+        // acknowledged fields or pending deltas.
         ConnectionState state;
         state.connectionId = connectionId;
         m_connections[connectionId] = std::move(state);
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "DeltaSnapshotManager: registered connection %u", connectionId);
+    }
+
+    bool DeltaSnapshotManager::HasConnection(uint32_t connectionId) const
+    {
+        std::lock_guard lock(m_mutex);
+        return m_connections.contains(connectionId);
     }
 
     void DeltaSnapshotManager::UnregisterConnection(uint32_t connectionId)

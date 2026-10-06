@@ -9,8 +9,7 @@
 
 #include "RacingEngineSystems.h"
 #include "RacingPersistence.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 // Engine systems
 #include "Audio/MusicManager.h"
@@ -43,9 +42,8 @@ namespace Racing
         m_raceManager = raceManager;
         m_aiDriver = aiDriver;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Racing] Initializing engine system integrations...");
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine systems initializing");
+        Spark::ModuleLog::Info(m_context, "[Racing] Initializing engine system integrations...");
+        Spark::ModuleLog::Info(m_context, "Racing engine systems initializing");
 
         RegisterMusicTracks();
         SubscribeToEvents();
@@ -56,9 +54,9 @@ namespace Racing
         RegisterCoroutines();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine systems wired (7 subsystems)");
-        console.LogInfo(
-            "[Racing] Engine systems wired (audio, events, save, replay, weather, destruction, coroutines)");
+        Spark::ModuleLog::Info(m_context, "Racing engine systems wired (7 subsystems)");
+        Spark::ModuleLog::Info(
+            m_context, "[Racing] Engine systems wired (audio, events, save, replay, weather, destruction, coroutines)");
         return true;
     }
 
@@ -101,8 +99,8 @@ namespace Racing
         m_aiDriver = nullptr;
         m_initialized = false;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing engine system integrations shut down");
-        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Engine system integrations shut down");
+        Spark::ModuleLog::Info(m_context, "Racing engine system integrations shut down");
+        Spark::ModuleLog::Info(m_context, "[Racing] Engine system integrations shut down");
     }
 
     // =============================================================================
@@ -126,13 +124,13 @@ namespace Racing
             music->RegisterTrack(track);
         };
 
-        registerTrack("menu_theme", "Assets/Audio/Music/racing_menu.ogg", 110.0f, true);
-        registerTrack("race_countdown", "Assets/Audio/Music/countdown.ogg", 120.0f, false);
-        registerTrack("race_music_1", "Assets/Audio/Music/race_track_01.ogg", 150.0f, true);
-        registerTrack("race_music_2", "Assets/Audio/Music/race_track_02.ogg", 145.0f, true);
-        registerTrack("final_lap", "Assets/Audio/Music/final_lap.ogg", 165.0f, true);
-        registerTrack("victory", "Assets/Audio/Music/victory.ogg", 130.0f, false);
-        registerTrack("defeat", "Assets/Audio/Music/defeat.ogg", 80.0f, false);
+        registerTrack("menu_theme", "Assets/Audio/Racing/Music/racing_menu.wav", 110.0f, true);
+        registerTrack("race_countdown", "Assets/Audio/Racing/Music/countdown.wav", 120.0f, false);
+        registerTrack("race_music_1", "Assets/Audio/Racing/Music/race_track_01.wav", 150.0f, true);
+        registerTrack("race_music_2", "Assets/Audio/Racing/Music/race_track_02.wav", 145.0f, true);
+        registerTrack("final_lap", "Assets/Audio/Racing/Music/final_lap.wav", 165.0f, true);
+        registerTrack("victory", "Assets/Audio/Racing/Music/victory.wav", 130.0f, false);
+        registerTrack("defeat", "Assets/Audio/Racing/Music/defeat.wav", 80.0f, false);
 
         // Race playlist
         Spark::Audio::Playlist racePlaylist;
@@ -151,7 +149,7 @@ namespace Racing
 
         music->Play("menu_theme", 1.0f);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Audio: 7 music tracks, 1 playlist registered");
+        Spark::ModuleLog::Info(m_context, "[Racing] Audio: 7 music tracks, 1 playlist registered");
     }
 
     // =============================================================================
@@ -166,21 +164,20 @@ namespace Racing
 
         // React to vehicle collisions (wall impacts, vehicle crashes)
         m_eventHandles.push_back(bus->Subscribe<Spark::CollisionEvent>(
-            [](const Spark::CollisionEvent& e)
+            [context = m_context](const Spark::CollisionEvent& e)
             {
-                auto& console = Spark::SimpleConsole::GetInstance();
                 if (e.impactForce > 500.0f)
-                    console.LogInfo("[Racing] Heavy collision: force=" +
-                                    std::to_string(static_cast<int>(e.impactForce)));
+                    Spark::ModuleLog::Info(context, "{}",
+                                           "[Racing] Heavy collision: force=" +
+                                               std::to_string(static_cast<int>(e.impactForce)));
             }));
 
         // React to quality preset changes (adjust visual effects)
         m_eventHandles.push_back(bus->Subscribe<Spark::QualityChangedEvent>(
-            [](const Spark::QualityChangedEvent& e)
-            { Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Quality changed to: " + e.preset); }));
+            [context = m_context](const Spark::QualityChangedEvent& e)
+            { Spark::ModuleLog::Info(context, "{}", "[Racing] Quality changed to: " + e.preset); }));
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Racing] Events: subscribed to CollisionEvent, QualityChangedEvent");
+        Spark::ModuleLog::Info(m_context, "[Racing] Events: subscribed to CollisionEvent, QualityChangedEvent");
     }
 
     // =============================================================================
@@ -195,11 +192,11 @@ namespace Racing
 
         if (!save->Initialize("Saves/Racing"))
         {
-            Spark::SimpleConsole::GetInstance().LogError("[Racing] Save: failed to initialize Saves/Racing");
+            Spark::ModuleLog::Error(m_context, "[Racing] Save: failed to initialize Saves/Racing");
             return;
         }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Save: directory set to Saves/Racing");
+        Spark::ModuleLog::Info(m_context, "[Racing] Save: directory set to Saves/Racing");
     }
 
     std::string RacingEngineSystems::SaveRaceData(const std::string& slotName)
@@ -257,18 +254,37 @@ namespace Racing
         if (!save->SaveExists(slotName))
             return "No save found for slot: " + slotName;
 
-        std::unordered_map<std::string, std::string> customState;
-        if (!save->Load(slotName, *world, customState))
-            return "Failed to load race data from slot: " + slotName;
-
-        const auto encoded = customState.find(std::string(RacingPersistence::StateKey));
-        if (encoded == customState.end())
-            return "Save has no racing state: " + slotName;
-
+        // Decode and validate the racing state before the SaveSystem commits the ECS world, so a slot with no,
+        // damaged, or tampered racing state (or one saved on a track this build does not have) leaves both the
+        // world and the running race untouched.
         RacingPersistenceSnapshot snapshot;
         std::string error;
-        if (!RacingPersistence::Deserialize(encoded->second, snapshot, error) ||
-            !RacingPersistence::Apply(snapshot, *m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver, error))
+        const auto decodeRaceState = [&](const std::unordered_map<std::string, std::string>& state)
+        {
+            const auto encoded = state.find(std::string(RacingPersistence::StateKey));
+            if (encoded == state.end())
+            {
+                error = "save has no racing state";
+                return false;
+            }
+            if (!RacingPersistence::Deserialize(encoded->second, snapshot, error))
+                return false;
+            if (snapshot.trackId > m_trackSystem->GetTrackCount())
+            {
+                error = "saved track is unavailable";
+                return false;
+            }
+            return true;
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!save->Load(slotName, *world, customState, decodeRaceState))
+        {
+            if (error.empty())
+                return "Failed to load race data from slot: " + slotName;
+            return "Invalid racing state in slot '" + slotName + "': " + error;
+        }
+        if (!RacingPersistence::Apply(snapshot, *m_trackSystem, *m_vehicleSystem, *m_raceManager, *m_aiDriver, error))
         {
             return "Invalid racing state in slot '" + slotName + "': " + error;
         }
@@ -295,7 +311,7 @@ namespace Racing
         replay->SetRecordInterval(1.0f / 20.0f);
         replay->SetMetadata("race_track", "racing");
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Replay: configured (20fps, ghost + cinematic support)");
+        Spark::ModuleLog::Info(m_context, "[Racing] Replay: configured (20fps, ghost + cinematic support)");
     }
 
     std::string RacingEngineSystems::ToggleReplay(const std::string& action)
@@ -354,7 +370,7 @@ namespace Racing
         // Default: dry conditions, full grip
         weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[Racing] Weather: clear skies, full grip");
+        Spark::ModuleLog::Info(m_context, "[Racing] Weather: clear skies, full grip");
     }
 
     std::string RacingEngineSystems::SetWeather(const std::string& weatherName)
@@ -436,8 +452,7 @@ namespace Racing
         fencePattern.SetParticleEffect("vfx_debris");
         destruction->RegisterPattern("chain_fence", fencePattern);
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Racing] Destruction: 3 fracture patterns (barrier, tire wall, fence)");
+        Spark::ModuleLog::Info(m_context, "[Racing] Destruction: 3 fracture patterns (barrier, tire wall, fence)");
     }
 
     // =============================================================================
@@ -453,8 +468,8 @@ namespace Racing
         //   damage_repair:      gradual health restore during pit stop
         //   post_race_results:  delay before showing results screen
         // Started on demand by race state transitions via IEngineContext.
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Racing] Coroutines: 4 sequences registered (countdown, pit, repair, results)");
+        Spark::ModuleLog::Info(m_context,
+                               "[Racing] Coroutines: 4 sequences registered (countdown, pit, repair, results)");
     }
 
     // =============================================================================

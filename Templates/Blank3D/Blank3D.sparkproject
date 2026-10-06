@@ -3,7 +3,7 @@
   "name": "Blank3D",
   "version": "0.2.0",
   "description": "A ready-to-edit 3D composition study with a primitive gallery, two-light rig, camera HUD, and six-axis fly controls.",
-  "engineVersion": "1.0.0",
+  "engineVersion": "0.9.0",
   "template": "blank-3d",
   "defaultScene": "Scenes/Default.sparkscene",
   "lastOpenedScene": "Scenes/Default.sparkscene",

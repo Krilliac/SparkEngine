@@ -72,7 +72,14 @@ The release program has four control planes:
 3. **Artifact integrity.** One authoritative version flows into CMake, SDK,
    installer, launcher, package metadata, checksums, SBOM, attestations, and
    release notes.  Promotion verifies that these all refer to the same source
-   SHA and dependency lock.
+   SHA and dependency lock. Windows Runtime EXE/MSI artifacts are gated by
+   native, timestamped Authenticode verification against the protected
+   `SPARK_RELEASE_SIGNER_THUMBPRINT`. The current low-cost release policy uses
+   `SPARK_RELEASE_TRUST_MODEL=self-signed`: the certificate must be trusted by
+   the release runner and its subject must equal its issuer. Ordinary users
+   may see Windows' `Unknown Publisher` warning; release notes must disclose
+   that limitation. Missing policy, signer drift, missing timestamp, or an
+   unsigned artifact fails closed.
 4. **Release approval.** GitHub enforcement, protected release environments,
    signing identities, and final human approval remain explicit external gates.
    The repository can prepare and verify their contracts, but it must never
@@ -112,9 +119,13 @@ migration, SDK/ABI, and performance budgets on the supported Windows product.
 
 `MOD-290` and `MOD-310` prove the installed public-SDK module kit and
 SparkGameFPS release slice.  `ENG-220` proves canonical D3D11 model import.
-`DOC-400`, `GOV-400`, and `REL-200` complete public framing, legal/support
-governance, and the signed end-to-end release rehearsal.  `REL-200` is the only
-terminal gate; it stays blocked until every preceding required gate is proven.
+`DOC-400` and `GOV-400` complete public framing and legal/support governance.
+`REL-190` owns signed end-to-end rehearsal and approval before publication;
+its technical jobs and selectors cannot be deferred. `REL-200` owns only the
+terminal immutable publication, independent download verification, and live-site
+finalization. The [publication stages](../../wiki/development/Release-Publication-Stages.md)
+retain every qualification requirement and explicitly leave the first-release
+predecessor and incompatible rolling-nightly policy unresolved.
 
 ## Blender asset evidence connector
 
@@ -160,7 +171,12 @@ Some required actions cannot be completed with repository write access alone:
 - The GitHub account owner must enable the declared required-check ruleset and
   retain its enforcement evidence.
 - Protected release environments, signing identities, and artifact-attestation
-  permissions require authorized credential and organization setup.
+  permissions require authorized credential and organization setup. Stable
+  detached signatures are generated post-freeze inside the protected release
+  job from the same ephemeral PFX key used for Windows outer installers; the
+  public SPKI fingerprint is pinned as repository policy, and a dedicated
+  release control asset is independently downloaded and verified after
+  publication.
 - A real release tag, GitHub publication, download verification, and any
   clean-machine certification require their designated environments and owners.
 

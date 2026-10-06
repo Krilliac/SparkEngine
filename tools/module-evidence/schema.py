@@ -67,10 +67,15 @@ EVIDENCE_PRODUCERS: dict[str, dict[str, str]] = {
         "artifact": "build/SparkTests-junit.xml",
         "ciJob": "build-linux-gcc",
     },
+    # run-sanitizer-tests.sh writes junit.xml + metadata.json into
+    # $SANITIZER_EVIDENCE_DIR, which build-linux-asan uploads as
+    # test-results-linux-asan; the module-evidence job downloads it here.
+    # metadata.json is the bound artifact because it pins the commit and the
+    # SHA-256 of the sibling junit.xml it describes.
     "sanitizer-report": {
         "producer": "sh:.github/scripts/run-sanitizer-tests.sh",
         "definedIn": ".github/workflows/build.yml",
-        "artifact": "build/asan-ubsan-lsan-results.txt",
+        "artifact": "build/module-evidence/sanitizer-asan/metadata.json",
         "ciJob": "build-linux-asan",
     },
     "cmake-target-index": {
@@ -98,8 +103,27 @@ VALID_EVIDENCE_TYPES = frozenset(EVIDENCE_PRODUCERS)
 # Evidence every module a profile *includes* must publish.  An included module
 # with no bindings is an unproven module presented as a proven one.
 REQUIRED_INCLUDED_EVIDENCE = frozenset(
-    {"cmake-target-index", "lifecycle-log", "junit-xml", "package-smoke-log"}
+    {"cmake-target-index", "lifecycle-log", "junit-xml", "package-smoke-log",
+     "sanitizer-report"}
 )
+
+# The JUnit document the sanitizer-report metadata describes.  It is read from
+# the same downloaded evidence directory and bound by the metadata's
+# completion.junitSha256, so it cannot be swapped independently.
+SANITIZER_REPORT_JUNIT = "build/module-evidence/sanitizer-asan/junit.xml"
+
+# The JUnit and sanitizer runs are the whole SparkTests suite, most of which is
+# not about any one module.  Each included module names a test-name prefix whose
+# tests drive its production sources (not a test-local mirror).  The validator
+# derives the expected name set from the production-source files that define
+# the prefix, and both the JUnit and the ASan JUnit must record exactly that
+# set, each case once and passed.  FPSRespawn_* tests include SparkGameFPS
+# headers and drive its compiled RespawnSystem; Tests/Tools/test_module_evidence.py
+# pins the derived set to the SPARK_TEST_EXPECT_COUNT that
+# FPSSinglePlayerSlice_RespawnProductionSource registers.
+MODULE_TEST_SELECTORS: dict[str, str] = {
+    "SparkGameFPS": "FPSRespawn_",
+}
 
 # --- Key sets (closed world: unknown keys are rejected at every level) ------
 REQUIRED_TOP_LEVEL_KEYS = frozenset({"schemaVersion", "modules", "profiles"})

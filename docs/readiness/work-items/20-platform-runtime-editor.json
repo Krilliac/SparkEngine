@@ -5,12 +5,12 @@
       "id": "PLT-200",
       "title": "Certify the primary Windows support row",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification.",
+      "rationale": "Windows is the intended primary host but lacks one blocking clean-machine Shipping, GPU, editor, package, installer, upgrade, rollback, and crash certification. 2026-09-12 progress: full platform-cert validation now rejects unknown profiles even when a caller enables matrix-only diagnostic compatibility; unknown profiles cannot produce certified evidence. 2026-09-13 progress: root Visual Studio profiles now retain measured compiler path/identity/version, x64 architecture, and Windows SDK provenance in the CMake cache, with parity regressions for missing and mismatched values. 2026-09-25 progress: dependency_closure is now measured, not copied from the plan. collect_evidence.py --package-root runs Tools/platform-cert/pe_imports.py, a bounded PE32+ import/delay-import reader, over the staged package and attests the import graph. The validator refuses a closure with no attested graph, an unresolved import, a measured import missing from the closure, or a declared entry that nothing imports. A package-local DLL must be first-party, an app-local platformRuntime library, or a third-party image reviewed into the authority's imageNames (declared under its thirdParty identity); OS-owned names (API sets, KnownDLLs, system-source runtimes) can be neither package-local nor first-party. No vendored library ships as a Windows DLL today, so none is mapped. The row plans retain a historical Shipping declaration as a regression baseline. A fresh-stage CTest/CI driver checks app-local runtime availability and both plans and retains hashed import graphs. The current-tree Windows Shipping remeasurement is still pending; the historical declaration is not current evidence. Clean Windows 11, driver, installer, upgrade, rollback, and hosted certification evidence remain open.",
       "dependencies": [
         "BLD-100",
         "REL-100",
@@ -46,10 +46,42 @@
         "Unsupported combinations stay experimental",
         "Runtime dependency closure is recorded"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:6157460e42c8",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. No physical Windows evidence exists for either declared row. This needs clean-host exact-SHA runs."
+        },
+        {
+          "criterionDigest": "sha256:6c6b9e8e94ea",
+          "state": "implemented",
+          "evidence": [
+            "Tools/platform-cert/validate_certification.py",
+            "Tests/Tools/test_platform_certification.py",
+            "docs/certification/support-matrix.json",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "CTest PlatformCertification and PlatformCertMatrixOnly reject extra certifiable rows, tier changes and unknown profiles on the committed two-row matrix."
+        },
+        {
+          "criterionDigest": "sha256:4f1864e49dd0",
+          "state": "unmet",
+          "evidence": [
+            "Tests/PackageSmoke/VerifyWindowsPackageClosure.cmake",
+            "Tools/platform-cert/pe_imports.py",
+            "tools/pe_import_closure.py",
+            "docs/certification/plans/win11-x64-msvc143-d3d11.json",
+            "docs/certification/plans/win11-x64-msvc143-nullrhi.json",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required build-windows-shipping measures a fresh MSI component stage against both Windows row plans and app-local PE closure, retaining shipping-closure-<sha>. This records staged-package dependencies; physical Windows 11 certification and a current exact-SHA hosted pass remain unverified here."
+        }
+      ],
       "commands": [
-        "cmake --preset windows-shipping",
+        "cmake --preset windows-shipping -DBUILD_TESTS=ON",
         "cmake --build build/windows-shipping --config MinSizeRel",
-        "ctest --test-dir build/windows-shipping -L certification --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-shipping -C MinSizeRel -L certification --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "WindowsCertification_*"
@@ -127,21 +159,18 @@
       },
       "plannedCiJobs": [
         "windows-certification"
-      ],
-      "plannedTestSelectors": [
-        "WindowsCertification_*"
       ]
     },
     {
       "id": "PLT-210",
       "title": "Certify or explicitly bound Linux support",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification.",
+      "rationale": "Linux compilers, sanitizers, Vulkan/OpenGL, and headless paths exist without a clean-machine package, driver, desktop/audio/input, and uninstall certification. Owner decision OD-10 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): the stable-v1 Linux support row is Ubuntu 24.04 LTS on x86-64 only. The decision fixes the row's scope; it does not certify it, and the clean-machine evidence above is still required. 2026-09-25 progress: installed-tree runtime closure is now checked. CTest VerifyLinuxInstalledRuntime (Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake) installs the build into a fresh prefix. It fails on any RUNPATH/RPATH entry that is not $ORIGIN-relative inside the prefix, on any ldd closure entry that is missing, resolves into the source/build tree, or leaves the prefix for anything but a host system directory, on a shipped soname resolved elsewhere, and on a stale module sidecar. It then runs the installed SparkEngine -headless with the installed SparkGameFPS from cwd=/ with an empty environment and fresh HOME/XDG, and requires the NullRHI lifecycle records. LinuxInstalledRuntime_ClosureDetection proves each rule on defective copies of real build images. The check found that every installed Linux game module was rejected before dlopen, because cmake --install rewrote the RUNPATH that the .sparkabi binary_sha256 had hashed. cmake/SparkGameModule.cmake now links modules with BUILD_WITH_INSTALL_RPATH on ELF. The check passed on local linux-gcc-release and linux-shipping (FPS-only) installs on one Ubuntu 24.04 gVisor host. The installed SparkEngine, SparkServer and SparkGateway directly need libGL.so.1 and libX11.so.6, so even -headless cannot start on a host without those libraries. That is not clean-machine, hosted or certification evidence, so the package criterion stays open. 2026-09-25: the silent windowed downgrade to NullRHI is fixed. The Linux SDL2 host now fails closed (exit 1, with the SDL error logged) when it tries to create a window, Metal view or GL context and cannot. It no longer continues on NullRHI and exits 0. Its root cause, SDL_VIDEO_X11_FORCE_EGL on a host without libEGL, was removed by RHI-240. CTest SparkEngineExplicitOpenGLStartup now also runs SparkGameFPS for 30 frames on the OpenGL window under Xvfb and checks the refusal on the SDL dummy video driver (docs/platform/LINUX-SUPPORT-EVIDENCE.md section 6). This is local single-host evidence, so no criterion changes.",
       "dependencies": [
         "BLD-100",
         "RDY-020",
@@ -174,8 +203,41 @@
         "Experimental rows are never summarized as supported",
         "Package has no repository/toolchain dependency at runtime"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:8577e4293478",
+          "state": "unmet",
+          "evidence": [
+            "docs/readiness/OWNER-DECISIONS.md",
+            "wiki/platform/System-Requirements.md"
+          ],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. OD-10 limits scope to Ubuntu 24.04 x86-64. There is no Linux certification suite, no LinuxCertification tests and no clean-host evidence."
+        },
+        {
+          "criterionDigest": "sha256:0c8c1f94727a",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py",
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt",
+            "wiki/platform/System-Requirements.md"
+          ],
+          "note": "Update the PLT-210 note: the generic 'Linux is supported' wording gap is closed by CTest PublicWording_ExperimentalPlatforms."
+        },
+        {
+          "criterionDigest": "sha256:2889e6c2676e",
+          "state": "unmet",
+          "evidence": [
+            "Tests/PackageSmoke/VerifyLinuxInstalledRuntime.cmake",
+            "docs/platform/LINUX-SUPPORT-EVIDENCE.md"
+          ],
+          "note": "A local single-host installed-tree RUNPATH/ldd closure and installed-run check exists (CTest VerifyLinuxInstalledRuntime, LinuxInstalledRuntime_ClosureDetection). There is no clean-host, hosted or packaged (CPack) evidence, and the installed SparkEngine still needs the host GL and X11 client libraries even for -headless."
+        }
+      ],
       "commands": [
-        "cmake --preset linux-shipping",
+        "cmake --preset linux-shipping -DBUILD_TESTS=ON",
         "cmake --build build/linux-shipping",
         "ctest --test-dir build/linux-shipping -L certification --output-on-failure --no-tests=error"
       ],
@@ -202,7 +264,8 @@
         "Distribution and driver fragmentation"
       ],
       "outOfScope": [
-        "Unsupported distributions"
+        "Unsupported distributions",
+        "Distributions other than Ubuntu 24.04 LTS and non-x86-64 Linux, including ARM64, for stable-v1 (OD-10)"
       ],
       "definitionOfDone": [
         "Matrix is explicit",
@@ -223,12 +286,12 @@
       "id": "PLT-220",
       "title": "Complete and certify the macOS product path",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists.",
+      "rationale": "macOS CI is nonblocking, platform-version claims conflict, no complete Metal path is certified, and no signed/notarized engine package exists. Owner decision OD-11 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): macOS is deferred from stable-v1 and stays experimental; no macOS certification work is scheduled for stable-v1, and any later macOS support row is Apple Silicon only. The deferral leaves this item open, not done.",
       "dependencies": [
         "BLD-100",
         "RHI-220",
@@ -259,6 +322,35 @@
         "A notarized package passes on clean supported Macs",
         "Metal/render/content/runtime evidence is blocking",
         "Minimum-version documentation matches binaries and CI"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1df84ec3f212",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no notarized macOS package. Clean Mac hardware runs are needed. Deferred by OD-11."
+        },
+        {
+          "criterionDigest": "sha256:2257d1838d14",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMetalRayTracing.cpp"
+          ],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. build-macos is continue-on-error. The Metal tests are lifecycle smoke tests only, with no blocking render or content evidence."
+        },
+        {
+          "criterionDigest": "sha256:415123b513a2",
+          "state": "implemented",
+          "evidence": [
+            "CMakeLists.txt",
+            "tools/check_macos_min_version.py",
+            "Tests/Tools/test_macos_min_version.py",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            "wiki/platform/System-Requirements.md"
+          ],
+          "note": "Add 'MacOSBaseline_*' to PLT-220 testSelectors as a new non-planned selector. Leave MacCertification_* planned. The binary-side check runs in the continue-on-error build-macos job (OD-11), so there is no hosted exact-SHA binary record yet. Keep the status at partial if the ledger needs hosted binary evidence to call this implemented."
+        }
       ],
       "commands": [
         "cmake --preset macos-shipping",
@@ -292,7 +384,9 @@
         "Signing/notarization credentials"
       ],
       "outOfScope": [
-        "Older macOS outside declared baseline"
+        "Older macOS outside declared baseline",
+        "macOS certification for stable-v1 (deferred by OD-11)",
+        "Intel macOS; any later macOS row is Apple Silicon only (OD-11)"
       ],
       "definitionOfDone": [
         "Native package is notarized",
@@ -314,12 +408,12 @@
       "id": "PLT-230",
       "title": "Decide and implement the mobile release profile",
       "priority": "P2",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline.",
+      "rationale": "Touch input and quality scaling are framework pieces, not an iOS/Android platform layer or deployment pipeline. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): mobile support is deferred from stable-v1 and no mobile platform work is scheduled for it. The deferral leaves this item open, not done.",
       "dependencies": [
         "RDY-000",
         "ENG-220"
@@ -333,7 +427,7 @@
         "wiki/platform/Mobile-Platform.md"
       ],
       "entryPoints": [
-        "SparkEngine/Source/Platform",
+        "SparkEngine/Source/Engine/Mobile",
         "CMakeLists.txt"
       ],
       "implementationScope": [
@@ -346,6 +440,27 @@
       "acceptanceCriteria": [
         "If supported, packaged sample installs, resumes, renders, saves, handles input/audio, and meets budgets on declared devices",
         "If deferred, all public wording remains planned/unsupported"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:0f617b06e0ee",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Out of scope by OD-28 (2026-09-30): platform outside stable-v1 (OD-25), outside this repository's control. Mobile is unsupported. There is no packaged sample, device matrix or mobile lifecycle tests."
+        },
+        {
+          "criterionDigest": "sha256:bf1959f18749",
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt",
+            "wiki/platform/Mobile-Platform.md"
+          ],
+          "note": "deferred_platform_support_errors keeps platform.mobile unsupported and blocked while PLT-230 is open. deferred_platform_claim_errors scans the global public surfaces plus the capability's documentation pages, and is wired into Validator.validate(). Covered by the registered CTest PublicWording_DeferredPlatforms. The qualifier check is per sentence and loose; see nonblocking."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.mobile"
@@ -373,7 +488,8 @@
         "Large platform-specific scope"
       ],
       "outOfScope": [
-        "Every mobile GPU/OS version"
+        "Every mobile GPU/OS version",
+        "Mobile platform work for stable-v1 (deferred by OD-12)"
       ],
       "definitionOfDone": [
         "Decision is explicit",
@@ -393,12 +509,12 @@
       "id": "PLT-240",
       "title": "Decide and implement the OpenXR release profile",
       "priority": "P2",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof.",
+      "rationale": "VR/OpenXR is a framework stub without runtime initialization, interaction, stereo, performance, or packaged headset proof. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): OpenXR/VR support is deferred from stable-v1 and no OpenXR platform work is scheduled for it. The deferral leaves this item open, not done.",
       "dependencies": [
         "RDY-000",
         "ENG-220"
@@ -425,6 +541,25 @@
       "acceptanceCriteria": [
         "If supported, a packaged sample initializes, tracks, interacts, renders both eyes, recovers focus, and meets budgets",
         "Otherwise wording remains framework/planned"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:f23d762818e0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Out of scope by OD-28 (2026-09-30): platform outside stable-v1 (OD-25), outside this repository's control. VR is a stub. There is no OpenXR runtime, no packaged headset sample and no OpenXR tests."
+        },
+        {
+          "criterionDigest": "sha256:e6a6acf179e6",
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "platform.vr stays unsupported/blocked, and OpenXR/SteamVR/Meta Quest/VR-headset support claims without a framework/planned qualifier are rejected. The live pass includes wiki/platform/VR-Support.md."
+        }
       ],
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.vr"
@@ -455,7 +590,8 @@
         "Hardware lab and runtime fragmentation"
       ],
       "outOfScope": [
-        "Native vendor runtimes beyond declared OpenXR profiles"
+        "Native vendor runtimes beyond declared OpenXR profiles",
+        "OpenXR/VR platform work for stable-v1 (deferred by OD-12)"
       ],
       "definitionOfDone": [
         "Decision and device matrix exist",
@@ -482,7 +618,7 @@
       "wave": 5,
       "area": "platform",
       "owner": "unassigned",
-      "rationale": "Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs.",
+      "rationale": "Console support is planned and cannot be implemented or claimed without agreements, SDK access, dev kits, platform owners, and certification programs. Owner decision OD-12 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): console support is deferred from stable-v1 and no console platform work is scheduled for it. The item stays blocked on agreements, SDK access and dev kits.",
       "dependencies": [
         "RDY-000"
       ],
@@ -506,10 +642,43 @@
         "No public source or CI implies certification",
         "Authorized work has separate confidential controls"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:df3e3df35bc9",
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_site_data_contract.py",
+            "docs/site/readiness.json",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "platform.console must stay unsupported/blocked, and any platformAuthority field is rejected by name, pointing to OWNER-DECISIONS.md. PlayStation/Xbox/Switch/console-platform claims are rejected in public surfaces. 'No public source or CI implies certification' is still unmet: source and CI are not scanned."
+        },
+        {
+          "criterionDigest": "sha256:d496fb3ab4b9",
+          "state": "implemented",
+          "evidence": [
+            "tools/site-data/validate.py",
+            "Tests/Tools/test_public_wording.py",
+            "Tests/CMakeLists.txt",
+            "wiki/platform/Accessibility.md"
+          ],
+          "note": "console_certification_implication_errors() (tools/site-data/validate.py, run by Validator.validate) rejects console runner/job/matrix/option/preset identifiers in workflows and CMake, and unqualified console-plus-certification wording in public docs, wiki and engine source. CTest PublicWording_ConsoleCertification covers unit cases and the live tree. A dead console enum header remains."
+        },
+        {
+          "criterionDigest": "sha256:0f1ac5c1b8e3",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Out of scope by OD-28 (2026-09-30): depends on platform agreements (OD-25), outside this repository's control. There are no confidential controls. This needs platform agreements and owner action."
+        }
+      ],
       "commands": [
         "python3 tools/site-data/validate.py --capability platform.console"
       ],
-      "testSelectors": [],
+      "testSelectors": [
+        "PublicWording_ConsoleCertification"
+      ],
       "requiredCiJobs": [],
       "performanceBudgets": [],
       "documentationUpdates": [
@@ -525,7 +694,8 @@
         "Disclosing confidential platform material"
       ],
       "outOfScope": [
-        "Unauthorized implementation"
+        "Unauthorized implementation",
+        "Console platform work for stable-v1 (deferred by OD-12)"
       ],
       "definitionOfDone": [
         "Claims are gated",
@@ -539,12 +709,12 @@
       "id": "RHI-210",
       "title": "Certify D3D11 as the primary renderer",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "rendering",
       "owner": "unassigned",
-      "rationale": "D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate.",
+      "rationale": "D3D11 is the deepest renderer but lacks a same-commit packaged golden-scene/pass/shader/resource/driver/performance release gate. 2026-09-12 progress: Texture2DArray color and depth resources now create array-aware SRV/DSV views, including MSAA dimensions, with production-linked native view-descriptor coverage. 2026-09-21 progress: the strict MinSizeRel windows-shipping package stages exactly SparkGameFPS and completes an installed-bin-only D3D11 WARP smoke for eight rendered frames with one strict device marker, zero lifecycle faults, save/reload, and retained binary/module hashes. 2026-09-23 local progress: an installed Release D3D11 WARP package now binds authored and procedural FPS materials; changing only the center-building albedo changes 47.32% of central screenshot samples and 0% outside, while the pre-fix binary fails the same test at 0%. GPU captures, golden-scene and hardware-driver execution, visual thresholds, clean-machine and hosted exact-SHA evidence remain open.",
       "dependencies": [
         "CI-110",
         "BLD-100",
@@ -579,9 +749,68 @@
         "GPU validation is clean",
         "Packaged scene passes on every supported Windows row"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:f339929ecf90",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestRHI210D3D11GoldenReal.cpp",
+            "Tests/TestRHI210D3D11PassGoldenReal.cpp",
+            "Tests/TestRHI210D3D11FrameGoldenReal.cpp",
+            "Tests/TestRHI210D3D11SceneGoldenReal.cpp",
+            "Tests/TestRHI210D3D11WorldGoldenReal.cpp",
+            "Tests/TestRHI210D3D11PrimaryGoldenReal.cpp",
+            "Tests/GoldenImages/manifest.json",
+            "Tools/rhi210_capture.py",
+            "Tests/Tools/test_rhi210_capture.py"
+          ],
+          "note": "Four post-processing goldens are owner-approved. The frame/FPS/world/primary suites are DISABLED: they exposed Windows normal-transform, frustum-plane, PNG-decode and Plane-winding defects plus the missing G-buffer fill and lighting resolve; 10 captures then need owner review. No exact-SHA CI proof."
+        },
+        {
+          "criterionDigest": "sha256:745ccd700288",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI210D3D11DeviceLossReal.cpp",
+            "Tests/TestRHI210D3D11ValidationReal.cpp",
+            "Tests/RHI210D3D11EngineFixture.h",
+            "Tests/CMakeLists.txt",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindowsDeviceLost.cpp",
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindows.cpp",
+            "SparkEngine/Source/Graphics/GraphicsConsoleOpsWindowsDiagnostics.cpp",
+            "wiki/subsystems/Rendering-and-Graphics.md",
+            "Tests/TestRHI210D3D11GoldenReal.cpp"
+          ],
+          "note": "Reset, repeated-reset budget and injected DEVICE_REMOVED recover on WARP; the mesh owner reloads after recovery, since the CPU draw list has no lazy reload. WARP setup fails closed. Module-owned mesh rehydration and allocation-pressure recovery remain open. Producer is build-windows-vs2022; requiredCiJobs still names planned jobs."
+        },
+        {
+          "criterionDigest": "sha256:ab52617664c9",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI210D3D11ValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            "SparkEngine/Source/Graphics/GraphicsEngine.h",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindows.cpp",
+            "SparkEngine/Source/Graphics/GraphicsEngineWindowsFrame.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D11/D3D11Device.h",
+            ".github/workflows/build.yml",
+            "wiki/graphics/RHI-Abstraction-Layer.md",
+            "Tests/TestRHI210D3D11PassGoldenReal.cpp",
+            "SparkEngine/Source/Graphics/GPUTimestampQuery.h",
+            "Tests/RHI210D3D11EngineFixture.h"
+          ],
+          "note": "D3D11_Validation and the reviewed post-pass goldens require the debug layer and zero warnings/errors/corruption/discards, with an injected counter control; GPUTimestampQuery no longer abandons disjoint queries (#408). The disabled frame/FPS/world/primary suites are not evidence yet. Hardware is deferred by OD-27. Producer build-windows-vs2022."
+        },
+        {
+          "criterionDigest": "sha256:0a3989a189ef",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on every supported Windows row, on hardware, with exact-SHA evidence."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L d3d11-golden --output-on-failure --no-tests=error",
-        "ctest --test-dir build/windows-shipping -L d3d11-stress --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L d3d11-golden --output-on-failure --no-tests=error",
+        "ctest --test-dir build/windows-release -C Release -L d3d11-stress --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "D3D11_Golden_*",
@@ -627,11 +856,7 @@
         "golden-d3d11",
         "d3d11-stress"
       ],
-      "plannedTestSelectors": [
-        "D3D11_Golden_*",
-        "D3D11_Resource_*",
-        "D3D11_DeviceLoss_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "RHI-220",
@@ -673,11 +898,41 @@
         "Packaged Metal scene passes on certified Macs",
         "Unsupported features fail explicitly"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:df5ed71ca628",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The Metal backend is incomplete. There is no declared pass set and no visual parity test. Mac hardware is needed."
+        },
+        {
+          "criterionDigest": "sha256:0f932a3b1358",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There are no Metal resource-lifetime or synchronization tests."
+        },
+        {
+          "criterionDigest": "sha256:dbbf70e01454",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on certified Mac hardware."
+        },
+        {
+          "criterionDigest": "sha256:50f8aa92ac83",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestMetalRayTracing.cpp",
+            "SparkEngine/Source/Graphics/RHI/Metal/MetalRayTracing.mm"
+          ],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Only the ray-tracing null-device failure paths are tested, and only on macOS. There is no general explicit-unsupported-feature coverage."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/macos-shipping -L metal --output-on-failure --no-tests=error"
+        "ctest --test-dir build/macos-metal -L metal --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
-        "Metal_*"
+        "Metal_*",
+        "metal"
       ],
       "requiredCiJobs": [
         "metal-golden",
@@ -714,14 +969,15 @@
         "metal-stress"
       ],
       "plannedTestSelectors": [
-        "Metal_*"
+        "Metal_*",
+        "metal"
       ]
     },
     {
       "id": "RHI-225",
       "title": "Close D3D12 synchronization, pass, shader, and driver parity",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "rendering",
@@ -758,8 +1014,58 @@
         "Advanced feature fallbacks are deterministic",
         "Packaged scene passes supported GPUs/drivers"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:b3240365716d",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI225D3D12ParityReal.cpp",
+            "Tests/TestRHI225D3D12ValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/graphics/D3D12-Backend.md",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12DescriptorHeap.cpp",
+            "SparkShaderCompiler/CMakeLists.txt"
+          ],
+          "note": "12 D3D12_Parity_* tests (CTest D3D12_Parity, exact count 12) and D3D12_Validation (5) pass in the central Windows CTest run (371/371, RTX 5070 Ti) after the binding fix; mutations of filter mapping, SetConstantBuffer and static-buffer copy are caught. No exact-commit CI yet."
+        },
+        {
+          "criterionDigest": "sha256:210dbdea9230",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.h",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12CommandList.cpp",
+            "Tests/TestRHI225D3D12ValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            ".github/workflows/build.yml",
+            ".github/workflows/release.yml",
+            "wiki/graphics/D3D12-Backend.md"
+          ],
+          "note": "RHI-level declared set only (triangle frame, 200-cycle fence-deferred churn, negative control). GraphicsEngine is D3D11-direct, so engine frames are not covered. The Windows CI jobs now provision Graphics Tools before ctest."
+        },
+        {
+          "criterionDigest": "sha256:b0eacef609fe",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestDXRSupport.cpp",
+            "SparkEngine/Source/Graphics/RHI/D3D12/D3D12Device.cpp",
+            "Tests/TestRHI225D3D12FallbackReal.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/graphics/D3D12-Backend.md"
+          ],
+          "note": "CTest D3D12Fallback (exact 3)."
+        },
+        {
+          "criterionDigest": "sha256:f3df062bd6ee",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. Needs a packaged scene on supported GPUs and drivers."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L d3d12 --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L d3d12 --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "D3D12_*"
@@ -798,20 +1104,18 @@
         "d3d12-golden",
         "d3d12-stress"
       ],
-      "plannedTestSelectors": [
-        "D3D12_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "RHI-230",
       "title": "Close Vulkan GPU-backed parity and shader-toolchain gates",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "rendering",
       "owner": "unassigned",
-      "rationale": "Vulkan's deterministic reference route and parity milestones do not yet prove full GPU readback or every production pass variant.",
+      "rationale": "Vulkan does not yet prove GPU-backed goldens of the engine renderer or any production pass variant. 2026-09-25 progress (no promotion): VulkanDevice::GetD3D11ParityMilestones (pass-route, golden-route and CI milestones hard-coded to true) and RenderCanonicalGoldenScene (a CPU-synthesized image its test compared with itself) were deleted along with the three vacuous VulkanParity_* tests, so VulkanParity_* is now a planned selector. The build-linux-gcc Release gate now requires the SPARK_VULKAN_SUPPORT-only VulkanShaderToolchain_RejectsMalformedSpirv and VulkanGolden_FullscreenTriangleReadback tests in the JUnit report instead. Every acceptance criterion keeps its state. 2026-09-25 progress (no promotion): shipped GLSL is compiled to SPIR-V at build time. On non-Windows builds with the Vulkan backend, configure requires glslangValidator. Section 9.4 of CMakeLists.txt builds every Shaders/GLSL stage into bin/Shaders/SPIRV and installs it there. The Linux basic shader pair registers that SPIR-V, and FullscreenQuad.glsl now compiles for Vulkan. VulkanShaderToolchain_ShippedProgramsCreatePipelines creates all 11 shipped programs under the validation layer on local Lavapipe, and VulkanShaderToolchain_ShaderCacheLoadsShippedSpirv loads the basic pair through ShaderCache. The production passes still record unbound draws. 2026-09-26 progress (no promotion): Tests/TestRHI230VulkanGoldenReal.cpp renders the shipped FullscreenQuad + PostProcess (ACES), BloomExtract and GaussianBlur (vertical) SPIR-V on local Mesa Lavapipe under the validation layer and compares each frame with committed baselines in Tests/GoldenImages/vulkan-lavapipe/ through the manifest (agent-proposed perPixelThreshold 2, tolerancePercent 0.5, SHA-256 pinned). The VulkanGoldenTests CTest entry runs it, and the main SparkEngineTests lane excludes VulkanGolden_RHI230_ where that entry is registered, so only one lane compares the baselines, which have not yet been matched on a hosted runner; a one-constant change to each shader fails the golden. These are software-row shader goldens, not engine-pass or GPU-backed goldens, and the baselines still need owner review.",
       "dependencies": [
         "RHI-210",
         "ENG-220",
@@ -845,13 +1149,67 @@
         "Shader toolchain failures are fatal",
         "Packaged supported rows pass"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:00e2dc7a026e",
+          "state": "unmet",
+          "evidence": [
+            "Tests/GoldenImages/manifest.json",
+            "Tests/GoldenImages/vulkan-lavapipe",
+            "Tests/TestRHI230VulkanGoldenReal.cpp",
+            "Tests/TestRHI230VulkanValidationReal.cpp"
+          ],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. The vulkan-lavapipe row has three baselines of shipped post-process SPIR-V (PostProcess_ACES, BloomExtract, GaussianBlur_Vertical) that match locally on Lavapipe, under agent-proposed thresholds."
+        },
+        {
+          "criterionDigest": "sha256:ea058ba24c18",
+          "state": "unmet",
+          "evidence": [
+            "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp",
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesLinuxShaders.cpp",
+            "SparkEngine/Source/Graphics/GraphicsEngineSubmit.cpp",
+            "SparkEngine/Source/Graphics/GraphicsRenderPipelinesLinux.cpp",
+            "Tests/TestRHI240LinuxForwardPassReal.cpp"
+          ],
+          "note": "The Linux forward draw-list and tone-mapping (FullscreenQuad + PostProcess, ACES) passes bind their pipelines and resources and render the production frame on Lavapipe, checked by CPU pixel probes (CTest LinuxForwardPassVulkan, LinuxTonemapPassVulkan; local runs). Shadow, deferred and the other post effects still have no Linux RHI pipeline. No pass-matrix parity test."
+        },
+        {
+          "criterionDigest": "sha256:e66683102ec6",
+          "state": "unmet",
+          "evidence": [
+            "Tests/TestRHI230VulkanValidationReal.cpp",
+            "Tests/TestRHI240LinuxForwardPassReal.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "VulkanValidation covers unit-level draws; the production forward and tone-mapping passes also run under a forced VK_LAYER_KHRONOS_validation with zero errors required (CTest LinuxForwardPassVulkan, LinuxTonemapPassVulkan; local Lavapipe runs). Shadow/deferred and other post passes do not execute on Vulkan, so are unvalidated. No vulkan-lavapipe job."
+        },
+        {
+          "criterionDigest": "sha256:c30a0243b349",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDevice.cpp",
+            "CMakeLists.txt",
+            "Tests/TestRHI230VulkanValidationReal.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/graphics/RHI-Abstraction-Layer.md"
+          ],
+          "note": "Windows Vulkan builds require glslangValidator and build and ship SPIR-V. CTest VulkanShaderToolchainWindows (exact 4) registers only where the Vulkan SDK is present."
+        },
+        {
+          "criterionDigest": "sha256:92b1fcb816d0",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no Vulkan package lane and no lavapipe/hardware CI rows. This needs hosted or hardware execution."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L vulkan --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L vulkan --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "VulkanParity_*",
         "VulkanGolden_*",
-        "VulkanValidation_*"
+        "VulkanValidation_*",
+        "VulkanShaderToolchain_*"
       ],
       "requiredCiJobs": [
         "vulkan-lavapipe",
@@ -887,20 +1245,19 @@
         "vulkan-hardware"
       ],
       "plannedTestSelectors": [
-        "VulkanGolden_*",
-        "VulkanValidation_*"
+        "VulkanParity_*"
       ]
     },
     {
       "id": "RHI-240",
       "title": "Certify OpenGL translation, visual, driver, and software-render paths",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": false,
       "wave": 5,
       "area": "rendering",
       "owner": "unassigned",
-      "rationale": "OpenGL provides useful portability and llvmpipe execution without production visual parity or a declared driver/toolchain envelope.",
+      "rationale": "OpenGL provides useful portability and llvmpipe execution without production visual parity or a declared driver/toolchain envelope. 2026-09-26 progress (no promotion): Tests/TestRHI240OpenGLGoldenReal.cpp renders the shipped Shaders/GLSL programs through a real GLDevice on local Mesa 25.2.8 llvmpipe (BasicVS+BasicPS lit sphere, PostProcess ACES/Reinhard/Uncharted2/FXAA, GaussianBlur horizontal/vertical, BloomExtract) and compares each frame with committed baselines in Tests/GoldenImages/opengl-llvmpipe/ through the reviewed manifest (perPixelThreshold 2, tolerancePercent 0.5, SHA-256 pinned), with CPU-formula probes and zero KHR_debug errors. CTest SparkOpenGLGoldenTests (labels opengl;llvmpipe;opengl-golden, SPARK_REQUIRE_OPENGL=1, exact count 8) runs it. Locally, a one-constant change to PostProcess (ACES a, FXAA rgbB blend), BasicPS (specular denominator), GaussianBlur (centre weight) and BloomExtract (a luma weight) fails the matching golden; BasicVS and FullscreenQuad were not mutation-tested, and a change of one 8-bit step or less passes by threshold. The main SparkEngineTests lane excludes OpenGLGolden_ where this lane is registered, so only this lane compares the baselines, which were rendered on Ubuntu 24.04's noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 and have not yet been matched on a hosted runner. These are software-row shader goldens, not engine-pass goldens (the Linux engine passes still record no real draws), and the baselines still need owner review.",
       "dependencies": [
         "RHI-210",
         "ENG-220",
@@ -932,8 +1289,49 @@
         "Hardware and software rows are separately labeled",
         "Packaged scenes pass"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:55c47a1096c8",
+          "state": "unmet",
+          "evidence": [
+            "Tests/GoldenImages/manifest.json",
+            "Tests/GoldenImages/opengl-llvmpipe",
+            "Tests/TestRHI240OpenGLGoldenReal.cpp",
+            "Tests/TestRHI240OpenGLReal.cpp"
+          ],
+          "note": "opengl-llvmpipe has eight reviewed-threshold baselines of shipped GLSL (lit sphere, four PostProcess variants, two blur passes, BloomExtract) that match locally (CTest SparkOpenGLGoldenTests). They are software shader goldens, not engine-pass goldens (those passes still do not render); no hardware row, owner review or hosted run, so unmet."
+        },
+        {
+          "criterionDigest": "sha256:995eb3158c72",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI240OpenGLReal.cpp",
+            "SparkEngine/Source/Graphics/RHI/RHIFactory.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ShaderTranslation_RHI240_HLSLToGLSLFailsExplicitly calls production CompileShader and requires failure naming SPIRV-Cross. Registered as CTest SparkOpenGLTests; needs no GL context. Keyword-substitution helper still exported."
+        },
+        {
+          "criterionDigest": "sha256:78dd0099af39",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestRHI240OpenGLReal.cpp",
+            "SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp",
+            "Tests/CMakeLists.txt",
+            "Tests/OpenGLTestSupport.h",
+            "wiki/graphics/RHI-Abstraction-Layer.md"
+          ],
+          "note": "The llvmpipe lanes pin LIBGL_ALWAYS_SOFTWARE/GALLIUM_DRIVER. The opt-in SPARK_GL_HARDWARE_ROW lane SparkOpenGLHardwareTests (labels opengl;opengl-hardware, exact 13) fails on a software context. The local hardware row is Mesa D3D12 translation under WSL, not native driver certification."
+        },
+        {
+          "criterionDigest": "sha256:032eb8523eaf",
+          "state": "unmet",
+          "evidence": [],
+          "note": "Deferred to a later milestone by OD-27 (2026-09-29): needs hardware, signing, publication, live-site or legal resources. There is no packaged OpenGL scene lane or packaged-scene test."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L opengl --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L opengl --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "OpenGL_*",
@@ -973,16 +1371,13 @@
         "opengl-hardware",
         "opengl-llvmpipe"
       ],
-      "plannedTestSelectors": [
-        "OpenGL_*",
-        "ShaderTranslation_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ENG-220",
       "title": "Close D3D11 model import and canonical-content interoperability",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 5,
       "area": "rendering",
@@ -1021,8 +1416,72 @@
         "The Windows package retains all dependencies",
         "Experimental backend parity remains owned by RHI-220, RHI-225, RHI-230, and RHI-240"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:697d4717fa4c",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestGLTFStaticMeshLoader.cpp",
+            "SparkEngine/Source/Graphics/GLTFStaticMeshLoader.cpp",
+            "Tests/TestGLTFSkinnedMeshLoader.cpp",
+            "SparkEngine/Source/Graphics/GLTFSkinnedMeshLoader.cpp",
+            "Tests/TestGLTFAnimationImport.cpp",
+            "SparkEngine/Source/Graphics/GLTFAnimationLoader.cpp",
+            "SparkEngine/Source/Graphics/AssetTypes.cpp",
+            "SparkEngine/Source/Graphics/AssetTypesWindows.cpp",
+            "SparkEngine/Source/Graphics/AssetPipeline.h",
+            "SparkEngine/Source/Graphics/GPUSkinning.cpp",
+            "Shaders/HLSL/Compute/SkinningCS.hlsl",
+            "Tests/TestENG220GPUSkinningD3D11Real.cpp",
+            "Tests/GLTFSkinningReference.h",
+            "Tests/CMakeLists.txt",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
+          ],
+          "note": "CTest GPUSkinningD3D11 (SPARK_TEST_NAME=GPUSkinningD3D11_, exact 4, stable-v1) and GLTFAnimationImport (exact 27 on every host). Pending the dispatcher's MSVC build and run."
+        },
+        {
+          "criterionDigest": "sha256:60f825cc1ca8",
+          "state": "unmet",
+          "evidence": [],
+          "note": "There are no canonical-scene tests or content. The D3D11 material check was a local Windows run, with no hosted packaged proof."
+        },
+        {
+          "criterionDigest": "sha256:a0ea46f75153",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestGLTFStaticMeshLoader.cpp",
+            "Tests/TestENG220ObjImportReal.cpp",
+            "Tests/TestGLTFSkinnedMeshLoader.cpp",
+            "Tests/TestGLTFAnimationImport.cpp",
+            "SparkEngine/Source/Graphics/GraphicsDeviceResourcesWindowsBasicState.cpp",
+            "Tests/TestLegacyGameObjectMaterial.cpp",
+            "Tests/CMakeLists.txt",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
+          ],
+          "note": "CTest BasicMaterialDiagnostics (exact 4). The errors name the declared (not case-folded) texture path. This covers the basic-material half only; the Windows package-diagnostics half is still owed by ENG-220/windows-package-run. Pending the dispatcher's MSVC run."
+        },
+        {
+          "criterionDigest": "sha256:99267550fdd7",
+          "state": "unmet",
+          "evidence": [
+            "tools/asset-integrity/asset_references.py",
+            "tools/asset-integrity/verify_asset_integrity.py",
+            "Tests/PackageSmoke/ValidateInstalledFPSAssets.cmake",
+            "Tests/Tools/test_asset_integrity.py"
+          ],
+          "note": "verify_asset_integrity.py references proves scene and material references resolve inside the staged Assets root to listed, link-free files and fails closed on unknown reference-like keys; check-all and ValidateInstalledFPSAssets.cmake run it. Local Linux: repo Assets (740 references) and a cmake --install stage pass. Missing: Windows package run, hosted evidence."
+        },
+        {
+          "criterionDigest": "sha256:0bdf64af2831",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py"
+          ],
+          "note": "Downgraded: the contract test only asserts ENG-220 text omits backend names. Nothing asserts RHI-220/225/230/240 exist or own parity, so losing ownership would pass."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L gltf-d3d11 --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L gltf-d3d11 --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "GLTF_Skinning_*",
@@ -1065,8 +1524,6 @@
         "golden-d3d11"
       ],
       "plannedTestSelectors": [
-        "GLTF_Skinning_*",
-        "GLTF_Animation_*",
         "CanonicalScene_*"
       ]
     },
@@ -1074,12 +1531,12 @@
       "id": "HEAD-220",
       "title": "Certify packaged Windows 11 NullRHI execution",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "runtime",
       "owner": "unassigned",
-      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). No packaged Windows 11 x64 no-GPU boot/soak evidence exists yet; the item stays open.",
+      "rationale": "NullRHI is functional, but stable-v1 needs packaged Windows 11 x64 boot, FPS module/assets/save, shutdown, leak, soak, and no-GPU evidence without inheriting production-service operations. 2026-09-05 progress: Saves/, Logs/ (rotating SparkEngine_*.log), spark_trace.json and ShaderCache/ resolve through Spark::UserPaths under %LOCALAPPDATA%/SparkEngine (POSIX: $XDG_DATA_HOME or ~/.local/share/SparkEngine), Data/*.spk is resolved beside the executable first, and settings.ini falls back to a per-user directory on read-only installs (Tests/TestUserDataPathsReal.cpp). RHIBridge::Initialize no longer degrades a windowed request to NullRHIDevice silently (headless needs a headless request or allowHeadlessFallback). 2026-09-12 progress: NullRHI qualification now rejects logger-prefixed SPARK_D3D11_DEVICE records rather than accepting a false no-GPU result. 2026-09-13 progress: runtime-layout validation now executes the staged SparkEngine NullRHI lifecycle before returning from module-only validation; the Windows text-fixture path is explicitly excluded because the real installed-package smoke supplies the executable proof. 2026-09-20 local progress: the staged MinSizeRel package completed its existing real NullRHI FPS lifecycle and, separately, two fresh D3D11 WARP processes wrote and restored 37 progression XP with semantic audit checks and unchanged save bytes. This is not NullRHI save/reload, no-display-host, soak/recovery, leak/sanitizer, clean-machine, or hosted exact-SHA evidence; the item stays open. 2026-09-25 local Linux progress: the headless host now reports NullRHI resources still live at device shutdown, and the soak harness requires zero. Under local ASan the nullrhi-headless label found a teardown leak report from the process-lifetime ModuleManager; it is now held reachable, and ASan and TSan both pass 12/12. A seeded heap leak is caught by LSan and by the soak RSS ceiling. Limits: game modules cannot reach the headless NullRHI device, so the live=0 record is a bridge/device teardown guard, not an FPS resource-leak check, until module or render work allocates on that device; and LSan does not cover heap reachable from the resident ModuleManager and module (tracked with the modules-kept-mapped-at-exit teardown item). This is Linux shared-code evidence, not Windows package evidence.",
       "dependencies": [
         "BLD-100",
         "RDY-010",
@@ -1114,14 +1571,72 @@
         "FPS lifecycle, save/reload, shutdown, and recovery are bounded and sanitizer-clean",
         "Production network administration, fleet telemetry, backups, and incident drills remain owned by G12 and OPS-110"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:cd2b72fd5268",
+          "state": "implemented",
+          "evidence": [
+            "cmake/ValidateStagedPackageExecutables.cmake",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            "Tests/CMakeLists.txt",
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required installed NullRHI smoke enforces zero rendered callbacks and no D3D11 device record. No-desktop execution, zero owned windows and hardware-adapter absence are not established. OS graphics imports do not themselves prove a GPU requirement; native qualification remains pending."
+        },
+        {
+          "criterionDigest": "sha256:dda52a09803d",
+          "state": "implemented",
+          "evidence": [
+            "cmake/RunSparkHeadlessNullRHILifecycle.cmake",
+            "cmake/RunSparkHeadlessFPSSaveReload.cmake",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            "Tests/CMakeLists.txt",
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            "Tests/PackageSmoke/windows_appcontainer_run.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required MSI runtime helper runs installed NullRHI save/reload plus AppContainer source/build canaries and scene-less/asset-less controls. The consumer uses the producer CMakeCache as its build canary. Native execution of these newly required probes remains pending."
+        },
+        {
+          "criterionDigest": "sha256:113da975258b",
+          "state": "implemented",
+          "evidence": [
+            "docs/platform/LINUX-SUPPORT-EVIDENCE.md",
+            "Tests/Tools/test_run_nullrhi_soak.py",
+            "Tests/TestHEAD220NullRHILifetimeReal.cpp",
+            "cmake/RunSparkHeadlessFPSSaveReload.cmake",
+            "Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake",
+            "Tests/CMakeLists.txt",
+            "wiki/subsystems/Dedicated-Server.md",
+            "Tests/PackageSmoke/RunInstalledFPSPackage.cmake",
+            ".github/scripts/qualify-windows-msi.py",
+            "Tests/PackageSmoke/package_runtime_probe.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Packaged bounded save/reload is wired into required MSI smoke. Native package execution remains pending. Windows forced-termination/recovery, process-level sanitizer qualification and FPS Windows soak remain open; no sanitizer-clean or soak result is claimed."
+        },
+        {
+          "criterionDigest": "sha256:e6a39adf789f",
+          "state": "implemented",
+          "evidence": [
+            "Tests/Tools/test_site_data_contract.py",
+            "tools/site-data/validate.py"
+          ],
+          "note": "The contract checks OPS-110 wording only. Nothing asserts that HEAD-220 excludes these concerns or that G12 owns them."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L nullrhi-headless --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L nullrhi-headless --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "NullRHI_Windows_*",
         "FPSHeadlessPackage_*",
         "HeadlessShutdown_*",
-        "RHIBridgeReal_*"
+        "RHIBridgeReal_*",
+        "HeadlessSaveReload_*"
       ],
       "requiredCiJobs": [
         "headless-windows-package",
@@ -1159,21 +1674,18 @@
         "headless-windows-package",
         "headless-windows-soak"
       ],
-      "plannedTestSelectors": [
-        "FPSHeadlessPackage_*",
-        "HeadlessShutdown_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "LIFE-200",
       "title": "Close runtime ownership, shutdown, reload, and failure semantics",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "runtime",
       "owner": "unassigned",
-      "rationale": "A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools. 2026-09-05 progress: a failed module OnLoad no longer blocks a replacement game module or freezes the windowed present path; engine teardown runs module OnUnload before gameplay/debug system shutdown; the InitDebug stage runs first (LifecycleOrder::Diagnostics) and ten never-fed lifecycle registrations were removed (Tests/TestModuleLifecycleReal.cpp, Tests/TestEngineWiringReal.cpp). Still open (core-29): module hot reload silently drops the reloaded module's console commands and InvalidStateDetector rules; EngineContext::InitializeAll/ShutdownAll is not the production init path and is kept only for tests.",
+      "rationale": "A fully ready engine needs deterministic initialization/teardown and safe partial-failure behavior across context services, modules, jobs, assets, render, audio, physics, scripts, editor, daemon, and tools. 2026-09-05 progress: a failed module OnLoad no longer blocks a replacement game module or freezes the windowed present path; engine teardown runs module OnUnload before gameplay/debug system shutdown; the InitDebug stage runs first (LifecycleOrder::Diagnostics) and ten never-fed lifecycle registrations were removed (Tests/TestModuleLifecycleReal.cpp, Tests/TestEngineWiringReal.cpp). 2026-09-12 progress: ModuleHotReloadManager now snapshots a watched image only after a successful reload, so a failed replacement remains retryable; the production lifecycle regression observes both failed polls. 2026-09-13 progress: ModuleManager now catches OnLoad exceptions, cleans partial registrations, attempts guarded partial OnUnload, destroys the instance, and unmaps ownership safely, with a real throwing-load fixture. 2026-09-14 progress: ModuleHotReloadManager now contains standard and unknown exceptions from PollChanges and ForceReload callbacks, logs the failure, and preserves the reload result; real-fixture exception regressions and the 11-test module-lifecycle slice pass in a fresh MSVC build. 2026-09-14 further progress: per-image registration owners prevent outgoing module cleanup from removing replacement console commands or InvalidStateDetector rules; ModuleABI_ReloadPreservesHostRegistryCallbacks proves the handoff. 2026-09-21 further progress: Windows teardown now keeps Mod, Dialogue, UI, and Weather alive through module OnUnload and clears injected context before destruction/DLL unload; the full local 7198-test suite is green. Cross-platform, file-cache, and live-D3D11 proof remain open. 2026-09-24 progress (OD-01): EngineContext::InitializeAll/ShutdownAll and the R1.2 dependency registry only they used (RegisterSubsystem, DependsOn, SubsystemEntry, EngineSetup::RegisterCoreSubsystems) are deleted, so EngineRuntime plus LifecycleCompositionRoot is the single lifecycle owner; the two IEngineContext virtuals went with them (SPARK_SDK_VERSION 5, EngineContextVirtualCount 88) and the LifecyclePartialInit CTest that drove only the removed registry is gone. Verified 2026-09-25 on local linux-gcc-release only: the full tree (engine, editor, all game modules, SparkTests) builds; no production, SDK, test or wiki caller of the deleted EngineContext entry points remains; TestEngineContext (9), TestModuleABI (25), TestModuleLifecycleReal (16), TestLifecycleCompositionRootFailure (8), TestEngineWiringReal (9) and the 4 lifecycle-labelled CTests pass; tools/check-wiring.sh reports all 43 Initialize() systems referenced. The Windows/MSVC build of the v5 SDK was not run. 2026-09-24 progress (LIFE-200): the production LifecycleCompositionRoot fails closed. Stage Initialize returns bool; a false return, std::exception or unknown throw rolls back the touched stages in reverse order (including the real teardown-only Shutdown stage) and latches Failed, so later update/shutdown/initialize calls are no-ops; an invalid stage composition now fails startup instead of silently disabling the lifecycle; a throwing stage Shutdown is contained and the remaining stages still tear down. InitConsole returns false and the Linux headless/SDL2/no-SDL2 and Windows headless/windowed entry points exit non-zero on lifecycle init or teardown failure. Evidence: 8 PartialInit_CompositionRoot* tests (Tests/TestLifecycleCompositionRootFailure.cpp, CTest LifecycleCompositionRootFailure, label lifecycle), including real production stages rolled back after an injected failure, pass on local linux-gcc-release; a headless FPS -require-game boot and an Xvfb SDL2 boot still exit 0. The Windows entry-point edits were not compiled or run locally. Still open: sanitizer lifecycle loops, shutdown budgets, and cross-platform/live-D3D11 proof.",
       "dependencies": [
         "RDY-010",
         "BLD-100"
@@ -1208,16 +1720,76 @@
         "Hot reload rejects incompatible state safely",
         "Shutdown completes within budget"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:a9bbfa256f65",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestLIFE200LifecycleLoopReal.cpp",
+            "Tests/TestLIFE200ModuleReloadLoopReal.cpp",
+            "Tests/LifecycleLoopGuards.h",
+            "Tests/PackageSmoke/run_headless_boot_loop.py",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "criterionDigest sha256:a9bbfa256f65. Repeated-loop coverage: TestLIFE200LifecycleLoopReal.cpp and TestLIFE200ModuleReloadLoopReal.cpp (ModuleReload_*, now in testSelectors) with the LifecycleLoopGuards.h leak and deadlock checks and run_headless_boot_loop.py. The ASan and TSan runs of these tests are hosted-CI evidence and have not been run locally."
+        },
+        {
+          "criterionDigest": "sha256:0e019adbc00a",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestLifecycleCompositionRootFailure.cpp",
+            "SparkEngine/Source/Core/Lifecycle/LifecycleCompositionRoot.h",
+            "Tests/TestLIFE200LifecycleLoopReal.cpp",
+            "Tests/CMakeLists.txt",
+            "Tests/TestLIFE200ModuleReloadLoopReal.cpp",
+            "Tests/LifecycleLoopGuards.h",
+            "Tests/PackageSmoke/run_headless_init_failure.py",
+            "SparkEngine/Source/Core/EngineRuntime.h",
+            "SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp",
+            "SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp",
+            "SparkEngine/Source/Core/SparkEngine.cpp"
+          ],
+          "note": "Lifecycle_LifecycleLoop pins 9 tests, including partial gameplay-stage exceptions and NullRHI init failure. POSIX HeadlessInitFailure_Unwinds sweeps host checkpoints; loops check services, phases, commands, threads and handles. Throwing module-load coverage is also cited. C++ tests are unrun here; windowed audio/graphics injection and allocation-leak proof remain open."
+        },
+        {
+          "criterionDigest": "sha256:4fdc9530334c",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestModuleABI.cpp",
+            "SparkEngine/Source/Core/ModuleManager.cpp",
+            "Tests/TestENG200ScriptHotReloadReal.cpp"
+          ],
+          "note": "DLL reload carries no state and is transactional: an ABI-mismatched or hash-modified image is rejected before static constructors run (ModuleABI_MismatchRejected*, ModuleABI_ModifiedBinaryRejected*). Script hot reload keeps instances and state intact on a failed compile (ScriptHotReload_ENG200_*). Local only; no exact-commit CI yet."
+        },
+        {
+          "criterionDigest": "sha256:a372c7c44e09",
+          "state": "implemented",
+          "evidence": [
+            "perf-budgets/v1/budget.json",
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "SparkEngine/Source/Core/SparkEngineLinuxHeadless.cpp",
+            "Tests/PackageSmoke/run_headless_boot_loop.py",
+            "cmake/RunSparkHeadlessNullRHILifecycle.cmake",
+            "tools/perf-budget/validate_budget.py",
+            "tools/perf-budget/compare_results.py",
+            "Tests/Tools/test_perf_budget_hardening.py"
+          ],
+          "note": "Headless NullRHI only: the boot loop enforces the provisional 5000 ms teardown ceiling and now requires live=0 on Windows and Linux. Timing excludes process exit and retained POSIX module images. The metric remains suspended pending a reviewed PERF-100 baseline; windowed client/editor, daemon and tools lack shutdown budgets. No C++ or hosted run was performed here."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-asan -L lifecycle --output-on-failure --no-tests=error",
-        "ctest --test-dir build/linux-tsan -L lifecycle --output-on-failure --no-tests=error"
+        "ctest --test-dir build/ci-linux-asan -L lifecycle --output-on-failure --no-tests=error",
+        "ctest --test-dir build/ci-linux-tsan -L lifecycle --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "EngineLifecycle_*",
         "ModuleReload_*",
         "PartialInit_*",
         "ModuleLifecycle_*",
-        "EngineWiring_*"
+        "EngineWiring_*",
+        "ModuleABI_ThrownOnLoadCleansPartialHostRegistryState",
+        "LifecycleLoop_*",
+        "HeadlessBootLoop_*"
       ],
       "requiredCiJobs": [
         "lifecycle-asan",
@@ -1253,20 +1825,18 @@
         "lifecycle-asan",
         "lifecycle-tsan"
       ],
-      "plannedTestSelectors": [
-        "ModuleReload_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "EDT-210",
       "title": "Finish the editor authoring and undo-safe package round trip",
       "priority": "P1",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "editor",
       "owner": "unassigned",
-      "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and the crash-recovery pipeline (RecoveryCallback, RecordOperation callers, recovery dialog remain unwired; do not claim crash recovery works).",
+      "rationale": "Hierarchy and inspector can mutate World outside the command stack; rotate/scale gizmos and real asset thumbnail/drag paths are incomplete; author-to-package is not one gate. 2026-09-05 progress: World-document create/delete/duplicate/reparent/rename/translate/rotate/scale and inspector edits are command-backed (one CommandHistory entry per gizmo drag); all three transform gizmos ship. 2026-09-12 progress: UndoRedoManager now restores its dispatch-depth boundary through RAII when a command throws, with a production regression proving the manager does not remain in dispatch state or enqueue a failed command. 2026-09-13 progress: recovery saves now validate the strict scene schema before replacing the primary snapshot, with a malformed-structured-scene regression. 2026-09-21 progress: the real SparkEditor executable loads an explicit isolated project in bounded test mode, publishes an atomic structured result, completes three frames, and shuts down cleanly; cleanup paths are build-root anchored and adversarially checked. 2026-09-23 verification: EditorUI initializes the per-user crash handler and recovery store, project-open offers matching snapshots, document-history observation records mutations, and the recovery modal exposes explicit restore/discard actions; the focused EditorRecovery suite passes 18 tests and 119 assertions. This verifies recovery persistence and guarded restore/discard paths, not public crash-triggered restore or clean-host crash recovery. Still open: asset browse/drag/assign path, author-to-installed-runtime round trip, and independent public crash-recovery qualification. 2026-09-25 progress: the Linux SparkEngine host now runs `-scene <path>` engine-only. It loads the reflected scene into the engine ECS world, skips implicit module discovery, prints `SPARK_SCENE_LOADED entities=N renderables=M`, and exits 4 when the scene cannot be loaded (previously it ignored -scene and exited 0). The LinuxScenePreview CTest checks the headless and SDL hosts against an editor-saved fixture scene plus missing and malformed scenes. This loads the scene but does not draw it, because the Linux basic draw path is a no-op.",
       "dependencies": [
         "RDY-010",
         "RDY-020",
@@ -1285,7 +1855,7 @@
       ],
       "entryPoints": [
         "SparkEditor/Source/Panels",
-        "SparkEditor/Source/Commands"
+        "SparkEditor/Source/UndoRedo"
       ],
       "implementationScope": [
         "Route all create/delete/rename/component/transform operations through commands",
@@ -1300,15 +1870,94 @@
         "A clean automated author-to-installed-runtime scenario passes",
         "Failed operations remain atomic and recoverable"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:75e8e61a5f5f",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestEditorRecovery.cpp",
+            "Tests/TestEditorAssetDropWorldReal.cpp",
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp",
+            "SparkEditor/Source/Core/EditorDocument.h",
+            "SparkEditor/Source/Core/EditorDocument.cpp",
+            "SparkEditor/Source/Core/EditorUI.cpp",
+            "SparkEditor/Source/Gizmos/SceneEditTools.h",
+            "SparkEditor/Source/Gizmos/SceneEditTools.cpp",
+            "SparkEditor/Source/Panels/HierarchyPanel.cpp",
+            "SparkEditor/Source/Panels/SceneImportPanel.cpp",
+            "SparkEditor/Source/Panels/SceneViewPanel.cpp",
+            "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
+            "SparkEditor/world-mutation-inventory.json",
+            "Tests/Tools/test_editor_world_mutation_inventory.py",
+            "Tests/TestEditorDocumentReal.cpp",
+            "Tests/TestEditorUndoHierarchyReal.cpp",
+            "Tests/TestEditorUndoWorldMatrixReal.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ctests: EditorUndoDocument (EditorUndo_Document_, count 5), EditorUndoWorldMatrix (EditorUndo_WorldMatrix_, count 2), EditorUndo_WorldMutationInventory (python), and 3 EditorUndoHierarchy_ tests in the main lane. Before 32a298f85 none of the C++ tests compiled. They have not been run locally, so status stays 'implemented' until the central build passes."
+        },
+        {
+          "criterionDigest": "sha256:69382bab2d53",
+          "state": "implemented",
+          "evidence": [
+            "SparkEditor/Source/Panels/InspectorPanel.cpp",
+            "SparkEditor/Source/AssetPipeline/EditorAssetDrag.h",
+            "SparkEditor/Source/AssetPipeline/EditorAssetDrag.cpp",
+            "SparkEditor/Source/Panels/AssetBrowserPanel.cpp",
+            "SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp",
+            "Tests/TestEditorAssetDrag.cpp",
+            "SparkEngine/Source/Core/HostScenePreview.h",
+            "SparkEngine/Source/Core/HostScenePreview.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "cmake/RunSparkWindowsScenePreview.cmake",
+            "SparkEditor/Source/Panels/BuildPipeline.cpp",
+            "SparkEditor/Source/Panels/BuildPipeline.h",
+            "Tests/TestEditorSubsystems.cpp",
+            "Tests/CMakeLists.txt",
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.h",
+            "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp",
+            "Tests/TestEditorAssetDropWorldReal.cpp",
+            "Tests/TestEditorCookPackageReal.cpp"
+          ],
+          "note": "EditorCookPackageRoundTrip (Windows): the asset drag payload and Inspector drop core, SaveWorld, the real SparkCooker, AssembleNativePackage, and a packaged headless ScenePreview run that resolves the mesh, plus a missing-asset negative case."
+        },
+        {
+          "criterionDigest": "sha256:4c9b9b22f00d",
+          "state": "implemented",
+          "evidence": [
+            "cmake/RunSparkLinuxScenePreview.cmake",
+            "cmake/RunEditorAuthorInstalledRuntime.cmake",
+            "Tests/TestEditorCookPackageReal.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ctest EditorCookPackageInstalledRuntime (Windows, RUN_SERIAL). Commit 241a603c5 fixed the redeclaration that broke the Windows SparkTests compile. The lane still has to pass in the central Windows build."
+        },
+        {
+          "criterionDigest": "sha256:66e00b9727df",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestEditorRecovery.cpp",
+            "SparkEditor/Source/Core/EditorRecovery.cpp",
+            "SparkEngine/Source/Core/HostScenePreview.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp",
+            "SparkEngine/Source/Core/SparkEngineWindowsHeadless.cpp",
+            "cmake/RunSparkWindowsScenePreview.cmake",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Scope: a failed Windows -scene load now exits 4 with no SPARK_SCENE_LOADED record, where it used to clear the path and exit 0. The WindowsScenePreview ctest covers the missing and malformed cases. This only covers the scene-host failure path; it has not been built or run here."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L editor-integration --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L editor-integration --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "EditorUndo_*",
         "EditorGizmo_*",
         "EditorAssetDrag_*",
         "EditorCookPackage_*",
-        "EditorUndoHierarchy_*"
+        "EditorUndoHierarchy_*",
+        "EditorRecovery_*"
       ],
       "requiredCiJobs": [
         "editor-integration",
@@ -1347,22 +1996,18 @@
         "editor-integration",
         "editor-package-roundtrip"
       ],
-      "plannedTestSelectors": [
-        "EditorUndo_*",
-        "EditorAssetDrag_*",
-        "EditorCookPackage_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ASSET-220",
       "title": "Consolidate cooking, packaging, CLI, and installed consumer behavior",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "packaging",
       "owner": "unassigned",
-      "rationale": "CPack omits products/modules, package smoke does not call Spark symbols, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge.",
+      "rationale": "CPack omits products/modules, installed linkage can contradict host architecture, CLI behaviors are placeholders, and two GamePackager implementations diverge. 2026-09-12 progress: the canonical GamePackager now rejects traversal or path-like project names at both configuration validation and package-write boundaries, with a regression proving no escaped output is created. 2026-09-13 progress: the CLI now validates both .scene and .sparkscene inputs as structured JSON and fails closed on malformed scene files. 2026-09-13 additional progress: runnable packages now copy project Data/*.spk archives, and package output nested under Data is rejected before build to prevent archive omission and self-recursive staging; the bounded Spark CLI/Pak suites pass 42/42 and 9/9. 2026-09-21 progress: the installed FPS SDK consumer now compiles the production module entrypoint header from staged Spark/ headers only, and a source-boundary regression rejects private IGameModule factories or concrete EngineContext singleton access. The rebuilt module passes D3D11 and NullRHI lifecycle tests. The installed FPS runtime verifies all 882 staged asset-manifest entries before module lifecycle and save/reload, with adversarial missing, tampered, exact-case, undeclared, and link-like coverage. The legacy Core GamePackager is now a compatibility facade over one canonical implementation; validation ordering, native-first platform order, aggregate copy failures, payload/PDB counts, manifest exclusion, and output equivalence are covered by 20 focused tests and 84 assertions. 2026-09-23 local progress: the installed Release stage verifies 883/883 asset-manifest entries, and the FPS package smoke now proves the procedural center-building material changes rendered pixels. The complete FPS DLL still includes private engine headers and links SparkEngineLib on Windows, so full installed-consumer, linkage, clean-machine/archive, uninstall, and profile-wide qualification remain open. 2026-09-25 local progress (non-hosted): the opt-in PackageConsumer_LinuxInstalledSDK ctest (label package-consumer-linux, -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON) installs the Linux build into a build-owned prefix, then configures, builds and ctests Tests/PackageSmoke against that prefix with the version read from the engine cache (13/13 consumer tests pass locally in linux-gcc-release), and scans the consumer depfiles, link lines and compile database so any include or library resolved from the source or build tree fails it; PackageConsumer_SourceTreeBoundaryDetection proves that detector on 12 fixtures. The lane exposed that the installed SparkEngineConfig resolved SDL2 from the host instead of the bundled lib/cmake/SDL2 it ships, which is now fixed. It is not a hosted CI job, and package-consumer-windows, the full FPS DLL public-SDK boundary, and uninstall remain open. 2026-09-25 local progress (non-hosted, no promotion): cmake/SparkUninstall.cmake is a manifest-driven uninstall (also the `uninstall` build target, replacing the unguarded SDL2 one) that validates every install_manifest entry before removing anything, refuses links, directories, non-normalized or outside-prefix paths, symlinked/junctioned parents that resolve outside the prefix, semicolon or unbalanced-square-bracket manifests and a filesystem-root prefix, honors DESTDIR (dropping a leading drive letter as cmake --install does; that Windows mapping is not yet exercised on a Windows host), and prunes only emptied directories, listing each with glob metacharacters escaped so a prefix such as C:/Games [Beta] is never mistaken for empty. SparkTrackedInstall.Contract now runs two install/reinstall/uninstall cycles, proving byte-identical idempotent reinstall, that only declared user data remains, repeat-uninstall idempotence, nine rejected adversarial manifests that leave the tree untouched, a DESTDIR stage, and a prefix containing glob metacharacters with user data inside an installed directory; seven helper mutations each fail it, as do mutations that unescape the prune glob or drop the bracket check. A local runtime-component install of linux-gcc-release (1124 files) reinstalled byte-identically and uninstalled to only the injected user data. Windows 11 clean-machine CPack/NSIS uninstall and SparkInstaller reuse (INST-130) remain open.",
       "dependencies": [
         "RDY-020",
         "BLD-100",
@@ -1399,6 +2044,59 @@
         "Installed runtime loads supported modules/assets without source paths",
         "CLI and packager claims match behavior",
         "Install/uninstall is repeatable and leaves only declared user data"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:167749619b69",
+          "state": "implemented",
+          "evidence": [
+            "GameModules/SparkGameFPS/CMakeLists.txt",
+            "Tests/PackageSmoke/CMakeLists.txt",
+            "Tools/spark-cli/spark_cli.py",
+            "Tools/spark-cli/tests/test_spark_cli.py",
+            "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
+            "cmake/RunInstalledPackageConsumer.cmake",
+            "Tests/CMakeLists.txt",
+            "Tools/spark-cli/README.md"
+          ],
+          "note": "SDKConsumer_InstalledEmptyProjectTemplate (Windows), PackageConsumer_LinuxInstalledSDK and SparkNewFromInstalledPrefixTests (in SparkCliContract)."
+        },
+        {
+          "criterionDigest": "sha256:0ec10cc244b9",
+          "state": "implemented",
+          "evidence": [
+            "cmake/ValidateStagedPackageExecutables.cmake",
+            "cmake/RunSparkFPSHeadlessArena.cmake",
+            "wiki/gameplay-tools/Asset-Pipeline.md"
+          ],
+          "note": "The staged package validator runs the FPS arena check against the staged bin/Assets/Scenes/level1.scene. It runs from a working directory outside both the package and the source tree. Evidence is local only."
+        },
+        {
+          "criterionDigest": "sha256:037f80907fc4",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Core/SparkEngineLinux.cpp",
+            "Tools/spark-cli/claims.json",
+            "Tools/spark-cli/tests/test_spark_cli_claims.py",
+            "Tools/spark-cli/spark_cli.py",
+            "Tools/spark-cli/README.md",
+            "wiki/gameplay-tools/Game-Packaging.md",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "ctest CLI_ClaimsMatchBehavior; the claims file is also in SparkCliContract's discover run."
+        },
+        {
+          "criterionDigest": "sha256:94cbedf9f93f",
+          "state": "unmet",
+          "evidence": [
+            "cmake/SparkUninstall.cmake",
+            "cmake/TestSparkTrackedInstall.cmake",
+            ".github/scripts/qualify-windows-msi.py",
+            ".github/scripts/test_qualify_windows_msi.py",
+            ".github/workflows/build.yml"
+          ],
+          "note": "Required MSI smoke requests two install/uninstall cycles, identical payload digests on reinstall, removed registration/install roots and preserved declared user data. Native MSI execution, NSIS/SparkInstaller reuse and Windows 11 clean-host qualification remain pending."
+        }
       ],
       "commands": [
         "cmake --install build/linux-shipping --prefix /tmp/spark-install",
@@ -1448,21 +2146,18 @@
         "package-consumer-linux",
         "package-consumer-windows"
       ],
-      "plannedTestSelectors": [
-        "PackageConsumer_*",
-        "CLI_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "SAVE-230",
       "title": "Version saves, scenes, assets, editor data, and migrations",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "compatibility",
       "owner": "unassigned",
-      "rationale": "A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. Not yet: a v2 disk fixture, a payload checksum, scene/asset migration fixtures. AchievementSystem persistence remains a game-module responsibility.",
+      "rationale": "A release engine must preserve or explicitly migrate user projects and game state across versions; several modules still contain placeholder serialization. 2026-09-05 progress: .spark_save v3 persists the Transform hierarchy, retains <slot>.spark_save.bak and falls back to it on an unreadable slot, creates the save directory on demand, and covers every ComponentFactory-registered serializer; the in-memory v2->v3 migration and the v1 disk fixture are tested. 2026-09-12 progress: AssetMigrationRegistry now rejects a valid header whose asset type differs from the requested migration type, with a production regression. 2026-09-13 progress: an immutable v2 disk fixture now preserves its screenshot metadata, migrates every pre-v3 Transform to an explicit root, and verifies that neither the checked-in fixture nor copied slot is rewritten. 2026-09-20 local progress: a staged MinSizeRel FPS package preserved 37 progression XP across two fresh D3D11 WARP processes and left the 355-byte save hash unchanged after reading. 2026-09-21 v4 progress: the writer now appends a standard CRC-32 over the complete preceding file, readers verify it before parsing or metadata display, stale cache entries cannot hide external corruption, an unreadable primary cannot overwrite a valid retained copy, and immutable v1-v3 fixtures migrate in memory without rewrite. Production-linked tests cover payload/trailer/version corruption and valid-backup recovery. CRC-32 detects accidental corruption and is not authentication. 2026-09-24 OD-03 local progress: the save reader window is now exactly N-1..N (kOldestSupportedSaveVersion = kCurrentSaveVersion - 1 = 3), so the production v3 FPS fixture migrates while the committed v1/v2 fixtures fail closed on metadata and load without mutating caller state or the file; the dead v1/v2 migration steps were removed. SceneFile loads v2 and migrates v1 in memory from two committed fixtures emitted by the unmodified v1 writer at commit 3ef790f4 (structure, hierarchy, marker components, environment, camera and asset references are retained; v1 raw object-image component payloads fail closed with a versioned error), writes v2 only, and rejects older/newer versions with an error naming the file version and the supported window. The public SDK header Spark/PersistedSchema.h adds ModulePersistedSchema (read N and N-1, write N) and SparkGameFPS declares and uses it in its quicksave/quickload profile path. Evidence: SaveMigration_* and SceneMigration_* / FPSLocalProfile_* production-linked tests on local linux-gcc-release. 2026-09-25 local progress: the reflected-World dialect used by editor File > Open/Save and -scene (Spark::DeserializeInto/LoadWorld in SceneManager/ReflectedSceneSerializer.cpp and ReflectedScenePersistence.cpp) now returns an actionable reason on every rejection. Version rejections name the version field, the file value and the supported window (reads version 1 and the legacy editor sceneVersion 1 dialect, writes version 1) plus the next step (newer build, or no migration). Schema rejections name the entity index and name, the id, parent, component type or field. LoadWorld reports the primary and the .bak reasons. EditorUI::OpenScene, ProjectManager::LoadProjectScene and the Linux and Win32 -scene paths print it instead of a bare failure. Evidence: ReflectedScene_VersionRejectionNamesFileVersionAndSupportedWindow, ReflectedScene_SchemaRejectionExplainsTheOffendingElement and ReflectedScene_LoadWorldReportsPrimaryVersionAndBackupReason on local linux-gcc-release. The reflected dialect has only ever written version 1, so it has no prior reflected version to migrate. 2026-09-26 local progress: AtomicWrite_KilledSaveWriterNeverLosesTheLastCompletedGeneration (Tests/TestSaveInterruptionReal.cpp, ctest SparkSaveInterruptionTests, POSIX) SIGKILLs an exec'd writer that saves successive generations through the production SaveSystem at seeded randomized offsets, then requires the slot to load the last completed or in-flight generation with a valid CRC, a complete .bak of the preceding revision and no promoted .tmp. 3000 kills over seeds 1-3 exposed a torn .bak (about 4 per 1000) because the retained copy was refreshed with an in-place copy_file; the retained copy is now staged and renamed (SaveSystem/SaveFileDurability.cpp, split out of SaveSystem.cpp), and 3000 kills over seeds 1-3 pass after the fix (kill points depend on wall-clock timing, so a seed does not replay identical kills). Because that window is hit only about 4 times per 1000 kills, AtomicWrite_RetentionRefreshReplacesTheBackupByRenameNotInPlace (the .bak inode must change on refresh) and AtomicWrite_FailedRetentionStagingLeavesBackupAndSlotUntouched (a blocked staging copy must fail the save with .bak and the slot byte-identical) guard the fix deterministically; DeleteSave now also removes the <slot>.spark_save.tmp and .bak.tmp staging files a killed writer can leave. Still open: Windows TerminateProcess interruption rehearsal, scene/prefab/editor-state interruption rehearsal, full profile fields, prefab/asset/editor-state migrations, schema declarations for the remaining game modules, clean-machine and hosted exact-SHA proof. AchievementSystem persistence remains a game-module responsibility.",
       "dependencies": [
         "RDY-000",
         "RDY-010",
@@ -1481,7 +2176,9 @@
       ],
       "entryPoints": [
         "SparkEngine/Source/Utils/Serializer.h",
-        "Tests/Fixtures/Compatibility"
+        "Tests/Fixtures/Compatibility",
+        "SparkSDK/Include/Spark/PersistedSchema.h",
+        "Tests/Fixtures/Compatibility/SceneFile"
       ],
       "implementationScope": [
         "Define version headers and compatibility policy",
@@ -1497,8 +2194,100 @@
         "Interrupted/corrupt writes do not destroy the last good state",
         "Breaking changes emit actionable diagnostics"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:1e666db357f8",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
+            "Tests/TestReflectedSceneCompatibility.cpp",
+            "Tests/Fixtures/Compatibility/ReflectedScene/README.md",
+            "Tests/Fixtures/Compatibility/EditorState/README.md",
+            "Tests/Fixtures/Compatibility/EditorState/v1-project/V1Project.sparkproject",
+            "Tests/Fixtures/Compatibility/EditorState/v2-future-project/Future.sparkproject",
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Prefabs/PrefabTextFormat.cpp",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "Tests/TestPrefabCompatibility.cpp",
+            "Tests/Fixtures/Compatibility/Prefab/v1-guard-tower.sparkprefab",
+            "Tests/Fixtures/Compatibility/Prefab/README.md",
+            "Tests/CMakeLists.txt",
+            "Tests/harden/Test_persistence_SaveSystem.cpp",
+            "Tests/Fixtures/Compatibility/SaveSystem/v3-fps-profile.spark_save.hex",
+            "Tests/TestSceneSerializerReal.cpp",
+            "Tests/Fixtures/Compatibility/SceneFile/v1-hierarchy.sparkscene",
+            "wiki/gameplay-tools/Asset-Migration.md"
+          ],
+          "note": "Save v3 and SceneFile v1 fixtures retain declared state; prefab v1 and legacy reflected fixtures document their hand-authored provenance. SparkSaveCompatibilityTests pins 31 tests. Assets have no production MigrateAsset caller, and editor projects have no N-1 format: owner decisions remain pending. No status promotion or hosted proof is claimed."
+        },
+        {
+          "criterionDigest": "sha256:8d9be8a2494e",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+            "SparkEditor/Source/Core/ProjectManager.cpp",
+            "Tests/TestPrefabPersistence.cpp",
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Core/EditorUI.cpp",
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+            "Tests/TestSaveSystemRoundTripReal.cpp",
+            "Tests/TestSAVE230NewerFormatSlotReal.cpp",
+            "Tests/harden/Test_persistence_SaveSystem.cpp",
+            "Tests/TestReflectedScene.cpp"
+          ],
+          "note": "Production save rollback, newer-format corruption recovery, reflected-scene .bak recovery, prefab and project backup recovery are directly tested. Failed loads preserve live data; repairing saves retain the usable backup. Asset-migration rollback lacks a production load path and needs an owner decision. C++ execution of this lane remains pending."
+        },
+        {
+          "criterionDigest": "sha256:33b4700b3cfc",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
+            "SparkEngine/Source/Utils/SaveFileDurability.cpp",
+            "Tests/TestSaveInterruptionReal.cpp",
+            "SparkEngine/Source/Utils/SaveFileDurability.h",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "SparkEditor/Source/Core/ProjectManager.cpp",
+            "Tests/TestDocumentDurableWrite.cpp",
+            "Tests/TestPrefabPersistence.cpp",
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+            "Tests/TestEditorLayoutManager.cpp",
+            "SparkEditor/Source/Prefabs/PrefabManager.cpp",
+            "Tests/TestDocumentInterruptionReal.cpp",
+            "Tests/CMakeLists.txt",
+            "Tests/TestSaveSystemRoundTripReal.cpp",
+            "Tests/TestReflectedScene.cpp",
+            ".github/workflows/build.yml"
+          ],
+          "note": "SparkSaveInterruptionTests and SparkDocumentInterruptionTests use Spark::Process::Kill for save/scene/prefab/project writers (TerminateProcess on Windows, SIGKILL on POSIX), retaining complete generations and backups. New Windows save-port execution is pending in build-windows-vs2022; Linux proof belongs to build-linux-gcc. Power loss and kernel crashes are not simulated."
+        },
+        {
+          "criterionDigest": "sha256:333b592702f6",
+          "state": "implemented",
+          "evidence": [
+            "SparkEngine/Source/SceneManager/ReflectedSceneSerializer.cpp",
+            "Tests/TestReflectedScene.cpp",
+            "SparkEditor/Source/Prefabs/PrefabAsset.cpp",
+            "SparkEngine/Source/Engine/ECS/RuntimePrefab.h",
+            "SparkEditor/Source/Core/ProjectManager.cpp",
+            "Tests/TestPrefabPersistence.cpp",
+            "Tests/TestRuntimePrefab.cpp",
+            "Tests/TestEditorStateCompatibility.cpp",
+            "SparkEditor/Source/Core/EditorLayoutManager.cpp",
+            "Tests/TestEditorLayoutManager.cpp",
+            "Tests/Fixtures/Compatibility/EditorState/Layouts/v2-future-layout.json",
+            "Tests/Fixtures/Compatibility/Prefab/v3-future.sparkprefab",
+            "Tests/TestPrefabCompatibility.cpp",
+            "SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp",
+            "Tests/TestSAVE230NewerFormatSlotReal.cpp"
+          ],
+          "note": "RuntimePrefab returns actionable magic/version/truncation errors; tests assert them and unchanged targets. Save Load logs are checked for the slot, newer format, supported read window and recovery action. Scene/prefab/project/layout diagnostics remain covered. Assets lack a production migration path and require an owner decision; C++ execution is pending."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/linux-shipping -L compatibility --output-on-failure --no-tests=error"
+        "ctest --test-dir build/linux-gcc-release -L compatibility --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "SaveMigration_*",
@@ -1506,7 +2295,11 @@
         "AssetMigration_*",
         "AtomicWrite_*",
         "SaveSystemRoundTripReal_*",
-        "SparkSaveCompatibilityTests"
+        "SparkSaveCompatibilityTests",
+        "SparkSceneCompatibilityTests",
+        "DocumentWrite_*",
+        "PrefabPersistence_*",
+        "EditorStateMigration_*"
       ],
       "requiredCiJobs": [
         "build-windows-vs2022"
@@ -1540,22 +2333,18 @@
       ],
       "profileApplicability": {
         "stable-v1": "required"
-      },
-      "plannedTestSelectors": [
-        "SceneMigration_*",
-        "AtomicWrite_*"
-      ]
+      }
     },
     {
       "id": "SDK-240",
       "title": "Stabilize SDK, module ABI, package exports, and compatibility diagnostics",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "sdk",
       "owner": "unassigned",
-      "rationale": "Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior.",
+      "rationale": "Dynamic modules and installed consumers need a declared version/ABI contract, correct exported dependencies, packaged loading, and explicit incompatibility behavior. 2026-09-12 progress: SparkGameModule now rejects SDK headers with multiple or missing SPARK_SDK_VERSION definitions before deriving the module ABI sidecar, with a configure-level hostile-header regression. 2026-09-13 progress: the sdk install component now carries its legal materials, documentation, third-party notices, EmptyProject example, and a completeness CTest. 2026-09-21 further progress: the weather seam is module-owned and game-thread enforced, with the concrete dependency isolated to the Core adapter; six focused tests pass. The complete FPS DLL still has many private dependencies, so the public-SDK-only requirement remains open. 2026-09-24 progress (OD-02, exact-match module ABI, no N-1 loading): ModuleManager's .sparkabi sidecar gate (before OS load), in-image descriptor re-check (before injection/factory), and post-factory ModuleInfo SDK check now all fail closed with a diagnostic naming the mismatched field, the host's expected value, and the module's declared value; Tests/TestModuleABIDiagnostics.cpp drives each of the ten exact-match fields plus struct_size through the production LoadModule path with exact-message assertions, including an N-1 sdk_version rejection. Local Linux GCC evidence only; the installed-consumer gate and hosted module-compatibility CI remain open. 2026-09-25 progress: Tests/CMakeLists.txt now builds a real N-1 module image (SparkPreviousSdkModuleFixture, in-image descriptor and build-generated sidecar both declaring SPARK_SDK_VERSION - 1) beside the existing N+1 image. Tests/TestModuleVersion.cpp (CTest ModuleVersionCompatibility, exact count 6) checks that the fixtures' sidecars declare N-1, N and N+1. It checks that the current-SDK image loads, and that the N-1 and N+1 images are rejected before OS load with the exact diagnostic naming both versions and without any fixture code running. The same manager still loads the current image after an N-1 rejection. An N-1 image behind a forged host-valued sidecar is rejected by the in-image re-check before injection or factory. Sidecars declaring runtime_abi_version N-1 and N+1 are rejected before OS load. Local Linux GCC evidence only; no criterion changes.",
       "dependencies": [
         "ASSET-220",
         "LIFE-200",
@@ -1581,14 +2370,64 @@
         "Export correct CMake targets and transitive dependencies",
         "Build/package external consumer and module",
         "Validate compatibility at load with actionable errors",
-        "Test N-1 supported and incompatible fixtures",
+        "Test exact-match and incompatible (including N-1) fixtures; N-1 modules are rejected, not loaded or migrated (OD-02)",
         "Publish API/reference and migration notes"
       ],
       "acceptanceCriteria": [
         "External consumer needs no source-tree include/lib",
-        "Supported N-1 module loads or migrates",
+        "Any module whose ABI descriptor differs from the host, including an N-1 module, is rejected before OS load with a diagnostic naming the field and both versions (OD-02)",
         "Incompatible module fails before executing code",
         "SDK package contains headers, targets, license, notices, docs, and examples"
+      ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:2ce64c3b94bd",
+          "state": "implemented",
+          "evidence": [
+            "cmake/RunInstalledPackageConsumer.cmake",
+            "cmake/TestPackageConsumerBoundary.cmake",
+            "Tests/CMakeLists.txt",
+            "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
+            "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
+            "cmake/SparkPackageConsumerBoundary.cmake"
+          ],
+          "note": "Linux: opt-in PackageConsumer_LinuxInstalledSDK. Windows: SDKConsumer_InstalledEmptyProjectTemplate installs runtime, sdk, and tools (sdk/tools depend on runtime), builds EmptyProject, and scans ninja -t deps/commands; unscanned dumps or missing prefix fail. SDKConsumer_TemplateRunnerContract passes locally; Windows GREEN is not independently verified."
+        },
+        {
+          "criterionDigest": "sha256:3e936e0f4337",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestModuleABIDiagnostics.cpp",
+            "Tests/TestModuleVersion.cpp",
+            "SparkEngine/Source/Core/ModuleManager.cpp"
+          ],
+          "note": "ModuleABI_ tests drive production LoadModule with sidecars for all ten fields plus struct_size and N-1 sdk_version, asserting exact 'rejected before OS load' messages that name the field and both values. ModuleVersion_ tests load real N-1 and N+1 SDK module images and assert the same named-field, both-versions rejection before any module code runs."
+        },
+        {
+          "criterionDigest": "sha256:2a1334911ea8",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestModuleABI.cpp",
+            "Tests/Fixtures/ModuleABI/MismatchedModule.cpp",
+            "SparkEngine/Source/Core/ModuleManager.cpp"
+          ],
+          "note": "ModuleABI_MismatchRejectedBeforeStaticConstructorInjectionOrFactory loads the real mismatched fixture and asserts that its sentinel (static ctor/DllMain/inject/factory) is never written."
+        },
+        {
+          "criterionDigest": "sha256:0bec21096bc0",
+          "state": "implemented",
+          "evidence": [
+            "Tests/PackageSmoke/TestSparkSDKComponentCompleteness.cmake",
+            "Tests/CMakeLists.txt",
+            "Tests/PackageSmoke/RunInstalledSDKTemplate.cmake",
+            "SparkSDK/README.md",
+            "CMakeLists.txt",
+            "Tests/Tools/test_sdk_component_completeness.py",
+            "SparkSDK/API-REFERENCE.md",
+            "SparkSDK/MIGRATION.md"
+          ],
+          "note": "SparkSDKComponentCompleteness checks public/version/ABI headers, ConfigVersion/targets, legal files, API/migration guidance and EmptyProject. SDKConsumer_InstalledEmptyProjectTemplate builds the installed sdk+tools example and checks its hashed sidecar against SparkGameFPS on Windows and Linux. New Linux execution and exact-SHA CI remain pending."
+        }
       ],
       "commands": [
         "cmake -S Tests/PackageSmoke -B /tmp/spark-sdk-consumer -DCMAKE_PREFIX_PATH=/tmp/spark-install",
@@ -1598,7 +2437,8 @@
       "testSelectors": [
         "SDKConsumer_*",
         "ModuleABI_*",
-        "ModuleVersion_*"
+        "ModuleVersion_*",
+        "SparkSDKComponentCompleteness"
       ],
       "requiredCiJobs": [
         "sdk-consumer-linux",
@@ -1640,21 +2480,18 @@
         "sdk-consumer-windows",
         "module-compatibility"
       ],
-      "plannedTestSelectors": [
-        "SDKConsumer_*",
-        "ModuleVersion_*"
-      ]
+      "plannedTestSelectors": []
     },
     {
       "id": "ENG-200",
       "title": "Complete the AngelScript and visual-script runtime lifecycle",
       "priority": "P0",
-      "status": "open",
+      "status": "in-progress",
       "blocking": true,
       "wave": 2,
       "area": "scripting",
       "owner": "unassigned",
-      "rationale": "Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too.",
+      "rationale": "Script objects/methods are cached, but entity identity and production start/update/collision dispatch are disconnected; multiple gameplay bindings are no-op or log-only, blocking VisualScript too. Owner decision OD-13 (2026-09-24, docs/readiness/OWNER-DECISIONS.md): this item is scheduled after the stable-v1 items and no stable-v1 capacity is assigned to it. It stays open until its own evidence exists.",
       "dependencies": [
         "RDY-010",
         "LIFE-200",
@@ -1688,8 +2525,66 @@
         "Hot reload follows documented state rules",
         "Graph-to-packaged-runtime gameplay loop passes"
       ],
+      "acceptanceStatus": [
+        {
+          "criterionDigest": "sha256:bb0380c76dc5",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200ScriptFaultsReal.cpp",
+            "Tests/TestENG200ScriptBindingsReal.cpp",
+            "Tests/TestEngineWiringReal.cpp",
+            "Tests/TestENG200ScriptAudioAnimationReal.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp",
+            "SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp",
+            "SparkEngine/Source/Engine/ECS/Components/AudioComponents.h",
+            "SparkEngine/Source/Core/EngineSetup.h",
+            "SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp",
+            "Tests/TestENG200ScriptRuntimeReal.cpp",
+            "GameModules/SparkGameVisualScript/Source/Core/Main.cpp",
+            "Tests/CMakeLists.txt"
+          ],
+          "note": "Engine-owned ScriptRuntimeSystem dispatches components; VisualScript no longer calls Start/Update. Regression covers movement, start-once, disabled and detach. playSound() queues ScriptAudioCues drained by AudioUpdateSystem; playAnimation() switches AnimationController and AnimationUpdateSystem advances it (TestENG200ScriptAudioAnimationReal, ScriptMediaBindingsReal). C++/audio/CI unverified."
+        },
+        {
+          "criterionDigest": "sha256:cd885ff23a2b",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200ScriptFaultsReal.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.cpp"
+          ],
+          "note": "The real AngelScriptEngine reports compile, runtime, constructor and sandbox-runaway faults with section:line diagnostics. The faulted script is disabled and not re-run, and this is asserted by trace counts."
+        },
+        {
+          "criterionDigest": "sha256:6b96a39373c4",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200ScriptHotReloadReal.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngineHotReload.cpp",
+            "SparkEngine/Source/Engine/Scripting/AngelScriptEngine.h",
+            "wiki/subsystems/Scripting-with-AngelScript.md"
+          ],
+          "note": "criterionDigest sha256:6b96a39373c4. Rules R1-R8 are documented on AngelScriptEngine::HotReloadModule and in the wiki. ScriptHotReload_ENG200_* (CTest ScriptHotReloadReal, 9 tests): same-name, same-type primitive, string and POD values carry over; handles and arrays are dropped and reported; retyped or removed fields are reported; a failed compile changes nothing; reload survives a cwd change."
+        },
+        {
+          "criterionDigest": "sha256:cec871256cec",
+          "state": "implemented",
+          "evidence": [
+            "Tests/TestENG200VisualScriptRuntimeReal.cpp",
+            "Tests/VisualScriptGameplayHarness.h",
+            "Tests/TestMOD390VisualScriptGameplayReal.cpp",
+            "Tests/CMakeLists.txt",
+            "GameModules/SparkGameVisualScript/README.md",
+            "wiki/subsystems/Visual-Scripting.md",
+            ".github/workflows/build.yml",
+            "Tests/run_visual_script_package.py",
+            "Tests/Tools/test_visual_script_package.py",
+            "GameModules/SparkGameVisualScript/Source/Core/Main.cpp"
+          ],
+          "note": "Advisory build.yml visual-script-package builds AngelScript and the VisualScript module, packages graphs through spark-cli, and launches the packaged host from a foreign cwd with autoplay and a one-win/exit-0 check. Python contracts are local harness proof only. The packaged executable launch and C++ build remain unrun; no exact-commit CI evidence."
+        }
+      ],
       "commands": [
-        "ctest --test-dir build/windows-shipping -L scripting-integration --output-on-failure --no-tests=error"
+        "ctest --test-dir build/windows-release -C Release -L scripting-integration --output-on-failure --no-tests=error"
       ],
       "testSelectors": [
         "ScriptLifecycle_*",
@@ -1705,8 +2600,8 @@
         "Per-frame script time/allocation budgets and runaway execution limits"
       ],
       "documentationUpdates": [
-        "wiki/subsystems/Scripting.md",
-        "wiki/gameplay-tools/Visual-Scripting.md"
+        "wiki/subsystems/Scripting-with-AngelScript.md",
+        "wiki/subsystems/Visual-Scripting.md"
       ],
       "readinessChanges": [
         "G11",
@@ -1721,7 +2616,8 @@
         "Unbounded scripts on simulation thread"
       ],
       "outOfScope": [
-        "Lua support unless separately contracted"
+        "Lua support unless separately contracted",
+        "Stable-v1 capacity; the item is scheduled after the stable-v1 items (OD-13)"
       ],
       "definitionOfDone": [
         "Lifecycle and bindings are real",
@@ -1731,14 +2627,9 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "scripting-integration",
-        "visual-script-package"
+        "scripting-integration"
       ],
-      "plannedTestSelectors": [
-        "ScriptLifecycle_*",
-        "ScriptBindings_*",
-        "VisualScriptRuntime_*"
-      ]
+      "plannedTestSelectors": []
     }
   ]
 }

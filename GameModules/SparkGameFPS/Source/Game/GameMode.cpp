@@ -6,8 +6,7 @@
  */
 
 #include "GameMode.h"
-#include "Utils/ContainerUtils.h"
-#include "Utils/Validate.h"
+#include "Core/FPSLog.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -19,7 +18,6 @@ namespace Spark
 
     bool GameMode::Initialize(const GameModeRules& rules)
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
         const bool validRules = rules.scoreLimit >= 0 && rules.roundLimit > 0 && std::isfinite(rules.timeLimit) &&
                                 rules.timeLimit >= 0.0f && std::isfinite(rules.respawnDelay) &&
                                 rules.respawnDelay >= 0.0f && std::isfinite(rules.damageMultiplier) &&
@@ -28,12 +26,11 @@ namespace Spark
                                 rules.speedMultiplier > 0.0f;
         if (!validRules)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Game, "Rejected invalid GameMode rules for '%s'",
-                            rules.modeName.c_str());
+            FPS_LOG_ERROR("Rejected invalid GameMode rules for '{}'", rules.modeName.c_str());
             return false;
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing GameMode: %s", rules.modeName.c_str());
+        FPS_LOG_INFO("Initializing GameMode: {}", rules.modeName.c_str());
         m_rules = rules;
         m_roundState = RoundState::WaitingForPlayers;
         m_matchActive = false;
@@ -106,8 +103,7 @@ namespace Spark
 
     void GameMode::StartMatch()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Starting match");
+        FPS_LOG_INFO("Starting match");
         m_matchActive = true;
         m_currentRound = 0;
         m_alphaScore = 0;
@@ -137,8 +133,7 @@ namespace Spark
 
     void GameMode::EndMatch()
     {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Ending match");
+        FPS_LOG_INFO("Ending match");
         m_matchActive = false;
         m_roundState = RoundState::MatchEnd;
         m_roundFSM.TransitionTo(RoundState::MatchEnd);
@@ -226,7 +221,7 @@ namespace Spark
 
     void GameMode::AddPlayer(const std::string& name, Team team)
     {
-        if (!Spark::ContainerUtils::Contains(m_playerScores, name))
+        if (!m_playerScores.contains(name))
         {
             PlayerScore score;
             score.playerName = name;

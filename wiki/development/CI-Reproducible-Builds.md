@@ -20,6 +20,109 @@ The Windows Shipping producer and the Linux trusted verifier must compute the sa
 
 `Build Matrix Verifier` accepts only `push` and `workflow_dispatch` builds on `Working`. Its workflow trigger filters the branch and its job conditions filter those event types. Pull-request and scheduled builds remain ordinary CI evidence and must not invoke the publication verifier as if they were accepted release sources. The verifier still independently checks repository, workflow, commit, run attempt, artifact, and receipt identity before publishing a status.
 
+### Installed native qualification fixtures
+
+`.github/scripts/qualify-installed-native.py` captures `source_sha` in
+`identity.json` during its build phase. Later SDK, ABI and dependency-closure
+phases require that same source identity, qualification mode and image hashes
+before starting a process. Compiler-free fixtures in
+`Tests/Tools/test_installed_native_runner.py` must include the captured source
+identity to reach the intended host-binding, timeout and closure checks. Missing
+or changed identities remain failures; do not relax the runner to accommodate
+an incomplete fixture.
+
+Reproduce the fixture checks with:
+
+```bash
+python3 -B Tests/Tools/test_installed_native_runner.py
+```
+
+The ABI10 weather workflow's source-contract job gates its Windows native job.
+Run every source-contract step in
+`.github/workflows/installed-weather-qualification.yml` before requesting native
+evidence; CMake, Ninja and PyYAML are required for those source checks. Passing
+them qualifies the orchestration checks only. Native product results must retain
+their separately pinned product and workflow commits, and do not certify Windows
+11, physical graphics, installer signing or release readiness.
+
+`FPSWeatherIntegration_RejectsWrongThreadWithoutMutation` covers both inactive
+and active weather integration. Worker calls must return refusal before reading
+game-thread state, and must leave the bound port and activation state unchanged.
+The owned save decoder's missing-fixture skip is classified in
+`Tests/test-warning-waivers.json`; its dedicated qualification runner still
+requires a real copied primary and rejects skipped decoding as evidence.
+The native decoder builds its canonical profile JSON object one string entry at
+a time. The vendored JSON API does not support implicit `std::unordered_map`
+conversion; keep the persisted profile keys and values as strings in the receipt.
+Cast its byte count to `std::uint64_t` explicitly: on macOS, `size_t` does not
+select the vendored JSON integer constructor unambiguously.
+Reflected scene rejection fixtures rebuild filtered objects and arrays instead
+of calling unsupported JSON `erase` overloads; retain every other field/entity.
+Installed lineage command binding accepts Windows executable path case aliases
+only when they identify the same physical file. `PATHEXT` can return `cmake.EXE`
+while CMake reports `cmake.exe`. Source pins, configuration, argument order and
+flag spelling remain exact; different or unresolvable tools must fail binding.
+Verify the complete configured command before compiling as well as afterward,
+so a binding mismatch fails before the expensive native build.
+Installed reflected-scene failures retain their specific reason on stderr when
+static engine code has an uninitialized module-local logger. An initialized
+logger still uses its configured structured sinks and filtering. Runtime camera
+FOV checks allow the existing `1e-6` relative numeric tolerance for the float
+degrees/radians round trip; authored scene fields remain exact, and missing,
+duplicate, non-finite or materially changed runtime values still fail.
+`SparkFPSGameCameraReloadReal` separately loads two authored legacy scenes through
+the exported FPS DLL `Game`, checks the live camera's changed FOV and other state,
+and verifies that a malformed reload retains the committed state. Its isolated
+staged assets and CPU initialization require no graphics device. Required Windows
+CTest executes it; compiling it in native qualification alone is not runtime proof.
+Documentation health allocates its results file with Python under the safe job
+`TMPDIR`; Apple's bare `mktemp` can choose `/var/folders` across a symlink and
+make every generator result unreadable under the strict no-reparse contract.
+The asset cooker fixture verifies invalid native filename bytes before claiming
+its UTF-8 rejection was exercised. Apple filesystems that refuse creation with
+an encoding error report that case as unexercised; unexpected I/O errors fail.
+Held-fire network tests wait for each input's applied sequence without advancing
+simulation time during socket dispatch, retaining the separate flood-limit test.
+`ModuleLifecycleRecordHost` selects all six production lifecycle-record cases.
+The Linux symbolication probe uses `-O0 -fno-omit-frame-pointer` so the actual
+signal-safe frame-chain walker can retain its caller. The canary still requires
+the exact fault location and a return frame in `main`; this is a fixture option,
+not a change to production crash capture or optimization.
+Fatal stderr diagnostics are best effort so an unread or closed pipe cannot
+block the crash report or its watchdog. Linux prepares a separate nonblocking
+open-file description during handler installation, preserving inherited flags.
+Other POSIX hosts emit these optional diagnostics only when stderr is already
+nonblocking. The private report and original fatal termination remain canonical;
+ordinary nonfatal diagnostics keep their existing behavior. The Linux canary
+checks full and closed stderr pipes, including the stalled-report timeout.
+Non-MSVC Debug builds optimize the pinned crypto dependency with `-O2` while
+retaining symbols, security flags and the ISA floor. The password verifier keeps
+its 600,000 rounds and the authenticator keeps its two-second guard. The Linux
+component regression checks actual compile commands and runs the existing hash
+cases. ASan explicitly uses `-g -Og` for Debug C/C++ code while keeping assertions,
+sanitizer instrumentation and the full-suite 1,800-second limit.
+
+Qualification workflows also participate in readiness ownership validation.
+The stdlib-only workflow parser accepts literal blocks (`|` / `|-`) for multiline
+strings; use those instead of wrapped plain or quoted scalars. When converting
+existing workflows, compare the complete parsed YAML values before and after,
+including command newlines, then check the strict parser against those values.
+Source pins, permissions, deadlines and triggers must retain their meanings.
+
+The mainline Windows Release CPU-floor gate uses
+`.github/scripts/extract_sde_archive.py` after verifying the pinned Intel SDE
+archive hash. Its single streaming XZ pass avoids the native Windows tar
+extraction timeout observed in Build run `37196542008`. Keep the five-minute
+setup limit and propagate extractor failures; the below-floor process test
+remains required. Extraction measurements are printed into the job log.
+
+The fuzz-policy structural gate requires every detected parser to have an
+accurate classification. `SceneManagerReflected.cpp` owns a second JSON read
+and gameplay adaptation beyond `DeserializeInto`; neither the reflected-world
+nor text-reader harness executes it. Its `reflected-gameplay-scene` inventory
+entry therefore remains blocked under SEC-120. A structural pass does not
+prove this adapter is fuzz covered or close the release gate.
+
 ## clang-format check (runs on every PR — job `check-format`)
 
 ```bash
@@ -75,6 +178,8 @@ cd ..
 ```
 
 There is also a `ci-linux-asan` CMake preset that bundles these flags if you prefer `cmake --preset ci-linux-asan`.
+
+The `--output-file` name above is only a local convenience. CI does not write `asan-ubsan-lsan-results.txt`. It runs the suite through `.github/scripts/run-sanitizer-tests.sh`, which writes `junit.xml`, `metadata.json`, `console.txt`, `report.txt` and `process-footer.txt` into `$SANITIZER_EVIDENCE_DIR`, and uploads that directory as `test-results-linux-asan`. The `module-evidence` job (RDY-010) downloads it to `build/module-evidence/sanitizer-asan/` and runs `verify-sanitizer-evidence.py verify-published` on it. `tools/module-evidence/validate_manifest.py` then consumes it as SparkGameFPS's required `sanitizer-report` evidence: the metadata must name the exact commit, carry an origin directory that matches that commit and its recorded run id/attempt, be a clean run with zero failures, and match the `junit.xml` digest; the `junit.xml` must record at least the 6900-testcase SparkTests floor (`SANITIZER_MIN_JUNIT_TESTCASES`, pinned by a test to the step's `--minimum-tests`); and it must record exactly the `FPSRespawn_*` tests that production-source files define (derived by `Tools/test_source_census.py`, pinned to the `SPARK_TEST_EXPECT_COUNT` of `FPSSinglePlayerSlice_RespawnProductionSource`), each once and passed. The same exact-set rule applies to SparkGameFPS's `junit-xml` binding (`build/SparkTests-junit.xml`), so a filtered, stale or merged run cannot stand in for the module's production tests. Only the preceding `verify-published` step binds the directory to the current workflow run id and attempt, so keep it ahead of the consumer.
 
 ## Linux GCC ThreadSanitizer — Debug (job `build-linux-tsan`)
 
@@ -145,29 +250,372 @@ ctest --test-dir build -C Release --output-on-failure --parallel --no-tests=erro
 
 Without sccache installed, omit the two `_LAUNCHER` flags. With sccache, keep `-DGENERATE_DEBUG_SYMBOLS=OFF`: Jolt's own `/Zi` would otherwise make sccache expect a PDB that `cl` (honouring the engine's later `/Z7`) never writes, and every Jolt translation unit fails with `sccache: encountered fatal error`. PCH is off because sccache cannot cache `/Yc` / `/Fp`; module scanning is off because no module units exist.
 
+Use a fresh build directory for each CMake executable, generator, compiler, or
+toolset. Do not run two configure processes against the same directory. A
+partially written compiler-information file can retain the compiler identity
+while losing the ABI and `CMAKE_CXX_COMPILE_FEATURES` results; the later
+`target_compile_features` diagnostic is then a stale-state symptom, not proof
+that MSVC lacks C++23 support. Re-run with `cmake --fresh` (or remove the
+directory) after changing the CMake installation or recovering an interrupted
+configure.
+
 CI installs sccache v0.17.0 from the GitHub release verified against a SHA-256 literal, keeps the cache in `SCCACHE_DIR` under `runner.temp` (split `actions/cache/restore` / `actions/cache/save` steps keyed like the Linux ccache steps; the save runs even when the job went red; `build/` is not restored), starts the server explicitly before configure, and reports the numbers in a `Print sccache stats` step. The engine selects embedded MSVC debug information (`/Z7`) through CMake policy CMP0141 before `project()`, which is what lets the configure-time try-compiles pass under the launcher.
 
 The advisory `build-windows-vs2026` job follows the same recipe inside the VS 2026 developer environment (vswhere `[18.0,19.0)`, default v145 toolset) without `-DBUILD_GAME_MODULES=ON`; it fails visibly when that toolchain is absent instead of reporting a green no-op. `build-windows-shipping` still configures through the `windows-shipping` preset (Visual Studio 17 2022 generator, v143) and uses no compiler cache.
+
+The build-matrix provenance checker records the absolute C++ compiler path in
+addition to the Visual Studio generator instance, archiver, and linker. It
+accepts only an absolute Windows x64 MSVC `cl.exe` path whose concrete toolset
+version agrees with the other recorded tools. This is provenance validation,
+not hosted reproducibility evidence: BLD-100 still requires two clean Windows
+Shipping builds and an externally verified comparison.
+
+### Shipping private symbols (BLD-100)
+
+`STRIP_DEBUG_SYMBOLS=ON` (both Shipping presets) keeps private symbols out of
+the runtime package. It no longer stops them from being produced:
+
+- **MSVC**: every image links with `/DEBUG` (objects already compile with
+  `/Z7`), so it carries a CodeView RSDS record, the PDB GUID and age that
+  identify its PDB. Outside Debug, `/PDBALTPATH:<name>.pdb` records only the PDB
+  file name; the name comes from `$<TARGET_PDB_FILE_NAME:...>`, not `%_PDB%`,
+  because the Visual Studio generator escapes `%` to `%%` in link options and
+  link.exe then recorded `%%%probe.pdb%%%` (reproduced 2026-09-27 with a probe
+  project; Ninja passed `%_PDB%` through intact). `/OPT:REF` and `/OPT:ICF` are
+  restated for every non-Debug configuration, because `/DEBUG` alone would
+  switch them off. `tools/check_shipping_configuration.py` reads a configured
+  tree's File API codemodel and fails when MinSizeRel is not a distinct
+  Shipping configuration: Shipping defines only in MinSizeRel, a per-configuration
+  artifact directory, and `/DEBUG`, `/Brepro` and a bare-name `/PDBALTPATH` on
+  the Shipping link. build.yml runs it on `build/windows-shipping`; the
+  `ShippingConfiguration_Distinct` CTest runs it on Visual Studio test trees.
+- **ELF (GCC/Clang)**: every image links with `-Wl,--build-id=sha1`. With
+  `STRIP_DEBUG_SYMBOLS=ON`, every target compiles with `-g` (the static
+  libraries hold most shipped code), and each shipped image target gets
+  `cmake/SparkSplitDebugLink.cmake` as its C/C++ `LINKER_LAUNCHER`. It runs the
+  link, then writes `<image>.debug` (`objcopy --only-keep-debug`) and strips the
+  image with a `.gnu_debuglink`. It runs inside the link step, so the module
+  `.sparkabi` hash and every `POST_BUILD` copy see the stripped image. Every
+  other image (SparkTests, test probes) links outside Debug with `-g0` and
+  `--strip-all` and gets no `.debug`; under LTO, link-time `-g0` keeps the
+  LTRANS stage from generating debug info (checked with GCC 13). MinGW keeps
+  `-s`, and Apple has no strip step.
+
+The PDBs and `.debug` files of the shipped image targets
+(`SPARK_SHIPPED_IMAGE_TARGETS` in the root `CMakeLists.txt`) install only into
+the `symbols` component. `CPACK_COMPONENTS_ALL` leaves that component out, so no
+package carries symbols:
+
+```bash
+cmake --install <build> --component runtime --prefix stage     # also tools, samples
+cmake --install <build> --component symbols --prefix symbols-stage
+python3 tools/shipping_symbol_manifest.py --images stage \
+    --symbols symbols-stage/symbols --output shipping-symbol-manifest.json
+```
+
+The manifest tool uses only the standard library. It maps each ELF image by
+build-id, `.gnu_debuglink` name and CRC-32 to one DWARF `.debug` file, and each
+PE image by RSDS GUID and age to one PDB: the GUID comes from the PDB info
+stream and the age from the DBI stream. It writes a closed
+`spark.shipping-symbol-manifest/1` JSON and writes nothing (exit 1) when any of
+these hold:
+
+- an image has no build ID, or still has DWARF or `.symtab`;
+- an image has no matching symbol file, or more than one;
+- a debuglink name or CRC does not match;
+- an RSDS record holds a path instead of a bare PDB name;
+- a symbol file sits in the runtime tree;
+- a symbol file maps to no image.
+
+`build-windows-shipping` runs it over the staged runtime/tools/samples
+components and uploads the PDBs and manifest as the separate
+`shipping-symbols-<sha>` artifact. Symbol-server hosting belongs to OPS-100.
+
+CTests: `ShippingManifest_SymbolManifestTool` runs
+`Tests/Tools/test_shipping_symbol_manifest.py`. It builds real gcc fixtures
+through the production launcher, and clang/lld-link PE+PDB fixtures
+cross-checked with `llvm-readobj` and `llvm-pdbutil`. It also checks that
+`SPARK_SHIPPED_IMAGE_TARGETS` names every image target installed by an
+`install(TARGETS)` rule in the root, `Spark*/`, `GameModules/` and `cmake/`
+CMake files, and that no `CPACK_COMPONENTS_ALL` list (root or
+`cmake/SparkCPackOptions.cmake`) names the symbols component.
+`ShippingManifest_PrivateSymbols` is registered in a `STRIP_DEBUG_SYMBOLS` ELF
+tree and in every MSVC tree with tests enabled (MSVC: Release, RelWithDebInfo
+and MinSizeRel only, because Debug links keep the absolute PDB path). Its body,
+`cmake/SparkStagePrivateSymbols.cmake`, installs the runtime/tools/samples and
+symbols components to separate roots under `<build>/shipping-symbol-stage` and
+maps every installed image, so it needs every installed target built. The local
+linux-shipping evidence is with `ENABLE_LTO=OFF`; a full LTO (preset default)
+build with `-g`, and its disk, memory and time on hosted runners, has not been
+measured. MSVC PDB output under `/Brepro` and the hosted job have not yet been
+observed.
+
+### Build-output reproducibility (BLD-100)
+
+`cmake/SparkReproducibleBuild.cmake` maps both roots out of optimized GCC/Clang
+outputs: `-ffile-prefix-map=<source>/=` and then `-ffile-prefix-map=<build>=.`
+(the later map wins, so it also covers a build tree inside the source tree).
+Without the build-root map every DWARF `comp_dir` (each target's binary
+directory) carried the build path, so builds made in different directories
+differed in `.debug_info` and, through the GNU build-id, in the stripped image.
+Under GCC LTO the LTRANS units compile at link time, so GCC also gets both maps
+as link options, and every compile gets `-frandom-seed=<OBJECT>`: without a
+seed GCC names the LTO IR sections of an object from the clock and pid, so even
+two builds in one directory produced different static libraries.
+
+Known limit: GCC's LTO IR (the members of static libraries such as
+`libSparkAssetPipelineCore.a`) still records the build directory; no prefix map
+rewrites it. Those members differ between trees in different directories,
+although the linked images and `.debug` files are equivalent.
+
+`tools/compare_build_outputs.py` compares builds with the standard library only:
+
+```bash
+python3 tools/compare_build_outputs.py manifest <root> --output a.json   # one tree
+python3 tools/compare_build_outputs.py compare a.json b.json --report r.json
+python3 tools/compare_build_outputs.py trees <root-a> <root-b>           # both at once
+```
+
+The `spark.build-output-manifest/2` manifest lists every ELF, PE, COFF object and `ar` file
+under the root: relative path, size, SHA-256, the identity (GNU build-id; COFF
+timestamp, RSDS GUID/age/PDB name and whether the image carries the `/Brepro`
+REPRO debug entry) and a SHA-256 per section or archive
+member. It holds no absolute path, so equivalent trees give byte-identical
+manifests. Regenerate older manifests: version 2 records normalization metadata
+and hashes archive members with their actual bytes. PDBs are not compared:
+the RSDS record in the image identifies them.
+The comparison exits 1 on any missing, extra or differing output and names the
+first differing section that is a cause (headers, the build-id note and the
+debuglink CRC only follow other changes). A PE image linked without `/Brepro`
+whose COFF timestamp differs is reported at `<pe-headers> (COFF timestamp)`:
+there the timestamp is the link time and the debug directory that repeats it
+is derived. Under `/Brepro` the timestamp is a content hash, so the content
+section is named instead. An empty or malformed tree exits 2.
+
+CTests (label `reproducibility`):
+
+- `ReproducibleBuild_CompareTool` runs `Tests/Tools/test_compare_build_outputs.py`
+  on gcc ELF, crafted PE and `ar` fixtures.
+- `ReproducibleBuild_LinuxToolTargets` (ELF trees with objcopy; `RUN_SERIAL`,
+  about 80 s) runs `compare_build_outputs.py two-tree`. It copies the source
+  tree (no `.git`, no `build/`) to `<build>/reproducible-build-trees/a/src` and
+  `.../tree-b/nested/src`, configures each with the linux-shipping settings
+  (MinSizeRel, LTO, `STRIP_DEBUG_SYMBOLS=ON`; `SPARK_STRICT_DEPS` stays OFF
+  because the copies have no `.git` for the third-party audit) and this tree's
+  compiler, with no compiler launcher and no `CFLAGS`/`CXXFLAGS`/`LDFLAGS`,
+  builds `SparkCooker`, and compares `bin/`: the stripped image and its
+  `.debug`. Before the build-root map both differed (`.debug_info`, and the
+  image's build-id). It has passed locally only with GCC 13.3. The inner
+  build uses the defaults (`ENABLE_LTO=ON`, the compiler's default standard
+  library), not the Clang lane's `ENABLE_LTO=OFF`/libc++ flags, and no hosted
+  GCC 14 or Clang lane has run it yet; one manual Clang two-tree run outside
+  the CTest was equivalent.
+
+The `reproducibility-windows` job checks the repository out twice (`tree-a` and
+`tree-b`), builds and installs the `windows-shipping` preset in each with no
+compiler cache, and compares the two install trees. The checkout names have
+equal byte lengths. Each manifest receives its native Windows build-root
+string through `--build-root`.
+
+Owner decision OD-24 permits one normalization: the exact build-root string
+inside `.debug$S` CodeView sections of COFF members of `.lib` archives is
+replaced with a fixed placeholder of the same length. The manifest records
+the affected members. Archive headers, member lengths, section layouts,
+other sections, image bytes and paths outside `.debug$S` remain exact.
+Different-length roots are rejected. Standalone COFF objects and archives
+with other extensions do not receive this normalization. This does not
+permit stripping debug sections or ignoring SDK libraries.
+
+The job remains `continue-on-error` and outside `required-ci-gate` until a
+hosted run proves equivalent trees. Local parser fixtures do not establish
+Windows Shipping reproducibility. A local MSVC `/Z7 /Brepro /bigobj` probe
+still differed in the COFF content-derived timestamp and `.debug$T` bytes
+after the permitted replacement. Those differences remain failures under
+OD-24; broadening the comparator to hide them is not permitted.
+
+### Windows CPU instruction checks
+
+`tools/check_isa_baseline.py` scans Windows PE images when each is given its
+matching PDB (`--pdb IMAGE=PDB`) and LLVM's `llvm-objdump` and `llvm-pdbutil`
+are available; a missing or mismatched PDB is a tool error. On Windows MSVC,
+`cmake/SparkIsaBaseline.cmake` registers `CpuFloor_IsaBaseline` from the root
+`SPARK_SHIPPED_IMAGE_TARGETS` inventory when the distribution CPU floor applies.
+It pairs each configured image with that configuration's `TARGET_PDB_FILE`.
+The custom target works with `BUILD_TESTS=OFF`; Windows Shipping CI invokes it
+after building the products. With tests enabled it also registers a CTest.
+Missing tools, missing files and remaining findings fail the scan. Existing ELF
+registration remains in `Tests/CMakeLists.txt`.
+
+On a local windows-shipping MinSizeRel build (LTO off, MSVC 14.44.35207,
+LLVM 22.1.8) all 12 configured first-party images (each scanned with its own
+build PDB) pass. The Microsoft runtime DLLs packaged under `redist/` have no
+build PDB and are not scanned. The earlier residual classes were
+resolved as follows:
+
+- libsodium's AVX2/AES-NI/AVX-512 variants and `sodium_init`'s XGETBV: no
+  longer compiled on MSVC (`cmake/SparkLibsodium.cmake`).
+- EVEX loops the auto-vectorizer adds behind `__isa_available >= 6`
+  (`cgltf_calc_index_bound`, the STL's `__std_minmax_*`) and AVX2 loops behind
+  `__isa_available >= 5` (`Sha256State::Finalize`): reviewed guard rules.
+- The out-of-line `std::_Countl_zero_lzcnt<unsigned __int64>`, reached only by
+  `_Checked_x86_x64_countl_zero`'s guarded tail jump: a caller-guarded entry,
+  re-proven on every scan.
+- MSVC x64 switch tables inside `.text` (all undecodable records, and bytes
+  that decoded as bogus VEX/EVEX instructions): proven data by
+  `tools/isa_code_map.py`.
+
+Per-image measurements are in `docs/readiness/BLD-100-PROGRESS.md`.
+
+The scanner binds each PE to its PDB by RSDS GUID and age. Every exemption is
+scoped to named ISA families and to reviewed provenance:
+
+- **Section contributions.** The DBI section contributions of the STL's
+  `vector_algorithms.obj` are exempt for AVX, AVX2 and LZCNT only. The module
+  must carry its exact Microsoft build path, and the PDB must say it came from
+  an MSVC 14.44.35207 library. The whole 5382-line source was reviewed. Every
+  above-floor intrinsic in it runs only behind `_Use_avx2()`, and the line
+  numbers are cited in the checker. This covers the code that has no
+  `S_GPROC32` record.
+- **Exact procedure/module pairs.** `memcpy`/`memset` are exempt for AVX/AVX2.
+  vcruntime's `__isa_available_init` and `Spark::Detail::ReadXcr0` are exempt
+  for XGETBV only; other XSAVE-family instructions still fail.
+- **Guard dominance.** This covers CRT/STL code the headers inline into
+  arbitrary procedures, and auto-vectorized loops: UCRT `wmemchr`/`wmemcmp`
+  behind `_Avx2WmemEnabled` (AVX/AVX2), `__isa_available >= 5` (AVX/AVX2 and
+  LZCNT) and `__isa_available >= 6` (only `vpmaxuq`/`vpminuq`, AVX512F/VL).
+  The vcruntime `__isa_available_init` disassembly was reviewed for what each
+  level proves. Such an instruction is exempt when the guard edge is the only way to
+  reach it from its procedure's entry. The analysis builds the procedure's
+  control-flow graph from the disassembly. It fails closed on indirect jumps,
+  guards in callers, unmatched compare shapes, undecodable bytes and code with
+  no procedure record. Guard storage must fit inside the section's virtual
+  data extent, including the loader's zero-filled tail.
+- **Caller-guarded procedures.** `REVIEWED_CALLER_GUARDED_PROCEDURES` names
+  out-of-line procedures that only guarded callers reach. An entry holds only
+  when every code reference is a direct branch or call that a guard rule
+  dominates, the address is never taken, and no data section contains it.
+
+**Data in code.** Before classification, `tools/isa_code_map.py` rebuilds each
+procedure's instruction stream around the MSVC switch tables it can prove. The
+dispatch must match MSVC's `lea image base; [movzbl index table]; movl
+RVA(%base,%idx,4); add %base; jmp *reg` idiom, with the image base reaching
+every use. The extent comes from the bound check. Where MSVC omits the bound
+(`std::variant`), it comes from the run of entries that name instruction
+starts. Every entry must land on an instruction of the rebuilt stream. No
+branch may target a table, and no reachable instruction may fall into one. The
+table set must be a fixed point of re-reading the rebuilt stream. The stream
+is re-decoded where the sweep fell out of step. Bytes nothing explains stay
+undecodable and fail.
+
+A table is also rejected, and a guarded block's exemption withdrawn, when the
+bytes are reached as code from **outside** the procedure. The scanner collects
+image-wide code entry points -- direct branch/call targets (from the rebuilt
+streams, so table bytes do not masquerade as branches), exception handlers,
+exports, base-relocation pointees and the guard-CF table -- and treats an entry
+inside a table, or strictly inside a guarded procedure, as an alternate entry.
+`.pdata` BeginAddress is excluded (MSVC gives a jump table its own
+RUNTIME_FUNCTION). A computed indirect target is resolved by basic-block
+dataflow -- an immediate image address materialized into a register
+(movabs/mov/lea, constant add/sub/inc/dec, and the mov-RVA-plus-image-base
+idiom) that reaches `jmp *reg` / `call *reg`, or is stored while the procedure
+has an indirect branch -- and counts as an entry (rejecting a table, seeding a
+guard root, or withdrawing the caller-guard exemption). A bare data constant
+that merely coincides with a code address is not an entry; separately, if such a
+constant lands inside proven-table bytes, those bytes are decoded and the table
+is rejected only when they form an above-floor instruction (undecodable table
+data is kept; a computed jump into it is caught as an entry). Finally,
+`_verify_coverage` requires the classified instructions, proven tables and
+padding to tile every executable file-backed byte with no gap, so a record
+without raw bytes (unknown size) fails rather than being skipped.
+
+The reviewed CRT/STL exemptions (vector_algorithms, memcpy/memset,
+`__isa_available_init` XGETBV, the inline guards and the caller-guarded LZCNT
+helper) are granted only when the PDB's sole observed MSVC toolset is the
+reviewed 14.44.35207; otherwise they become violations and the report prints a
+"re-review for this toolset" note. The scanner's threat model is
+compiler-generated MSVC code from this repository's sources: direct branches,
+structural pointers and basic-block-local computed targets are resolved;
+interprocedural or memory-carried computed targets in a fixed-base image are
+not.
+
+The scanner reads raw instruction bytes, so an EVEX-encoded xmm instruction
+counts as AVX-512 and never as AVX. A VEX instruction is classified by an
+explicit allow-list of the AVX/AVX2 mnemonics; anything outside it fails closed
+as its own feature, so AVX-VNNI (`vpdpbusd`), AVX-IFMA, AVX-NE-CONVERT, VAES,
+VPCLMULQDQ, GFNI and XOP cannot inherit an AVX/AVX2 exemption.
+Mask-register instructions include k0.
+LLVM's separate prefix records are joined only to contiguous instruction bytes.
+Undecodable bytes remain failures and are reported separately from identified
+above-floor instructions. FMA, unreviewed AVX-512, BMI, other extensions and
+unknown runtime functions remain failures under these PE mechanisms. `--allow-symbol` affects ELF only. New toolchain or
+runtime variants need a new review.
+
+`CpuFloor_IsaBaselineChecker` covers linked PE fixtures, the PDB contribution
+and procedure parsers, the guard analysis, the switch-table proofs and the
+caller-guarded entries, using synthetic `llvm-objdump` and `llvm-pdbutil` text. Native runtime fixture passes establish local scanner
+behavior. They do not replace an engine image scan or execution on below-floor
+hardware.
 
 ## macOS (job `build-macos`, `continue-on-error`)
 
 ```bash
 cmake --preset macos-release
-cmake --build build --parallel $(sysctl -n hw.logicalcpu)
-cd build && ./bin/SparkTests && cd ..
+cmake --build build/macos-release --parallel $(sysctl -n hw.logicalcpu)
+./build/macos-release/bin/SparkTests
 ```
+
+## macOS Shipping (job `build-macos-shipping`, `continue-on-error`)
+
+`build-macos` configures by hand, so this job is the only one that proves the
+shipped macOS configuration (MinSizeRel, arm64, no editor or dev tools, no
+tests) still configures, builds and installs. It then checks that the staged
+engine records `SPARK_MACOS_MIN_VERSION` as its minimum OS:
+
+```bash
+cmake --preset macos-shipping
+cmake --build --preset macos-shipping --parallel $(sysctl -n hw.logicalcpu)
+cmake --install build/macos-shipping --prefix stage --component runtime
+python3 tools/check_macos_min_version.py --binary stage/bin/SparkEngine
+```
+
+It is advisory and not a `required-ci-gate` dependency until a hosted run is
+green; `macos_shipping_leg_errors()` in
+`.github/scripts/test-workflow-failure-propagation.py` keeps it present,
+preset-driven and advisory.
 
 ## MinGW + Wine (job `build-linux-mingw-wine`, `continue-on-error`)
 
-Cross-compiles the Windows D3D11 code on Linux and runs it under Wine:
+This experimental lane runs only on manual `workflow_dispatch`. It is advisory
+and targets CPU rendering for GPU-less servers and agents in both the engine
+and editor. The last documented hosted run built but failed Wine tests; the
+new runtime smokes have no current local or exact-commit hosted pass.
 
 ```bash
-cmake --preset linux-mingw-release
-cmake --build build --parallel $(nproc)
-tools/wine-run.sh build/bin/SparkTests.exe
+# From the Linux/WSL checkout root; initialize the recorded submodules first.
+git submodule update --init --recursive
+cmake --preset linux-mingw-release -DBUILD_TESTS=ON -DENABLE_EDITOR=ON
+cmake --build build/linux-mingw-release --target SparkEngine SparkEditor --parallel 2
+cmake --build build/linux-mingw-release --parallel 2
+
+# Use a dedicated prefix. --dxvk-only verifies the archive and copies its x64 DLLs here.
+export WINEPREFIX="$PWD/build/linux-mingw-release/.wineprefix-mingw"
+xvfb-run -a bash tools/wine-run.sh --setup-only
+bash tools/setup-mingw-wine.sh --dxvk-only
+
+# Each command invokes xvfb-run + Wine + pinned DXVK + Lavapipe internally.
+python3 .github/scripts/mingw-wine-smoke.py engine
+python3 .github/scripts/mingw-wine-smoke.py editor
+export SPARK_TEST_EXCLUDE="$(python3 .github/scripts/mingw-wine-smoke.py exclusions)"
+python3 .github/scripts/mingw-wine-smoke.py tests
+python3 .github/scripts/mingw-wine-smoke.py summary
 ```
 
-See the project's MinGW/Wine setup notes for the full toolchain install (`tools/setup-mingw-wine.sh`).
+The runner requires fresh captures/command audits, editor successful presentation
+counts, pinned DXVK CPU-device logs, clean exits and the passing-test floor (`MINIMUM_TESTS=7500`)
+with `--warn-is-error`. The job emits an always-on stage summary and artifact.
+The [MinGW guide](MinGW-Wine-Cross-Compilation.md) lists prerequisites and every
+Wine-only exclusion. Native Windows tests are unchanged. No nightly trigger is
+added without three consecutive local passes.
 
 ## Prompt validation (runs on every PR — job `validate-prompts`)
 
@@ -179,10 +627,90 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
 
 - `check-thirdparty-manifest` — `./tools/check-thirdparty-manifest-sync.sh`
 - `coverage` — GCC Debug with `--coverage` + lcov, per-subsystem thresholds
-- `clang-tidy` (`continue-on-error`) — Clang Debug static analysis
+- `clang-tidy` — Clang Debug static analysis over every shipped-product
+  translation unit; configure/compile failures block, and the diagnostic
+  budget ratchet (below) blocks any change in per-check diagnostic counts
 - `todo-count` — fails if TODO count exceeds threshold (20)
 - `build-installer` — builds the `SparkInstaller` target
 - `report-ci-errors` — aggregates `ci-errors-*` artifacts from failed jobs; findings from advisory lanes (job-level `continue-on-error`, e.g. `build-linux-msan`) are listed but do not fail the report. The reporter is loaded from the trusted `Working` checkout, so a change to it takes effect only after it lands there
+
+To verify CI-100's required-job failure propagation on the `Working` ref, run
+`gh workflow run build.yml --ref Working -f simulate_required_job_failure=true`. The manual-only input deliberately fails
+the required `validate-ci-tools` job; `Required CI Gate` must then fail as well.
+This is a red control run and cannot qualify a release commit.
+
+## clang-tidy diagnostic budget ratchet (CI-110, job `clang-tidy`)
+
+The blocking inventory includes `SparkAssetPipelineCore/src` and
+`SparkCrashReporter/src`; the workflow failure-propagation contract pins both
+roots. Measure newly covered translation units with Ubuntu 24.04 clang-tidy 18,
+the lane's configure flags and compile database, and the repository `.clang-tidy`.
+Prefer behavior-preserving fixes, add only measured new-file budget counts,
+never raise existing entries, and record provenance in `measuredAt`. A focused
+log checked against a projected budget proves those files only; the complete
+inventory remains the full static-analysis gate.
+
+`--warnings-as-errors=""` keeps a single diagnostic from failing the analysis,
+so `Tools/clang_tidy_budget.py` turns the diagnostic stream into a ratchet
+against the committed `Tools/clang-tidy-budget.json`. The run step writes one
+log per translation unit (parallel workers never interleave partial lines),
+checks that there is a log for every translation unit, and concatenates them in
+sorted order. The budget step then deduplicates diagnostics by
+repository-relative path, line, column, check and message (a header reported by
+many translation units counts once), counts them per file and check, and fails
+when:
+
+- a (file, check) entry reports more diagnostics than its budget (a
+  regression; the error names the file and lists its diagnostics);
+- a (file, check) pair that is not in the budget reports anything;
+- an entry reports fewer than its budget (the budget is stale: lower it in the
+  same change so the cleanup cannot be spent by a later regression elsewhere);
+- the clang-tidy major version differs from the budget's
+  `clangTidyMajorVersion` (18 on ubuntu-24.04).
+
+Reproduce the lane locally (ubuntu-24.04 packages: `clang-tidy`, `libc++-dev`,
+`libc++abi-dev`), with the CI configure line and `-B <dir>` outside the repo:
+
+```bash
+cmake -S . -B /tmp/tidy-build -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_CXX_FLAGS="-stdlib=libc++" -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++" \
+  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+# Build the file list and per-TU logs exactly as the "Run clang-tidy" step does
+# (with -p /tmp/tidy-build in place of -p build), concatenate them into
+# clang-tidy-output.log, then:
+clang-tidy --version > clang-tidy-version.txt
+python3 Tools/clang_tidy_budget.py check --log clang-tidy-output.log \
+  --clang-tidy-version-file clang-tidy-version.txt
+```
+
+To accept a reviewed change (lowering after a cleanup, or a deliberate raise),
+download the lane's `clang-tidy-output` artifact (the log plus
+`clang-tidy-version.txt`) and regenerate; `--repo-root` is the checkout the log
+was produced in:
+
+```bash
+python3 Tools/clang_tidy_budget.py update --log clang-tidy-output.log \
+  --clang-tidy-version-file clang-tidy-version.txt \
+  --repo-root /home/runner/work/SparkEngine/SparkEngine --measured-at <commit-or-run>
+```
+
+A local measurement is only valid when it runs over the exact tree CI will
+check out. Never measure the shared working tree: uncommitted edits by other
+agents change counts, and an untracked source file becomes a budget entry that
+a clean checkout reports as stale. Export the commit (`git archive <sha> | tar
+-x -C <dir>`), link the submodule directories in, point a copy of
+`compile_commands.json` at the export, run clang-tidy there, and pass the
+export as `--repo-root`. Every commit that changes C++ under the analyzed roots
+must carry the matching budget update, because an exact ratchet reports both
+new and removed diagnostics.
+
+`Tests/Tools/test_clang_tidy_budget.py` (run by `validate-ci-tools`) covers the
+regression, unbudgeted-check, stale-budget, toolchain-mismatch, empty-log and
+malformed-budget paths, rejects budget entries for files git does not track,
+and pins the workflow wiring. A full local run of the
+955 translation units takes hours on a loaded 4-core machine.
 
 ## Notes
 
@@ -197,13 +725,17 @@ See the project's MinGW/Wine setup notes for the full toolchain install (`tools/
   - **Fixed a broken shell construct** in the ASan/TSan/MSan run lines: the source wrote `ENV=... cd build && ./bin/SparkTests` which applies the env var to `cd`, not to the test binary. Rewritten as `cd build` then the env-prefixed `./bin/SparkTests` run, matching how CI actually invokes it.
   - Aligned the LSan suppressions path to `../Tests/lsan_suppressions.txt` (relative to `build/`); verified `Tests/lsan_suppressions.txt` and `Tests/msan_ignorelist.txt` exist.
   - Removed the source's prior CTest-plus-`SparkTests` combo from the GCC/Clang jobs — CI runs `./bin/SparkTests` directly there; clarified where CTest actually runs (Windows/macOS matrix).
-  - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.).
+  - Output filenames updated to match current CI (`asan-ubsan-lsan-results.txt`, etc.). Corrected 2026-09-24: CI's ASan evidence is the `run-sanitizer-tests.sh` directory (`junit.xml` + `metadata.json`), not a results `.txt` file.
   - Added the new `ci-linux-asan` / `ci-linux-tsan` presets as alternatives.
   - Noted MSan builds only the `SparkTests` target in CI; added `|| true` to match CI (2026-09-06: the recipe now builds the MSan-instrumented libc++ first and runs with `halt_on_error=1`, so the `|| true` was dropped again).
   - Added sccache/`continue-on-error` notes for the Windows jobs and the v145 VS 2026 variant.
   - Windows VS 2022 / VS 2026 recipes switched to Ninja Multi-Config + sccache (2026-09-06); the Visual Studio-generator configure now applies only to `build-windows-shipping`'s preset.
   - Added the jobs that did not exist in the source: `check-thirdparty-manifest`, `coverage`, `clang-tidy`, `todo-count`, `build-installer`, `report-ci-errors`, plus the macOS and MinGW-Wine reproduction recipes.
   - Noted the Linux GCC job uses gcc-14/g++-14.
+  - 2026-09-29: Windows CPU instruction checks now describe the vector_algorithms section-contribution ranges, the guard-dominance analysis and the XSAVE exemptions (BLD-100). Measured on local MSVC 14.44.35207 Release images, not on a hosted run.
+  - 2026-09-27: added the advisory `build-macos-shipping` job (PLT-220), the first lane that configures the `macos-shipping` preset; authored and structurally tested only, with no hosted macOS run yet.
+  - 2026-09-26: added the CI-110 clang-tidy diagnostic budget ratchet (per-TU logs, `Tools/clang_tidy_budget.py`, `Tools/clang-tidy-budget.json`); the committed budget was measured locally with Ubuntu clang-tidy 18.1.3 and the lane's configure line, not yet on a hosted run.
+  - 2026-09-25: added build-output reproducibility (BLD-100): the build-root prefix map, the GCC LTO seed, `tools/compare_build_outputs.py`, the `ReproducibleBuild_*` CTests and the advisory `reproducibility-windows` job, measured locally with GCC 13.3.
 
 ## Related Pages
 
@@ -253,3 +785,31 @@ Owners must provision the trusted publisher certificate identity and a secure si
 The diagnostic JSON records the exact source commit, artifact SHA-256 values, publisher and timestamp certificate subjects/thumbprints, native signature status, and pass/failure. Each file is hashed before and after the native signature query; a second workflow check requires the same bytes after MSI qualification and immediately before package upload. Diagnostics are retained on failure as well as success. Injected-process tests cover rejected status, catalog signatures, mismatched signer, absent timestamp, malformed responses, process failures, file substitution, and selection defects. Windows-only unsigned-fixture subtests exercise the real PowerShell command independently for EXE and MSI in ordinary VS 2022 Release PR CI before compilation and early in the stable release job; local Linux runs skip them. A second-artifact-only rejection fixture also proves that a valid EXE result cannot hide an unsigned MSI.
 
 This is a bounded first slice of REL-110, which remains open. It verifies only the outer NSIS EXE and MSI; it does not verify ZIP contents or internal PE payload signatures, prove NSIS installation behavior, provide independent consumer verification, or complete signing, scanning, protected approval, or Windows 11 qualification. Native signed-artifact success evidence remains pending the owner's signing setup and hosted run.
+
+## Bounded diagnostics and successful two-tree cleanup
+
+Windows SDE installation has a five-minute step limit and logs download,
+digest verification, extraction and executable-validation boundaries. The pinned
+URL/hash and exactly-one-executable requirement remain. Timeout is a failure,
+not CPU-floor evidence; these markers do not repair an unknown installation hang.
+
+The comparator cleans up the actual `a`/`b` layout for permitted COFF build-root
+normalization and `a`/`tree-b` in ordinary mode only after an equivalent result.
+Failed comparisons retain both trees. This corrects successful cleanup without
+changing byte comparison, OD-24 normalization or unresolved archive differences.
+
+Windows Shipping also retains `coff-diagnostics.json`, capped at 1 MiB, alongside
+the unchanged comparison report. It inspects one differing ordinary member per
+static library and reports section hashes, header hashes and remaining bytes.
+Unavailable inspection is explicit and preserves the comparison result. These
+hashes locate differences; they do not prove their cause or permit additional
+normalization. The cap applies to this JSON, not the complete hosted artifact.
+
+Shipping retains a separate diagnostic-only JSON bundle for parity findings,
+inventory and the pending receipt when present. Its provenance records missing
+inputs explicitly; missing receipts are never synthesized. The bundle caps JSON
+at 12 MiB expanded and its inner ZIP at 960 KiB. Retrieval still requires checking
+the hosted outer artifact against the approved 1 MiB download cap and accounting
+for both archive layers. Existing full products, validators and failures remain.
+Unreviewed findings are labelled FINDINGS; only an exact reviewed baseline earns
+REVIEWED FINDINGS. No diagnostic bundle is release acceptance evidence.

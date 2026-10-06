@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -212,6 +213,7 @@ class SnapshotSafetyTests(unittest.TestCase):
             with mock.patch.object(vai, "MAX_ENTRY_COUNT", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
+
             with mock.patch.object(vai, "MAX_FILE_BYTES", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
@@ -221,6 +223,315 @@ class SnapshotSafetyTests(unittest.TestCase):
             with mock.patch.object(vai, "MAX_DIRECTORY_ENTRY_COUNT", 1):
                 _, errors = vai.scan_directory(root)
                 self.assertTrue(any(e.category == "resource-limit" for e in errors))
+
+
+class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
+    """Exercise the installed-package CMake asset-integrity helper contract."""
+
+    HELPER = REPO_ROOT / "Tests" / "PackageSmoke" / "ValidateInstalledFPSAssets.cmake"
+
+    def _fixture(
+        self, temporary: str | os.PathLike[str], license_id: str = "CC0-1.0",
+        extra: dict[str, bytes] | None = None,
+    ) -> Path:
+        # The helper applies the stable-v1 package profile, so the fixture is a
+        # schema v2 manifest whose entries match a reviewed source manifest.
+        # The source manifest lives in a fixture checkout whose stable-v1
+        # profile definition makes payload.bin (plus any extra files) the whole
+        # asset closure (RDY-020).
+        assets = Path(temporary) / "Assets"
+        assets.mkdir(parents=True)
+        payload = b"installed FPS package fixture\n"
+        files = {"payload.bin": payload, **(extra or {})}
+        checkout = Path(temporary) / "checkout"
+        for relative in ("Assets", "tools/asset-integrity", "GameModules/Fixture/Source", "Engine/Source"):
+            (checkout / relative).mkdir(parents=True)
+        # The closure derivation follows scene references in the checkout's copy.
+        for base in (assets, checkout / "Assets"):
+            for relative, data in files.items():
+                (base / relative).parent.mkdir(parents=True, exist_ok=True)
+                (base / relative).write_bytes(data)
+        (checkout / "tools/asset-integrity/package-profiles.json").write_text(json.dumps({
+            "version": 1,
+            "profiles": {"stable-v1": {
+                "modules": ["Fixture"],
+                "engineSources": [{"path": "Engine/Source/", "reason": "Fixture engine code"}],
+                "seeds": [{"path": relative, "reason": "Installed-package helper fixture payload"}
+                          for relative in sorted(files)],
+                "unshippedReferences": [],
+            }},
+        }), encoding="utf-8")
+        (checkout / "GameModules/module-content-inventory.json").write_text(json.dumps({"modules": [{
+            "name": "Fixture",
+            "sourceDirectory": "GameModules/Fixture/Source",
+            "profileApplicability": {"stable-v1": "required"},
+        }]}), encoding="utf-8")
+        manifest = {
+            "version": 2,
+            "algorithm": "sha256",
+            "root": "Assets",
+            "fileCount": len(files),
+            "entries": [{
+                "path": relative,
+                "sha256": digest(files[relative]),
+                "size": len(files[relative]),
+                "license": license_id,
+                "provenance": "Installed-package helper fixture",
+            } for relative in sorted(files)],
+        }
+        (assets / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
+        (checkout / "Assets" / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
+        return assets
+
+    def _run_helper(self, assets: Path) -> subprocess.CompletedProcess[str]:
+        cmake = shutil.which("cmake")
+        self.assertIsNotNone(cmake, "cmake is required for installed-package helper tests")
+        return subprocess.run(
+            [
+                cmake,
+                f"-DSPARK_ASSETS_ROOT={assets}",
+                f"-DSPARK_ASSET_VERIFIER={SCRIPT}",
+                f"-DSPARK_ASSET_SOURCE_MANIFEST={assets.parent / 'checkout' / 'Assets' / vai.MANIFEST_FILENAME}",
+                "-P",
+                str(self.HELPER),
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+
+    CRATE_OBJ = b"o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+    CRATE_SCENE = b"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel=Assets/Models/crate.obj\n"
+
+    def test_installed_package_asset_helper_accepts_matching_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(
+                temporary, extra={"Models/crate.obj": self.CRATE_OBJ, "Scenes/arena.scene": self.CRATE_SCENE})
+            result = self._run_helper(assets)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("asset integrity passed: OK: 3 entries verified", result.stdout + result.stderr)
+
+    def test_installed_package_asset_helper_rejects_a_closure_over_nothing(self) -> None:
+        # ENG-220: every hash matches and the reference verifier exits 0, but no
+        # scene or material was staged, so the closure checked nothing. The
+        # FPS package ships authored scenes; an empty closure is not a pass.
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self._run_helper(self._fixture(temporary))
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("asset integrity passed", output)
+        # CMake wraps FATAL_ERROR text, so match across the line breaks.
+        self.assertRegex(output, r"reference closure checked nothing \(0\s+references\s+in\s+0\s+scene")
+
+    def test_installed_package_asset_helper_checks_scene_reference_closure(self) -> None:
+        crate = b"o crate\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"
+        for model, accepted in (("Assets/Models/crate.obj", True), ("crate.obj", False)):
+            with self.subTest(model=model), tempfile.TemporaryDirectory() as temporary:
+                scene = f"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel={model}\n".encode()
+                assets = self._fixture(temporary, extra={"Models/crate.obj": crate, "Scenes/arena.scene": scene})
+                result = self._run_helper(assets)
+                output = result.stdout + result.stderr
+                if accepted:
+                    self.assertEqual(result.returncode, 0, output)
+                    self.assertIn("reference closure passed: OK: 1 references in 1 scene", output)
+                else:
+                    # The hash and closure-profile checks accept the bytes; only
+                    # the reference check sees that the runtime cannot resolve them.
+                    self.assertNotEqual(result.returncode, 0, output)
+                    self.assertIn("Installed FPS asset reference closure failed", output)
+                    self.assertIn("Scenes/arena.scene:6: model='crate.obj' is not an Assets/-rooted path", output)
+
+    def test_installed_package_asset_helper_fails_hashes_before_references(self) -> None:
+        # A tampered payload plus a broken reference must stop at the hash step:
+        # closure is only meaningful over bytes already proven to be the reviewed ones.
+        scene = b"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel=Assets/Models/absent.obj\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary, extra={"Scenes/arena.scene": scene})
+            (assets / "payload.bin").write_bytes(b"tampered package payload\n")
+            result = self._run_helper(assets)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("Installed FPS asset integrity validation failed", output)
+        self.assertNotIn("reference closure", output)
+
+    def test_installed_package_asset_helper_rejects_noassertion_asset(self) -> None:
+        # OD-09: the stable-v1 package must not ship an asset without a license record.
+        with tempfile.TemporaryDirectory() as temporary:
+            result = self._run_helper(self._fixture(temporary, license_id="NOASSERTION"))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"\[profile-excluded\] payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_missing_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / vai.MANIFEST_FILENAME).unlink()
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)manifest")
+
+    def test_installed_package_asset_helper_rejects_missing_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "payload.bin").unlink()
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)missing.*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_tampered_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "payload.bin").write_bytes(b"tampered package payload\n")
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(hash|size).*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_case_mismatched_manifest_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            manifest = assets / vai.MANIFEST_FILENAME
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data["entries"][0]["path"] = "Payload.bin"
+            manifest.write_bytes(vai.manifest_bytes(data))
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(missing|undeclared).*payload\.bin")
+
+    def test_installed_package_asset_helper_rejects_undeclared_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(temporary)
+            (assets / "undeclared.bin").write_bytes(b"undeclared package payload\n")
+            result = self._run_helper(assets)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)undeclared.*undeclared\.bin")
+
+    def test_installed_package_asset_helper_rejects_link_like_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            assets = self._fixture(temporary)
+            outside = root / "outside"
+            outside.mkdir()
+            (outside / "payload.bin").write_bytes(b"external package payload\n")
+            linked = assets / "linked"
+            create_reparse(linked, outside)
+            try:
+                result = self._run_helper(assets)
+            finally:
+                remove_reparse(linked)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertRegex(result.stdout + result.stderr, r"(?i)(reparse|symlink|junction).*linked")
+
+    def test_installed_fps_package_wires_asset_helper_before_module_validation(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        text = package_script.read_text(encoding="utf-8")
+        helper_position = text.find("ValidateInstalledFPSAssets.cmake")
+        module_position = text.find("ValidateStagedPackageExecutables.cmake")
+        self.assertGreaterEqual(helper_position, 0, "installed FPS package must invoke asset helper")
+        self.assertGreaterEqual(module_position, 0, "installed FPS package must invoke module validator")
+        self.assertLess(
+            helper_position,
+            module_position,
+            "asset integrity must be validated before module validation",
+        )
+
+    @staticmethod
+    def _pe_closure_contract_violations(text: str) -> list[str]:
+        """ENG-220: the installed FPS package must run the PE import closure for
+        every redistributable configuration and may skip it only for Debug."""
+        violations = []
+        start = text.find('if(SPARK_CONFIG STREQUAL "Debug")')
+        end = text.find("\nendif()", start)
+        if start < 0 or end < 0:
+            return ["no configuration switch around the PE import closure"]
+        block = text[start:end]
+        branches = block.split("\nelse")
+        if len(branches) != 3:
+            return [f"expected Debug / redistributable / unknown branches, found {len(branches)}"]
+        debug, redistributable, unknown = branches
+        if "pe_import_closure.py" in debug:
+            violations.append("Debug branch runs the closure the Debug CRT cannot pass")
+        if 'MATCHES "^(Release|MinSizeRel|RelWithDebInfo)$"' not in redistributable:
+            violations.append("redistributable branch does not name Release, MinSizeRel and RelWithDebInfo")
+        if "tools/pe_import_closure.py\" --list" not in redistributable:
+            violations.append("redistributable branch does not run pe_import_closure.py --list")
+        for image in ("bin/SparkEngine.exe", "bin/SparkGameFPS.dll"):
+            if image not in redistributable:
+                violations.append(f"closure coverage of {image} is not required")
+        if not unknown.lstrip().startswith("()") or "FATAL_ERROR" not in unknown:
+            violations.append("an unknown configuration does not fail")
+        return violations
+
+    def test_installed_fps_package_runs_pe_closure_for_every_redistributable_config(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        text = package_script.read_text(encoding="utf-8")
+        self.assertEqual(self._pe_closure_contract_violations(text), [])
+        # The contract must catch the regressions it exists for.
+        removed = text.replace("tools/pe_import_closure.py\" --list", "tools/removed.py\"")
+        self.assertIn("redistributable branch does not run pe_import_closure.py --list",
+                      self._pe_closure_contract_violations(removed))
+        release_skipped = text.replace('"^(Release|MinSizeRel|RelWithDebInfo)$"', '"^(RelWithDebInfo)$"')
+        self.assertIn("redistributable branch does not name Release, MinSizeRel and RelWithDebInfo",
+                      self._pe_closure_contract_violations(release_skipped))
+        silent_unknown = text.replace(
+            "message(FATAL_ERROR\n        \"SPARK_CONFIG '${SPARK_CONFIG}'",
+            "message(STATUS\n        \"SPARK_CONFIG '${SPARK_CONFIG}'")
+        self.assertNotEqual(silent_unknown, text)
+        self.assertIn("an unknown configuration does not fail", self._pe_closure_contract_violations(silent_unknown))
+
+    def test_installed_fps_package_wires_d3d11_smoke_after_module_validation(self) -> None:
+        package_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSPackage.cmake"
+        smoke_script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
+        package_text = package_script.read_text(encoding="utf-8")
+        smoke_text = smoke_script.read_text(encoding="utf-8")
+        module_position = package_text.find("ValidateStagedPackageExecutables.cmake")
+        d3d11_position = package_text.find("RunInstalledFPSD3D11.cmake")
+        save_position = package_text.find("RunInstalledFPSSaveReload.cmake")
+        self.assertGreaterEqual(module_position, 0, "installed FPS package must invoke module validator")
+        self.assertGreaterEqual(d3d11_position, 0, "installed FPS package must invoke D3D11 smoke")
+        self.assertGreaterEqual(save_position, 0, "installed FPS package must retain save/reload smoke")
+        self.assertLess(module_position, d3d11_position)
+        self.assertLess(d3d11_position, save_position)
+        self.assertIn('"SPARK_RHI_BACKEND=d3d11"', smoke_text)
+        self.assertIn('"SPARK_D3D11_DRIVER=warp"', smoke_text)
+        self.assertIn("_spark_validate_lifecycle_result", smoke_text)
+        self.assertIn("asset_root_guard=installed-bin", smoke_text)
+        self.assertIn("installed root is the source tree", smoke_text)
+        self.assertIn("ReparsePoint", smoke_text)
+        self.assertIn("IS_SYMLINK", smoke_text)
+        self.assertIn("-test-frames 8", smoke_text)
+        # The procedural fallback arena passes every pixel test, so the visible
+        # frame check must also read the run's scene identity marker.
+        self.assertIn('-LogPath "${_run_root}/exec_audit.log"', smoke_text)
+        self.assertIn('-ExpectedSceneDirectory "${_assets}/Scenes"', smoke_text)
+
+    def test_fps_visible_frame_callers_require_authored_scene_identity(self) -> None:
+        check_text = (REPO_ROOT / "Tests" / "PackageSmoke" / "CheckFPSVisibleFrame.ps1").read_text(encoding="utf-8")
+        self.assertIn("FPS scene identity: procedural fallback arena", check_text)
+        self.assertIn("FPS scene identity: authored scene", check_text)
+        game_text = (REPO_ROOT / "GameModules" / "SparkGameFPS" / "Source" / "Game" / "Game.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("FPS scene identity: procedural fallback arena", game_text)
+        self.assertIn('FPS scene identity: authored scene \\"{}\\" ({} nodes) from {}', game_text)
+        for script_name in ("RunInstalledFPSD3D11.cmake", "VerifyFPSAuthoredScene.cmake"):
+            text = (REPO_ROOT / "Tests" / "PackageSmoke" / script_name).read_text(encoding="utf-8")
+            calls = text.count("CheckFPSVisibleFrame.ps1")
+            self.assertGreater(calls, 0, script_name)
+            self.assertEqual(text.count("-LogPath "), calls, script_name)
+            self.assertEqual(text.count("-ExpectedSceneDirectory "), calls, script_name)
+
+    def test_installed_fps_d3d11_path_policy_contract(self) -> None:
+        script = REPO_ROOT / "Tests" / "PackageSmoke" / "RunInstalledFPSD3D11.cmake"
+        result = subprocess.run(
+            ["cmake", "-DSPARK_FPS_D3D11_PATH_POLICY_SELF_TEST=ON", "-P", str(script)],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("path policy contract passed", result.stdout)
 
 
 class ManifestValidationTests(unittest.TestCase):
@@ -302,7 +613,7 @@ class ManifestValidationTests(unittest.TestCase):
                 vai._read_bounded_json(path, limit=4)
 
     def test_generation_is_deterministic_and_refuses_every_scan_error(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as policy_dir:
             root = Path(directory)
             (root / "b").write_bytes(b"b")
             (root / "a").write_bytes(b"a")
@@ -311,9 +622,25 @@ class ManifestValidationTests(unittest.TestCase):
             self.assertEqual(errors_one, [])
             self.assertEqual(errors_two, [])
             self.assertEqual(vai.manifest_bytes(one), vai.manifest_bytes(two))
-            args = argparse.Namespace(root=str(root), output=None)
+            # The CLI always emits schema v2, so it needs a policy claiming every file.
+            policy = Path(policy_dir) / "provenance.json"
+            policy.write_text(json.dumps({
+                "version": 1,
+                "root": root.name,
+                "licenses": {"NOASSERTION": {"name": "No license asserted"}},
+                "rules": [{
+                    "id": "fixture",
+                    "license": "NOASSERTION",
+                    "provenance": "Test fixture bytes",
+                    "evidence": [],
+                    "gap": "RDY-020",
+                    "files": {"a": digest(b"a"), "b": digest(b"b")},
+                }],
+            }), encoding="utf-8")
+            args = argparse.Namespace(root=str(root), output=None, provenance=str(policy))
             self.assertEqual(vai.cmd_generate(args), 0)
             first_bytes = (root / vai.MANIFEST_FILENAME).read_bytes()
+            self.assertEqual(json.loads(first_bytes)["version"], vai.MANIFEST_SCHEMA_VERSION)
             self.assertEqual(vai.cmd_generate(args), 0)
             self.assertEqual((root / vai.MANIFEST_FILENAME).read_bytes(), first_bytes)
 
@@ -352,6 +679,40 @@ class TemplateCompletenessTests(unittest.TestCase):
             root = Path(directory)
             self._fixture(root)
             self.assertEqual(vai.verify_template_manifests(root), [])
+
+    def test_unexpected_template_root_file_is_not_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._fixture(root)
+            unexpected = root / "Templates" / "unexpected.bin"
+            unexpected.write_bytes(b"concealed payload")
+            errors = vai.verify_template_manifests(root)
+        self.assertTrue(any(
+            error.category == "undeclared" and error.path == "Templates/unexpected.bin"
+            for error in errors
+        ), errors)
+
+    def test_empty_template_manifest_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets, manifest, lock = self._fixture(root)
+            (assets / "asset.bin").unlink()
+            manifest.write_text(json.dumps({
+                "manifestVersion": 1,
+                "package": "Starter",
+                "assets": [],
+            }), encoding="utf-8")
+            lock.write_text(json.dumps({
+                "version": 1,
+                "algorithm": "sha256",
+                "assets": {},
+            }), encoding="utf-8")
+            errors = vai.verify_template_manifests(root)
+        self.assertTrue(any(
+            error.category == "manifest-load"
+            and error.path == "Templates/Starter/Assets/manifest.json"
+            for error in errors
+        ), errors)
 
     def test_undeclared_disk_file_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -652,6 +1013,228 @@ class SiteDataAssetIntegrationTests(unittest.TestCase):
             (root / "Assets" / "fixture.bin").write_bytes(b"tampered")
             errors = self.validate_fixture(root)
         self.assertTrue(any("asset-integrity:fixture.bin" in error for error in errors), errors)
+
+
+class AssetReferenceClosureTests(unittest.TestCase):
+    """ENG-220: staged scene and material references must close over listed files inside the root."""
+
+    SCENE = (
+        "[Scene]\n"
+        "name=Fixture\n"
+        "skybox=Assets/Textures/sky/space\n"
+        "\n"
+        "[Object]\n"
+        "type=model\n"
+        "model=Assets/Models/crate.obj\n"
+        "material=Assets/Materials/Stone.json\n"
+        "position=0.0,0.0,0.0\n"
+    )
+    ZONE = {
+        "name": "Zone",
+        "environment": {"skyTexture": ""},
+        "entities": [
+            {"name": "Crate", "components": {"MeshRenderer": {"mesh": "Models/crate.obj",
+                                                              "material": "Materials/Stone.json"}}},
+            {"name": "Floor", "components": {"MeshRenderer": {"mesh": "Primitive/Cube"}}},
+            {"name": "Ambience", "components": {"AudioSource": {"sound": "Audio/amb.wav"}}},
+        ],
+    }
+    MATERIAL = {"name": "Stone", "shader": "PBR", "albedo": "Textures/stone.png",
+                "normal": "Assets/Textures/stone_n.png", "roughness": 0.5, "tiling": [1, 1]}
+
+    def _stage(
+        self, directory: str, overrides: dict[str, bytes | None] | None = None, *, unlisted: tuple[str, ...] = ()
+    ) -> Path:
+        root = Path(directory) / "Assets"
+        files: dict[str, bytes | None] = {
+            "Scenes/level.scene": self.SCENE.encode(),
+            "Scenes/zone.scene": json.dumps(self.ZONE).encode(),
+            "Materials/Stone.json": json.dumps(self.MATERIAL).encode(),
+            "Models/crate.obj": b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n",
+            "Textures/stone.png": b"png",
+            "Textures/stone_n.png": b"png-normal",
+            "Audio/amb.wav": b"wav",
+        }
+        for face in ("px", "nx", "py", "ny", "pz", "nz"):
+            files[f"Textures/sky/space_{face}.png"] = face.encode()
+        files.update(overrides or {})
+        entries = []
+        for relative, data in sorted(files.items()):
+            if data is None:
+                continue
+            (root / relative).parent.mkdir(parents=True, exist_ok=True)
+            (root / relative).write_bytes(data)
+            if relative not in unlisted:
+                entries.append({"path": relative, "sha256": digest(data), "size": len(data)})
+        write_manifest(root, entries)
+        return root
+
+    def _check(self, root: Path) -> tuple[list, int, int]:
+        return vai.verify_references(root / vai.MANIFEST_FILENAME, root)
+
+    def _assert_error(self, root: Path, category: str, location: str, fragment: str) -> None:
+        errors, _, _ = self._check(root)
+        rendered = [str(error) for error in errors]
+        self.assertTrue(
+            any(error.category == category and error.path == location and fragment in error.message
+                for error in errors),
+            f"expected [{category}] {location}: ...{fragment}... in {rendered}")
+
+    def test_closed_fixture_passes_both_dialects_and_materials(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory)
+            self.assertEqual(vai.verify_manifest(root / vai.MANIFEST_FILENAME, root), [])
+            errors, parsed, checked = self._check(root)
+        self.assertEqual(errors, [], [str(error) for error in errors])
+        # level.scene: 6 skybox faces + model + material; zone.scene: mesh, material, sound; Stone.json: 2.
+        self.assertEqual((parsed, checked), (3, 13))
+
+    def test_missing_texture_names_material_and_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Textures/stone.png": None})
+            self._assert_error(root, "reference-missing", "Materials/Stone.json:albedo",
+                               "albedo='Textures/stone.png' resolves to 'Textures/stone.png', which is not staged")
+
+    def test_missing_material_names_scene_line(self) -> None:
+        scene = self.SCENE.replace("Materials/Stone.json", "Materials/Missing.json")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": scene.encode()})
+            self._assert_error(root, "reference-missing", "Scenes/level.scene:8",
+                               "material='Assets/Materials/Missing.json'")
+
+    def test_path_escaping_the_root_fails_in_every_format(self) -> None:
+        zone = json.loads(json.dumps(self.ZONE))
+        zone["entities"][0]["components"]["MeshRenderer"]["mesh"] = "Models/../../outside.obj"
+        material = dict(self.MATERIAL, normal="../Textures/stone_n.png")
+        cases = {
+            "Scenes/level.scene:7": ("Scenes/level.scene",
+                                     self.SCENE.replace("Assets/Models/crate.obj", "Assets/../outside.obj").encode()),
+            "Scenes/zone.scene:entities.0.components.MeshRenderer.mesh": ("Scenes/zone.scene",
+                                                                          json.dumps(zone).encode()),
+            "Materials/Stone.json:normal": ("Materials/Stone.json", json.dumps(material).encode()),
+        }
+        for location, (key, data) in cases.items():
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as directory:
+                (Path(directory) / "outside.obj").write_bytes(b"v 0 0 0\n")
+                root = self._stage(directory, {key: data})
+                self._assert_error(root, "reference", location, "escapes the staged Assets root")
+
+    def test_absolute_reference_fails(self) -> None:
+        material = dict(self.MATERIAL, albedo="/etc/passwd")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Materials/Stone.json": json.dumps(material).encode()})
+            self._assert_error(root, "reference", "Materials/Stone.json:albedo", "is an absolute path")
+
+    def test_unlisted_staged_file_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, unlisted=("Audio/amb.wav",))
+            self._assert_error(root, "reference-unlisted",
+                               "Scenes/zone.scene:entities.2.components.AudioSource.sound",
+                               "which assets.integrity.json does not list")
+
+    def test_case_mismatch_fails_on_every_filesystem(self) -> None:
+        scene = self.SCENE.replace("Assets/Models/crate.obj", "Assets/Models/Crate.obj")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": scene.encode()})
+            self._assert_error(root, "reference-case", "Scenes/level.scene:7", "differs in case")
+
+    def test_bare_scene_names_the_runtime_cannot_resolve_fail(self) -> None:
+        scene = self.SCENE.replace("Assets/Models/crate.obj", "crate.obj").replace(
+            "Assets/Materials/Stone.json", "ground_dirt")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": scene.encode()})
+            self._assert_error(root, "reference", "Scenes/level.scene:7", "is not an Assets/-rooted path")
+            self._assert_error(root, "reference", "Scenes/level.scene:8", "is not an Assets/-rooted path")
+
+    def test_unknown_reference_like_keys_fail_closed(self) -> None:
+        zone = json.loads(json.dumps(self.ZONE))
+        zone["entities"][0]["components"]["Decal"] = {"image": "Textures/stone.png"}
+        material = dict(self.MATERIAL, emissiveMap="Textures/stone.png")
+        cases = {
+            "Scenes/level.scene:10": ("Scenes/level.scene",
+                                      (self.SCENE + "texture=Assets/Textures/stone.png\n").encode()),
+            "Scenes/zone.scene:entities.0.components.Decal.image": ("Scenes/zone.scene", json.dumps(zone).encode()),
+            "Materials/Stone.json:emissiveMap": ("Materials/Stone.json", json.dumps(material).encode()),
+        }
+        for location, (key, data) in cases.items():
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as directory:
+                root = self._stage(directory, {key: data})
+                self._assert_error(root, "reference", location, "under a key the reference validator does not know")
+
+    def test_every_cubemap_face_must_be_staged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Textures/sky/space_nz.png": None})
+            self._assert_error(root, "reference-missing", "Scenes/level.scene:3",
+                               "resolves to 'Textures/sky/space_nz.png'")
+
+    def test_material_outside_materials_is_followed(self) -> None:
+        zone = json.loads(json.dumps(self.ZONE))
+        zone["entities"][0]["components"]["MeshRenderer"]["material"] = "Data/Other.json"
+        other = json.dumps(dict(self.MATERIAL, albedo="Textures/absent.png")).encode()
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/zone.scene": json.dumps(zone).encode(), "Data/Other.json": other})
+            self._assert_error(root, "reference-missing", "Data/Other.json:albedo", "'Textures/absent.png'")
+
+    def test_legacy_and_malformed_scenes_fail_closed(self) -> None:
+        cases = {
+            "is not an INI or JSON scene": b"Cube 0 0 0\nSphere 1 2 3\n",
+            "is not valid JSON": b'{"entities": [}',
+            "duplicate JSON object key": b'{"name": "a", "name": "b"}',
+        }
+        for fragment, data in cases.items():
+            with self.subTest(fragment=fragment), tempfile.TemporaryDirectory() as directory:
+                root = self._stage(directory, {"Scenes/zone.scene": data})
+                self._assert_error(root, "reference", "Scenes/zone.scene", fragment)
+
+    @unittest.skipIf(sys.platform == "win32", "symlink creation needs privileges on Windows")
+    def test_link_like_reference_target_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Audio/amb.wav": None})
+            outside = Path(directory) / "outside.wav"
+            outside.write_bytes(b"wav")
+            (root / "Audio").mkdir()
+            (root / "Audio" / "amb.wav").symlink_to(outside)
+            manifest = vai.load_manifest(root / vai.MANIFEST_FILENAME)
+            manifest["entries"].append({"path": "Audio/amb.wav", "sha256": digest(b"wav"), "size": 3})
+            manifest["entries"].sort(key=lambda entry: entry["path"])
+            manifest["fileCount"] = len(manifest["entries"])
+            (root / vai.MANIFEST_FILENAME).write_bytes(vai.manifest_bytes(manifest))
+            self._assert_error(root, "reference-unsafe",
+                               "Scenes/zone.scene:entities.2.components.AudioSource.sound", "symlink")
+
+    def test_command_line_reports_referencing_file_and_key(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory)
+            passed = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "references", str(root / vai.MANIFEST_FILENAME),
+                 "--root", str(root)], text=True, capture_output=True, timeout=60, check=False)
+            (root / "Textures" / "stone_n.png").unlink()
+            failed = subprocess.run(
+                [sys.executable, "-B", str(SCRIPT), "references", str(root / vai.MANIFEST_FILENAME),
+                 "--root", str(root)], text=True, capture_output=True, timeout=60, check=False)
+        self.assertEqual(passed.returncode, 0, passed.stderr)
+        self.assertIn("OK: 13 references in 3 scene and material files", passed.stdout)
+        self.assertEqual(failed.returncode, 1)
+        self.assertIn("[reference-missing] Materials/Stone.json:normal: normal='Assets/Textures/stone_n.png'",
+                      failed.stderr)
+
+    def test_ini_material_outside_runtime_material_root_fails(self) -> None:
+        # GameObject loads INI materials only from Assets/Materials/*.json (exact
+        # case); any other staged, listed JSON would silently render the default.
+        for value in ("Assets/Textures/foo.json", "Assets/materials/foo.json", "Assets/Materials/Foo.JSON",
+                      "Assets/Materials\\Foo.json"):
+            scene = self.SCENE.replace("Assets/Materials/Stone.json", value)
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                staged = value[len("Assets/"):].replace("\\", "/")
+                root = self._stage(directory, {"Scenes/level.scene": scene.encode(),
+                                               staged: json.dumps(self.MATERIAL).encode()})
+                self._assert_error(root, "reference", "Scenes/level.scene:8",
+                                   "GameObject ignores materials outside Assets/Materials/")
+        backslash = self.SCENE.replace("Assets/Materials/Stone.json", "Assets\\Materials\\Stone.json")
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._stage(directory, {"Scenes/level.scene": backslash.encode()})
+            errors, _, _ = self._check(root)
+        self.assertEqual(errors, [], [str(error) for error in errors])
 
 
 class RepositoryParityTests(unittest.TestCase):

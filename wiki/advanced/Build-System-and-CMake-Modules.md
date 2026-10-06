@@ -17,6 +17,13 @@ SparkEngine uses CMake 3.25+ as its build system with documented options, cross-
 - C++23 standard (enforced via `cxx_std_23`, no extensions)
 - CMP0091 policy for consistent MSVC runtime library selection
 
+Native compiler metadata is build-directory state. Keep a build directory tied
+to one CMake executable, generator, compiler, and toolset; never configure it
+concurrently or switch CMake installations in place. If any of those inputs
+change, use a new directory or `cmake --fresh` so compiler ABI and feature
+detection run again. The supported Windows preset selects Visual Studio 17
+2022, x64, and v143, but does not pin CMake/MSVC/Windows SDK patch versions.
+
 ### Quick Configuration
 
 ```bash
@@ -27,10 +34,10 @@ SparkEngine uses CMake 3.25+ as its build system with documented options, cross-
 ./generate.sh release -g Ninja
 
 # Direct CMake
-cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143
 
 # Using presets (recommended)
-cmake --preset windows-release
+cmake --fresh --preset windows-release
 cmake --build --preset windows-release
 ```
 
@@ -61,12 +68,37 @@ cmake -B build [options]
 ## Selected Root Build Options
 
 Only options declared and consumed by the current root `CMakeLists.txt` have a
-proven build effect. Setting an arbitrary `ENABLE_*` cache variable does not remove
-a subsystem. The table below intentionally avoids undocumented pseudo-options.
+proven build effect. The table below intentionally avoids undocumented pseudo-options.
+
+**Undeclared options fail configure (CI-120).** The last command of the root
+`CMakeLists.txt` is `spark_reject_undeclared_options()` from
+`cmake/SparkOptionGuard.cmake`. Any `ENABLE_*`, `SPARK_*` or `BUILD_*` cache entry
+that is still `UNINITIALIZED` after the whole tree has configured -- i.e. it was
+passed as an untyped `-DNAME=VALUE` (or a preset string value) and nothing ran
+`option()`/`set(... CACHE ...)` for it -- stops configure with a `FATAL_ERROR`
+listing each name and the `cmake -U NAME <build-dir>` command to drop it. A typo
+such as `-DENABLE_EDTIOR=OFF`, or an option that only exists on another platform,
+can therefore no longer configure "successfully" with the default feature set.
+Explicitly typed entries (`-DNAME:BOOL=ON`, or a preset boolean/typed value) are
+checked too: `spark_capture_cli_options()`, the first command after
+`cmake_minimum_required()`, returns every guarded entry that still carries CMake's
+command-line helpstring to `UNINITIALIZED`, so `option()` adopts it like an untyped
+entry and an undeclared one reaches the final check. Options that are declared but
+never read (no `if()`, `${}`, generator expression, forwarded `-D` or
+`configure_file` template consumes them) are reported by
+`Tools/buildmatrix/check_parity.py` as the blocking `declared-option-unread`
+finding (the inert `ENABLE_GRAPHICS` was deleted on that basis). Options that
+must be accepted on every platform are declared
+unconditionally: `SPARK_REQUIRE_WINDOWS_INSTALLERS` (SparkBuild passes it
+everywhere; `ON` off Windows is itself fatal) and the explicit
+`SPARK_MODULE_CXX_LANGUAGE_ABI` override (declared by `cmake/SparkGameModule.cmake`).
+`Tests/Tools/test_build_option_guard.py` (CTest `BuildOptions_UnknownOptionRejected`)
+configures a fixture project through the real module (typed and untyped `-D`
+entries, and a typed preset) and audits every cache variable in `CMakePresets.json`
+against the tree's declarations.
 
 | Option | Root default | Source-backed effect when disabled |
 |--------|--------------|------------------------------------|
-| `ENABLE_GRAPHICS` | ON | Currently inert; OFF does not remove graphics/RHI (`HEAD-220`) |
 | `ENABLE_VULKAN` | ON | Disables Vulkan discovery and omits `SPARK_VULKAN_SUPPORT`; root source glob remains |
 | `ENABLE_OPENGL` | ON | Disables OpenGL discovery/enablement; verify host context separately |
 | `ENABLE_METAL` | ON on Apple, OFF elsewhere | Omits Metal enablement on Apple development builds |
@@ -80,9 +112,10 @@ a subsystem. The table below intentionally avoids undocumented pseudo-options.
 
 ### Reduced Development Preset
 
-The `minimal` preset currently disables networking and DXR. Several additional
-preset cache variables have no matching root option and are inert, so this is not
-a core-only build contract. Disable declared targets such as the editor explicitly
+The `minimal` preset disables networking, DXR, and the optional tool and module
+targets. Every preset cache variable is a declared root option (the option guard
+rejects anything else), but disabling them does not remove the graphics/RHI
+sources, so this is not a core-only build contract. Disable declared targets such as the editor explicitly
 when needed; `HEAD-220` tracks a true stripped/headless configuration.
 
 ```bash
@@ -130,7 +163,8 @@ Each manifest row declares:
 `cmake/SparkThirdPartyAudit.cmake` is invoked from root `CMakeLists.txt` early in configure and:
 - validates required files exist for each declared dependency,
 - prints source/version/license summary during configure,
-- warns on manifest mismatches (and can be made fatal with `-DSPARK_STRICT_DEPS=ON`).
+- warns on manifest mismatches; with `-DSPARK_STRICT_DEPS=ON` every locked entry is required and any missing
+  dependency or pin mismatch fails configure (see [ThirdParty Dependencies Audit](ThirdParty-Dependencies-Audit.md)).
 
 CI enforces manifest hygiene via `tools/check-thirdparty-manifest-sync.sh`: dependency path/URL/version wiring changes must include a matching `ThirdParty/dependencies.lock` update.
 
@@ -173,6 +207,45 @@ cmake --list-presets
 cmake --preset windows-release
 cmake --build --preset windows-release
 ```
+
+### Documented commands are checked against the presets
+
+Every preset writes `build/<preset>`, and the Visual Studio presets are
+multi-config, so a tree built or tested without `--config`/`-C` produces Debug.
+`tools/site-data/documented_commands.py` (run by `tools/site-data/validate.py`
+and the `BuildOptions_DocumentedCommandsMatchPresets` CTest) resolves every
+`cmake`/`ctest`/`cpack` command in the shell code blocks and inline code spans
+of every root-level Markdown page (`README.md`, `CLAUDE.md`, `TROUBLESHOOTING.md`,
+`CONTRIBUTING.md`, `AGENTS.md`, ...), `wiki/`, `docs/`, `.github/prompts/`, the
+Copilot instructions, the `.claude/skills/` and `.codex/skills/` runbooks, and the
+Markdown under `SparkBuild/`, `SparkSDK/`, `FuzzerTests/`, `GameModules/` and
+`Templates/` against `CMakePresets.json`. A `cd` is followed: `cd MyGame` then
+`cmake -B build` configures `MyGame/build`, not the root `build`, and `cd` into
+the directory a documented `git clone` created is the repository root. It fails
+when:
+
+- `--preset` names no visible preset of that family;
+- a build, install, test or package tree (`cmake --build`/`--install`,
+  `ctest`, `cpack --config <tree>/CPackConfig.cmake`, or the directory a `cd`
+  entered) is neither a preset `binaryDir` nor configured earlier in the
+  document with `-B` or a repository configure script (`generate.sh`,
+  `generate.bat`, `build.sh` and `build.ps1` all configure `build`);
+- a block that configured presets then uses any other tree, including another
+  preset's (the classic `cmake --preset <name>` then `cmake --build build`);
+- an ad-hoc `-B` configure writes into a preset's tree;
+- a multi-config preset tree omits its preset's configuration (a preset with no
+  generator counts as multi-config unless its condition pins a non-Windows host,
+  because Visual Studio is the Windows default), or any stated
+  configuration differs from it. `cmake --install` and `cpack` default a
+  multi-config tree to Release, so they may omit it only for a Release preset;
+  `--build` and `ctest` default to Debug;
+- an ad-hoc configure with a generator the presets use omits the `-A`/`-T`
+  values those presets pin (`-A x64 -T v143` for VS 2022; `-T v143,host=x64`
+  states the same toolset). A generator no preset uses has no pin to compare.
+
+Placeholders (`<preset>`, `$VAR`, `~`) and absolute paths are skipped. Generated
+pages (`docs/api/`, `wiki/reference/`, the readiness handoff), dated plans
+under `docs/superpowers/` and the `CHANGELOG.md` history are out of scope.
 
 ### Configured-target build-matrix evidence
 
@@ -273,6 +346,42 @@ not evidence of automatic fallback or uniform runtime probing.
 | [SparkConsole](../gameplay-tools/SparkConsole.md) | Executable | Debug console with named-pipe transport on Windows and bidirectional inherited stdio transport elsewhere |
 | `SparkShaderCompiler` | Executable | Offline HLSL/GLSL shader compilation tool |
 | `SparkTests` | Executable | Unit test runner (when `BUILD_TESTS=ON`) |
+| `uninstall` | Custom target | Manifest-driven removal of the last full `cmake --install` (see below) |
+
+### Install and Uninstall
+
+`cmake --install <build>` records every file it writes in
+`<build>/install_manifest.txt` (`install_manifest_<component>.txt` for a
+`--component` install). `cmake/SparkUninstall.cmake` removes exactly those files:
+
+```bash
+cmake --build <build> --target uninstall      # full install into CMAKE_INSTALL_PREFIX
+cmake -DPREFIX=<prefix> -DMANIFEST=<build>/install_manifest_runtime.txt \
+      -P cmake/SparkUninstall.cmake           # --prefix or --component installs
+```
+
+Every manifest entry is validated before anything is deleted. The helper refuses
+the whole manifest if any entry is relative, not normalized, outside the prefix,
+a link, a directory, or under a parent that resolves outside the prefix. It also
+refuses a manifest containing a semicolon or an entry with unbalanced square
+brackets (CMake list handling would merge it with its neighbors), and a
+filesystem-root prefix. Entries that are already gone are skipped, so a second
+uninstall succeeds. Directories are pruned only when they are left empty, so data
+written under the prefix after install (saves, settings, caches) survives. The
+emptiness check escapes glob metacharacters, so a prefix such as
+`C:/Games [Beta]` is listed literally rather than read as a pattern. DESTDIR is
+applied as `cmake --install` applies it: the manifest holds unstaged paths, and a
+leading drive letter is dropped before DESTDIR is prepended. The DESTDIR stage is
+tested on Linux; the drive-letter mapping has not yet run on a Windows host. The vendored SDL2 `uninstall` target is disabled
+(`SDL2_DISABLE_UNINSTALL`) because it deletes manifest paths without these checks.
+
+`SparkTrackedInstall.Contract` covers the contract. It runs two install,
+reinstall and uninstall cycles, asserts that reinstall is byte-identical and that
+only declared user data remains, and checks the adversarial manifests, a
+DESTDIR stage, and a prefix containing glob metacharacters with user data inside
+an installed directory. This is local CMake-tree evidence only. Windows CPack/NSIS
+uninstall and SparkInstaller are separate and not yet qualified (ASSET-220,
+INST-130).
 
 ## Build Output
 
@@ -294,12 +403,12 @@ build/
 
 **SparkBuild** is an in-tree C++17 terminal-UI wrapper around CMake. The source lives at `SparkBuild/` (vendored from the now-archived `Krilliac/SparkBuild`; see `SparkBuild/UPSTREAM.md` for the pinned commit). It is built as part of the normal engine build under the `ENABLE_SPARKBUILD` option (ON by default).
 
-**Output:** `build/bin/SparkBuild` (or `SparkBuild.exe` on Windows).
+**Output:** `build/<preset>/bin/SparkBuild` (or `build/<preset>/bin/<Config>/SparkBuild.exe` on Windows).
 
 ```bash
 cmake --preset linux-gcc-release
-cmake --build build --target SparkBuild
-./build/bin/SparkBuild
+cmake --build build/linux-gcc-release --target SparkBuild
+./build/linux-gcc-release/bin/SparkBuild
 ```
 
 Because SparkBuild only shells out to `cmake`, it has no dependency on any SparkEngine header or library — so in-tree hosting introduces no circular build dependency. To skip it:
@@ -395,6 +504,19 @@ target_link_libraries(MyTarget PRIVATE SparkECS SparkGraphics SparkPhysics)
 ```
 
 `SparkEngineLib` remains as an umbrella target that links all components for backward compatibility.
+
+### SparkCxxRuntime.cmake
+
+On non-Windows producers, this helper detects libc++ or libstdc++ from the
+selected standard-library headers for each configuration. It rejects ambiguous
+or mixed-family configurations. The selected family is exported as C++ compile
+and link requirements on `SparkEngineLib` and `SparkEngineInterface`, so installed
+consumers retain the producer's standard-library choice. Windows keeps its
+existing CRT/toolset contract.
+
+`SDKCxxRuntime_ExportContract` checks the configure/export/import wiring without
+enabling a compiler. It does not establish native ABI compatibility; the installed
+SDK consumer build and module-load checks remain necessary.
 
 ### SparkEngineConfig.cmake
 
@@ -525,14 +647,14 @@ SparkEngine enforces consistent code style via `.clang-format` (Microsoft-based,
 # Check formatting (dry run)
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format --dry-run --Werror 2>&1
 
 # Fix formatting automatically
 find SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
      SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests \
+     SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
   -not -path '*/Metal/*' \( -name '*.h' -o -name '*.hpp' -o -name '*.cpp' \) \
   | xargs clang-format -i
 ```
@@ -548,3 +670,13 @@ CI rejects PRs with formatting violations.
 - [Architecture Overview](../getting-started/Architecture-Overview.md) -- Engine design and subsystems
 - [Contributing](Contributing.md) -- Contribution workflow and code style
 - [Creating a Game Module](../getting-started/Creating-a-Game-Module.md) -- Building game modules
+
+### Combined SDK runtime qualification
+
+The installed EmptyProject consumer check now launches the installed engine
+with the exact generated module and `-require-game`, from the generated project.
+Its 120-second headless run must pass the existing production NullRHI lifecycle
+parser (one initialized module, update/fixed/unload callbacks and zero faults).
+The module image hash must remain unchanged. This is a same-build runtime ABI
+check; it does not establish N-1 compatibility, hot reload or rendered behavior.
+Source checks alone do not qualify this runtime gate.

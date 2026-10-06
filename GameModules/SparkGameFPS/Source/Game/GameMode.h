@@ -11,7 +11,7 @@
 #pragma once
 
 #include "GameModeTypes.h"
-#include "Utils/StateMachine.h"
+#include <Spark/StateMachine.h>
 
 #include <string>
 #include <unordered_map>

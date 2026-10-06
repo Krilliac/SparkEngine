@@ -69,7 +69,7 @@ class TelemetrySpoolTests(unittest.TestCase):
     def test_current_runtime_filename_with_sequence_range_is_accepted(self) -> None:
         first = valid_event()
         first["sequence"] = 7
-        second = valid_event()
+        second = dict(first)
         second["sequence"] = 9
         self.write_batch([first, second], self.runtime_batch_name(7, 9))
         validator = self.validate()

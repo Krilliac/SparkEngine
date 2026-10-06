@@ -1,0 +1,1 @@
+{"rules":[{"name":"zero","sourceEntityId":0},{"name":"max","sourceEntityId":4294967295},{"name":"above-int","sourceEntityId":3000000000},{"name":"fraction","sourceEntityId":2.5},{"name":"text","sourceEntityId":"9"}]}

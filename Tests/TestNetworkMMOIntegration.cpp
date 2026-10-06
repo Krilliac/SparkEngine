@@ -31,10 +31,14 @@
 #include <thread>
 #include <vector>
 
+#include "Fixtures/SecureTestPeer.h"
+
 using namespace Spark::Net;
 
 // ============================================================================
-// Raw UDP client helper (reused from TestNetworkStress.cpp)
+// Raw UDP client helper (reused from TestNetworkStress.cpp). NET-100: sends go
+// through a WireAdapter, so a Connect runs the real v2 handshake and every later
+// message is sealed; receives are opened back into inner messages.
 // ============================================================================
 
 class TestUDPClient
@@ -81,27 +85,54 @@ class TestUDPClient
 
     bool SendTo(const void* data, size_t size, uint16_t port)
     {
-        sockaddr_in dest{};
-        dest.sin_family = AF_INET;
-        dest.sin_port = htons(port);
-        inet_pton(AF_INET, "127.0.0.1", &dest.sin_addr);
-        int sent = sendto(m_socket, reinterpret_cast<const char*>(data), static_cast<int>(size), 0,
-                          reinterpret_cast<const sockaddr*>(&dest), sizeof(dest));
-        return sent > 0;
+        const std::span<const uint8_t> message(static_cast<const uint8_t*>(data), size);
+        return m_wire.Send(
+            message, [this, port](std::span<const uint8_t> datagram) { return SendRaw(datagram, port); },
+            [this] { return ReceiveRaw(); });
     }
 
     int Receive(void* buf, size_t bufSize)
     {
-        sockaddr_in sender{};
-        socklen_t senderLen = sizeof(sender);
-        return recvfrom(m_socket, reinterpret_cast<char*>(buf), static_cast<int>(bufSize), 0,
-                        reinterpret_cast<sockaddr*>(&sender), &senderLen);
+        while (auto datagram = ReceiveRaw())
+        {
+            auto inner = m_wire.Open(*datagram);
+            if (!inner || inner->size() > bufSize)
+                continue;
+            std::memcpy(buf, inner->data(), inner->size());
+            return static_cast<int>(inner->size());
+        }
+        return -1;
     }
 
     ~TestUDPClient() { Close(); }
 
   private:
+    bool SendRaw(std::span<const uint8_t> datagram, uint16_t port)
+    {
+        sockaddr_in dest{};
+        dest.sin_family = AF_INET;
+        dest.sin_port = htons(port);
+        inet_pton(AF_INET, "127.0.0.1", &dest.sin_addr);
+        int sent = sendto(m_socket, reinterpret_cast<const char*>(datagram.data()), static_cast<int>(datagram.size()),
+                          0, reinterpret_cast<const sockaddr*>(&dest), sizeof(dest));
+        return sent > 0;
+    }
+
+    std::optional<std::vector<uint8_t>> ReceiveRaw()
+    {
+        std::vector<uint8_t> buffer(MAX_UDP_WIRE_DATAGRAM_SIZE);
+        sockaddr_in sender{};
+        socklen_t senderLen = sizeof(sender);
+        const int received = recvfrom(m_socket, reinterpret_cast<char*>(buffer.data()), static_cast<int>(buffer.size()),
+                                      0, reinterpret_cast<sockaddr*>(&sender), &senderLen);
+        if (received <= 0)
+            return std::nullopt;
+        buffer.resize(static_cast<size_t>(received));
+        return buffer;
+    }
+
     SOCKET m_socket = INVALID_SOCKET;
+    SparkTestFixtures::WireAdapter m_wire;
 };
 
 // ============================================================================
@@ -119,6 +150,10 @@ static std::vector<uint8_t> MakePacket(MessageType type, ChannelType channel, ui
     buf.WriteUint32(sequence);
     buf.WriteFloat(timestamp);
     buf.WriteUint32(static_cast<uint32_t>(payload.size()));
+    if (channel == ChannelType::ReliableOrdered)
+    {
+        buf.WriteUint32(0); // protocol v3 ordered sequence; 0 = deliver unordered
+    }
     if (!payload.empty())
         buf.WriteBytes(payload.data(), payload.size());
     return std::vector<uint8_t>(buf.GetData().begin(), buf.GetData().end());
@@ -126,10 +161,8 @@ static std::vector<uint8_t> MakePacket(MessageType type, ChannelType channel, ui
 
 static std::vector<uint8_t> MakeConnectPacket(const std::string& playerName)
 {
-    NetBuffer nameBuf;
-    nameBuf.WriteString(playerName);
     return MakePacket(MessageType::Connect, ChannelType::Reliable, 0, 0, 0.0f,
-                      std::vector<uint8_t>(nameBuf.GetData().begin(), nameBuf.GetData().end()));
+                      SparkTestFixtures::LegacyConnectPayload(playerName));
 }
 
 static std::vector<uint8_t> MakeChatPacket(uint32_t senderID, const std::string& name, const std::string& text)
@@ -231,11 +264,10 @@ TEST(MMOIntegration_ConnectionHandshake)
 
     EXPECT_EQ(ws.GetTotalPlayerCount(), static_cast<uint32_t>(1));
 
-    // Client should receive ConnectAccepted
-    uint8_t recvBuf[4096];
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    int received = client.Receive(recvBuf, sizeof(recvBuf));
-    EXPECT_GT(received, 0);
+    // The v2 handshake inside SendTo consumed the ConnectAccepted and delivered the name in the
+    // sealed ClientFinished (NET-100): the server knows the player by the name it chose.
+    ASSERT_FALSE(nm.GetClients().empty());
+    EXPECT_EQ(nm.GetClients().begin()->second.name, std::string("TestPlayer"));
 
     ws.Stop();
     nm.StopServer();
@@ -769,7 +801,7 @@ TEST(MMOIntegration_FullStackStress)
     RunServerFrames(nm, 20);
 
     int connectedCount = static_cast<int>(nm.GetClients().size());
-    EXPECT_GT(connectedCount, 0);
+    EXPECT_EQ(connectedCount, kClients);
 
     // Bridge to WorldServer
     for (const auto& [clientId, info] : nm.GetClients())

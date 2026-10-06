@@ -307,6 +307,22 @@ namespace Spark::Net
             Log("No area available for player '" + playerName + "' at spawn position.");
             return INVALID_AREA;
         }
+        return HandlePlayerConnectToArea(clientId, playerName, spawnPosition, targetArea) ? targetArea : INVALID_AREA;
+    }
+
+    bool WorldServer::HandlePlayerConnectToArea(ClientID clientId, const std::string& playerName,
+                                                const XMFLOAT3& spawnPosition, AreaID targetArea)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_areaMutex);
+            const auto found = m_areas.find(targetArea);
+            if (found == m_areas.end() || !found->second.isOnline)
+            {
+                Log("Area " + std::to_string(targetArea) + " is not an online area; player '" + playerName +
+                    "' was not connected.");
+                return false;
+            }
+        }
 
         uint32_t playerCount = 0;
         {
@@ -324,7 +340,7 @@ namespace Spark::Net
         }
 
         Log("Player '" + playerName + "' connected, assigned to area " + std::to_string(targetArea) + ".");
-        return targetArea;
+        return true;
     }
 
     void WorldServer::HandlePlayerDisconnect(ClientID clientId)

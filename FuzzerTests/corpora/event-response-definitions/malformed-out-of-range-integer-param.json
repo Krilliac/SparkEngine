@@ -1,0 +1,1 @@
+{"rules":[{"name":"storm","trigger":"OnStart","actions":[{"type":"SetWeather","params":[1e300]}]}]}

@@ -15,3 +15,11 @@ leak:PhysicsSystem::CreateCollisionShape
 # and the instance; the remaining 128-byte blocks live in third-party code
 # below vkEnumeratePhysicalDevices, so they are not SparkEngine leaks.
 leak:vkEnumeratePhysicalDevices
+
+# No entry is needed for the engine's intentional exit-time roots. The Linux
+# entry point (SparkEngine/Source/Core/SparkEngineLinux.cpp) release()s the
+# module manager, hot-reload manager and event bus before std::_Exit and marks
+# each exact block with __lsan_ignore_object, then runs __lsan_do_leak_check()
+# itself because std::_Exit skips LSan's atexit check. A per-object ignore is
+# narrower than a stack-pattern suppression here: a leak:ModuleManager line
+# would also hide real leaks allocated anywhere under ModuleManager frames.

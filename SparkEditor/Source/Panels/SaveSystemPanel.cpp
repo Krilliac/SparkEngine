@@ -7,12 +7,14 @@
 #include "../Core/EditorIcons.h"
 #include "Core/EngineContext.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+#include <optional>
 #include <imgui.h>
 
 namespace SparkEditor
@@ -103,8 +105,16 @@ namespace SparkEditor
             if (!entry.is_regular_file() || entry.path().extension() != ".spark_save")
                 continue;
 
+            // UTF-8 for ImGui. path::string() throws on Windows for a name the ANSI code
+            // page cannot spell, which ended the refresh (and the frame) on a stray file.
+            std::optional<std::string> slotName = Spark::FileUtils::TryPathToUtf8(entry.path().stem());
+            if (!slotName)
+            {
+                continue;
+            }
+
             SaveSlotInfo info;
-            info.slotName = entry.path().stem().string();
+            info.slotName = std::move(*slotName);
             if (!System().GetSaveMetadata(info.slotName, info.metadata))
             {
                 // The file exists but its header is unreadable; show it as unreadable

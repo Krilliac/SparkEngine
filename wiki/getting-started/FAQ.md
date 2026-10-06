@@ -16,7 +16,7 @@ Common questions about SparkEngine — what it is, who it's for, and how to get 
 
 ### What is SparkEngine?
 
-SparkEngine is a free, open-source 3D game engine written in C++23. It started as an FPS engine and is evolving into a general-purpose engine with source implementations and prototypes for FPS, RPG, MMO, open-world, racing, platformer, and RTS genres. The repository includes DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, an EnTT ECS, an ImGui-based editor, and experimental AngelScript tooling outside `stable-v1`.
+SparkEngine is a free, source-available 3D game engine written in C++23. It started as an FPS engine and is evolving into a general-purpose engine with source implementations and prototypes for FPS, RPG, MMO, open-world, racing, platformer, and RTS genres. The repository includes DirectX 11 rendering, Jolt Physics, XAudio2 spatial audio, an EnTT ECS, an ImGui-based editor, and experimental AngelScript tooling outside `stable-v1`.
 
 ### Is SparkEngine free?
 
@@ -41,7 +41,7 @@ The repository contains example and prototype game modules for FPS, platformer, 
 
 SparkEngine is smaller and earlier in development than those engines. Key differences:
 
-- **Open-source C++23** — You have full source access and can modify anything. No black-box runtime.
+- **Source-available C++23** — You have full source access and can modify anything. No black-box runtime.
 - **No editor lock-in** — Game logic lives in C++ modules or AngelScript scripts, not in a proprietary project format.
 - **MMO-oriented experimental architecture** — Area-server, world-streaming, and collaborative-editing implementations exist, but they are outside `stable-v1` and are not authenticated-transport or deployment evidence.
 - **Source-oriented** — The repository builds locally from source; current release evidence does not establish a portable download-size or build-time budget.
@@ -117,7 +117,7 @@ cmake -B build -DENABLE_EDITOR=OFF        # Everything except editor
 | `-game <path>` | Load a specific game module DLL/SO |
 | `-window-size WxH` | Override window resolution (e.g., `1920x1080`) |
 | `-test-frames N` | Run N frames then exit (for benchmarking) |
-| `-scene <path>` | Load a specific scene on startup |
+| `-scene <path>` | Run a reflected scene without a game module (Linux: loaded, not drawn; exits 4 if it cannot load) |
 | `--help` / `-h` | Print the platform host's authoritative option list |
 
 ---
@@ -128,15 +128,15 @@ cmake -B build -DENABLE_EDITOR=OFF        # Everything except editor
 
 Build with `ENABLE_EDITOR=ON` and launch the separate `SparkEditor` executable.
 The source does not define an F1 engine-overlay toggle. The repository inventory
-currently contains 65 `*Panel.h` classes; registration and default visibility are
+currently contains 64 `*Panel.h` classes; registration and default visibility are
 separate metrics.
 
 ### What panels does the editor have?
 
-The source tree includes 65 `*Panel.h` classes covering scene editing, asset
+The source tree includes 64 `*Panel.h` classes covering scene editing, asset
 management, physics, gameplay, audio, scripting, profiling, and more. This
 source-file inventory is not `stable-v1` editor certification and does not mean
-all classes are registered or shown by default. The 6 core panels shown by
+all classes are registered or shown by default. The core panels shown by
 default are:
 
 - **Scene View** — 3D viewport with gizmos
@@ -171,7 +171,7 @@ An experimental [Visual Scripting](../subsystems/Visual-Scripting.md) panel comp
 
 ### How does the ECS work?
 
-SparkEngine uses [EnTT](https://github.com/skypjack/entt) for its Entity Component System. Entities are lightweight IDs, components are plain data structs, and systems operate on component groups. A reproducible source inventory currently finds 79 component structs across 17 component headers; no canonical source-backed total is claimed for systems here. See [Entity Component System](../subsystems/Entity-Component-System.md).
+SparkEngine uses [EnTT](https://github.com/skypjack/entt) for its Entity Component System. Entities are lightweight IDs, components are plain data structs, and systems operate on component groups. The generated component inventory is maintained in the ECS reference; no canonical source-backed total is claimed for systems here. See [Entity Component System](../subsystems/Entity-Component-System.md).
 
 ### How do I add multiplayer to my game?
 
@@ -291,9 +291,9 @@ The VS2026 and macOS jobs are job-level advisory. MinGW is a manual
 `workflow_dispatch` development lane rather than a required push gate. The
 `clang-tidy` job is a dependency of `required-ci-gate` (even though individual
 diagnostics may be advisory), so its job/configuration outcome is blocking. Note
-that no branch protection or ruleset is active on `Working` today, so
-`required-ci-gate` is a post-hoc publication gate rather than a merge gate
-(`CI-100`). See
+that the active `Working integrity` ruleset (21968740) requires the
+`Required CI Gate` check; exact-SHA evidence and controlled-failure behavior are
+still release gates (`CI-100`). See
 [Contributing](../advanced/Contributing.md) for the full CI overview.
 
 ### Where do I get help?

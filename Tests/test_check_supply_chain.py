@@ -95,6 +95,7 @@ CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 LOCK_SKELETON = {
     "version": 2,
     "description": "fixture lockfile",
+    "exceptions": [],
     "submodule_gitlinks": {},
     "managed_vendored_dirs": ["ThirdParty/Utils/demo"],
     "project_owned_dirs": {
@@ -162,6 +163,11 @@ class _Baseline:
             ["config", "user.name", "Supply Chain Fixture"],
             ["config", "commit.gpgsign", "false"],
             ["config", "core.autocrlf", "false"],
+            # Recent git runs auto-maintenance detached after a commit; its
+            # lock file can land in .git while a test's TemporaryDirectory is
+            # being removed ("Directory not empty: '.git'" on CI).
+            ["config", "maintenance.auto", "false"],
+            ["config", "gc.auto", "0"],
             ["add", "-A"],
             ["commit", "-q", "-m", "baseline"],
         ):
@@ -336,6 +342,14 @@ class TestTrackedInventory(FakeRepoCase):
         self.commit()
         self.assert_violation("tracked file is in no declared container")
 
+    def test_allowlist_cannot_exempt_an_unlisted_root_payload(self) -> None:
+        data = self.lock()
+        data["allowed_root_files"].append("ThirdParty/EVIL.md")
+        self.set_lock(data)
+        self.write("ThirdParty/EVIL.md", "forged dependency payload\n")
+        self.commit()
+        self.assert_violation("allowed_root_files")
+
     def test_untracked_payload_is_detected(self) -> None:
         self.write("ThirdParty/Utils/demo/untracked.h", "/* payload */\n")
         self.assert_violation("worktree differs from the index")
@@ -495,6 +509,333 @@ class TestLinkHygiene(FakeRepoCase):
         self.assertIsNone(sc.link_reason(self.repo / "ThirdParty/Utils/demo/demo.h"))
 
 
+SUBMODULE_REL = "ThirdParty/Sub/dep"
+SUBMODULE_URL = "https://example.invalid/dep.git"
+SUBMODULE_NOTICE_REL = "ThirdParty/Local/dep-LICENSE.txt"
+FIXTURE_GIT_IDENTITY = (
+    "-c", "user.email=fixture@example.invalid",
+    "-c", "user.name=Supply Chain Fixture",
+    "-c", "commit.gpgsign=false",
+)
+
+
+def _symlinks_or_skip(probe_dir: Path) -> None:
+    """Symlink-dependent fixtures need real links; CI must provide them."""
+    probe = probe_dir / "symlink-probe"
+    try:
+        os.symlink("target", str(probe))
+    except (OSError, NotImplementedError) as exc:
+        if IN_CI:
+            raise AssertionError(f"symlink creation must work in CI: {exc}") from exc
+        raise unittest.SkipTest(f"symlink creation unavailable: {exc}")
+    probe.unlink()
+
+
+class _SubmoduleBaseline:
+    """The passing baseline plus an initialized submodule that tracks symlinks.
+
+    The upstream tracks a file link and a directory link whose targets stay
+    inside the submodule, which is exactly the shape of SDL2's
+    android-project-ant links that made the gate's verdict depend on whether
+    submodules were initialized.
+    """
+
+    path: Path | None = None
+    _holder: tempfile.TemporaryDirectory | None = None
+
+    @classmethod
+    def get(cls) -> Path:
+        if cls.path is None:
+            cls._holder = tempfile.TemporaryDirectory(prefix="spark-sc-submodule-")
+            cls.path = cls._build(Path(cls._holder.name))
+        return cls.path
+
+    @staticmethod
+    def _git(git: str, cwd: Path, *args: str) -> str:
+        # core.symlinks=true: Git for Windows defaults it to false and would
+        # check the upstream's tracked links out as plain files, leaving these
+        # tests nothing to judge. Linux and macOS already default it to true.
+        done = subprocess.run(
+            [git, *FIXTURE_GIT_IDENTITY, "-c", "protocol.file.allow=always",
+             "-c", "core.symlinks=true", *args],
+            cwd=str(cwd), capture_output=True, text=True, timeout=120,
+        )
+        if done.returncode != 0:
+            raise AssertionError(f"git {args}: {done.stderr}")
+        return done.stdout.strip()
+
+    @classmethod
+    def _build(cls, holder: Path) -> Path:
+        git = _require("git")
+        _symlinks_or_skip(holder)
+
+        upstream = holder / "upstream"
+        (upstream / "real" / "java").mkdir(parents=True)
+        (upstream / "dep.h").write_text("/* dep */\n", encoding="utf-8")
+        (upstream / "real" / "target.h").write_text("/* target */\n", encoding="utf-8")
+        (upstream / "real" / "java" / "Main.java").write_text("class Main {}\n", encoding="utf-8")
+        (upstream / "ant").mkdir()
+        os.symlink("../real/target.h", str(upstream / "ant" / "target.h"))
+        os.symlink("../real/java", str(upstream / "ant" / "src"))
+        cls._git(git, upstream, "init", "-q", "-b", "main")
+        cls._git(git, upstream, "add", "-A")
+        cls._git(git, upstream, "commit", "-q", "-m", "upstream")
+        head = cls._git(git, upstream, "rev-parse", "HEAD")
+
+        repo = holder / "repo"
+        shutil.copytree(_Baseline.get(), repo)
+        cls._git(git, repo, "submodule", "add", "-q", str(upstream), SUBMODULE_REL)
+        cls._git(
+            git, repo, "config", "-f", ".gitmodules",
+            f"submodule.{SUBMODULE_REL}.url", SUBMODULE_URL,
+        )
+        notice = repo / SUBMODULE_NOTICE_REL
+        notice.write_text(LICENSE_TEXT, encoding="utf-8", newline="\n")
+        manifest = MANIFEST_TEXT.replace(
+            '\n)\n',
+            f'\n    "dep|{SUBMODULE_URL}|{head}|MIT|{SUBMODULE_REL}|dep.h|SPARK_HAS_DEP|'
+            f'SparkEngine/Source/DemoStub.cpp|WARN|{SUBMODULE_NOTICE_REL}"\n)\n',
+        )
+        (repo / "ThirdParty/dependencies.lock").write_text(
+            manifest, encoding="utf-8", newline="\n"
+        )
+        cls._git(git, repo, "add", "-A")
+        cls._git(git, repo, "commit", "-q", "-m", "add submodule")
+        _SubmoduleBaseline.relock(git, repo)
+        return repo
+
+    @classmethod
+    def relock(cls, git: str, repo: Path, *, expect_clean: bool = True) -> None:
+        """Regenerate and commit the lock.
+
+        --update re-verifies what it wrote; a fixture pinning a hostile
+        upstream expects that re-verification to fail (exit 1) after writing.
+        """
+        done = subprocess.run(
+            [sys.executable, CHECKER_REL, "--update"],
+            cwd=str(repo), capture_output=True, text=True, timeout=300,
+        )
+        wrote = f"Wrote {sc.LOCKFILE_REL}" in done.stdout
+        expected_rc = 0 if expect_clean else 1
+        if done.returncode != expected_rc or not wrote:
+            raise AssertionError(f"--update exited {done.returncode}:\n{done.stdout}\n{done.stderr}")
+        cls._git(git, repo, "add", "-A")
+        cls._git(git, repo, "commit", "-q", "-m", "relock")
+
+
+class TestSubmoduleLinks(FakeRepoCase):
+    """An initialized submodule must not change the verdict, nor widen it.
+
+    Before the fix, every mode-120000 entry tracked by a pinned upstream was
+    rejected as soon as the submodule was checked out, while CI (which checks
+    out without submodules) passed the same commit.  The allowance that fixes
+    that is narrow: only links the LOCKED upstream commit tracks, with their
+    tracked targets, resolving inside the submodule.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.submodule_baseline = _SubmoduleBaseline.get()
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="spark-sc-case-")
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name) / "repo"
+        # symlinks=True: copying must preserve the links under test.
+        shutil.copytree(self.submodule_baseline, self.repo, symlinks=True)
+        if sys.platform == "win32":
+            # copytree recreates every link with a bare os.symlink, which on
+            # Windows makes a file link even when the source was a directory
+            # link, and a file link to a directory never resolves. Restore
+            # each copied directory link's type from its source.
+            for root, dirs, files in os.walk(self.submodule_baseline):
+                for name in dirs + files:
+                    source = Path(root) / name
+                    if (source.is_symlink() and
+                            os.lstat(source).st_file_attributes & stat.FILE_ATTRIBUTE_DIRECTORY):
+                        copied = self.repo / source.relative_to(self.submodule_baseline)
+                        copied.unlink()
+                        os.symlink(os.readlink(source), copied, target_is_directory=True)
+        self.sub = self.repo / SUBMODULE_REL
+
+    def sub_git(self, *args: str) -> str:
+        return _SubmoduleBaseline._git(self.git, self.sub, *args)
+
+    def pin_submodule_head(self) -> None:
+        """Record the submodule's current HEAD as the reviewed, locked gitlink."""
+        head = self.sub_git("rev-parse", "HEAD")
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        text = manifest.read_text(encoding="utf-8")
+        old = text.split(f"|MIT|{SUBMODULE_REL}|")[0].rsplit("|", 1)[1]
+        manifest.write_text(text.replace(old, head), encoding="utf-8", newline="\n")
+        self.commit("pin submodule")
+        _SubmoduleBaseline.relock(self.git, self.repo, expect_clean=False)
+
+    def commit_in_submodule(self, message: str = "upstream change") -> None:
+        self.sub_git("add", "-A")
+        self.sub_git("commit", "-q", "-m", message)
+
+    def verdict(self) -> tuple[int, list]:
+        done = self.check("--json")
+        self.assertIn(done.returncode, (0, 1), f"{done.stdout}\n{done.stderr}")
+        return done.returncode, json.loads(done.stdout)["violations"]
+
+    def test_initialized_submodule_verdict_matches_uninitialized(self) -> None:
+        self.assertTrue((self.sub / "ant" / "src").is_symlink())
+        initialized = self.verdict()
+        self.git_run("submodule", "deinit", "-q", "-f", SUBMODULE_REL)
+        self.assertFalse((self.sub / "ant").exists())
+        uninitialized = self.verdict()
+        self.assertEqual(initialized, uninitialized)
+        self.assertEqual(initialized, (0, []))
+
+    def test_untracked_symlink_in_submodule_is_rejected(self) -> None:
+        os.symlink("../real/target.h", str(self.sub / "ant" / "extra.h"))
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/extra.h",
+            "not tracked as a symlink in the locked submodule commit",
+        )
+
+    def test_link_committed_off_the_locked_pin_is_rejected(self) -> None:
+        # Tracked by the submodule's own HEAD, but not by the reviewed gitlink.
+        os.symlink("../real/target.h", str(self.sub / "ant" / "later.h"))
+        self.commit_in_submodule()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/later.h",
+            "not tracked as a symlink in the locked submodule commit",
+        )
+
+    def test_replace_ref_cannot_forge_the_locked_tree(self) -> None:
+        # A refs/replace/* entry in the submodule's own object store makes a
+        # plain `git ls-tree <pin>` list the forged commit's tree instead.
+        pin = self.sub_git("rev-parse", "HEAD")
+        os.symlink("../real/target.h", str(self.sub / "ant" / "forged.h"))
+        self.commit_in_submodule("forged link")
+        forged = self.sub_git("rev-parse", "HEAD")
+        self.sub_git("replace", pin, forged)
+        # Precondition: without --no-replace-objects git really lies.
+        self.assertIn("ant/forged.h", self.sub_git("ls-tree", "-r", "--name-only", pin))
+        done = self.assert_violation()
+        violations = json.loads(done.stdout)["violations"]
+        self.assertTrue(
+            any(
+                v["path"] == "ThirdParty/Sub/dep/ant/forged.h"
+                and "not tracked as a symlink in the locked submodule commit" in v["message"]
+                for v in violations
+            ),
+            violations,
+        )
+
+    def test_windows_link_target_separators_map_to_git_form(self) -> None:
+        # Git for Windows writes '\\' into on-disk link targets; git's blob
+        # always holds '/'.  POSIX targets are never rewritten.
+        self.assertEqual(sc._git_link_target("..\\real\\java", "\\"), "../real/java")
+        self.assertEqual(sc._git_link_target("../real/java", "\\"), "../real/java")
+        self.assertEqual(sc._git_link_target("a\\b", "/"), "a\\b")
+        # Python's Windows readlink returns absolute targets in the Win32
+        # namespace form; Git for Windows stores them without that prefix.
+        self.assertEqual(sc._git_link_target("\\\\?\\C:\\real\\java", "\\"), "C:/real/java")
+        self.assertEqual(sc._git_link_target("\\\\?\\UNC\\host\\share\\x", "\\"), "//host/share/x")
+        self.assertEqual(sc._git_link_target("\\\\?\\C:\\x", "/"), "\\\\?\\C:\\x")
+
+    def test_retargeted_tracked_link_is_rejected(self) -> None:
+        link = self.sub / "ant" / "target.h"
+        link.unlink()
+        os.symlink("../dep.h", str(link))
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/target.h",
+            "on-disk target differs from the locked submodule commit",
+        )
+
+    def test_locked_link_escaping_the_submodule_is_rejected(self) -> None:
+        outside = self.repo / "ThirdParty" / "Local" / "notes.h"
+        self.assertTrue(outside.is_file())
+        os.symlink("../../../Local/notes.h", str(self.sub / "ant" / "escape.h"))
+        self.commit_in_submodule("escaping link")
+        self.pin_submodule_head()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/escape.h",
+            "target escapes the submodule root",
+        )
+
+    def test_locked_link_escaping_through_an_inner_link_is_rejected(self) -> None:
+        # Lexically inside, but the hop is itself a link that leaves the root.
+        os.symlink("../../../Local", str(self.sub / "real" / "hop"))
+        os.symlink("../real/hop/notes.h", str(self.sub / "ant" / "chained.h"))
+        self.commit_in_submodule("chained link")
+        self.pin_submodule_head()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/real/hop", "target escapes the submodule root",
+        )
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/chained.h", "target escapes the submodule root",
+        )
+
+    def test_locked_absolute_link_is_rejected(self) -> None:
+        os.symlink(str(self.sub / "dep.h"), str(self.sub / "ant" / "absolute.h"))
+        self.commit_in_submodule("absolute link")
+        self.pin_submodule_head()
+        self.assert_violation("ThirdParty/Sub/dep/ant/absolute.h", "absolute target")
+
+    def test_locked_dangling_link_is_rejected(self) -> None:
+        os.symlink("../real/missing.h", str(self.sub / "ant" / "dangling.h"))
+        self.commit_in_submodule("dangling link")
+        self.pin_submodule_head()
+        self.assert_violation(
+            "ThirdParty/Sub/dep/ant/dangling.h", "target does not resolve",
+        )
+
+    def test_superproject_link_is_still_rejected_beside_a_submodule(self) -> None:
+        os.symlink("Sub/dep/dep.h", str(self.repo / "ThirdParty" / "Local" / "alias.h"))
+        self.assert_violation("ThirdParty/Local/alias.h", "symbolic link rejected")
+
+    def test_reparse_point_in_submodule_is_never_accepted(self) -> None:
+        # A junction is not S_ISLNK; the allowance must never reach it even
+        # at a path the locked commit tracks as a symlink.
+        junction_reason = "reparse point (junction/link) rejected — tag 0xa0000003"
+        real_link_reason = sc.link_reason
+
+        def fake_link_reason(path: Path) -> str | None:
+            if path.name == "src" and path.parent.name == "ant":
+                return junction_reason
+            return real_link_reason(path)
+
+        lockfile = self.lock()
+        tracked = sc.git_tracked_thirdparty(self.repo)
+        submodules = sc.verified_submodule_gitlinks(lockfile, tracked)
+        self.assertIn(SUBMODULE_REL, submodules)
+        result = sc.CheckResult()
+        original = sc.link_reason
+        sc.link_reason = fake_link_reason
+        try:
+            sc.check_link_hygiene(self.repo, result, submodules)
+        finally:
+            sc.link_reason = original
+        messages = [(v.path, v.message) for v in result.violations]
+        self.assertEqual(messages, [("ThirdParty/Sub/dep/ant/src", junction_reason)])
+
+    @unittest.skipUnless(sys.platform == "win32", "junctions are a Windows concept")
+    def test_junction_inside_submodule_is_rejected(self) -> None:
+        target = self.sub / "real"
+        link = self.sub / "junction"
+        done = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)],
+            capture_output=True, text=True, timeout=60,
+        )
+        if done.returncode != 0:
+            self.fail(f"could not create junction: {done.stdout}{done.stderr}")
+        self.assert_violation("ThirdParty/Sub/dep/junction", "reparse point")
+
+    def test_gitlink_that_disagrees_with_the_lock_gets_no_allowance(self) -> None:
+        data = self.lock()
+        data["submodule_gitlinks"][SUBMODULE_REL] = "e" * 40
+        self.set_lock(data)
+        tracked = sc.git_tracked_thirdparty(self.repo)
+        self.assertEqual(sc.verified_submodule_gitlinks(data, tracked), {})
+        self.assert_violation("gitlink drift", "symbolic link rejected")
+
+
 class TestContainment(unittest.TestCase):
     """assert_regular_file_no_escape must separate its failure modes."""
 
@@ -638,13 +979,35 @@ class TestActionPinning(FakeRepoCase):
         self._workflow(self.HEADER + f"      - uses: actions/checkout@{'c' * 40}\n")
         self.assert_violation("not a recorded pin")
 
+    def test_dormant_sha_under_used_owner_is_rejected(self) -> None:
+        # Pre-recording an unused SHA would let a later repin to it land
+        # without a lockfile diff; the lock must equal the in-use pairs.
+        data = self.lock()
+        data["action_pins"]["actions/checkout"] = sorted(
+            [*data["action_pins"]["actions/checkout"], "c" * 40]
+        )
+        self.set_lock(data)
+        self.commit()
+        self.assert_violation("dormant SHA", "c" * 40)
+
+    def test_unreferenced_owner_is_rejected(self) -> None:
+        data = self.lock()
+        data["action_pins"]["attacker/backdoor"] = ["b" * 40]
+        self.set_lock(data)
+        self.commit()
+        self.assert_violation("'attacker/backdoor' is not referenced by any workflow")
+
     def test_docker_tag_reference_is_rejected(self) -> None:
         self._workflow(self.HEADER + "      - uses: docker://alpine:latest\n")
         self.assert_violation("digest-pinned")
 
     def test_docker_digest_reference_is_accepted(self) -> None:
+        # Keep the recorded checkout pin in use: an unused lock entry is itself
+        # a violation, and this case is about the docker reference only.
         self._workflow(
-            self.HEADER + f"      - uses: docker://alpine@sha256:{'d' * 64}\n"
+            self.HEADER
+            + f"      - uses: actions/checkout@{CHECKOUT_SHA}\n"
+            + f"      - uses: docker://alpine@sha256:{'d' * 64}\n"
         )
         self.assert_baseline_passes()
 
@@ -944,6 +1307,95 @@ class TestGitmodulesReconciliation(FakeRepoCase):
         self.assert_violation("declares no path")
 
 
+class TestExceptionSchema(FakeRepoCase):
+
+    @staticmethod
+    def _exception(**overrides: str) -> dict[str, str]:
+        record = {
+            "id": "SEC-110-EX-001",
+            "scope": "dependency-policy",
+            "owner": "supply-chain-maintainer",
+            "justification": "Temporary scanner exception is tracked for review.",
+            "expires": "2099-12-31",
+        }
+        record.update(overrides)
+        return record
+
+    def test_expired_exception_is_a_policy_violation(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="2000-01-01")]
+        self.set_lock(data)
+        self.assert_violation("expired", "SEC-110-EX-001")
+
+    def test_far_future_exception_is_a_policy_violation(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="9999-12-31")]
+        self.set_lock(data)
+        self.assert_violation("366-day maximum", "SEC-110-EX-001")
+
+    def test_missing_exception_owner_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        record = self._exception()
+        del record["owner"]
+        data["exceptions"] = [record]
+        self.set_lock(data)
+        self.assert_fatal("owner")
+
+    def test_placeholder_exception_owner_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(owner="unassigned")]
+        self.set_lock(data)
+        self.assert_fatal("owned")
+
+    def test_malformed_exception_expiry_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(expires="2099-02-29")]
+        self.set_lock(data)
+        self.assert_fatal("expires")
+
+    def test_duplicate_exception_ids_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(), self._exception(scope="other")]
+        self.set_lock(data)
+        self.assert_fatal("duplicate")
+
+    def test_unknown_exception_fields_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(severity="high")]
+        self.set_lock(data)
+        self.assert_fatal("fields")
+
+    def test_exception_collection_is_required(self) -> None:
+        data = self.lock()
+        data.pop("exceptions", None)
+        self.set_lock(data)
+        self.assert_fatal("exceptions")
+
+    def test_short_exception_justification_is_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [self._exception(justification="temporary")]
+        self.set_lock(data)
+        self.assert_fatal("justification")
+
+    def test_case_variant_exception_ids_are_a_schema_failure(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [
+            self._exception(),
+            self._exception(id="sec-110-ex-001", scope="other"),
+        ]
+        self.set_lock(data)
+        self.assert_fatal("duplicate")
+
+    def test_exception_collection_is_bounded(self) -> None:
+        data = self.lock()
+        data["exceptions"] = [
+            self._exception(id=f"SEC-110-EX-{index:03d}")
+            for index in range(257)
+        ]
+        self.set_lock(data)
+        self.assert_fatal("MAX_EXCEPTIONS")
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Sentinel integrity
 # ═══════════════════════════════════════════════════════════════════════
@@ -1048,6 +1500,483 @@ class TestLicenseContent(unittest.TestCase):
 # --update must produce a complete, verified lockfile
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+# Dependencies outside ThirdParty/ — system, CI, web, vendored
+# ═══════════════════════════════════════════════════════════════════════
+
+MIT_HEADER = """// Copyright (c) 2019 Someone Else
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software").
+int vendored_helper() { return 0; }
+"""
+CDN_URL = "https://cdn.jsdelivr.net/npm/widget@1.2.3/dist/widget.module.js"
+CDN_SRI = "sha384-" + "A" * 64
+
+
+def _importmap_page(url: str, integrity: str | None) -> str:
+    import_map: dict = {"imports": {"widget": url}}
+    if integrity is not None:
+        import_map["integrity"] = {url: integrity}
+    return (
+        "<!doctype html><html><head>\n"
+        f'<script type="importmap">{json.dumps(import_map)}</script>\n'
+        '</head><body><script type="module">\nimport { Widget } from "widget";\nnew Widget();\n</script>\n'
+        "</body></html>\n"
+    )
+
+
+class TestExternalDependencies(FakeRepoCase):
+
+    @staticmethod
+    def _record(name: str, kind: str, **fields) -> dict:
+        record = {
+            "name": name,
+            "class": kind,
+            "license_spdx": "MIT",
+            "owner": "supply-chain-maintainer",
+            "justification": "Fixture dependency declared for this adversarial case.",
+        }
+        record.update(fields)
+        return record
+
+    def declare(self, *records: dict) -> None:
+        data = self.lock()
+        data["external_dependencies"] = list(records)
+        self.set_lock(data)
+
+    def assert_passes(self) -> None:
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 0, f"{done.stdout}\n{done.stderr}")
+
+    _DOWNLOAD_URL = "https://example.invalid/releases/download/v1.2.3/demo.tar.gz"
+    _DOWNLOAD_SHA = "a" * 64
+    _CURL_COMMAND = 'curl -fLo demo.tar.gz "https://example.invalid/releases/download/v1.2.3/demo.tar.gz"'
+
+    def _download(self, **overrides) -> dict:
+        record = self._record(
+            "demo archive", "downloads", path="tools/fetch.sh", pin_path="tools/fetch.sh",
+            command=self._CURL_COMMAND, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="sha256sum", output="demo.tar.gz",
+        )
+        record.update(overrides)
+        return record
+
+    def test_undeclared_curl_archive_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n")
+        self.commit()
+        self.assert_violation("unmanaged raw download", "declare URL and SHA-256")
+
+    def test_undeclared_wget_archive_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\nwget -O demo.tar.gz {self._DOWNLOAD_URL}\n")
+        self.commit()
+        self.assert_violation("unmanaged raw download", "wget")
+
+    def test_declared_download_without_hash_comparison_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\nEXPECTED={self._DOWNLOAD_SHA}\n{self._CURL_COMMAND}\n")
+        self.commit()
+        self.declare(self._download())
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_commented_hash_comparison_does_not_verify_archive(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'# echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_declared_url_not_used_by_download_fails(self) -> None:
+        other = "https://attacker.invalid/releases/download/v1.2.3/demo.tar.gz"
+        command = self._CURL_COMMAND.replace(self._DOWNLOAD_URL, other)
+        self.write("tools/fetch.sh", f"#!/bin/sh\npinned_url='{self._DOWNLOAD_URL}'\n{command}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download(command=command))
+        self.assert_violation("does not consume its locked URL")
+
+    def test_unrelated_hash_comparison_does_not_verify_archive(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  other-demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_declared_curl_with_hash_comparison_passes(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.assert_passes()
+
+    def test_mutable_branch_url_is_rejected(self) -> None:
+        mutable = "https://raw.githubusercontent.com/example/demo/main/demo.h"
+        self.declare(self._download(source_url=mutable, url=mutable))
+        self.assert_fatal("immutable https URL")
+
+    def test_mutable_ref_query_is_rejected(self) -> None:
+        for mutable in ("https://example.invalid/archive.zip?ref=main",
+                        "https://example.invalid/archive.zip?branch=feature/security-fix"):
+            with self.subTest(url=mutable):
+                self.declare(self._download(source_url=mutable, url=mutable))
+                self.assert_fatal("immutable https URL")
+
+    def test_changed_download_hash_or_url_fails(self) -> None:
+        self.write("tools/fetch.sh", f"#!/bin/sh\n{self._CURL_COMMAND}\n"
+                   f'echo "{self._DOWNLOAD_SHA}  demo.tar.gz" | sha256sum -c -\n')
+        self.commit()
+        self.declare(self._download())
+        self.write("tools/fetch.sh", (self.repo / "tools/fetch.sh").read_text(encoding="utf-8")
+                   .replace(self._DOWNLOAD_SHA, "b" * 64))
+        self.assert_violation("download SHA-256")
+
+    def test_declared_download_without_call_fails(self) -> None:
+        self.declare(self._download())
+        self.assert_violation("has no matching command")
+
+    def test_cmake_file_download_is_inventory_checked(self) -> None:
+        self.write("cmake/Fetch.cmake", 'file(DOWNLOAD "${url}" "${archive}" TLS_VERIFY ON)\n')
+        self.commit()
+        self.assert_violation("unmanaged raw download", "file(DOWNLOAD")
+
+    def test_multiline_cmake_download_is_inventory_checked(self) -> None:
+        self.write("cmake/Fetch.cmake", 'file(\n    DOWNLOAD "https://example.invalid/a.tar.gz"\n    "${out}"\n)\n')
+        self.commit()
+        self.assert_violation("unmanaged raw download", "file( DOWNLOAD")
+
+    def test_multiline_cmake_expected_hash_passes(self) -> None:
+        command = (f'file( DOWNLOAD "{self._DOWNLOAD_URL}" "demo.tar.gz" '
+                   f'EXPECTED_HASH SHA256={self._DOWNLOAD_SHA} )')
+        self.write("cmake/Fetch.cmake", f'file(\n DOWNLOAD "{self._DOWNLOAD_URL}"\n "demo.tar.gz"\n'
+                   f' EXPECTED_HASH SHA256={self._DOWNLOAD_SHA}\n)\n')
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="cmake/Fetch.cmake", pin_path="cmake/Fetch.cmake",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="cmake-expected-hash", output="demo.tar.gz",
+        ))
+        self.assert_passes()
+
+    def test_cmake_fetchcontent_url_hash_passes(self) -> None:
+        command = (f'FetchContent_Declare( widget URL "{self._DOWNLOAD_URL}" '
+                   f'URL_HASH SHA256={self._DOWNLOAD_SHA} )')
+        self.write("cmake/Fetch.cmake", f'FetchContent_Declare(\n widget URL "{self._DOWNLOAD_URL}"\n'
+                   f' URL_HASH SHA256={self._DOWNLOAD_SHA}\n)\n')
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="cmake/Fetch.cmake", pin_path="cmake/Fetch.cmake",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="cmake-url-hash", output="cmake-managed",
+        ))
+        self.assert_passes()
+
+    def test_cmake_externalproject_url_hash_passes(self) -> None:
+        command = (f'ExternalProject_Add( widget URL "{self._DOWNLOAD_URL}" '
+                   f'URL_HASH SHA256={self._DOWNLOAD_SHA} )')
+        self.write("cmake/Fetch.cmake", f'ExternalProject_Add(\n widget URL "{self._DOWNLOAD_URL}"\n'
+                   f' URL_HASH SHA256={self._DOWNLOAD_SHA}\n)\n')
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="cmake/Fetch.cmake", pin_path="cmake/Fetch.cmake",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="cmake-url-hash", output="cmake-managed",
+        ))
+        self.assert_passes()
+
+    def test_powershell_download_with_comparison_passes(self) -> None:
+        command = "Invoke-WebRequest -Uri $url -OutFile $archive"
+        script = (f'$url = "{self._DOWNLOAD_URL}"\n$archive = "demo.tar.gz"\n'
+                  f"$expected = \"{self._DOWNLOAD_SHA}\"\n{command}\n"
+                  "$actual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()\n"
+                  "if ($actual -ne $expected) { throw 'hash mismatch' }\n")
+        self.write("tools/fetch.ps1", script)
+        self.commit()
+        self.declare(self._record(
+            "demo archive", "downloads", path="tools/fetch.ps1", pin_path="tools/fetch.ps1",
+            command=command, source_url=self._DOWNLOAD_URL, url=self._DOWNLOAD_URL,
+            sha256=self._DOWNLOAD_SHA, verification="get-file-hash", output="archive",
+        ))
+        self.assert_passes()
+
+    def test_package_install_naming_a_fetch_tool_is_not_a_download(self) -> None:
+        self.write("tools/setup.sh", "#!/bin/sh\nsudo apt-get install -y curl wget ca-certificates\n")
+        self.commit()
+        self.assert_passes()
+
+    def test_fetch_chained_after_a_package_install_is_still_a_download(self) -> None:
+        self.write("tools/setup.sh", f"#!/bin/sh\napt-get install -y curl && {self._CURL_COMMAND}\n")
+        self.commit()
+        self.assert_violation("unmanaged raw download")
+
+    _GITHUB_API_FETCH = ('curl --silent --header "Accept: application/vnd.github+json" '
+                         '--output "$body" "$api_url"\n')
+
+    def test_github_api_json_fetch_through_api_url_is_not_a_download(self) -> None:
+        self.write("tools/publish.sh", (
+            '#!/bin/sh\nlocal api_url="https://api.github.com/repos/$REPO"\n'
+            'api_url="$api_url/$endpoint"\n' + self._GITHUB_API_FETCH))
+        self.commit()
+        self.assert_passes()
+
+    def test_api_url_pointing_elsewhere_is_a_download_despite_an_api_mention(self) -> None:
+        # Mentioning the GitHub API in a comment says nothing about where $api_url points.
+        self.write("tools/publish.sh", (
+            '#!/bin/sh\n# mirrors https://api.github.com/ responses\n'
+            'api_url="https://downloads.example.org/latest"\n' + self._GITHUB_API_FETCH))
+        self.commit()
+        self.assert_violation("unmanaged raw download")
+
+    _VAR_CURL = "if ! curl --fail --proto '=https' \"$DEMO_URL\" --output \"$tmp/demo.tar.gz\"; then"
+
+    def _variable_url_script(self, check_line: str, url_value: str | None = None) -> None:
+        self.write("tools/fetch.sh", (
+            f'#!/bin/sh\npinned_url="{self._DOWNLOAD_URL}"\nDEMO_URL="{url_value or self._DOWNLOAD_URL}"\n'
+            f'DEMO_SHA256="{self._DOWNLOAD_SHA}"\n'
+            f"{self._VAR_CURL}\n    exit 1\nfi\n{check_line}\n"))
+        self.commit()
+        self.declare(self._download(command=self._VAR_CURL, output="$tmp/demo.tar.gz"))
+
+    def test_url_variable_with_strict_check_in_if_condition_passes(self) -> None:
+        self._variable_url_script(
+            "if ! printf '%s  %s\\n' \"$DEMO_SHA256\" \"$tmp/demo.tar.gz\" | sha256sum --check --strict -; then exit 1; fi")
+        self.assert_passes()
+
+    def test_sha256sum_verdict_discarded_by_or_true_does_not_verify(self) -> None:
+        self._variable_url_script(
+            "printf '%s  %s\\n' \"$DEMO_SHA256\" \"$tmp/demo.tar.gz\" | sha256sum --check - || true")
+        self.assert_violation("no in-file SHA-256 comparison")
+
+    def test_url_variable_bound_to_another_url_is_not_consumed(self) -> None:
+        self._variable_url_script(
+            "if ! printf '%s  %s\\n' \"$DEMO_SHA256\" \"$tmp/demo.tar.gz\" | sha256sum --check --strict -; then exit 1; fi",
+            url_value="https://attacker.invalid/releases/download/v1.2.3/demo.tar.gz")
+        self.assert_violation("does not consume its locked URL")
+
+    def test_fetch_output_flags_are_parsed_exactly(self) -> None:
+        self.assertEqual(sc._command_output("curl --proto '=https' \"$u\" --output \"$tmp/a.tgz\"; then"), "$tmp/a.tgz")
+        self.assertEqual(sc._command_output('curl -fLo demo.tar.gz "https://x.invalid/a"'), "demo.tar.gz")
+        self.assertIsNone(sc._command_output("curl -O https://x.invalid/a.tgz"))
+        self.assertEqual(sc._command_output("wget -o fetch.log https://x.invalid/a -O out.tgz"), "out.tgz")
+
+    # ── CMake system packages ────────────────────────────────────────
+
+    def test_undeclared_find_package_fails(self) -> None:
+        self.write("CMakeLists.txt", "cmake_minimum_required(VERSION 3.20)\nfind_package(ZLIB REQUIRED)\n")
+        self.commit()
+        self.assert_violation("cmake:ZLIB", "system_libraries")
+
+    def test_declared_find_package_passes(self) -> None:
+        self.write("CMakeLists.txt", "find_package(\n  ZLIB REQUIRED)\n")
+        self.commit()
+        self.declare(self._record("zlib", "system_libraries", license_spdx="Zlib", identifiers=["cmake:ZLIB"]))
+        self.assert_passes()
+
+    def test_undeclared_pkg_config_module_fails(self) -> None:
+        self.write("cmake/Probe.cmake", "pkg_check_modules(FOO QUIET IMPORTED_TARGET libfoo>=1.2)\n")
+        self.commit()
+        self.assert_violation("pkg-config:libfoo")
+
+    def test_first_party_and_commented_packages_are_not_dependencies(self) -> None:
+        self.write(
+            "CMakeLists.txt",
+            "find_package(SparkEngine CONFIG REQUIRED)\n# find_package(Retired REQUIRED)\n"
+            "#[[ find_package(AlsoRetired) ]]\nmessage(STATUS \"#not a comment\")\n",
+        )
+        self.commit()
+        self.assert_passes()
+
+    # ── CI system packages ───────────────────────────────────────────
+
+    def test_undeclared_apt_package_in_a_multiline_install_fails(self) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n"
+            "      - run: |\n          sudo apt-get update\n          sudo apt-get install -y \\\n"
+            "            cmake \\\n            libevil-dev\n",
+        )
+        self.commit()
+        self.declare(self._record("tools", "ci_packages", license_spdx="NOASSERTION", identifiers=["apt:cmake"]))
+        self.assert_violation("apt:libevil-dev", "ci_packages")
+
+    def test_declared_ci_packages_pass_and_shell_operators_end_the_list(self) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: macos-15\n    steps:\n"
+            "      - run: |\n          # apt-get install of nothing: a comment\n"
+            "          brew install molten-vk || echo warn-only\n"
+            "          sudo apt-get update && sudo apt-get install -y gcc-14=14.2.0-1 # trailing note\n",
+        )
+        self.commit()
+        self.declare(self._record(
+            "tools", "ci_packages", license_spdx="NOASSERTION", identifiers=["brew:molten-vk", "apt:gcc-14"],
+        ))
+        self.assert_passes()
+
+    _PIP_WORKFLOW = (
+        "name: deps\non: [push]\njobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
+        "      - run: python -m pip install --require-hashes --no-deps -r ci/req.txt\n"
+    )
+
+    def test_declared_hash_pinned_pip_requirements_pass(self) -> None:
+        self.write(".github/workflows/deps.yml", self._PIP_WORKFLOW)
+        self.write("ci/req.txt", f"PyYAML==6.0.3 \\\n    --hash=sha256:{'0' * 64}\n")
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_passes()
+
+    def test_pip_requirement_without_a_hash_fails(self) -> None:
+        self.write(".github/workflows/deps.yml", self._PIP_WORKFLOW)
+        self.write("ci/req.txt", "PyYAML==6.0.3\n")
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_violation("not an exact name==version pin")
+
+    def test_missing_pip_requirements_file_fails(self) -> None:
+        self.write(".github/workflows/deps.yml", self._PIP_WORKFLOW)
+        self.commit()
+        self.assert_violation("pip requirements file 'ci/req.txt'")
+
+    def test_pip_package_installed_by_name_fails_even_when_declared(self) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
+            "      - run: pip install PyYAML==6.0.3\n",
+        )
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_violation("is installed by name")
+
+    # ── Remote web runtime ───────────────────────────────────────────
+
+    def test_cdn_import_without_sri_fails(self) -> None:
+        self.write("tools/viz/page.html", _importmap_page(CDN_URL, None))
+        self.commit()
+        self.declare(self._record("widget", "web_runtime", url=CDN_URL, sri=CDN_SRI))
+        self.assert_violation("without its declared subresource-integrity")
+
+    def test_cdn_url_with_a_floating_version_fails(self) -> None:
+        floating = "https://cdn.jsdelivr.net/npm/widget@latest/dist/widget.module.js"
+        self.write("tools/viz/page.html", f'<script src="{floating}" integrity="{CDN_SRI}"></script>\n')
+        self.commit()
+        self.assert_violation("does not name an exact version")
+
+    def test_undeclared_remote_import_in_a_module_fails(self) -> None:
+        self.write("tools/viz/app.mjs", f'import {{ Widget }} from "{CDN_URL}";\nexport default Widget;\n')
+        self.commit()
+        self.assert_violation("is not declared", "web_runtime")
+
+    def test_declared_cdn_import_with_sri_passes(self) -> None:
+        self.write("tools/viz/page.html", _importmap_page(CDN_URL, CDN_SRI))
+        self.commit()
+        self.declare(self._record("widget", "web_runtime", url=CDN_URL, sri=CDN_SRI))
+        self.assert_passes()
+
+    def test_record_for_a_floating_url_is_a_schema_failure(self) -> None:
+        self.declare(self._record(
+            "widget", "web_runtime", url="https://cdn.jsdelivr.net/npm/widget@1/dist/w.js", sri=CDN_SRI,
+        ))
+        self.assert_fatal("exact version")
+
+    # ── Vendored code outside ThirdParty/ ────────────────────────────
+
+    def test_foreign_mit_header_in_engine_source_fails(self) -> None:
+        self.write("SparkEngine/Source/Util/Vendored.cpp", MIT_HEADER)
+        self.commit()
+        self.assert_violation("SparkEngine/Source/Util/Vendored.cpp", "vendored_outside_thirdparty")
+
+    def test_declared_vendored_directory_passes(self) -> None:
+        self.write("SparkEngine/Source/Util/Vendored.cpp", MIT_HEADER)
+        self.commit()
+        self.declare(self._record("helper", "vendored_outside_thirdparty", paths=["SparkEngine/Source/Util/"]))
+        self.assert_passes()
+
+    def test_license_text_in_test_fixtures_is_exempt(self) -> None:
+        self.write("Tests/Fixtures/quoted_license.py", f'TEXT = """{MIT_HEADER}"""\n')
+        self.commit()
+        self.assert_passes()
+
+    def test_declared_vendored_path_must_be_tracked(self) -> None:
+        self.declare(self._record("gone", "vendored_outside_thirdparty", paths=["SparkEngine/Source/Gone.cpp"]))
+        self.assert_violation("is not tracked")
+
+    # ── Record schema ────────────────────────────────────────────────
+
+    def test_duplicate_or_case_colliding_records_are_a_schema_failure(self) -> None:
+        cases = {
+            "name": (
+                self._record("Zlib", "system_libraries", identifiers=["cmake:ZLIB"]),
+                self._record("zlib", "system_libraries", identifiers=["cmake:Other"]),
+            ),
+            "identifier": (
+                self._record("one", "system_libraries", identifiers=["cmake:ZLIB"]),
+                self._record("two", "system_libraries", identifiers=["cmake:zlib"]),
+            ),
+        }
+        for kind, records in cases.items():
+            with self.subTest(kind):
+                self.declare(*records)
+                self.assert_fatal("collides")
+
+    def test_noassertion_license_is_only_for_ci_packages(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", license_spdx="NOASSERTION", identifiers=["cmake:ZLIB"]))
+        self.assert_fatal("license_spdx")
+
+    def test_identifier_namespace_must_match_the_class(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", identifiers=["apt:zlib1g-dev"]))
+        self.assert_fatal("namespace")
+
+    def test_unowned_record_is_a_schema_failure(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", owner="unassigned", identifiers=["cmake:ZLIB"]))
+        self.assert_fatal("owned")
+
+    def test_unused_declaration_warns_without_failing(self) -> None:
+        self.declare(self._record("zlib", "system_libraries", identifiers=["cmake:ZLIB"]))
+        done = self.check("--json")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("which nothing uses", done.stdout)
+
+    def test_update_carries_the_declarations_through(self) -> None:
+        record = self._record("zlib", "system_libraries", identifiers=["cmake:ZLIB"])
+        self.declare(record)
+        done = self.check("--update")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.lock()["external_dependencies"], [record])
+
+
+class TestExternalScanners(unittest.TestCase):
+
+    def test_cmake_package_uses(self) -> None:
+        text = (
+            'find_package(Vulkan QUIET COMPONENTS glslc)\nfind_dependency(SDL2 REQUIRED CONFIG)\n'
+            'pkg_search_module(EGL REQUIRED egl)\n# find_package(Hidden)\n'
+        )
+        self.assertEqual(sc.cmake_package_uses(text), ["cmake:Vulkan", "cmake:SDL2", "pkg-config:egl"])
+
+    def test_shell_package_installs(self) -> None:
+        script = "sudo apt-get -q install -y a b=1.0; apt install c\nbrew install d | tee log\nnot apt-get update x\n"
+        self.assertEqual(sc.shell_package_installs(script), ["apt:a", "apt:b", "apt:c", "brew:d"])
+
+    def test_pip_installs_split_named_packages_from_requirement_files(self) -> None:
+        script = (
+            '"$py" -m pip install --require-hashes -r ci/req.txt \\\n  --requirement=ci/more.txt -c pins.txt\n'
+            "pip3 install Loose==1.0 && pip install -r other.txt\n"
+        )
+        self.assertEqual(sc.shell_package_installs(script), ["pip:Loose"])
+        self.assertEqual(sc.pip_requirement_files(script), ["ci/req.txt", "ci/more.txt", "other.txt"])
+
+    def test_pip_requirement_lines_must_be_exact_hashed_pins(self) -> None:
+        digest = "0" * 64
+        text = (
+            f"# comment\nPyYAML==6.0.3 \\\n    --hash=sha256:{digest} \\\n    --hash=sha256:{digest}  # wheels\n"
+            f"floating>=1 --hash=sha256:{digest}\nunhashed==1.0\n--index-url https://example.invalid/simple\n"
+        )
+        packages, rejected = sc.pip_requirement_packages(text)
+        self.assertEqual(packages, ["pip:PyYAML"])
+        self.assertEqual(
+            rejected,
+            [f"floating>=1 --hash=sha256:{digest}", "unhashed==1.0", "--index-url https://example.invalid/simple"],
+        )
+
+
 class TestUpdateMode(FakeRepoCase):
 
     def test_update_verifies_what_it_wrote(self) -> None:
@@ -1142,6 +2071,7 @@ class TestSchemaValidation(unittest.TestCase):
         base = {
             "version": 2,
             "description": "test",
+            "exceptions": [],
             "submodule_gitlinks": {},
             "managed_vendored_dirs": [],
             "project_owned_dirs": {},
@@ -1160,6 +2090,36 @@ class TestSchemaValidation(unittest.TestCase):
 
     def test_minimal_valid_schema_is_accepted(self) -> None:
         sc.validate_lockfile_schema(self._lock())
+
+    def _policy(self, **fields) -> dict:
+        record = {"declared": "zlib", "spdx": "Zlib", **fields}
+        return self._lock(license_policy={"dependencies": {"SDL2": record}})
+
+    def test_vulnerability_identity_fields_are_accepted(self) -> None:
+        sc.validate_lockfile_schema(self._policy(
+            upstream_version="2.32.0+231", upstream_tag_commit="7" * 40,
+            cpe="cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"))
+        sc.validate_lockfile_schema(self._policy(
+            upstream_version="2.38.0", upstream_version_source="Version macro in the pinned public header.",
+            cpe_unavailable_reason="The NVD CPE dictionary has no product for it."))
+
+    def test_malformed_vulnerability_identity_is_rejected(self) -> None:
+        cpe = "cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"
+        cases = {
+            "cpe and reason": dict(upstream_version="2.32.0", cpe=cpe, cpe_unavailable_reason="x" * 20),
+            "cpe without version": dict(cpe=cpe),
+            "cpe for another release": dict(upstream_version="2.30.0", cpe=cpe),
+            "not a cpe 2.3 name": dict(upstream_version="2.32.0", cpe="cpe:/a:libsdl:sdl:2.32.0"),
+            "floating version": dict(upstream_version="latest"),
+            "tag commit without version": dict(upstream_tag_commit="7" * 40),
+            "tag commit and source": dict(upstream_version="2.32.0", upstream_tag_commit="7" * 40,
+                                          upstream_version_source="Version macro in the header."),
+            "short reason": dict(cpe_unavailable_reason="none"),
+            "unknown field": dict(cpe_vendor="libsdl"),
+        }
+        for label, fields in cases.items():
+            with self.subTest(label):
+                self._expect_fatal(self._policy(**fields))
 
     def test_truncated_sentinel_sha256_rejected(self) -> None:
         self._expect_fatal(self._lock(sentinel_files={
@@ -1340,6 +2300,19 @@ class TestFailClosed(FakeRepoCase):
     def test_missing_manifest_exits_two(self) -> None:
         (self.repo / "ThirdParty/dependencies.lock").unlink()
         self.assert_fatal("")
+
+    def test_hardlinked_manifest_is_rejected(self) -> None:
+        manifest = self.repo / "ThirdParty/dependencies.lock"
+        outside = Path(self._tmp.name) / "dependencies.lock"
+        outside.write_bytes(manifest.read_bytes())
+        manifest.unlink()
+        try:
+            os.link(str(outside), str(manifest))
+        except (OSError, NotImplementedError, AttributeError) as exc:
+            if IN_CI:
+                self.fail(f"hardlink creation must work in CI: {exc}")
+            self.skipTest(f"hardlink creation unavailable: {exc}")
+        self.assert_fatal("hardlinked file rejected")
 
     def test_missing_gitmodules_exits_two(self) -> None:
         (self.repo / ".gitmodules").unlink()

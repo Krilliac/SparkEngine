@@ -19,7 +19,10 @@
 #include "../GameModules/SparkGameRTS/Source/Command/RTSCommandSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Core/RTSPersistence.h"
+#include "../GameModules/SparkGameRTS/Source/FogOfWar/RTSFogOfWarSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Match/RTSMatchSystem.h"
 #include "../GameModules/SparkGameRTS/Source/Resource/RTSResourceSystem.h"
+#include "../GameModules/SparkGameRTS/Source/Simulation/RTSSkirmishSimulation.h"
 
 using namespace RTS;
 
@@ -584,6 +587,15 @@ TEST(RTS_Persistence_RoundTripsAndAtomicallyRestoresGameplayState)
     EXPECT_TRUE(buildings.Initialize(nullptr, &units, &resources));
     RTSCommandSystem commands;
     EXPECT_TRUE(commands.Initialize(nullptr, &units));
+    RTSFogOfWarSystem fog;
+    EXPECT_TRUE(fog.Initialize(nullptr, 16, 16));
+    RTSMatchSystem match;
+    EXPECT_TRUE(match.Initialize(nullptr));
+    match.SetupMatch(2);
+    EXPECT_TRUE(match.StartMatch());
+    const RTSSkirmishSystems systems{&units, &buildings, &resources, &commands, &fog, &match};
+    RTSSkirmishSimulation simulation;
+    ASSERT_TRUE(simulation.Initialize(nullptr, systems));
 
     const uint32_t worker = units.SpawnUnit(RTSUnitType::Worker, RTSFaction::Human, 3.25f, -7.5f);
     const uint32_t marine = units.SpawnUnit(RTSUnitType::Marine, RTSFaction::Human, 8.0f, 4.0f);
@@ -598,7 +610,7 @@ TEST(RTS_Persistence_RoundTripsAndAtomicallyRestoresGameplayState)
     buildings.Update(100.0f);
     EXPECT_TRUE(buildings.StartProduction(barracks, RTSUnitType::Marine));
 
-    const RTSPersistenceSnapshot captured = RTSPersistence::Capture(units, buildings, resources);
+    const RTSPersistenceSnapshot captured = RTSPersistence::Capture(systems, simulation);
     std::string error;
     const std::string encoded = RTSPersistence::Serialize(captured, error);
     EXPECT_EQ(error, std::string());
@@ -613,7 +625,7 @@ TEST(RTS_Persistence_RoundTripsAndAtomicallyRestoresGameplayState)
     resources.AddResources(RTSFaction::Human, 999, 999);
     commands.Select(worker);
 
-    EXPECT_TRUE(RTSPersistence::Apply(decoded, units, buildings, resources, &commands, error));
+    EXPECT_TRUE(RTSPersistence::Apply(decoded, systems, simulation, error));
     EXPECT_EQ(units.GetUnitCount(), static_cast<size_t>(2));
     EXPECT_NEAR(units.GetUnit(worker)->health, savedWorkerHealth, 0.001f);
     EXPECT_EQ(units.GetUnit(marine)->targetId, worker);

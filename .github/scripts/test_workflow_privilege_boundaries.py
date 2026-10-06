@@ -24,6 +24,7 @@ CODEQL_REPORT = ROOT / ".github" / "workflows" / "codeql-report.yml"
 SUMMARY = ROOT / ".github" / "workflows" / "summary.yml"
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 MSVC = ROOT / ".github" / "workflows" / "msvc.yml"
+OPERATIONS = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
 CODEQL_ACTION_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -158,6 +159,43 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
             },
         )
         self.assertNotIn("actions: write", release)
+
+    def test_release_approval_job_is_read_only(self) -> None:
+        text = RELEASE.read_text(encoding="utf-8")
+        approval = _block(text, "release-approval", 2)
+
+        self.assertEqual(_permissions(approval), {"actions": "read", "contents": "read"})
+        self.assertNotIn(": write", approval)
+        self.assertNotIn("secrets.", approval)
+
+    def test_release_publisher_verifies_published_asset_attestation(self) -> None:
+        text = RELEASE.read_text(encoding="utf-8")
+        release = _block(text, "release", 2)
+        step_name = "    - name: Verify published release attestation as a consumer\n"
+
+        self.assertEqual(
+            release.count(step_name),
+            1,
+            "release publication must include exactly one consumer attestation check",
+        )
+        self.assertIn(
+            'gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"',
+            release,
+        )
+        verify_index = release.index(step_name)
+        verify_end = release.find("\n    - name:", verify_index + len(step_name))
+        verify_step = release[verify_index:verify_end]
+        self.assertNotIn("\n      if:", verify_step,
+                         "both stable and nightly publications require consumer verification")
+        self.assertNotIn("continue-on-error:", verify_step)
+        self.assertLess(
+            release.index("    - name: Verify release tag immediately after publication\n"),
+            verify_index,
+        )
+        self.assertLess(
+            verify_index,
+            release.index("    - name: Complete published release and download counters\n"),
+        )
 
     def test_codeql_source_workflow_executes_no_repository_code(self) -> None:
         text = CODEQL.read_text(encoding="utf-8")
@@ -297,6 +335,17 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
 
         self.assertEqual(_permissions(job), {"issues": "write", "models": "read"})
         self.assertNotIn("actions/checkout@", job)
+        _assert_full_sha_pins(self, text)
+
+    def test_scheduled_operations_jobs_are_read_only(self) -> None:
+        text = OPERATIONS.read_text(encoding="utf-8")
+        self.assertEqual(_block(text, "permissions", 0).splitlines()[1:], ["  contents: read"])
+        for name in ("recovery-drill", "server-soak", "soak-scheduled"):
+            job = _block(text, name, 2)
+            with self.subTest(job=name):
+                self.assertEqual(_permissions(job), {"contents": "read"})
+                self.assertIn("persist-credentials: false", job)
+                self.assertNotIn("secrets.", job)
         _assert_full_sha_pins(self, text)
 
 

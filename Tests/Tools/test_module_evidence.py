@@ -23,6 +23,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -53,6 +55,55 @@ PROFILE = "stable-v1"
 PACKAGE_SMOKE_TEST_SHA = "0123456789abcdef0123456789abcdef01234567"
 PACKAGE_SMOKE_TEST_DIGEST = "a" * 64
 
+# The production-source FPSRespawn_* tests the fixture repository defines.  The
+# names are the shipped ones, so the fixture JUnit looks like a real SparkTests
+# run; the validator derives the expected set from the fixture's Tests/ sources.
+FPS_RESPAWN_CASES = (
+    "FPSRespawn_CollectsShippedLevelDefaultSpawnsOnly",
+    "FPSRespawn_CollectSkipsMalformedPriorityAndWaveSpawns",
+    "FPSRespawn_DeathRespawnReportsAuthoredSpawnRotation",
+    "FPSRespawn_SceneReloadRebindKeepsPendingDeathScoreAndSettings",
+    "FPSRespawn_RebindWithoutAuthoredSpawnsRestoresFallbackNotStaleSpawn",
+    "FPSRespawn_LowestIntegerPriorityStillSelectsAuthoredSpawn",
+    "FPSRespawn_DeathScoresAndArmsTheRespawnTimer",
+    "FPSRespawn_UpdatePublishesRespawnEventAfterTheDelay",
+    "FPSRespawn_RespawnWithoutAPendingDeathDoesNothing",
+    "FPSRespawn_ManualRespawnPublishesAndClearsThePendingDeath",
+)
+OTHER_SPARKTESTS_CASES = ("NullRHI_Boots", "ECS_TicksInOrder", "Save_RoundTrips")
+
+
+def sparktests_junit(fps_cases: tuple[str, ...] = FPS_RESPAWN_CASES,
+                     other_cases: tuple[str, ...] = OTHER_SPARKTESTS_CASES) -> str:
+    """SparkTests-shaped JUnit: the module's production cases plus unrelated ones."""
+    names = (*other_cases, *fps_cases)
+    cases = "".join(
+        f'    <testcase name="{name}" classname="SparkEngine" time="0.01"/>\n' for name in names
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<testsuites tests="{len(names)}" failures="0" errors="0">\n'
+        f'  <testsuite name="SparkEngine" tests="{len(names)}" failures="0" errors="0">\n'
+        f"{cases}"
+        '  </testsuite>\n'
+        '</testsuites>\n'
+    )
+
+
+def write_fps_production_tests(root: Path, names: tuple[str, ...] = FPS_RESPAWN_CASES) -> None:
+    """A production-source test file (it includes a real module header)."""
+    header = root / "GameModules" / INCLUDED / "Source" / "Respawn" / "RespawnSystem.h"
+    header.parent.mkdir(parents=True, exist_ok=True)
+    header.write_text("#pragma once\nstruct RespawnSystem {};\n", encoding="utf-8")
+    tests = root / "Tests"
+    tests.mkdir(parents=True, exist_ok=True)
+    body = "".join(f"TEST({name})\n{{\n    EXPECT_EQ(sizeof(RespawnSystem), 1u);\n}}\n\n"
+                   for name in names)
+    (tests / "TestFPSRespawnFixture.cpp").write_text(
+        '#include "TestFramework.h"\n#include "Respawn/RespawnSystem.h"\n\n' + body,
+        encoding="utf-8",
+    )
+
 
 def package_smoke_record(module: str, commit_sha: str) -> str:
     """Hand-authored canonical package evidence; never derived from the parser."""
@@ -63,10 +114,110 @@ def package_smoke_record(module: str, commit_sha: str) -> str:
         "[package-smoke] profile=stable-v1\n"
         f"[package-smoke] commit_sha={commit_sha}\n"
         f"[package-smoke] msi_sha256={PACKAGE_SMOKE_TEST_DIGEST}\n"
+        "[package-smoke] package_runtime=PASS\n"
+        "[package-smoke] asset_integrity=PASS\n"
+        "[package-smoke] asset_entries=12\n"
+        "[package-smoke] authored_scene_visual=PASS\n"
+        "[package-smoke] save_reload=PASS\n"
+        "[package-smoke] repository_isolation=PASS\n"
         "[package-smoke] backend=nullrhi result=PASS\n"
         "[package-smoke] backend=d3d11-warp result=PASS\n"
         "[package-smoke] exit_code=0\n"
         "[package-smoke] PASS\n"
+    )
+
+
+def sanitizer_junit(*, selector_cases: tuple[str, ...] = FPS_RESPAWN_CASES,
+                    selector_child: str = "",
+                    total: int | None = None) -> str:
+    """SparkTests-shaped ASan JUnit carrying the FPS production-source testcases.
+
+    ``total`` testcases are recorded (default: exactly the full-suite floor),
+    padded with passing non-FPS cases so only the selector cases are relevant.
+    ``selector_child`` is placed inside the first selector case.
+    """
+    if total is None:
+        total = artifacts.SANITIZER_MIN_JUNIT_TESTCASES
+    filler = "".join(
+        f'    <testcase name="NullRHI_Filler_{index:05d}" time="0.001"/>\n'
+        for index in range(max(0, total - len(selector_cases)))
+    )
+    selected = "".join(
+        f'    <testcase name="{name}" time="0.9">{selector_child if index == 0 else ""}</testcase>\n'
+        for index, name in enumerate(selector_cases)
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<testsuites tests="{total}" failures="0" skipped="0" flaky="0" empty="0" time="1.5">\n'
+        f'  <testsuite name="SparkEngine" tests="{total}" failures="0" skipped="0" flaky="0" '
+        'empty="0" time="1.5">\n'
+        f"{filler}"
+        f"{selected}"
+        '  </testsuite>\n'
+        '</testsuites>\n'
+    )
+
+
+def sanitizer_metadata(commit_sha: str, junit: bytes, **overrides: Any) -> dict[str, Any]:
+    """The clean metadata.json verify-sanitizer-evidence.py writes for one ASan run."""
+    document: dict[str, Any] = {
+        "schemaVersion": 2,
+        "provenance": {
+            "commitSha": commit_sha,
+            "runId": 1234,
+            "runAttempt": 1,
+            "job": "build-linux-asan",
+            "sanitizer": "asan",
+            "lane": "linux-asan",
+            "originEvidenceDirectory": f"spark-sanitizer-asan-{commit_sha}-1234-1-build-linux-asan",
+            "commandSha256": "c" * 64,
+        },
+        "selector": {"expected": "all", "verified": True},
+        "process": {
+            "exitCode": 0, "captureExitCode": 0, "timeoutSeconds": 900,
+            "timedOut": False, "captureOverflow": False,
+        },
+        "completion": {
+            "valid": True, "tests": junit.count(b"<testcase "), "failures": 0, "errors": 0, "skipped": 0,
+            "knownFlakyWarnings": 0, "flakyOutcomes": 0, "flakySkips": 0, "empty": 0,
+            "suiteNames": ["SparkEngine"], "shuffleSeed": 123,
+            "junitSha256": hashlib.sha256(junit).hexdigest(),
+            "reportSha256": "d" * 64, "consoleSha256": "e" * 64,
+        },
+        "signals": {
+            "sanitizerSignature": False, "runtimeEvidence": False, "testFailure": False,
+            "knownFlakyWarning": False, "crash": False, "infrastructure": False,
+        },
+        "runtimeLogs": [],
+        "scannerExitCodes": {
+            "sanitizerSignature": 1, "warning": 1, "testFailure": 1, "crash": 1,
+            "infrastructure": 1,
+        },
+        "classification": "clean",
+        "recommendedExitCode": 0,
+        "evidenceErrors": [],
+        "startedUnixNanoseconds": 1,
+        "completedUtc": "2026-09-24T00:00:00Z",
+    }
+    for dotted, value in overrides.items():
+        target = document
+        keys = dotted.split("__")
+        for key in keys[:-1]:
+            target = target[key]
+        target[keys[-1]] = value
+    return document
+
+
+def write_sanitizer_evidence(root: Path, commit_sha: str, *, junit: str | None = None,
+                             **overrides: Any) -> None:
+    """Lay out a downloaded test-results-linux-asan artifact under the repo."""
+    junit_bytes = (junit if junit is not None else sanitizer_junit()).encode("utf-8")
+    metadata_path = root / EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    (root / schema_mod.SANITIZER_REPORT_JUNIT).write_bytes(junit_bytes)
+    metadata_path.write_text(
+        json.dumps(sanitizer_metadata(commit_sha, junit_bytes, **overrides)),
+        encoding="utf-8",
     )
 
 
@@ -122,19 +273,8 @@ def build_fake_repo(root: Path) -> str:
     # carry semantically valid content.
     junit_path = root / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
     junit_path.parent.mkdir(parents=True, exist_ok=True)
-    junit_path.write_text(
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<testsuites tests="5" failures="0" errors="0">\n'
-        f'  <testsuite name="{INCLUDED}" tests="5" failures="0" errors="0">\n'
-        f'    <testcase name="test_load" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_init" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_update" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_unload" classname="{INCLUDED}.Module"/>\n'
-        f'    <testcase name="test_shutdown" classname="{INCLUDED}.Module"/>\n'
-        '  </testsuite>\n'
-        '</testsuites>\n',
-        encoding="utf-8",
-    )
+    junit_path.write_text(sparktests_junit(), encoding="utf-8")
+    write_fps_production_tests(root)
     smoke_path = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
     smoke_path.parent.mkdir(parents=True, exist_ok=True)
     _git(root, "init", "-q", "-b", "main")
@@ -145,6 +285,7 @@ def build_fake_repo(root: Path) -> str:
     _git(root, "commit", "-q", "-m", "fixture")
     sha = _git(root, "rev-parse", "HEAD").stdout.strip()
     smoke_path.write_text(package_smoke_record(INCLUDED, sha), encoding="utf-8")
+    write_sanitizer_evidence(root, sha)
     return sha
 
 
@@ -164,7 +305,7 @@ def module_entry(name: str, *, included: bool) -> dict[str, Any]:
         entry["evidenceBindings"] = [
             {"type": t, "artifactPattern": EVIDENCE_PRODUCERS[t]["artifact"]}
             for t in ("cmake-target-index", "lifecycle-log", "junit-xml",
-                      "package-smoke-log")
+                      "package-smoke-log", "sanitizer-report")
         ]
     else:
         entry["evidenceBindings"] = []
@@ -482,10 +623,29 @@ class TestTargetProof(FixtureCase):
         self.assertRejected(base_manifest(), "B02",
                             target_index=target_index(sources=[]))
 
+    def test_target_without_a_module_artifact_is_rejected(self) -> None:
+        evidence = target_index()
+        evidence["targets"][INCLUDED]["artifacts"] = []
+        errors = self.assertRejected(
+            base_manifest(), "B02c", target_index=evidence,
+        )
+        self.assertTrue(
+            any("output artifact" in error.lower() for error in errors),
+            errors,
+        )
+
     def test_B02b_sources_outside_declared_tree_are_rejected(self) -> None:
         self.assertRejected(
             base_manifest(), "B02b",
             target_index=target_index(sources=["SparkEngine/Source/Other.cpp"]),
+        )
+
+    def test_B02c_sibling_source_directory_prefix_is_rejected(self) -> None:
+        self.assertRejected(
+            base_manifest(), "B02c",
+            target_index=target_index(
+                source_directory=f"GameModules/{INCLUDED}Evil/Source",
+            ),
         )
 
     def test_target_of_wrong_type_is_rejected(self) -> None:
@@ -1426,14 +1586,7 @@ class TestLifecycleIsRuntimeProof(FixtureCase):
         )
         junit = root / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
         junit.parent.mkdir(parents=True, exist_ok=True)
-        junit.write_text(
-            '<testsuites tests="3"><testsuite tests="3">'
-            '<testcase name="a" classname="SparkGameFPS"/>'
-            '<testcase name="b" classname="SparkGameFPS"/>'
-            '<testcase name="c" classname="SparkGameFPS"/>'
-            '</testsuite></testsuites>',
-            encoding="utf-8",
-        )
+        junit.write_text(sparktests_junit(), encoding="utf-8")
         smoke = root / EVIDENCE_PRODUCERS["package-smoke-log"]["artifact"]
         smoke.parent.mkdir(parents=True, exist_ok=True)
         smoke.write_text(package_smoke_record(INCLUDED, sha), encoding="utf-8")
@@ -3968,7 +4121,7 @@ class TestEvidenceBindings(FixtureCase):
         self.assertRejected(m, "B12")
 
     def test_B12b_each_required_evidence_type_is_individually_required(self) -> None:
-        for i in range(4):
+        for i in range(5):
             with self.subTest(dropped=i):
                 m = base_manifest()
                 del m["modules"][0]["evidenceBindings"][i]
@@ -4698,6 +4851,11 @@ class TestCIWiring(unittest.TestCase):
         block = self._job_block("module-evidence")
         self.assertIn("collect_targets.py", block)
         self.assertIn("-DBUILD_GAME_MODULES=ON", block)
+        self.assertNotRegex(
+            block, r"--configure-arg\s+-D",
+            "CMake definitions must be attached to --configure-arg so argparse "
+            "does not treat a leading -D as another option",
+        )
 
     def test_module_evidence_gate_is_not_policy_only(self) -> None:
         """A --policy-only run must never be the release gate."""
@@ -4738,7 +4896,8 @@ class TestCIWiring(unittest.TestCase):
         """The Ubuntu release consumer waits for and reads exact lifecycle JSON."""
         block = self._job_block("module-evidence")
         self.assertIn(
-            "needs: [build-linux-gcc, module-profile-lifecycle, module-profile-package-smoke]",
+            "needs: [build-linux-gcc, build-linux-asan, module-profile-lifecycle, "
+            "module-profile-package-smoke]",
             block,
         )
         self.assertIn("module-profile-lifecycle-${{ github.sha }}", block)
@@ -4765,6 +4924,22 @@ class TestCIWiring(unittest.TestCase):
         needs = gate[gate.index("needs:"):gate.index("runs-on:")]
         self.assertIn("- module-profile-package-smoke", needs)
         self.assertIn('"module-profile-package-smoke"', gate)
+
+    def test_module_evidence_consumes_verified_asan_evidence(self) -> None:
+        """RDY-010: the ASan lane's real evidence directory is downloaded, fully
+        verified, and placed where the sanitizer-report binding reads it."""
+        block = self._job_block("module-evidence")
+        self.assertIn("build-linux-asan", block[:block.index("runs-on:")])
+        self.assertIn("name: test-results-linux-asan", block)
+        evidence_dir = Path(EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]).parent.as_posix()
+        self.assertIn(f"path: {evidence_dir}", block)
+        verify = block.index("verify-sanitizer-evidence.py verify-published")
+        self.assertLess(block.index("name: test-results-linux-asan"), verify)
+        self.assertLess(verify, block.index("validate_manifest.py"))
+        for flag in ("--sanitizer asan", "--lane linux-asan", '--expected-sha "${{ github.sha }}"',
+                     "--job build-linux-asan", "--minimum-tests 6900"):
+            self.assertIn(flag, block[verify:])
+        self.assertNotIn("asan-ubsan-lsan-results.txt", self.workflow)
 
     def test_gate_consumes_really_produced_junit_evidence(self) -> None:
         block = self._job_block("module-evidence")
@@ -5095,6 +5270,67 @@ class TestCMakeFileAPI(unittest.TestCase):
         self.assertEqual(index["SparkGameFPS"]["sources"],
                          ["GameModules/SparkGameFPS/Source/Main.cpp"])
 
+    def test_extract_from_reply_normalizes_absolute_codemodel_paths(self) -> None:
+        """Real CMake roots are absolute; evidence must remain portable."""
+        with tempfile.TemporaryDirectory(prefix="spark-absolute-reply-") as tmp:
+            root = Path(tmp)
+            source_root = root / "checkout"
+            build_root = root / "build"
+            target_source = source_root / "GameModules" / "SparkGameFPS"
+            target = {
+                "name": "SparkGameFPS",
+                "type": "SHARED_LIBRARY",
+                "nameOnDisk": "libSparkGameFPS.so",
+                "paths": {
+                    "source": str(target_source),
+                    "build": str(build_root / "GameModules" / "SparkGameFPS"),
+                },
+                "sources": [{
+                    "path": str(target_source / "Source" / "Main.cpp"),
+                }],
+                "artifacts": [{
+                    "path": str(build_root / "bin" / "libSparkGameFPS.so"),
+                }],
+            }
+            codemodel = {
+                "paths": {
+                    "source": str(source_root),
+                    "build": str(build_root),
+                },
+                "configurations": [{
+                    "name": "Release",
+                    "targets": [{
+                        "name": "SparkGameFPS",
+                        "jsonFile": "target-X.json",
+                    }],
+                }],
+            }
+            reply = root / "reply"
+            reply.mkdir()
+            (reply / "target-X.json").write_text(
+                json.dumps(target), encoding="utf-8",
+            )
+            (reply / "codemodel-v2-abc.json").write_text(
+                json.dumps(codemodel), encoding="utf-8",
+            )
+            (reply / "index-1.json").write_text(json.dumps({
+                "reply": {targets_mod.CLIENT_NAME: {"query.json": {
+                    "responses": [{
+                        "kind": "codemodel",
+                        "jsonFile": "codemodel-v2-abc.json",
+                    }]
+                }}}
+            }), encoding="utf-8")
+            index = targets_mod.extract_from_reply(reply)
+
+        captured = index["SparkGameFPS"]
+        self.assertEqual(captured["sourceDirectory"], "GameModules/SparkGameFPS")
+        self.assertEqual(
+            captured["sources"],
+            ["GameModules/SparkGameFPS/Source/Main.cpp"],
+        )
+        self.assertEqual(captured["artifacts"], ["bin/libSparkGameFPS.so"])
+
     def test_query_error_in_reply_raises(self) -> None:
         with tempfile.TemporaryDirectory(prefix="spark-reply-") as tmp:
             reply = Path(tmp)
@@ -5203,18 +5439,7 @@ class TestArtifactSemanticValidation(FixtureCase):
         path.write_text(content, encoding="utf-8")
         return path
 
-    VALID_JUNIT = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<testsuites tests="5" failures="0" errors="0">\n'
-        '  <testsuite name="SparkGameFPS" tests="5" failures="0" errors="0">\n'
-        '    <testcase name="test_load" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_init" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_update" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_unload" classname="SparkGameFPS.Module"/>\n'
-        '    <testcase name="test_shutdown" classname="SparkGameFPS.Module"/>\n'
-        '  </testsuite>\n'
-        '</testsuites>\n'
-    )
+    VALID_JUNIT = sparktests_junit()
     VALID_SMOKE = package_smoke_record(INCLUDED, PACKAGE_SMOKE_TEST_SHA)
 
     def test_zero_byte_junit_xml_is_rejected(self) -> None:
@@ -5228,6 +5453,21 @@ class TestArtifactSemanticValidation(FixtureCase):
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertEqual(errors, [], f"valid JUnit XML rejected: {errors}")
 
+    def test_ctest_junit_without_classname_is_accepted(self) -> None:
+        """CTest's JUnit producer omits the optional classname attribute."""
+        report = (
+            '<testsuites tests="3" failures="0" errors="0">'
+            '<testsuite name="SparkEngineTests" tests="3" failures="0" errors="0">'
+            '<testcase name="one"/><testcase name="two"/><testcase name="three"/>'
+            '</testsuite></testsuites>'
+        )
+        path_errors = artifacts.validate_junit_xml(self._junit_xml(report), INCLUDED)
+        byte_errors = artifacts.validate_junit_xml_bytes(
+            report.encode("utf-8"), "ctest-junit.xml", INCLUDED,
+        )
+        self.assertEqual(path_errors, [], path_errors)
+        self.assertEqual(byte_errors, [], byte_errors)
+
     def test_junit_xml_with_zero_tests_is_rejected(self) -> None:
         path = self._junit_xml(
             '<testsuites tests="0" failures="0" errors="0">'
@@ -5235,6 +5475,41 @@ class TestArtifactSemanticValidation(FixtureCase):
         )
         errors = artifacts.validate_junit_xml(path, INCLUDED)
         self.assertTrue(any("zero tests" in e for e in errors), errors)
+
+    def test_junit_xml_with_nonzero_failure_or_error_counts_is_rejected(self) -> None:
+        """A report recording failed tests cannot satisfy the evidence binding."""
+        for attribute in ("failures", "errors"):
+            with self.subTest(attribute=attribute):
+                report = self.VALID_JUNIT.replace(
+                    f'{attribute}="0"', f'{attribute}="1"',
+                )
+                path = self._junit_xml(report)
+                path_errors = artifacts.validate_junit_xml(path, INCLUDED)
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "test-junit.xml", INCLUDED,
+                )
+                self.assertTrue(path_errors, path_errors)
+                self.assertTrue(byte_errors, byte_errors)
+
+    def test_junit_xml_rejects_failure_or_error_children_with_zero_counts(self) -> None:
+        """Failure/error elements cannot hide behind false aggregate counters."""
+        for outcome in ("failure", "error"):
+            with self.subTest(outcome=outcome):
+                report = (
+                    '<testsuites tests="3" failures="0" errors="0">'
+                    '<testsuite name="SparkEngineTests" tests="3" failures="0" errors="0">'
+                    f'<testcase name="bad"><{outcome}>boom</{outcome}></testcase>'
+                    '<testcase name="two"/><testcase name="three"/>'
+                    '</testsuite></testsuites>'
+                )
+                path_errors = artifacts.validate_junit_xml(
+                    self._junit_xml(report), INCLUDED,
+                )
+                byte_errors = artifacts.validate_junit_xml_bytes(
+                    report.encode("utf-8"), "ctest-junit.xml", INCLUDED,
+                )
+                self.assertTrue(any(f"<{outcome}>" in e for e in path_errors), path_errors)
+                self.assertTrue(any(f"<{outcome}>" in e for e in byte_errors), byte_errors)
 
     def test_junit_xml_with_no_testcases_is_rejected(self) -> None:
         path = self._junit_xml(
@@ -5472,16 +5747,11 @@ class TestArtifactSemanticValidation(FixtureCase):
         )
         self.assertTrue(len(errors) > 0, "whitespace-only log accepted")
 
-    def test_artifact_dispatcher_routes_correctly(self) -> None:
-        path = self._junit_xml(self.VALID_JUNIT)
-        self.assertEqual(artifacts.validate_artifact(path, "junit-xml", INCLUDED), [])
-        self.assertEqual(
-            artifacts.validate_artifact(path, "cmake-target-index", INCLUDED), [])
-
     def test_held_byte_dispatcher_routes_correctly(self) -> None:
         self.assertEqual(
             artifacts.validate_artifact_bytes(
                 self.VALID_JUNIT.encode("utf-8"), "test-junit.xml", "junit-xml", INCLUDED,
+                selector_prefix="FPSRespawn_", expected_cases=frozenset(FPS_RESPAWN_CASES),
             ),
             [],
         )
@@ -5571,6 +5841,415 @@ class TestArtifactSemanticValidation(FixtureCase):
             any("recorded as a known evidence gap" in error for error in errors),
             errors,
         )
+
+
+
+class TestSanitizerReportEvidence(FixtureCase):
+    """RDY-010: ASan evidence is required, exact-revision and module-relevant."""
+
+    STALE_PATH = "build/asan-ubsan-lsan-results.txt"
+
+    def setUp(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha)
+        self.addCleanup(write_sanitizer_evidence, self.repo, self.sha)
+
+    def _metadata_path(self) -> Path:
+        return self.repo / EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]
+
+    def _junit_path(self) -> Path:
+        return self.repo / schema_mod.SANITIZER_REPORT_JUNIT
+
+    def _assert_rejected_with(self, needle: str, case: str) -> list[str]:
+        errors = self.assertRejected(base_manifest(), case)
+        self.assertTrue(any(needle in error for error in errors), errors)
+        return errors
+
+    def test_sanitizer_report_is_required_for_included_modules(self) -> None:
+        self.assertIn("sanitizer-report", schema_mod.REQUIRED_INCLUDED_EVIDENCE)
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"] = [
+            b for b in m["modules"][0]["evidenceBindings"] if b["type"] != "sanitizer-report"
+        ]
+        errors = self.assertRejected(m, "sanitizer-unbound")
+        self.assertTrue(any("sanitizer-report" in e for e in errors), errors)
+
+    def test_shipped_manifest_binds_fps_sanitizer_report(self) -> None:
+        manifest = load_manifest(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        fps = next(m for m in manifest["modules"] if m["name"] == INCLUDED)
+        self.assertIn(
+            {"type": "sanitizer-report",
+             "artifactPattern": EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]},
+            fps["evidenceBindings"],
+        )
+
+    def test_producer_points_at_the_real_run_sanitizer_tests_layout(self) -> None:
+        artifact = EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"]
+        self.assertEqual(Path(artifact).name, "metadata.json")
+        self.assertEqual(Path(schema_mod.SANITIZER_REPORT_JUNIT).name, "junit.xml")
+        self.assertEqual(Path(artifact).parent, Path(schema_mod.SANITIZER_REPORT_JUNIT).parent)
+        runner = (REPO_ROOT / ".github" / "scripts" / "run-sanitizer-tests.sh").read_text(
+            encoding="utf-8")
+        self.assertIn('junit_path="$evidence_dir/junit.xml"', runner)
+        self.assertIn('metadata_path="$evidence_dir/metadata.json"', runner)
+
+    def test_stale_results_txt_binding_is_rejected(self) -> None:
+        """No workflow writes build/asan-ubsan-lsan-results.txt."""
+        self.assertNotEqual(EVIDENCE_PRODUCERS["sanitizer-report"]["artifact"], self.STALE_PATH)
+        m = base_manifest()
+        m["modules"][0]["evidenceBindings"][4]["artifactPattern"] = self.STALE_PATH
+        errors = self.assertRejected(m, "sanitizer-stale-path")
+        self.assertTrue(any("is not the output of" in e for e in errors), errors)
+        self.assertNotIn(self.STALE_PATH, (REPO_ROOT / "tools" / "module-evidence"
+                                           / "manifest.json").read_text(encoding="utf-8"))
+
+    def test_clean_exact_revision_asan_evidence_is_accepted(self) -> None:
+        self.assertAccepted(base_manifest())
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted artifact authority")
+    def test_clean_evidence_is_accepted_through_held_root_bytes(self) -> None:
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                base_manifest(), self.repo,
+                target_index=target_index_for_revision(self.sha),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+        self.assertEqual(errors, [], errors)
+
+    @unittest.skipIf(os.name == "nt", "POSIX rooted artifact authority")
+    def test_rooted_consumer_rejects_wrong_sha(self) -> None:
+        write_sanitizer_evidence(self.repo, PACKAGE_SMOKE_TEST_SHA)
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                base_manifest(), self.repo,
+                target_index=target_index_for_revision(self.sha),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+        self.assertTrue(any("does not match expected" in e for e in errors), errors)
+
+    def test_missing_metadata_is_rejected(self) -> None:
+        self._metadata_path().unlink()
+        self._assert_rejected_with("was not produced", "sanitizer-missing")
+
+    def test_missing_metadata_is_rejected_by_the_rooted_consumer(self) -> None:
+        if os.name == "nt":
+            self.skipTest("POSIX rooted artifact authority")
+        self._metadata_path().unlink()
+        with strict_json.open_no_follow_directory_lease(self.repo, label="test root") as lease:
+            errors = ManifestValidator(
+                base_manifest(), self.repo,
+                target_index=target_index_for_revision(self.sha),
+                lifecycle_evidence=lifecycle_evidence(self.repo, self.sha),
+                expected_sha=self.sha,
+                root_authority=lease,
+            ).validate()
+        self.assertTrue(any("was not produced" in e for e in errors), errors)
+
+    def test_missing_sibling_junit_is_rejected(self) -> None:
+        self._junit_path().unlink()
+        self._assert_rejected_with("no sibling junit.xml", "sanitizer-no-junit")
+
+    def test_wrong_sha_metadata_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, PACKAGE_SMOKE_TEST_SHA)
+        self._assert_rejected_with("does not match expected", "sanitizer-wrong-sha")
+
+    def test_origin_directory_for_another_revision_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            provenance__originEvidenceDirectory=(
+                f"spark-sanitizer-asan-{PACKAGE_SMOKE_TEST_SHA}-1-1-build-linux-asan"),
+        )
+        self._assert_rejected_with("originEvidenceDirectory", "sanitizer-foreign-origin")
+
+    def test_unestablished_expected_sha_is_rejected(self) -> None:
+        errors = self.assertRejected(base_manifest(), "sanitizer-no-sha", expected_sha=None)
+        self.assertTrue(any("no expected sanitizer-report SHA" in e for e in errors), errors)
+
+    def test_selector_free_junit_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha, junit=sanitizer_junit(selector_cases=("WeaponMirror_Fires",)))
+        self._assert_rejected_with("is missing 10 of 10", "sanitizer-no-selector")
+
+    def test_skipped_selector_does_not_count_as_executed(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(selector_child='<skipped message="not on this platform"/>'))
+        self._assert_rejected_with("did not run to a clean pass", "sanitizer-skipped-selector")
+
+    def test_empty_selector_does_not_count_as_executed(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(
+                selector_child='<properties><property name="empty" value="true"/></properties>'))
+        self._assert_rejected_with("is marked empty", "sanitizer-empty-selector")
+
+    def test_failed_selector_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(selector_child='<failure message="leak"/>'))
+        errors = self._assert_rejected_with(
+            "did not run to a clean pass", "sanitizer-failed-selector")
+        self.assertTrue(any("<failure>" in e for e in errors), errors)
+
+    def test_metadata_reporting_failures_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, completion__failures=1)
+        self._assert_rejected_with("completion failures", "sanitizer-failures")
+
+    def test_non_clean_classification_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, classification="sanitizer-finding")
+        self._assert_rejected_with("exact clean classification", "sanitizer-dirty")
+
+    def test_sanitizer_signal_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, signals__sanitizerSignature=True)
+        self._assert_rejected_with("signal sanitizerSignature", "sanitizer-signal")
+
+    def test_tsan_lane_cannot_stand_in_for_asan(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha, provenance__sanitizer="tsan", provenance__lane="linux-tsan")
+        self._assert_rejected_with("provenance sanitizer", "sanitizer-wrong-lane")
+
+    def test_swapped_junit_breaks_the_metadata_digest(self) -> None:
+        self._junit_path().write_text(
+            sanitizer_junit(selector_cases=(*FPS_RESPAWN_CASES[1:], "FPSRespawn_SubstitutedAfterTheRun")),
+            encoding="utf-8")
+        self._assert_rejected_with("junitSha256 does not match", "sanitizer-swapped-junit")
+
+    def test_clean_run_below_the_full_suite_floor_is_rejected(self) -> None:
+        """A clean, self-consistent but filtered ASan run is not full-suite evidence."""
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(total=artifacts.SANITIZER_MIN_JUNIT_TESTCASES - 1))
+        self._assert_rejected_with("below the SparkTests floor", "sanitizer-below-floor")
+
+    def test_trivially_small_clean_run_is_rejected(self) -> None:
+        write_sanitizer_evidence(
+            self.repo, self.sha, junit=sanitizer_junit(selector_cases=FPS_RESPAWN_CASES[:4], total=4))
+        self._assert_rejected_with("records 4 testcases", "sanitizer-tiny-run")
+
+    def test_floor_matches_the_workflow_verify_published_floor(self) -> None:
+        """The consumer floor and the CI verify-published floor cannot drift apart."""
+        workflow = (REPO_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        step = workflow.split("- name: Verify downloaded ASan evidence\n", 1)[1]
+        step = step.split("- name:", 1)[0]
+        self.assertIn("build/module-evidence/sanitizer-asan", step)
+        match = re.search(r"--minimum-tests (\d+)", step)
+        self.assertIsNotNone(match, step)
+        self.assertEqual(int(match.group(1)), artifacts.SANITIZER_MIN_JUNIT_TESTCASES)
+
+    def test_origin_directory_must_match_recorded_run_identity(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, provenance__runId=9999)
+        self._assert_rejected_with("originEvidenceDirectory", "sanitizer-run-mismatch")
+
+    def test_non_integer_run_attempt_is_rejected(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, provenance__runAttempt=True)
+        self._assert_rejected_with("runId and runAttempt", "sanitizer-bool-attempt")
+
+    def test_integer_one_is_not_boolean_true(self) -> None:
+        write_sanitizer_evidence(self.repo, self.sha, completion__valid=1)
+        self._assert_rejected_with("completion is not valid", "sanitizer-truthy-valid")
+
+    def test_duplicate_metadata_keys_are_rejected(self) -> None:
+        path = self._metadata_path()
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text[:-1] + ', "classification": "clean"}', encoding="utf-8")
+        self._assert_rejected_with("not strict JSON", "sanitizer-duplicate-key")
+
+    def test_module_without_a_selector_fails_policy(self) -> None:
+        with mock.patch.dict(validate_manifest_mod.MODULE_TEST_SELECTORS, clear=True):
+            errors = ManifestValidator(base_manifest(), self.repo, policy_only=True).validate()
+        self.assertTrue(any("module test selector" in e for e in errors), errors)
+
+    def test_present_sanitizer_evidence_trips_a_stale_declared_gap(self) -> None:
+        errors = self.assertRejected(
+            base_manifest(), "sanitizer-stale-gap",
+            declared_gaps={"sanitizer-report": "RDY-010"},
+        )
+        self.assertTrue(any("recorded as a known evidence gap" in e for e in errors), errors)
+
+    def test_selectors_resolve_only_to_registered_production_source_tests(self) -> None:
+        """A mirror file defining FPSRespawn_* would let a copy satisfy the gate."""
+        import importlib.util
+        import re
+        census_path = REPO_ROOT / "Tools" / "test_source_census.py"
+        spec = importlib.util.spec_from_file_location("spark_census_rdy010", census_path)
+        assert spec is not None and spec.loader is not None
+        census = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = census
+        spec.loader.exec_module(census)
+        cmake = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        manifest = load_manifest(REPO_ROOT / "tools" / "module-evidence" / "manifest.json")
+        source_dirs = {m["name"]: m["sourceDirectory"] for m in manifest["modules"]}
+        for module, prefix in schema_mod.MODULE_TEST_SELECTORS.items():
+            with self.subTest(module=module):
+                pattern = re.compile(rf"^\s*TEST(?:_F)?\s*\(\s*{re.escape(prefix)}\w*", re.M)
+                defining = [
+                    path for path in sorted((REPO_ROOT / "Tests").rglob("*.cpp"))
+                    if pattern.search(path.read_text(encoding="utf-8"))
+                ]
+                self.assertTrue(defining, f"no test defines a {prefix}* selector")
+                for path in defining:
+                    relative = path.relative_to(REPO_ROOT).as_posix()
+                    text = path.read_text(encoding="utf-8")
+                    self.assertEqual(
+                        census.classify(text, REPO_ROOT, relative), "production-source",
+                        f"{relative} defines {prefix}* but is a mirror",
+                    )
+                    self.assertRegex(cmake, rf"(?m)^\s*{re.escape(path.name)}\s*$")
+                    module_headers = [
+                        include for include, _ in census.INCLUDE_RE.findall(text)
+                        if include and (REPO_ROOT / source_dirs[module] / include).is_file()
+                    ]
+                    self.assertTrue(
+                        module_headers,
+                        f"{relative} includes no header from {source_dirs[module]}",
+                    )
+
+
+
+class TestModuleTestDerivationFlags(unittest.TestCase):
+    """The derived expected set must consume the census verdicts, never discard them."""
+
+    def derive(self, tautological: bool, production: bool) -> frozenset[str]:
+        census = SimpleNamespace(
+            scan=lambda root: [{"kind": "production-source", "path": "Tests/Fixture.cpp"}],
+            test_definitions=lambda text: [("FPSRespawn_Fixture", 1, tautological)],
+            production_test_bodies=lambda text, root, cache: {"FPSRespawn_Fixture"} if production else set(),
+        )
+        with mock.patch.dict(sys.modules, {"spark_module_evidence_census": census}), \
+             mock.patch.object(Path, "read_text", return_value="fixture source"):
+            return validate_manifest_mod.derive_module_test_cases(REPO_ROOT, "FPSRespawn_")
+
+    def test_production_verdict_is_accepted(self) -> None:
+        self.assertEqual(frozenset({"FPSRespawn_Fixture"}), self.derive(False, True))
+
+    def test_B37_tautological_verdict_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "is tautological"):
+            self.derive(True, True)
+
+    def test_B38_copied_body_verdict_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "does not reference an included production declaration"):
+            self.derive(False, False)
+
+
+class TestModuleTestExactSet(FixtureCase):
+    """RDY-010: module JUnit/ASan evidence must name every production test, once, passed.
+
+    Before this gate a SparkTests JUnit with three unrelated passing testcases
+    satisfied SparkGameFPS's junit-xml binding, and one passing FPSRespawn_ case
+    satisfied its sanitizer-report binding, so a filtered or stale run that
+    dropped the module's production tests still counted as module evidence.
+    """
+
+    def setUp(self) -> None:
+        self.junit = self.repo / EVIDENCE_PRODUCERS["junit-xml"]["artifact"]
+        self.addCleanup(self.junit.write_text, sparktests_junit(), encoding="utf-8")
+        self.addCleanup(write_sanitizer_evidence, self.repo, self.sha)
+
+    def _junit_errors(self, fps_cases: tuple[str, ...]) -> list[str]:
+        self.junit.write_text(sparktests_junit(fps_cases), encoding="utf-8")
+        return self.validate(base_manifest())
+
+    def test_full_production_set_is_accepted(self) -> None:
+        self.assertEqual(self._junit_errors(FPS_RESPAWN_CASES), [])
+
+    def test_junit_without_any_module_test_is_rejected(self) -> None:
+        """(a) Five passing unrelated testcases are not SparkGameFPS evidence."""
+        self.junit.write_text(
+            sparktests_junit((), ("A_One", "B_Two", "C_Three", "D_Four", "E_Five")),
+            encoding="utf-8")
+        errors = self.validate(base_manifest())
+        self.assertTrue(any("is missing 10 of 10" in e for e in errors), errors)
+        self.assertTrue(any(FPS_RESPAWN_CASES[0] in e for e in errors), errors)
+
+    def test_junit_missing_one_module_test_names_it(self) -> None:
+        """(b) Nine of ten is a filtered run, and the gate names the dropped test."""
+        errors = self._junit_errors(FPS_RESPAWN_CASES[:-1])
+        self.assertTrue(
+            any("is missing 1 of 10" in e and FPS_RESPAWN_CASES[-1] in e for e in errors), errors)
+
+    def test_junit_with_undefined_module_test_is_rejected(self) -> None:
+        """(c) A name the production sources do not define comes from a stale binary."""
+        errors = self._junit_errors((*FPS_RESPAWN_CASES, "FPSRespawn_StaleName"))
+        self.assertTrue(
+            any("not defined in the production sources" in e and "FPSRespawn_StaleName" in e
+                for e in errors), errors)
+
+    def test_junit_with_duplicate_module_test_is_rejected(self) -> None:
+        """(d) A test recorded twice is not one deterministic run."""
+        errors = self._junit_errors((*FPS_RESPAWN_CASES, FPS_RESPAWN_CASES[2]))
+        self.assertTrue(
+            any("more than once" in e and FPS_RESPAWN_CASES[2] in e for e in errors), errors)
+
+    def test_junit_with_skipped_module_test_is_rejected(self) -> None:
+        junit = sparktests_junit().replace(
+            f'<testcase name="{FPS_RESPAWN_CASES[0]}" classname="SparkEngine" time="0.01"/>',
+            f'<testcase name="{FPS_RESPAWN_CASES[0]}" classname="SparkEngine" time="0.01">'
+            '<skipped message="filtered"/></testcase>')
+        self.assertIn("<skipped", junit)
+        self.junit.write_text(junit, encoding="utf-8")
+        errors = self.validate(base_manifest())
+        self.assertTrue(any("did not run to a clean pass" in e for e in errors), errors)
+
+    def test_sanitizer_run_with_one_module_test_is_rejected(self) -> None:
+        """(e) One passing FPSRespawn_ case under ASan leaves nine production tests unproven."""
+        write_sanitizer_evidence(
+            self.repo, self.sha,
+            junit=sanitizer_junit(selector_cases=("FPSRespawn_DeathRespawnReportsAuthoredSpawnRotation",)))
+        errors = self.validate(base_manifest())
+        self.assertTrue(
+            any("sanitizer-report junit.xml is missing 9 of 10" in e for e in errors), errors)
+
+    def test_derived_set_matches_the_registered_expect_count(self) -> None:
+        """(f) The shipped selector set is exactly what the production-source CTest pins."""
+        cmake = (REPO_ROOT / "Tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+        match = re.search(
+            r"set_tests_properties\(FPSSinglePlayerSlice_RespawnProductionSource PROPERTIES\s+"
+            r'ENVIRONMENT "SPARK_TEST_NAME=([A-Za-z0-9_]+);SPARK_TEST_EXPECT_COUNT=(\d+)"',
+            cmake)
+        self.assertIsNotNone(match, "FPSSinglePlayerSlice_RespawnProductionSource registration moved")
+        assert match is not None
+        self.assertEqual(match.group(1), schema_mod.MODULE_TEST_SELECTORS[INCLUDED])
+        derived = validate_manifest_mod.derive_module_test_cases(REPO_ROOT, match.group(1))
+        self.assertEqual(len(derived), int(match.group(2)), sorted(derived))
+        self.assertEqual(derived, frozenset(FPS_RESPAWN_CASES))
+
+    def test_mirror_definitions_do_not_enter_the_expected_set(self) -> None:
+        """(g) Only production-source files define the tests module evidence must carry."""
+        mirror = self.repo / "Tests" / "TestFPSRespawnMirror.cpp"
+        mirror.write_text(
+            '#include "TestFramework.h"\n\nTEST(FPSRespawn_MirrorOnly)\n{\n    EXPECT_EQ(1, 1);\n}\n',
+            encoding="utf-8")
+        self.addCleanup(mirror.unlink)
+        derived = validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
+        self.assertEqual(derived, frozenset(FPS_RESPAWN_CASES))
+        self.assertEqual(self._junit_errors(FPS_RESPAWN_CASES), [])
+
+    def test_no_production_definition_is_a_policy_failure(self) -> None:
+        with mock.patch.dict(validate_manifest_mod.MODULE_TEST_SELECTORS,
+                             {INCLUDED: "FPSNothingDefinesThis_"}):
+            errors = ManifestValidator(base_manifest(), self.repo, policy_only=True).validate()
+        self.assertTrue(any("no production-source test defines" in e for e in errors), errors)
+
+    def test_B37_tautological_production_test_cannot_enter_expected_set(self) -> None:
+        path = self.repo / "Tests" / "TestFPSRespawnFixture.cpp"
+        original = path.read_text(encoding="utf-8")
+        # The fixture repository is shared by the class; restore it for later tests.
+        self.addCleanup(path.write_text, original, encoding="utf-8")
+        path.write_text(original + '\nTEST(FPSRespawn_ConstantOnly) { EXPECT_EQ(1, 1); }\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "FPSRespawn_ConstantOnly is tautological"):
+            validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
+
+    def test_B38_unrelated_production_include_cannot_promote_local_model(self) -> None:
+        path = self.repo / "Tests" / "TestFPSRespawnFixture.cpp"
+        original = path.read_text(encoding="utf-8")
+        self.addCleanup(path.write_text, original, encoding="utf-8")
+        path.write_text(original +
+                        '\nTEST(FPSRespawn_LocalModel) { int copied = 1; EXPECT_EQ(copied, 1); }\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "FPSRespawn_LocalModel does not reference"):
+            validate_manifest_mod.derive_module_test_cases(self.repo, "FPSRespawn_")
 
 
 if __name__ == "__main__":

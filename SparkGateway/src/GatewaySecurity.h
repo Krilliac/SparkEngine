@@ -21,6 +21,7 @@ namespace Spark::Gateway
     inline constexpr uint16_t GatewayProtocolMinor = 0;
     inline constexpr size_t GatewayMaximumBodySize = 4096;
     inline constexpr size_t GatewayMaximumCredentialSize = 512;
+    inline constexpr size_t GatewayMaximumReplayEntries = 4096;
 
     /** Loads a >=256-bit secret and rejects key files readable by other users. */
     [[nodiscard]] bool LoadPrivateGatewayKey(const std::filesystem::path& path, std::vector<uint8_t>& key,

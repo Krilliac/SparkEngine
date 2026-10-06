@@ -19,6 +19,8 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
+#include "Utils/ProcessWin32HandleList.h"
 #else
 #include <fcntl.h>
 #include <poll.h>
@@ -81,25 +83,42 @@ namespace SparkEditor
         if (m_cancelRequested.load())
             return 1;
 #ifdef _WIN32
-        SECURITY_ATTRIBUTES sa = {};
-        sa.nLength = sizeof(sa);
-        sa.bInheritHandle = TRUE;
-
+        // Non-inheritable pipe; only the child's write end is made inheritable,
+        // and the handle list below hands the child that end and nothing else.
+        // This worker thread launches while the main thread may be launching
+        // through Spark::Process, and a bare bInheritHandles=TRUE would copy
+        // that launch's pipe ends into a long-running cook/cmake child.
         HANDLE readPipe = nullptr;
         HANDLE writePipe = nullptr;
-        if (!CreatePipe(&readPipe, &writePipe, &sa, 0))
+        if (!CreatePipe(&readPipe, &writePipe, nullptr, 0))
         {
             PushLog(BuildLogLine::Level::Error, "Failed to create subprocess pipe");
             return -1;
         }
-        SetHandleInformation(readPipe, HANDLE_FLAG_INHERIT, 0);
 
-        STARTUPINFOA startup = {};
-        startup.cb = sizeof(startup);
+        Spark::ProcessDetail::InheritedHandleList inherited;
+        DWORD inheritError = ERROR_SUCCESS;
+        if (!inherited.AddInheritable(writePipe))
+            inheritError = GetLastError();
+        else
+            inheritError = inherited.Build();
+        if (inheritError != ERROR_SUCCESS)
+        {
+            CloseHandle(readPipe);
+            CloseHandle(writePipe);
+            PushLog(BuildLogLine::Level::Error,
+                    "Failed to restrict subprocess handle inheritance (Win32 " + std::to_string(inheritError) + ")");
+            return -1;
+        }
+
+        STARTUPINFOEXA startupEx = {};
+        STARTUPINFOA& startup = startupEx.StartupInfo;
+        startup.cb = sizeof(startupEx);
         startup.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
         startup.hStdOutput = writePipe;
         startup.hStdError = writePipe;
         startup.wShowWindow = SW_HIDE;
+        startupEx.lpAttributeList = inherited.Attributes();
 
         PROCESS_INFORMATION process = {};
         std::string commandLine = QuoteWindowsArgument(executable);
@@ -110,7 +129,8 @@ namespace SparkEditor
         }
 
         BOOL ok = CreateProcessA(nullptr, commandLine.data(), nullptr, nullptr, TRUE,
-                                 CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &process);
+                                 CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT, nullptr, nullptr,
+                                 &startup, &process);
         CloseHandle(writePipe);
         if (!ok)
         {

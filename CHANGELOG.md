@@ -11,12 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Saves and SceneFile (dialect B) scenes follow owner decision OD-03: read the current and previous schema version, write only the current one. `.spark_save` readers accept v3 and v4 (v1/v2 files now fail closed with a versioned diagnostic); SceneFile JSON reads v2 and migrates v1 in memory from real v1 fixtures, while v1 raw object-image component payloads and any other version fail closed with a versioned error. Reflected-World scenes (editor File > Open/Save and `-scene`, `Spark::LoadWorld`) still read only version 1 and the legacy editor `sceneVersion: 1` dialect, but every rejection now reports an actionable reason: the version field, the file's value and the supported read/write window, or the offending entity, id, parent, component or field. `LoadWorld` reports both the primary and `.bak` reasons, and the editor and `-scene` launch paths print them.
+- `STRIP_DEBUG_SYMBOLS` (both Shipping presets) now keeps private symbols out of the runtime package instead of never producing them (BLD-100). MSVC images always link with `/DEBUG`, with `/PDBALTPATH:%_PDB%` outside Debug, so each carries its PDB GUID and age. ELF images link with a SHA-1 GNU build-id; with the option on everything compiles with `-g`, and the shipped image targets are split at link time (`cmake/SparkSplitDebugLink.cmake`) into a stripped image with a `.gnu_debuglink` and `<image>.debug`; SparkTests and other unshipped images link with `-g0` and `--strip-all` instead. The PDBs and `.debug` files install only into the new `symbols` component, which no CPack package includes. `tools/shipping_symbol_manifest.py` maps every staged image to exactly one symbol file by build ID and fails on missing, duplicate, mismatched or leaked symbols; `build-windows-shipping` runs it and uploads the symbols as a separate artifact.
+
 ### Added
+- `IEngineContext::GetStateValidation()` and `Spark/IStateValidation.h` (public SDK v9, MOD-295): the host implements `Spark::IStateValidation` (`EngineSdkStateValidation`, forwarding to the host `InvalidStateDetector`), and all nine prototype modules that register invalid-state rules now add and remove them through it instead of the private `Utils/InvalidStateDetector.h`. `StateViolationSeverity`, `StateViolation` and `StateCheckFn` moved into the SDK unchanged. The SparkGame showcase and SparkGameVisualScript also register console commands through `IConsole` and log through `Spark::ModuleLog` instead of `Utils/SparkConsole.h`/`Utils/LogMacros.h`; the module-content inventory drops 15 engine-private header entries.
+- `IEngineContext::GetLogger()` and `Spark/ModuleLog.h` (public SDK, MOD-295): the host implements `Spark::ILogger` (`EngineSdkLogger`, routed to the engine Logger under `LogCategory::Game`), and modules log with `Spark::ModuleLog::Info/Warn/Error/Debug(context, "{}", ...)` instead of the private `Utils/SparkConsole.h` and `Utils/LogMacros.h`. The appended virtual makes `SPARK_SDK_VERSION` 6 and `EngineContextVirtualCount` 89; game modules must be rebuilt against the v6 SDK. SparkGameRTS and SparkGamePlatformer log through it.
+- `Spark/PersistedSchema.h` (public SDK): `ModulePersistedSchema` lets each game module declare the schema version of its save custom state, with the same read-N-and-N-1 rule; SparkGameFPS declares and uses it for its local profile.
+- `tools/release_notes.py` (REL-190) renders the stable release body from the `stable-v1` profile in `docs/site/readiness.json`, this file's single `## [X.Y.Z]` section (a `### Migration` subsection becomes the notes' Migrations section), the frozen `SHA256SUMS`, and fixed checksum, signature, SBOM and provenance verification instructions. It fails closed on a missing or duplicated version section, an empty or inconsistent `SHA256SUMS`, or a missing SBOM or signature control asset; nightly releases keep their short body. No stable release has been published with it.
+
+### Fixed
+- First material saves create missing asset directories, use native filesystem paths for UTF-8 filenames on Windows, and retain the unsaved state when writing or closing the file fails.
+- Per-user MSI qualification explicitly quotes the empty `ALLUSERS` property so Windows Installer cannot consume the next property as its value. WiX packaging requires CMake 4.3, which implements per-user installation, while token and ownership checks remain enforced.
+- The external console prints a pipe-mode command prompt on startup and after Enter, rather than appending another prompt every 100 milliseconds while idle. Prompts stay off the engine command channel.
+- Cross-platform release qualification now uses the ECS entity type consistently in AI, removes a test-only `World` ODR conflict, reports completed OpenGL editor frames, wires Hierarchy and Inspector document selection outside the Windows graphics path, and gives Windows GUI smoke children explicit inherited capture handles.
+- Generic Shift/Ctrl/Alt queries now include either physical side while retaining side-specific state and frame edges. The Win32 host resolves modifier sides from event metadata and forwards system-key messages, including Alt.
+- Windows package reconciliation recognizes runtime notices through the existing package coverage rules and requires redistribution terms and coverage of every shipped runtime DLL.
+- The MSVC libsodium CPU floor now uses the compiler target architecture when Windows omits the system processor, keeping above-floor variants disabled without weakening the native runtime assertions.
+- Newly opened editor panels use their declared initial size, so Play Control and other wrapped-text panels do not collapse into unreadable strips; saved layouts remain authoritative.
+
+### Removed
+- `EngineContext::InitializeAll`/`ShutdownAll` and the R1.2 dependency registry that only they used (`RegisterSubsystem`, `DependsOn`, `SubsystemEntry`, `GetInitOrder`, `GetSubsystemCount`, `HasLifecycleFailure`, `EngineSetup::RegisterCoreSubsystems`), per owner decision OD-01: `EngineRuntime` is the single owner of subsystem lifecycle and `LifecycleCompositionRoot` orders it. The two `IEngineContext` virtuals went with them, so `SPARK_SDK_VERSION` is 5 and `EngineContextVirtualCount` is 88; game modules must be rebuilt against the v5 SDK (v4 modules are refused by the exact-match ABI check). The `engine_subsystems` console command no longer prints a registered-entry count, and the `LifecyclePartialInit` CTest (which drove only the removed registry) is gone; `LifecycleCompositionRootFailure` covers partial-init rollback.
+
+## [0.9.0] - 2026-09-23
+
+This is the reviewed predecessor source candidate for the first fully gated
+stable release. Publication remains blocked until the protected source seal,
+signing, and independent acceptance evidence are complete.
+
+### Added
+- Installed playtest entry points and the standalone `SparkCrashReporter` metadata-only GitHub Issues flow, with explicit consent, duplicate handling, and manual fallback; this is not a claim that a public authenticated release has passed acceptance.
+- A protected v0.9.0 publication route that signs frozen assets with the provisioned PFX and publishes a detached signature bundle; the self-signed Windows publisher warning remains disclosed until a publicly trusted certificate is available.
+- Release-readiness qualification baseline for the signed immutable v0.9.0 predecessor.
 - Production-source regression tests (`Tests/Test*Real.cpp`) covering audio, editor panels/gizmos/undo, engine wiring, save round trips, security parsers, the shader compiler, the shadow pass, module lifecycle, user data paths, logger sinks, crash-handler gating, and the SparkGameFPS loop; `Tools/test_source_census.py` reports production-source vs mirror tests with a `--check` gate
 - Test runner: `EXPECT_WARN_ONLY(expr, reason)`, `EXPECT_NO_CRASH(reason)`, an `[ EMPTY ]` label for zero-assertion tests (`--empty-is-error`), and JUnit `flaky=`/`empty=` attributes with `<flakyFailure>` instead of `<skipped>` for waived tests
 - `SparkEngineLoadTests` CTest lane (labels `load;slow`) split from `SparkEngineTests`, with per-configuration `SPARK_TEST_TIMEOUT_SECONDS` budgets and the `SPARK_TESTS_WARN_IS_ERROR` option
 - SparkGameFPS: complete death -> respawn -> score loop (`RespawnSystem` decoupled from `Player`), `FPSLocalProfile` persisted by `quicksave`/`quickload`, one runtime-discovered asset root, and initialization without a D3D11 device
-- Save format v3: Transform hierarchy persisted and restored, `<slot>.spark_save.bak` last-good retention with load fallback, `SaveMetadata::slotName` on enumerated slots, on-demand save-directory creation
+- Installed SparkGameFPS package qualification now includes isolated two-process D3D11 WARP quicksave/quickload evidence with semantic audit parsing, current binary/source identities, unchanged save bytes, and the existing real staged NullRHI lifecycle
+- Installed SparkGameFPS package smoke now verifies the staged asset-integrity manifest against all 882 payload entries before module/runtime tests and fails closed for missing manifests or payloads, tampering, exact-case mismatches, undeclared files, and link-like paths
+- SparkGameFPS module entrypoint now uses only `Spark::IModule` plus the injected public `IEngineContext`; installed-SDK tests compile its production header from staged `Spark/` headers and reject retired `IGameModule` factories or concrete `EngineContext` singleton access
+- Save format v4: little-endian fixed-width fields and a trailing standard CRC-32 verified before parsing or metadata display, immutable v1-v3 migration fixtures, Transform hierarchy persistence, validated `<slot>.spark_save.bak` retention/fallback, cache-fresh corruption checks, `SaveMetadata::slotName`, and on-demand save-directory creation
 - `Spark::UserPaths`: per-user `Saves/`, `Logs/`, `spark_trace.json`, `ShaderCache/`, and `settings.ini` fallback under `%LOCALAPPDATA%/SparkEngine` (XDG directories on POSIX)
 - Engine logs persisted to `Logs/SparkEngine_<timestamp>.log` via `Logger::InstallDefaultSinks` and mirrored to `SparkConsole.exe`; console commands carry an owner token so a second registrant cannot replace a command or lower its permission level
 - D3D11 shadow-caster depth pass (Deferred and RenderGraph paths) with `LightingSystem` driving the cached shadow atlas; real triangle/vertex counts in render statistics
@@ -25,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TriggerVolumeComponent` bridged to `ProximityTriggerSystem` (enter/exit publish `TriggerEnterEvent`/`TriggerExitEvent`); `ReplaySystem` records Transform/velocity/health frames while recording
 - Editor: SparkEditor installs a real Windows unhandled-exception filter (dumps under the per-user editor data directory); `EditorWindowManager` layout persisted to `<EditorData>/window_layout.json`; Workflow panel confirmation for Clean & Rebuild
 - CI/readiness tooling: `asset-integrity` job (`tools/site-data/validate.py --assets`), strict work-item selector/job resolution with `plannedCiJobs`/`plannedTestSelectors`, docs health producer (`docs/.health.json`), `SparkVersionSingleSource` CTest, `SPARK_CRASH_ON_ASSERT=1`, sanitizer `incomplete-run` classification, `.github/test-count-ratchet.json` baseline block
+- Working branch integrity ruleset 21968740 is active with the GitHub Actions `Required CI Gate` check required; exact-SHA hosted evidence and controlled-failure proof remain open release gates
 - `CrashHandler::TriggerCrashReportUnattended()` (`CrashReportDelivery::ArtifactOnly`): dump/log/manifest with no screenshot, consent dialog, or in-process upload — used by the freeze watchdog so `terminateOnFreeze` really terminates
 - `SaveSystem::MarkComponentTransient()` / `IsComponentTransient()` opt-out for registry-driven world serialization (default transient set: `ProjectileComponent`, `DecalComponent`)
 - Console command `log_path`: prints the log file this run opened and its size, or reports that no log file could be opened
@@ -41,6 +77,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rolling Debug/Release build aliases and generated checksum/SBOM/provenance metadata for development artifacts; binaries/installers are not code-signed, and none of this is versioned stable-v1 release qualification
 
 ### Changed
+- Crash capture now serializes minidump writing with symbol resolution, rejects same-thread DbgHelp reentry, and retries one transient partial-memory read while keeping failed dumps out of the published manifest.
+- D3D11 `gfx_benchmark` now samples actual presented frames and GPU timestamps, names the active DXGI adapter, and reports bounded p50/p95/p99 distributions with sample-completeness status; representative PERF-100 baselines and soaks remain pending.
+- The editor asset browser carries confined, typed `Assets/...` mesh/material drag references into undo-backed inspector assignment instead of machine-local absolute paths.
+- SparkEditor’s prominent Play control and F5/F6 now open Play Control for the external game process; counter-only state preview remains explicitly labeled non-gameplay.
+- Shared-runner microsecond ECS churn samples remain diagnostic; deterministic entity-count checks stay blocking while certified performance budgets belong to PERF-100.
+- SparkServer headless startup now owns a real NullRHI device through `EngineRuntime`, advances its frame lifecycle with module ticks, and tears it down after module rollback/shutdown instead of running with a null rendering boundary
+- Failed ModuleHotReload replacements remain pending for retry instead of consuming the watched file change
+- clang-tidy now analyzes the complete shipped-product source inventory and fails closed when its roots or translation units are missing
+- Release preparation now runs the fail-closed dependency, vendored-content, and GitHub Actions pin policy before computing release metadata
+- Crash-upload proxy and FTP logs now redact credentials and capability-bearing URL data while preserving transport behavior
+- SparkConsole now consumes the configured engine version, exposes `--version`/`-v`, and verifies that output through CTest
+- SparkPak now rejects traversal entry names while opening archives, before unsafe paths reach the virtual filesystem
+- D3D11 Texture2DArray resources now create array-aware shader/depth views, including multisample array dimensions
+- Editor UndoRedoManager now restores its dispatch boundary when a command throws, preventing failed commands from poisoning later transactions
+- Runtime packages now carry the first-party asset integrity manifest, and extracted-package checks reject missing, link-like, or tampered asset payloads
+- FPS package smoke now requires the complete canonical public SDK header set, including the umbrella SparkSDK.h contract
+- Windows NullRHI qualification now rejects logger-prefixed D3D11 device records that could masquerade as a no-GPU result
+- Build-matrix parity now binds stable shipping/validation profiles to matching CMake build presets and configurations, failing closed on drift
+- SECURITY.md now states best-effort, non-SLA response expectations instead of unsupported fixed deadlines
+- Platform certification now rejects unknown profiles in full evidence validation; unknown profiles remain diagnostic-only
+- Stable publication now rechecks the readiness contract immediately before its final acceptance PATCH
+- Installer CI now builds the InstallState regression executable before running the complete registered test set
+- RemoteDebug reserves built-in command types against public handler rebinding, AssetMigration rejects requested-type mismatches, GamePackager rejects traversal project names, and performance-budget baseline validation rejects malformed hardware IDs
+- SparkGameModule rejects SDK headers with ambiguous `SPARK_SDK_VERSION` definitions before configuring a module ABI sidecar
+- SparkInstaller persists `.sparkengine-install.json` through a flushed same-directory replacement and treats malformed state as non-existent
+- Build-matrix and trusted CodeQL exact-source status publication tolerate GitHub's queued-to-in_progress API race, and Windows authority fixtures select Git Bash instead of the incompatible WindowsApps WSL launcher
 - World saves now write format v3 (reader window v1..v3, in-memory v1->v2 and v2->v3 migrations); `SerializeWorld` covers every `ComponentFactory`-registered type with a serializer instead of a fixed 14, and named entities without other components are retained
 - `RHIBridge::Initialize` no longer silently degrades a windowed request to `NullRHIDevice`; headless fallback requires `allowHeadlessFallback`. D3D11 requires feature level 11_0 (SM 5.0); D3D11 deferred command lists really record (`FinishCommandList`) and execute; structured/indirect buffers get the correct misc flags and SRV/UAVs
 - Shader compiler compiles HLSL to DXBC for real via `d3dcompiler_47` (D3D11/D3D12 on Windows) and fails closed for DXIL/SPIR-V/GLSL/MSL; shader hot reload compiles for real when driven but is not enabled in production; the four DXR PSOs use their shaders' export names
@@ -82,6 +144,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runtime packages now include complete deterministic third-party license notices rather than dependency metadata alone
 
 ### Fixed
+- The FPS `scene_load` path is confined to the packaged scene tree and recreates the built-in combat arena after a successful reload; package smoke checks malformed/foreign-path rejection, authored camera/spawn state, and rendered pre- and post-survival frames.
+- SceneManager `.scene` saves now reload through their matching versioned-text parser, retain authored camera/spawn/material fields and names with spaces, stage durable same-directory replacement, and preserve live object identity and runtime state when malformed or unsupported loads fail.
+- Shipping builds refuse the legacy in-process PAT-based GitHub crash uploader; generic and unknown-scheme endpoint diagnostics redact credentials and capability-bearing URL data.
+- Empty material references intentionally select the engine default on D3D11 and the NullRHI-tested non-Windows binding path instead of producing per-frame missing-material warnings or inheriting a previous texture; hardware backend certification remains pending.
+- Build-matrix provenance now keeps imported CMake File API dependencies in the hashed raw reply while excluding them from configured product identities; pending-authority failures name the exact target that lacks an artifact identity
+- Wiki test inventory generation now includes the registered runner test in `TestMain.cpp`, keeping Home, Testing, README, badge, and codebase-statistics counts aligned
 - OPS-100 validators now import their bounded JSON parser under a unique module name, so combined test discovery cannot resolve the module-evidence parser in its place
 - SparkBuild documentation now names the repository's Spark Open License and `Working`/`nightly` development channel instead of stale MIT and `main`/`latest` claims
 - Telemetry local export now creates its configured directory before writing, and the OPS-100 spool validator accepts the sequence-range filenames emitted by the runtime while retaining legacy timestamp-only compatibility
@@ -117,6 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation claims that the code does not implement: `/W4` zero-warning builds, in-game backtick console, LAN server discovery/RCON/kick-ban in the Dedicated Server panel, atlas-backed shadow sampling, automatic DLSS/XeSS/FSR2 selection, per-bus DSP and rendered reverb, hybrid RT on D3D11, an enforced merge-time Required CI Gate
 
 ### Security
+- The `.nnw` neural-weight loader now bounds file size and architecture dimensions, uses checked parameter arithmetic, validates connectivity, flags, activations, optimizer trailers, and exact EOF before allocating weight/optimizer payloads, and shares those rules with the saver; six production-linked regressions and a direct LoadWeights libFuzzer target with an eight-seed corpus cover the new contract
 - Packet text fields are screened for real (schema-declared offsets, length-prefix validation) and the `packet.stats` string counter is no longer a permanent zero
 - JSON parse budgets on every default entry point; strict, size-capped `mod.json`/mod-config parsing; scene-manifest path containment and size caps; `.spk` decompression-ratio bound enforced at `Open`; skeleton/animation loaders reject non-finite matrices and forward `parentIndex` references
 - Virtual-path policy rejects drive-relative and NTFS alternate-data-stream names, reserved Windows device names, and symlink/junction escapes inside a mount
@@ -134,7 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AI system (behavior trees, NavMesh, perception, formations, steering)
 - Animation system (skeletal, blend spaces, IK, retargeting)
 - UDP networking with entity replication, prediction, lag compensation
-- EnTT-based ECS with 75 component types and 25 systems
+- EnTT-based ECS component and system framework
 - Dear ImGui editor with 59 panels and collaborative editing
 - Audio system (XAudio2, OpenAL, null backend)
 - AngelScript + Lua scripting with hot-reload

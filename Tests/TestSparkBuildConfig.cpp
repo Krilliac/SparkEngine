@@ -9,6 +9,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -111,29 +112,79 @@ TEST(SparkBuildConfig_LoadRejectsUnknownOptionTransactionally)
 {
     ConfigManager manager;
     const auto path =
-        WriteConfigFixture("unknown-option", "[Options]\nENABLE_GRAPHICS=OFF\nREMOVED_OR_UNKNOWN_OPTION=ON\n");
+        WriteConfigFixture("unknown-option", "[Options]\nENABLE_RECAST=OFF\nREMOVED_OR_UNKNOWN_OPTION=ON\n");
 
     EXPECT_FALSE(manager.Load(path.string()));
-    EXPECT_TRUE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    EXPECT_TRUE(OptionValue(manager, "ENABLE_RECAST"));
     std::filesystem::remove(path);
 }
 
 TEST(SparkBuildConfig_LoadRejectsInvalidOptionValue)
 {
     ConfigManager manager;
-    const auto path = WriteConfigFixture("invalid-value", "[Options]\nENABLE_GRAPHICS=perhaps\n");
+    const auto path = WriteConfigFixture("invalid-value", "[Options]\nENABLE_RECAST=perhaps\n");
 
     EXPECT_FALSE(manager.Load(path.string()));
-    EXPECT_TRUE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    EXPECT_TRUE(OptionValue(manager, "ENABLE_RECAST"));
     std::filesystem::remove(path);
 }
 
 TEST(SparkBuildConfig_LoadAcceptsKnownOptionValue)
 {
     ConfigManager manager;
-    const auto path = WriteConfigFixture("known-option", "[Options]\nENABLE_GRAPHICS=OFF\n");
+    const auto path = WriteConfigFixture("known-option", "[Options]\nENABLE_RECAST=OFF\n");
 
     EXPECT_TRUE(manager.Load(path.string()));
-    EXPECT_FALSE(OptionValue(manager, "ENABLE_GRAPHICS"));
+    EXPECT_FALSE(OptionValue(manager, "ENABLE_RECAST"));
     std::filesystem::remove(path);
+}
+
+TEST(SparkBuildConfig_LoadRejectsOversizedFile)
+{
+    // A valid document padded with comment lines to exactly the bound loads;
+    // one byte more is refused before parsing and leaves the config unchanged.
+    const std::string document = "[Options]\nENABLE_RECAST=OFF\n";
+    std::string atBound = document;
+    while (atBound.size() + 64 < ConfigManager::kMaxConfigBytes)
+        atBound += "; " + std::string(61, 'x') + "\n";
+    atBound += std::string(ConfigManager::kMaxConfigBytes - atBound.size() - 1, ';') + "\n";
+    EXPECT_EQ(atBound.size(), ConfigManager::kMaxConfigBytes);
+
+    ConfigManager accepted;
+    const auto atBoundPath = WriteConfigFixture("at-bound", atBound);
+    EXPECT_TRUE(accepted.Load(atBoundPath.string()));
+    EXPECT_FALSE(OptionValue(accepted, "ENABLE_RECAST"));
+    std::filesystem::remove(atBoundPath);
+
+    ConfigManager refused;
+    const auto oversizedPath = WriteConfigFixture("oversized", atBound + ";");
+    EXPECT_FALSE(refused.Load(oversizedPath.string()));
+    EXPECT_TRUE(OptionValue(refused, "ENABLE_RECAST"));
+    std::filesystem::remove(oversizedPath);
+}
+
+TEST(SparkBuildConfig_LoadFromStreamMatchesLoad)
+{
+    const std::string document = "; saved by SparkBuild\r\n[Paths]\r\nEnginePath = engine root \r\nBuildPath=out\r\n"
+                                 "[Build]\r\nGenerator=Ninja\r\nBuildType=Debug\r\nParallelJobs=6\r\n"
+                                 "[Options]\r\nENABLE_RECAST=OFF\r\n";
+    ConfigManager fromFile;
+    const auto path = WriteConfigFixture("stream-match", document);
+    EXPECT_TRUE(fromFile.Load(path.string()));
+    std::filesystem::remove(path);
+
+    ConfigManager fromStream;
+    std::istringstream input(document);
+    EXPECT_TRUE(fromStream.LoadFromStream(input));
+
+    EXPECT_EQ(fromStream.config.enginePath, std::string("engine root"));
+    EXPECT_EQ(fromStream.config.parallelJobs, 6);
+    EXPECT_FALSE(OptionValue(fromStream, "ENABLE_RECAST"));
+    EXPECT_EQ(fromStream.BuildCMakeConfigureCommand(), fromFile.BuildCMakeConfigureCommand());
+    EXPECT_EQ(fromStream.BuildCMakeBuildCommand(), fromFile.BuildCMakeBuildCommand());
+
+    // A rejected document leaves the previously loaded configuration in place.
+    std::istringstream rejected("[Paths]\nBuildPath=elsewhere\n[Unknown]\n");
+    EXPECT_FALSE(fromStream.LoadFromStream(rejected));
+    EXPECT_EQ(fromStream.config.buildPath, std::string("out"));
 }

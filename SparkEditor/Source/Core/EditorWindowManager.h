@@ -139,6 +139,11 @@ namespace SparkEditor
         const std::string& GetLastSavedPath() const { return m_lastSavedPath; }
 
         /**
+         * @brief The layout LoadLayout / LoadLayoutFromFile last applied.
+         */
+        const WindowLayout& GetCurrentLayout() const { return m_currentLayout; }
+
+        /**
          * @brief Get names of all saved layouts
          * @return Vector of layout names
          */

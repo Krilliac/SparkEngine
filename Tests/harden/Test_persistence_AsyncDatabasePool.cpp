@@ -114,6 +114,37 @@ TEST(AsyncDatabasePool_AsyncAndSyncWrites_SurviveCloseReopen)
     std::filesystem::remove(path);
 }
 
+TEST(AsyncDatabasePool_TransactionCommitFailure_IsReportedAndRolledBack)
+{
+    const std::string path = MakeTempDbPath("transaction_commit_failure");
+
+    AsyncDatabasePool pool;
+    pool.PrepareStatement(kSetAsync, "SET txkey committed");
+    pool.PrepareStatement(kGetAsync, "GET txkey");
+    EXPECT_TRUE(pool.Open(path, 1));
+
+    // Simulate the destination becoming unusable after a valid connection was
+    // opened.  The temporary revision can still be written, but replacement of
+    // the destination must fail and the transaction must not report success or
+    // leave its value in the in-memory store.
+    std::error_code filesystemError;
+    EXPECT_TRUE(std::filesystem::create_directory(path, filesystemError));
+    EXPECT_FALSE(static_cast<bool>(filesystemError));
+
+    Transaction transaction;
+    transaction.Append(kSetAsync);
+    QueryResult transactionResult = pool.AsyncTransaction(std::move(transaction)).get();
+    EXPECT_FALSE(transactionResult.success);
+    EXPECT_STR_CONTAINS(transactionResult.errorMessage, "commit");
+
+    QueryResult readResult = pool.SyncQuery(kGetAsync);
+    EXPECT_TRUE(readResult.success);
+    EXPECT_FALSE(readResult.HasRows());
+
+    pool.Close();
+    std::filesystem::remove_all(path, filesystemError);
+}
+
 TEST(AsyncDatabasePool_CloseRace_DrainsAcceptedAndCompletesRejectedWork)
 {
     using namespace std::chrono_literals;

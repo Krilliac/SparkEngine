@@ -15,7 +15,7 @@
 
 #include <cstdint>
 #include <string>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 namespace RTS
@@ -87,6 +87,8 @@ namespace RTS
         // === Building lifecycle ===
         uint32_t PlaceBuilding(RTSBuildingType type, RTSFaction faction, float x, float y);
         void DestroyBuilding(uint32_t buildingId);
+        /** Subtract combat damage; the building is removed (and queued supply released) on the next Update. */
+        void ApplyDamage(uint32_t buildingId, float amount);
 
         // === Production ===
         bool StartProduction(uint32_t buildingId, RTSUnitType unitType);
@@ -100,8 +102,16 @@ namespace RTS
         int GetSupplyProvided(RTSFaction faction) const;
         std::string GetBuildingListString() const;
 
-        /** Replace all runtime buildings from a validated persistence snapshot. */
-        bool RestoreState(const std::vector<BuildingData>& buildings);
+        /** @brief Id the next placed building receives (ids are never reused, so this is persistent state). */
+        uint32_t GetNextBuildingId() const;
+
+        /**
+         * @brief Replace all runtime buildings from a validated persistence snapshot.
+         * @param nextBuildingId  Id the next placement receives; 0 derives it as one past the highest restored id,
+         *                        otherwise it must exceed every restored id.
+         * @return false (leaving state untouched) if any record or the id counter is invalid.
+         */
+        bool RestoreState(const std::vector<BuildingData>& buildings, uint32_t nextBuildingId = 0);
 
       private:
         void RegisterFactionTemplates(RTSFaction faction);
@@ -113,7 +123,8 @@ namespace RTS
         RTSUnitSystem* m_unitSystem{nullptr};
         RTSResourceSystem* m_resourceSystem{nullptr};
 
-        std::unordered_map<uint32_t, BuildingData> m_buildings;
+        // Ordered by id so production completing on the same tick spawns units in a deterministic order.
+        std::map<uint32_t, BuildingData> m_buildings;
         std::vector<BuildingTemplate> m_templates;
         uint32_t m_nextBuildingId = 1;
     };

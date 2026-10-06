@@ -1,0 +1,88 @@
+{
+  "capturedAt": "2026-09-24T12:50:57Z",
+  "repository": "Krilliac/SparkEngine",
+  "sources": {
+    "rulesForBranch": "GET /repos/Krilliac/SparkEngine/rules/branches/Working",
+    "ruleset": "GET /repos/Krilliac/SparkEngine/rulesets/21968740"
+  },
+  "rulesForBranch": [
+    {
+      "type": "deletion",
+      "ruleset_source_type": "Repository",
+      "ruleset_source": "Krilliac/SparkEngine",
+      "ruleset_id": 21968740
+    },
+    {
+      "type": "non_fast_forward",
+      "ruleset_source_type": "Repository",
+      "ruleset_source": "Krilliac/SparkEngine",
+      "ruleset_id": 21968740
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "Required CI Gate",
+            "integration_id": 15368
+          }
+        ]
+      },
+      "ruleset_source_type": "Repository",
+      "ruleset_source": "Krilliac/SparkEngine",
+      "ruleset_id": 21968740
+    }
+  ],
+  "ruleset": {
+    "id": 21968740,
+    "name": "Working integrity",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "Krilliac/SparkEngine",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/Working"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": false,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "Required CI Gate",
+              "integration_id": 15368
+            }
+          ]
+        }
+      }
+    ],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec49MslwzgFPN2Q",
+    "created_at": "2026-08-31T19:02:13.935-05:00",
+    "updated_at": "2026-09-12T14:43:07.157-05:00",
+    "bypass_actors": [],
+    "current_user_can_bypass": "never",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/Krilliac/SparkEngine/rulesets/21968740"
+      },
+      "html": {
+        "href": "https://github.com/Krilliac/SparkEngine/rules/21968740"
+      }
+    }
+  }
+}

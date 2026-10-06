@@ -4,8 +4,7 @@
  */
 
 #include "RacingAIDriver.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -44,9 +43,8 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI driver system initialized");
-        console.LogInfo("[Racing AI] AI driver system initialized");
+        Spark::ModuleLog::Info(m_context, "Racing AI driver system initialized");
+        Spark::ModuleLog::Info(m_context, "[Racing AI] AI driver system initialized");
         return true;
     }
 
@@ -110,11 +108,12 @@ namespace Racing
             driver.aggressiveness = preset.aggressiveness;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
         const char* names[] = {"Easy", "Medium", "Hard", "Expert"};
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI global difficulty set to: %s",
-                       names[static_cast<int>(difficulty)]);
-        console.LogInfo("[Racing AI] Global difficulty set to: " + std::string(names[static_cast<int>(difficulty)]));
+        Spark::ModuleLog::Info(m_context, "Racing AI global difficulty set to: {}",
+                               names[static_cast<int>(difficulty)]);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing AI] Global difficulty set to: " +
+                                   std::string(names[static_cast<int>(difficulty)]));
     }
 
     void RacingAIDriver::UpdateRubberBanding(float playerDistance, float leadDistance, float lastDistance)
@@ -158,6 +157,15 @@ namespace Racing
 
             state.rubberBandFactor = std::clamp(state.rubberBandFactor, kMaxRubberBandPenalty, kMaxRubberBandBoost);
         }
+    }
+
+    void RacingAIDriver::SetTrackSteer(uint32_t vehicleId, float steer)
+    {
+        const auto it = m_stateIndexByVehicleId.find(vehicleId);
+        if (it == m_stateIndexByVehicleId.end() || it->second >= m_states.size() || !std::isfinite(steer))
+            return;
+        m_states[it->second].trackSteer = std::clamp(steer, -1.0f, 1.0f);
+        m_states[it->second].hasTrackSteer = true;
     }
 
     const AIDriverState* RacingAIDriver::GetDriverState(uint32_t vehicleId) const
@@ -224,17 +232,18 @@ namespace Racing
         state.targetWaypoint = (state.targetWaypoint + static_cast<uint32_t>(std::max(1.0f, waypointAdvance))) %
                                static_cast<uint32_t>(kSyntheticTrackWaypointCount);
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
-                        state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
+        // No per-driver, per-frame log here: the SDK logger has no Trace level, and at Debug a full
+        // simulated race emits ~87k lines, flooding the sanitizer lanes' 16 MiB capture cap.
     }
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)
     {
-        // Synthetic racing line (sine-cosine blend) for deterministic behavior
-        // when no track-waypoint service is injected yet.
+        // Follow the authored track line when the race flow supplies it; otherwise fall back to a
+        // synthetic racing line (sine-cosine blend) for deterministic standalone behavior.
         const float phase = GetTrackPhase(state);
         const float upcomingPhase = phase + (state.lookAheadCount * 0.05f);
-        const float targetAngle = std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
+        const float targetAngle =
+            state.hasTrackSteer ? state.trackSteer : std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
 
         // Line accuracy adds noise: lower accuracy = wider, less precise lines
         const float deterministicSeed = static_cast<float>((state.vehicleId * 1103515245u + 12345u) & 0x3FFu) / 1023.0f;

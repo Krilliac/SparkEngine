@@ -1,6 +1,6 @@
 /**
  * @file TestPhysicsTeardownGuard.cpp
- * @brief Regression tests for the physics teardown-order guard (W10 exit AV).
+ * @brief Regression tests for the physics teardown-order guard (W10 exit AV) and the shape cache key.
  *
  * A module that fails OnLoad is only destroyed at ModuleManager::UnloadAll,
  * which historically ran AFTER ShutdownPhysics — its destructor then released
@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <memory>
+#include <vector>
 
 TEST(PhysicsTeardown_RemoveBodyAfterShutdown_IsSafeNoOp)
 {
@@ -272,4 +273,112 @@ TEST(PhysicsCharacterController_RealJoltWorldExercisesRuntimeSurface)
     (void)hr;
 #endif
     physics->Shutdown();
+}
+
+TEST(PhysicsTrigger_RemovedBodyLeavesNoStaleOverlap)
+{
+#ifdef SPARK_TEST_HAS_PHYSICS
+    // A body removed while it overlaps a sensor must drop out of the trigger bookkeeping: no exit callback may
+    // hand out its (possibly freed) wrapper, and a new body entering the sensor must still report an enter.
+    auto physics = std::make_unique<PhysicsSystem>();
+    ASSERT_TRUE(SUCCEEDED(physics->Initialize()));
+
+    PhysicsBodyDesc sensorDesc;
+    sensorDesc.name = "trigger_guard_sensor";
+    sensorDesc.type = PhysicsBodyType::Static;
+    sensorDesc.mass = 0.0f;
+    sensorDesc.isTrigger = true;
+    sensorDesc.shape.type = CollisionShapeType::Box;
+    sensorDesc.shape.dimensions = {6.0f, 6.0f, 6.0f};
+    std::shared_ptr<PhysicsBody> sensor = physics->CreateBody(sensorDesc);
+    ASSERT_TRUE(sensor != nullptr);
+
+    auto makeVisitor = [&](const char* name)
+    {
+        PhysicsBodyDesc desc;
+        desc.name = name;
+        desc.shape.type = CollisionShapeType::Box;
+        desc.shape.dimensions = {1.0f, 1.0f, 1.0f};
+        desc.gravityFactor = 0.0f; // stays inside the sensor
+        return physics->CreateBody(desc);
+    };
+
+    int enters = 0;
+    std::vector<const PhysicsBody*> exited;
+    physics->SetTriggerCallback(
+        [&](PhysicsBody* first, PhysicsBody* second, bool entered)
+        {
+            if (entered)
+                ++enters;
+            else
+                exited.push_back(first == sensor.get() ? second : first); // pointer value only, never dereferenced
+        });
+
+    std::shared_ptr<PhysicsBody> visitor = makeVisitor("trigger_guard_visitor");
+    ASSERT_TRUE(visitor != nullptr);
+    physics->StepFixed(2);
+    EXPECT_EQ(enters, 1);
+
+    const PhysicsBody* removed = visitor.get();
+    physics->RemoveBody(visitor);
+    visitor.reset();
+    physics->StepFixed(2);
+    for (const PhysicsBody* body : exited)
+        EXPECT_TRUE(body != removed);
+
+    std::shared_ptr<PhysicsBody> next = makeVisitor("trigger_guard_next");
+    ASSERT_TRUE(next != nullptr);
+    physics->StepFixed(2);
+    EXPECT_EQ(enters, 2);
+
+    physics->SetTriggerCallback(nullptr);
+    physics->RemoveBody(next);
+    physics->RemoveBody(sensor);
+    physics->Shutdown();
+#endif
+}
+
+TEST(PhysicsShapeCache_InlineMeshesWithEqualCountsKeepTheirOwnGeometry)
+{
+#ifdef SPARK_TEST_HAS_PHYSICS
+    // The shape cache used to key inline meshes by vertex/index counts only, so a second mesh with the same counts
+    // (e.g. another procedurally built road surface) silently reused the first mesh's geometry. Each body must
+    // collide where its own vertices are.
+    auto physics = std::make_unique<PhysicsSystem>();
+    ASSERT_TRUE(SUCCEEDED(physics->Initialize()));
+
+    auto makeQuad = [&](const char* name, float minX)
+    {
+        PhysicsBodyDesc desc;
+        desc.name = name;
+        desc.type = PhysicsBodyType::Static;
+        desc.mass = 0.0f;
+        desc.shape.type = CollisionShapeType::Mesh;
+        desc.shape.vertices = {
+            {minX, 0.0f, 0.0f}, {minX + 4.0f, 0.0f, 0.0f}, {minX + 4.0f, 0.0f, 4.0f}, {minX, 0.0f, 4.0f}};
+        desc.shape.indices = {0, 2, 1, 0, 3, 2};
+        return physics->CreateBody(desc);
+    };
+
+    std::shared_ptr<PhysicsBody> first = makeQuad("shape_cache_quad_a", 0.0f);
+    std::shared_ptr<PhysicsBody> second = makeQuad("shape_cache_quad_b", 10.0f);
+    ASSERT_TRUE(first != nullptr);
+    ASSERT_TRUE(second != nullptr);
+
+    const RaycastHit hitSecond = physics->Raycast({12.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 10.0f);
+    ASSERT_TRUE(hitSecond.hasHit);
+    EXPECT_TRUE(hitSecond.body == second.get());
+    EXPECT_NEAR(hitSecond.point.y, 0.0f, 0.01f);
+
+    const RaycastHit hitFirst = physics->Raycast({2.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 10.0f);
+    ASSERT_TRUE(hitFirst.hasHit);
+    EXPECT_TRUE(hitFirst.body == first.get());
+
+    // Between the quads there is no geometry at all.
+    EXPECT_FALSE(physics->Raycast({7.0f, 5.0f, 2.0f}, {0.0f, -1.0f, 0.0f}, 10.0f).hasHit);
+
+    physics->RemoveBody(second);
+    physics->RemoveBody(first);
+    physics->Shutdown();
+#endif
 }

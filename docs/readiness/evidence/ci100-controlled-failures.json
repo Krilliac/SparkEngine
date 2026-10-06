@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "description": "CI-100[0] controlled-failure rehearsal evidence. Each class records the hosted Build run whose controlled failure turned the Required CI Gate red. Written by tools/ci/run_controlled_failure_rehearsal.py; this committed copy is the pending scaffold until an owner runs the rehearsal against Working.",
+  "status": "pending-hosted-rehearsal",
+  "baseSha": null,
+  "classes": {}
+}

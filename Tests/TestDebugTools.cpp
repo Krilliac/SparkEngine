@@ -413,18 +413,23 @@ TEST(DebugOverlay_BuildStatsWhenDisabled)
 
 TEST(DebugOverlay_FPSTracking)
 {
+    // The overlay is a process-wide singleton that the lifecycle tests also tick
+    // through UpdateDebugSystemsImpl, so start from a known baseline.
     auto& overlay = Spark::DebugOverlay::GetInstance();
+    overlay.ResetStats();
     overlay.SetEnabled(true);
 
-    // Simulate several frames at ~60fps
+    // Feed 60 frames at exactly 60 fps; every statistic follows from the fed times.
+    constexpr float frameTime = 1.0f / 60.0f;
     for (int i = 0; i < 60; i++)
-        overlay.Update(1.0f / 60.0f);
+        overlay.Update(frameTime);
 
-    EXPECT_GT(overlay.GetCurrentFPS(), 0.0f);
-    EXPECT_GT(overlay.GetAvgFrameTime(), 0.0f);
     EXPECT_EQ(overlay.GetFrameCount(), static_cast<uint64_t>(60));
+    EXPECT_NEAR(overlay.GetCurrentFPS(), 60.0f, 0.01f);
+    EXPECT_NEAR(overlay.GetAvgFrameTime(), frameTime * 1000.0f, 0.001f);
 
     overlay.SetEnabled(false);
+    overlay.ResetStats();
 }
 
 TEST(DebugOverlay_SectionToggle)

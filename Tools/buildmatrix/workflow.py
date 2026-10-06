@@ -429,6 +429,8 @@ def _expand_matrix(matrix: Any) -> tuple[list[dict[str, Any]], list[str], bool]:
     for values in axes.values():
         if not isinstance(values, list):
             return [{}], sorted(axes), False
+    if any(not values for values in axes.values()):
+        return [{}], sorted(axes), False
     names = sorted(axes)
     combinations = [
         dict(zip(names, values)) for values in itertools.product(*(axes[name] for name in names))
@@ -1035,6 +1037,13 @@ def _parse_cmake_build(
             while index < len(args) and not args[index].startswith("-"):
                 result["targets"].append(args[index])
                 index += 1
+            continue
+        if argument.startswith("--target="):
+            target = argument.split("=", 1)[1]
+            if not target:
+                raise WorkflowError(f"{context.get('job')}/{context.get('step')}: --target lacks a value")
+            result["targets"].append(target)
+            index += 1
             continue
         if argument in {"--parallel", "-j"}:
             following = args[index + 1] if index + 1 < len(args) else ""

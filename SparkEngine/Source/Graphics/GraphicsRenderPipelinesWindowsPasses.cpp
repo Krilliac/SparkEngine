@@ -1,6 +1,7 @@
 /**
  * @file GraphicsRenderPipelinesWindowsPasses.cpp
- * @brief D3D11 G-Buffer fill, lighting pass, frustum culling, and post-processing passes
+ * @brief D3D11 G-Buffer fill, lighting pass, frustum culling, and
+ * post-processing passes
  *
  * Split from GraphicsRenderPipelinesWindows.cpp. Contains the deferred-pass
  * internals (G-Buffer fill, lighting pass), frustum culling, post-processing,
@@ -10,26 +11,29 @@
 #include "../Core/Platform.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 
+#include "../Game/GameObject.h"
+#include "../Utils/LogMacros.h"
+#include "../Utils/SparkConsole.h"
+#include "D3D11FrustumCulling.h"
 #include "GraphicsEngine.h"
 #include "GraphicsRenderPipelinesShadowPass.h"
 #include "LightingSystem.h"
 #include "Mesh.h"
 #include "PostProcessingPipeline.h"
 #include "TemporalEffects.h"
-#include "../Game/GameObject.h"
-#include "../Utils/LogMacros.h"
-#include "../Utils/SparkConsole.h"
 
-#include <windows.h>
-#include <d3d11_1.h>
 #include "Core/Platform.h"
+#include <d3d11_1.h>
+#include <windows.h>
 #include <wrl.h>
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace DirectX;
@@ -48,10 +52,46 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
         return;
     }
 
-    // Bind G-Buffer render targets for the geometry pass
-    ID3D11RenderTargetView* gBufferRTVs[4] = {m_gBufferRTVs[0].Get(), m_gBufferRTVs[1].Get(), m_gBufferRTVs[2].Get(),
-                                              m_gBufferRTVs[3].Get()};
-    m_context->OMSetRenderTargets(4, gBufferRTVs, m_depthStencilView.Get());
+    ComPtr<ID3D11PixelShader> deferredShader;
+    UINT shaderBytes = sizeof(ID3D11PixelShader*);
+    if (!m_basicPixelShader ||
+        FAILED(m_basicPixelShader->GetPrivateData(kDeferredGBufferShaderGuid, &shaderBytes,
+                                                  deferredShader.GetAddressOf())) ||
+        !deferredShader)
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "FillGBuffer: deferred shader unavailable, skipping geometry");
+        return;
+    }
+
+    // Render-thread-only borrowed binding seam, no allocation. GameObject::Render
+    // calls SetBasicShaders, so replace that seam only for this call. The forward
+    // shader owns the deferred variant; GetPrivateData adds the local reference.
+    // Restore even on exceptions and when a caller inspects geometry without
+    // subsequently calling LightingPass (the Primary geometry capture does so).
+    struct ScopedGeometryShader
+    {
+        ComPtr<ID3D11PixelShader>& current;
+        ComPtr<ID3D11PixelShader> saved;
+        ID3D11DeviceContext* context;
+        ScopedGeometryShader(ComPtr<ID3D11PixelShader>& basic, ComPtr<ID3D11PixelShader> next,
+                             ID3D11DeviceContext* deviceContext)
+            : current(basic), saved(std::move(next)), context(deviceContext)
+        {
+            current.Swap(saved);
+        }
+        ~ScopedGeometryShader()
+        {
+            current.Swap(saved);
+            context->PSSetShader(current.Get(), nullptr, 0);
+        }
+        ScopedGeometryShader(const ScopedGeometryShader&) = delete;
+        ScopedGeometryShader& operator=(const ScopedGeometryShader&) = delete;
+    } geometryShader(m_basicPixelShader, std::move(deferredShader), m_context.Get());
+
+    // Only the three implemented attachments are written. Motion history is
+    // not available yet; do not fabricate a fourth attachment's output.
+    ID3D11RenderTargetView* gBufferRTVs[3] = {m_gBufferRTVs[0].Get(), m_gBufferRTVs[1].Get(), m_gBufferRTVs[2].Get()};
+    m_context->OMSetRenderTargets(3, gBufferRTVs, m_depthStencilView.Get());
 
     uint32_t gBufferDrawCalls = 0;
     uint32_t totalTriangles = 0;
@@ -108,6 +148,8 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
 
 void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
+    if (!m_context)
+        return;
     auto lightingStartTime = std::chrono::high_resolution_clock::now();
 
     if (m_context && m_renderTargetView)
@@ -119,8 +161,10 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
     {
         try
         {
-            // Bind lighting data to shaders
-            m_lightingSystem->BindLightingData(m_context.Get());
+            // Resolve packs current light values after Update; the legacy b1/b2
+            // upload is not a compatible deferred constant layout.
+            if (m_currentPipeline != RenderingPipeline::Deferred)
+                m_lightingSystem->BindLightingData(m_context.Get());
 
             // Update lighting system with the real frame delta (RenderPostProcessing
             // does the same); a hard-coded 16 ms desynchronises every time-based
@@ -182,7 +226,12 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
         LOG_TO_CONSOLE_IMMEDIATE(L"Warning: LightingSystem not available for lighting pass", L"WARNING");
     }
 
-    uint32_t lightingDrawCalls = 1;
+    // Count only the fullscreen draw actually submitted; unavailable resources
+    // or a failed constant-buffer upload must not fabricate a lighting draw.
+    uint32_t resolvedLights = 0;
+    const uint32_t lightingDrawCalls = ResolveDeferredLighting(viewMatrix, projMatrix, resolvedLights) ? 1u : 0u;
+    if (m_currentPipeline == RenderingPipeline::Deferred && lightingDrawCalls == 0)
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Deferred lighting resolve skipped; no lighting draw submitted");
 
     auto lightingEndTime = std::chrono::high_resolution_clock::now();
     auto lightingTime = std::chrono::duration_cast<std::chrono::microseconds>(lightingEndTime - lightingStartTime);
@@ -197,7 +246,8 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
             try
             {
                 auto lightingMetrics = m_lightingSystem->Console_GetMetrics();
-                m_statistics.activeLights = lightingMetrics.activeLights;
+                m_statistics.activeLights =
+                    m_currentPipeline == RenderingPipeline::Deferred ? resolvedLights : lightingMetrics.activeLights;
                 m_statistics.shadowUpdates = lightingMetrics.shadowMapUpdates;
                 m_statistics.lightCullingTime = lightingMetrics.lightCullingTime;
             }
@@ -229,7 +279,7 @@ void GraphicsEngine::LightingPass(const XMMATRIX& viewMatrix, const XMMATRIX& pr
         }
     }
 
-    SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Deferred lighting pass complete in %.3f ms",
+    SPARK_LOG_TRACE(Spark::LogCategory::Graphics, "Deferred lighting data update complete; resolve pending (%.3f ms)",
                     static_cast<double>(lightingTime.count()) / 1000.0);
 }
 
@@ -241,52 +291,8 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     visibleObjects.clear();
     visibleObjects.reserve(objects.size());
 
-    // Extract frustum planes from view-projection matrix
-    XMMATRIX viewProjMatrix = XMMatrixMultiply(viewMatrix, projMatrix);
-
-    XMVECTOR frustumPlanes[6];
-
-    // Left plane
-    frustumPlanes[0] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[0]),
-                                   XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[0]),
-                                   XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[0]),
-                                   XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[0]));
-
-    // Right plane
-    frustumPlanes[1] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[0]),
-                                   XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[0]),
-                                   XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[0]),
-                                   XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[0]));
-
-    // Top plane
-    frustumPlanes[2] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[1]),
-                                   XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[1]),
-                                   XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[1]),
-                                   XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[1]));
-
-    // Bottom plane
-    frustumPlanes[3] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[1]),
-                                   XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[1]),
-                                   XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[1]),
-                                   XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[1]));
-
-    // Near plane
-    frustumPlanes[4] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) + XMVectorGetX(viewProjMatrix.r[2]),
-                                   XMVectorGetY(viewProjMatrix.r[3]) + XMVectorGetY(viewProjMatrix.r[2]),
-                                   XMVectorGetZ(viewProjMatrix.r[3]) + XMVectorGetZ(viewProjMatrix.r[2]),
-                                   XMVectorGetW(viewProjMatrix.r[3]) + XMVectorGetW(viewProjMatrix.r[2]));
-
-    // Far plane
-    frustumPlanes[5] = XMVectorSet(XMVectorGetX(viewProjMatrix.r[3]) - XMVectorGetX(viewProjMatrix.r[2]),
-                                   XMVectorGetY(viewProjMatrix.r[3]) - XMVectorGetY(viewProjMatrix.r[2]),
-                                   XMVectorGetZ(viewProjMatrix.r[3]) - XMVectorGetZ(viewProjMatrix.r[2]),
-                                   XMVectorGetW(viewProjMatrix.r[3]) - XMVectorGetW(viewProjMatrix.r[2]));
-
-    // Normalize frustum planes
-    for (int i = 0; i < 6; i++)
-    {
-        frustumPlanes[i] = XMPlaneNormalize(frustumPlanes[i]);
-    }
+    const XMMATRIX viewProjMatrix = XMMatrixMultiply(viewMatrix, projMatrix);
+    const auto frustumPlanes = Spark::Graphics::D3D11RenderMath::ExtractFrustumPlanes(viewProjMatrix);
 
     uint32_t totalObjects = 0;
     uint32_t culledObjects = 0;
@@ -296,7 +302,9 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     for (auto* obj : objects)
     {
         if (!obj)
+        {
             continue;
+        }
 
         totalObjects++;
 
@@ -306,23 +314,18 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
             continue;
         }
 
-        XMFLOAT3 objPos = obj->GetPosition();
-        XMVECTOR objectPosition = XMLoadFloat3(&objPos);
-        float boundingRadius = 5.0f;
-
-        bool isVisible = true;
-
-        // Test against all frustum planes
-        for (int i = 0; i < 6; i++)
-        {
-            float distance = XMVectorGetX(XMPlaneDotCoord(frustumPlanes[i], objectPosition));
-
-            if (distance < -boundingRadius)
-            {
-                isVisible = false;
-                break;
-            }
-        }
+        const XMFLOAT3 objPos = obj->GetPosition();
+        const XMFLOAT3 scale = obj->GetScale();
+        // Mesh keeps CPU vertices private and exposes no local bounds; GameObject
+        // exposes no bounds either. Until that API exists, retain the legacy
+        // five-unit envelope and expand it for scale (never shrink it). This is
+        // conservative for the existing unit primitives, not certified arbitrary
+        // imported geometry. Computing mesh bounds by GPU readback here is not
+        // viable.
+        const float scaleFactor = std::max({1.0f, std::fabs(scale.x), std::fabs(scale.y), std::fabs(scale.z)});
+        const float boundingRadius = 5.0f * scaleFactor;
+        const bool isVisible =
+            Spark::Graphics::D3D11RenderMath::SphereIntersects(frustumPlanes, objPos, boundingRadius);
 
         if (isVisible)
         {
@@ -399,16 +402,6 @@ void GraphicsEngine::RenderTemporalEffects()
         if (m_settings.motionBlur)
             m_statistics.postProcessPasses++;
     }
-}
-
-void GraphicsEngine::RenderGeometryPass()
-{
-    // Windows D3D11: geometry pass handled through RenderForward/RenderDeferred
-}
-
-void GraphicsEngine::RenderLightingPass()
-{
-    // Windows D3D11: lighting pass handled through LightingPass()
 }
 
 #endif // SPARK_PLATFORM_WINDOWS

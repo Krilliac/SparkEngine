@@ -1,11 +1,10 @@
 /**
  * @file RTSUnitSystem.cpp
- * @brief Unit templates, spawning, lifecycle, and behavioral AI
+ * @brief Unit templates, spawning, and lifecycle
  */
 
 #include "RTSUnitSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -27,27 +26,17 @@ namespace RTS
         RegisterFactionTemplates(RTSFaction::Sentinel);
         RegisterFactionTemplates(RTSFaction::Swarm);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RTS unit system initialized with %zu templates", m_templates.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RTS] Unit system initialized (" +
-                                                    std::to_string(m_templates.size()) + " templates)");
+        Spark::ModuleLog::Info(m_context, "[RTS] Unit system initialized ({} templates)", m_templates.size());
         return true;
     }
 
     void RTSUnitSystem::Update(float deltaTime)
     {
-        // Remove dead units
-        for (auto it = m_units.begin(); it != m_units.end();)
-        {
-            if (it->second.state == RTSUnitState::Dead)
-            {
-                it = m_units.erase(it);
-            }
-            else
-            {
-                UpdateUnitAI(it->second, deltaTime);
-                ++it;
-            }
-        }
+        (void)deltaTime;
+
+        // Remove dead units. Movement belongs to RTSCommandSystem (grid pathfinding), combat and win/loss to
+        // RTSSkirmishSimulation, and gathering to RTSResourceSystem.
+        std::erase_if(m_units, [](const auto& entry) { return entry.second.state == RTSUnitState::Dead; });
     }
 
     void RTSUnitSystem::Shutdown()
@@ -82,7 +71,6 @@ namespace RTS
 
         uint32_t id = unit.unitId;
         m_units[id] = unit;
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS unit spawned: id=%u at (%.0f, %.0f)", id, x, y);
         return id;
     }
 
@@ -91,7 +79,6 @@ namespace RTS
         auto it = m_units.find(unitId);
         if (it != m_units.end())
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Game, "RTS unit %u killed", unitId);
             m_units.erase(it);
         }
     }
@@ -164,10 +151,14 @@ namespace RTS
         return result;
     }
 
-    bool RTSUnitSystem::RestoreState(const std::vector<UnitData>& units)
+    uint32_t RTSUnitSystem::GetNextUnitId() const
     {
-        std::unordered_map<uint32_t, UnitData> restored;
-        restored.reserve(units.size());
+        return m_nextUnitId;
+    }
+
+    bool RTSUnitSystem::RestoreState(const std::vector<UnitData>& units, uint32_t nextUnitId)
+    {
+        std::map<uint32_t, UnitData> restored;
         uint32_t nextId = 1;
 
         for (const UnitData& unit : units)
@@ -179,11 +170,17 @@ namespace RTS
                 !std::isfinite(unit.visionRange) || !std::isfinite(unit.posX) || !std::isfinite(unit.posY) ||
                 unit.maxHealth <= 0.0f || unit.health < 0.0f || unit.health > unit.maxHealth || unit.damage < 0.0f ||
                 unit.attackSpeed < 0.0f || unit.moveSpeed < 0.0f || unit.visionRange < 0.0f ||
-                !restored.emplace(unit.unitId, unit).second)
+                unit.visionRange > MAX_VISION_RANGE || !restored.emplace(unit.unitId, unit).second)
             {
                 return false;
             }
             nextId = std::max(nextId, unit.unitId + 1);
+        }
+        if (nextUnitId != 0)
+        {
+            if (nextUnitId < nextId)
+                return false;
+            nextId = nextUnitId;
         }
 
         m_units = std::move(restored);
@@ -265,34 +262,6 @@ namespace RTS
         addTemplate(RTSUnitType::Hero, "Hero", 300, 40, 1.0f, 3.0f, 10.0f, 2.0f, 60.0f, 300, 200, 6);
         addTemplate(RTSUnitType::Medic, "Medic", 50, 0, 0.0f, 3.0f, 8.0f, 4.0f, 20.0f, 50, 50, 1);
         addTemplate(RTSUnitType::Siege, "Siege", 120, 50, 0.3f, 1.5f, 8.0f, 12.0f, 35.0f, 200, 100, 3);
-    }
-
-    void RTSUnitSystem::UpdateUnitAI(UnitData& unit, float deltaTime)
-    {
-        (void)deltaTime;
-
-        // Simple state-based AI skeleton
-        switch (unit.state)
-        {
-        case RTSUnitState::Idle:
-            // Idle units do nothing; await commands
-            break;
-
-        case RTSUnitState::Moving:
-            // Movement would be handled by pathfinding integration
-            break;
-
-        case RTSUnitState::Attacking:
-            // Attack logic handled by CommandSystem targeting
-            break;
-
-        case RTSUnitState::Gathering:
-            // Resource gathering handled by ResourceSystem
-            break;
-
-        default:
-            break;
-        }
     }
 
     void RTSUnitSystem::RenderDebugUI()

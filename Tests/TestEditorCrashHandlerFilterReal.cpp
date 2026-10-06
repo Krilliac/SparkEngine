@@ -16,11 +16,24 @@
 #include "TestFramework.h"
 
 #include "Core/EditorCrashHandler.h"
+#include "Utils/StackTrace.h"
 
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iterator>
+#include <random>
+#include <span>
 #include <string>
+
+#ifdef _WIN32
+#include "Utils/MiniDumpWithoutStacks.h"
+
+#include <dbghelp.h>
+#endif
 
 namespace
 {
@@ -95,6 +108,82 @@ namespace
         SetUnhandledExceptionFilter(current);
         return current;
     }
+
+    /** @brief Memory ranges held in the MemoryListStream of the minidump image @p dump. */
+    std::span<const MINIDUMP_MEMORY_DESCRIPTOR> DumpMemoryRanges(const std::string& dump)
+    {
+        void* stream = nullptr;
+        ULONG streamSize = 0;
+        if (!MiniDumpReadDumpStream(const_cast<char*>(dump.data()), MemoryListStream, nullptr, &stream, &streamSize) ||
+            streamSize < sizeof(ULONG32))
+            return {};
+        const auto* list = static_cast<const MINIDUMP_MEMORY_LIST*>(stream);
+        return {list->MemoryRanges, list->NumberOfMemoryRanges};
+    }
+
+    /** @brief The ExceptionStream of the minidump image @p dump, or nullptr. */
+    const MINIDUMP_EXCEPTION_STREAM* DumpExceptionStream(const std::string& dump)
+    {
+        void* stream = nullptr;
+        ULONG streamSize = 0;
+        if (!MiniDumpReadDumpStream(const_cast<char*>(dump.data()), ExceptionStream, nullptr, &stream, &streamSize) ||
+            streamSize < sizeof(MINIDUMP_EXCEPTION_STREAM))
+            return nullptr;
+        return static_cast<const MINIDUMP_EXCEPTION_STREAM*>(stream);
+    }
+
+    /** @brief Failure diagnostic: which part of the minidump image @p dump holds file offset @p offset. */
+    std::string DumpRegionHolding(const std::string& dump, size_t offset)
+    {
+        const auto within = [offset](ULONG64 rva, ULONG64 size) { return offset >= rva && offset - rva < size; };
+        MINIDUMP_HEADER header{};
+        if (dump.size() < sizeof(header))
+            return "no minidump header";
+        std::memcpy(&header, dump.data(), sizeof(header));
+        if (within(0, sizeof(header)))
+            return "the minidump header";
+        const ULONG64 directorySize = ULONG64{header.NumberOfStreams} * sizeof(MINIDUMP_DIRECTORY);
+        if (header.StreamDirectoryRva + directorySize > dump.size())
+            return "a truncated stream directory";
+        if (within(header.StreamDirectoryRva, directorySize))
+            return "the stream directory";
+        std::string owner;
+        for (ULONG32 index = 0; index != header.NumberOfStreams; ++index)
+        {
+            MINIDUMP_DIRECTORY entry{};
+            std::memcpy(&entry, dump.data() + header.StreamDirectoryRva + index * sizeof(entry), sizeof(entry));
+            if (within(entry.Location.Rva, entry.Location.DataSize))
+                owner += std::format("stream type {} [0x{:x}, +0x{:x}) ", entry.StreamType, entry.Location.Rva,
+                                     entry.Location.DataSize);
+        }
+        // Thread contexts live outside the ThreadListStream's own bytes.
+        void* stream = nullptr;
+        ULONG streamSize = 0;
+        if (MiniDumpReadDumpStream(const_cast<char*>(dump.data()), ThreadListStream, nullptr, &stream, &streamSize) &&
+            streamSize >= sizeof(ULONG32))
+        {
+            const auto* threads = static_cast<const MINIDUMP_THREAD_LIST*>(stream);
+            for (ULONG32 index = 0; index != threads->NumberOfThreads; ++index)
+            {
+                const MINIDUMP_THREAD& thread = threads->Threads[index];
+                if (within(thread.ThreadContext.Rva, thread.ThreadContext.DataSize))
+                    owner += std::format("context of thread {} ", thread.ThreadId);
+            }
+        }
+        // So does the exception context, which a DbgHelp build that over-reads the ContextRecord fills.
+        if (const MINIDUMP_EXCEPTION_STREAM* exception = DumpExceptionStream(dump))
+        {
+            if (within(exception->ThreadContext.Rva, exception->ThreadContext.DataSize))
+                owner += std::format("the exception context [0x{:x}, +0x{:x}) ", exception->ThreadContext.Rva,
+                                     exception->ThreadContext.DataSize);
+        }
+        return owner.empty() ? std::string("no stream or thread context (indirect data or file slack)") : owner;
+    }
+
+    constexpr bool IsPartialCopy(DWORD error)
+    {
+        return error == ERROR_PARTIAL_COPY || error == static_cast<DWORD>(HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY));
+    }
 } // namespace
 
 TEST(EditorCrashHandlerReal_InitializeInstallsAnUnhandledExceptionFilter)
@@ -115,6 +204,55 @@ TEST(EditorCrashHandlerReal_InitializeInstallsAnUnhandledExceptionFilter)
     // Shutdown must hand the process back exactly as it found it, or a later
     // owner (the engine crash handler, a debugger) loses its filter.
     EXPECT_TRUE(CurrentUnhandledExceptionFilter() == before);
+}
+
+TEST(EditorCrashHandlerReal_SymbolBusyWritesAnUnsymbolizedReport)
+{
+    ScratchCrashDir scratch("symbol_busy");
+    SparkEditor::EditorCrashHandler& handler = SparkEditor::EditorCrashHandler::GetInstance();
+    ASSERT_TRUE(handler.Initialize(scratch.Path()));
+
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = STATUS_FATAL_APP_EXIT;
+    EXCEPTION_POINTERS pointers{&record, &context};
+    int callbackCount = 0;
+    const auto filter = CurrentUnhandledExceptionFilter();
+    ASSERT_TRUE(filter != nullptr);
+    handler.SetCrashCallback(
+        [&](const SparkEditor::CrashInfo&)
+        {
+            ++callbackCount;
+            EXPECT_EQ(filter(&pointers), EXCEPTION_EXECUTE_HANDLER);
+        });
+
+    {
+        // Invoke the installed production filter while this same thread owns
+        // DbgHelp. It must preserve a report without recursive symbol calls
+        // or writing a partial full-memory dump.
+        Spark::StackTrace::SymbolLockLease symbolLock;
+        ASSERT_TRUE(symbolLock.owns_lock());
+        EXPECT_EQ(filter(&pointers), EXCEPTION_EXECUTE_HANDLER);
+    }
+    handler.SetCrashCallback({});
+    handler.Shutdown();
+
+    bool foundReport = false;
+    bool foundDump = false;
+    for (const auto& entry : std::filesystem::directory_iterator(scratch.Path()))
+    {
+        if (entry.path().extension() == ".dmp")
+            foundDump = true;
+        if (entry.path().extension() != ".log")
+            continue;
+        std::ifstream report(entry.path());
+        const std::string contents{std::istreambuf_iterator<char>(report), std::istreambuf_iterator<char>()};
+        foundReport |= contents.find("DbgHelp busy") != std::string::npos;
+    }
+    EXPECT_TRUE(foundReport);
+    EXPECT_FALSE(foundDump);
+    EXPECT_EQ(callbackCount, 1);
 }
 
 TEST(EditorCrashHandlerReal_InitializeCreatesTheCrashDirectory)
@@ -145,6 +283,282 @@ TEST(EditorCrashHandlerReal_ShutdownWithoutInitializeLeavesTheFilterAlone)
 
     handler.Shutdown();
     EXPECT_TRUE(CurrentUnhandledExceptionFilter() == before);
+}
+
+// OPS-100: an editor dump must not carry the whole heap (tokens, credentials,
+// clipboard) into a file users are asked to share.
+TEST(EditorCrashHandler_DefaultDumpExcludesFullMemory)
+{
+    const std::uint32_t dumpType = SparkEditor::EditorCrashHandler::CrashDumpType();
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithFullMemory), 0u);
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithPrivateReadWriteMemory), 0u);
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithIndirectlyReferencedMemory), 0u);
+    EXPECT_EQ(dumpType & static_cast<std::uint32_t>(MiniDumpWithHandleData), 0u);
+    EXPECT_NE(dumpType & static_cast<std::uint32_t>(MiniDumpWithThreadInfo), 0u);
+
+    // The writer must use that selection, not a hard-coded full-memory type, and must go through
+    // the stack-removing writer rather than a raw MiniDumpWriteDump that copies every stack.
+    const std::string source = ReadSourceFile("SparkEditor/Source/Core/EditorCrashHandler.cpp");
+    ASSERT_FALSE(source.empty());
+    EXPECT_TRUE(source.contains("static_cast<MINIDUMP_TYPE>(CrashDumpType())"));
+    EXPECT_FALSE(source.contains("MiniDumpWithFullMemory"));
+    EXPECT_TRUE(
+        source.contains("Spark::CrashDump::WriteWithoutStacks(hFile, static_cast<MINIDUMP_TYPE>(CrashDumpType())"));
+    EXPECT_FALSE(source.contains("MiniDumpWriteDump("));
+}
+
+// OPS-100: a secret live on the dumping thread's stack must not reach an editor dump. The control
+// dump (same type, raw MiniDumpWriteDump) must contain it, which proves the scan can see a leak.
+TEST(EditorCrashHandler_DumpTypeWritesNoStackResidentSecret)
+{
+    // Built at run time, so the image's read-only data holds no copy: the only ones are this stack
+    // array and the string's heap buffer.
+    const std::string canary = std::format("SPARKEDITORCANARY-{:016x}", std::random_device{}() * 0x9E3779B97F4A7C15ull);
+    volatile char stackSecret[64] = {};
+    for (size_t index = 0; index < canary.size(); ++index)
+        stackSecret[index] = canary[index];
+
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    EXCEPTION_POINTERS pointers{&record, &context};
+    MINIDUMP_EXCEPTION_INFORMATION exception{GetCurrentThreadId(), &pointers, FALSE};
+    const auto dumpType = static_cast<MINIDUMP_TYPE>(SparkEditor::EditorCrashHandler::CrashDumpType());
+
+    ScratchCrashDir dir("stack_canary");
+    const auto writeDump = [&](const std::filesystem::path& file, bool removeStacks) -> std::string
+    {
+        HANDLE handle =
+            CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return {};
+        BOOL written = FALSE;
+        DWORD error = ERROR_SUCCESS;
+        {
+            Spark::StackTrace::SymbolLockLease symbolLock(true);
+            if (symbolLock.owns_lock())
+            {
+                // The raw control only proves the scan can see the canary, so it does not need an
+                // exception stream. Passing the test's plain CONTEXT makes some DbgHelp builds reject
+                // the control before stack capture. Like the product writer, retry once when DbgHelp
+                // races a transiently unreadable page.
+                for (int attempt = 0; attempt != 2; ++attempt)
+                {
+                    LARGE_INTEGER start{};
+                    SetFilePointerEx(handle, start, nullptr, FILE_BEGIN);
+                    SetEndOfFile(handle);
+                    SetLastError(ERROR_SUCCESS);
+                    written = removeStacks ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, &error)
+                                           : MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), handle,
+                                                               dumpType, nullptr, nullptr, nullptr);
+                    if (!removeStacks)
+                        error = written ? ERROR_SUCCESS : GetLastError();
+                    if (written || removeStacks || !IsPartialCopy(error))
+                        break;
+                }
+            }
+            else
+            {
+                error = ERROR_BUSY;
+            }
+        }
+        CloseHandle(handle);
+        if (!written)
+        {
+            std::printf("  %s dump failed: error 0x%lx\n", removeStacks ? "filtered" : "control", error);
+            return {};
+        }
+        std::ifstream in(file, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+
+    const std::string control = writeDump(std::filesystem::path(dir.Path()) / "control.dmp", false);
+    ASSERT_FALSE(control.empty());
+    EXPECT_TRUE(control.find(canary) != std::string::npos);
+
+    const std::string filtered = writeDump(std::filesystem::path(dir.Path()) / "editor.dmp", true);
+    ASSERT_FALSE(filtered.empty());
+
+    // No byte of this thread's stack reservation may reach the dump, whichever stack pointer DbgHelp
+    // copied from and whatever stale frames lie below it.
+    ULONG_PTR stackLow = 0;
+    ULONG_PTR stackHigh = 0;
+    GetCurrentThreadStackLimits(&stackLow, &stackHigh);
+    const auto ranges = DumpMemoryRanges(filtered);
+    ASSERT_FALSE(ranges.empty());
+    for (const MINIDUMP_MEMORY_DESCRIPTOR& range : ranges)
+    {
+        const ULONG64 start = range.StartOfMemoryRange;
+        const ULONG64 end = start + range.Memory.DataSize;
+        const bool overlapsStack = start < stackHigh && end > stackLow;
+        if (overlapsStack)
+            std::printf("  dump range [0x%llx, 0x%llx) overlaps this thread's stack [0x%llx, 0x%llx)\n", start, end,
+                        static_cast<ULONG64>(stackLow), static_cast<ULONG64>(stackHigh));
+        EXPECT_FALSE(overlapsStack);
+    }
+
+    // On failure, name the address the secret came from so another DbgHelp build is diagnosable.
+    const size_t leak = filtered.find(canary);
+    for (const MINIDUMP_MEMORY_DESCRIPTOR& range : ranges)
+    {
+        if (leak != std::string::npos && leak >= range.Memory.Rva && leak - range.Memory.Rva < range.Memory.DataSize)
+            std::printf("  canary at dump offset 0x%zx = address 0x%llx\n", leak,
+                        range.StartOfMemoryRange + (leak - range.Memory.Rva));
+    }
+    if (leak != std::string::npos)
+        std::printf("  canary at dump offset 0x%zx lies in %s\n", leak, DumpRegionHolding(filtered, leak).c_str());
+    EXPECT_TRUE(leak == std::string::npos);
+    EXPECT_EQ(stackSecret[0], 'S');
+}
+
+// OPS-100: some DbgHelp builds read the exception ContextRecord at the full size of every extended
+// state the processor enables, several KiB past a plain CONTEXT, and write those bytes into the
+// dump's exception context. A crash handler's CONTEXT sits in a stack frame next to live locals, so
+// the writer must hand DbgHelp its own copy. Here the bytes after the caller's CONTEXT are a secret,
+// and in the second case they are unreadable: the dump must leave the first out and must not fail
+// on the second, and the exception context it records must still be the caller's registers.
+TEST(CrashDumpWriter_BytesPastTheExceptionContextNeverReachTheDump)
+{
+    const std::string canary =
+        std::format("SPARKCONTEXTCANARY-{:016x}", std::random_device{}() * 0x9E3779B97F4A7C15ull);
+    constexpr SIZE_T kRegion = 0x10000;
+    constexpr SIZE_T kContextSlot = (sizeof(CONTEXT) + 63) & ~SIZE_T{63};
+    auto* region = static_cast<char*>(VirtualAlloc(nullptr, 2 * kRegion, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    ASSERT_TRUE(region != nullptr);
+
+    // Case 1: the secret fills everything after the CONTEXT, as live locals would.
+    auto* secretFollowed = reinterpret_cast<CONTEXT*>(region);
+    for (SIZE_T offset = kContextSlot; offset + canary.size() <= 2 * kRegion; offset += canary.size())
+        std::memcpy(region + offset, canary.data(), canary.size());
+    RtlCaptureContext(secretFollowed);
+
+    // Case 2: the CONTEXT ends where readable memory ends.
+    auto* edge = static_cast<char*>(VirtualAlloc(nullptr, 2 * kRegion, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    ASSERT_TRUE(edge != nullptr);
+    DWORD oldProtect = 0;
+    ASSERT_TRUE(VirtualProtect(edge + kRegion, kRegion, PAGE_NOACCESS, &oldProtect) != FALSE);
+    auto* atEdge = reinterpret_cast<CONTEXT*>(edge + kRegion - kContextSlot);
+    std::memcpy(atEdge, secretFollowed, sizeof(CONTEXT));
+
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    const auto dumpType = static_cast<MINIDUMP_TYPE>(SparkEditor::EditorCrashHandler::CrashDumpType());
+    ScratchCrashDir dir("context_overread");
+    const auto writeDump = [&](CONTEXT* context, const char* name, DWORD& error) -> std::string
+    {
+        EXCEPTION_POINTERS pointers{&record, context};
+        MINIDUMP_EXCEPTION_INFORMATION exception{GetCurrentThreadId(), &pointers, FALSE};
+        const std::filesystem::path file = std::filesystem::path(dir.Path()) / name;
+        HANDLE handle =
+            CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (handle == INVALID_HANDLE_VALUE)
+            return {};
+        BOOL written = FALSE;
+        {
+            Spark::StackTrace::SymbolLockLease symbolLock(true);
+            written = symbolLock.owns_lock()
+                          ? Spark::CrashDump::WriteWithoutStacks(handle, dumpType, &exception, &error)
+                          : FALSE;
+        }
+        CloseHandle(handle);
+        if (!written)
+            return {};
+        std::ifstream in(file, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    };
+
+    DWORD followedError = ERROR_SUCCESS;
+    const std::string followed = writeDump(secretFollowed, "followed.dmp", followedError);
+    DWORD edgeError = ERROR_SUCCESS;
+    const std::string atEdgeDump = writeDump(atEdge, "edge.dmp", edgeError);
+
+    EXPECT_EQ(followedError, static_cast<DWORD>(ERROR_SUCCESS));
+    ASSERT_FALSE(followed.empty());
+    const size_t leak = followed.find(canary);
+    if (leak != std::string::npos)
+        std::printf("  canary at dump offset 0x%zx lies in %s\n", leak, DumpRegionHolding(followed, leak).c_str());
+    EXPECT_TRUE(leak == std::string::npos);
+
+    // The copy is faithful: the recorded exception context holds the caller's registers.
+    const MINIDUMP_EXCEPTION_STREAM* exceptionStream = DumpExceptionStream(followed);
+    ASSERT_TRUE(exceptionStream != nullptr);
+    ASSERT_TRUE(exceptionStream->ThreadContext.DataSize >= sizeof(CONTEXT) &&
+                exceptionStream->ThreadContext.Rva + sizeof(CONTEXT) <= followed.size());
+    CONTEXT recorded{};
+    std::memcpy(&recorded, followed.data() + exceptionStream->ThreadContext.Rva, sizeof(CONTEXT));
+    EXPECT_EQ(recorded.Rip, secretFollowed->Rip);
+    EXPECT_EQ(recorded.Rsp, secretFollowed->Rsp);
+    EXPECT_EQ(exceptionStream->ExceptionRecord.ExceptionCode, static_cast<ULONG32>(EXCEPTION_BREAKPOINT));
+
+    EXPECT_EQ(edgeError, static_cast<DWORD>(ERROR_SUCCESS));
+    EXPECT_FALSE(atEdgeDump.empty());
+
+    VirtualFree(edge, 0, MEM_RELEASE);
+    VirtualFree(region, 0, MEM_RELEASE);
+}
+
+// The dump writer runs DbgHelp on its own thread. If that thread cannot start (here: this thread
+// holds the loader lock, so the writer blocks before DLL_THREAD_ATTACH), the write must fail closed
+// within the bound instead of hanging, write nothing, and never fall back to this thread. The late
+// writer must not hijack the next request either.
+TEST(CrashDumpWriter_BlockedWriterThreadFailsClosedWithinTheBound)
+{
+    using LockLoaderLock = LONG(NTAPI*)(ULONG, ULONG*, PVOID*);
+    using UnlockLoaderLock = LONG(NTAPI*)(ULONG, PVOID);
+    const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    ASSERT_TRUE(ntdll != nullptr);
+    const auto lockLoader = reinterpret_cast<LockLoaderLock>(GetProcAddress(ntdll, "LdrLockLoaderLock"));
+    const auto unlockLoader = reinterpret_cast<UnlockLoaderLock>(GetProcAddress(ntdll, "LdrUnlockLoaderLock"));
+    ASSERT_TRUE(lockLoader != nullptr && unlockLoader != nullptr);
+
+    CONTEXT context{};
+    RtlCaptureContext(&context);
+    EXCEPTION_RECORD record{};
+    record.ExceptionCode = EXCEPTION_BREAKPOINT;
+    EXCEPTION_POINTERS pointers{&record, &context};
+    MINIDUMP_EXCEPTION_INFORMATION exception{GetCurrentThreadId(), &pointers, FALSE};
+    const auto dumpType = static_cast<MINIDUMP_TYPE>(SparkEditor::EditorCrashHandler::CrashDumpType());
+
+    ScratchCrashDir dir("writer_timeout");
+    const std::filesystem::path blockedPath = std::filesystem::path(dir.Path()) / "blocked.dmp";
+    const std::filesystem::path laterPath = std::filesystem::path(dir.Path()) / "later.dmp";
+    HANDLE blocked =
+        CreateFileW(blockedPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, 0, nullptr);
+    HANDLE later = CreateFileW(laterPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, 0, nullptr);
+    ASSERT_TRUE(blocked != INVALID_HANDLE_VALUE && later != INVALID_HANDLE_VALUE);
+
+    BOOL blockedWritten = TRUE;
+    DWORD blockedError = ERROR_SUCCESS;
+    ULONGLONG elapsedMs = 0;
+    BOOL laterWritten = FALSE;
+    DWORD laterError = ERROR_SUCCESS;
+    {
+        Spark::StackTrace::SymbolLockLease symbolLock(true);
+        ASSERT_TRUE(symbolLock.owns_lock());
+
+        PVOID cookie = nullptr;
+        ASSERT_EQ(lockLoader(0, nullptr, &cookie), 0);
+        const ULONGLONG started = GetTickCount64();
+        blockedWritten = Spark::CrashDump::WriteOnWriterThread(blocked, dumpType, &exception, true, 500, &blockedError);
+        elapsedMs = GetTickCount64() - started;
+        unlockLoader(0, cookie);
+
+        laterWritten = Spark::CrashDump::WriteWithoutStacks(later, dumpType, &exception, &laterError);
+    }
+    // The abandoned writer has been free to start since the unlock; give it time to (wrongly) write.
+    Sleep(200);
+    CloseHandle(blocked);
+    CloseHandle(later);
+
+    EXPECT_FALSE(blockedWritten);
+    EXPECT_EQ(blockedError, static_cast<DWORD>(ERROR_TIMEOUT));
+    EXPECT_TRUE(elapsedMs < 5000);
+    std::error_code ignored;
+    EXPECT_EQ(std::filesystem::file_size(blockedPath, ignored), static_cast<std::uintmax_t>(0));
+    EXPECT_TRUE(laterWritten);
+    EXPECT_EQ(laterError, static_cast<DWORD>(ERROR_SUCCESS));
+    EXPECT_TRUE(std::filesystem::file_size(laterPath, ignored) > 0);
 }
 
 #else

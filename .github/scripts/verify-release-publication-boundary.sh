@@ -84,9 +84,8 @@ fi
 boundary_output="$(mktemp "$RUNNER_TEMP/release-boundary-ledger.XXXXXX")"
 release_output="$(mktemp "$RUNNER_TEMP/release-boundary-release.XXXXXX")"
 assets_output="$(mktemp "$RUNNER_TEMP/release-boundary-assets.XXXXXX")"
-policy_output="$(mktemp "$RUNNER_TEMP/release-boundary-policy.XXXXXX")"
 cleanup() {
-  rm -f -- "$boundary_output" "$release_output" "$assets_output" "$policy_output"
+  rm -f -- "$boundary_output" "$release_output" "$assets_output"
 }
 trap cleanup EXIT
 GITHUB_OUTPUT="$boundary_output" \
@@ -108,20 +107,18 @@ if [[ "$boundary_exists" != "true" || \
 fi
 
 if [[ "$phase" == "publish-preflight" ]]; then
-  gh api -H "X-GitHub-Api-Version: 2026-03-10" \
-    "repos/$GITHUB_REPOSITORY/immutable-releases" > "$policy_output"
-  if ! jq -e \
-      'type == "object" and .enabled == false and .enforced_by_owner == false' \
-      "$policy_output" >/dev/null; then
-    echo "Release immutability is enabled or could not be proven disabled; automatic redraft recovery is unavailable." >&2
-    exit 1
-  fi
+  python3 "$GITHUB_WORKSPACE/.github/scripts/verify_release_policy.py"
 fi
 
 gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$release_output"
 gh api --paginate --slurp \
   "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" \
   > "$assets_output"
+boundary_args=()
+if [[ "$IS_VERSIONED" == "true" ]]; then
+  boundary_args+=(--signature-control-asset "SparkEngine-release-signature-bundle.tar.gz")
+  boundary_args+=(--signature-control-path "$RUNNER_TEMP/spark-release-signature-bundle.tar.gz")
+fi
 python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_asset_boundary.py" \
   --release-json "$release_output" \
   --assets-json "$assets_output" \
@@ -132,4 +129,6 @@ python3 -I "$GITHUB_WORKSPACE/.github/scripts/verify_release_asset_boundary.py" 
   --release-id "$RELEASE_ID" \
   --release-tag "$RELEASE_TAG" \
   --is-versioned "$IS_VERSIONED" \
+  "${boundary_args[@]}" \
+  --immutable-channel "${RELEASE_IMMUTABLE:-false}" \
   --expected-draft "$expected_draft"

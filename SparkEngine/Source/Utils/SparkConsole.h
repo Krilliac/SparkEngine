@@ -122,6 +122,28 @@ namespace Spark
          */
         static void SetGlobalInstance(SimpleConsole* instance);
 
+        /**
+         * @brief Attribute implicit command registrations to one module image.
+         *
+         * ModuleManager uses this scope while invoking a module lifecycle
+         * callback. Registrations made through the legacy overloads therefore
+         * remain removable even when the module did not pass an explicit owner.
+         */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(SimpleConsole& console, std::string ownerId);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            SimpleConsole& m_console;
+            std::unique_lock<std::recursive_mutex> m_lock;
+            std::string m_previousOwner;
+        };
+
         bool Initialize();
         [[nodiscard]] bool IsInitialized() const;
         void Shutdown();
@@ -185,6 +207,18 @@ namespace Spark
         std::string GetCommandOwner(const std::string& name) const;
         bool HasCommand(const std::string& name) const;
         bool ExecuteCommand(const std::string& commandLine);
+        /**
+         * @brief Form of @p commandLine that is safe to log or persist.
+         *
+         * Aliases are resolved first, so a line whose effective command is
+         * sensitive (registered with RegisterSensitiveCommand) comes back as its
+         * first typed token followed by `<arguments-redacted>`, the same form the
+         * command history records. A line whose effective command is neither a
+         * registered command nor a CVar is redacted the same way when it carries
+         * arguments (fail closed: its credential command may not be loaded yet).
+         * Any other line is returned unchanged.
+         */
+        std::string RedactSensitiveArguments(const std::string& commandLine) const;
 
         // Permission management
         void SetCurrentPermissionLevel(CommandPermission level);
@@ -212,7 +246,7 @@ namespace Spark
         SimpleConsole(const SimpleConsole&) = delete;
         SimpleConsole& operator=(const SimpleConsole&) = delete;
 
-        std::vector<std::string> ParseCommand(const std::string& commandLine);
+        std::vector<std::string> ParseCommand(const std::string& commandLine) const;
 
         /// @brief Shared registration path for every RegisterCommand overload.
         bool RegisterCommandInternal(const std::string& name, CommandHandler handler, const std::string& description,
@@ -232,9 +266,14 @@ namespace Spark
 
         std::string GetTimestamp() const;
         std::string FindClosestCommand(const std::string& input) const;
-        std::string ResolveAliases(const std::string& commandLine);
+        std::string ResolveAliases(const std::string& commandLine) const;
 
         std::unordered_map<std::string, CommandInfo> m_commands;
+        // During transactional module reload, a replacement may register the
+        // same command name before the outgoing image is unloaded. Keep the
+        // previous image's handler here so a failed replacement can roll back
+        // without allowing the outgoing OnUnload to remove the replacement.
+        std::unordered_map<std::string, std::vector<CommandInfo>> m_shadowedCommands;
         // Retained across module unregister/reload windows so a known
         // credential command can never fall back to raw history recording.
         std::unordered_set<std::string> m_sensitiveCommandNames;
@@ -250,6 +289,7 @@ namespace Spark
         // Recursive because Initialize registers built-ins and handlers may
         // register/unregister commands while holding the lifecycle lease.
         mutable std::recursive_mutex m_lifecycleMutex;
+        std::string m_registrationOwner;
 
         std::unordered_map<std::string, std::string> m_aliases;
         std::atomic<CommandPermission> m_currentPermission{CommandPermission::Developer};

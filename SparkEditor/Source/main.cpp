@@ -11,8 +11,13 @@
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
+#include "Utils/MultiISA.h"
+#include <Spark/Version.h>
+#include <cstdio>
+#include <format>
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -22,6 +27,8 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
+#include <cstdint>
+#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -65,6 +72,89 @@ static bool IsDebuggerAttached()
 #endif
 }
 
+/// @brief Write CLI introspection output (e.g. --version) to the process's standard output.
+///
+/// On Windows the editor is a GUI-subsystem executable, so the CRT stdout stream is not bound to a
+/// redirected parent pipe. The inherited Win32 standard handle still is, so write to it directly
+/// (the same contract as SparkEngine's WriteCommandOutput) and fall back to the CRT for consoles.
+static void WriteCommandOutput(const std::string& text)
+{
+#ifdef _WIN32
+    const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (output != nullptr && output != INVALID_HANDLE_VALUE)
+    {
+        DWORD written = 0;
+        if (WriteFile(output, text.data(), static_cast<DWORD>(text.size()), &written, nullptr) &&
+            written == text.size())
+        {
+            return;
+        }
+    }
+#endif
+    std::fwrite(text.data(), 1, text.size(), stdout);
+    std::fflush(stdout);
+}
+
+static bool WriteSmokeResult(const std::string& path, const char* status, bool projectLoaded, int runResult,
+                             std::string& error, uint64_t renderedFrames = 0, uint64_t presentFailures = 0,
+                             const std::string& graphicsBackend = "unknown")
+{
+    if (path.empty())
+        return true;
+    const std::filesystem::path destination = std::filesystem::u8path(path.begin(), path.end());
+    if (destination.empty() || destination.filename().empty())
+    {
+        error = "smoke result path is empty or has no filename";
+        return false;
+    }
+
+    static std::atomic<uint64_t> counter{0};
+    const uint64_t nonce = static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^
+                           counter.fetch_add(1, std::memory_order_relaxed);
+    const std::filesystem::path temporary =
+        destination.parent_path() / (destination.filename().string() + ".tmp." + std::to_string(nonce));
+    std::ofstream result{temporary, std::ios::binary | std::ios::trunc};
+    if (!result.is_open())
+    {
+        error = "cannot open temporary result '" + temporary.string() + "'";
+        return false;
+    }
+    result << "{\n  \"schema\": 1,\n  \"status\": \"" << status
+           << "\",\n  \"projectLoaded\": " << (projectLoaded ? "true" : "false") << ",\n  \"runResult\": " << runResult
+           << ",\n  \"renderedFrames\": " << renderedFrames << ",\n  \"presentFailures\": " << presentFailures
+           << ",\n  \"graphicsBackend\": \"" << graphicsBackend << "\"\n}\n";
+    result.close();
+    if (!result.good())
+    {
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        error = "cannot write temporary result '" + temporary.string() + "'";
+        return false;
+    }
+
+#ifdef _WIN32
+    if (!::MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        error = "cannot atomically replace result '" + destination.string() +
+                "': " + std::error_code(static_cast<int>(::GetLastError()), std::system_category()).message();
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return false;
+    }
+#else
+    std::error_code renameError;
+    std::filesystem::rename(temporary, destination, renameError);
+    if (renameError)
+    {
+        error = "cannot atomically replace result '" + destination.string() + "': " + renameError.message();
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return false;
+    }
+#endif
+    return true;
+}
+
 #ifndef _WIN32
 #include <fstream>
 #endif
@@ -106,6 +196,10 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
 
     console.LogSuccess("Collab server running. Waiting for editors to connect...");
     std::cout << "Server started successfully." << std::endl;
+    // The join code is a secret: it goes to the operator's terminal only, never to the
+    // console log sink. Editors must enter it to join.
+    // Flush explicitly: the headless loop below never returns to flush a piped stdout.
+    std::cout << "Join code: " << session.GetJoinCode() << '\n' << std::flush;
 
     // Headless main loop — just tick the session at 10 Hz
     while (g_collabServerRunning.load(std::memory_order_acquire))
@@ -133,8 +227,24 @@ static int RunCollabServer(uint16_t port, const std::string& serverName)
 // Unified main entry point with debug support when needed
 int main(int argc, char* argv[])
 {
-    // Initialize the Spark console system first (like the engine does)
-    auto& console = Spark::SimpleConsole::GetInstance();
+    // BLD-100 / OD-04: refuse an x86-64 CPU below the SSE4.2 + POPCNT floor
+    // before the console, logger or crash handling start, so the user gets a
+    // clear message instead of an illegal-instruction crash. The Windows editor
+    // is a GUI-subsystem image: without a usable stderr handle it shows a box.
+    if (const std::string cpuFloorFailure = Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures());
+        !cpuFloorFailure.empty())
+    {
+        std::fprintf(stderr, "SparkEditor: %s\n", cpuFloorFailure.c_str());
+        std::fflush(stderr);
+#ifdef _WIN32
+        const HANDLE errorOutput = GetStdHandle(STD_ERROR_HANDLE);
+        if (errorOutput == nullptr || errorOutput == INVALID_HANDLE_VALUE)
+        {
+            MessageBoxA(nullptr, cpuFloorFailure.c_str(), "SparkEditor", MB_OK | MB_ICONERROR);
+        }
+#endif
+        return EXIT_FAILURE;
+    }
 
     // Check for debug console request or if debugger is present
     bool showDebugConsole = false;
@@ -148,14 +258,20 @@ int main(int argc, char* argv[])
     std::string projectPathArg;
     std::string startupTheme;
     std::string startupPanel;
-    std::string saveScenePath; // --save-scene <path>: save seeded World then exit (D2 acceptance)
-    std::string openScenePath; // --open-scene <path>: boot directly into a scene, skipping the project browser
+    std::string saveScenePath;   // --save-scene <path>: save seeded World then exit (D2 acceptance)
+    std::string openScenePath;   // --open-scene <path>: boot directly into a scene, skipping the project browser
+    std::string smokeResultPath; // --smoke-result <path>: structured CI executable-smoke result
     std::vector<std::string> editorPluginDirectories;
+    bool showVersion = false;
 
     // Check command line arguments
     for (int i = 1; i < argc; i++)
     {
-        if (strcmp(argv[i], "--debug-console") == 0 || strcmp(argv[i], "-d") == 0)
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0)
+        {
+            showVersion = true;
+        }
+        else if (strcmp(argv[i], "--debug-console") == 0 || strcmp(argv[i], "-d") == 0)
         {
             showDebugConsole = true;
         }
@@ -209,7 +325,22 @@ int main(int argc, char* argv[])
         {
             openScenePath = argv[++i];
         }
+        else if (strcmp(argv[i], "--smoke-result") == 0 && i + 1 < argc)
+        {
+            smokeResultPath = argv[++i];
+        }
     }
+
+    // Version introspection must work in staged packages and on machines without a display or GPU,
+    // so it exits before the console, crash handling, collab server, or any ImGui/window setup.
+    if (showVersion)
+    {
+        WriteCommandOutput(std::format("SparkEditor {}.{}.{}\n", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
+                                       SPARK_ENGINE_VERSION_PATCH));
+        return 0;
+    }
+
+    auto& console = Spark::SimpleConsole::GetInstance();
 
     // --open-scene forces test-mode's "skip the project browser, auto-create
     // a test project" switch (EditorApplication.h / EditorUI.cpp) so the
@@ -322,6 +453,10 @@ int main(int argc, char* argv[])
             {
                 std::cerr << "Failed to initialize SparkEditor" << std::endl;
             }
+            std::string smokeResultError;
+            if (!WriteSmokeResult(smokeResultPath, "initialize-failed", false, -1, smokeResultError) &&
+                !smokeResultPath.empty())
+                std::cerr << "Failed to publish SparkEditor smoke result: " << smokeResultError << std::endl;
             if (waitForConsoleOnExit)
             {
                 std::cout << "Press Enter to exit..." << std::endl;
@@ -331,6 +466,23 @@ int main(int argc, char* argv[])
         }
 
         console.LogSuccess("SparkEditor application initialized successfully");
+
+        const bool smokeProjectLoaded =
+            app->GetUI() && app->GetUI()->GetProjectManager() && app->GetUI()->GetProjectManager()->HasOpenProject();
+        if (!smokeResultPath.empty() && !smokeProjectLoaded)
+        {
+            console.LogError("SparkEditor smoke requested a project, but no project is open");
+            const uint64_t renderedFrames = app->GetRenderedFrameCount();
+            const uint64_t presentFailures = app->GetPresentFailureCount();
+            const std::string graphicsBackend = app->GetGraphicsBackend();
+            app->Shutdown();
+            std::string smokeResultError;
+            if (!WriteSmokeResult(smokeResultPath, "project-load-failed", false, -1, smokeResultError, renderedFrames,
+                                  presentFailures, graphicsBackend))
+                console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+            console.Shutdown();
+            return -1;
+        }
 
         if (!startupPanel.empty())
         {
@@ -416,6 +568,13 @@ int main(int argc, char* argv[])
                 {
                     std::cerr << "Failed to open scene from " << openScenePath << std::endl;
                 }
+                app->Shutdown();
+                std::string smokeResultError;
+                if (!WriteSmokeResult(smokeResultPath, "scene-open-failed", smokeProjectLoaded, -1, smokeResultError) &&
+                    !smokeResultPath.empty())
+                    console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+                console.Shutdown();
+                return -1;
             }
         }
 
@@ -440,9 +599,20 @@ int main(int argc, char* argv[])
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Shutting down SparkEditor application");
         console.LogInfo("Shutting down SparkEditor application...");
         // Cleanup
+        const uint64_t renderedFrames = app->GetRenderedFrameCount();
+        const uint64_t presentFailures = app->GetPresentFailureCount();
+        const std::string graphicsBackend = app->GetGraphicsBackend();
         app->Shutdown();
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "SparkEditor shutdown complete");
         console.LogSuccess("SparkEditor application shutdown complete");
+        std::string smokeResultError;
+        if (!WriteSmokeResult(smokeResultPath, result == 0 ? "passed" : "run-failed", smokeProjectLoaded, result,
+                              smokeResultError, renderedFrames, presentFailures, graphicsBackend) &&
+            !smokeResultPath.empty())
+        {
+            console.LogError("Failed to publish SparkEditor smoke result: " + smokeResultError);
+            result = 3;
+        }
 
         if (showDebugConsole)
         {

@@ -60,6 +60,8 @@ namespace Spark::Scripting
         std::vector<ScriptPin> inputs;
         std::vector<ScriptPin> outputs;
         std::unordered_map<std::string, std::string> properties; ///< Node-specific properties
+        float editorX = 0.0f; ///< Editor canvas position (layout only; never affects compilation)
+        float editorY = 0.0f; ///< Editor canvas position (layout only; never affects compilation)
     };
 
     /**
@@ -110,6 +112,7 @@ namespace Spark::Scripting
     struct VisualScriptGraph
     {
         std::string className = "MyScript";
+        std::string description; ///< Emitted as leading comment lines of the generated source
         std::vector<ScriptNode> nodes;
         std::vector<ScriptConnection> connections;
         std::vector<VariableDecl> variables;

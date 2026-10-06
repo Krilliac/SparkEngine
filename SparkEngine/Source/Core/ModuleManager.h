@@ -21,16 +21,12 @@
 #include "Spark/IModule.h"
 #include "Spark/IEngineContext.h"
 #include "Core/Contracts.h"
+#include "Core/ModuleSidecar.h"
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <memory>
-
-namespace Spark
-{
-    class LocalFileCache;
-}
 
 // Forward declaration for legacy adapter
 class IGameModule;
@@ -67,6 +63,8 @@ class ModuleManager
     struct ModuleLifecycleRecord
     {
         std::string module;
+        std::string libraryPath;                          ///< Image path this manager last created it from
+        Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class from ModuleInfo
         uint64_t createModule = 0;
         uint64_t onLoad = 0;
         uint64_t onUpdate = 0;
@@ -97,6 +95,21 @@ class ModuleManager
             }
             return nullptr;
         }
+
+        /** @brief The single Game-kind record, or nullptr when there is none or more than one. */
+        const ModuleLifecycleRecord* FindGameModule() const
+        {
+            const ModuleLifecycleRecord* game = nullptr;
+            for (const auto& record : modules)
+            {
+                if (record.kind != Spark::ModuleKind::Game)
+                    continue;
+                if (game)
+                    return nullptr;
+                game = &record;
+            }
+            return game;
+        }
     };
 
     enum class DiscoveryMode
@@ -124,8 +137,14 @@ class ModuleManager
 
     /**
      * @brief Load modules listed in a spark.modules.json manifest
+     *
+     * The manifest must be a regular file of at most 1 MiB. It is always read
+     * directly from disk with a bounded read (never through LocalFileCache,
+     * whose whole-file read is unbounded and would also serve a stale copy),
+     * and a FIFO, device or symlink to one is refused before it is opened.
+     *
      * @param manifestPath Path to the JSON manifest file
-     * @return true if at least one module was loaded
+     * @return true if every listed module was loaded
      */
     bool LoadModulesFromManifest(const std::string& manifestPath);
 
@@ -166,8 +185,12 @@ class ModuleManager
     /**
      * @brief Initialize all loaded modules (sorted by loadOrder)
      * @param context Engine context passed to each module's OnLoad()
+     * @return true when every loaded module initialized successfully; false when
+     *         the context is null, any module could not initialize, or the
+     *         declared dependency graph names a module that is not loaded or
+     *         contains a cycle (then no module is initialized)
      */
-    void InitializeAll(Spark::IEngineContext* context);
+    bool InitializeAll(Spark::IEngineContext* context);
 
     /** @brief Call OnUpdate() on all modules in load order */
     void UpdateAll(float deltaTime);
@@ -272,6 +295,29 @@ class ModuleManager
     static LifecycleEvidence GetLastTeardownLifecycleEvidence();
 
     /**
+     * @brief Publish this manager's evidence as the last-teardown snapshot now.
+     *
+     * For hosts that deliberately keep module images mapped until process exit
+     * and therefore never run the destructor that normally publishes it.
+     */
+    void PublishLifecycleEvidence() const;
+
+    /**
+     * @brief Build-target name of a module image: its filename stem without the
+     *        POSIX shared-library "lib" prefix (libSparkGameRTS.so -> SparkGameRTS).
+     */
+    static std::string LibraryTargetName(std::string_view libraryPath);
+
+    /**
+     * @brief Format the host's machine-readable lifecycle record for @p record.
+     *
+     * Produces `SPARK_MODULE_LIFECYCLE module=<target> create= load= update= fixed=
+     * render= unload= destroy= faults=` (no newline), identifying the module by
+     * LibraryTargetName(record.libraryPath) rather than its display name.
+     */
+    static std::string FormatLifecycleRecord(const ModuleLifecycleRecord& record);
+
+    /**
      * @brief Detailed reason from the most recent load operation.
      *
      * Empty after a successful LoadModule/LoadModulesFromManifest/
@@ -297,9 +343,6 @@ class ModuleManager
 
     /** @brief Get paths and names of all loaded modules for hot-reload watching */
     std::vector<std::pair<std::string, std::string>> GetModulePathsAndNames() const;
-
-    /** @brief Set the file cache for manifest loading (non-owning). */
-    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
     /**
      * @brief Scan a directory for module DLLs without executing them
@@ -332,7 +375,11 @@ class ModuleManager
         bool initialized = false;
         bool isLegacyAdapter = false;                     ///< True if wrapping IGameModule
         Spark::ModuleKind kind = Spark::ModuleKind::Game; ///< Load-policy class (one Game per process)
+        std::string registrationOwner;                    ///< Unique registry owner for this module image
         std::string transientImagePath;                   ///< Shadow image removed after the module library is closed
+        /// OnLoad ran and failed. Callbacks its partial OnLoad registered outside the owner-scoped
+        /// registries may still point into the image, so UnloadEntry never unmaps it.
+        bool retainImage = false;
     };
 
     /** @brief Sort modules by loadOrder */
@@ -340,12 +387,15 @@ class ModuleManager
 
     /** @brief Unload a single module entry */
     void UnloadEntry(LoadedModule& entry);
+    /** @brief Remove host registry callbacks before an image can be unmapped. */
+    void UnregisterModuleRegistrations(const LoadedModule& entry);
 
     ModuleLifecycleRecord& FindOrCreateLifecycleRecord(std::string_view module);
 
     std::vector<LoadedModule> m_modules;
-    Spark::LocalFileCache* m_fileCache = nullptr;
     std::string m_lastLoadError;
     LifecycleEvidence m_lifecycleEvidence;
     bool m_publishTeardownLifecycleEvidence = true;
+    /// False only for ReloadModule's staging manager, which validates the replacement against the live graph.
+    bool m_validateDependencyGraph = true;
 };

@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace OpenWorld
@@ -92,6 +93,15 @@ namespace OpenWorld
 
         const Settlement* GetSettlement(uint32_t id) const;
         const Settlement* GetNearestSettlement(float x, float z) const;
+        /// @brief Settlement whose radius contains (x, z) on the ground plane, nearest centre first
+        const Settlement* FindSettlementAt(float x, float z) const;
+
+        /// @brief Record that the player entered and interacted with a settlement.
+        ///        Visits are session state: the OpenWorld save format does not carry them.
+        /// @return False for an unknown settlement id
+        bool VisitSettlement(uint32_t settlementId);
+        bool IsSettlementVisited(uint32_t settlementId) const { return m_visitedSettlements.count(settlementId) > 0; }
+        size_t GetVisitedSettlementCount() const { return m_visitedSettlements.size(); }
 
         /// @brief Place a new player camp at the given position
         uint32_t PlaceCamp(const std::string& name, float x, float y, float z, uint32_t regionId);
@@ -111,6 +121,7 @@ namespace OpenWorld
         Spark::IEngineContext* m_context{nullptr};
         std::vector<Settlement> m_settlements;
         std::unordered_map<uint32_t, PlayerCamp> m_camps;
+        std::unordered_set<uint32_t> m_visitedSettlements;
         uint32_t m_nextCampId{1};
         bool m_initialized{false};
     };

@@ -115,6 +115,11 @@ namespace Terrafront
         /// the previous session.
         void ResetToLogin();
 
+        /// Character-select "Logout": ends the AUTHORITATIVE session (the server
+        /// clears the account binding via the disconnect cleanup) before the UI
+        /// returns to Login. See LogoutStopsTransport (Net/TFClientSessionEnd.h).
+        void Logout();
+
         // --- reply sinks: Task 6 wires TFClientNet's onboarding handlers to call
         // these directly once `m_ctx->loginFlow` exists. Until then, Update()'s
         // getter poll calls the same methods internally so the flow still works
@@ -155,7 +160,8 @@ namespace Terrafront
         TFFlowState m_state{TFFlowState::Login};
         std::string m_error;
 
-        // Login / Register form (sizes mirror TF_AuthRequest's wire fields).
+        // Login / Register form. The username fits TF_LoginStart::user; the password never
+        // goes on the wire (NET-100 SCRAM, Net/TFScramWire.h) and is wiped after each send.
         char m_username[32]{};
         char m_password[64]{};
 

@@ -25,7 +25,7 @@ file(GLOB_RECURSE DAEMON_SOURCES
 
 # Collaboration accepts a different trust class of traffic and intentionally
 # runs in its own process. Keep its implementation out of SparkDaemon.
-list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/Collaboration.*")
+spark_exclude_sources_matching(DAEMON_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*/Collaboration.*")
 list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/CollabServerMain\\.cpp$")
 list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/OrchestratorMain\\.cpp$")
 list(FILTER DAEMON_SOURCES EXCLUDE REGEX ".*/OrchestratorIdentity\\.cpp$")
@@ -126,6 +126,8 @@ target_include_directories(SparkOrchestrator PRIVATE
 target_link_libraries(SparkOrchestrator PRIVATE Threads::Threads)
 if(WIN32)
     target_compile_definitions(SparkOrchestrator PRIVATE SPARK_PLATFORM_WINDOWS)
+    # DaemonClient authenticates the pipe server's user SID (token APIs).
+    target_link_libraries(SparkOrchestrator PRIVATE advapi32)
 elseif(APPLE)
     target_compile_definitions(SparkOrchestrator PRIVATE SPARK_PLATFORM_MACOS)
 else()
@@ -167,6 +169,7 @@ if(BUILD_TESTS)
         target_compile_options(SparkDaemonServiceTests PRIVATE -Wall -Wextra -Werror)
     endif()
     add_test(NAME SparkDaemonServiceTests COMMAND SparkDaemonServiceTests)
+    set_tests_properties(SparkDaemonServiceTests PROPERTIES TIMEOUT 60 LABELS "daemon;unit")
 endif()
 
 install(TARGETS SparkDaemon SparkCollabServer SparkOrchestrator

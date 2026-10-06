@@ -4,8 +4,7 @@
  */
 
 #include "OWExplorationSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #ifdef ENABLE_EDITOR
 #include <imgui.h>
@@ -31,9 +30,9 @@ namespace OpenWorld
         }
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Exploration system initialized with %zu POIs", m_pois.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Exploration: " + std::to_string(m_pois.size()) +
-                                                    " points of interest");
+        Spark::ModuleLog::Info(m_context, "Exploration system initialized with {} POIs", m_pois.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Exploration: " + std::to_string(m_pois.size()) + " points of interest");
         return true;
     }
 
@@ -159,8 +158,9 @@ namespace OpenWorld
             if (poi.poiId == poiId)
             {
                 m_totalXPEarned += poi.xpReward;
-                Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Discovered: " + poi.name + " (+" +
-                                                            std::to_string(poi.xpReward) + " XP)");
+                Spark::ModuleLog::Info(m_context, "{}",
+                                       "[OpenWorld] Discovered: " + poi.name + " (+" + std::to_string(poi.xpReward) +
+                                           " XP)");
                 if (m_onDiscovered)
                     m_onDiscovered(poi);
                 break;
@@ -188,8 +188,8 @@ namespace OpenWorld
             it->second.secretFound = true;
             it->second.state = DiscoveryState::Completed;
             m_totalXPEarned += 50; // Bonus XP for secret
-            Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Secret found at POI " + std::to_string(poiId) +
-                                                        " (+50 XP)");
+            Spark::ModuleLog::Info(m_context, "{}",
+                                   "[OpenWorld] Secret found at POI " + std::to_string(poiId) + " (+50 XP)");
         }
     }
 

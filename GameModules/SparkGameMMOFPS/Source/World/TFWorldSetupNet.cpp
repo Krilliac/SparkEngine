@@ -107,7 +107,7 @@ namespace Terrafront
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] Connect: NetworkManager init failed");
             return false;
         }
-        if (!nm.Connect(ip, port, "TerrafrontPlayer"))
+        if (!nm.UseDefaultSecurityConfig(Spark::Net::NetworkRole::Client) || !nm.Connect(ip, port, "TerrafrontPlayer"))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] Connect to %s:%u failed", ip.c_str(), port);
             return false;
@@ -136,7 +136,8 @@ namespace Terrafront
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] BootServer: NetworkManager init failed");
             return false;
         }
-        if (!nm.StartServer(port, static_cast<int>(kMaxPlayers)))
+        if (!nm.UseDefaultSecurityConfig(Spark::Net::NetworkRole::Server) ||
+            !nm.StartServer(port, static_cast<int>(kMaxPlayers)))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Game, "[TF] BootServer: StartServer on port %u failed", port);
             return false;

@@ -464,6 +464,8 @@ namespace Spark::Gateway
         PruneReplays(now);
         if (m_seenNonces.contains(nonce))
             return {false, {}, "Replayed gateway credential"};
+        if (m_seenNonces.size() >= GatewayMaximumReplayEntries)
+            return {false, {}, "Gateway replay ledger is full"};
         m_seenNonces.emplace(nonce, timestamp);
         return {true, request.sessionId, {}};
     }
