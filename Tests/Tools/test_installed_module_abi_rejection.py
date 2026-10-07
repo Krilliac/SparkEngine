@@ -184,5 +184,10 @@ class Abi10OrchestrationTests(OrchestrationTests):
     SDK_VERSION = 10
 
 
+class Abi11OrchestrationTests(OrchestrationTests):
+    """Current actor SDK host11 rejects benign10/12 declarations before loading."""
+    SDK_VERSION = 11
+
+
 if __name__ == "__main__":
     unittest.main()

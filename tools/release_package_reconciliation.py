@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Bind final package inventories to published bytes and the committed source lock.
 
-Archives and self-contained MSI File-table payloads are reconciled after offline
-extraction. Other opaque installers fail closed: their
+Archives, self-contained MSI File-table payloads and the supported NSIS decoder
+profile are reconciled after offline extraction. Other opaque installers fail closed: their
 outer hashes do not prove an inventory, and a caller-supplied stage is not proof
 of their final contents. A blocked record is retained for diagnosis, never
 accepted by the publication verifier.
@@ -32,6 +32,7 @@ def load_tool(name, filename):
 
 provenance = load_tool("release_reconciliation_provenance", "release_build_provenance.py")
 native_msi = load_tool("release_reconciliation_native_msi", "native_msi_payload.py")
+native_nsis = load_tool("release_reconciliation_native_nsis", "native_nsis_payload.py")
 
 
 def require(condition, message):
@@ -76,10 +77,11 @@ def create(packages, root, sha, platform, configuration, not_configured):
     for path in paths:
         safe_name(path.name)
         digest = provenance._sha256_file(path)
-        if path.name.lower().endswith((".zip", ".tar.gz", ".tgz", ".msi")):
+        if path.name.lower().endswith((".zip", ".tar.gz", ".tgz", ".msi", ".exe")):
             if inventory is None:
                 inventory, rules = sbom.load_inventory(root), sbom.load_rules()
-            reconcile = sbom.reconcile_msi if path.suffix.lower() == ".msi" else sbom.reconcile_archive
+            reconcile = {".msi": sbom.reconcile_msi, ".exe": sbom.reconcile_nsis}.get(
+                path.suffix.lower(), sbom.reconcile_archive)
             try:
                 report = reconcile(inventory, rules, path, not_configured, root)
             except (sbom.InputError, sbom.SbomError, OSError) as error:
@@ -124,19 +126,20 @@ def verify_documents(documents, published, source, profile_authority=None):
             artifact = inventory.get("artifact", {})
             require(artifact.get("name") == name and artifact.get("sha256") == digest,
                     f"inventory does not bind final artifact bytes: {name}")
-            if name.lower().endswith(".msi"):
-                require(artifact.get("format") == "msi", "MSI inventory format mismatch")
-                native_msi.validate_evidence(inventory.get("extraction"), inventory["packageFiles"])
-                require(profile_authority is not None, "MSI publication requires committed package-profile authority")
+            if name.lower().endswith((".msi", ".exe")):
+                format_name, adapter = ("msi", native_msi) if name.lower().endswith(".msi") else ("nsis", native_nsis)
+                require(artifact.get("format") == format_name, "native inventory format mismatch")
+                adapter.validate_evidence(inventory.get("extraction"), inventory["packageFiles"])
+                require(profile_authority is not None, "native publication requires committed package-profile authority")
                 policy, _raw_rules, binding = profile_authority
-                native_msi.prove_profile(inventory["extraction"], policy)
+                adapter.prove_profile(inventory["extraction"], policy)
                 require(inventory.get("packageProfile") == {
                     **binding, "installComponents": sorted(policy["windowsRuntime"]["components"])},
-                    "MSI package-profile policy/rule identity drift")
+                    "native package-profile policy/rule identity drift")
                 coverage = inventory.get("noticeCoverage")
                 require(isinstance(coverage, dict) and set(coverage) == {"fonts", "embeddedFonts", "thirdPartyPayloadFiles"}
                         and all(type(value) is int and value >= 0 for value in coverage.values()),
-                        "MSI final notice/font coverage evidence is missing or invalid")
+                        "native final notice/font coverage evidence is missing or invalid")
             else:
                 require(name.lower().endswith((".zip", ".tar.gz", ".tgz")),
                         f"unsupported final payload inventory format: {name}")
@@ -185,7 +188,7 @@ def main(argv=None):
             published = {safe_name(name): provenance._sha256_file(regular(args.assets_dir / name))
                          for name in names if provenance._is_distributable(name)}
             authority = None
-            if any(name.lower().endswith(".msi") for name in published):
+            if any(name.lower().endswith((".msi", ".exe")) for name in published):
                 authority = native_msi.profile_authority(
                     lambda path: provenance._git(args.source_root, "show", f"{args.source_sha}:{path}"))
             verify_documents(documents, published, source_identity(args.source_root, args.source_sha), authority)

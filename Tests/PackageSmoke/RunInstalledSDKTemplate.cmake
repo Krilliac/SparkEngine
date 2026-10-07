@@ -51,7 +51,7 @@ cmake_minimum_required(VERSION 3.25)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/SparkPackageConsumerBoundary.cmake")
 
-# Optional SDK10 weather call coverage uses this same installed consumer/image.
+# Optional SDK11 weather call coverage uses this same installed consumer/image.
 # Windows headless has no weather subsystem; its null observation is separate
 # from the positive real-service windowed WARP run. No wrong-thread call is made.
 function(_spark_sdk_template_weather_result stdout stderr expected_available out_error)
@@ -484,8 +484,8 @@ if(NOT _sdk_line_count EQUAL 1 OR NOT _sdk_lines MATCHES "SPARK_SDK_VERSION[ \t]
     message(FATAL_ERROR "${_version_header} must define SPARK_SDK_VERSION exactly once as a decimal integer")
 endif()
 set(_sdk_version "${CMAKE_MATCH_1}")
-if(SPARK_SDK_WEATHER_CONSUMER AND (NOT CMAKE_HOST_WIN32 OR NOT _sdk_version STREQUAL "10"))
-    message(FATAL_ERROR "Optional weather consumer requires native Windows and installed SDK10")
+if(SPARK_SDK_WEATHER_CONSUMER AND (NOT CMAKE_HOST_WIN32 OR NOT _sdk_version STREQUAL "11"))
+    message(FATAL_ERROR "Optional weather consumer requires native Windows and installed SDK11")
 endif()
 
 # Generate the game with the installed CLI. It must locate the prefix from its
@@ -746,7 +746,7 @@ if(SPARK_SDK_WEATHER_CONSUMER)
         list(GET _parts 1 _value)
         string(JSON _weather_receipt SET "${_weather_receipt}" "${_key}" "\"${_value}\"")
     endforeach()
-    string(JSON _weather_receipt SET "${_weather_receipt}" sdk_version 10)
+    string(JSON _weather_receipt SET "${_weather_receipt}" sdk_version "${_sdk_version}")
     string(JSON _weather_receipt SET "${_weather_receipt}" boundary_scanned ${_scanned})
     string(JSON _weather_receipt SET "${_weather_receipt}" boundary_violations 0)
     string(JSON _weather_receipt SET "${_weather_receipt}" streams "{}")

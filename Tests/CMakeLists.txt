@@ -3094,7 +3094,7 @@ set_tests_properties(RHI210_MatrixContracts PROPERTIES
 if(WIN32)
     add_test(NAME RHI210_TextureDecode COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
     set_tests_properties(RHI210_TextureDecode PROPERTIES
-        ENVIRONMENT "SPARK_TEST_FILE=TestRHI210TextureDecode.cpp;SPARK_TEST_EXPECT_COUNT=2"
+        ENVIRONMENT "SPARK_TEST_FILE=TestRHI210TextureDecode.cpp;SPARK_TEST_EXPECT_COUNT=3"
         LABELS "rendering;d3d11;unit"
         RUN_SERIAL TRUE
         TIMEOUT 60)
@@ -6131,6 +6131,13 @@ if(Python3_Interpreter_FOUND)
         FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
         LABELS "release;supply-chain;python"
         TIMEOUT 60)
+    add_test(
+        NAME SupplyChain_NativeNsisPayload
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_native_nsis_payload.py)
+    set_tests_properties(SupplyChain_NativeNsisPayload PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "release;supply-chain;python"
+        TIMEOUT 60)
 
     # REL-190: tools/release_qualification.py, which profile-required-gates runs
     # for a versioned candidate: stage readiness, every required item's CI jobs
@@ -6677,6 +6684,7 @@ endif()
 # Actual FPS mutation adapters and engine event publication, without module rendering dependencies.
 add_subdirectory(FPSGameplayEvents)
 add_subdirectory(FPSHostConsoleBoundary)
+add_subdirectory(LegacyActorPublicSDK)
 
 # ---------------------------------------------------------------------
 # SparkTests precompiled header

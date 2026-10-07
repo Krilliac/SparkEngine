@@ -85,6 +85,9 @@ class FinalPackageReconciliationTests(unittest.TestCase):
         fake_sbom = unittest.mock.Mock()
         fake_sbom.load_inventory.return_value = []
         fake_sbom.load_rules.return_value = object()
+        fake_sbom.InputError = ValueError
+        fake_sbom.SbomError = RuntimeError
+        fake_sbom.reconcile_nsis.side_effect = ValueError("unsupported NSIS decoder")
         with patch.object(tool, "load_tool", return_value=fake_sbom), \
                 patch.object(tool, "source_identity", return_value=SOURCE), \
                 patch.object(Path, "iterdir", return_value=iter([package])), \
@@ -94,6 +97,7 @@ class FinalPackageReconciliationTests(unittest.TestCase):
         self.assertTrue(result["errors"])
         self.assertIsNone(result["artifacts"][0]["inventory"])
         fake_sbom.reconcile_archive.assert_not_called()
+        fake_sbom.reconcile_nsis.assert_called_once()
 
     def test_unsafe_artifact_names_and_duplicate_json_fields_are_rejected(self):
         for name in ("../payload.zip", "C:payload.zip", "a/b.zip", "file.zip\n"):
@@ -309,8 +313,60 @@ class NativeMsiPlanTests(unittest.TestCase):
         document = report()
         entry = document["artifacts"][0]
         entry["name"] = entry["inventory"]["artifact"]["name"] = "SparkInstaller-Windows.exe"
-        with self.assertRaisesRegex(ValueError, "unsupported"):
+        with self.assertRaisesRegex(ValueError, "format mismatch"):
             tool.verify_documents([document], {entry["name"]: DIGEST}, SOURCE)
+
+
+class NativeNsisPublicationTests(unittest.TestCase):
+    """The publication gate requires complete static NSIS evidence and source authority."""
+
+    def setUp(self):
+        fixture_spec = importlib.util.spec_from_file_location(
+            "nsis_publication_fixture", ROOT / "Tests/Tools/test_native_nsis_payload.py")
+        fixture = importlib.util.module_from_spec(fixture_spec)
+        fixture_spec.loader.exec_module(fixture)
+        self.document = report()
+        self.name = "SparkEngine-Runtime.exe"
+        entry = self.document["artifacts"][0]
+        entry["name"] = entry["inventory"]["artifact"]["name"] = self.name
+        entry["inventory"]["artifact"]["format"] = "nsis"
+        entry["inventory"]["packageFiles"] = 4
+        entry["inventory"]["extraction"] = fixture.evidence_fixture()
+        self.authority = native.profile_authority(lambda path: (ROOT / path).read_bytes())
+        entry["inventory"]["packageProfile"] = {
+            **self.authority[2], "installComponents": sorted(self.authority[0]["windowsRuntime"]["components"])}
+        entry["inventory"]["noticeCoverage"] = {"fonts": 0, "embeddedFonts": 0, "thirdPartyPayloadFiles": 0}
+
+    def test_complete_nsis_inventory_and_identical_alias_are_accepted(self):
+        tool.verify_documents([self.document], {self.name: DIGEST, "SparkInstaller.exe": DIGEST},
+                              SOURCE, self.authority)
+
+    def test_outer_only_stage_partial_and_unbound_reports_are_rejected(self):
+        for kind in ("outer-only", "stage", "missing-support", "missing-uninstaller", "wrong-count",
+                     "wrong-profile", "notice-coverage", "false-signature-claim"):
+            changed = copy.deepcopy(self.document)
+            inventory = changed["artifacts"][0]["inventory"]
+            if kind == "outer-only":
+                del inventory["extraction"]
+            elif kind == "stage":
+                inventory["extraction"]["method"] = "caller-supplied-stage"
+            elif kind == "missing-support":
+                inventory["extraction"]["support"].clear()
+            elif kind == "missing-uninstaller":
+                del inventory["extraction"]["uninstaller"]
+            elif kind == "wrong-count":
+                inventory["packageFiles"] += 1
+            elif kind == "wrong-profile":
+                inventory["packageProfile"]["profileSha256"] = "f" * 64
+            elif kind == "notice-coverage":
+                del inventory["noticeCoverage"]
+            else:
+                inventory["extraction"]["certificate"] = {
+                    "offset": 1024, "size": 16, "sha256": "a" * 64, "authentication": "verified"}
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                tool.verify_documents([changed], {self.name: DIGEST}, SOURCE, self.authority)
+        with self.assertRaisesRegex(ValueError, "committed package-profile authority"):
+            tool.verify_documents([self.document], {self.name: DIGEST}, SOURCE)
 
 
 def write_cabinet(path, members):

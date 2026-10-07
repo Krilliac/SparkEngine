@@ -6,6 +6,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Graphics/AssetPipeline.h"
+#include "RHI210D3D11EngineFixture.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <atomic>
@@ -142,5 +143,62 @@ TEST(RHI210_TextureAsset_RejectsOversizedPngHeader)
     ASSERT_TRUE(SUCCEEDED(texture.Load(device.Get())));
     EXPECT_EQ(texture.GetWidth(), 2u);
     EXPECT_EQ(texture.GetHeight(), 2u);
+}
+
+TEST(RHI210_TextureAsset_DrawListUsesUploadedTextureCoordinates)
+{
+    // The draw list uploads MeshAssetData::Vertex, whose UV follows the tangent.
+    // Reading the legacy mesh's UV offset instead samples a constant texel even
+    // though texture decoding, the SRV and D3D11 validation all succeed.
+    TextureFixture fixture;
+    const std::string texturePath = fixture.Write(TinyPng()).string();
+    const auto meshFile = std::filesystem::path(texturePath).parent_path() / "quad.obj";
+    {
+        std::ofstream output(meshFile, std::ios::binary);
+        output << "v -1 -1 0\nv 1 -1 0\nv 1 1 0\nv -1 1 0\n"
+                  "vt 0 1\nvt 1 1\nvt 1 0\nvt 0 0\n"
+                  "vn 0 0 -1\n"
+                  "f 1/1/1 4/4/1 3/3/1\nf 1/1/1 3/3/1 2/2/1\n";
+        ASSERT_TRUE(output.good());
+    }
+    const std::string meshPath = meshFile.string();
+    RHI210::WarpGraphicsEngine warp(64, 64);
+    ASSERT_TRUE(warp.Ready());
+    GraphicsEngine& engine = warp.Engine();
+    AssetPipeline* assets = engine.GetAssetPipeline();
+    ASSERT_TRUE(assets != nullptr);
+    ASSERT_TRUE(assets->LoadMesh(meshPath) != nullptr);
+    auto texture = assets->LoadTexture(texturePath);
+    ASSERT_TRUE(texture != nullptr);
+    ASSERT_EQ(texture->GetWidth(), 2u);
+    ASSERT_EQ(texture->GetHeight(), 1u);
+
+    using namespace DirectX;
+    const XMMATRIX view = XMMatrixLookAtLH(XMVectorSet(0, 0, -2, 1), XMVectorZero(), XMVectorSet(0, 1, 0, 0));
+    const XMMATRIX projection = XMMatrixOrthographicLH(2, 2, 0.1f, 10);
+    RHI210::Frame frame;
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        engine.SubmitMeshForRendering(meshPath, texturePath, XMMatrixIdentity(), false);
+        frame = RHI210::RenderObjectsFrame(engine, view, projection, {});
+    }
+    ASSERT_EQ(frame.width, 64u);
+    ASSERT_EQ(frame.height, 64u);
+    // Probe both texel interiors, away from the bilinear transition and edges.
+    // A constant UV cannot satisfy the opposite red/green channel dominance.
+    size_t redPixels = 0;
+    size_t greenPixels = 0;
+    for (uint32_t y = 8; y < 56; ++y)
+    {
+        for (uint32_t x = 12; x < 20; ++x)
+        {
+            const auto* red = frame.At(x, y);
+            const auto* green = frame.At(x + 32, y);
+            redPixels += red[0] > 100 && red[0] > 3u * red[1] && red[2] < 8;
+            greenPixels += green[1] > 100 && green[1] > 3u * green[0] && green[2] < 8;
+        }
+    }
+    EXPECT_EQ(redPixels, size_t(384));
+    EXPECT_EQ(greenPixels, size_t(384));
 }
 #endif // SPARK_PLATFORM_WINDOWS

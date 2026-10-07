@@ -14,7 +14,7 @@
 #include "Core/framework.h" // XMFLOAT3, XMMATRIX, HRESULT
 #include "Core/FPSAssert.h"
 #include "Physics/CollisionSystem.h" // BoundingSphere
-#include "Game/GameObject.h"
+#include <Spark/GameObject.h>
 
 class PhysicsSystem;
 

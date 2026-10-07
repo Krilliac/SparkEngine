@@ -56,6 +56,7 @@ Usage:
   python3 tools/generate-sbom.py reconcile --package-root stage --not-configured SDL2
   python3 tools/generate-sbom.py reconcile --archive SparkEngine-1.2.3.zip --json-report reconcile-final.json
   python tools/generate-sbom.py reconcile --msi SparkEngine-1.2.3-Runtime.msi --json-report reconcile-msi.json
+  python tools/generate-sbom.py reconcile --nsis SparkEngine-1.2.3-Runtime.exe --json-report reconcile-nsis.json
 """
 
 from __future__ import annotations
@@ -127,6 +128,7 @@ supply_chain = _load_tool("spark_sbom_check_supply_chain", TOOLS_DIR / "check-su
 provenance = _load_tool("spark_sbom_release_build_provenance", TOOLS_DIR / "release_build_provenance.py")
 notices = _load_tool("spark_sbom_third_party_notices", TOOLS_DIR / "governance" / "generate_third_party_notices.py")
 native_msi = _load_tool("spark_sbom_native_msi", TOOLS_DIR / "native_msi_payload.py")
+native_nsis = _load_tool("spark_sbom_native_nsis", TOOLS_DIR / "native_nsis_payload.py")
 
 
 @dataclass(frozen=True)
@@ -678,15 +680,25 @@ def reconcile_archive(
 
 def reconcile_msi(inventory, rules, artifact, not_configured, source_root=REPO_ROOT):
     """Reconcile every embedded MSI File-table payload from verified final bytes."""
+    return _reconcile_native(inventory, artifact, not_configured, source_root, native_msi, "msi")
+
+
+def reconcile_nsis(inventory, rules, artifact, not_configured, source_root=REPO_ROOT):
+    """Reconcile all application payloads from a supported final NSIS executable."""
+    return _reconcile_native(inventory, artifact, not_configured, source_root, native_nsis, "nsis")
+
+
+def _reconcile_native(inventory, artifact, not_configured, source_root, adapter, format_name):
+    """Share committed profile/notice authority across the two native formats."""
     try:
-        native_msi.regular(artifact)
+        adapter.regular(artifact)
         source_sha = _git_text(source_root, "rev-parse", "HEAD").strip()
         provenance._git(source_root, "diff", "--quiet", source_sha, "--", provenance.LOCK_PATH)
         policy, raw_rules, binding = native_msi.profile_authority(
             lambda path: provenance._git(source_root, "show", f"{source_sha}:{path}"))
         committed_rules = notices.parse_package_rules(raw_rules.decode("utf-8"), "committed package notice rules")
-        with native_msi.extracted_payload(artifact) as (evidence, notice, digest, payload_files):
-            assignments = native_msi.prove_profile(evidence, policy)
+        with adapter.extracted_payload(artifact) as (evidence, notice, digest, payload_files):
+            assignments = adapter.prove_profile(evidence, policy)
             components = policy["windowsRuntime"]["components"]
             report = reconcile(inventory, committed_rules, [item["path"] for item in evidence["files"]],
                                notice, not_configured, install_components=components, file_components=assignments,
@@ -697,13 +709,14 @@ def reconcile_msi(inventory, rules, artifact, not_configured, source_root=REPO_R
                                        "thirdPartyPayloadFiles": coverage.payload_count}
             report["extraction"] = evidence
             report["packageProfile"] = {**binding, "installComponents": sorted(components)}
-            _archive_report(report, artifact, source_root, digest, format_name="msi")
+            _archive_report(report, artifact, source_root, digest, format_name=format_name)
             if report["source"]["sha"] != source_sha:
-                raise InputError("source changed during MSI profile reconciliation")
+                raise InputError("source changed during native package profile reconciliation")
             provenance._git(source_root, "diff", "--quiet", source_sha, "--", provenance.LOCK_PATH)
             return report
-    except (native_msi.NativeMsiError, provenance.ProvenanceError, notices.NoticeInputError) as error:
-        raise InputError(f"cannot safely inventory MSI {artifact}: {error}") from error
+    except (native_msi.NativeMsiError, native_nsis.NativeNsisError,
+            provenance.ProvenanceError, notices.NoticeInputError) as error:
+        raise InputError(f"cannot safely inventory {format_name.upper()} {artifact}: {error}") from error
 
 
 def _notice_inventory(path: Path) -> dict[str, str]:
@@ -776,7 +789,7 @@ def reconcile(
             continue
         if install_components is not None and rule.install_components is not None:
             if file_components is None or file_components.get(rel) not in rule.install_components:
-                errors.append(f"{rel}: MSI feature membership contradicts its install component rule")
+                errors.append(f"{rel}: native installer component membership contradicts its install component rule")
         if rule.component is None:
             first_party += 1
         elif rule.component not in dependencies:
@@ -893,12 +906,17 @@ def _generate_main(args: argparse.Namespace) -> int:
 
 
 def _reconcile_main(args: argparse.Namespace) -> int:
-    if args.archive is not None or args.msi is not None:
-        reconcile_final = reconcile_msi if args.msi is not None else reconcile_archive
+    if args.archive is not None or args.msi is not None or args.nsis is not None:
+        if args.msi is not None:
+            reconcile_final, artifact = reconcile_msi, args.msi
+        elif args.nsis is not None:
+            reconcile_final, artifact = reconcile_nsis, args.nsis
+        else:
+            reconcile_final, artifact = reconcile_archive, args.archive
         report = reconcile_final(
             load_inventory(args.source_root),
             load_rules(),
-            args.msi if args.msi is not None else args.archive,
+            artifact,
             args.not_configured or [],
             args.source_root,
         )
@@ -947,6 +965,7 @@ def main(argv: list[str] | None = None) -> int:
         "--archive", type=Path, help="final .zip, .tar.gz, or .tgz package archive; extract and reconcile safely"
     )
     source.add_argument("--msi", type=Path, help="final self-contained MSI; offline inventory of all embedded File payloads")
+    source.add_argument("--nsis", type=Path, help="final supported NSIS executable; static inventory without execution")
     rec.add_argument("--install-prefix", help="install prefix of --install-manifest (default: its notice's directory)")
     rec.add_argument(
         "--not-configured",

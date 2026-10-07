@@ -14,6 +14,8 @@
 #include "../Core/RuntimePackage.h"
 #include "../Utils/LogMacros.h"
 #include "../Utils/SparkConsole.h"
+#include "AssetPipeline.h"
+#include "D3D11BasicInputLayouts.h"
 #include "GraphicsEngine.h"
 #include "Shader.h"
 
@@ -23,9 +25,11 @@
 #include <wrl.h>
 
 #include <cstring>
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <system_error>
+#include <type_traits>
 
 using Microsoft::WRL::ComPtr;
 
@@ -79,6 +83,32 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
     if (FAILED(hr))
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create input layout", L"ERROR");
+        return hr;
+    }
+
+    // AssetPipeline vertices carry a tangent between the normal and UV. The
+    // legacy GameObject layout above reads that tangent as UV when used with
+    // an asset vertex buffer, producing a constant texel despite a valid SRV.
+    using AssetVertex = MeshAssetData::Vertex;
+    static_assert(std::is_standard_layout_v<AssetVertex>);
+    const D3D11_INPUT_ELEMENT_DESC assetLayout[] = {
+        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, static_cast<UINT>(offsetof(AssetVertex, position)),
+         D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, static_cast<UINT>(offsetof(AssetVertex, normal)),
+         D3D11_INPUT_PER_VERTEX_DATA, 0},
+        {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, static_cast<UINT>(offsetof(AssetVertex, texCoord0)),
+         D3D11_INPUT_PER_VERTEX_DATA, 0}};
+    ComPtr<ID3D11InputLayout> assetInputLayout;
+    hr = m_device->CreateInputLayout(assetLayout, ARRAYSIZE(assetLayout), vsBlob->GetBufferPointer(),
+                                     vsBlob->GetBufferSize(), &assetInputLayout);
+    if (SUCCEEDED(hr))
+    {
+        hr = m_basicVertexShader->SetPrivateDataInterface(Spark::Graphics::Detail::kBasicAssetInputLayoutGuid,
+                                                          assetInputLayout.Get());
+    }
+    if (FAILED(hr))
+    {
+        LOG_TO_CONSOLE_IMMEDIATE(L"Failed to create asset vertex input layout", L"ERROR");
         return hr;
     }
 

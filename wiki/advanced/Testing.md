@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*743 test-bearing `.cpp`/`.mm` files, 8565 source-level test definitions*
+*743 test-bearing `.cpp`/`.mm` files, 8566 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1542,7 +1542,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestRHI210D3D11ValidationReal` | 4 |
 | `TestRHI210D3D11WorldGoldenReal` | 2 |
 | `TestRHI210MatrixContracts` | 3 |
-| `TestRHI210TextureDecode` | 2 |
+| `TestRHI210TextureDecode` | 3 |
 | `TestRHI225D3D12FallbackReal` | 3 |
 | `TestRHI225D3D12ParityReal` | 12 |
 | `TestRHI225D3D12ValidationReal` | 5 |

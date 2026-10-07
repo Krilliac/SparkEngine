@@ -9,6 +9,7 @@
 #include "Core/Platform.h"
 #include "Core/FPSAssert.h"
 #include "Core/FPSLog.h"
+#include "Utils/SparkError.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif // SPARK_PLATFORM_WINDOWS
@@ -23,10 +24,10 @@
 #include "Graphics/GraphicsEngine.h"
 #include "Physics/PhysicsSystem.h"
 #include "Camera/SparkEngineCamera.h"
-#include "Game/GameObject.h"
-#include "Game/CubeObject.h"
-#include "Game/PlaneObject.h"
-#include "Game/SphereObject.h"
+#include <Spark/GameObject.h>
+#include <Spark/CubeObject.h>
+#include <Spark/PlaneObject.h>
+#include <Spark/SphereObject.h>
 #include "ModelObject.h"
 #include "FPSAssetPaths.h"
 #include "Enemy.h"

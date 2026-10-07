@@ -18,7 +18,7 @@
 #include "Spark/SparkExport.h"
 #include "Core/Platform.h"
 
-#include "Game/GameObject.h"
+#include <Spark/GameObject.h>
 #include "ClassSystem.h"
 #include "GravitySystem.h"
 #include "Camera/SparkEngineCamera.h"

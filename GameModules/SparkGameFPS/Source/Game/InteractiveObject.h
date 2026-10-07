@@ -14,7 +14,7 @@
 #include "Core/Platform.h"
 #include <Spark/StateMachine.h>
 
-#include "Game/GameObject.h"
+#include <Spark/GameObject.h>
 #include <Spark/GameTypes.h>
 #include "Projectiles/WeaponStats.h"
 #include "ClassSystem.h"

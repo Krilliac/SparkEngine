@@ -1,4 +1,5 @@
 #include "Game/PlaneObject.h"
+#include "Graphics/MeshTypes.h"
 #include "Core/Platform.h"
 #include "Utils/Assert.h"
 #include "Utils/Validate.h"

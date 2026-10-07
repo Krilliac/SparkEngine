@@ -4789,6 +4789,36 @@
       "resolved": true
     },
     {
+      "target": "spark_legacy_actor_header_checks",
+      "kind": "object_library",
+      "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
+      "line": 108,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_legacy_actor_host",
+      "kind": "executable",
+      "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
+      "line": 89,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
+      "target": "spark_legacy_actor_module",
+      "kind": "module_library",
+      "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
+      "line": 80,
+      "conditionFrames": [],
+      "definitionScope": [],
+      "origin": "declaration",
+      "resolved": true
+    },
+    {
       "target": "spark_module_logging_a",
       "kind": "shared_library",
       "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
@@ -8566,6 +8596,60 @@
           "file": "Tests/PackageSmoke/FPSProgression/CMakeLists.txt",
           "line": 100,
           "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_legacy_actor_header_checks",
+      "kind": "object_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
+          "line": 108,
+          "kind": "object_library",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_legacy_actor_host",
+      "kind": "executable",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
+          "line": 89,
+          "kind": "executable",
+          "origin": "declaration",
+          "definitionScope": [],
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "target": "spark_legacy_actor_module",
+      "kind": "module_library",
+      "buildable": true,
+      "origins": [
+        "declaration"
+      ],
+      "declarations": [
+        {
+          "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
+          "line": 80,
+          "kind": "module_library",
           "origin": "declaration",
           "definitionScope": [],
           "resolved": true

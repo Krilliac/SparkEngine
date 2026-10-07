@@ -133,7 +133,7 @@ def weather_proof(root, identity):
     receipt = proof_json(root / "sdk/weather-identity.json")
     expected = {key: identity[key] for key in ("source_sha", "workflow_sha", "run_id", "run_attempt", "host_sha256")}
     expected.update(module="SparkGeneratedGame", headless="unavailable", windowed="accepted", lifecycle="passed")
-    if any(receipt.get(key) != value for key, value in expected.items()) or type(receipt.get("sdk_version")) is not int or receipt["sdk_version"] != 10:
+    if any(receipt.get(key) != value for key, value in expected.items()) or type(receipt.get("sdk_version")) is not int or receipt["sdk_version"] != 11:
         raise ValueError("Weather receipt identity/result mismatch")
     if type(receipt.get("boundary_scanned")) is not int or receipt["boundary_scanned"] < 2 or type(receipt.get("boundary_violations")) is not int or receipt["boundary_violations"] != 0:
         raise ValueError("Weather SDK boundary result missing or failed")

@@ -63,11 +63,9 @@ namespace Spark
     class EventBus;
 }
 
-#include "Game/Primitives.h"
-#include "Game/PlaceholderMesh.h"
-#include "Game/CubeObject.h"
-#include "Game/PlaneObject.h"
-#include "Game/SphereObject.h"
+#include <Spark/CubeObject.h>
+#include <Spark/PlaneObject.h>
+#include <Spark/SphereObject.h>
 #include "SceneManager/SceneManager.h"
 
 using SparkEditor::PlayerClass;

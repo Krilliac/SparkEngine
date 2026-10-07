@@ -325,7 +325,7 @@ class TestReconcileNoticeInventory(ReconcileCase):
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["profileExcludedPayloadRequirements"], ["Alpha"])
         self.assert_error(run([name for name in files if "Beta" not in name]), "locked dependency 'Beta'")
-        self.assert_error(run(GOOD_FILES), "feature membership contradicts")
+        self.assert_error(run(GOOD_FILES), "component membership contradicts")
         self.assert_error(run(files + ["include/Vendor/unknown.h"]), "no package rule maps")
         self.write_notice({"Beta": GOOD_NOTICE["Beta"], "Gamma": GOOD_NOTICE["Gamma"]})
         self.assert_error(run(files), "does not list locked dependency 'Alpha'")
@@ -637,6 +637,16 @@ class TestReconcileCli(unittest.TestCase):
             code = sbom.main(["reconcile", "--msi", str(self.prefix)])
         self.assertEqual(code, 2)
         self.assertIn("not a regular", err.getvalue())
+
+    def test_nsis_rejects_a_stage_and_an_unsupported_executable(self) -> None:
+        unsupported = self.prefix / "unsupported.exe"
+        unsupported.write_bytes(b"MZ-not-an-NSIS-package")
+        for candidate in (self.prefix, unsupported):
+            err = io.StringIO()
+            with self.subTest(candidate=candidate), redirect_stdout(io.StringIO()), redirect_stderr(err):
+                code = sbom.main(["reconcile", "--nsis", str(candidate)])
+            self.assertEqual(code, 2, err.getvalue())
+            self.assertIn("cannot safely inventory NSIS", err.getvalue())
 
 
 class TestRealRepositoryLock(unittest.TestCase):

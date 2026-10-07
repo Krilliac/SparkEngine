@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = ROOT/'Tests/PackageSmoke/RunInstalledSDKTemplate.cmake'
@@ -19,6 +20,17 @@ def bracket(value):
 
 
 class WeatherConsumerContracts(unittest.TestCase):
+    def test_qualification_uses_the_checked_revision_for_product_and_harness(self):
+        workflow = yaml.safe_load((ROOT/'.github/workflows/installed-weather-qualification.yml').read_text(encoding='utf-8'))
+        steps = workflow['jobs']['installed-native']['steps']
+        checkouts = {step['with']['path']: step['with']['ref'] for step in steps
+                     if 'actions/checkout@' in step.get('uses', '')}
+        self.assertEqual(checkouts, {'harness': '${{ github.sha }}', 'product': '${{ github.sha }}'})
+        phases = [step['run'] for step in steps if '--source-sha' in step.get('run', '')]
+        self.assertEqual(len(phases), 6)
+        for phase in phases:
+            self.assertIn('--source-sha ${{ github.sha }}', phase)
+
     def cmake(self, body, good=True):
         with tempfile.TemporaryDirectory() as tmp:
             script=Path(tmp)/'test.cmake'
@@ -78,7 +90,7 @@ class WeatherConsumerContracts(unittest.TestCase):
 
     def test_optional_route_preserves_headless_and_real_windowed_requirements(self):
         source=RUNNER.read_text(encoding='utf-8')
-        self.assertIn('NOT CMAKE_HOST_WIN32 OR NOT _sdk_version STREQUAL "10"',source)
+        self.assertIn('NOT CMAKE_HOST_WIN32 OR NOT _sdk_version STREQUAL "11"',source)
         self.assertIn('"${_engine}" -headless -game "${_images}" -require-game',source)
         windowed=source[source.index('# The real windowed host registers WeatherSystem'):]
         self.assertNotIn('-headless',windowed)
@@ -127,10 +139,11 @@ class WeatherConsumerContracts(unittest.TestCase):
                     for weather,available in (('',0),('-weather',1)):
                         (sdk/f'runtime{weather}-stdout.log').write_text(f'SPARK_SDK_WEATHER module=SparkGeneratedGame available={available} accepted={available} invalid_rejected={available} clear_accepted={available} callback=OnLoad\n')
                         (sdk/f'runtime{weather}-stderr.log').write_text('x'*20000)
-                    variables=dict(_scanned='2',SPARK_TEST_ROOT=sdk.as_posix(),_module_name='SparkGeneratedGame',SPARK_WEATHER_SOURCE_SHA='a'*40,SPARK_WEATHER_WORKFLOW_SHA='b'*40,SPARK_WEATHER_RUN_ID='123',SPARK_WEATHER_RUN_ATTEMPT='1',_weather_consumer_sha256='d'*64,_weather_host_after='c'*64,_image_sha256='e'*64,_weather_sidecar_after='f'*64)
+                    variables=dict(_sdk_version='11',_scanned='2',SPARK_TEST_ROOT=sdk.as_posix(),_module_name='SparkGeneratedGame',SPARK_WEATHER_SOURCE_SHA='a'*40,SPARK_WEATHER_WORKFLOW_SHA='b'*40,SPARK_WEATHER_RUN_ID='123',SPARK_WEATHER_RUN_ATTEMPT='1',_weather_consumer_sha256='d'*64,_weather_host_after='c'*64,_image_sha256='e'*64,_weather_sidecar_after='f'*64)
                     self.cmake('\n'.join('set('+key+' '+bracket(value)+')' for key,value in variables.items())+'\n'+writer)
                     receipt=sdk/'weather-identity.json'
                     boundary=json.loads(receipt.read_text())
+                    self.assertEqual(boundary['sdk_version'],11)
                     self.assertIs(type(boundary['boundary_scanned']),int)
                     self.assertEqual(boundary['boundary_scanned'],2)
                     self.assertIs(type(boundary['boundary_violations']),int)

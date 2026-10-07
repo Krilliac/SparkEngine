@@ -171,6 +171,77 @@ class SdkAbiSurfaceTests(unittest.TestCase):
         self.sdk.edit("IModule.h", "        int loadOrder = 1000;", "        int64_t loadOrder = 1000;")
         self.assertFails(self.sdk.run(), "Spark::ModuleInfo")
 
+    def test_native_same_size_field_reorder_requires_version_bump(self) -> None:
+        baseline = self.sdk.run()
+        self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
+        self.sdk.edit("GameObject.h", "XMFLOAT3 m_position", "XMFLOAT3 m_swap")
+        self.sdk.edit("GameObject.h", "XMFLOAT3 m_rotation", "XMFLOAT3 m_position")
+        self.sdk.edit("GameObject.h", "XMFLOAT3 m_swap", "XMFLOAT3 m_rotation")
+        self.assertFails(self.sdk.run(), "native_classes.GameObject")
+
+    def test_native_mesh_member_type_change_requires_version_bump(self) -> None:
+        baseline = self.sdk.run()
+        self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
+        self.sdk.edit("Mesh.h", "std::vector<unsigned int> m_indices", "std::vector<unsigned short> m_indices")
+        self.assertFails(self.sdk.run(), "native_classes.Mesh")
+
+    def test_native_nonvirtual_signature_change_requires_version_bump(self) -> None:
+        baseline = self.sdk.run()
+        self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
+        self.sdk.edit("Mesh.h", "HRESULT CreateCube(float size", "HRESULT CreateCube(double size")
+        self.assertFails(self.sdk.run(), "native_classes.Mesh")
+
+    def test_native_unparsed_member_fails_closed(self) -> None:
+        original = "unsigned int m_vertexCount{0};"
+        for declaration in ("unsigned int m_vertexCount : 24;", "unsigned int m_vertexCount{0}, extra{1};",
+                            "unsigned int m_vertexCount = 0, extra = 1;", "void (*m_vertexCount)();",
+                            "unsigned int m_vertexCount = GetDefaultCount();", "union { int m_vertexCount; };"):
+            with self.subTest(declaration=declaration):
+                self.sdk.edit("Mesh.h", original, declaration)
+                result = self.sdk.run("print")
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("Mesh", result.stderr)
+                self.assertIn("cannot parse", result.stderr)
+                self.sdk.edit("Mesh.h", declaration, original)
+
+    def test_native_missing_required_class_fails_closed(self) -> None:
+        (self.sdk.include / "Model.h").unlink()
+        result = self.sdk.run("print")
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("Model", result.stderr)
+
+    def test_native_surface_records_real_members_without_guessed_layouts(self) -> None:
+        result = self.sdk.run("print")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        native = json.loads(result.stdout)["native_classes"]
+        self.assertEqual(set(native), {"GameObject", "Model", "CubeObject", "PlaneObject", "SphereObject",
+                                      "WallObject", "Mesh", "Vertex", "MeshSubmesh"})
+        self.assertEqual(native["CubeObject"]["bases"], "public GameObject")
+        self.assertEqual(native["GameObject"]["fields"][:3], [
+            {"name": "m_position", "type": "XMFLOAT3"},
+            {"name": "m_rotation", "type": "XMFLOAT3"},
+            {"name": "m_scale", "type": "XMFLOAT3"}])
+        self.assertIn("HRESULT CreateCube(float size = 1.0f)", native["Mesh"]["methods"])
+        self.assertIn("~SphereObject() override = default", native["SphereObject"]["methods"])
+        self.assertEqual(native["Vertex"]["methods"], [
+            "Vertex()", "Vertex(const XMFLOAT3& p, const XMFLOAT3& n, const XMFLOAT2& t)"])
+        self.assertNotIn("lp64_", json.dumps(native))
+
+    def test_older_sdk_without_native_classes_retains_legacy_schema(self) -> None:
+        for name in ("GameObject", "Model", "CubeObject", "PlaneObject", "SphereObject", "WallObject", "Mesh",
+                     "MeshTypes", "NativeTypes"):
+            (self.sdk.include / f"{name}.h").unlink()
+        version = current_sdk_version(self.sdk.include)
+        self.sdk.edit("Version.h", f"#define SPARK_SDK_VERSION {version}", "#define SPARK_SDK_VERSION 10")
+        result = self.sdk.run("print")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("native_classes", json.loads(result.stdout))
+        self.sdk.golden.unlink()
+        result = self.sdk.run("update")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.sdk.run()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_bump_that_was_not_repinned_fails(self) -> None:
         self.sdk.append_engine_context_virtual()
         self.sdk.set_engine_context_count(GROWN_COUNT)

@@ -119,14 +119,6 @@
         "Engine/Replay/ReplaySystem.h",
         "Engine/SaveSystem/SaveSystem.h",
         "Engine/Security/MemoryIntegrity.h",
-        "Game/CubeObject.h",
-        "Game/GameObject.h",
-        "Game/Model.h",
-        "Game/PlaceholderMesh.h",
-        "Game/PlaneObject.h",
-        "Game/Primitives.h",
-        "Game/SphereObject.h",
-        "Game/WallObject.h",
         "Graphics/AssetPipeline.h",
         "Graphics/GraphicsEngine.h",
         "Graphics/Shader.h",
@@ -137,7 +129,7 @@
         "SceneManager/SceneManager.h",
         "Utils/SparkError.h"
       ],
-      "privateEngineHeaderCount": 31,
+      "privateEngineHeaderCount": 23,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

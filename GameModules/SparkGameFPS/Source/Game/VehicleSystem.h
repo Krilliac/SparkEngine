@@ -13,7 +13,7 @@
 #pragma once
 #include "Core/Platform.h"
 
-#include "Game/GameObject.h"
+#include <Spark/GameObject.h>
 #include <Spark/GameTypes.h>
 #include "Projectiles/WeaponStats.h"
 #ifdef SPARK_PLATFORM_WINDOWS
