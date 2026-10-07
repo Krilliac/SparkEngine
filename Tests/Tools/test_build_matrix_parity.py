@@ -2203,12 +2203,14 @@ def write_codemodel_reply(
     build_dir: str,
     generator: str = "Visual Studio 17 2022",
     architecture: str = "x64",
-    toolset: str = "v143",
+    toolset: str | None = None,
     configuration: str = "MinSizeRel",
     targets: tuple[tuple[str, str], ...] = (("SparkEngine", "EXECUTABLE"),),
     cache: dict[str, str] | None = None,
 ) -> Path:
     """Write a real CMake File API reply tree, not a hand-built dict."""
+    if toolset is None:
+        toolset = "v143,host=x64,version=14.44.35207" if configuration == "MinSizeRel" else "v143"
     reply = root / ".cmake" / "api" / "v1" / "reply"
     reply.mkdir(parents=True, exist_ok=True)
     cmake_producer = root / "cmake-producer.exe"
@@ -2257,7 +2259,7 @@ def write_codemodel_reply(
         ),
         "SPARK_TOOLCHAIN_CXX_COMPILER": MSVC_CXX_COMPILER_PATH,
         "SPARK_TOOLCHAIN_CXX_COMPILER_ID": "MSVC",
-        "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION": "19.44.35228.0",
+        "SPARK_TOOLCHAIN_CXX_COMPILER_VERSION": "19.44.35229.0" if configuration == "MinSizeRel" else "19.44.35228.0",
         "SPARK_TOOLCHAIN_CXX_ARCHITECTURE": "x64",
         "SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION": "10.0.26100.0",
     }
@@ -2326,6 +2328,7 @@ def write_synthetic_transaction_provenance(
     }
     executable = evidence["cmakeProducer"]["executable"]
     configuration = evidence["configurations"][0]
+    preset = "windows-release" if profile == "windows-validation" else profile
     record = {
         "schemaVersion": inventory._PROVENANCE_SCHEMA,
         "producer": inventory._PROVENANCE_PRODUCER,
@@ -2339,7 +2342,7 @@ def write_synthetic_transaction_provenance(
             ).hexdigest(),
             "query": query,
             "profile": profile,
-            "preset": profile,
+            "preset": preset,
             "configuration": configuration,
             "sourceDirectory": evidence["sourceDirectory"],
             "buildDirectory": evidence["buildDirectory"],
@@ -2347,7 +2350,7 @@ def write_synthetic_transaction_provenance(
                 "executable": executable,
                 "executableIdentity": inventory._executable_identity(Path(executable)),
                 "version": evidence["cmakeProducer"]["version"],
-                "argv": [executable, "--fresh", "--preset", profile],
+                "argv": [executable, "--fresh", "--preset", preset],
                 "cwd": repository_root,
                 "exitCode": 0,
             },
@@ -2358,7 +2361,7 @@ def write_synthetic_transaction_provenance(
         "observed": {
             "sourceDirectory": evidence["sourceDirectory"],
             "buildDirectory": evidence["buildDirectory"],
-            "preset": profile,
+            "preset": preset,
             "configuration": configuration,
             "generator": evidence["generator"],
             "architecture": evidence["architecture"],
@@ -2453,6 +2456,50 @@ class CodemodelProvenanceTests(unittest.TestCase):
 
         categories = self.categories(self.bound_data(evidence))
         self.assertNotIn("codemodel-toolchain-mismatch", categories)
+        self.assertNotIn("codemodel-shipping-toolchain-mismatch", categories)
+
+    def test_shipping_rejects_exact_compiler_sdk_and_toolset_patch_drift(self) -> None:
+        for changes in (
+            {"SPARK_TOOLCHAIN_CXX_COMPILER_VERSION": "19.44.35228.0"},
+            {"SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION": "10.0.22621.0"},
+            {"SPARK_TOOLCHAIN_CXX_COMPILER": MSVC_CXX_COMPILER_PATH.replace("35207", "35208"),
+             "CMAKE_AR": MSVC_CXX_COMPILER_PATH.replace("35207", "35208").replace("cl.exe", "lib.exe"),
+             "CMAKE_LINKER": MSVC_CXX_COMPILER_PATH.replace("35207", "35208").replace("cl.exe", "link.exe")},
+        ):
+            with self.subTest(changes=changes), tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+                evidence = self.shipping_evidence(Path(raw), cache=dict(self.shipping_cache, **changes))
+                self.assertIn("codemodel-shipping-toolchain-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_shipping_policy_is_loaded_from_trusted_checker_checkout(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        data = self.bound_data(evidence)
+        data["repository"]["root"] = "Z:/untrusted-producer"
+        with mock.patch.object(check_parity, "load_policy", wraps=check_parity.load_policy) as load:
+            self.categories(data)
+        load.assert_called_once_with(REPO_ROOT)
+
+    def test_missing_or_malformed_shipping_policy_is_blocking(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            evidence = self.shipping_evidence(Path(raw))
+        with mock.patch.object(check_parity, "load_policy", side_effect=check_parity.ShippingToolchainError("bad policy")):
+            self.assertIn("codemodel-shipping-toolchain-mismatch", self.categories(self.bound_data(evidence)))
+
+    def test_validation_release_keeps_local_compiler_patch_without_shipping_policy(self) -> None:
+        preset = inventory.resolve_configure_preset(self.data["cmakePresets"], "windows-release")
+        cache = {name: str(value) for name, value in preset["cacheVariables"].items()}
+        with tempfile.TemporaryDirectory(dir=TEST_TEMP_ROOT) as raw:
+            directory = Path(raw)
+            write_codemodel_reply(directory, source_dir=REPO_ROOT.as_posix(), build_dir=directory.as_posix(),
+                                  configuration="Release", cache=cache)
+            write_synthetic_transaction_provenance(directory, "windows-validation", repository_root=REPO_ROOT.as_posix())
+            with synthetic_capture_contract(directory, "windows-validation"), mock.patch.dict(os.environ, synthetic_ci_environment(), clear=False):
+                evidence = inventory.extract_codemodel_targets(directory, "windows-validation", "0" * 40)
+        self.assertEqual(evidence["cacheVariables"]["SPARK_TOOLCHAIN_CXX_COMPILER_VERSION"], "19.44.35228.0")
+        with mock.patch.object(check_parity, "load_policy", side_effect=AssertionError("Release must not load Shipping policy")):
+            categories = self.categories(self.bound_data(evidence))
+        self.assertNotIn("codemodel-toolchain-mismatch", categories)
+        self.assertNotIn("codemodel-shipping-toolchain-mismatch", categories)
 
     def test_msvc_compiler_path_must_agree_with_linker_toolset(self) -> None:
         cache = dict(self.shipping_cache)
@@ -2482,7 +2529,7 @@ class CodemodelProvenanceTests(unittest.TestCase):
             evidence = self.shipping_evidence(Path(raw))
         self.assertEqual(evidence["status"], "available")
         self.assertEqual(evidence["generator"], "Visual Studio 17 2022")
-        self.assertEqual(evidence["toolset"], "v143")
+        self.assertEqual(evidence["toolset"], "v143,host=x64,version=14.44.35207")
         self.assertEqual(evidence["configurations"], ["MinSizeRel"])
         self.assertEqual(evidence["producerProvenance"]["state"], "unavailable")
         self.assertEqual(

@@ -764,7 +764,7 @@
             "Tools/rhi210_capture.py",
             "Tests/Tools/test_rhi210_capture.py"
           ],
-          "note": "Four post-processing goldens are owner-approved. The frame/FPS/world/primary suites are DISABLED: they exposed Windows normal-transform, frustum-plane, PNG-decode and Plane-winding defects plus the missing G-buffer fill and lighting resolve; 10 captures then need owner review. No exact-SHA CI proof."
+          "note": "Four post-pass and three Primary WARP baselines are approved. D3D11PrimaryGolden is enabled after four local tests (537700 assertions) and pixel mismatches for geometry, lighting and shadow disabled-pass controls. G-buffer and lighting resolve exist. Frame/FPS-scene/world remain disabled: seven captures and renderer rechecks are pending. No final-tree hosted or hardware proof."
         },
         {
           "criterionDigest": "sha256:745ccd700288",
@@ -799,7 +799,7 @@
             "SparkEngine/Source/Graphics/GPUTimestampQuery.h",
             "Tests/RHI210D3D11EngineFixture.h"
           ],
-          "note": "D3D11_Validation and the reviewed post-pass goldens require the debug layer and zero warnings/errors/corruption/discards, with an injected counter control; GPUTimestampQuery no longer abandons disjoint queries (#408). The disabled frame/FPS/world/primary suites are not evidence yet. Hardware is deferred by OD-27. Producer build-windows-vs2022."
+          "note": "D3D11_Validation, the reviewed post-pass goldens and the enabled Primary suite require the debug layer and zero warnings/errors/corruption/discards, with injected counter or disabled-pass controls; GPUTimestampQuery no longer abandons disjoint queries (#408). The disabled frame/FPS-scene/world suites are not evidence yet. Hardware qualification remains pending. Producer build-windows-vs2022."
         },
         {
           "criterionDigest": "sha256:0a3989a189ef",

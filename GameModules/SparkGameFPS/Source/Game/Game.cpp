@@ -36,7 +36,7 @@
 #include "SceneManager/SceneManager.h"
 #include "Console/AdvancedConsoleCommands.h"
 #include <Spark/IConsole.h>
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 #include "Audio/MusicManager.h"
 #include <cmath>
 #include <filesystem>

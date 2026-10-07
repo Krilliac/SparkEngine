@@ -10,6 +10,8 @@
 #include "GraphicsConsoleCommands.h"
 #include "../Core/Platform.h"
 #include "GraphicsEngine.h"
+#include "MaterialSystem.h"
+#include "LightingSystem.h"
 #include "../Utils/SparkConsole.h"
 #include "GPUDrivenRenderer.h"
 #ifdef SPARK_HYBRID_RT
@@ -37,6 +39,56 @@ namespace Spark::Graphics
         SPARK_TRACE_ENTER(Spark::LogCategory::Graphics);
         SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Registering graphics console commands");
         auto& console = Spark::SimpleConsole::GetInstance();
+
+        console.RegisterCommand(
+            "mat_list",
+            [&engine](const std::vector<std::string>&) -> std::string
+            {
+                if (auto* materials = engine.GetMaterialSystem())
+                    return materials->Console_ListMaterials();
+                return "Material system not available";
+            },
+            "List all loaded materials", "Graphics");
+
+        console.RegisterCommand(
+            "mat_info",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.size() != 1)
+                    return "Usage: mat_info <material_name>";
+                if (auto* materials = engine.GetMaterialSystem())
+                    return materials->Console_GetMaterialInfo(args[0]);
+                return "Material system not available";
+            },
+            "Get material information", "Graphics");
+
+        console.RegisterCommand(
+            "light_list",
+            [&engine](const std::vector<std::string>&) -> std::string
+            {
+                if (auto* lighting = engine.GetLightingSystem())
+                    return lighting->Console_ListLights();
+                return "Lighting system not available";
+            },
+            "List all lights", "Graphics");
+
+        console.RegisterCommand(
+            "shadows",
+            [&engine](const std::vector<std::string>& args) -> std::string
+            {
+                if (args.size() != 1)
+                    return "Usage: shadows <on/off>";
+                const bool enabled = (args[0] == "on" || args[0] == "true" || args[0] == "1");
+                if (!enabled && args[0] != "off" && args[0] != "false" && args[0] != "0")
+                    return "Usage: shadows <on/off>";
+                if (auto* lighting = engine.GetLightingSystem())
+                {
+                    lighting->Console_EnableShadows(enabled);
+                    return enabled ? "Shadows enabled" : "Shadows disabled";
+                }
+                return "Lighting system not available";
+            },
+            "Enable/disable shadows", "Graphics");
 
         console.RegisterCommand(
             "gfx_vsync",

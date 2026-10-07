@@ -3,9 +3,9 @@
  * @brief Intermediate deferred geometry/lighting and production shadow-depth goldens.
  *
  * Captures precede the deferred path's forward replay: a working forward renderer
- * cannot mask an absent deferred resolve. The current LightingPass has no resolve;
- * its content assertion must remain red until production writes a lit result.
- * No test shader supplies the missing pass. Pending captures are never baselines.
+ * cannot mask an absent deferred resolve. The production G-buffer, lighting resolve
+ * and shadow-depth pass are compared against the reviewed Primary WARP baselines.
+ * No test shader supplies these passes. Pending captures are never baselines.
  */
 #include "TestFramework.h"
 

@@ -673,6 +673,9 @@ class PackageRuleSetTests(unittest.TestCase):
             "bad scan pattern": {**good, "embeddedFonts": {**good["embeddedFonts"], "scanPattern": "^bin/("}},
             "no scan limit": {**good, "embeddedFonts": {**good["embeddedFonts"], "maximumScanBytes": 0}},
         }
+        for index, components in enumerate((None, [], ["sdk", "sdk"], ["symbols"], "sdk", [False])):
+            cases[f"invalid install component scope {index}"] = {
+                **good, "payloadRules": [{"pattern": "^include/", "component": "zstd", "installComponents": components}]}
         for label, data in cases.items():
             with self.subTest(label):
                 with self.assertRaises(notices.NoticeInputError):
@@ -686,6 +689,25 @@ class PackageRuleSetTests(unittest.TestCase):
         self.assertGreater(gate, required, "the notice gate must run in the full package validation path")
         self.assertIn("set(SPARK_PACKAGE_NOTICE_COVERAGE enforce)", text)
         self.assertNotIn("set(SPARK_PACKAGE_NOTICE_COVERAGE report)", text)
+
+    @unittest.skipUnless(shutil.which("cmake"), "cmake is required for component-scope schema parity")
+    def test_install_component_scopes_fail_closed_in_both_parsers(self) -> None:
+        good = json.loads(RULES_PATH.read_text("utf-8"))
+        with tempfile.TemporaryDirectory(prefix="spark-rule-scope-") as raw:
+            root = Path(raw) / "package"
+            _write_package(root, _package_notice(FONT_LICENSE, LIBRARY_LICENSE, "FixtureSans-Regular.ttf"))
+            path = Path(raw) / "rules.json"
+            for value in (None, [], ["sdk", "sdk"], ["symbols"], "sdk", [False]):
+                data = {**good, "payloadRules": [{"pattern": "^include/", "component": "zstd", "installComponents": value}]}
+                path.write_text(json.dumps(data), encoding="utf-8")
+                with self.subTest(value=value):
+                    with self.assertRaises(notices.NoticeInputError):
+                        notices.parse_package_rules(json.dumps(data))
+                    result = subprocess.run(["cmake", f"-DSPARK_PACKAGE_ROOT={root}",
+                        f"-DSPARK_PACKAGE_NOTICE_RULES={path}", "-P", str(PACKAGE_GATE)],
+                        capture_output=True, text=True, timeout=30)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("installComponents", result.stderr)
 
 
 class LicenseInventoryPackageTests(unittest.TestCase):

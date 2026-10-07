@@ -12,9 +12,9 @@
 #include "Core/FPSLog.h"
 
 #include "Core/Platform.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 #include "SceneManager/SceneManager.h"
-#include "Utils/EventBus.h"
+#include <Spark/EventBus.h>
 
 #include <algorithm>
 #include <charconv>

@@ -3841,7 +3841,9 @@ set_source_files_properties(FuzzRuntimePrefabProduction.cpp FuzzAssetMigrationPr
 target_include_directories(SparkFuzzRuntimePrefab PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
 target_include_directories(SparkFuzzAssetMigration PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
 target_include_directories(SparkFuzzAchievement PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
-target_include_directories(SparkFuzzEventResponse PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzEventResponse PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include")
 target_include_directories(SparkFuzzUILayout PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
 target_include_directories(SparkFuzzEventResponse PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json")

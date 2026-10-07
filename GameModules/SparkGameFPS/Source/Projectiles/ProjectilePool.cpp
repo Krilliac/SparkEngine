@@ -6,7 +6,7 @@
 #include "Rocket.h"
 #include "Grenade.h"
 #include "Game/Enemy.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 #include "Core/FPSAssert.h"
 #include <algorithm>
 #include <iostream>

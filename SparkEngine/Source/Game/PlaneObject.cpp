@@ -45,7 +45,23 @@ void PlaneObject::CreateMesh()
     }
     if (!loaded)
     {
-        hr = m_mesh->CreatePlane(m_width, m_depth);
+        // Ground faces +Y. Keep the generic Mesh plane's opposite winding for
+        // the sprite callers that rotate it into the screen-facing plane.
+        const float halfWidth = m_width * 0.5f;
+        const float halfDepth = m_depth * 0.5f;
+        const XMFLOAT3 positions[] = {{-halfWidth, 0, -halfDepth},
+                                      {halfWidth, 0, -halfDepth},
+                                      {halfWidth, 0, halfDepth},
+                                      {-halfWidth, 0, halfDepth}};
+        const DirectX::XMFLOAT2 uvs[] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+        const unsigned int corners[] = {0, 2, 1, 0, 3, 2};
+        MeshData plane;
+        for (const unsigned int corner : corners)
+        {
+            plane.vertices.emplace_back(positions[corner], XMFLOAT3{0, 1, 0}, uvs[corner]);
+            plane.indices.push_back(static_cast<unsigned int>(plane.indices.size()));
+        }
+        hr = m_mesh->CreateFromVertices(plane.vertices, plane.indices);
         if (FAILED(hr))
         {
             hr = m_mesh->CreateCube(m_width);

@@ -114,7 +114,6 @@
         "Engine/Cinematic/Sequencer.h",
         "Engine/Destruction/DestructionSystem.h",
         "Engine/Dialogue/DialogueSystem.h",
-        "Engine/Events/EventSystem.h",
         "Engine/Networking/ClientPrediction.h",
         "Engine/Networking/NetworkManager.h",
         "Engine/Replay/ReplaySystem.h",
@@ -130,19 +129,15 @@
         "Game/WallObject.h",
         "Graphics/AssetPipeline.h",
         "Graphics/GraphicsEngine.h",
-        "Graphics/LightingSystem.h",
-        "Graphics/MaterialSystem.h",
-        "Graphics/PostProcessingPipeline.h",
         "Graphics/Shader.h",
         "Graphics/TextureSystem.h",
         "Input/InputManager.h",
         "Physics/CollisionSystem.h",
         "Physics/PhysicsSystem.h",
         "SceneManager/SceneManager.h",
-        "Utils/EventBus.h",
         "Utils/SparkError.h"
       ],
-      "privateEngineHeaderCount": 36,
+      "privateEngineHeaderCount": 31,
       "copiedInfrastructureFiles": [
         "GameModules/SparkGameFPS/Source/Game/GameEngineSystems.cpp"
       ],

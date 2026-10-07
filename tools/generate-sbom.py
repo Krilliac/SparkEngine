@@ -55,6 +55,7 @@ Usage:
   python3 tools/generate-sbom.py reconcile --install-manifest build/linux-gcc-release/install_manifest.txt
   python3 tools/generate-sbom.py reconcile --package-root stage --not-configured SDL2
   python3 tools/generate-sbom.py reconcile --archive SparkEngine-1.2.3.zip --json-report reconcile-final.json
+  python tools/generate-sbom.py reconcile --msi SparkEngine-1.2.3-Runtime.msi --json-report reconcile-msi.json
 """
 
 from __future__ import annotations
@@ -125,6 +126,7 @@ def _load_tool(name: str, path: Path) -> ModuleType:
 supply_chain = _load_tool("spark_sbom_check_supply_chain", TOOLS_DIR / "check-supply-chain.py")
 provenance = _load_tool("spark_sbom_release_build_provenance", TOOLS_DIR / "release_build_provenance.py")
 notices = _load_tool("spark_sbom_third_party_notices", TOOLS_DIR / "governance" / "generate_third_party_notices.py")
+native_msi = _load_tool("spark_sbom_native_msi", TOOLS_DIR / "native_msi_payload.py")
 
 
 @dataclass(frozen=True)
@@ -610,13 +612,14 @@ def _archive_format(archive: Path) -> str:
 
 
 def _archive_report(
-    report: dict[str, Any], archive: Path, source_root: Path, artifact_digest: str | None = None
+    report: dict[str, Any], archive: Path, source_root: Path, artifact_digest: str | None = None,
+    format_name: str | None = None,
 ) -> dict[str, Any]:
     try:
         source_sha = _git_text(source_root, "rev-parse", "HEAD").strip()
         lock_sha = provenance._committed_lock_digest(source_root, source_sha)
     except (InputError, provenance.ProvenanceError) as error:
-        raise InputError(f"cannot bind archive report to source lock: {error}") from error
+        raise InputError(f"cannot bind final package report to source lock: {error}") from error
     digest = artifact_digest
     if digest is None:
         digest_builder = hashlib.sha256()
@@ -626,7 +629,7 @@ def _archive_report(
         digest = digest_builder.hexdigest()
     report["artifact"] = {
         "name": archive.name,
-        "format": _archive_format(archive),
+        "format": format_name or _archive_format(archive),
         "sha256": digest,
     }
     report["source"] = {"sha": source_sha, "dependencyLockSha256": lock_sha}
@@ -673,6 +676,36 @@ def reconcile_archive(
     return _archive_report(report, archive, source_root, after_digest.hexdigest())
 
 
+def reconcile_msi(inventory, rules, artifact, not_configured, source_root=REPO_ROOT):
+    """Reconcile every embedded MSI File-table payload from verified final bytes."""
+    try:
+        native_msi.regular(artifact)
+        source_sha = _git_text(source_root, "rev-parse", "HEAD").strip()
+        provenance._git(source_root, "diff", "--quiet", source_sha, "--", provenance.LOCK_PATH)
+        policy, raw_rules, binding = native_msi.profile_authority(
+            lambda path: provenance._git(source_root, "show", f"{source_sha}:{path}"))
+        committed_rules = notices.parse_package_rules(raw_rules.decode("utf-8"), "committed package notice rules")
+        with native_msi.extracted_payload(artifact) as (evidence, notice, digest, payload_files):
+            assignments = native_msi.prove_profile(evidence, policy)
+            components = policy["windowsRuntime"]["components"]
+            report = reconcile(inventory, committed_rules, [item["path"] for item in evidence["files"]],
+                               notice, not_configured, install_components=components, file_components=assignments,
+                               validate_notice_text=True)
+            coverage = notices.check_package_coverage(notice.parent, committed_rules, payload_files=payload_files)
+            report["errors"].extend(coverage.uncovered)
+            report["noticeCoverage"] = {"fonts": coverage.font_count, "embeddedFonts": coverage.embedded_count,
+                                       "thirdPartyPayloadFiles": coverage.payload_count}
+            report["extraction"] = evidence
+            report["packageProfile"] = {**binding, "installComponents": sorted(components)}
+            _archive_report(report, artifact, source_root, digest, format_name="msi")
+            if report["source"]["sha"] != source_sha:
+                raise InputError("source changed during MSI profile reconciliation")
+            provenance._git(source_root, "diff", "--quiet", source_sha, "--", provenance.LOCK_PATH)
+            return report
+    except (native_msi.NativeMsiError, provenance.ProvenanceError, notices.NoticeInputError) as error:
+        raise InputError(f"cannot safely inventory MSI {artifact}: {error}") from error
+
+
 def _notice_inventory(path: Path) -> dict[str, str]:
     """Map each THIRD_PARTY_NOTICES.txt inventory entry name to its Version line."""
     if not path.is_file() or path.is_symlink():
@@ -717,11 +750,16 @@ def reconcile(
     files: list[str],
     notice_path: Path,
     not_configured: list[str],
+    *, install_components: list[str] | None = None, file_components: dict[str, str] | None = None,
+    validate_notice_text: bool = False,
 ) -> dict[str, Any]:
     """Reconcile a package file list with the lock; the report's ``errors`` decide the verdict."""
     dependencies = {dep.name: dep for dep in inventory}
     errors: list[str] = []
     rule_components = sorted({rule.component for rule in rules.payload if rule.component})
+    required_components = {rule.component for rule in rules.payload if rule.component and (
+        install_components is None or rule.install_components is None
+        or rule.install_components.intersection(install_components))}
     for component in rule_components:
         if component not in dependencies:
             errors.append(f"package rule names component '{component}', which dependencies.lock does not lock")
@@ -736,6 +774,9 @@ def reconcile(
             if any(pattern.search(rel) for pattern in rules.roots):
                 errors.append(f"{rel}: third-party install path that no package rule maps to a locked dependency")
             continue
+        if install_components is not None and rule.install_components is not None:
+            if file_components is None or file_components.get(rel) not in rule.install_components:
+                errors.append(f"{rel}: MSI feature membership contradicts its install component rule")
         if rule.component is None:
             first_party += 1
         elif rule.component not in dependencies:
@@ -749,7 +790,7 @@ def reconcile(
             errors.append(f"--not-configured {name}: not a locked dependency with install payload rules")
         elif name in present:
             errors.append(f"--not-configured {name}: the package ships {present[name]} file(s) of it")
-    for name in rule_components:
+    for name in sorted(required_components):
         if name in dependencies and name not in present and name not in declared_absent:
             errors.append(f"locked dependency '{name}' has install payload rules but ships no file in this package")
 
@@ -763,6 +804,10 @@ def reconcile(
         notice_entries = notices.parse_package_notice(notice_text, rules, str(notice_path))
     except (OSError, UnicodeDecodeError, notices.NoticeInputError) as error:
         raise InputError(f"{notice_path}: cannot parse generated package inventory: {error}") from error
+    if validate_notice_text:
+        for entry in notice_entries:
+            if entry.name in dependencies and entry.problem:
+                errors.append(f"{NOTICE_NAME}: locked dependency '{entry.name}' {entry.problem}")
     runtime_names = {rule.system_runtime for rule in rules.payload if rule.system_runtime is not None}
     runtime_entries = {entry.name: entry for entry in notice_entries if entry.name in runtime_names}
     runtime_files: dict[str, set[str]] = {name: set() for name in runtime_names}
@@ -805,7 +850,7 @@ def reconcile(
     for name in sorted(set(listed) - set(dependencies) - set(font_entries) - valid_runtime_entries):
         errors.append(f"{NOTICE_NAME} lists '{name}', which dependencies.lock does not lock")
 
-    return {
+    report = {
         "schema": RECONCILE_SCHEMA,
         "packageFiles": len(files),
         "firstPartyExemptFiles": first_party,
@@ -815,6 +860,9 @@ def reconcile(
         "fontEntries": font_entries,
         "errors": errors,
     }
+    if install_components is not None:
+        report["profileExcludedPayloadRequirements"] = sorted(set(rule_components) - required_components - set(declared_absent))
+    return report
 
 
 # --------------------------------------------------------------------------- cli
@@ -845,11 +893,12 @@ def _generate_main(args: argparse.Namespace) -> int:
 
 
 def _reconcile_main(args: argparse.Namespace) -> int:
-    if args.archive is not None:
-        report = reconcile_archive(
+    if args.archive is not None or args.msi is not None:
+        reconcile_final = reconcile_msi if args.msi is not None else reconcile_archive
+        report = reconcile_final(
             load_inventory(args.source_root),
             load_rules(),
-            args.archive,
+            args.msi if args.msi is not None else args.archive,
             args.not_configured or [],
             args.source_root,
         )
@@ -897,6 +946,7 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument(
         "--archive", type=Path, help="final .zip, .tar.gz, or .tgz package archive; extract and reconcile safely"
     )
+    source.add_argument("--msi", type=Path, help="final self-contained MSI; offline inventory of all embedded File payloads")
     rec.add_argument("--install-prefix", help="install prefix of --install-manifest (default: its notice's directory)")
     rec.add_argument(
         "--not-configured",

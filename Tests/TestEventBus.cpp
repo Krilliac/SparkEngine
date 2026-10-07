@@ -1,7 +1,7 @@
-// TestEventBus.cpp - Tests for Spark::EventBus and SubscriptionHandle (new Utils/EventBus.h)
+// TestEventBus.cpp - Tests for Spark::EventBus and SubscriptionHandle (public Spark/EventBus.h)
 // Note: test names use "UtilEventBus_" prefix to avoid collisions with TestEventSystem.cpp
 #include "TestFramework.h"
-#include "Utils/EventBus.h"
+#include <Spark/EventBus.h>
 
 #include <string>
 #include <vector>

@@ -4,7 +4,10 @@
  */
 
 #include "TestFramework.h"
-#include "Utils/EventBus.h"
+#include <Spark/EventBus.h>
+#include "Utils/EventBus.h" // The compatibility path must refer to the same declarations.
+
+#include <string>
 
 namespace
 {

@@ -176,9 +176,11 @@
             "inherits": "default",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
-            "toolset": "v143",
+            "toolset": "v143,host=x64,version=14.44.35207",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_SYSTEM_VERSION": "10.0.26100.0",
+                "SPARK_ENFORCE_WINDOWS_SHIPPING_TOOLCHAIN": "ON",
                 "ENABLE_LTO": "OFF",
                 "SPARK_NATIVE_ARCH": "OFF",
                 "ENABLE_EDITOR": "ON",

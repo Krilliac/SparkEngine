@@ -19,6 +19,10 @@ equal to the OD-04 floor (x86-64-v2: SSE4.2, no AVX/AVX2/FMA/F16C/LZCNT/TZCNT);
 ``record`` refuses to write one that does not, and ``verify --stable`` accepts
 only such a v2 record. v1 records stay readable for nightly verification.
 
+Stable-v1 Windows Shipping additionally requires the exact toolchain input
+policy committed in cmake/WindowsShippingToolchain.json at sourceSHA. Both
+commands reject working-policy drift; the policy conveys no certification.
+
 Every failure is fatal and exits non-zero; there is no advisory mode.
 """
 from __future__ import annotations
@@ -32,6 +36,9 @@ import re
 import subprocess
 import sys
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from windows_shipping_toolchain import ShippingToolchainError, compare_toolchain, load_policy
 
 SCHEMA_VERSION = "spark-build-provenance-v2"
 LEGACY_SCHEMA_VERSION = "spark-build-provenance-v1"
@@ -302,6 +309,8 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
                         "version": os.environ.get("ImageVersion") or None},
         "artifacts": _artifacts(args.packages, args.version),
     }
+    if (args.profile, args.platform) == STABLE_PROFILE:
+        _require_shipping_toolchain(document, args.source_root, source_sha)
     _write_no_replace(args.out, document)
     return document
 
@@ -389,6 +398,25 @@ def _check_platform_schema(record_doc: dict[str, Any], name: str) -> None:
         _require_stable_platform(platform_toolchain, isa, name)
 
 
+def _require_shipping_toolchain(record_doc: dict[str, Any], source_root: Path, source_sha: str) -> None:
+    try:
+        policy = load_policy(source_root, source_sha)
+        toolchain = record_doc["toolchain"]
+        platform = record_doc["platformToolchain"]
+        errors = compare_toolchain(
+            policy, configuration=record_doc["configuration"], generator=toolchain["generator"],
+            architecture=toolchain["generatorPlatform"], toolset=toolchain["generatorToolset"],
+            compilers=toolchain["compilers"], windows_sdk=platform["windowsSdkVersion"],
+            linker=platform["linker"], archiver=platform["archiver"], instance=platform["visualStudioInstance"],
+            require_c=True,
+        )
+        if platform["msvcToolsVersion"] != policy["msvcToolsVersion"]:
+            errors.append(f"msvcToolsVersion={platform['msvcToolsVersion']!r}, requires {policy['msvcToolsVersion']!r}")
+    except ShippingToolchainError as error:
+        raise ProvenanceError(str(error)) from error
+    _require(not errors, "stable-v1 Windows Shipping toolchain mismatch: " + "; ".join(errors))
+
+
 def verify(args: argparse.Namespace) -> tuple[int, int]:
     _require(bool(_SHA1.fullmatch(args.source_sha)), "source SHA must be 40 lower-case hexadecimal characters")
     head = _git(args.source_root, "rev-parse", "HEAD").decode().strip()
@@ -408,6 +436,9 @@ def verify(args: argparse.Namespace) -> tuple[int, int]:
                  f"{path.name} version {record_doc['version']} is not {args.version}")
         _require(record_doc["dependencyLock"]["sha256"] == expected_lock,
                  f"{path.name} dependency lock digest differs from {LOCK_PATH} at {args.source_sha}")
+        if ((record_doc["profile"], record_doc["platform"]) == STABLE_PROFILE
+                and record_doc["schemaVersion"] == SCHEMA_VERSION):
+            _require_shipping_toolchain(record_doc, args.source_root, args.source_sha)
         records.append(record_doc)
 
     if args.stable:
@@ -415,8 +446,8 @@ def verify(args: argparse.Namespace) -> tuple[int, int]:
         only = records[0]
         _require((only["profile"], only["platform"], only["configuration"]) == (*STABLE_PROFILE, "MinSizeRel"),
                  "stable publication requires the stable-v1 Windows MinSizeRel record")
-        # _load_record already enforced the toolchain and CPU floor for a v2
-        # stable-v1 Windows record; v1 cannot carry them, so it cannot publish.
+        # Record loading and the committed policy check enforced the toolchain
+        # and CPU floor for v2; v1 cannot carry them, so it cannot publish.
         _require(only["schemaVersion"] == SCHEMA_VERSION,
                  f"stable publication requires a {SCHEMA_VERSION} record (Windows SDK, MSVC toolset, CPU baseline)")
 

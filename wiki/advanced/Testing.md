@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*742 test-bearing `.cpp`/`.mm` files, 8563 source-level test definitions*
+*743 test-bearing `.cpp`/`.mm` files, 8565 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1511,6 +1511,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestPhysicsStress` | 16 |
 | `TestPhysicsSystem` | 29 |
 | `TestPhysicsTeardownGuard` | 7 |
+| `TestPlaneObjectFallbackReal` | 2 |
 | `TestPlatformInput` | 11 |
 | `TestPlayModeManager` | 34 |
 | `TestPluginABI` | 17 |

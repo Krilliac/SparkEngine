@@ -27,6 +27,8 @@ TOOL = ROOT / "tools" / "release_build_provenance.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 VERSION = "7.8.9"
 LOCK_REL = "ThirdParty/dependencies.lock"
+POLICY_REL = "cmake/WindowsShippingToolchain.json"
+SHIPPING_TOOLSET = "v143,host=x64,version=14.44.35207"
 MSVC_BIN = "C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64"
 # What windows-shipping (Visual Studio generator, SPARK_NATIVE_ARCH=OFF) leaves in
 # CMakeCache.txt: the root CMakeLists.txt SDK entry, CMake's own instance,
@@ -74,8 +76,10 @@ class Fixture:
         self.out = base / "records" / "build-provenance-Windows-MinSizeRel.json"
         (self.source / "ThirdParty").mkdir(parents=True)
         (self.source / LOCK_REL).write_text("entt 9c5281c79a241ec810f999ad9675fa32f51f934f\n", encoding="utf-8")
+        (self.source / "cmake").mkdir()
+        shutil.copyfile(ROOT / POLICY_REL, self.source / POLICY_REL)
         git(self.source, "init", "-q")
-        git(self.source, "add", LOCK_REL)
+        git(self.source, "add", LOCK_REL, POLICY_REL)
         git(self.source, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
             "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fixture")
         self.sha = git(self.source, "rev-parse", "HEAD")
@@ -92,7 +96,7 @@ class Fixture:
             f"SPARK_ENGINE_VERSION:STRING={VERSION}",
             "CMAKE_GENERATOR:INTERNAL=Visual Studio 17 2022",
             "CMAKE_GENERATOR_PLATFORM:INTERNAL=x64",
-            "CMAKE_GENERATOR_TOOLSET:INTERNAL=v143",
+            f"CMAKE_GENERATOR_TOOLSET:INTERNAL={SHIPPING_TOOLSET}",
             "CMAKE_CACHE_MAJOR_VERSION:INTERNAL=3",
             "CMAKE_CACHE_MINOR_VERSION:INTERNAL=30",
             "CMAKE_CACHE_PATCH_VERSION:INTERNAL=2",
@@ -102,10 +106,13 @@ class Fixture:
         (compiler_dir / "CMakeCXXCompiler.cmake").write_text("\n".join([
             f'set(CMAKE_CXX_COMPILER "{MSVC_BIN}/cl.exe")',
             'set(CMAKE_CXX_COMPILER_ID "MSVC")',
-            'set(CMAKE_CXX_COMPILER_VERSION "19.44.35228.0")',
+            'set(CMAKE_CXX_COMPILER_VERSION "19.44.35229.0")',
             'set(CMAKE_CXX_COMPILER_ARCHITECTURE_ID "x64")',
             "",
         ]), encoding="utf-8")
+        (compiler_dir / "CMakeCCompiler.cmake").write_text(
+            (compiler_dir / "CMakeCXXCompiler.cmake").read_text(encoding="utf-8").replace("CMAKE_CXX_", "CMAKE_C_"),
+            encoding="utf-8")
         self.packages.mkdir()
         (self.packages / f"SparkEngine-{VERSION}-Windows-AMD64-MinSizeRel.zip").write_bytes(b"zip-bytes")
         (self.packages / f"SparkEngine-{VERSION}-Windows-AMD64-MinSizeRel-Runtime.msi").write_bytes(b"msi-bytes")
@@ -174,9 +181,9 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(toolchain["cmakeVersion"], "3.30.2")
         self.assertEqual(toolchain["generator"], "Visual Studio 17 2022")
         self.assertEqual(toolchain["generatorPlatform"], "x64")
-        self.assertEqual(toolchain["generatorToolset"], "v143")
+        self.assertEqual(toolchain["generatorToolset"], SHIPPING_TOOLSET)
         self.assertEqual(toolchain["compilers"]["CXX"]["id"], "MSVC")
-        self.assertEqual(toolchain["compilers"]["CXX"]["version"], "19.44.35228.0")
+        self.assertEqual(toolchain["compilers"]["CXX"]["version"], "19.44.35229.0")
         self.assertEqual(toolchain["compilers"]["CXX"]["architecture"], "x64")
         self.assertEqual(record["platformToolchain"], {
             "windowsSdkVersion": "10.0.26100.0",
@@ -244,6 +251,9 @@ class RecordTests(unittest.TestCase):
                                    capture_output=True, check=True).stdout
         self.assertNotIn(b"\r\n", committed)
         (self.fx.source / LOCK_REL).write_bytes(committed.replace(b"\n", b"\r\n"))
+        policy = subprocess.run(["git", "-C", str(self.fx.source), "show", f"HEAD:{POLICY_REL}"],
+                                capture_output=True, check=True).stdout
+        (self.fx.source / POLICY_REL).write_bytes(policy.replace(b"\n", b"\r\n"))
         result = self.fx.record()
         self.assertEqual(result.returncode, 0, result.stderr)
         record = json.loads(self.fx.out.read_text(encoding="utf-8"))
@@ -354,6 +364,75 @@ class RecordTests(unittest.TestCase):
         self.assertNotEqual(again.returncode, 0)
         self.assertEqual(self.fx.out.read_bytes(), before)
 
+    def test_shipping_rejects_exact_compiler_patch_drift_and_c_cxx_disagreement(self) -> None:
+        for language in ("C", "CXX"):
+            compiler = self.fx.build / "CMakeFiles" / "3.30.2" / f"CMake{language}Compiler.cmake"
+            original = compiler.read_text(encoding="utf-8")
+            with self.subTest(language=language):
+                compiler.write_text(original.replace("19.44.35229.0", "19.44.35228.0"), encoding="utf-8")
+                result = self.fx.record()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{language} compilerVersion", result.stderr)
+                self.assertFalse(self.fx.out.exists())
+            compiler.write_text(original, encoding="utf-8")
+
+    def test_shipping_rejects_missing_c_identity(self) -> None:
+        (self.fx.build / "CMakeFiles" / "3.30.2" / "CMakeCCompiler.cmake").unlink()
+        result = self.fx.record()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("C compiler identity is missing", result.stderr)
+
+    def test_shipping_rejects_sdk_and_linker_archiver_toolset_drift(self) -> None:
+        for key, value in (("SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION:INTERNAL", "10.0.22621.0"),
+                           ("CMAKE_LINKER:FILEPATH", MSVC_BIN.replace("35207", "35208") + "/link.exe"),
+                           ("CMAKE_AR:FILEPATH", MSVC_BIN.replace("35207", "35208") + "/lib.exe")):
+            with self.subTest(key=key):
+                fx, result = self.record_with({key: value})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Shipping toolchain mismatch", result.stderr)
+                self.assertFalse(fx.out.exists())
+
+    def test_shipping_uses_committed_policy_and_rejects_worktree_policy_drift(self) -> None:
+        path = self.fx.source / POLICY_REL
+        original = path.read_text(encoding="utf-8")
+        path.write_text(original.replace("19.44.35229.0", "19.44.35228.0"), encoding="utf-8")
+        result = self.fx.record()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("policy differs", result.stderr)
+
+    def test_git_index_hints_cannot_hide_consumed_policy_drift(self) -> None:
+        path = self.fx.source / POLICY_REL
+        git(self.fx.source, "update-index", "--assume-unchanged", "--", POLICY_REL)
+        path.write_text(path.read_text(encoding="utf-8").replace("19.44.35229.0", "19.44.35228.0"), encoding="utf-8")
+        result = self.fx.record()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("policy differs", result.stderr)
+
+    def test_shipping_rejects_missing_and_malformed_committed_policy(self) -> None:
+        path = self.fx.source / POLICY_REL
+        for contents in (None, "{}"):
+            with self.subTest(contents=contents):
+                if contents is None:
+                    path.unlink()
+                else:
+                    path.write_text(contents, encoding="utf-8")
+                git(self.fx.source, "add", "--", POLICY_REL)
+                git(self.fx.source, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                    "-c", "commit.gpgsign=false", "commit", "-q", "-m", "invalid policy")
+                self.fx.sha = git(self.fx.source, "rev-parse", "HEAD")
+                result = self.fx.record()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("policy", result.stderr)
+                self.assertFalse(self.fx.out.exists())
+
+    def test_non_shipping_release_keeps_local_compiler_patch(self) -> None:
+        for compiler in (self.fx.build / "CMakeFiles" / "3.30.2").glob("CMake*Compiler.cmake"):
+            compiler.write_text(compiler.read_text(encoding="utf-8").replace("19.44.35229.0", "19.44.35228.0"),
+                                encoding="utf-8")
+        (self.fx.source / POLICY_REL).unlink()
+        result = self.fx.record("--profile", "default", configuration="Release")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 class VerifyTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -377,6 +456,31 @@ class VerifyTests(unittest.TestCase):
         result = self.fx.verify(self.assets, self.listing, "--stable")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("3 distributable asset(s)", result.stdout)
+
+    def test_verify_rejects_shipping_compiler_sdk_and_toolset_patch_drift(self) -> None:
+        original = self.fx.out.read_text(encoding="utf-8")
+        mutations = (
+            lambda r: r["toolchain"]["compilers"]["CXX"].__setitem__("version", "19.44.35228.0"),
+            lambda r: r["toolchain"]["compilers"]["C"].__setitem__("version", "19.44.35228.0"),
+            lambda r: r["platformToolchain"].__setitem__("windowsSdkVersion", "10.0.22621.0"),
+            lambda r: r["platformToolchain"].__setitem__("msvcToolsVersion", "14.44.35208"),
+            lambda r: r["platformToolchain"].__setitem__("linker", MSVC_BIN.replace("35207", "35208") + "/link.exe"),
+            lambda r: r["platformToolchain"].__setitem__("archiver", MSVC_BIN.replace("35207", "35208") + "/lib.exe"),
+        )
+        for index, mutate in enumerate(mutations):
+            with self.subTest(component=index):
+                self.fx.out.write_text(original, encoding="utf-8")
+                self.rewrite_record(mutate)
+                result = self.fx.verify(self.assets, self.listing, "--stable")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Shipping toolchain mismatch", result.stderr)
+
+    def test_verify_rejects_policy_drift_even_when_record_matches_original_lock(self) -> None:
+        path = self.fx.source / POLICY_REL
+        path.write_text(path.read_text(encoding="utf-8").replace("19.44.35229.0", "19.44.35228.0"), encoding="utf-8")
+        result = self.fx.verify(self.assets, self.listing, "--stable")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("policy differs", result.stderr)
 
     def test_rejects_published_bytes_that_no_record_describes(self) -> None:
         (self.assets / f"SparkEngine-{VERSION}-Windows-AMD64-MinSizeRel-Runtime.msi").write_bytes(b"tampered")

@@ -30,7 +30,7 @@
 #include "Game/WallObject.h"
 #include "ModelObject.h"
 #include "Player.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 
 
 #include <algorithm>

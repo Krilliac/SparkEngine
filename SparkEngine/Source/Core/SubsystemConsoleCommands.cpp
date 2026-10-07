@@ -704,29 +704,28 @@ namespace Spark
             },
             "Disable a post-processing effect", "PostProcess");
 
-        console.RegisterCommand(
-            "pp_exposure",
-            [](const std::vector<std::string>& args) -> std::string
+        // Both names share parsing and mutation so the FPS compatibility name
+        // stays host-owned and cannot diverge from the canonical command.
+        const auto setExposure = [](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() != 1)
+                return "Usage: pp_exposure <value>  (alias: exposure)";
+            const std::optional<float> exposure = StringUtils::ParseFloatingExact<float>(args[0]);
+            if (!exposure || !std::isfinite(*exposure))
             {
-                if (args.empty())
-                    return "Usage: pp_exposure <value>  (e.g. 1.0)";
-                auto* gfx = EngineContext::Get() ? EngineContext::Get()->GetGraphics() : nullptr;
-                if (!gfx)
-                    return "Graphics engine not available";
-                auto* pp = gfx->GetPostProcessingPipeline();
-                if (!pp)
-                    return "Post-processing pipeline not available";
-                try
-                {
-                    pp->Console_SetExposure(std::stof(args[0]));
-                    return "Exposure set to " + args[0];
-                }
-                catch (const std::exception&)
-                {
-                    return "Invalid number";
-                }
-            },
-            "Set exposure value", "PostProcess");
+                return "Invalid number: " + args[0];
+            }
+            auto* gfx = EngineContext::Get() ? EngineContext::Get()->GetGraphics() : nullptr;
+            if (!gfx)
+                return "Graphics engine not available";
+            auto* pp = gfx->GetPostProcessingPipeline();
+            if (!pp)
+                return "Post-processing pipeline not available";
+            pp->Console_SetExposure(*exposure);
+            return "Exposure set to " + args[0];
+        };
+        console.RegisterCommand("pp_exposure", setExposure, "Set exposure value", "PostProcess");
+        console.RegisterCommand("exposure", setExposure, "Set exposure value (alias for pp_exposure)", "PostProcess");
     }
 
     // ========================================================================

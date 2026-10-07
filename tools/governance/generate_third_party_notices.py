@@ -226,6 +226,9 @@ class PayloadRule:
     # A shipped license text: covered when its name is on the "Notice files:"
     # line of an inventory entry whose texts are all reproduced.
     notice_text: str | None = None
+    # Applies only to presence requirements after a final package proves its
+    # component profile. It never suppresses notice coverage for shipped files.
+    install_components: frozenset[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -308,6 +311,14 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
             raise NoticeInputError(
                 f"{where} must name exactly one of 'component', 'firstParty', 'systemRuntime' or 'noticeText'"
             )
+        install_components = rule.get("installComponents")
+        if "installComponents" in rule and (
+            not isinstance(install_components, list) or not install_components
+            or not all(isinstance(name, str) and name in {"runtime", "sdk", "tools", "templates", "samples", "redist"}
+                       for name in install_components)
+            or len(set(install_components)) != len(install_components)
+        ):
+            raise NoticeInputError(f"{where}: installComponents must be distinct known install component names")
         payload.append(
             PayloadRule(
                 _rules_regex(rule.get("pattern"), where),
@@ -315,6 +326,7 @@ def parse_package_rules(text: str, label: str = "package notice rules") -> Packa
                 named.get("firstParty"),
                 named.get("systemRuntime"),
                 named.get("noticeText"),
+                frozenset(install_components) if install_components is not None else None,
             )
         )
     first_party_roots = []
@@ -543,7 +555,8 @@ def _asset_manifest_licenses(package_root: Path, manifest: str) -> dict[str, str
     return licenses
 
 
-def check_package_coverage(package_root: Path, rules: PackageRules, closed_world: bool = False) -> PackageCoverage:
+def check_package_coverage(package_root: Path, rules: PackageRules, closed_world: bool = False,
+                           *, payload_files: dict[str, Path] | None = None) -> PackageCoverage:
     """Apply the notice-coverage rules to a staged install tree.
 
     Mirrors cmake/ValidateStagedPackageNotices.cmake; the fixture tests run both
@@ -552,7 +565,15 @@ def check_package_coverage(package_root: Path, rules: PackageRules, closed_world
     first-party; closed world requires it to match a justified firstPartyRoots
     pattern and reports it as unclassified otherwise.
     """
-    notice_path = package_root / PACKAGE_NOTICE_NAME
+    # Offline native extraction maps logical install paths to private numeric
+    # files. Reuse exactly the notice/font/runtime rules without materializing
+    # any installer-controlled directory name. Closed-world asset manifests
+    # still require their existing tree-aware implementation.
+    if payload_files is not None and closed_world:
+        raise NoticeInputError("closed-world asset coverage requires a package tree")
+    notice_path = payload_files.get(PACKAGE_NOTICE_NAME) if payload_files is not None else package_root / PACKAGE_NOTICE_NAME
+    if notice_path is None:
+        raise NoticeInputError(f"missing {PACKAGE_NOTICE_NAME} in native payload")
     if not notice_path.is_file() or notice_path.is_symlink():
         raise NoticeInputError(f"{notice_path} is missing or is not a regular non-link file")
     if notice_path.stat().st_size > MAX_PACKAGE_NOTICE_BYTES:
@@ -566,17 +587,18 @@ def check_package_coverage(package_root: Path, rules: PackageRules, closed_world
     for entry in entries:
         by_name.setdefault(entry.name, entry)
 
-    files: list[str] = []
-    for directory, subdirs, names in os.walk(package_root):
-        base = Path(directory)
-        # Mirror CMake's GLOB_RECURSE: a symlinked directory is reported as an
-        # entry, not descended into.
-        for sub in list(subdirs):
-            if (base / sub).is_symlink():
-                subdirs.remove(sub)
-                names.append(sub)
-        for name in names:
-            files.append((base / name).relative_to(package_root).as_posix())
+    files: list[str] = list(payload_files) if payload_files is not None else []
+    if payload_files is None:
+        for directory, subdirs, names in os.walk(package_root):
+            base = Path(directory)
+            # Mirror CMake's GLOB_RECURSE: a symlinked directory is reported as an
+            # entry, not descended into.
+            for sub in list(subdirs):
+                if (base / sub).is_symlink():
+                    subdirs.remove(sub)
+                    names.append(sub)
+            for name in names:
+                files.append((base / name).relative_to(package_root).as_posix())
 
     uncovered: list[str] = []
     font_count = payload_count = first_party_count = asset_count = embedded_count = 0
@@ -590,7 +612,7 @@ def check_package_coverage(package_root: Path, rules: PackageRules, closed_world
                 uncovered.append(f"{rel}: font {reason}")
             continue
 
-        path = package_root / rel
+        path = payload_files[rel] if payload_files is not None else package_root / rel
         if rules.embedded_scan.search(rel) and path.is_file() and not path.is_symlink():
             for marker in embedded_font_markers_in(path, rules.embedded_markers, rules.embedded_max_bytes):
                 embedded_count += 1

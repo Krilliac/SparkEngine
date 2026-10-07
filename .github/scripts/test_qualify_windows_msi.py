@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Native-process fixtures exercise orchestration, not Windows qualification."""
 import contextlib
+import ctypes
+from ctypes import wintypes
 import hashlib
 import importlib.util
 import io
@@ -140,6 +142,106 @@ class WindowsMSIRuntimeEvidenceTests(unittest.TestCase):
 
 
 class WindowsMSILifecycleTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows native scratch security")
+    def test_private_scratch_and_children_are_accessible_to_non_elevated_same_user(self):
+        """The creator's inputs are accessible to a verified same-user medium token."""
+        self._assert_private_scratch_access()
+
+    @unittest.skipUnless(os.name == "nt", "Windows native scratch security")
+    def test_elevated_creator_scratch_is_accessible_to_filtered_medium_client(self):
+        """Run the hosted creator/client boundary only with an elevated creator."""
+        self._assert_private_scratch_access(elevated_only=True)
+
+    def _assert_private_scratch_access(self, *, elevated_only=False):
+        launcher_spec = importlib.util.spec_from_file_location(
+            "scratch_non_elevated", Path(__file__).with_name("run-non-elevated-windows.py"))
+        launcher = importlib.util.module_from_spec(launcher_spec)
+        launcher_spec.loader.exec_module(launcher)
+        process = launcher._api("GetCurrentProcess", "kernel32", wintypes.HANDLE, [])()
+        creator_token = launcher._token(process)
+        try:
+            creator_elevated = launcher._token_is_elevated(creator_token)
+        finally:
+            launcher._close(creator_token)
+        if elevated_only and not creator_elevated:
+            self.skipTest("creator token is not elevated; hosted elevated-creator regression is unproven locally")
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            scratch = MODULE._create_msi_scratch(parent)
+            # These inputs are created by the original (possibly elevated)
+            # process, just like PowerShell's transform and the data canary.
+            (scratch / "interrupt-failure.mst").write_bytes(b"transform input")
+            (scratch / "canary.sav").write_bytes(b"external user data")
+            check = (
+                "from pathlib import Path; import sys; p=Path(sys.argv[1]); "
+                "assert (p/'interrupt-failure.mst').read_bytes()==b'transform input'; "
+                "assert (p/'canary.sav').read_bytes()==b'external user data'; "
+                "(p/'install').mkdir(); (p/'install'/'payload').write_bytes(b'installed'); "
+                "(p/'install'/'payload').unlink(); (p/'install').rmdir(); print('medium-scratch-pass')"
+            )
+            log = parent / "medium-access.log"
+            self.assertEqual(launcher.run([sys.executable, "-c", check, str(scratch)], log, 30), 0,
+                             log.read_text(encoding="utf-8"))
+            self.assertIn("medium-scratch-pass", log.read_text(encoding="utf-8"))
+            self.assertEqual((scratch / "canary.sav").read_bytes(), b"external user data")
+            # The helper itself verifies the owner and entire protected DACL,
+            # including the absence of inherited/world/OWNER RIGHTS grants.
+            self.assertTrue(scratch.is_relative_to(parent))
+
+    @unittest.skipUnless(os.name == "nt", "Windows native security descriptor canonicalization")
+    def test_scratch_descriptor_normalizes_service_sids_without_weakening_acl_comparison(self):
+        convert = ctypes.WinDLL("advapi32", use_last_error=True).ConvertStringSecurityDescriptorToSecurityDescriptorW
+        convert.restype = wintypes.BOOL
+        convert.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(wintypes.LPVOID), wintypes.LPVOID]
+        local_free = ctypes.WinDLL("kernel32", use_last_error=True).LocalFree
+        local_free.restype, local_free.argtypes = wintypes.LPVOID, [wintypes.LPVOID]
+
+        def canonical(sddl):
+            descriptor = wintypes.LPVOID()
+            self.assertTrue(convert(sddl, 1, ctypes.byref(descriptor), None))
+            try:
+                return MODULE._security_descriptor_sddl(descriptor)
+            finally:
+                local_free(descriptor)
+
+        for sid, alias in (("S-1-5-18", "SY"), ("S-1-5-19", "LS"), ("S-1-5-20", "NS")):
+            with self.subTest(sid=sid):
+                requested = f"O:{sid}D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
+                expected = f"O:{alias}D:P(A;OICI;FA;;;{alias})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
+                self.assertEqual(canonical(requested), expected)
+                for changed in (expected.replace(f"O:{alias}", "O:BA"), expected.replace("D:P", "D:"),
+                                expected.replace("OICI", "CI", 1), expected.replace("FA", "FR", 1),
+                                expected + "(A;OICI;FA;;;WD)"):
+                    self.assertNotEqual(canonical(requested), canonical(changed))
+
+    @unittest.skipUnless(os.name == "nt", "Windows native scratch security")
+    def test_private_scratch_collision_never_reuses_or_changes_existing_directory(self):
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            existing = parent / ("spark-msi-" + "a" * 32)
+            existing.mkdir()
+            (existing / "user-owned").write_bytes(b"preserve")
+            with mock.patch.object(MODULE.secrets, "token_hex", side_effect=["a" * 32, "b" * 32]):
+                scratch = MODULE._create_msi_scratch(parent)
+            self.assertEqual(scratch.name, "spark-msi-" + "b" * 32)
+            self.assertEqual((existing / "user-owned").read_bytes(), b"preserve")
+            with mock.patch.object(MODULE.secrets, "token_hex", return_value="a" * 32) as choose:
+                with self.assertRaisesRegex(OSError, "could not allocate fresh MSI scratch"):
+                    MODULE._create_msi_scratch(parent)
+            self.assertEqual(choose.call_count, 32)
+            self.assertEqual((existing / "user-owned").read_bytes(), b"preserve")
+
+    def test_scratch_security_failure_prevents_installer_execution(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            with mock.patch.object(MODULE, "_create_msi_scratch", side_effect=OSError("scratch ACL rejected")):
+                result, calls, state, logs = self._run_interrupt_drill(root, bootstrap=True)
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("scratch ACL rejected", " ".join(report["errors"]))
+            self.assertFalse(any(call[0] == "msiexec.exe" for call in calls))
+            self.assertFalse((logs / "package-smoke.log").exists())
+
     def _transaction_fixture(self, root):
         """Create the two immutable package identities used by the transaction contract."""
         old_packages = root / "old-packages"
@@ -246,6 +348,8 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 self.assertTrue(Path(transforms[0].split("=", 1)[1]).is_file())
                 install_root = Path(next(arg.split("=", 1)[1] for arg in argv if arg.startswith("INSTALL_ROOT=")))
                 version = re.search(r"SparkEngine-([0-9]+\.[0-9]+\.[0-9]+)-Windows-", " ".join(map(str, argv))).group(1)
+                if interrupt_outcome == "inaccessible-transform":
+                    return 1624
                 if interrupt_outcome == "leave-registered":
                     state.update(installed=True, version=version, install_root=str(install_root))
                     install_root.mkdir(parents=True, exist_ok=True)
@@ -870,6 +974,17 @@ class WindowsMSILifecycleTests(unittest.TestCase):
             drill = json.loads((logs / "interrupt-drill.json").read_text(encoding="utf-8"))
             self.assertEqual(drill["mode"], "install")
             self.assertTrue(drill["passed"])
+
+    def test_transform_access_failure_is_not_accepted_as_an_interruption(self):
+        with tempfile.TemporaryDirectory() as raw:
+            result, calls, state, logs = self._run_interrupt_drill(
+                Path(raw), bootstrap=True, interrupt_outcome="inaccessible-transform")
+            self.assertNotEqual(result, 0)
+            report = json.loads((logs / "result.json").read_text(encoding="utf-8"))
+            self.assertIn("install-interrupted exited 1624, expected 1603", " ".join(report["errors"]))
+            self.assertNotIn("install.log", state["logs"])
+            self.assertFalse((logs / "interrupt-drill.json").exists())
+            self.assertFalse((logs / "package-smoke.log").exists())
 
     def test_interrupted_install_leaving_registration_or_residue_fails_and_is_cleaned(self):
         """Installer_Interrupted: partial activation fails closed and still reaches uninstall."""

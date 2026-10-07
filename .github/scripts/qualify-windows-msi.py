@@ -45,6 +45,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import stat
 import subprocess
 import sys
@@ -179,6 +180,109 @@ def run_command(argv, log, *, timeout, env=None, cwd=None):
         return launcher.run(argv, log, timeout, env=env, cwd=cwd)
     with log.open("w", encoding="utf-8") as output:
         return subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT, timeout=timeout, env=env, cwd=cwd).returncode
+
+
+def _security_descriptor_sddl(descriptor):
+    """Canonical Windows rendering of exactly the owner and complete DACL."""
+    stringify = ctypes.WinDLL("advapi32", use_last_error=True).ConvertSecurityDescriptorToStringSecurityDescriptorW
+    stringify.restype = wintypes.BOOL
+    stringify.argtypes = [wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD,
+                          ctypes.POINTER(wintypes.LPWSTR), wintypes.LPVOID]
+    local_free = ctypes.WinDLL("kernel32", use_last_error=True).LocalFree
+    local_free.restype, local_free.argtypes = wintypes.LPVOID, [wintypes.LPVOID]
+    text = wintypes.LPWSTR()
+    try:
+        if not stringify(descriptor, 1, 0x5, ctypes.byref(text), None):
+            raise ctypes.WinError(ctypes.get_last_error(), "Read MSI scratch security descriptor")
+        return text.value
+    finally:
+        if text:
+            local_free(text)
+
+
+def _create_msi_scratch(parent):
+    """Atomically create private scratch accessible to the same-user medium token.
+
+    Windows tempfile uses OWNER RIGHTS. An elevated runner can create objects
+    owned by Administrators, which the installer client's token disables. Use
+    the explicit user SID on the directory and its children instead; never
+    relax the runner temp root or change an existing directory's permissions.
+    """
+    parent = Path(parent).absolute()
+    if _has_link_component(parent):
+        raise ValueError("MSI scratch parent must not traverse a link")
+    if os.name != "nt":
+        return Path(tempfile.mkdtemp(prefix="spark-msi-", dir=parent)).resolve()
+
+    def api(library, name, restype, argtypes):
+        function = getattr(ctypes.WinDLL(library, use_last_error=True), name)
+        function.restype, function.argtypes = restype, argtypes
+        return function
+
+    def require(result, operation):
+        if not result:
+            raise ctypes.WinError(ctypes.get_last_error(), operation)
+
+    class SecurityAttributes(ctypes.Structure):
+        _fields_ = [("nLength", wintypes.DWORD), ("lpSecurityDescriptor", wintypes.LPVOID),
+                    ("bInheritHandle", wintypes.BOOL)]
+
+    local_free = api("kernel32", "LocalFree", wintypes.LPVOID, [wintypes.LPVOID])
+    token = wintypes.HANDLE()
+    user_text = wintypes.LPWSTR()
+    descriptor = wintypes.LPVOID()
+    try:
+        process = api("kernel32", "GetCurrentProcess", wintypes.HANDLE, [])()
+        require(api("advapi32", "OpenProcessToken", wintypes.BOOL,
+                    [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)])(
+                        process, 0x0008, ctypes.byref(token)), "OpenProcessToken for MSI scratch")
+        user = ctypes.create_string_buffer(4096)
+        length = wintypes.DWORD()
+        require(api("advapi32", "GetTokenInformation", wintypes.BOOL,
+                    [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+                     ctypes.POINTER(wintypes.DWORD)])(token, 1, user, len(user), ctypes.byref(length)),
+                "GetTokenInformation(TokenUser) for MSI scratch")
+        # TOKEN_USER starts with SID_AND_ATTRIBUTES, whose first field is PSID.
+        user_sid = ctypes.cast(user, ctypes.POINTER(wintypes.LPVOID)).contents
+        require(api("advapi32", "ConvertSidToStringSidW", wintypes.BOOL,
+                    [wintypes.LPVOID, ctypes.POINTER(wintypes.LPWSTR)])(user_sid, ctypes.byref(user_text)),
+                "ConvertSidToStringSidW for MSI scratch")
+        sddl = (f"O:{user_text.value}D:P(A;OICI;FA;;;{user_text.value})"
+                "(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+        require(api("advapi32", "ConvertStringSecurityDescriptorToSecurityDescriptorW", wintypes.BOOL,
+                    [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(wintypes.LPVOID), wintypes.LPVOID])(
+                        sddl, 1, ctypes.byref(descriptor), None), "Convert MSI scratch security descriptor")
+        # Windows renders well-known SID strings as aliases (SY/LS/NS).
+        # Canonicalize both descriptors before comparing their exact contents.
+        expected_sddl = _security_descriptor_sddl(descriptor)
+        attributes = SecurityAttributes(ctypes.sizeof(SecurityAttributes), descriptor, False)
+        create = api("kernel32", "CreateDirectoryW", wintypes.BOOL,
+                     [wintypes.LPCWSTR, ctypes.POINTER(SecurityAttributes)])
+        for _ in range(32):
+            scratch = parent / ("spark-msi-" + secrets.token_hex(16))
+            if create(str(scratch), ctypes.byref(attributes)):
+                break
+            if ctypes.get_last_error() != 183:  # ERROR_ALREADY_EXISTS: choose another name, never reuse.
+                require(False, "CreateDirectoryW for MSI scratch")
+        else:
+            raise OSError("could not allocate fresh MSI scratch")
+        # Fail closed on filesystems that ignore security descriptors or a
+        # directory whose owner/ACL differs. Only this freshly created leaf is
+        # inspected; there is no repair of an arbitrary existing temp path.
+        security = ctypes.create_string_buffer(4096)
+        require(api("advapi32", "GetFileSecurityW", wintypes.BOOL,
+                    [wintypes.LPCWSTR, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+                     ctypes.POINTER(wintypes.DWORD)])(str(scratch), 0x5, security, len(security), ctypes.byref(length)),
+                "Read MSI scratch owner and DACL")
+        if _security_descriptor_sddl(security) != expected_sddl or _has_link_component(scratch):
+            raise ValueError("MSI scratch owner or private ACL did not match the requested security descriptor")
+        return scratch
+    finally:
+        for allocation in (descriptor, user_text):
+            if allocation:
+                local_free(allocation)
+        if token:
+            _CloseHandle(token)
 
 
 @contextmanager
@@ -664,7 +768,7 @@ def _qualify_impl(packages, version, manifest, runner_temp, logs, *, runner=run_
             })
             report.update(previous_msi=old_package.name, previous_sha256=old_digest,
                           previous_shipping_package_manifest=str(previous_package_manifest))
-        scratch = Path(tempfile.mkdtemp(prefix="spark-msi-", dir=runner_temp)).resolve()
+        scratch = _create_msi_scratch(runner_temp)
         install_root = scratch / "install"
         local_app_data = scratch / "localappdata"
         user_data_root = local_app_data / "SparkEngine"
