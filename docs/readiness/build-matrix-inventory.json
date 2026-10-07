@@ -1378,7 +1378,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4611,
+      "line": 4612,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1387,10 +1387,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4022,
+      "line": 4023,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4017",
+          "id": "Tests/CMakeLists.txt:4018",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1404,7 +1404,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4649,
+      "line": 4650,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1413,7 +1413,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4825,
+      "line": 4826,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1422,10 +1422,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 3965,
+      "line": 3966,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3893",
+          "id": "Tests/CMakeLists.txt:3894",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1439,7 +1439,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 5089,
+      "line": 5090,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1457,7 +1457,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1960,
+      "line": 1961,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1544,7 +1544,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1818,
+      "line": 1819,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2663,10 +2663,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2318,
+      "line": 2319,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2317",
+          "id": "Tests/CMakeLists.txt:2318",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2799,10 +2799,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5816,
+      "line": 5817,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5814",
+          "id": "Tests/CMakeLists.txt:5815",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -3015,10 +3015,10 @@
       "target": "SparkFPSLANLoopbackPeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1558,
+      "line": 1559,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1520",
+          "id": "Tests/CMakeLists.txt:1521",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -4170,10 +4170,10 @@
       "target": "SparkMMOSessionGatePeer",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 1527,
+      "line": 1528,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:1520",
+          "id": "Tests/CMakeLists.txt:1521",
           "branch": 0,
           "branches": [
             "ENABLE_NETWORKING"
@@ -5496,7 +5496,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2318,
+          "line": 2319,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5604,7 +5604,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5816,
+          "line": 5817,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5838,7 +5838,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1558,
+          "line": 1559,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7774,7 +7774,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 1527,
+          "line": 1528,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],

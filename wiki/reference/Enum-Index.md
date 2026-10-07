@@ -286,7 +286,7 @@
 | `entity` | enum | SparkEngine | [TerrainRenderer.h:L41](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L41) |  |
 | `EntityEventCleanupMode` | enum | SparkEngine | [Components.h:L72](../../SparkEngine/Source/Engine/ECS/Components.h#L72) |  |
 | `EventCategory` | enum | SparkEditor | [EventMonitorPanel.h:L36](../../SparkEditor/Source/Panels/EventMonitorPanel.h#L36) |  |
-| `EventPriority` | enum | SparkEngine | [EventSystem.h:L298](../../SparkEngine/Source/Engine/Events/EventSystem.h#L298) | Dispatch priority tier for queued events. |
+| `EventPriority` | enum | SparkSDK | [EventSystem.h:L301](../../SparkSDK/Include/Spark/EventSystem.h#L301) | Dispatch priority tier for queued events. |
 | `EventState` | enum | GameModules | [OpenWorldEnums.h:L180](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L180) | Event lifecycle state |
 | `EventTriggerType` | enum | SparkEngine | [EventResponseSystem.h:L42](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L42) | Types of events that can trigger a rule |
 | `EventTriggerType` | enum | Tests | [TestEventResponseSystem.cpp:L19](../../Tests/TestEventResponseSystem.cpp#L19) |  |
