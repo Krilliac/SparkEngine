@@ -3,8 +3,8 @@
     "initialized": true,
     "baseTotal": 0,
     "baseInstallerTotal": 0,
-    "total": 73,
-    "installerTotal": 42,
+    "total": 80,
+    "installerTotal": 45,
     "assets": [
         {
             "id": 530455809,
@@ -18,7 +18,7 @@
             "id": 530455812,
             "releaseId": 376952823,
             "name": "SparkInstaller-Linux-x64",
-            "downloadCount": 1,
+            "downloadCount": 2,
             "digest": "sha256:6010b06fcd84a6c2b502286688c0e08c71f9d603444ef66ea1f96016207c8a47",
             "state": "uploaded"
         },
@@ -58,7 +58,7 @@
             "id": 530455817,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Release-Runtime.exe",
-            "downloadCount": 2,
+            "downloadCount": 3,
             "digest": "sha256:ce0db59259ba56a4f9e538bc754180ab6aa10711366be6c5f8f51ba2654c0419",
             "state": "uploaded"
         },
@@ -66,7 +66,7 @@
             "id": 530455818,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Debug.zip",
-            "downloadCount": 1,
+            "downloadCount": 3,
             "digest": "sha256:8efb05653deed700d9e69752860e80c1f2e71a728f2f937754bc601140feb743",
             "state": "uploaded"
         },
@@ -90,7 +90,7 @@
             "id": 530455821,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Linux-x86_64-Release.zip",
-            "downloadCount": 2,
+            "downloadCount": 4,
             "digest": "sha256:3d799d9244315974e77278f2da44c432a6d32cfe05eb75b007a7c29c974e5656",
             "state": "uploaded"
         },
@@ -106,7 +106,7 @@
             "id": 530455829,
             "releaseId": 376952823,
             "name": "SparkEngine-1.0.0-Windows-AMD64-Debug-Runtime.exe",
-            "downloadCount": 2,
+            "downloadCount": 3,
             "digest": "sha256:e5478a7bd53b90ba0df54004c9dd4c715ded2613833dcd4397f998745d2bf158",
             "state": "uploaded"
         },
@@ -163,5 +163,5 @@
         538847551
     ],
     "pending": null,
-    "updated": "2026-10-06T22:26:58Z"
+    "updated": "2026-10-07T04:47:38Z"
 }
