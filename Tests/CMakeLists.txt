@@ -1218,6 +1218,7 @@ target_sources(SparkTests PRIVATE
     TestRHI210D3D11SceneGoldenReal.cpp
     TestRHI210D3D11WorldGoldenReal.cpp
     TestRHI210D3D11PrimaryGoldenReal.cpp
+    TestPlaneObjectFallbackReal.cpp
     TestRHI210D3D11DeferredResolveReal.cpp
     TestRHI210D3D11ValidationReal.cpp
     TestRHI210D3D11DeviceLossReal.cpp

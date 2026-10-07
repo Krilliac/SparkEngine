@@ -201,6 +201,10 @@ int main()
             if (!failOnLoad)
                 check(console.HasCommand("registry_fixture_status"),
                       "Normal module load must register its own command");
+            if (initialized)
+                check(manager.ShutdownAll(), "Active modules must complete shutdown before image unload");
+            else
+                check(!manager.HasInitializedModules(), "Failed load must leave no active module");
             manager.UnloadAll();
             check(!console.HasCommand("registry_fixture_status"),
                   "Unload or failed-load cleanup must remove module commands");
