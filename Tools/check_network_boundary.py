@@ -37,6 +37,8 @@ SOURCE_ROOTS = (
     ROOT / "SparkSDK" / "Include",
     ROOT / "SparkServer" / "src",
     ROOT / "SparkShaderCompiler" / "src",
+    ROOT / "SparkUI" / "Include",
+    ROOT / "SparkUI" / "Source",
     ROOT / "SparkWorker" / "src",
     ROOT / "GameModules",
     ROOT / "Templates",

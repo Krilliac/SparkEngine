@@ -195,7 +195,7 @@ namespace Spark::Ui
 
     void KeyHint(const char* keys)
     {
-        ScopedFont small(FontRole::Small);
+        ScopedFont smallFont(FontRole::Small);
         ImGui::PushStyleColor(ImGuiCol_Text, ColV(Role::TextSecondary));
         ImGui::TextUnformatted(keys != nullptr ? keys : "");
         ImGui::PopStyleColor();
@@ -475,7 +475,7 @@ namespace Spark::Ui
 
     void Badge(const char* label, Status s)
     {
-        ScopedFont small(FontRole::Small);
+        ScopedFont smallFont(FontRole::Small);
         Pill(label != nullptr ? label : "", StatusFillRole(s), StatusTextRole(s), Role::BorderSubtle, Px(3.0f));
     }
 

@@ -20,6 +20,11 @@ namespace Spark::Ui
         {
             return 1.0f;
         }
+#ifdef __APPLE__
+        // macOS reports logical points; the SDL2 ImGui backend already applies the Retina backing ratio through
+        // DisplayFramebufferScale, so multiplying it in here would draw the UI at double size (spec section 2.8).
+        const float scale = 1.0f;
+#else
         int windowWidth = 0;
         int windowHeight = 0;
         int drawableWidth = 0;
@@ -29,7 +34,6 @@ namespace Spark::Ui
         float scale = windowWidth > 0 && drawableWidth > 0
                           ? static_cast<float>(drawableWidth) / static_cast<float>(windowWidth)
                           : 1.0f;
-#ifndef __APPLE__
         float diagonalDpi = 0.0f;
         float horizontalDpi = 0.0f;
         float verticalDpi = 0.0f;

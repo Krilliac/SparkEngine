@@ -250,7 +250,7 @@ namespace Spark::Ui
         switch (r)
         {
         case FontRole::Small:
-            return type.small;
+            return type.caption;
         case FontRole::Body:
             return type.body;
         case FontRole::Strong:

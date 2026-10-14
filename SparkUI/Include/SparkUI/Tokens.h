@@ -160,7 +160,7 @@ namespace Spark::Ui
     /// @brief Logical font sizes in pixels at 100 % for each FontRole.
     struct Typography
     {
-        float small = 13.0f;
+        float caption = 13.0f;
         float body = 15.0f;
         float strong = 15.0f;
         float h2 = 17.0f;

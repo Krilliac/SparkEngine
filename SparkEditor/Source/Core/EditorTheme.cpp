@@ -672,7 +672,7 @@ namespace SparkEditor
         // Every typographic role keeps its ratio to the body size the theme asks for.
         const float typeScale = SaneFactor(theme.fontSize, kBodyFontSize) / kBodyFontSize;
         Spark::Ui::Typography& type = t.type;
-        type.small *= typeScale;
+        type.caption *= typeScale;
         type.body *= typeScale;
         type.strong *= typeScale;
         type.h2 *= typeScale;

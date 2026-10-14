@@ -323,7 +323,7 @@ namespace Spark::Ui
         set(Sdk::UiRole::SurfaceOverlay, Role::SurfaceOverlay);
         out.scale = Scale();
         out.fontBody = t.type.body;
-        out.fontSmall = t.type.small;
+        out.fontSmall = t.type.caption;
         out.fontH1 = t.type.h1;
         out.reduceMotion = ReduceMotion() ? 1 : 0;
         out.highContrast = t.appearance == Appearance::HighContrast ? 1 : 0;
