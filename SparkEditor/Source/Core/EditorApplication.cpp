@@ -14,6 +14,9 @@
 #include "EditorApplication.h"
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "EditorTheme.h"
+#include "EditorPreferences.h"
+#include "SparkUI/Runtime.h"
 #include "EditorWindowManager.h"
 #include "Core/FaultIsolation.h"
 #include "EditorCrashHandler.h"
@@ -24,6 +27,7 @@
 #include "Utils/LogMacros.h"
 #include <memory>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 
 // Dear ImGui includes
@@ -51,6 +55,52 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// Appearance the operating system asks for: high contrast wins, then the app light/dark
+        /// setting. Linux/SDL builds have no portable query and report Dark.
+        Spark::Ui::Appearance SystemAppearance()
+        {
+#ifdef _WIN32
+            HIGHCONTRASTW highContrast{};
+            highContrast.cbSize = sizeof(highContrast);
+            if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(highContrast), &highContrast, 0) != FALSE &&
+                (highContrast.dwFlags & HCF_HIGHCONTRASTON) != 0)
+            {
+                return Spark::Ui::Appearance::HighContrast;
+            }
+            DWORD appsUseLightTheme = 0;
+            DWORD valueSize = sizeof(appsUseLightTheme);
+            const LSTATUS status =
+                RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                             L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &appsUseLightTheme, &valueSize);
+            if (status == ERROR_SUCCESS && appsUseLightTheme != 0)
+            {
+                return Spark::Ui::Appearance::Light;
+            }
+#endif
+            return Spark::Ui::Appearance::Dark;
+        }
+
+        /// Appearance override for a stored preference; "dark" (and anything unknown) keeps the
+        /// palette's own appearance.
+        std::optional<Spark::Ui::Appearance> AppearanceOverrideFor(const std::string& appearance)
+        {
+            if (appearance == "light")
+            {
+                return Spark::Ui::Appearance::Light;
+            }
+            if (appearance == "hc")
+            {
+                return Spark::Ui::Appearance::HighContrast;
+            }
+            if (appearance == "system")
+            {
+                return SystemAppearance();
+            }
+            return std::nullopt;
+        }
+    } // namespace
 
     // Out-of-class definition of the static application pointer. The
     // declaration lives in EditorApplication.h so WindowProc and other
@@ -101,6 +151,7 @@ namespace SparkEditor
         m_config = config;
         m_windowWidth = config.windowWidth;
         m_windowHeight = config.windowHeight;
+        ApplyStartupPreferences(m_config);
 
         // Create main editor window
         console.LogInfo("Creating main editor window...");
@@ -147,7 +198,7 @@ namespace SparkEditor
         // Initialize EditorUI (this creates all panels including console)
         console.LogInfo("Initializing EditorUI...");
         m_ui = std::make_unique<EditorUI>();
-        if (!m_ui->Initialize(config))
+        if (!m_ui->Initialize(m_config))
         {
             console.LogError("Failed to initialize EditorUI");
             return failInitialization();
@@ -208,6 +259,44 @@ namespace SparkEditor
         console.LogInfo("All editor operations will be logged to external console");
 
         return true;
+    }
+
+    void EditorApplication::ApplyStartupPreferences(EditorConfig& config)
+    {
+        // Bounded/test launches stay deterministic: they never read the user's preferences.
+        if (!config.testMode)
+        {
+            std::string error;
+            const std::filesystem::path preferencesFile = EditorPreferencesPath();
+            std::error_code existsError;
+            if (std::filesystem::exists(preferencesFile, existsError) &&
+                !LoadEditorPreferences(preferencesFile, m_preferences, &error))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Ignoring editor preferences '%s': %s",
+                               preferencesFile.string().c_str(), error.c_str());
+            }
+        }
+
+        // --theme applies to this session only and leaves the saved appearance and density alone.
+        if (config.startupTheme.empty())
+        {
+            config.startupTheme = m_preferences.palette;
+            EditorTheme::SetAppearanceOverride(AppearanceOverrideFor(m_preferences.appearance));
+            EditorTheme::SetDensity(m_preferences.density);
+        }
+    }
+
+    void EditorApplication::OnDpiChanged(float dpiScale)
+    {
+        if (!(dpiScale > 0.0f) || dpiScale == m_dpiScale)
+        {
+            return;
+        }
+        m_dpiScale = dpiScale;
+        if (m_imguiInitialized)
+        {
+            EditorTheme::SetUiScale(dpiScale, Spark::Ui::UserScale());
+        }
     }
 
     // Platform-specific methods (CreateMainWindow, InitializeGraphics, Run, Shutdown)

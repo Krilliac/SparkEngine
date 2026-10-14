@@ -3,10 +3,11 @@
  * @brief Out-of-process crash report handler
  *
  * Standalone application launched by SparkEngine at startup. Monitors the
- * engine process and, when a crash is detected, shows a user-facing dialog
- * with consent, screenshot selection, and local report review. A separate
- * user-local opt-in may create a metadata-only GitHub Issue via the user's
- * authenticated GitHub CLI. Manifest fields cannot enable network delivery.
+ * engine process and, when a crash is detected, asks for consent through a
+ * native dialog (Windows) or a console prompt (elsewhere) and reviews the
+ * manifest and log locally. A separate user-local opt-in may create a
+ * metadata-only GitHub Issue via the user's authenticated GitHub CLI.
+ * Manifest fields cannot enable network delivery.
  *
  * Communication:
  *   Engine writes a crash manifest file (JSON) to a known path, then signals
@@ -15,7 +16,7 @@
  *
  * Why out-of-process:
  *   - Survives total process corruption (heap trashed, stack overflow)
- *   - Can show a proper GUI with text input (not just MessageBox buttons)
+ *   - Can ask for consent before anything is published
  *   - Non-blocking: engine process can terminate immediately
  *   - Reliable crash-artifact collection after the engine exits
  */
@@ -105,9 +106,45 @@ namespace SparkCrashReporter
         std::function<void(const std::string& message, bool confirmed)> notifyIssueOutcome;
     };
 
-    /// The platform dialogs: MessageBoxes on Windows; elsewhere a stdin
-    /// [Y/n] / [y/N] question, and the outcome goes to stderr only. An
-    /// unanswered question declines.
+    /// Icon of a native dialog.
+    enum class DialogIcon
+    {
+        Information,
+        Warning,
+        Shield ///< Marks a question whose yes authorizes a public post
+    };
+
+    /// One native dialog to show. Text is UTF-8.
+    struct DialogRequest
+    {
+        std::string title;
+        std::string instruction; ///< Optional main instruction shown above the content
+        std::string content;
+        DialogIcon icon = DialogIcon::Information;
+        bool askYesNo = false;  ///< Yes/No buttons; otherwise a single OK
+        bool defaultNo = false; ///< No is the default button (Yes/No dialogs only)
+    };
+
+    /// What the user did with a dialog. Failed means the dialog could not be shown.
+    enum class DialogAnswer
+    {
+        Yes,
+        No,
+        Failed
+    };
+
+    /// Shows one dialog and reports the answer. Called on the reporter's thread only.
+    using DialogBackend = std::function<DialogAnswer(const DialogRequest&)>;
+
+    /// Builds the reporter dialogs on top of @p backend. A question is confirmed
+    /// only by DialogAnswer::Yes: Failed, No, an empty backend or a throwing
+    /// backend all decline. This is the seam for the native dialogs and for tests.
+    ReporterUi MakeDialogReporterUi(DialogBackend backend);
+
+    /// The platform dialogs: TaskDialogs (MessageBoxW fallback) on Windows;
+    /// elsewhere a stdin [Y/n] / [y/N] question, and the outcome goes to
+    /// stderr only. An unanswered question or a dialog that cannot be shown
+    /// declines.
     ReporterUi PlatformReporterUi();
 
     /// Run the crash reporter UI and prepare the local report

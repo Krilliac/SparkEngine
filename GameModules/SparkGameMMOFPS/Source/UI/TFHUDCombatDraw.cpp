@@ -25,6 +25,7 @@
 #include "Camera/SparkEngineCamera.h"
 #include "Net/TFClientNet.h"
 #include "Net/TFNetProtocol.h"
+#include "UI/TFHUDInternal.h" // HudDetail::FactionCol, Spark::Ui::Sdk (HudFont, PushSuccessButton)
 #include "UI/TFMapScreen.h"
 #include "UI/TFMinimap.h" // minimap-v2 lane (W13): corner-minimap-v3 delegate (UI/TFMinimap.cpp)
 #include "UI/TFSpawnScreen.h"
@@ -50,17 +51,11 @@ namespace Terrafront
         constexpr float kKillfeedFadeSec = 2.0f;
         constexpr float kDeployDebounceSec = 1.0f;
 
-        ImU32 CombatFactionCol(FactionId f, float alpha = 1.0f)
-        {
-            float c[4];
-            FactionColor(f, c);
-            return ImGui::ColorConvertFloat4ToU32(ImVec4(c[0], c[1], c[2], alpha));
-        }
-
         void CombatTextCentered(ImDrawList* dl, float fontSize, ImVec2 center, ImU32 col, const char* text)
         {
-            ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontSize, 1e9f, 0.0f, text);
-            dl->AddText(ImGui::GetFont(), fontSize, ImVec2(center.x - sz.x * 0.5f, center.y - sz.y * 0.5f), col, text);
+            ImFont* font = Spark::Ui::Sdk::HudFont();
+            ImVec2 sz = font->CalcTextSizeA(fontSize, 1e9f, 0.0f, text);
+            dl->AddText(font, fontSize, ImVec2(center.x - sz.x * 0.5f, center.y - sz.y * 0.5f), col, text);
         }
 
     } // namespace
@@ -90,13 +85,13 @@ namespace Terrafront
                 dl->AddRectFilled(ImVec2(x - 6.0f, y - 2.0f), ImVec2(right + 6.0f, y + wK.y + 2.0f),
                                   ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 1.0f, 0.12f * a)), 3.0f);
             }
-            dl->AddText(ImVec2(x, y), CombatFactionCol(e.killerF, a), e.killer.c_str());
+            dl->AddText(ImVec2(x, y), HudDetail::FactionCol(e.killerF, a), e.killer.c_str());
             x += wK.x;
             dl->AddText(ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(ImVec4(0.75f, 0.75f, 0.75f, a)), mid.c_str());
             x += wM.x;
             dl->AddText(ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.35f, 0.25f, a)), hs);
             x += wH.x;
-            dl->AddText(ImVec2(x, y), CombatFactionCol(e.victimF, a), e.victim.c_str());
+            dl->AddText(ImVec2(x, y), HudDetail::FactionCol(e.victimF, a), e.victim.c_str());
             y += wK.y + 4.0f;
         }
     }
@@ -225,12 +220,10 @@ namespace Terrafront
             return;
         }
 
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.42f, 0.20f, 0.90f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.56f, 0.26f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.24f, 0.68f, 0.30f, 1.0f));
+        Spark::Ui::Sdk::PushSuccessButton();
         if (ImGui::Button("DEPLOY SCREEN", ImVec2(150.0f, 34.0f)) && m_ctx->spawnUI)
             m_ctx->spawnUI->Open();
-        ImGui::PopStyleColor(3);
+        Spark::Ui::Sdk::PopSuccessButton();
         ImGui::SameLine();
         if (ImGui::Button("MAP", ImVec2(90.0f, 34.0f)) && m_ctx->map)
             m_ctx->map->Open();

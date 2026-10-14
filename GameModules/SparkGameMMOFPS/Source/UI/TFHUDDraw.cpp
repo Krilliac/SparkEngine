@@ -55,8 +55,9 @@ namespace Terrafront
 
         void AddTextCentered(ImDrawList* dl, float fontSize, ImVec2 center, ImU32 col, const char* text)
         {
-            ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontSize, 1e9f, 0.0f, text);
-            dl->AddText(ImGui::GetFont(), fontSize, ImVec2(center.x - sz.x * 0.5f, center.y - sz.y * 0.5f), col, text);
+            ImFont* font = Spark::Ui::Sdk::HudFont();
+            ImVec2 sz = font->CalcTextSizeA(fontSize, 1e9f, 0.0f, text);
+            dl->AddText(font, fontSize, ImVec2(center.x - sz.x * 0.5f, center.y - sz.y * 0.5f), col, text);
         }
 
         const char* ClassFallbackName(ClassId c)
@@ -304,9 +305,10 @@ namespace Terrafront
         else
             std::snprintf(ammo, sizeof(ammo), "-- | --"); // not fed yet (SetWeaponStatus)
         const float ammoSize = 30.0f;
-        ImVec2 ammoSz = ImGui::GetFont()->CalcTextSizeA(ammoSize, 1e9f, 0.0f, ammo);
-        dl->AddText(ImGui::GetFont(), ammoSize, ImVec2(corner.x - ammoSz.x, corner.y - 34.0f),
-                    IM_COL32(240, 240, 240, 235), ammo);
+        ImFont* ammoFont = Spark::Ui::Sdk::HudFontBold();
+        ImVec2 ammoSz = ammoFont->CalcTextSizeA(ammoSize, 1e9f, 0.0f, ammo);
+        dl->AddText(ammoFont, ammoSize, ImVec2(corner.x - ammoSz.x, corner.y - 34.0f), IM_COL32(240, 240, 240, 235),
+                    ammo);
 
         // grenades lane (W10): frag count above the weapon name in the ammo
         // cluster (authoritative via TF_GrenadeSpawn's `remaining` echo).

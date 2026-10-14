@@ -1,6 +1,8 @@
 /**
  * @file EditorDockLayout.h
  * @brief Default dock geometry shared by the editor and layout regression tests.
+ *
+ * Thread affinity: main (ImGui) thread only; the builders mutate the current context's dock tree.
  */
 #pragma once
 
@@ -26,14 +28,17 @@ namespace SparkEditor
     }
 
     /// Build geometry for first launch or explicit Reset Layout, never each frame.
-    inline EditorDockNodes BuildEditorDockLayout(ImGuiID root, ImVec2 size)
+    /// @param scale Effective UI scale (Spark::Ui::Scale()); the toolbar strip grows with it so
+    ///              scaled toolbar buttons are not clipped. Non-finite or non-positive means 1.
+    inline EditorDockNodes BuildEditorDockLayout(ImGuiID root, ImVec2 size, float scale)
     {
         ImGui::DockBuilderRemoveNode(root);
         ImGui::DockBuilderAddNode(root, ImGuiDockNodeFlags_DockSpace);
         ImGui::DockBuilderSetNodeSize(root, size);
         ImGuiID main = root;
         EditorDockNodes nodes{};
-        const float toolbarHeight = EditorToolbarButtonSize + 2.0f * EditorToolbarPaddingY;
+        const float saneScale = (scale > 0.0f && scale < 1.0e6f) ? scale : 1.0f;
+        const float toolbarHeight = ImFloor((EditorToolbarButtonSize + 2.0f * EditorToolbarPaddingY) * saneScale);
         const float splitHeight = ImMax(1.0f, size.y - ImGui::GetStyle().DockingSeparatorSize);
         ImGui::DockBuilderSplitNode(main, ImGuiDir_Up, ImClamp(toolbarHeight / splitHeight, 0.0f, 0.95f),
                                     &nodes.toolbar, &main);
@@ -48,5 +53,11 @@ namespace SparkEditor
         ImGui::DockBuilderSplitNode(main, ImGuiDir_Right, 0.22f, &nodes.right, &main);
         ImGui::DockBuilderSplitNode(main, ImGuiDir_Down, 0.25f, &nodes.bottom, &nodes.center);
         return nodes;
+    }
+
+    /// Unscaled form (100 %) kept for existing callers and layout regression tests.
+    inline EditorDockNodes BuildEditorDockLayout(ImGuiID root, ImVec2 size)
+    {
+        return BuildEditorDockLayout(root, size, 1.0f);
     }
 } // namespace SparkEditor

@@ -129,12 +129,20 @@ if(IMGUI_FOUND)
     target_link_libraries(SparkEditor PRIVATE imgui)
 endif()
 
+# Spark UI kit: style, fonts, DPI, runtime and widgets over the SparkUITokens palette (the root
+# CMakeLists links SparkUITokens). Core/EditorPreferences*.cpp come in through the source glob.
+if(TARGET SparkUIKit)
+    target_link_libraries(SparkEditor PRIVATE SparkUIKit)
+endif()
+
 if(WIN32)
     target_link_libraries(SparkEditor PRIVATE
         d3d11 dxgi d3dcompiler dxguid
         kernel32 user32 gdi32 winspool comdlg32 advapi32 shell32 ole32 oleaut32 uuid
-        odbc32 odbccp32 winmm shlwapi comctl32 version
+        odbc32 odbccp32 winmm shlwapi comctl32 version dwmapi
     )
+    # Application icon (IDI_SPARK_APP) for the window class, taskbar and Explorer.
+    target_sources(SparkEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources/SparkEditor.rc")
 else()
     # Linux libraries (ImGui ships its own GL loader — no GLEW needed)
     # SDL2 may come from ThirdParty submodule or system install
@@ -176,15 +184,8 @@ add_custom_command(TARGET SparkEditor POST_BUILD
     COMMENT "Creating SparkEditor directory structure"
 )
 
-# Copy fonts to output directory
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Fonts")
-    add_custom_command(TARGET SparkEditor POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/Fonts"
-            "$<TARGET_FILE_DIR:SparkEditor>/EditorAssets/Fonts"
-        COMMENT "Copying editor fonts"
-    )
-endif()
+# Stage the Spark UI fonts (and their licences) to EditorAssets/Fonts next to the executable.
+spark_stage_ui_fonts(SparkEditor)
 
 # Dependencies
 if(TARGET SparkEngine)

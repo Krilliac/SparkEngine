@@ -124,9 +124,15 @@ int main(int argc, char* argv[])
     {
 #ifdef SPARKINSTALLER_ENABLE_GUI
         ctx.frontend = SparkInstaller::Frontend::Gui;
-        if (!SparkInstaller::WizardGui::Run(ctx))
-            return 0;
-        return SparkInstaller::Installer::Run(ctx);
+        // The wizard runs the install itself (on a worker thread, to show progress), so its exit
+        // code is the install's: a failed install must not look like success to a script.
+        SparkInstaller::WizardGui wizard;
+        if (!wizard.Run(ctx))
+        {
+            std::cerr << "error: the GUI could not start. Rerun without --gui.\n";
+            return 2;
+        }
+        return wizard.ExitCode();
 #else
         std::cerr << "error: this build was compiled without GUI support. Rerun without --gui.\n";
         return 2;

@@ -2722,6 +2722,8 @@ TEST(PluginManager_RejectsForwardMinorStableABIPlugin)
 #include "Panels/InspectorPanel.h"
 #include "Core/EditorDockLayout.h"
 #include "Core/EditorNotificationManager.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/TokenAudit.h"
 
 TEST(Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate)
 {
@@ -2780,6 +2782,46 @@ TEST(Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset)
 
     ImGui::DockBuilderRemoveNode(root);
     EXPECT_TRUE(NeedsDefaultEditorDockLayout(root, false));
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorDockLayout_ScaleOverloadDefaultsToOne)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 1080.0f);
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    ImGui::NewFrame();
+    ImGui::Begin("##DockLayoutScaleTest");
+
+    const ImGuiID root = 0x53444F43;
+    const auto toolbarHeight = [root](const EditorDockNodes& nodes)
+    {
+        const auto* toolbar = ImGui::DockBuilderGetNode(nodes.toolbar);
+        EXPECT_TRUE(toolbar != nullptr);
+        const float height = toolbar ? toolbar->Size.y : -1.0f;
+        ImGui::DockBuilderRemoveNode(root);
+        return height;
+    };
+    const ImVec2 size(1280.0f, 1080.0f);
+    const float unscaled = EditorToolbarButtonSize + 2.0f * EditorToolbarPaddingY;
+    const float defaultHeight = toolbarHeight(BuildEditorDockLayout(root, size));
+    const float explicitOne = toolbarHeight(BuildEditorDockLayout(root, size, 1.0f));
+    const float scaled = toolbarHeight(BuildEditorDockLayout(root, size, 1.5f));
+    const float invalid = toolbarHeight(BuildEditorDockLayout(root, size, -2.0f));
+    EXPECT_NEAR(defaultHeight, unscaled, 1.0f);
+    EXPECT_NEAR(explicitOne, defaultHeight, 0.001f);
+    EXPECT_NEAR(scaled, unscaled * 1.5f, 1.0f);
+    EXPECT_NEAR(invalid, unscaled, 1.0f);
+
     ImGui::End();
     ImGui::EndFrame();
     ImGui::DestroyContext(context);
@@ -3053,6 +3095,216 @@ TEST(Gated_EditorTheme_BuiltinThemes)
     EXPECT_TRUE(!unreal.name.empty());
     EXPECT_TRUE(!vs.name.empty());
     EXPECT_TRUE(!jetbrains.name.empty());
+}
+
+namespace
+{
+    struct ThemeColourField
+    {
+        const char* name;
+        ThemeColor EditorThemeData::*member;
+    };
+
+    // Every ThemeColor member of EditorThemeData, listed independently of EditorTheme.cpp so a
+    // field the adapter forgets shows up as a colour that reaches no sink.
+    const ThemeColourField kAllThemeColourFields[] = {
+        {"background", &EditorThemeData::background},
+        {"backgroundDark", &EditorThemeData::backgroundDark},
+        {"backgroundLight", &EditorThemeData::backgroundLight},
+        {"backgroundAccent", &EditorThemeData::backgroundAccent},
+        {"backgroundHeader", &EditorThemeData::backgroundHeader},
+        {"backgroundActive", &EditorThemeData::backgroundActive},
+        {"backgroundHover", &EditorThemeData::backgroundHover},
+        {"backgroundSelected", &EditorThemeData::backgroundSelected},
+        {"text", &EditorThemeData::text},
+        {"textDisabled", &EditorThemeData::textDisabled},
+        {"textSecondary", &EditorThemeData::textSecondary},
+        {"textAccent", &EditorThemeData::textAccent},
+        {"textWarning", &EditorThemeData::textWarning},
+        {"textError", &EditorThemeData::textError},
+        {"textSuccess", &EditorThemeData::textSuccess},
+        {"button", &EditorThemeData::button},
+        {"buttonHovered", &EditorThemeData::buttonHovered},
+        {"buttonActive", &EditorThemeData::buttonActive},
+        {"buttonDisabled", &EditorThemeData::buttonDisabled},
+        {"frame", &EditorThemeData::frame},
+        {"frameHovered", &EditorThemeData::frameHovered},
+        {"frameActive", &EditorThemeData::frameActive},
+        {"border", &EditorThemeData::border},
+        {"borderLight", &EditorThemeData::borderLight},
+        {"borderAccent", &EditorThemeData::borderAccent},
+        {"borderSeparator", &EditorThemeData::borderSeparator},
+        {"titleBar", &EditorThemeData::titleBar},
+        {"titleBarActive", &EditorThemeData::titleBarActive},
+        {"titleBarText", &EditorThemeData::titleBarText},
+        {"menuBar", &EditorThemeData::menuBar},
+        {"menuItem", &EditorThemeData::menuItem},
+        {"menuItemHovered", &EditorThemeData::menuItemHovered},
+        {"scrollbar", &EditorThemeData::scrollbar},
+        {"scrollbarGrab", &EditorThemeData::scrollbarGrab},
+        {"scrollbarGrabHovered", &EditorThemeData::scrollbarGrabHovered},
+        {"scrollbarGrabActive", &EditorThemeData::scrollbarGrabActive},
+        {"tab", &EditorThemeData::tab},
+        {"tabHovered", &EditorThemeData::tabHovered},
+        {"tabActive", &EditorThemeData::tabActive},
+        {"tabUnfocused", &EditorThemeData::tabUnfocused},
+        {"accent", &EditorThemeData::accent},
+        {"accentSecondary", &EditorThemeData::accentSecondary},
+        {"focus", &EditorThemeData::focus},
+        {"selection", &EditorThemeData::selection},
+        {"drop", &EditorThemeData::drop},
+        {"graph1", &EditorThemeData::graph1},
+        {"graph2", &EditorThemeData::graph2},
+        {"graph3", &EditorThemeData::graph3},
+        {"graph4", &EditorThemeData::graph4},
+        {"graph5", &EditorThemeData::graph5},
+        {"borderStrong", &EditorThemeData::borderStrong},
+        {"surfaceOverlay", &EditorThemeData::surfaceOverlay},
+        {"surfaceSelectedUnfocused", &EditorThemeData::surfaceSelectedUnfocused},
+        {"textOnAccent", &EditorThemeData::textOnAccent},
+        {"textInfo", &EditorThemeData::textInfo},
+        {"accentHover", &EditorThemeData::accentHover},
+        {"accentActive", &EditorThemeData::accentActive},
+        {"accentText", &EditorThemeData::accentText},
+    };
+
+    bool SameRgb(float r, float g, float b, const ThemeColor& c)
+    {
+        constexpr float kTolerance = 0.0001f;
+        return std::fabs(r - c.r) < kTolerance && std::fabs(g - c.g) < kTolerance && std::fabs(b - c.b) < kTolerance;
+    }
+
+    /// True when @p sentinel reached the live ImGui style, the active Spark UI tokens or the
+    /// native caption style after EditorTheme::ApplyTheme(data).
+    bool SentinelReachesASink(const EditorThemeData& data, const ThemeColor& sentinel)
+    {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        for (int i = 0; i < ImGuiCol_COUNT; ++i)
+        {
+            if (SameRgb(style.Colors[i].x, style.Colors[i].y, style.Colors[i].z, sentinel))
+                return true;
+        }
+        for (const Spark::Ui::Rgba& c : Spark::Ui::ActiveTokens().color)
+        {
+            if (SameRgb(c.r, c.g, c.b, sentinel))
+                return true;
+        }
+        const auto caption = EditorTheme::NativeCaptionStyleFor(data);
+        return SameRgb(caption.caption.r, caption.caption.g, caption.caption.b, sentinel) ||
+               SameRgb(caption.text.r, caption.text.g, caption.text.b, sentinel);
+    }
+
+    ThemeColor UniformColour(float value)
+    {
+        return ThemeColor(value, value, value, 1.0f);
+    }
+} // namespace
+
+TEST(Gated_EditorTheme_ApplyToImGuiMapsEveryField)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    const EditorThemeData* base = EditorTheme::GetTheme("Ember Studio");
+    EXPECT_TRUE(base != nullptr);
+    if (base)
+    {
+        // Colours no built-in palette uses; each probe gets its own green channel.
+        int probe = 0;
+        const auto nextSentinel = [&probe]()
+        {
+            ++probe;
+            return ThemeColor(0.0123f, 0.0011f + 0.0137f * static_cast<float>(probe), 0.9871f, 1.0f);
+        };
+        for (const ThemeColourField& field : kAllThemeColourFields)
+        {
+            EditorThemeData data = *base;
+            data.name = "Gated sentinel palette";
+            const ThemeColor sentinel = nextSentinel();
+            data.*(field.member) = sentinel;
+            EXPECT_TRUE(EditorTheme::ApplyTheme(data));
+            const bool reached = SentinelReachesASink(data, sentinel);
+            if (!reached)
+                std::printf("  EditorThemeData::%s reaches no ImGui slot, token role or caption\n", field.name);
+            EXPECT_TRUE(reached);
+        }
+        for (std::size_t i = 0; i < base->statusFills.size(); ++i)
+        {
+            EditorThemeData data = *base;
+            data.name = "Gated sentinel palette";
+            const ThemeColor sentinel = nextSentinel();
+            data.statusFills[i] = sentinel;
+            EXPECT_TRUE(EditorTheme::ApplyTheme(data));
+            const bool reached = SentinelReachesASink(data, sentinel);
+            if (!reached)
+                std::printf("  EditorThemeData::statusFills[%zu] reaches no token role\n", i);
+            EXPECT_TRUE(reached);
+        }
+    }
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorTheme_FactoriesPassTokenAudit)
+{
+    for (const char* name : {"Ember Studio", "Cobalt Forge", "Graphite Signal", "Professional Light", "High Contrast"})
+    {
+        const EditorThemeData* theme = EditorTheme::GetTheme(name);
+        EXPECT_TRUE(theme != nullptr);
+        if (!theme)
+            continue;
+        const auto failures = Spark::Ui::AuditTokens(EditorTheme::ToTokens(*theme));
+        for (const auto& failure : failures)
+        {
+            const std::string_view fg = Spark::Ui::RoleName(failure.fg);
+            const std::string_view bg = Spark::Ui::RoleName(failure.bg);
+            std::printf("  %s: %.*s %.*s on %.*s = %.2f (needs %.2f)\n", name, static_cast<int>(failure.rule.size()),
+                        failure.rule.data(), static_cast<int>(fg.size()), fg.data(), static_cast<int>(bg.size()),
+                        bg.data(), static_cast<double>(failure.ratio), static_cast<double>(failure.required));
+        }
+        EXPECT_TRUE(failures.empty());
+    }
+}
+
+TEST(Gated_EditorTheme_BlendedThemeBlendsAllColours)
+{
+    EditorThemeData first;
+    EditorThemeData second;
+    first.name = "Gated Uniform Blend A";
+    second.name = "Gated Uniform Blend B";
+    for (const ThemeColourField& field : kAllThemeColourFields)
+    {
+        first.*(field.member) = UniformColour(0.2f);
+        second.*(field.member) = UniformColour(0.6f);
+    }
+    for (std::size_t i = 0; i < first.statusFills.size(); ++i)
+    {
+        first.statusFills[i] = UniformColour(0.2f);
+        second.statusFills[i] = UniformColour(0.6f);
+    }
+    first.frameRounding = 2.0f;
+    second.frameRounding = 6.0f;
+    first.focusRingWidth = 2.0f;
+    second.focusRingWidth = 4.0f;
+    EXPECT_TRUE(EditorTheme::RegisterTheme(first));
+    EXPECT_TRUE(EditorTheme::RegisterTheme(second));
+
+    EXPECT_TRUE(EditorTheme::CreateBlendedTheme(first.name, second.name, 0.5f, "Gated Uniform Blend"));
+    const EditorThemeData* blended = EditorTheme::GetTheme("Gated Uniform Blend");
+    EXPECT_TRUE(blended != nullptr);
+    if (blended)
+    {
+        for (const ThemeColourField& field : kAllThemeColourFields)
+        {
+            const bool midpoint = SameRgb(0.4f, 0.4f, 0.4f, blended->*(field.member));
+            if (!midpoint)
+                std::printf("  EditorThemeData::%s was not blended\n", field.name);
+            EXPECT_TRUE(midpoint);
+        }
+        for (const ThemeColor& fill : blended->statusFills)
+            EXPECT_TRUE(SameRgb(0.4f, 0.4f, 0.4f, fill));
+        EXPECT_NEAR(blended->frameRounding, 4.0f, 0.0001f);
+        EXPECT_NEAR(blended->focusRingWidth, 3.0f, 0.0001f);
+    }
 }
 
 // --- CommandPalette full tests ---

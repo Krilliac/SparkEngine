@@ -1,0 +1,9 @@
+// SparkLauncher resources: the Spark logomark application icon.
+// VERSIONINFO is generated from SPARK_ENGINE_VERSION by cmake/SparkWindowsVersionInfo.cmake.
+// sparkengine.ico is found through the RC include path SparkLauncher/CMakeLists.txt adds
+// (Assets/Engine/Branding). IDI_SPARK_APP is the lowest icon id, so Explorer shows it for the
+// executable; LauncherBackendWindows.cpp loads the same id for the window class.
+
+#define IDI_SPARK_APP 1
+
+IDI_SPARK_APP ICON "sparkengine.ico"

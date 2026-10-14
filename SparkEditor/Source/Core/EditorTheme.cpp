@@ -1,6 +1,6 @@
 /**
  * @file EditorTheme.cpp
- * @brief Theme system implementation for the Spark Engine Editor
+ * @brief Theme registry and the EditorThemeData -> Spark UI tokens -> ImGui style adapter.
  * @author Spark Engine Team
  * @date 2025
  */
@@ -9,15 +9,21 @@
 #include "EditorThemeDocument.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Validate.h"
+#include "SparkUI/Color.h"
+#include "SparkUI/Runtime.h"
 #include <imgui.h>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <string_view>
+#include <unordered_set>
 
 #include "../Utils/EditorFileRead.h"
 
@@ -28,8 +34,369 @@ namespace SparkEditor
     std::unordered_map<std::string, EditorThemeData> EditorTheme::s_registeredThemes;
     std::string EditorTheme::s_currentThemeName;
     EditorThemeData EditorTheme::s_currentThemeData;
+    bool EditorTheme::s_currentIsBuiltinPalette = false;
+    Spark::Ui::Density EditorTheme::s_density = Spark::Ui::Density::Standard;
+    std::optional<Spark::Ui::Appearance> EditorTheme::s_appearanceOverride;
+    std::uint64_t EditorTheme::s_revision = 0;
     bool EditorTheme::s_enhancementsEnabled = false;
     bool EditorTheme::s_customFontsLoaded = false;
+
+    namespace
+    {
+        using Spark::Ui::Appearance;
+        using Spark::Ui::Density;
+        using Spark::Ui::PaletteId;
+        using Spark::Ui::Role;
+        using Spark::Ui::Tokens;
+
+        /// One entry of the theme picker, generated from the audited token tables.
+        struct BuiltinPalette
+        {
+            const char* name;
+            const char* description;
+            PaletteId palette;
+            Appearance appearance;
+        };
+
+        constexpr std::array<BuiltinPalette, 5> kBuiltinPalettes = {{
+            {"Ember Studio", "Warm charcoal workspace with an ember accent and a cyan focus ring", PaletteId::Ember,
+             Appearance::Dark},
+            {"Cobalt Forge", "Cool slate workspace with a cyan accent and an amber focus ring", PaletteId::Cobalt,
+             Appearance::Dark},
+            {"Graphite Signal", "Neutral graphite workspace with a silver accent and a mint focus ring",
+             PaletteId::Graphite, Appearance::Dark},
+            {"Professional Light", "Ember Studio on light surfaces", PaletteId::Ember, Appearance::Light},
+            {"High Contrast", "Ember Studio at 7:1 text contrast with a yellow focus ring", PaletteId::Ember,
+             Appearance::HighContrast},
+        }};
+
+        /// Every ThemeColor member except the statusFills array (blended separately).
+        constexpr auto kColorFields = std::to_array<ThemeColor EditorThemeData::*>({
+            &EditorThemeData::background,
+            &EditorThemeData::backgroundDark,
+            &EditorThemeData::backgroundLight,
+            &EditorThemeData::backgroundAccent,
+            &EditorThemeData::backgroundHeader,
+            &EditorThemeData::backgroundActive,
+            &EditorThemeData::backgroundHover,
+            &EditorThemeData::backgroundSelected,
+            &EditorThemeData::text,
+            &EditorThemeData::textDisabled,
+            &EditorThemeData::textSecondary,
+            &EditorThemeData::textAccent,
+            &EditorThemeData::textWarning,
+            &EditorThemeData::textError,
+            &EditorThemeData::textSuccess,
+            &EditorThemeData::button,
+            &EditorThemeData::buttonHovered,
+            &EditorThemeData::buttonActive,
+            &EditorThemeData::buttonDisabled,
+            &EditorThemeData::frame,
+            &EditorThemeData::frameHovered,
+            &EditorThemeData::frameActive,
+            &EditorThemeData::border,
+            &EditorThemeData::borderLight,
+            &EditorThemeData::borderAccent,
+            &EditorThemeData::borderSeparator,
+            &EditorThemeData::titleBar,
+            &EditorThemeData::titleBarActive,
+            &EditorThemeData::titleBarText,
+            &EditorThemeData::menuBar,
+            &EditorThemeData::menuItem,
+            &EditorThemeData::menuItemHovered,
+            &EditorThemeData::scrollbar,
+            &EditorThemeData::scrollbarGrab,
+            &EditorThemeData::scrollbarGrabHovered,
+            &EditorThemeData::scrollbarGrabActive,
+            &EditorThemeData::tab,
+            &EditorThemeData::tabHovered,
+            &EditorThemeData::tabActive,
+            &EditorThemeData::tabUnfocused,
+            &EditorThemeData::accent,
+            &EditorThemeData::accentSecondary,
+            &EditorThemeData::focus,
+            &EditorThemeData::selection,
+            &EditorThemeData::drop,
+            &EditorThemeData::graph1,
+            &EditorThemeData::graph2,
+            &EditorThemeData::graph3,
+            &EditorThemeData::graph4,
+            &EditorThemeData::graph5,
+            &EditorThemeData::borderStrong,
+            &EditorThemeData::surfaceOverlay,
+            &EditorThemeData::surfaceSelectedUnfocused,
+            &EditorThemeData::textOnAccent,
+            &EditorThemeData::textInfo,
+            &EditorThemeData::accentHover,
+            &EditorThemeData::accentActive,
+            &EditorThemeData::accentText,
+        });
+
+        /// Every float style value; CreateBlendedTheme interpolates all of them.
+        constexpr auto kMetricFields = std::to_array<float EditorThemeData::*>({
+            &EditorThemeData::windowRounding,    &EditorThemeData::childRounding,
+            &EditorThemeData::frameRounding,     &EditorThemeData::popupRounding,
+            &EditorThemeData::scrollbarRounding, &EditorThemeData::grabRounding,
+            &EditorThemeData::tabRounding,       &EditorThemeData::windowBorderSize,
+            &EditorThemeData::childBorderSize,   &EditorThemeData::popupBorderSize,
+            &EditorThemeData::frameBorderSize,   &EditorThemeData::indentSpacing,
+            &EditorThemeData::scrollbarSize,     &EditorThemeData::grabMinSize,
+            &EditorThemeData::windowPaddingX,    &EditorThemeData::windowPaddingY,
+            &EditorThemeData::framePaddingX,     &EditorThemeData::framePaddingY,
+            &EditorThemeData::itemSpacingX,      &EditorThemeData::itemSpacingY,
+            &EditorThemeData::itemInnerSpacingX, &EditorThemeData::itemInnerSpacingY,
+            &EditorThemeData::shadowOpacity,     &EditorThemeData::shadowSize,
+            &EditorThemeData::fontSize,          &EditorThemeData::fontScale,
+            &EditorThemeData::focusRingWidth,
+        });
+
+        constexpr float kBodyFontSize = 15.0f;
+        constexpr float kTableRowAltAlpha = 0.45f;
+        constexpr float kDropWashAlpha = 0.12f;
+        constexpr float kLegacyStatusFillMix = 0.15f;
+        constexpr float kLegacyUnfocusedSelectionMix = 0.22f;
+        constexpr float kLegacyAccentStep = 0.12f;
+
+        ThemeColor FromRgba(Spark::Ui::Rgba c)
+        {
+            return ThemeColor(c.r, c.g, c.b, c.a);
+        }
+
+        Spark::Ui::Rgba ToRgba(const ThemeColor& c)
+        {
+            return Spark::Ui::Rgba{c.r, c.g, c.b, c.a};
+        }
+
+        ThemeColor RoleColor(const Tokens& t, Role role)
+        {
+            return FromRgba(Spark::Ui::Get(t, role));
+        }
+
+        ThemeColor& StatusFill(EditorThemeData& theme, ThemeStatusFill which)
+        {
+            return theme.statusFills[static_cast<std::size_t>(which)];
+        }
+
+        const ThemeColor& StatusFill(const EditorThemeData& theme, ThemeStatusFill which)
+        {
+            return theme.statusFills[static_cast<std::size_t>(which)];
+        }
+
+        float SaneFactor(float value, float fallback)
+        {
+            return std::isfinite(value) && value > 0.0f ? value : fallback;
+        }
+
+        const BuiltinPalette* FindBuiltinPalette(std::string_view name)
+        {
+            for (const BuiltinPalette& palette : kBuiltinPalettes)
+            {
+                if (name == palette.name)
+                {
+                    return &palette;
+                }
+            }
+            return nullptr;
+        }
+
+        /// Built-in names that RegisterTheme replaced with a custom palette; those are applied as
+        /// registered and never regenerated.
+        std::unordered_set<std::string>& ShadowedBuiltinNames()
+        {
+            static std::unordered_set<std::string> names;
+            return names;
+        }
+
+        /// EditorThemeData carrying every role of @p t (spec section 2.2 field mapping).
+        EditorThemeData ThemeFromTokens(const Tokens& t, const BuiltinPalette& palette, Density density)
+        {
+            EditorThemeData theme;
+            theme.name = palette.name;
+            theme.description = palette.description;
+            theme.author = "Spark Engine Team";
+
+            const ThemeColor sunken = RoleColor(t, Role::SurfaceSunken);
+            const ThemeColor base = RoleColor(t, Role::SurfaceBase);
+            const ThemeColor raised = RoleColor(t, Role::SurfaceRaised);
+            const ThemeColor overlay = RoleColor(t, Role::SurfaceOverlay);
+            const ThemeColor hover = RoleColor(t, Role::SurfaceHover);
+            const ThemeColor selected = RoleColor(t, Role::SurfaceSelected);
+            const ThemeColor borderSubtle = RoleColor(t, Role::BorderSubtle);
+            const ThemeColor borderStrong = RoleColor(t, Role::BorderStrong);
+            const ThemeColor textPrimary = RoleColor(t, Role::TextPrimary);
+            const ThemeColor textDisabled = RoleColor(t, Role::TextDisabled);
+            const ThemeColor accent = RoleColor(t, Role::AccentFill);
+            const ThemeColor secondary = RoleColor(t, Role::Secondary);
+
+            theme.background = base;
+            theme.backgroundDark = sunken;
+            theme.backgroundLight = raised;
+            theme.backgroundAccent = secondary.WithAlpha(secondary.a * kDropWashAlpha);
+            theme.backgroundHeader = raised;
+            theme.backgroundActive = selected;
+            theme.backgroundHover = hover;
+            theme.backgroundSelected = selected;
+
+            theme.text = textPrimary;
+            theme.textDisabled = textDisabled;
+            theme.textSecondary = RoleColor(t, Role::TextSecondary);
+            theme.textAccent = RoleColor(t, Role::TextLink);
+            theme.textWarning = RoleColor(t, Role::WarningText);
+            theme.textError = RoleColor(t, Role::ErrorText);
+            theme.textSuccess = RoleColor(t, Role::SuccessText);
+
+            theme.button = raised;
+            theme.buttonHovered = hover;
+            theme.buttonActive = selected;
+            theme.buttonDisabled = textDisabled;
+
+            theme.frame = sunken;
+            theme.frameHovered = hover;
+            theme.frameActive = selected;
+
+            theme.border = borderSubtle;
+            theme.borderLight = borderStrong;
+            theme.borderAccent = accent;
+            theme.borderSeparator = borderSubtle;
+
+            theme.titleBar = sunken;
+            theme.titleBarActive = sunken;
+            theme.titleBarText = textPrimary;
+
+            theme.menuBar = sunken;
+            theme.menuItem = overlay;
+            theme.menuItemHovered = hover;
+
+            theme.scrollbar = sunken;
+            theme.scrollbarGrab = borderSubtle;
+            theme.scrollbarGrabHovered = borderStrong;
+            theme.scrollbarGrabActive = accent;
+
+            theme.tab = sunken;
+            theme.tabHovered = hover;
+            theme.tabActive = base;
+            theme.tabUnfocused = sunken;
+
+            theme.accent = accent;
+            theme.accentSecondary = secondary;
+            theme.focus = RoleColor(t, Role::BorderFocus);
+            theme.selection = RoleColor(t, Role::SelectionTextBg);
+            theme.drop = RoleColor(t, Role::DropTarget);
+
+            theme.graph1 = RoleColor(t, Role::Graph1);
+            theme.graph2 = RoleColor(t, Role::Graph2);
+            theme.graph3 = RoleColor(t, Role::Graph3);
+            theme.graph4 = RoleColor(t, Role::Graph4);
+            theme.graph5 = RoleColor(t, Role::Graph5);
+
+            theme.borderStrong = borderStrong;
+            theme.surfaceOverlay = overlay;
+            theme.surfaceSelectedUnfocused = RoleColor(t, Role::SurfaceSelectedUnfocused);
+            theme.textOnAccent = RoleColor(t, Role::TextOnAccent);
+            theme.textInfo = RoleColor(t, Role::InfoText);
+            theme.accentHover = RoleColor(t, Role::AccentFillHover);
+            theme.accentActive = RoleColor(t, Role::AccentFillActive);
+            theme.accentText = RoleColor(t, Role::AccentText);
+            StatusFill(theme, ThemeStatusFill::Info) = RoleColor(t, Role::InfoFill);
+            StatusFill(theme, ThemeStatusFill::Success) = RoleColor(t, Role::SuccessFill);
+            StatusFill(theme, ThemeStatusFill::Warning) = RoleColor(t, Role::WarningFill);
+            StatusFill(theme, ThemeStatusFill::Error) = RoleColor(t, Role::ErrorFill);
+            theme.appearance = t.appearance;
+            theme.density = density;
+            theme.focusRingWidth = t.metrics.focusRing;
+
+            const Spark::Ui::Metrics& m = t.metrics;
+            theme.windowRounding = m.rWindow;
+            theme.childRounding = m.rChild;
+            theme.frameRounding = m.rFrame;
+            theme.popupRounding = m.rPopup;
+            theme.scrollbarRounding = m.rScrollbar;
+            theme.grabRounding = m.rGrab;
+            theme.tabRounding = m.rTab;
+            theme.windowBorderSize = m.bWindow;
+            theme.childBorderSize = m.bChild;
+            theme.popupBorderSize = m.bPopup;
+            theme.frameBorderSize = m.bFrame;
+            theme.indentSpacing = m.indent;
+            theme.scrollbarSize = m.scrollbar;
+            theme.grabMinSize = m.grabMin;
+            theme.windowPaddingX = m.windowPadX;
+            theme.windowPaddingY = m.windowPadY;
+            theme.framePaddingX = m.framePadX;
+            theme.framePaddingY = m.framePadY;
+            theme.itemSpacingX = m.itemSpacingX;
+            theme.itemSpacingY = m.itemSpacingY;
+            theme.itemInnerSpacingX = m.itemInnerX;
+            theme.itemInnerSpacingY = m.itemInnerY;
+
+            theme.shadowOpacity = 0.45f;
+            theme.shadowSize = 10.0f;
+            theme.fontSize = t.type.body;
+            theme.fontScale = 1.0f;
+            theme.fontFamily = "IBM Plex Sans";
+            return theme;
+        }
+
+        EditorThemeData BuiltinTheme(const BuiltinPalette& palette, Appearance appearance, Density density)
+        {
+            const Tokens tokens =
+                Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(palette.palette), appearance, density);
+            return ThemeFromTokens(tokens, palette, density);
+        }
+
+        /// Dark ink or white, whichever reads better on @p fill.
+        ThemeColor ReadableInkOn(const ThemeColor& fill)
+        {
+            const Spark::Ui::Rgba darkInk = Spark::Ui::Hex(0x1a0f08);
+            const Spark::Ui::Rgba lightInk = Spark::Ui::Hex(0xffffff);
+            const Spark::Ui::Rgba background = ToRgba(fill.WithAlpha(1.0f));
+            return FromRgba(Spark::Ui::ContrastRatio(darkInk, background) >=
+                                    Spark::Ui::ContrastRatio(lightInk, background)
+                                ? darkInk
+                                : lightInk);
+        }
+
+        /// Fill the Ember Signal roles a hand-written (pre-token) palette does not set, from the
+        /// colours it does set.
+        void CompleteLegacyFields(EditorThemeData& t)
+        {
+            t.buttonDisabled = t.textDisabled;
+            t.menuItem = t.backgroundLight;
+            t.borderStrong = t.borderLight;
+            t.surfaceOverlay = t.backgroundLight;
+            t.surfaceSelectedUnfocused = t.background.Lerp(t.textSecondary, kLegacyUnfocusedSelectionMix);
+            t.textInfo = t.textAccent;
+            t.accentHover = t.accent.Lighten(kLegacyAccentStep);
+            t.accentActive = t.accent.Darken(kLegacyAccentStep);
+            t.accentText = t.textAccent;
+            t.textOnAccent = ReadableInkOn(t.accent);
+            const ThemeColor opaqueBackground = t.background.WithAlpha(1.0f);
+            StatusFill(t, ThemeStatusFill::Info) =
+                opaqueBackground.Lerp(t.textInfo.WithAlpha(1.0f), kLegacyStatusFillMix);
+            StatusFill(t, ThemeStatusFill::Success) =
+                opaqueBackground.Lerp(t.textSuccess.WithAlpha(1.0f), kLegacyStatusFillMix);
+            StatusFill(t, ThemeStatusFill::Warning) =
+                opaqueBackground.Lerp(t.textWarning.WithAlpha(1.0f), kLegacyStatusFillMix);
+            StatusFill(t, ThemeStatusFill::Error) =
+                opaqueBackground.Lerp(t.textError.WithAlpha(1.0f), kLegacyStatusFillMix);
+            t.appearance =
+                Spark::Ui::RelativeLuminance(ToRgba(t.background)) > 0.5f ? Appearance::Light : Appearance::Dark;
+        }
+
+        /// The registered theme, or its regeneration for the active appearance override and density
+        /// when it is a built-in palette nobody replaced.
+        EditorThemeData ResolveForApply(const EditorThemeData& registered, Density density,
+                                        const std::optional<Appearance>& appearanceOverride, bool& isBuiltin)
+        {
+            const BuiltinPalette* palette = FindBuiltinPalette(registered.name);
+            isBuiltin = palette != nullptr && !ShadowedBuiltinNames().contains(registered.name);
+            if (!isBuiltin || (!appearanceOverride.has_value() && density == Density::Standard))
+            {
+                return registered;
+            }
+            return BuiltinTheme(*palette, appearanceOverride.value_or(palette->appearance), density);
+        }
+    } // namespace
 
     // ===================================================================
     // ThemeColor implementations
@@ -115,9 +482,13 @@ namespace SparkEditor
                 return false;
         }
 
-        ApplyToImGui(*theme);
-        s_currentThemeData = *theme;
+        bool isBuiltin = false;
+        EditorThemeData resolved = ResolveForApply(*theme, s_density, s_appearanceOverride, isBuiltin);
+        ApplyToImGui(resolved);
         s_currentThemeName = theme->name;
+        s_currentThemeData = std::move(resolved);
+        s_currentIsBuiltinPalette = isBuiltin;
+        ++s_revision;
         std::cout << "[EditorTheme] Applied theme: " << s_currentThemeName << "\n";
         return true;
     }
@@ -127,6 +498,8 @@ namespace SparkEditor
         ApplyToImGui(theme);
         s_currentThemeData = theme;
         s_currentThemeName = theme.name;
+        s_currentIsBuiltinPalette = false;
+        ++s_revision;
         return true;
     }
 
@@ -169,6 +542,10 @@ namespace SparkEditor
     bool EditorTheme::RegisterTheme(const EditorThemeData& theme)
     {
         InitializeDefaultThemes();
+        if (FindBuiltinPalette(theme.name) != nullptr)
+        {
+            ShadowedBuiltinNames().insert(theme.name);
+        }
         s_registeredThemes[theme.name] = theme;
         return true;
     }
@@ -186,17 +563,28 @@ namespace SparkEditor
     bool EditorTheme::CreateBlendedTheme(const std::string& theme1, const std::string& theme2, float blend,
                                          const std::string& resultName)
     {
-        auto* t1 = GetTheme(theme1);
-        auto* t2 = GetTheme(theme2);
-        if (!t1 || !t2)
+        const EditorThemeData* first = GetTheme(theme1);
+        const EditorThemeData* second = GetTheme(theme2);
+        if (!first || !second)
             return false;
 
-        EditorThemeData blended;
+        const float t = std::isfinite(blend) ? std::clamp(blend, 0.0f, 1.0f) : 0.0f;
+        // Flags, strings and enums cannot be interpolated; they come from the nearer theme.
+        EditorThemeData blended = t < 0.5f ? *first : *second;
         blended.name = resultName;
-        blended.background = t1->background.Lerp(t2->background, blend);
-        blended.text = t1->text.Lerp(t2->text, blend);
-        blended.accent = t1->accent.Lerp(t2->accent, blend);
-        // Simplified — only blend key colors
+        blended.description = "Blend of " + first->name + " and " + second->name;
+        for (ThemeColor EditorThemeData::*field : kColorFields)
+        {
+            blended.*field = (first->*field).Lerp(second->*field, t);
+        }
+        for (std::size_t i = 0; i < blended.statusFills.size(); ++i)
+        {
+            blended.statusFills[i] = first->statusFills[i].Lerp(second->statusFills[i], t);
+        }
+        for (float EditorThemeData::*field : kMetricFields)
+        {
+            blended.*field = first->*field + (second->*field - first->*field) * t;
+        }
         RegisterTheme(blended);
         return true;
     }
@@ -211,207 +599,253 @@ namespace SparkEditor
         s_customFontsLoaded = true;
     }
 
+    Spark::Ui::Tokens EditorTheme::ToTokens(const EditorThemeData& theme)
+    {
+        // Roles without an EditorThemeData field (axes, categories, modal scrim) come from the
+        // audited Ember set of the theme's appearance; they are identical across palette families.
+        Tokens t = Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(PaletteId::Ember), theme.appearance, theme.density);
+        t.appearance = theme.appearance;
+        const auto set = [&t](Role role, const ThemeColor& colour)
+        { t.color[static_cast<std::size_t>(role)] = ToRgba(colour); };
+
+        set(Role::SurfaceSunken, theme.backgroundDark);
+        set(Role::SurfaceBase, theme.background);
+        set(Role::SurfaceRaised, theme.backgroundLight);
+        set(Role::SurfaceOverlay, theme.surfaceOverlay);
+        set(Role::SurfaceHover, theme.backgroundHover);
+        set(Role::SurfaceSelected, theme.backgroundSelected);
+        set(Role::SurfaceSelectedUnfocused, theme.surfaceSelectedUnfocused);
+        set(Role::BorderSubtle, theme.border);
+        set(Role::BorderStrong, theme.borderStrong);
+        set(Role::BorderFocus, theme.focus);
+        set(Role::TextPrimary, theme.text);
+        set(Role::TextSecondary, theme.textSecondary);
+        set(Role::TextDisabled, theme.buttonDisabled);
+        set(Role::TextOnAccent, theme.textOnAccent);
+        set(Role::TextLink, theme.textAccent);
+        set(Role::AccentFill, theme.accent);
+        set(Role::AccentFillHover, theme.accentHover);
+        set(Role::AccentFillActive, theme.accentActive);
+        set(Role::AccentText, theme.accentText);
+        set(Role::Secondary, theme.accentSecondary);
+        set(Role::SuccessText, theme.textSuccess);
+        set(Role::WarningText, theme.textWarning);
+        set(Role::ErrorText, theme.textError);
+        set(Role::InfoText, theme.textInfo);
+        set(Role::InfoFill, StatusFill(theme, ThemeStatusFill::Info));
+        set(Role::SuccessFill, StatusFill(theme, ThemeStatusFill::Success));
+        set(Role::WarningFill, StatusFill(theme, ThemeStatusFill::Warning));
+        set(Role::ErrorFill, StatusFill(theme, ThemeStatusFill::Error));
+        set(Role::Graph1, theme.graph1);
+        set(Role::Graph2, theme.graph2);
+        set(Role::Graph3, theme.graph3);
+        set(Role::Graph4, theme.graph4);
+        set(Role::Graph5, theme.graph5);
+        set(Role::DropTarget, theme.drop);
+        set(Role::SelectionTextBg, theme.selection);
+
+        Spark::Ui::Metrics& m = t.metrics;
+        m.windowPadX = theme.windowPaddingX;
+        m.windowPadY = theme.windowPaddingY;
+        m.framePadX = theme.framePaddingX;
+        m.framePadY = theme.framePaddingY;
+        m.itemSpacingX = theme.itemSpacingX;
+        m.itemSpacingY = theme.itemSpacingY;
+        m.itemInnerX = theme.itemInnerSpacingX;
+        m.itemInnerY = theme.itemInnerSpacingY;
+        m.indent = theme.indentSpacing;
+        m.scrollbar = theme.scrollbarSize;
+        m.grabMin = theme.grabMinSize;
+        m.rWindow = theme.windowRounding;
+        m.rChild = theme.childRounding;
+        m.rFrame = theme.frameRounding;
+        m.rPopup = theme.popupRounding;
+        m.rScrollbar = theme.scrollbarRounding;
+        m.rGrab = theme.grabRounding;
+        m.rTab = theme.tabRounding;
+        m.bWindow = theme.windowBorderSize;
+        m.bChild = theme.childBorderSize;
+        m.bPopup = theme.popupBorderSize;
+        m.bFrame = theme.frameBorderSize;
+        m.focusRing = theme.focusRingWidth;
+
+        // Every typographic role keeps its ratio to the body size the theme asks for.
+        const float typeScale = SaneFactor(theme.fontSize, kBodyFontSize) / kBodyFontSize;
+        Spark::Ui::Typography& type = t.type;
+        type.small *= typeScale;
+        type.body *= typeScale;
+        type.strong *= typeScale;
+        type.h2 *= typeScale;
+        type.h1 *= typeScale;
+        type.display *= typeScale;
+        type.mono *= typeScale;
+        type.monoSmall *= typeScale;
+        return t;
+    }
+
+    void EditorTheme::SetUiScale(float dpiScale, float userScale)
+    {
+        Spark::Ui::RequestScale(dpiScale, userScale);
+    }
+
+    float EditorTheme::GetUiScale()
+    {
+        return Spark::Ui::Scale();
+    }
+
+    bool EditorTheme::ApplyPendingScale()
+    {
+        if (!Spark::Ui::BeginFrameScale())
+        {
+            return false;
+        }
+        // BeginFrameScale rebuilt the style from the tokens; restore the per-field colour mapping.
+        if (!s_currentThemeName.empty())
+        {
+            ApplyFieldColours(s_currentThemeData, ImGui::GetStyle());
+        }
+        return true;
+    }
+
+    void EditorTheme::SetDensity(Spark::Ui::Density density)
+    {
+        if (s_density == density)
+        {
+            return;
+        }
+        s_density = density;
+        ReapplyCurrentTheme();
+    }
+
+    void EditorTheme::SetAppearanceOverride(std::optional<Spark::Ui::Appearance> appearance)
+    {
+        if (s_appearanceOverride == appearance)
+        {
+            return;
+        }
+        s_appearanceOverride = appearance;
+        ReapplyCurrentTheme();
+    }
+
+    std::uint64_t EditorTheme::GetRevision()
+    {
+        return s_revision;
+    }
+
+    EditorTheme::NativeCaptionStyle EditorTheme::NativeCaptionStyleFor(const EditorThemeData& theme)
+    {
+        NativeCaptionStyle style;
+        style.caption = theme.titleBarActive.WithAlpha(1.0f);
+        style.text = theme.titleBarText.WithAlpha(1.0f);
+        style.darkMode = Spark::Ui::RelativeLuminance(ToRgba(theme.background)) <= 0.5f;
+        return style;
+    }
+
+    void EditorTheme::ReapplyCurrentTheme()
+    {
+        // Density and the appearance override only regenerate built-in palettes; a custom theme
+        // stays exactly as it was applied.
+        if (s_currentIsBuiltinPalette && !s_currentThemeName.empty())
+        {
+            ApplyTheme(s_currentThemeName);
+        }
+    }
+
     // ===================================================================
-    // Core theme application — maps EditorThemeData to ImGui colors
+    // Core theme application — tokens first, then every field onto its slot
     // ===================================================================
 
     void EditorTheme::ApplyToImGui(const EditorThemeData& theme)
     {
-        ImGuiStyle& style = ImGui::GetStyle();
+        if (ImGui::GetCurrentContext() == nullptr)
+        {
+            return;
+        }
+        // Rebuilds the whole style (metrics, colours by role, FontSizeBase) at the context's
+        // current UI scale; the widget kit reads the same tokens.
+        Spark::Ui::SetTokens(ToTokens(theme));
+        ApplyFieldColours(theme, ImGui::GetStyle());
+    }
 
-        // --- Style values ---
-        style.WindowRounding = theme.windowRounding;
-        style.ChildRounding = theme.childRounding;
-        style.FrameRounding = theme.frameRounding;
-        style.PopupRounding = theme.popupRounding;
-        style.ScrollbarRounding = theme.scrollbarRounding;
-        style.GrabRounding = theme.grabRounding;
-        style.TabRounding = theme.tabRounding;
+    void EditorTheme::ApplyFieldColours(const EditorThemeData& theme, ImGuiStyle& style)
+    {
+        ImVec4* c = style.Colors;
+        const auto set = [c](ImGuiCol slot, const ThemeColor& colour) { c[slot] = colour.ToImVec4(); };
 
-        style.WindowBorderSize = theme.windowBorderSize;
-        style.ChildBorderSize = theme.childBorderSize;
-        style.PopupBorderSize = theme.popupBorderSize;
-        style.FrameBorderSize = theme.frameBorderSize;
+        set(ImGuiCol_Text, theme.text);
+        set(ImGuiCol_TextDisabled, theme.textDisabled);
+        set(ImGuiCol_WindowBg, theme.background);
+        set(ImGuiCol_PopupBg, theme.menuItem);
+        set(ImGuiCol_Border, theme.borderStrong);
+        set(ImGuiCol_FrameBg, theme.frame);
+        set(ImGuiCol_FrameBgHovered, theme.frameHovered);
+        set(ImGuiCol_FrameBgActive, theme.frameActive);
+        set(ImGuiCol_TitleBg, theme.titleBar);
+        set(ImGuiCol_TitleBgActive, theme.titleBarActive);
+        set(ImGuiCol_TitleBgCollapsed, theme.titleBar);
+        set(ImGuiCol_MenuBarBg, theme.menuBar);
+        set(ImGuiCol_ScrollbarBg, theme.scrollbar);
+        set(ImGuiCol_ScrollbarGrab, theme.scrollbarGrab);
+        set(ImGuiCol_ScrollbarGrabHovered, theme.scrollbarGrabHovered);
+        set(ImGuiCol_ScrollbarGrabActive, theme.scrollbarGrabActive);
+        set(ImGuiCol_CheckMark, theme.accent);
+        set(ImGuiCol_CheckboxSelectedBg, theme.backgroundSelected);
+        set(ImGuiCol_SliderGrab, theme.accent);
+        set(ImGuiCol_SliderGrabActive, theme.accentHover);
+        set(ImGuiCol_Button, theme.button);
+        set(ImGuiCol_ButtonHovered, theme.buttonHovered);
+        set(ImGuiCol_ButtonActive, theme.buttonActive);
+        set(ImGuiCol_Header, theme.backgroundHeader);
+        set(ImGuiCol_HeaderHovered, theme.menuItemHovered);
+        set(ImGuiCol_HeaderActive, theme.backgroundActive);
+        set(ImGuiCol_Separator, theme.borderSeparator);
+        set(ImGuiCol_SeparatorHovered, theme.borderLight);
+        set(ImGuiCol_SeparatorActive, theme.borderAccent);
+        set(ImGuiCol_ResizeGripHovered, theme.borderAccent);
+        set(ImGuiCol_ResizeGripActive, theme.accentActive);
+        set(ImGuiCol_InputTextCursor, theme.accent);
+        set(ImGuiCol_TabHovered, theme.tabHovered);
+        set(ImGuiCol_Tab, theme.tab);
+        set(ImGuiCol_TabSelected, theme.tabActive);
+        set(ImGuiCol_TabSelectedOverline, theme.accent);
+        set(ImGuiCol_TabDimmed, theme.tabUnfocused);
+        set(ImGuiCol_TabDimmedSelected, theme.tabActive);
+        set(ImGuiCol_TabDimmedSelectedOverline, theme.borderStrong);
+        set(ImGuiCol_DockingPreview, theme.drop);
+        set(ImGuiCol_DockingEmptyBg, theme.backgroundDark);
+        set(ImGuiCol_PlotLines, theme.accentSecondary);
+        set(ImGuiCol_PlotLinesHovered, theme.accentHover);
+        set(ImGuiCol_PlotHistogram, theme.graph1);
+        set(ImGuiCol_PlotHistogramHovered, theme.accentHover);
+        set(ImGuiCol_TableHeaderBg, theme.backgroundHeader);
+        set(ImGuiCol_TableBorderStrong, theme.borderStrong);
+        set(ImGuiCol_TableBorderLight, theme.border);
+        set(ImGuiCol_TableRowBgAlt, theme.backgroundLight.WithAlpha(theme.backgroundLight.a * kTableRowAltAlpha));
+        set(ImGuiCol_TextLink, theme.textAccent);
+        set(ImGuiCol_TextSelectedBg, theme.selection);
+        set(ImGuiCol_TreeLines, theme.border);
+        set(ImGuiCol_DragDropTarget, theme.drop);
+        set(ImGuiCol_DragDropTargetBg, theme.backgroundAccent);
+        set(ImGuiCol_UnsavedMarker, theme.accent);
+        set(ImGuiCol_NavCursor, theme.focus);
+        set(ImGuiCol_NavWindowingHighlight, theme.focus);
+        // ChildBg, BorderShadow, ResizeGrip, TableRowBg and the two dim backgrounds keep the token
+        // mapping (transparent or ModalScrim); no EditorThemeData field describes them.
 
-        style.IndentSpacing = theme.indentSpacing;
-        style.ScrollbarSize = theme.scrollbarSize;
-        style.GrabMinSize = theme.grabMinSize;
+        // style.FontScaleMain = user scale x theme font scale, recomputed (never accumulated).
+        style.FontScaleMain = Spark::Ui::Scale() / Spark::Ui::DpiScale() * SaneFactor(theme.fontScale, 1.0f);
 
-        style.WindowPadding = ImVec2(theme.windowPaddingX, theme.windowPaddingY);
-        style.FramePadding = ImVec2(theme.framePaddingX, theme.framePaddingY);
-        style.ItemSpacing = ImVec2(theme.itemSpacingX, theme.itemSpacingY);
-        style.ItemInnerSpacing = ImVec2(theme.itemInnerSpacingX, theme.itemInnerSpacingY);
-
-        // Smooth rendering — AA lines + fill, more tessellation on curves/circles.
-        // Matches the soft edges of the SparkEditor hi-fi design.
+        // Smooth rendering: anti-aliased lines and fills, finer curve and circle tessellation.
         style.AntiAliasedLines = true;
         style.AntiAliasedLinesUseTex = true;
         style.AntiAliasedFill = true;
         style.CurveTessellationTol = 1.0f;
         style.CircleTessellationMaxError = 0.10f;
-
-        // --- Color mapping ---
-        ImVec4* c = style.Colors;
-
-        // Window / Background
-        c[ImGuiCol_WindowBg] = theme.background.ToImVec4();
-        c[ImGuiCol_ChildBg] = theme.backgroundDark.ToImVec4();
-        c[ImGuiCol_PopupBg] = theme.backgroundLight.WithAlpha(0.95f).ToImVec4();
-
-        // Text
-        c[ImGuiCol_Text] = theme.text.ToImVec4();
-        c[ImGuiCol_TextDisabled] = theme.textDisabled.ToImVec4();
-
-        // Borders
-        c[ImGuiCol_Border] = theme.border.ToImVec4();
-        c[ImGuiCol_BorderShadow] = ThemeColor(0, 0, 0, 0).ToImVec4();
-
-        // Frame (input fields, checkboxes, etc.)
-        c[ImGuiCol_FrameBg] = theme.frame.ToImVec4();
-        c[ImGuiCol_FrameBgHovered] = theme.frameHovered.ToImVec4();
-        c[ImGuiCol_FrameBgActive] = theme.frameActive.ToImVec4();
-
-        // Title bar
-        c[ImGuiCol_TitleBg] = theme.titleBar.ToImVec4();
-        c[ImGuiCol_TitleBgActive] = theme.titleBarActive.ToImVec4();
-        c[ImGuiCol_TitleBgCollapsed] = theme.titleBar.WithAlpha(0.6f).ToImVec4();
-
-        // Menu bar
-        c[ImGuiCol_MenuBarBg] = theme.menuBar.ToImVec4();
-
-        // Scrollbar
-        c[ImGuiCol_ScrollbarBg] = theme.scrollbar.ToImVec4();
-        c[ImGuiCol_ScrollbarGrab] = theme.scrollbarGrab.ToImVec4();
-        c[ImGuiCol_ScrollbarGrabHovered] = theme.scrollbarGrabHovered.ToImVec4();
-        c[ImGuiCol_ScrollbarGrabActive] = theme.scrollbarGrabActive.ToImVec4();
-
-        // Checkbox / Radio
-        c[ImGuiCol_CheckMark] = theme.accent.ToImVec4();
-        c[ImGuiCol_CheckboxSelectedBg] = theme.backgroundSelected.ToImVec4();
-
-        // Slider
-        c[ImGuiCol_SliderGrab] = theme.accent.WithAlpha(0.8f).ToImVec4();
-        c[ImGuiCol_SliderGrabActive] = theme.accent.ToImVec4();
-
-        // Button
-        c[ImGuiCol_Button] = theme.button.ToImVec4();
-        c[ImGuiCol_ButtonHovered] = theme.buttonHovered.ToImVec4();
-        c[ImGuiCol_ButtonActive] = theme.buttonActive.ToImVec4();
-
-        // Header (collapsing headers, tree nodes, selectables)
-        c[ImGuiCol_Header] = theme.backgroundHeader.ToImVec4();
-        c[ImGuiCol_HeaderHovered] = theme.backgroundHover.ToImVec4();
-        c[ImGuiCol_HeaderActive] = theme.backgroundActive.ToImVec4();
-
-        // Separator
-        c[ImGuiCol_Separator] = theme.borderSeparator.ToImVec4();
-        c[ImGuiCol_SeparatorHovered] = theme.accent.WithAlpha(0.6f).ToImVec4();
-        c[ImGuiCol_SeparatorActive] = theme.accent.ToImVec4();
-
-        // Resize grip
-        c[ImGuiCol_ResizeGrip] = theme.accent.WithAlpha(0.2f).ToImVec4();
-        c[ImGuiCol_ResizeGripHovered] = theme.accent.WithAlpha(0.5f).ToImVec4();
-        c[ImGuiCol_ResizeGripActive] = theme.accent.WithAlpha(0.8f).ToImVec4();
-
-        // Tabs — active tab blends into panel, inactive recedes
-        c[ImGuiCol_Tab] = theme.tab.ToImVec4();
-        c[ImGuiCol_TabHovered] = theme.tabHovered.ToImVec4();
-        c[ImGuiCol_TabSelected] = theme.tabActive.ToImVec4();
-        c[ImGuiCol_TabSelectedOverline] = theme.accent.ToImVec4();
-        c[ImGuiCol_TabDimmed] = theme.tabUnfocused.ToImVec4();
-        c[ImGuiCol_TabDimmedSelected] = theme.tabActive.Darken(0.15f).ToImVec4();
-        c[ImGuiCol_TabDimmedSelectedOverline] = theme.borderAccent.WithAlpha(0.45f).ToImVec4();
-
-        // Docking — accent preview, deep empty background
-        c[ImGuiCol_DockingPreview] = theme.accent.WithAlpha(0.5f).ToImVec4();
-        c[ImGuiCol_DockingEmptyBg] = theme.backgroundDark.Darken(0.3f).ToImVec4();
-
-        // Plot
-        c[ImGuiCol_PlotLines] = theme.graph1.ToImVec4();
-        c[ImGuiCol_PlotLinesHovered] = theme.accent.ToImVec4();
-        c[ImGuiCol_PlotHistogram] = theme.graph2.ToImVec4();
-        c[ImGuiCol_PlotHistogramHovered] = theme.accentSecondary.ToImVec4();
-
-        // Tables
-        c[ImGuiCol_TableHeaderBg] = theme.backgroundHeader.ToImVec4();
-        c[ImGuiCol_TableBorderStrong] = theme.border.ToImVec4();
-        c[ImGuiCol_TableBorderLight] = theme.borderLight.ToImVec4();
-        c[ImGuiCol_TableRowBg] = ThemeColor(0, 0, 0, 0).ToImVec4();
-        c[ImGuiCol_TableRowBgAlt] = theme.backgroundDark.WithAlpha(0.3f).ToImVec4();
-
-        // Text selection
-        c[ImGuiCol_TextSelectedBg] = theme.selection.ToImVec4();
-
-        // Drag / Drop
-        c[ImGuiCol_DragDropTarget] = theme.drop.ToImVec4();
-
-        // Nav highlight
-        c[ImGuiCol_NavHighlight] = theme.focus.ToImVec4();
-        c[ImGuiCol_NavWindowingHighlight] = theme.accent.WithAlpha(0.7f).ToImVec4();
-        c[ImGuiCol_NavWindowingDimBg] = ThemeColor(0.2f, 0.2f, 0.2f, 0.2f).ToImVec4();
-
-        // Modal dimming
-        c[ImGuiCol_ModalWindowDimBg] = ThemeColor(0.0f, 0.0f, 0.0f, 0.5f).ToImVec4();
     }
 
     // ===================================================================
     // Predefined Themes
     // ===================================================================
-
-    // Forward declaration
-    static EditorThemeData CreateSparkThemeImpl();
-    static EditorThemeData CreateSparkFusionThemeImpl();
-    static EditorThemeData CreateSparkEmberThemeImpl();
-
-    // Shared semantic mapping keeps the three studio palettes consistent across widgets.
-    static EditorThemeData CreateStudioTheme(const char* name, const char* dark, const char* background,
-                                             const char* raised, const char* border, const char* text,
-                                             const char* muted, const char* accent, const char* secondary,
-                                             const char* success)
-    {
-        auto t = CreateSparkEmberThemeImpl();
-        t.name = name;
-        t.description = "Refined studio palette with consistent editor chrome";
-        t.backgroundDark = ThemeColor::FromHex(dark);
-        t.background = ThemeColor::FromHex(background);
-        t.backgroundLight = t.backgroundHeader = ThemeColor::FromHex(raised);
-        t.border = t.borderSeparator = ThemeColor::FromHex(border);
-        t.borderLight = t.border.Lighten(0.12f);
-        t.text = t.titleBarText = ThemeColor::FromHex(text);
-        t.textSecondary = ThemeColor::FromHex(muted);
-        t.textDisabled = t.textSecondary.Darken(0.15f);
-        t.accent = t.textAccent = t.borderAccent = t.focus = ThemeColor::FromHex(accent);
-        t.accentSecondary = ThemeColor::FromHex(secondary);
-        t.textSuccess = ThemeColor::FromHex(success);
-        t.backgroundAccent = t.background.Lerp(t.accent, 0.12f);
-        t.backgroundHover = t.background.Lerp(t.accent, 0.18f);
-        t.backgroundActive = t.backgroundSelected = t.background.Lerp(t.accent, 0.28f);
-        t.button = t.backgroundLight;
-        t.buttonHovered = t.backgroundHover;
-        t.buttonActive = t.backgroundActive;
-        t.buttonDisabled = t.background;
-        t.frame = t.backgroundDark;
-        t.frameHovered = t.backgroundHover;
-        t.frameActive = t.backgroundActive;
-        t.titleBar = t.titleBarActive = t.menuBar = t.backgroundDark;
-        t.menuItem = t.background;
-        t.menuItemHovered = t.backgroundHover;
-        t.scrollbar = t.backgroundDark;
-        t.scrollbarGrab = t.border;
-        t.scrollbarGrabHovered = t.borderLight;
-        t.scrollbarGrabActive = t.accent;
-        t.tab = t.tabUnfocused = t.backgroundDark;
-        t.tabHovered = t.backgroundHover;
-        t.tabActive = t.backgroundSelected;
-        t.selection = t.accent.WithAlpha(0.30f);
-        t.drop = t.accentSecondary.WithAlpha(0.70f);
-        t.graph1 = t.accent;
-        t.graph2 = t.accentSecondary;
-        t.graph3 = t.textSuccess;
-        t.graph4 = t.textWarning;
-        t.graph5 = t.textError;
-        return t;
-    }
 
     void EditorTheme::InitializeDefaultThemes()
     {
@@ -423,20 +857,15 @@ namespace SparkEditor
         initialized = true;
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Initializing default editor themes");
-        RegisterTheme(CreateStudioTheme("Ember Studio", "#110e0d", "#1a1716", "#24201e", "#3c3733", "#efeeeb",
-                                        "#918b85", "#f1823a", "#68d3ee", "#74d291"));
-        RegisterTheme(CreateStudioTheme("Cobalt Forge", "#0b1017", "#151f2a", "#202e3d", "#314557", "#e6eef7",
-                                        "#94a8bb", "#55c2e8", "#a99aff", "#6fdaa8"));
-        RegisterTheme(CreateStudioTheme("Graphite Signal", "#101113", "#1b1c1f", "#282a2f", "#46484e", "#ececef",
-                                        "#a8aab1", "#c9d1dd", "#78d3b2", "#a7d472"));
-        RegisterTheme(CreateProfessionalLightTheme());
-        RegisterTheme(CreateHighContrastTheme());
+        for (const BuiltinPalette& palette : kBuiltinPalettes)
+        {
+            s_registeredThemes[palette.name] = BuiltinTheme(palette, palette.appearance, Density::Standard);
+        }
     }
 
     // -------------------------------------------------------------------
-    // SPARK PROFESSIONAL — Signature theme
-    // Deep charcoal base, refined teal-cyan accent, warm amber secondary
-    // Sleek dark techie aesthetic inspired by Unreal/Unity/Godot best practices
+    // SPARK PROFESSIONAL — retired teal palette, still the base of the
+    // Blue Accent and Orange Accent factories.
     // -------------------------------------------------------------------
     static EditorThemeData CreateSparkThemeImpl()
     {
@@ -488,7 +917,6 @@ namespace SparkEditor
 
         // Menu bar — seamless with main background
         t.menuBar = ThemeColor::FromHex("#1B1D22");
-        t.menuItem = ThemeColor(0, 0, 0, 0);
         t.menuItemHovered = ThemeColor::FromHex("#1AAFBC").WithAlpha(0.35f);
 
         // Scrollbar — thin, subtle, only visible on hover
@@ -550,241 +978,6 @@ namespace SparkEditor
 
         return t;
     }
-
-    // -------------------------------------------------------------------
-    // SPARK FUSION — Unreal + Unity + Godot inspired with Spark's own signature
-    // High readability, sculpted contrast, cyan/amber visual language
-    // -------------------------------------------------------------------
-    static EditorThemeData CreateSparkFusionThemeImpl()
-    {
-        EditorThemeData t;
-        t.name = "Spark Fusion";
-        t.description = "Sleek pro dark blend of Unreal/Unity/Godot with Spark signature cyan + ember accents";
-        t.author = "Spark Engine Team";
-
-        // Background stack: deep neutral slate base with layered panel contrast.
-        t.background = ThemeColor::FromHex("#171A20");
-        t.backgroundDark = ThemeColor::FromHex("#101318");
-        t.backgroundLight = ThemeColor::FromHex("#222734");
-        t.backgroundAccent = ThemeColor::FromHex("#113A4A");
-        t.backgroundHeader = ThemeColor::FromHex("#1C212C");
-        t.backgroundActive = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.24f);
-        t.backgroundHover = ThemeColor::FromHex("#2A3140");
-        t.backgroundSelected = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.18f);
-
-        // Text hierarchy tuned for long editor sessions.
-        t.text = ThemeColor::FromHex("#E5EAF3");
-        t.textDisabled = ThemeColor::FromHex("#596477");
-        t.textSecondary = ThemeColor::FromHex("#97A4B8");
-        t.textAccent = ThemeColor::FromHex("#5CD8EA");
-        t.textWarning = ThemeColor::FromHex("#F5B45A");
-        t.textError = ThemeColor::FromHex("#F06363");
-        t.textSuccess = ThemeColor::FromHex("#54D79A");
-
-        // Buttons: Unity-like clarity with Unreal-like depth.
-        t.button = ThemeColor::FromHex("#2A3040");
-        t.buttonHovered = ThemeColor::FromHex("#343C4F");
-        t.buttonActive = ThemeColor::FromHex("#2FB8CC");
-        t.buttonDisabled = ThemeColor::FromHex("#1E2430");
-
-        // Frames: Godot-style recessed fields for dense data entry workflows.
-        t.frame = ThemeColor::FromHex("#141923");
-        t.frameHovered = ThemeColor::FromHex("#1C2431");
-        t.frameActive = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.37f);
-
-        t.border = ThemeColor::FromHex("#2A3343");
-        t.borderLight = ThemeColor::FromHex("#3A4558");
-        t.borderAccent = ThemeColor::FromHex("#2FB8CC");
-        t.borderSeparator = ThemeColor::FromHex("#242C39");
-
-        t.titleBar = ThemeColor::FromHex("#0F131A");
-        t.titleBarActive = ThemeColor::FromHex("#1D4D61");
-        t.titleBarText = ThemeColor::FromHex("#E5EAF3");
-
-        t.menuBar = ThemeColor::FromHex("#171A20");
-        t.menuItem = ThemeColor(0, 0, 0, 0);
-        t.menuItemHovered = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.32f);
-
-        t.scrollbar = ThemeColor::FromHex("#11161E");
-        t.scrollbarGrab = ThemeColor::FromHex("#3B465A");
-        t.scrollbarGrabHovered = ThemeColor::FromHex("#4D5B74");
-        t.scrollbarGrabActive = ThemeColor::FromHex("#2FB8CC");
-
-        t.tab = ThemeColor::FromHex("#1A1F29");
-        t.tabHovered = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.30f);
-        t.tabActive = ThemeColor::FromHex("#232A37");
-        t.tabUnfocused = ThemeColor::FromHex("#131720");
-
-        // Spark twist: cool cyan primary, warm ember secondary for key states.
-        t.accent = ThemeColor::FromHex("#2FB8CC");
-        t.accentSecondary = ThemeColor::FromHex("#EE9C44");
-        t.focus = ThemeColor::FromHex("#47CEE0");
-        t.selection = ThemeColor::FromHex("#2FB8CC").WithAlpha(0.28f);
-        t.drop = ThemeColor::FromHex("#EE9C44").WithAlpha(0.80f);
-
-        t.graph1 = ThemeColor::FromHex("#2FB8CC");
-        t.graph2 = ThemeColor::FromHex("#EE9C44");
-        t.graph3 = ThemeColor::FromHex("#54D79A");
-        t.graph4 = ThemeColor::FromHex("#F06363");
-        t.graph5 = ThemeColor::FromHex("#A98AF9");
-
-        // Style tuning: slightly crisper than Spark Professional, still modern.
-        t.windowRounding = 5.0f;
-        t.childRounding = 4.0f;
-        t.frameRounding = 5.0f;
-        t.popupRounding = 7.0f;
-        t.scrollbarRounding = 11.0f;
-        t.grabRounding = 4.0f;
-        t.tabRounding = 5.0f;
-
-        t.windowBorderSize = 1.0f;
-        t.childBorderSize = 1.0f;
-        t.popupBorderSize = 1.0f;
-        t.frameBorderSize = 0.0f;
-
-        t.windowPaddingX = 11.0f;
-        t.windowPaddingY = 10.0f;
-        t.framePaddingX = 9.0f;
-        t.framePaddingY = 6.0f;
-        t.itemSpacingX = 9.0f;
-        t.itemSpacingY = 6.0f;
-        t.itemInnerSpacingX = 6.0f;
-        t.itemInnerSpacingY = 5.0f;
-
-        t.indentSpacing = 20.0f;
-        t.scrollbarSize = 12.0f;
-        t.grabMinSize = 10.0f;
-
-        t.shadowOpacity = 0.42f;
-        t.shadowSize = 10.0f;
-        t.fontSize = 15.0f;
-        t.fontScale = 1.0f;
-        t.fontFamily = "Inter";
-
-        return t;
-    }
-
-    // -------------------------------------------------------------------
-    // SPARK EMBER — Warm charcoal IDE with ember/spark accent
-    // Matches the SparkEditor hi-fi design (IBM Plex Sans + JetBrains Mono,
-    // OKLCH neutrals at hue 60, ember accent at oklch(0.72 0.16 50)).
-    // -------------------------------------------------------------------
-    static EditorThemeData CreateSparkEmberThemeImpl()
-    {
-        EditorThemeData t;
-        t.name = "Spark Ember";
-        t.description = "Warm charcoal IDE with ember/spark accent — matches SparkEditor hi-fi design";
-        t.author = "Spark Engine Team";
-
-        // Warm neutral background stack (hue ≈ 60, very low chroma).
-        t.background = ThemeColor::FromHex("#1A1716");      // bg-1: panel
-        t.backgroundDark = ThemeColor::FromHex("#110E0D");  // bg-0: deepest
-        t.backgroundLight = ThemeColor::FromHex("#302D2A"); // bg-3: hover/input
-        t.backgroundAccent = ThemeColor::FromHex("#AF530D").WithAlpha(0.22f);
-        t.backgroundHeader = ThemeColor::FromHex("#23201E"); // bg-2: header row
-        t.backgroundActive = ThemeColor::FromHex("#F1823A").WithAlpha(0.20f);
-        t.backgroundHover = ThemeColor::FromHex("#302D2A");
-        t.backgroundSelected = ThemeColor::FromHex("#F1823A").WithAlpha(0.16f);
-
-        // Warm off-white foreground (hue ≈ 80).
-        t.text = ThemeColor::FromHex("#C5C3C1");          // fg-1
-        t.textDisabled = ThemeColor::FromHex("#64625F");  // fg-3
-        t.textSecondary = ThemeColor::FromHex("#8D8B88"); // fg-2
-        t.textAccent = ThemeColor::FromHex("#F1823A");    // ember
-        t.textWarning = ThemeColor::FromHex("#EDCF59");   // yellow
-        t.textError = ThemeColor::FromHex("#FA6862");     // red
-        t.textSuccess = ThemeColor::FromHex("#6ED086");   // green
-
-        // Buttons — slightly raised from panel.
-        t.button = ThemeColor::FromHex("#23201E");
-        t.buttonHovered = ThemeColor::FromHex("#302D2A");
-        t.buttonActive = ThemeColor::FromHex("#F1823A");
-        t.buttonDisabled = ThemeColor::FromHex("#1A1716");
-
-        // Frames (input fields) — recessed, darker than panel.
-        t.frame = ThemeColor::FromHex("#110E0D");
-        t.frameHovered = ThemeColor::FromHex("#23201E");
-        t.frameActive = ThemeColor::FromHex("#F1823A").WithAlpha(0.35f);
-
-        // Borders — barely visible on idle, ember on focus.
-        t.border = ThemeColor::FromHex("#35322F");      // line
-        t.borderLight = ThemeColor::FromHex("#403C38"); // bg-4
-        t.borderAccent = ThemeColor::FromHex("#F1823A");
-        t.borderSeparator = ThemeColor::FromHex("#282523"); // line-soft
-
-        // Title bar — deepest charcoal; active tab uses a dim ember wash.
-        t.titleBar = ThemeColor::FromHex("#110E0D");
-        t.titleBarActive = ThemeColor::FromHex("#AF530D");
-        t.titleBarText = ThemeColor::FromHex("#EFEEEB");
-
-        // Menu bar — seamless with panel background.
-        t.menuBar = ThemeColor::FromHex("#1A1716");
-        t.menuItem = ThemeColor(0, 0, 0, 0);
-        t.menuItemHovered = ThemeColor::FromHex("#F1823A").WithAlpha(0.30f);
-
-        // Scrollbars — thin, warm, ember-active.
-        t.scrollbar = ThemeColor::FromHex("#110E0D");
-        t.scrollbarGrab = ThemeColor::FromHex("#403C38");
-        t.scrollbarGrabHovered = ThemeColor::FromHex("#5A544E");
-        t.scrollbarGrabActive = ThemeColor::FromHex("#F1823A");
-
-        // Tabs — active tab rises to header tone.
-        t.tab = ThemeColor::FromHex("#1A1716");
-        t.tabHovered = ThemeColor::FromHex("#F1823A").WithAlpha(0.25f);
-        t.tabActive = ThemeColor::FromHex("#23201E");
-        t.tabUnfocused = ThemeColor::FromHex("#110E0D");
-
-        // Accents — ember primary, cyan secondary (matches design's dual accent).
-        t.accent = ThemeColor::FromHex("#F1823A");
-        t.accentSecondary = ThemeColor::FromHex("#5FCEEE");
-        t.focus = ThemeColor::FromHex("#F1823A");
-        t.selection = ThemeColor::FromHex("#F1823A").WithAlpha(0.28f);
-        t.drop = ThemeColor::FromHex("#F1823A").WithAlpha(0.75f);
-
-        // Graph palette — ember, cyan, green, red, blue (design's semantic set).
-        t.graph1 = ThemeColor::FromHex("#F1823A");
-        t.graph2 = ThemeColor::FromHex("#5FCEEE");
-        t.graph3 = ThemeColor::FromHex("#6ED086");
-        t.graph4 = ThemeColor::FromHex("#FA6862");
-        t.graph5 = ThemeColor::FromHex("#6AA7F4");
-
-        // Style tuning — tight, IDE-like radii matching the hi-fi design.
-        t.windowRounding = 3.0f;
-        t.childRounding = 3.0f;
-        t.frameRounding = 3.0f;
-        t.popupRounding = 5.0f;
-        t.scrollbarRounding = 5.0f;
-        t.grabRounding = 3.0f;
-        t.tabRounding = 4.0f;
-
-        t.windowBorderSize = 1.0f;
-        t.childBorderSize = 1.0f;
-        t.popupBorderSize = 1.0f;
-        // Design separates frames by color, not by stroke — disable per-frame border.
-        t.frameBorderSize = 0.0f;
-
-        t.windowPaddingX = 10.0f;
-        t.windowPaddingY = 10.0f;
-        t.framePaddingX = 9.0f;
-        t.framePaddingY = 5.0f;
-        t.itemSpacingX = 8.0f;
-        t.itemSpacingY = 5.0f;
-        t.itemInnerSpacingX = 6.0f;
-        t.itemInnerSpacingY = 5.0f;
-
-        t.indentSpacing = 18.0f;
-        t.scrollbarSize = 10.0f;
-        t.grabMinSize = 10.0f;
-
-        t.shadowOpacity = 0.45f;
-        t.shadowSize = 10.0f;
-        t.fontSize = 13.0f;
-        t.fontScale = 1.0f;
-        t.fontFamily = "IBM Plex Sans";
-
-        return t;
-    }
-
     EditorThemeData EditorTheme::CreateUnityProTheme()
     {
         EditorThemeData t;
@@ -828,7 +1021,6 @@ namespace SparkEditor
         t.titleBarText = ThemeColor::FromRGB(200, 200, 200);
 
         t.menuBar = ThemeColor::FromRGB(56, 56, 56);
-        t.menuItem = ThemeColor(0, 0, 0, 0);
         t.menuItemHovered = ThemeColor::FromRGB(62, 95, 150, 180);
 
         t.scrollbar = ThemeColor::FromRGB(40, 40, 40);
@@ -858,6 +1050,7 @@ namespace SparkEditor
         t.tabRounding = 2.0f;
         t.frameBorderSize = 0.0f;
 
+        CompleteLegacyFields(t);
         return t;
     }
 
@@ -904,7 +1097,6 @@ namespace SparkEditor
         t.titleBarText = ThemeColor::FromRGB(200, 200, 200);
 
         t.menuBar = ThemeColor::FromRGB(36, 36, 36);
-        t.menuItem = ThemeColor(0, 0, 0, 0);
         t.menuItemHovered = ThemeColor::FromRGB(0, 90, 180, 180);
 
         t.scrollbar = ThemeColor::FromRGB(20, 20, 20);
@@ -934,6 +1126,7 @@ namespace SparkEditor
         t.tabRounding = 0.0f;
         t.frameBorderSize = 1.0f;
 
+        CompleteLegacyFields(t);
         return t;
     }
 
@@ -978,7 +1171,6 @@ namespace SparkEditor
         t.titleBarActive = ThemeColor::FromRGB(0, 122, 204);
         t.titleBarText = ThemeColor::FromRGB(220, 220, 220);
         t.menuBar = ThemeColor::FromRGB(45, 45, 48);
-        t.menuItem = ThemeColor(0, 0, 0, 0);
         t.menuItemHovered = ThemeColor::FromRGB(0, 122, 204, 180);
 
         t.scrollbar = ThemeColor::FromRGB(30, 30, 30);
@@ -1006,6 +1198,7 @@ namespace SparkEditor
         t.frameRounding = 0.0f;
         t.tabRounding = 0.0f;
         t.frameBorderSize = 1.0f;
+        CompleteLegacyFields(t);
         return t;
     }
 
@@ -1047,7 +1240,6 @@ namespace SparkEditor
         t.titleBarActive = ThemeColor::FromRGB(75, 110, 175);
         t.titleBarText = ThemeColor::FromRGB(187, 187, 187);
         t.menuBar = ThemeColor::FromRGB(43, 43, 43);
-        t.menuItem = ThemeColor(0, 0, 0, 0);
         t.menuItemHovered = ThemeColor::FromRGB(75, 110, 175, 180);
         t.scrollbar = ThemeColor::FromRGB(43, 43, 43);
         t.scrollbarGrab = ThemeColor::FromRGB(80, 80, 80);
@@ -1072,140 +1264,22 @@ namespace SparkEditor
         t.frameRounding = 3.0f;
         t.tabRounding = 4.0f;
         t.frameBorderSize = 0.0f;
+        CompleteLegacyFields(t);
         return t;
     }
 
+    // -------------------------------------------------------------------
+    // Token-generated built-ins and retired accent variants
+    // -------------------------------------------------------------------
+
     EditorThemeData EditorTheme::CreateProfessionalLightTheme()
     {
-        EditorThemeData t;
-        t.name = "Professional Light";
-        t.description = "Clean, professional light theme";
-
-        t.background = ThemeColor::FromRGB(240, 240, 240);
-        t.backgroundDark = ThemeColor::FromRGB(230, 230, 230);
-        t.backgroundLight = ThemeColor::FromRGB(255, 255, 255);
-        t.backgroundAccent = ThemeColor::FromRGB(0, 120, 215);
-        t.backgroundHeader = ThemeColor::FromRGB(235, 235, 235);
-        t.backgroundActive = ThemeColor::FromRGB(0, 120, 215, 50);
-        t.backgroundHover = ThemeColor::FromRGB(225, 225, 225);
-        t.backgroundSelected = ThemeColor::FromRGB(0, 120, 215, 30);
-
-        t.text = ThemeColor::FromRGB(30, 30, 30);
-        t.textDisabled = ThemeColor::FromRGB(160, 160, 160);
-        t.textSecondary = ThemeColor::FromRGB(100, 100, 100);
-        t.textAccent = ThemeColor::FromRGB(0, 100, 200);
-        t.textWarning = ThemeColor::FromRGB(180, 130, 0);
-        t.textError = ThemeColor::FromRGB(190, 40, 40);
-        t.textSuccess = ThemeColor::FromRGB(40, 150, 60);
-
-        t.button = ThemeColor::FromRGB(225, 225, 225);
-        t.buttonHovered = ThemeColor::FromRGB(210, 210, 210);
-        t.buttonActive = ThemeColor::FromRGB(0, 120, 215);
-        t.buttonDisabled = ThemeColor::FromRGB(235, 235, 235);
-        t.frame = ThemeColor::FromRGB(255, 255, 255);
-        t.frameHovered = ThemeColor::FromRGB(245, 245, 245);
-        t.frameActive = ThemeColor::FromRGB(0, 120, 215, 80);
-        t.border = ThemeColor::FromRGB(200, 200, 200);
-        t.borderLight = ThemeColor::FromRGB(220, 220, 220);
-        t.borderAccent = ThemeColor::FromRGB(0, 120, 215);
-        t.borderSeparator = ThemeColor::FromRGB(210, 210, 210);
-        t.titleBar = ThemeColor::FromRGB(230, 230, 230);
-        t.titleBarActive = ThemeColor::FromRGB(0, 120, 215);
-        t.titleBarText = ThemeColor::FromRGB(30, 30, 30);
-        t.menuBar = ThemeColor::FromRGB(240, 240, 240);
-        t.menuItem = ThemeColor(0, 0, 0, 0);
-        t.menuItemHovered = ThemeColor::FromRGB(0, 120, 215, 80);
-        t.scrollbar = ThemeColor::FromRGB(240, 240, 240);
-        t.scrollbarGrab = ThemeColor::FromRGB(180, 180, 180);
-        t.scrollbarGrabHovered = ThemeColor::FromRGB(160, 160, 160);
-        t.scrollbarGrabActive = ThemeColor::FromRGB(140, 140, 140);
-        t.tab = ThemeColor::FromRGB(230, 230, 230);
-        t.tabHovered = ThemeColor::FromRGB(200, 220, 240);
-        t.tabActive = ThemeColor::FromRGB(255, 255, 255);
-        t.tabUnfocused = ThemeColor::FromRGB(235, 235, 235);
-        t.accent = ThemeColor::FromRGB(0, 120, 215);
-        t.accentSecondary = ThemeColor::FromRGB(0, 90, 180);
-        t.focus = ThemeColor::FromRGB(0, 120, 215);
-        t.selection = ThemeColor::FromRGB(0, 120, 215, 60);
-        t.drop = ThemeColor::FromRGB(0, 120, 215, 150);
-        t.graph1 = t.accent;
-        t.graph2 = t.textWarning;
-        t.graph3 = t.textSuccess;
-        t.graph4 = t.textError;
-        t.graph5 = ThemeColor::FromRGB(120, 60, 190);
-
-        t.windowRounding = 2.0f;
-        t.frameRounding = 2.0f;
-        t.tabRounding = 3.0f;
-        t.frameBorderSize = 1.0f;
-        return t;
+        return BuiltinTheme(kBuiltinPalettes[3], Appearance::Light, Density::Standard);
     }
 
     EditorThemeData EditorTheme::CreateHighContrastTheme()
     {
-        EditorThemeData t;
-        t.name = "High Contrast";
-        t.description = "High contrast accessibility theme";
-
-        t.background = ThemeColor::FromRGB(0, 0, 0);
-        t.backgroundDark = ThemeColor::FromRGB(0, 0, 0);
-        t.backgroundLight = ThemeColor::FromRGB(20, 20, 20);
-        t.backgroundAccent = ThemeColor::FromRGB(0, 120, 255);
-        t.backgroundHeader = ThemeColor::FromRGB(15, 15, 15);
-        t.backgroundActive = ThemeColor::FromRGB(0, 120, 255, 150);
-        t.backgroundHover = ThemeColor::FromRGB(30, 30, 30);
-        t.backgroundSelected = ThemeColor::FromRGB(0, 120, 255, 100);
-
-        t.text = ThemeColor::FromRGB(255, 255, 255);
-        t.textDisabled = ThemeColor::FromRGB(128, 128, 128);
-        t.textSecondary = ThemeColor::FromRGB(200, 200, 200);
-        t.textAccent = ThemeColor::FromRGB(0, 200, 255);
-        t.textWarning = ThemeColor::FromRGB(255, 220, 0);
-        t.textError = ThemeColor::FromRGB(255, 50, 50);
-        t.textSuccess = ThemeColor::FromRGB(0, 255, 100);
-
-        t.button = ThemeColor::FromRGB(30, 30, 30);
-        t.buttonHovered = ThemeColor::FromRGB(50, 50, 50);
-        t.buttonActive = ThemeColor::FromRGB(0, 120, 255);
-        t.buttonDisabled = ThemeColor::FromRGB(20, 20, 20);
-        t.frame = ThemeColor::FromRGB(10, 10, 10);
-        t.frameHovered = ThemeColor::FromRGB(30, 30, 30);
-        t.frameActive = ThemeColor::FromRGB(0, 120, 255, 150);
-        t.border = ThemeColor::FromRGB(200, 200, 200);
-        t.borderLight = ThemeColor::FromRGB(150, 150, 150);
-        t.borderAccent = ThemeColor::FromRGB(0, 200, 255);
-        t.borderSeparator = ThemeColor::FromRGB(150, 150, 150);
-        t.titleBar = ThemeColor::FromRGB(0, 0, 0);
-        t.titleBarActive = ThemeColor::FromRGB(0, 120, 255);
-        t.titleBarText = ThemeColor::FromRGB(255, 255, 255);
-        t.menuBar = ThemeColor::FromRGB(0, 0, 0);
-        t.menuItem = ThemeColor(0, 0, 0, 0);
-        t.menuItemHovered = ThemeColor::FromRGB(0, 120, 255, 200);
-        t.scrollbar = ThemeColor::FromRGB(0, 0, 0);
-        t.scrollbarGrab = ThemeColor::FromRGB(100, 100, 100);
-        t.scrollbarGrabHovered = ThemeColor::FromRGB(150, 150, 150);
-        t.scrollbarGrabActive = ThemeColor::FromRGB(200, 200, 200);
-        t.tab = ThemeColor::FromRGB(0, 0, 0);
-        t.tabHovered = ThemeColor::FromRGB(30, 30, 30);
-        t.tabActive = ThemeColor::FromRGB(0, 120, 255);
-        t.tabUnfocused = ThemeColor::FromRGB(0, 0, 0);
-        t.accent = ThemeColor::FromRGB(0, 200, 255);
-        t.accentSecondary = ThemeColor::FromRGB(0, 120, 255);
-        t.focus = ThemeColor::FromRGB(0, 200, 255);
-        t.selection = ThemeColor::FromRGB(0, 120, 255, 120);
-        t.drop = ThemeColor::FromRGB(0, 200, 255, 200);
-        t.graph1 = t.accent;
-        t.graph2 = t.textWarning;
-        t.graph3 = t.textSuccess;
-        t.graph4 = t.textError;
-        t.graph5 = ThemeColor::FromRGB(200, 100, 255);
-
-        t.windowRounding = 0.0f;
-        t.frameRounding = 0.0f;
-        t.tabRounding = 0.0f;
-        t.frameBorderSize = 2.0f;
-        t.windowBorderSize = 2.0f;
-        return t;
+        return BuiltinTheme(kBuiltinPalettes[4], Appearance::HighContrast, Density::Standard);
     }
 
     EditorThemeData EditorTheme::CreateBlueAccentTheme()
@@ -1218,6 +1292,7 @@ namespace SparkEditor
         t.tabActive = t.accent;
         t.titleBarActive = t.accent.Darken(0.3f);
         t.buttonActive = t.accent;
+        CompleteLegacyFields(t);
         return t;
     }
 
@@ -1232,32 +1307,8 @@ namespace SparkEditor
         t.titleBarActive = t.accent.Darken(0.4f);
         t.buttonActive = t.accent;
         t.textAccent = t.accent;
+        CompleteLegacyFields(t);
         return t;
-    }
-
-    // ===================================================================
-    // Private helpers
-    // ===================================================================
-
-    ThemeColor EditorTheme::GetSystemAccentColor()
-    {
-        return ThemeColor::FromHex("#2D8CF0");
-    }
-
-    ThemeColor EditorTheme::CreateComplementaryColor(const ThemeColor& base)
-    {
-        return ThemeColor(1.0f - base.r, 1.0f - base.g, 1.0f - base.b, base.a);
-    }
-
-    std::vector<ThemeColor> EditorTheme::CreateColorPalette(const ThemeColor& base)
-    {
-        return {base, base.Lighten(0.2f), base.Darken(0.2f), base.Desaturate(0.3f), base.Lighten(0.4f)};
-    }
-
-    unsigned int EditorTheme::ColorToImGui(const ThemeColor& color)
-    {
-        return IM_COL32((int)(color.r * 255.0f), (int)(color.g * 255.0f), (int)(color.b * 255.0f),
-                        (int)(color.a * 255.0f));
     }
 
     // ===================================================================
@@ -1390,8 +1441,8 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button("Reset to Default"))
         {
-            EditorTheme::ApplyTheme("SparkDark");
-            const EditorThemeData* resetTheme = EditorTheme::GetTheme("SparkDark");
+            EditorTheme::ApplyTheme("Ember Studio");
+            const EditorThemeData* resetTheme = EditorTheme::GetTheme("Ember Studio");
             if (resetTheme)
                 editTheme = *resetTheme;
         }

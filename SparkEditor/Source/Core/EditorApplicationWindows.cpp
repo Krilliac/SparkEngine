@@ -12,6 +12,7 @@
 
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "EditorTheme.h"
 #include "ProjectManager.h"
 #include "EditorWindowManager.h"
 #include "EditorCrashHandler.h"
@@ -19,7 +20,11 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Dpi.h"
+#include "SparkUI/Runtime.h"
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <imgui.h>
@@ -28,24 +33,77 @@
 #include <d3d11.h>
 #include <dxgi.h>
 #include <windows.h>
+#include <dwmapi.h>
 using Microsoft::WRL::ComPtr;
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// Resource id of the application icon (SparkEditor/resources/SparkEditor.rc, IDI_SPARK_APP).
+        constexpr WORD kAppIconResourceId = 1;
+        /// Share of the monitor work area the restored (non-maximized) window may cover.
+        constexpr float kMaxWorkAreaShare = 0.85f;
+        /// DWMWA_USE_IMMERSIVE_DARK_MODE on Windows 10 20H1+ / 11, and its pre-20H1 value (1809+).
+        constexpr DWORD kDwmUseImmersiveDarkMode = 20;
+        constexpr DWORD kDwmUseImmersiveDarkModeLegacy = 19;
+        /// DWMWA_CAPTION_COLOR and DWMWA_TEXT_COLOR (Windows 11 only).
+        constexpr DWORD kDwmCaptionColor = 35;
+        constexpr DWORD kDwmTextColor = 36;
+        constexpr float kChannelMax = 255.0f;
+        /// Windows logical DPI at 100 % scale.
+        constexpr float kBaselineDpi = 96.0f;
+
+        BYTE ToChannel(float value)
+        {
+            const float clamped = std::isfinite(value) ? std::clamp(value, 0.0f, 1.0f) : 0.0f;
+            return static_cast<BYTE>(std::lround(clamped * kChannelMax));
+        }
+
+        COLORREF ToColorRef(const ThemeColor& colour)
+        {
+            return RGB(ToChannel(colour.r), ToChannel(colour.g), ToChannel(colour.b));
+        }
+
+        /// Match the native caption to the theme: dark mode on Windows 10 1809+ and 11, caption and
+        /// caption-text colours on Windows 11. Attributes an OS does not know fail and are ignored.
+        void ApplyNativeCaption(HWND hwnd, const EditorTheme::NativeCaptionStyle& style)
+        {
+            const BOOL darkMode = style.darkMode ? TRUE : FALSE;
+            if (FAILED(DwmSetWindowAttribute(hwnd, kDwmUseImmersiveDarkMode, &darkMode, sizeof(darkMode))))
+            {
+                DwmSetWindowAttribute(hwnd, kDwmUseImmersiveDarkModeLegacy, &darkMode, sizeof(darkMode));
+            }
+            const COLORREF caption = ToColorRef(style.caption);
+            const COLORREF text = ToColorRef(style.text);
+            DwmSetWindowAttribute(hwnd, kDwmCaptionColor, &caption, sizeof(caption));
+            DwmSetWindowAttribute(hwnd, kDwmTextColor, &text, sizeof(text));
+        }
+    } // namespace
 
     bool EditorApplication::CreateMainWindow(const EditorConfig& config)
     {
         auto& console = Spark::SimpleConsole::GetInstance();
 
-        // Register window class
+        // Per-monitor DPI awareness must be set before the first window exists.
+        Spark::Ui::EnableProcessDpiAwareness();
+
+        // Register window class. No background brush: the swap chain clears every frame, so the
+        // OS never flashes a white client area before the first present.
+        const HINSTANCE instance = GetModuleHandleW(nullptr);
         WNDCLASSEXW wc = {};
         wc.cbSize = sizeof(WNDCLASSEXW);
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = WindowProc;
-        wc.hInstance = GetModuleHandleW(nullptr);
+        wc.hInstance = instance;
         wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)); // IDC_ARROW
-        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+        wc.hIcon = static_cast<HICON>(
+            LoadImageW(instance, MAKEINTRESOURCEW(kAppIconResourceId), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED));
+        wc.hIconSm =
+            static_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(kAppIconResourceId), IMAGE_ICON,
+                                          GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
+        wc.hbrBackground = nullptr;
         wc.lpszClassName = L"SparkEditorWindow";
 
         if (!RegisterClassExW(&wc))
@@ -57,18 +115,18 @@ namespace SparkEditor
         console.LogInfo("Window class registered successfully");
 
         // Create window
-        m_hwnd = CreateWindowExW(0,                         // dwExStyle
-                                 L"SparkEditorWindow",      // lpClassName
-                                 L"Spark Engine Editor",    // lpWindowName
-                                 WS_OVERLAPPEDWINDOW,       // dwStyle
-                                 CW_USEDEFAULT,             // X
-                                 CW_USEDEFAULT,             // Y
-                                 config.windowWidth,        // nWidth
-                                 config.windowHeight,       // nHeight
-                                 nullptr,                   // hWndParent
-                                 nullptr,                   // hMenu
-                                 GetModuleHandleW(nullptr), // hInstance
-                                 nullptr                    // lpParam
+        m_hwnd = CreateWindowExW(0,                      // dwExStyle
+                                 L"SparkEditorWindow",   // lpClassName
+                                 L"Spark Engine Editor", // lpWindowName
+                                 WS_OVERLAPPEDWINDOW,    // dwStyle
+                                 CW_USEDEFAULT,          // X
+                                 CW_USEDEFAULT,          // Y
+                                 config.windowWidth,     // nWidth
+                                 config.windowHeight,    // nHeight
+                                 nullptr,                // hWndParent
+                                 nullptr,                // hMenu
+                                 instance,               // hInstance
+                                 this                    // lpParam
         );
 
         if (!m_hwnd)
@@ -80,8 +138,36 @@ namespace SparkEditor
 
         console.LogInfo("Window created successfully");
 
-        ShowWindow(m_hwnd, SW_SHOW);
+        // Size the restored window in logical pixels for its monitor, capped to a share of the
+        // work area, and centre it there. Maximizing keeps this as the restore rectangle.
+        m_dpiScale = Spark::Ui::WindowDpiScale(m_hwnd);
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        if (GetMonitorInfoW(MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST), &monitorInfo) != FALSE)
+        {
+            const RECT& work = monitorInfo.rcWork;
+            const int workWidth = work.right - work.left;
+            const int workHeight = work.bottom - work.top;
+            const int width =
+                std::min(static_cast<int>(std::lround(static_cast<float>(config.windowWidth) * m_dpiScale)),
+                         static_cast<int>(static_cast<float>(workWidth) * kMaxWorkAreaShare));
+            const int height =
+                std::min(static_cast<int>(std::lround(static_cast<float>(config.windowHeight) * m_dpiScale)),
+                         static_cast<int>(static_cast<float>(workHeight) * kMaxWorkAreaShare));
+            SetWindowPos(m_hwnd, nullptr, work.left + (workWidth - width) / 2, work.top + (workHeight - height) / 2,
+                         width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+
+        ShowWindow(m_hwnd, config.startMaximized ? SW_SHOWMAXIMIZED : SW_SHOW);
         UpdateWindow(m_hwnd);
+
+        // The swap chain is created at the real client size, not the requested one.
+        RECT client{};
+        if (GetClientRect(m_hwnd, &client) != FALSE && client.right > client.left && client.bottom > client.top)
+        {
+            m_windowWidth = client.right - client.left;
+            m_windowHeight = client.bottom - client.top;
+        }
 
         console.LogInfo("Window is now visible and active");
         return true;
@@ -177,8 +263,16 @@ namespace SparkEditor
         io.ConfigDockingWithShift = false; // Dock without holding Shift
         io.ConfigWindowsResizeFromEdges = true;
 
-        // Load custom fonts before backend initialization
-        EditorFonts::LoadFonts(15.0f);
+        // Load custom fonts before backend initialization, then install the Spark UI runtime at
+        // the window's DPI and the saved user scale (0 = Auto: DPI only). The startup theme
+        // replaces these Ember tokens once EditorUI applies it.
+        EditorFonts::LoadFonts(Spark::Ui::Typography{}.body);
+        Spark::Ui::Install(ImGui::GetCurrentContext(),
+                           Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember),
+                                                     Spark::Ui::Appearance::Dark, m_preferences.density),
+                           m_dpiScale, m_preferences.uiScale > 0.0f ? m_preferences.uiScale : 1.0f,
+                           m_preferences.reduceMotion);
+        io.ConfigNavCursorVisibleAlways = m_preferences.alwaysShowFocus;
 
         // Setup Platform/Renderer backends
         if (!ImGui_ImplWin32_Init(m_hwnd))
@@ -281,8 +375,17 @@ namespace SparkEditor
 
     void EditorApplication::Render()
     {
-        // Clear render target
-        float clearColor[4] = {0.45f, 0.55f, 0.60f, 1.00f};
+        // A DPI or user-scale change queued since the last frame is applied before NewFrame.
+        EditorTheme::ApplyPendingScale();
+        if (EditorTheme::GetRevision() != m_appliedCaptionRevision)
+        {
+            m_appliedCaptionRevision = EditorTheme::GetRevision();
+            ApplyNativeCaption(m_hwnd, EditorTheme::NativeCaptionStyleFor(EditorTheme::GetCurrentThemeData()));
+        }
+
+        // Clear to the theme's sunken surface so resize gaps match the dock background.
+        const Spark::Ui::Rgba clear = Spark::Ui::Get(Spark::Ui::ActiveTokens(), Spark::Ui::Role::SurfaceSunken);
+        const float clearColor[4] = {clear.r, clear.g, clear.b, 1.0f};
         m_context->OMSetRenderTargets(1, m_rtv.GetAddressOf(), nullptr);
         m_context->ClearRenderTargetView(m_rtv.Get(), clearColor);
 
@@ -350,7 +453,14 @@ namespace SparkEditor
     {
         if (m_hwnd)
         {
-            std::wstring wTitle(title.begin(), title.end());
+            // Titles carry UTF-8 project and scene names; widen them properly.
+            const int length =
+                MultiByteToWideChar(CP_UTF8, 0, title.data(), static_cast<int>(title.size()), nullptr, 0);
+            std::wstring wTitle(static_cast<std::size_t>(std::max(length, 0)), L'\0');
+            if (length > 0)
+            {
+                MultiByteToWideChar(CP_UTF8, 0, title.data(), static_cast<int>(title.size()), wTitle.data(), length);
+            }
             SetWindowTextW(m_hwnd, wTitle.c_str());
         }
     }
@@ -458,6 +568,19 @@ namespace SparkEditor
                 app->OnWindowResize(LOWORD(lParam), HIWORD(lParam));
             }
             return 0;
+
+        case WM_DPICHANGED:
+        {
+            // Adopt the rectangle Windows suggests for the new monitor, then rescale the UI.
+            const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+            SetWindowPos(hwnd, nullptr, suggested->left, suggested->top, suggested->right - suggested->left,
+                         suggested->bottom - suggested->top, SWP_NOZORDER | SWP_NOACTIVATE);
+            if (app)
+            {
+                app->OnDpiChanged(static_cast<float>(HIWORD(wParam)) / kBaselineDpi);
+            }
+            return 0;
+        }
 
         case WM_CLOSE:
             if (app && app->OnShutdownRequested())

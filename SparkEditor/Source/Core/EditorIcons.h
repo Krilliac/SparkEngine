@@ -88,6 +88,16 @@
 #define ICON_FA_BOLT "\xef\x83\xa7"        // U+F0E7 (spark!)
 #define ICON_FA_FIRE "\xef\x81\xad"        // U+F06D
 
+// === Font Awesome 6 names used by the Spark UI status and chrome widgets ===
+#define ICON_FA_CIRCLE_CHECK "\xef\x81\x98"         // U+F058
+#define ICON_FA_TRIANGLE_EXCLAMATION "\xef\x81\xb1" // U+F071
+#define ICON_FA_CIRCLE_XMARK "\xef\x81\x97"         // U+F057
+#define ICON_FA_CIRCLE_INFO "\xef\x81\x9a"          // U+F05A
+#define ICON_FA_CIRCLE_QUESTION "\xef\x81\x99"      // U+F059
+#define ICON_FA_MAGNIFYING_GLASS "\xef\x80\x82"     // U+F002
+#define ICON_FA_ELLIPSIS "\xef\x85\x81"             // U+F141
+#define ICON_FA_XMARK "\xef\x80\x8d"                // U+F00D
+
 // === Communication / Dialogue ===
 #define ICON_FA_COMMENT "\xef\x81\xb5"  // U+F075
 #define ICON_FA_COMMENTS "\xef\x82\x86" // U+F086

@@ -46,6 +46,22 @@ if(REPORTER_SOURCES)
         target_link_libraries(SparkCrashReporter PRIVATE
             kernel32 user32 bcrypt
         )
+
+        # Brand icon plus the comctl32 v6 / PerMonitorV2 manifest, on the shipped exe only: the test binaries stay
+        # unmanifested so they keep the MessageBoxW path. MSVC-style linkers merge the .manifest source themselves;
+        # other toolchains embed it through the .rc.
+        set(SPARK_REPORTER_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../Assets/Engine/Branding/sparkengine.ico")
+        set(SPARK_REPORTER_RC "${CMAKE_CURRENT_SOURCE_DIR}/resources/SparkCrashReporter.rc")
+        set(SPARK_REPORTER_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/resources/SparkCrashReporter.manifest")
+        target_sources(SparkCrashReporter PRIVATE "${SPARK_REPORTER_RC}")
+        set_source_files_properties("${SPARK_REPORTER_RC}" PROPERTIES
+            OBJECT_DEPENDS "${SPARK_REPORTER_ICON};${SPARK_REPORTER_MANIFEST}")
+        if(MSVC)
+            target_sources(SparkCrashReporter PRIVATE "${SPARK_REPORTER_MANIFEST}")
+        else()
+            set_source_files_properties("${SPARK_REPORTER_RC}" PROPERTIES
+                COMPILE_DEFINITIONS SPARK_EMBED_MANIFEST_IN_RC)
+        endif()
     else()
         find_package(Threads REQUIRED)
         target_link_libraries(SparkCrashReporter PRIVATE Threads::Threads)
@@ -163,6 +179,16 @@ if(REPORTER_SOURCES)
         set_tests_properties(CrashReporter_Consent PROPERTIES
                              TIMEOUT 30
                              LABELS "crash-security;security;unit")
+
+        if(WIN32)
+            # The shipped exe must embed the comctl32 v6 manifest and icon; without them TaskDialogIndirect is
+            # unavailable and the dialogs silently degrade to MessageBoxW.
+            add_test(NAME SparkCrashReporter.ExeResources
+                     COMMAND SparkCrashReporterConsentTests --exe-resources $<TARGET_FILE:SparkCrashReporter>)
+            set_tests_properties(SparkCrashReporter.ExeResources PROPERTIES
+                                 TIMEOUT 30
+                                 LABELS "crash-reporter;unit")
+        endif()
 
         add_test(NAME SparkCrashReporter.ExecutableSmoke
                  COMMAND ${CMAKE_COMMAND}

@@ -3624,6 +3624,7 @@ set_source_files_properties(
 )
 target_include_directories(SparkFuzzEditorThemeImport PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkUI/Include"
 )
 target_compile_features(SparkFuzzEditorThemeImport PRIVATE cxx_std_23)
 target_compile_options(SparkFuzzEditorThemeImport PRIVATE

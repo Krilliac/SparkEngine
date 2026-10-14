@@ -20,6 +20,8 @@
 #include "Core/Platform.h" // DirectXMath on Windows / vector-math stubs on Linux
 
 #ifdef SPARK_HAS_IMGUI
+#include "Spark/UiTheme.h" // Spark::Ui::Sdk::HudFont
+
 #include <imgui.h>
 #endif
 
@@ -113,11 +115,12 @@ namespace Terrafront
                         char label[48];
                         std::snprintf(label, sizeof(label), "%s %.0fm", PingTypeName(p.type), dist);
                         const float fontSize = ImGui::GetFontSize() * 0.92f;
-                        const ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontSize, 1.0e9f, 0.0f, label);
+                        ImFont* const font = Spark::Ui::Sdk::HudFont();
+                        const ImVec2 sz = font->CalcTextSizeA(fontSize, 1.0e9f, 0.0f, label);
                         const ImVec2 pos(sp.x - sz.x * 0.5f, sp.y + 4.0f);
-                        dl->AddText(ImGui::GetFont(), fontSize, ImVec2(pos.x + 1.0f, pos.y + 1.0f),
+                        dl->AddText(font, fontSize, ImVec2(pos.x + 1.0f, pos.y + 1.0f),
                                     IM_COL32(0, 0, 0, static_cast<int>(alpha * 190.0f)), label);
-                        dl->AddText(ImGui::GetFont(), fontSize, pos, PingCol32(p.type, alpha), label);
+                        dl->AddText(font, fontSize, pos, PingCol32(p.type, alpha), label);
                     });
             }
         }

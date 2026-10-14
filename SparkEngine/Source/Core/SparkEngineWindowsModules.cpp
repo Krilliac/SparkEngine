@@ -21,8 +21,15 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 #ifdef SPARK_HAS_IMGUI
-#include <imgui.h> // bare-launch project selector panel
+#include <SparkUI/Brand.h>   // bare-launch project selector: brand header
+#include <SparkUI/Fonts.h>   // ... font roles
+#include <SparkUI/Glyphs.h>  // ... empty-state glyph
+#include <SparkUI/Runtime.h> // ... Em()
+#include <SparkUI/Widgets.h> // ... buttons, text roles, empty state
+#include <imgui.h>           // bare-launch project selector panel
 #endif
+#include <algorithm> // std::max (project selector row layout)
+#include <cstddef>
 #include <utility> // std::exchange (project selector choice hand-off)
 #include <filesystem>
 #include <format>
@@ -150,32 +157,71 @@ bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
  *
  * Runs inside GameImGui::RenderOverlay on the main thread. Only records the
  * choice — the actual module load happens in the main loop next frame.
+ * Drawn with the Spark UI kit: brand header, one row per module (name over
+ * file name, Launch on the right) and an empty state when nothing is armed.
  */
 void DrawProjectSelectorPanel()
 {
-    if (g_projectSelectorCandidates.empty() || !g_projectSelectorChoice.empty())
+    if (!g_projectSelectorChoice.empty())
         return;
 
+    namespace Ui = Spark::Ui;
     const ImGuiIO& io = ImGui::GetIO();
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.45f), ImGuiCond_Always,
                             ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(460.0f, 0.0f), ImGuiCond_Always);
-    ImGui::Begin("Spark Engine — Select Project", nullptr,
-                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+    ImGui::SetNextWindowSize(ImVec2(Ui::Em(32.0f), 0.0f), ImGuiCond_Always);
+    ImGui::Begin("Select Project###SparkProjectSelector", nullptr,
+                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
 
-    ImGui::TextWrapped("Several game modules were found next to the engine. Pick one to launch.");
-    ImGui::Separator();
+    Ui::BrandHeader("Spark Engine", "Select a project to launch");
+    ImGui::Spacing();
 
-    for (const auto& path : g_projectSelectorCandidates)
+    if (g_projectSelectorCandidates.empty())
     {
-        const std::string label = PathToUtf8(std::filesystem::u8path(path).stem());
-        if (ImGui::Button(label.c_str(), ImVec2(-1.0f, 34.0f)))
-            g_projectSelectorChoice = path;
+        Ui::EmptyState(Ui::Glyph::kCircleInfo, "No game modules found",
+                       "Place a game module next to the engine executable, or launch with -game <dll>.");
+        ImGui::End();
+        return;
+    }
+
+    Ui::SubHeader("Game modules next to the engine");
+    const float launchWidth = Ui::Em(6.0f);
+    for (std::size_t index = 0; index < g_projectSelectorCandidates.size(); ++index)
+    {
+        const std::filesystem::path modulePath = std::filesystem::u8path(g_projectSelectorCandidates[index]);
+        const std::string name = PathToUtf8(modulePath.stem());
+        const std::string file = PathToUtf8(modulePath.filename());
+
+        ImGui::PushID(static_cast<int>(index));
+        const float rowStartX = ImGui::GetCursorPosX();
+        const float rowWidth = ImGui::GetContentRegionAvail().x;
+        const float rowTopY = ImGui::GetCursorPosY();
+        ImGui::BeginGroup();
+        {
+            Ui::ScopedFont strong(Ui::FontRole::Strong);
+            ImGui::TextUnformatted(name.c_str());
+        }
+        {
+            Ui::ScopedFont monoSmall(Ui::FontRole::MonoSmall);
+            Ui::SecondaryText("Game module  %s", file.c_str());
+        }
+        ImGui::EndGroup();
+        const float rowHeight = ImGui::GetItemRectSize().y;
+
+        ImGui::SameLine();
+        ImGui::SetCursorPos(ImVec2(rowStartX + rowWidth - launchWidth,
+                                   rowTopY + std::max(0.0f, (rowHeight - ImGui::GetFrameHeight()) * 0.5f)));
+        if (Ui::PrimaryButton("Launch", ImVec2(launchWidth, 0.0f)))
+            g_projectSelectorChoice = g_projectSelectorCandidates[index];
+        ImGui::PopID();
+
+        ImGui::Spacing();
     }
 
     ImGui::Separator();
     ImGui::Checkbox("Remember choice (writes spark.modules.json)", &g_projectSelectorRemember);
-    ImGui::TextDisabled("Tip: launch with -game <dll> to skip this panel.");
+    Ui::SecondaryText("Tip: launch with -game <dll> to skip this panel.");
     ImGui::End();
 }
 #endif // SPARK_HAS_IMGUI

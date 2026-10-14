@@ -20,9 +20,20 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <stdexcept>
 #include <string_view>
+#include <utility>
+#include <vector>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
 #include <sys/stat.h>
 #endif
 
@@ -357,10 +368,146 @@ namespace
         Check(SparkCrashReporter::SetAutoIssuesEnabled(false), "user revokes the dialog-seam opt-in");
     }
 
+    /// The dialog layer maps a backend answer to the ReporterUi seam. Anything but a clear Yes declines.
+    void TestDialogBackendFailsClosed()
+    {
+        using namespace SparkCrashReporter;
+        const std::pair<const char*, DialogBackend> declining[] = {
+            {"failed", [](const DialogRequest&) { return DialogAnswer::Failed; }},
+            {"no", [](const DialogRequest&) { return DialogAnswer::No; }},
+            {"throwing", [](const DialogRequest&) -> DialogAnswer { throw std::runtime_error("no desktop"); }},
+            {"empty", DialogBackend{}},
+        };
+        for (const auto& [label, backend] : declining)
+        {
+            const ReporterUi ui = MakeDialogReporterUi(backend);
+            const std::string name(label);
+            Check(!ui.ask("Send?", "Crash Report", false),
+                  "CrashReporter_Consent: " + name + " dialog declines review");
+            Check(!ui.ask("Post?", "Crash Report", true),
+                  "CrashReporter_Consent: " + name + " dialog declines publication");
+            Check(!ui.ask("Shot?", "Screenshot Consent", false),
+                  "CrashReporter_Consent: " + name + " dialog declines the screenshot");
+            Check(static_cast<bool>(ui.notifyIssueOutcome), "CrashReporter_Consent: outcome notifier exists");
+        }
+
+        std::vector<DialogRequest> seen;
+        const ReporterUi ui = MakeDialogReporterUi(
+            [&seen](const DialogRequest& request)
+            {
+                seen.push_back(request);
+                return DialogAnswer::Yes;
+            });
+        Check(ui.ask("Review text", "Crash Report", false), "CrashReporter_Consent: a Yes answer confirms");
+        Check(ui.ask("Post text", "Crash Report", true), "CrashReporter_Consent: a Yes answer confirms publication");
+        Check(ui.ask("Shot text", "Screenshot Consent", false), "CrashReporter_Consent: a Yes answer confirms a shot");
+        Check(seen.size() == 3, "CrashReporter_Consent: one dialog per question");
+        if (seen.size() == 3)
+        {
+            Check(seen[0].title == "Crash Report" && seen[0].instruction == "SparkEngine stopped unexpectedly" &&
+                      seen[0].content == "Review text" && seen[0].icon == DialogIcon::Information && seen[0].askYesNo &&
+                      !seen[0].defaultNo,
+                  "CrashReporter_Consent: review dialog is an informational Yes/No with Yes default");
+            Check(seen[1].icon == DialogIcon::Shield && seen[1].defaultNo && seen[1].askYesNo &&
+                      seen[1].content == "Post text",
+                  "CrashReporter_Consent: publication dialog uses the shield and defaults to No");
+            Check(seen[2].title == "Screenshot Consent" && seen[2].instruction.empty() && seen[2].askYesNo,
+                  "CrashReporter_Consent: screenshot dialog keeps its title and has no instruction");
+        }
+
+        seen.clear();
+        std::ostringstream captured;
+        std::streambuf* previous = std::cerr.rdbuf(captured.rdbuf());
+        ui.notifyIssueOutcome("Created https://example.test/issues/1", true);
+        ui.notifyIssueOutcome("Not confirmed", false);
+        std::cerr.rdbuf(previous);
+        Check(seen.size() == 2 && seen[0].title == "SparkEngine Issue created" &&
+                  seen[0].icon == DialogIcon::Information && !seen[0].askYesNo &&
+                  seen[0].content == "Created https://example.test/issues/1" &&
+                  seen[1].title == "SparkEngine Issue not confirmed" && seen[1].icon == DialogIcon::Warning,
+              "CrashReporter_Consent: outcome dialogs show the plain-text message with an OK button");
+    }
+
+    /// Full reporter run on a dialog backend that cannot show anything: nothing is published. With the review
+    /// prompt waived and automatic Issues off, no dialog is requested at all.
+    void TestFailingDialogBackendTransmitsNothing(const fs::path& scratch)
+    {
+#ifdef _WIN32
+        const fs::path fakeExecutable = scratch / "fake-gh-seam-bin" / "gh.exe";
+#else
+        const fs::path fakeExecutable = scratch / "fake-gh-seam-bin" / "gh";
+#endif
+        Check(fs::is_regular_file(fakeExecutable), "failing-backend run reuses the isolated fake gh");
+        if (!fs::is_regular_file(fakeExecutable))
+            return; // Never fall back to the real GitHub CLI.
+        const fs::path capture = scratch / "fake-gh-seam-arguments.txt";
+        ScopedEnvironment path("PATH", fakeExecutable.parent_path().string());
+        ScopedEnvironment capturePath("SPARK_FAKE_GH_CAPTURE", capture.string());
+        ScopedEnvironment mode("SPARK_FAKE_GH_MODE", "success");
+
+        size_t requests = 0;
+        const SparkCrashReporter::ReporterUi failing = SparkCrashReporter::MakeDialogReporterUi(
+            [&requests](const SparkCrashReporter::DialogRequest&)
+            {
+                ++requests;
+                return SparkCrashReporter::DialogAnswer::Failed;
+            });
+
+        Check(SparkCrashReporter::SetAutoIssuesEnabled(true), "user opts in for the failing-backend run");
+        {
+            const auto manifest = MakeConsentManifest(scratch, "backend-failed", false);
+            const size_t before = CountCalls(capture);
+            const int result = SparkCrashReporter::RunCrashReporter(manifest, failing);
+            Check(result == 0, "CrashReporter_Consent: a failing dialog backend still exits cleanly");
+            Check(requests == 1, "CrashReporter_Consent: the publication question is asked once");
+            Check(CountCalls(capture) == before, "CrashReporter_Consent: a failing dialog backend transmits nothing");
+            Check(!AttemptReceiptExists(manifest),
+                  "CrashReporter_Consent: a failing dialog backend claims no issue attempt");
+        }
+        Check(SparkCrashReporter::SetAutoIssuesEnabled(false), "user revokes the failing-backend opt-in");
+
+        requests = 0;
+        const auto waived = MakeConsentManifest(scratch, "backend-waived", false);
+        Check(SparkCrashReporter::RunCrashReporter(waived, failing) == 0,
+              "CrashReporter_Consent: a waived review prompt runs without a dialog");
+        Check(requests == 0, "CrashReporter_Consent: requireConsent=false with automatic Issues off asks nothing");
+    }
+
+#ifdef _WIN32
+    /// The shipped exe must carry the comctl32 v6 / PerMonitorV2 manifest and the brand icon; without the manifest
+    /// TaskDialogIndirect is unavailable and every dialog silently degrades to MessageBoxW.
+    void TestExecutableResources(const fs::path& executable)
+    {
+        const HMODULE module = LoadLibraryExW(executable.c_str(), nullptr, LOAD_LIBRARY_AS_DATAFILE);
+        Check(module != nullptr, "CrashManifest_ExeResources: SparkCrashReporter.exe loads as a data file");
+        if (module == nullptr)
+            return;
+        std::string manifest;
+        constexpr WORD kManifestType = 24; // RT_MANIFEST, spelled numerically so UNICODE does not matter
+        if (const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(kManifestType)))
+        {
+            if (const HGLOBAL loaded = LoadResource(module, resource))
+            {
+                const auto* bytes = static_cast<const char*>(LockResource(loaded));
+                if (bytes != nullptr)
+                    manifest.assign(bytes, SizeofResource(module, resource));
+            }
+        }
+        Check(!manifest.empty(), "CrashManifest_ExeResources: the exe embeds an application manifest");
+        Check(manifest.find("Microsoft.Windows.Common-Controls") != std::string::npos &&
+                  manifest.find("version=\"6.0.0.0\"") != std::string::npos,
+              "CrashManifest_ExeResources: the manifest depends on comctl32 v6");
+        Check(manifest.find("PerMonitorV2") != std::string::npos,
+              "CrashManifest_ExeResources: the manifest declares PerMonitorV2 DPI awareness");
+        Check(FindResourceW(module, MAKEINTRESOURCEW(1), MAKEINTRESOURCEW(14)) != nullptr,
+              "CrashManifest_ExeResources: the exe embeds the application icon");
+        FreeLibrary(module);
+    }
+#endif
+
 #ifndef _WIN32
-    // POSIX reads consent from stdin. Windows uses MessageBoxA, which returns
-    // 0 (not IDYES) when no interactive desktop exists, so it already fails
-    // closed and cannot be driven from an unattended test without a desktop.
+    // POSIX reads consent from stdin. The Windows dialogs fail closed when no
+    // interactive desktop exists and are covered through the dialog backend seam.
     void TestUnansweredPromptTransmitsNothing(const fs::path& scratch, const fs::path& fakeGh)
     {
         const fs::path fakeDirectory = scratch / "fake-gh-bin";
@@ -475,6 +622,19 @@ namespace
 
 int main(int argc, char* argv[])
 {
+#ifdef _WIN32
+    if (argc == 3 && std::string_view(argv[1]) == "--exe-resources")
+    {
+        TestExecutableResources(argv[2]);
+        if (failures != 0 || checks == 0)
+        {
+            std::cerr << failures << " of " << checks << " executable resource check(s) failed\n";
+            return 1;
+        }
+        std::cout << "CrashReporter executable resource checks passed (" << checks << " checks)\n";
+        return 0;
+    }
+#endif
     ScratchDirectory scratch;
 #ifdef _WIN32
     ScopedEnvironment configRoot("LOCALAPPDATA", (scratch.path / "private-config").string());
@@ -485,9 +645,11 @@ int main(int argc, char* argv[])
     TestConsentAnswerIsBoundedBeforeBuffering();
     TestTerminalSafeRendering();
     TestManifestControlsNeverReachTheTerminal(scratch.path);
+    TestDialogBackendFailsClosed();
     if (argc == 2)
     {
         TestManifestCannotWaivePublicationQuestion(scratch.path, argv[1]);
+        TestFailingDialogBackendTransmitsNothing(scratch.path);
 #ifndef _WIN32
         TestUnansweredPromptTransmitsNothing(scratch.path, argv[1]);
 #endif

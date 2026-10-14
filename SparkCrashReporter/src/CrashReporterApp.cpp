@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -28,6 +29,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <commctrl.h> // TASKDIALOGCONFIG only; comctl32 is resolved at runtime, never linked.
 #else
 #include <csignal>
 #include <dirent.h>
@@ -1572,36 +1574,188 @@ namespace SparkCrashReporter
         return word == "y" || word == "yes";
     }
 
+    namespace
+    {
+        constexpr std::string_view kCrashReportTitle = "Crash Report";
+        constexpr const char* kStoppedInstruction = "SparkEngine stopped unexpectedly";
+
+#ifdef _WIN32
+        /// UTF-8 to UTF-16. Malformed bytes in untrusted manifest text become U+FFFD instead of blocking the
+        /// consent question. Returns an empty string when @p text is empty or cannot be converted.
+        std::wstring ToWide(std::string_view text)
+        {
+            if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+            {
+                return {};
+            }
+            const int length = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+            if (length <= 0)
+            {
+                return {};
+            }
+            std::wstring wide(static_cast<size_t>(length), L'\0');
+            if (MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), length) !=
+                length)
+            {
+                return {};
+            }
+            return wide;
+        }
+
+        using TaskDialogIndirectFn = HRESULT(WINAPI*)(const TASKDIALOGCONFIG*, int*, int*, BOOL*);
+
+        /// Shows @p request through comctl32's TaskDialogIndirect, resolved at runtime so no link dependency is
+        /// added. Returns the pressed button id, or nullopt when the API is unavailable (no comctl32 v6 manifest)
+        /// or the call fails.
+        std::optional<int> ShowTaskDialog(const DialogRequest& request, const std::wstring& title,
+                                          const std::wstring& instruction, const std::wstring& content)
+        {
+            const HMODULE comctl = LoadLibraryExW(L"comctl32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            if (comctl == nullptr)
+            {
+                return std::nullopt;
+            }
+            std::optional<int> pressed;
+            const auto proc = reinterpret_cast<void*>(GetProcAddress(comctl, "TaskDialogIndirect"));
+            if (proc != nullptr)
+            {
+                TASKDIALOGCONFIG config = {};
+                config.cbSize = sizeof(config);
+                config.pszWindowTitle = title.c_str();
+                config.pszMainInstruction = instruction.empty() ? nullptr : instruction.c_str();
+                config.pszContent = content.c_str();
+                config.dwCommonButtons = request.askYesNo ? (TDCBF_YES_BUTTON | TDCBF_NO_BUTTON) : TDCBF_OK_BUTTON;
+                config.nDefaultButton = request.askYesNo ? (request.defaultNo ? IDNO : IDYES) : IDOK;
+                switch (request.icon)
+                {
+                case DialogIcon::Shield:
+                    config.pszMainIcon = TD_SHIELD_ICON;
+                    break;
+                case DialogIcon::Warning:
+                    config.pszMainIcon = TD_WARNING_ICON;
+                    break;
+                case DialogIcon::Information:
+                    config.pszMainIcon = TD_INFORMATION_ICON;
+                    break;
+                }
+                int button = 0;
+                if (SUCCEEDED(reinterpret_cast<TaskDialogIndirectFn>(proc)(&config, &button, nullptr, nullptr)))
+                {
+                    pressed = button;
+                }
+            }
+            FreeLibrary(comctl);
+            return pressed;
+        }
+
+        /// MessageBoxW fallback. Without an interactive desktop it returns 0, which is a failure, not IDYES.
+        DialogAnswer ShowMessageBox(const DialogRequest& request, const std::wstring& title,
+                                    const std::wstring& instruction, const std::wstring& content)
+        {
+            const std::wstring text = instruction.empty() ? content : instruction + L"\n\n" + content;
+            UINT style = request.askYesNo ? MB_YESNO : MB_OK;
+            style |= request.icon == DialogIcon::Information ? MB_ICONINFORMATION : MB_ICONWARNING;
+            if (request.askYesNo && request.defaultNo)
+            {
+                style |= MB_DEFBUTTON2;
+            }
+            const int pressed = MessageBoxW(nullptr, text.c_str(), title.c_str(), style);
+            if (pressed == 0)
+            {
+                return DialogAnswer::Failed;
+            }
+            return pressed == (request.askYesNo ? IDYES : IDOK) ? DialogAnswer::Yes : DialogAnswer::No;
+        }
+
+        /// Native Windows backend: TaskDialogIndirect when available, MessageBoxW otherwise.
+        DialogAnswer ShowNativeDialog(const DialogRequest& request)
+        {
+            const std::wstring title = ToWide(request.title);
+            const std::wstring instruction = ToWide(request.instruction);
+            const std::wstring content = ToWide(request.content);
+            if ((!request.title.empty() && title.empty()) || (!request.instruction.empty() && instruction.empty()) ||
+                (!request.content.empty() && content.empty()))
+            {
+                return DialogAnswer::Failed;
+            }
+            if (const std::optional<int> pressed = ShowTaskDialog(request, title, instruction, content))
+            {
+                return *pressed == (request.askYesNo ? IDYES : IDOK) ? DialogAnswer::Yes : DialogAnswer::No;
+            }
+            return ShowMessageBox(request, title, instruction, content);
+        }
+#endif
+    } // namespace
+
+    ReporterUi MakeDialogReporterUi(DialogBackend backend)
+    {
+        // Any backend failure, including an exception, is a decline.
+        const auto show = [backend = std::move(backend)](const DialogRequest& request)
+        {
+            if (!backend)
+            {
+                return DialogAnswer::Failed;
+            }
+            try
+            {
+                return backend(request);
+            }
+            catch (...)
+            {
+                return DialogAnswer::Failed;
+            }
+        };
+
+        ReporterUi ui;
+        ui.ask = [show](const std::string& message, const char* title, bool publication)
+        {
+            DialogRequest request;
+            request.title = title != nullptr ? title : "";
+            if (request.title == kCrashReportTitle)
+            {
+                request.instruction = kStoppedInstruction;
+            }
+            request.content = message;
+            request.icon = publication ? DialogIcon::Shield : DialogIcon::Information;
+            request.askYesNo = true;
+            request.defaultNo = publication;
+            return show(request) == DialogAnswer::Yes;
+        };
+        ui.notifyIssueOutcome = [show](const std::string& message, bool confirmed)
+        {
+            std::cerr << message << '\n';
+            // The engine launches this reporter detached on Windows, so stderr
+            // cannot be the only place a playtester sees delivery status. The
+            // issue URL stays plain text: no hyperlink, no shell launch.
+            DialogRequest request;
+            request.title = confirmed ? "SparkEngine Issue created" : "SparkEngine Issue not confirmed";
+            request.content = message;
+            request.icon = confirmed ? DialogIcon::Information : DialogIcon::Warning;
+            show(request);
+        };
+        return ui;
+    }
+
     ReporterUi PlatformReporterUi()
     {
+#ifdef _WIN32
+        return MakeDialogReporterUi(ShowNativeDialog);
+#else
         ReporterUi ui;
         ui.ask = [](const std::string& message, const char* title, bool publication)
         {
-#ifdef _WIN32
-            // Without an interactive desktop MessageBoxA returns 0, not IDYES.
-            const UINT style = MB_YESNO | MB_ICONERROR | (publication ? MB_DEFBUTTON2 : 0u);
-            return MessageBoxA(nullptr, message.c_str(), title, style) == IDYES;
-#else
             (void)title;
             // A yes that authorizes a public post must be typed, not defaulted.
             std::cerr << message << (publication ? "\n[y/N]: " : "\n[Y/n]: ");
             return ReadConsentAnswer(std::cin, !publication);
-#endif
         };
         ui.notifyIssueOutcome = [](const std::string& message, bool confirmed)
         {
-            std::cerr << message << '\n';
-#ifdef _WIN32
-            // The engine launches this reporter detached on Windows, so stderr
-            // cannot be the only place a playtester sees delivery status.
-            MessageBoxA(nullptr, message.c_str(),
-                        confirmed ? "SparkEngine Issue created" : "SparkEngine Issue not confirmed",
-                        MB_OK | (confirmed ? MB_ICONINFORMATION : MB_ICONWARNING));
-#else
             (void)confirmed;
-#endif
+            std::cerr << message << '\n';
         };
         return ui;
+#endif
     }
 
     int RunCrashReporter(const CrashManifest& manifest)

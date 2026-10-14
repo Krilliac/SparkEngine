@@ -427,7 +427,9 @@ int main(int argc, char* argv[])
         SparkEditor::EditorConfig config;
         config.projectPath = projectPathArg.empty() ? "." : projectPathArg;
         config.enableLogging = true;
-        config.startMaximized = false; // Don't start maximized in debug mode
+        // Interactive launches open maximized; debug-console and bounded/test launches keep the
+        // fixed windowed size so diagnostics and smoke runs stay reproducible.
+        config.startMaximized = !testMode && !showDebugConsole && testFrameLimit <= 0;
         config.windowWidth = 1600;
         config.windowHeight = 900;
         config.testMode = testMode;

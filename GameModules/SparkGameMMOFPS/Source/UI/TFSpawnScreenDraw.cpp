@@ -379,12 +379,10 @@ namespace Terrafront
             std::snprintf(buf, sizeof(buf), "DEPLOY (%.1fs)", effRespawnLeft);
         else
             std::snprintf(buf, sizeof(buf), "DEPLOY");
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.42f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.56f, 0.26f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.24f, 0.68f, 0.30f, 1.0f));
+        Spark::Ui::Sdk::PushSuccessButton();
         if (ImGui::Button(buf, ImVec2(175.0f, 44.0f)))
             SendSpawnRequest();
-        ImGui::PopStyleColor(3);
+        Spark::Ui::Sdk::PopSuccessButton();
         ImGui::EndDisabled();
     }
 

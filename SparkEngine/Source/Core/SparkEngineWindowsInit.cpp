@@ -262,6 +262,8 @@ bool InitializeWindowedSubsystems(HINSTANCE hInstance, LPWSTR lpCmdLine)
     // allocators can be injected into each module DLL at load time, then hook
     // the overlay render into GraphicsEngine's pre-present callback so module
     // HUDs (IModule::OnImGui) draw every presented frame — no editor involved.
+    // Init also installs the Spark UI theme and publishes the SparkUiRuntimeBlock into
+    // io.UserData, so the injection below hands modules a context that is already themed.
     if (GetEngineRuntime().graphics)
     {
         auto* gfx = GetEngineRuntime().graphics.get();
