@@ -26,24 +26,24 @@ namespace SparkInstaller
 
     // True when @p text is well-formed UTF-8 (no overlongs, surrogates or
     // code points above U+10FFFF).
-    bool IsValidUtf8(std::string_view text);
+    [[nodiscard]] bool IsValidUtf8(std::string_view text);
 
     // UTF-8 text -> filesystem path. Ill-formed input is converted with
     // U+FFFD replacements; callers that accept user input validate it first.
-    std::filesystem::path PathFromUtf8(std::string_view utf8);
+    [[nodiscard]] std::filesystem::path PathFromUtf8(std::string_view utf8);
 
     // Filesystem path -> UTF-8 text. Never throws for unrepresentable names,
     // unlike path::string() on Windows.
-    std::string PathToUtf8(const std::filesystem::path& path);
+    [[nodiscard]] std::string PathToUtf8(const std::filesystem::path& path);
 
     // UTF-8 text -> the narrow encoding SparkBuild::ProcessRunner passes to the
     // OS (the ANSI code page on Windows; the bytes unchanged elsewhere). On
     // Windows returns false, leaving @p narrow untouched, when the text is not
     // valid UTF-8 or the code page cannot represent it exactly.
-    bool ProcessArgFromUtf8(std::string_view utf8, std::string& narrow);
+    [[nodiscard]] bool ProcessArgFromUtf8(std::string_view utf8, std::string& narrow);
 
 #ifdef _WIN32
     // UTF-16 -> UTF-8, for Windows APIs that report text as wide strings.
-    std::string Utf8FromWide(std::wstring_view wide);
+    [[nodiscard]] std::string Utf8FromWide(std::wstring_view wide);
 #endif
 } // namespace SparkInstaller

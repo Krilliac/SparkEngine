@@ -191,15 +191,33 @@ namespace SparkInstaller
             std::error_code ec;
             fs::create_directories(PathFromUtf8(ctx.configManager.config.buildPath), ec);
 
-            // The install paths are UTF-8; ProcessRunner needs the process
-            // code page. Commands run from a converted copy, logs show UTF-8.
+            // Every string in the config is UTF-8; ProcessRunner needs the
+            // process code page. Commands run from a converted copy, logs show
+            // UTF-8. A value the code page cannot hold is refused by name.
             SparkBuild::ConfigManager processConfig = ctx.configManager;
             std::string processDestination;
-            if (!ProcessArgFromUtf8(ctx.destination, processDestination) ||
-                !ProcessArgFromUtf8(ctx.configManager.config.buildPath, processConfig.config.buildPath))
+            const auto convert = [&log](const std::string& value, std::string& converted, const char* what)
             {
-                Emit(log, "error: the install path cannot be passed to CMake in this system's code page: " +
-                              ctx.configManager.config.buildPath);
+                if (ProcessArgFromUtf8(value, converted))
+                {
+                    return true;
+                }
+                Emit(log,
+                     std::string("error: ") + what + " cannot be passed to CMake in this system's code page: " + value);
+                return false;
+            };
+            bool converted =
+                convert(ctx.destination, processDestination, "the install path") &&
+                convert(ctx.configManager.config.buildPath, processConfig.config.buildPath, "the build path") &&
+                convert(ctx.configManager.config.cmakePath, processConfig.config.cmakePath, "the CMake path") &&
+                convert(ctx.configManager.config.cmakePreset, processConfig.config.cmakePreset, "the CMake preset") &&
+                convert(ctx.configManager.config.msvcToolset, processConfig.config.msvcToolset, "the MSVC toolset");
+            for (auto& option : processConfig.config.options)
+            {
+                converted = converted && convert(option.cmakeVar, option.cmakeVar, "a CMake option name");
+            }
+            if (!converted)
+            {
                 return 6;
             }
             processConfig.config.enginePath = processDestination;
@@ -522,6 +540,18 @@ namespace SparkInstaller
             dest = dest.parent_path();
         }
         ctx.destination = PathToUtf8(dest);
+
+        // git and CMake are started through CreateProcessA, so they can only
+        // be pointed at a path the process code page represents. Refuse here,
+        // before the lock and preflight, rather than fail later with a
+        // misleading git or CMake error.
+        if (std::string processDestination; !ProcessArgFromUtf8(ctx.destination, processDestination))
+        {
+            Emit(ctx.log, "error: destination " + ctx.destination +
+                              " contains characters this system's code page cannot represent; git and CMake "
+                              "cannot be run there. Choose a path without those characters.");
+            return 2;
+        }
 
         // --- Mode detection ------------------------------------------------
         // A pending marker without install state is a clone this installer

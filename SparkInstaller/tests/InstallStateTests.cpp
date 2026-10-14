@@ -7,6 +7,16 @@
 #include <iostream>
 #include <string>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 namespace
 {
     std::filesystem::path MakeTestRoot()
@@ -51,8 +61,7 @@ namespace
     {
         const auto root = MakeTestRoot();
         const auto wideDestination = root / NonAsciiLeaf();
-        // root is ASCII, so its narrow form is also its UTF-8 form.
-        const std::string utf8Destination = root.string() + "/Zo\xC3\xAB-install";
+        const std::string utf8Destination = SparkInstaller::PathToUtf8(root) + "/Zo\xC3\xAB-install";
         std::error_code error;
         std::filesystem::create_directories(wideDestination, error);
         int failures = Check(!error, "could not create the non-ASCII install-state test root");
@@ -105,6 +114,92 @@ namespace
                           "ProcessArgFromUtf8 accepted ill-formed UTF-8");
 #endif
         return failures;
+    }
+
+    // A non-ASCII character with its UTF-8 bytes, for picking one the active
+    // code page can (or cannot) represent. The probe calls the Win32 API
+    // directly so it does not depend on the helper under test.
+    struct NonAsciiCandidate
+    {
+        wchar_t wide;
+        const char* utf8;
+    };
+
+    [[maybe_unused]] constexpr NonAsciiCandidate kNonAsciiCandidates[] = {
+        {L'\u00EB', "\xC3\xAB"},     // Latin small e with diaeresis (cp1252 and most Western pages)
+        {L'\u0416', "\xD0\x96"},     // Cyrillic Zhe (cp1251, cp932, cp936)
+        {L'\u65E5', "\xE6\x97\xA5"}, // CJK "sun" (cp932, cp936, cp949, cp950)
+        {L'\u05D0', "\xD7\x90"},     // Hebrew Alef (cp1255)
+        {L'\u0E01', "\xE0\xB8\x81"}, // Thai Ko Kai (cp874)
+    };
+
+#ifdef _WIN32
+    [[maybe_unused]] bool ActiveCodePageRepresents(wchar_t character)
+    {
+        if (::GetACP() == CP_UTF8)
+        {
+            return true;
+        }
+        char buffer[8] = {};
+        BOOL usedDefault = FALSE;
+        const int size = ::WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, &character, 1, buffer, sizeof(buffer),
+                                               nullptr, &usedDefault);
+        return size > 0 && !usedDefault;
+    }
+#endif
+
+    // Returns nullptr when every candidate is (or none is) representable.
+    [[maybe_unused]] const NonAsciiCandidate* FindCandidate(bool representable)
+    {
+        for (const NonAsciiCandidate& candidate : kNonAsciiCandidates)
+        {
+#ifdef _WIN32
+            if (ActiveCodePageRepresents(candidate.wide) == representable)
+            {
+                return &candidate;
+            }
+#else
+            // POSIX paths are bytes: everything is representable.
+            if (representable)
+            {
+                return &candidate;
+            }
+#endif
+        }
+        return nullptr;
+    }
+
+    [[maybe_unused]] std::filesystem::path CandidateLeaf(const NonAsciiCandidate& candidate)
+    {
+#ifdef _WIN32
+        return std::filesystem::path(std::wstring(L"Zo") + candidate.wide + L"-install");
+#else
+        return std::filesystem::path(std::string("Zo") + candidate.utf8 + "-install");
+#endif
+    }
+
+    // "Refused, not mangled": a well-formed character the active code page
+    // lacks must fail the conversion and leave the output untouched, because a
+    // best-fit or '?' substitute would name a different directory.
+    int RunUnrepresentableProcessArgTest()
+    {
+#ifdef _WIN32
+        const NonAsciiCandidate* missing = FindCandidate(false);
+        if (missing == nullptr)
+        {
+            std::cout << "SKIP: active code page " << ::GetACP()
+                      << " represents every candidate; no unrepresentable-character case to test\n";
+            return 0;
+        }
+        const std::string utf8 = std::string("C:/Zo") + missing->utf8 + "-install";
+        std::string narrow = "unchanged";
+        int failures = Check(SparkInstaller::IsValidUtf8(utf8), "unrepresentable candidate is not valid UTF-8");
+        failures += Check(!SparkInstaller::ProcessArgFromUtf8(utf8, narrow) && narrow == "unchanged",
+                          "ProcessArgFromUtf8 mangled a character the active code page cannot represent");
+        return failures;
+#else
+        return 0;
+#endif
     }
 
     int RunAtomicReplacementTest()
@@ -464,6 +559,7 @@ int main()
         RunPendingMarkerRoundTripAndBoundTest(),
         RunUtf8DestinationTest(),
         RunPathUtf8HelperTest(),
+        RunUnrepresentableProcessArgTest(),
     };
     for (const int failures : results)
     {

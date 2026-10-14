@@ -1,6 +1,8 @@
 #include "PathUtf8.h"
 
 #include <climits>
+#include <cstddef>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -158,6 +160,26 @@ namespace SparkInstaller
             return true;
         }
         const int inputSize = static_cast<int>(wide.size());
+        if (::GetACP() == CP_UTF8)
+        {
+            // A UTF-8 process code page (activeCodePage manifest or the
+            // system-wide beta option) represents everything; it also rejects
+            // the best-fit flag and a used-default pointer.
+            const int size = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), inputSize, nullptr, 0,
+                                                   nullptr, nullptr);
+            if (size <= 0)
+            {
+                return false;
+            }
+            std::string converted(static_cast<std::size_t>(size), '\0');
+            if (::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), inputSize, converted.data(), size,
+                                      nullptr, nullptr) != size)
+            {
+                return false;
+            }
+            narrow = std::move(converted);
+            return true;
+        }
         // WC_NO_BEST_FIT_CHARS stops "best fit" substitutions (e.g. a Cyrillic
         // letter becoming a look-alike Latin one), which would name a
         // different directory; the default-character flag reports any loss.

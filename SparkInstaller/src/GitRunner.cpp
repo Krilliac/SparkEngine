@@ -13,7 +13,9 @@ namespace SparkInstaller
     {
         // Whitelist-validate a git ref (branch or tag). Rejects any input
         // outside [A-Za-z0-9._/+-], which is a conservative subset of what
-        // git itself allows and blocks every shell metacharacter.
+        // git itself allows and blocks every shell metacharacter. Being
+        // ASCII-only, an accepted ref is identical in UTF-8 and in the process
+        // code page, so it needs no ProcessArgFromUtf8 conversion.
         bool IsSafeRef(const std::string& ref)
         {
             if (ref.empty() || ref.size() > 255)
@@ -194,7 +196,7 @@ namespace SparkInstaller
         {
             if (log)
             {
-                log("error: git ref contains unsafe characters: " + ref);
+                log("error: git ref must use only ASCII letters, digits and . _ / + -: " + ref);
             }
             return false;
         }
@@ -340,7 +342,7 @@ namespace SparkInstaller
         {
             if (log)
             {
-                log("error: git ref contains unsafe characters: " + ref);
+                log("error: git ref must use only ASCII letters, digits and . _ / + -: " + ref);
             }
             return false;
         }
@@ -367,7 +369,7 @@ namespace SparkInstaller
         {
             if (log)
             {
-                log("error: git commit contains unsafe characters: " + commit);
+                log("error: git commit must use only ASCII letters, digits and . _ / + -: " + commit);
             }
             return false;
         }
