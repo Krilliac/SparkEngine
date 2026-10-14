@@ -2861,11 +2861,11 @@ set_tests_properties(ModuleVersionCompatibility PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 120)
 
-# Windows game modules link ImGui and define SPARK_HAS_IMGUI whenever the
-# shared imgui target exists (spark_configure_module_imgui). Each built image
-# must carry a string only its guarded in-game UI references; a module whose
-# UI is compiled out (e.g. guarded by the never-defined ENABLE_EDITOR) fails.
-if(WIN32 AND TARGET imgui)
+# Windows game modules link the engine's in-tree ImGui and define
+# SPARK_HAS_IMGUI (spark_configure_module_imgui). Each built image must carry a
+# string only its guarded in-game UI references; a module whose UI is compiled
+# out (e.g. guarded by the never-defined ENABLE_EDITOR) fails.
+if(WIN32 AND SPARK_ENGINE_IMGUI_FOR_MODULES)
     set(_spark_ui_modules
         SparkGame SparkGameARPG SparkGameFPS SparkGameMMO SparkGameOpenWorld
         SparkGamePlatformer SparkGameRPG SparkGameRTS SparkGameRacing)

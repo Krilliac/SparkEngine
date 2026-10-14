@@ -86,13 +86,6 @@ namespace OpenWorld
         Spark::ModuleLog::Info(m_context, "[OpenWorld] Engine systems shut down");
     }
 
-    void OWEngineSystems::RenderDebugUI()
-    {
-#ifdef SPARK_HAS_IMGUI
-        // Engine system debug is rendered by the engine's own panels
-#endif
-    }
-
     // =========================================================================
     // AI / Behavior Trees
     // =========================================================================

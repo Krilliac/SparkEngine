@@ -256,9 +256,15 @@ endfunction()
   POSIX modules are left without ImGui: they resolve engine symbols from the
   host executable, which has no game-mode ImGui overlay there, so their
   SPARK_HAS_IMGUI-guarded UI compiles out.
+
+  Only the engine's own in-tree `imgui` target qualifies. The root
+  CMakeLists.txt sets SPARK_ENGINE_IMGUI_FOR_MODULES after it builds that
+  target; an external project that merely has some target named `imgui` (its
+  own ImGui version or config) is left alone, because the engine would inject
+  its ImGuiContext into that mismatched copy through SparkModuleInjectImGui.
 #]=============================================================================]
 function(spark_configure_module_imgui TARGET_NAME)
-    if(NOT WIN32 OR NOT TARGET imgui)
+    if(NOT WIN32 OR NOT SPARK_ENGINE_IMGUI_FOR_MODULES OR NOT TARGET imgui)
         return()
     endif()
     get_target_property(_spark_module_defs ${TARGET_NAME} COMPILE_DEFINITIONS)

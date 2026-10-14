@@ -472,15 +472,4 @@ namespace Racing
                                "[Racing] Coroutines: 4 sequences registered (countdown, pit, repair, results)");
     }
 
-    // =============================================================================
-    // Debug UI
-    // =============================================================================
-
-    void RacingEngineSystems::RenderDebugUI()
-    {
-#ifdef SPARK_HAS_IMGUI
-        // ImGui debug panel for engine integration state would go here
-#endif
-    }
-
 } // namespace Racing

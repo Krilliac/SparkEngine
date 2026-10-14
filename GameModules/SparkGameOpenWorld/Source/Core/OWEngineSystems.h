@@ -42,7 +42,6 @@ namespace OpenWorld
                            OWSettlementSystem& settlements, OWWildlifeSystem& wildlife, OWDynamicEventSystem& events);
         void Update(float deltaTime);
         void Shutdown();
-        void RenderDebugUI();
 
         // Console command helpers
         /// @brief Save the ECS world and the gameplay snapshot to @p slotName in one atomic SaveSystem write.

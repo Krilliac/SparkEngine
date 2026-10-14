@@ -1568,6 +1568,9 @@ if(WIN32)
     if(TARGET imgui)
         target_link_libraries(SparkEngine PRIVATE imgui)
         target_compile_definitions(SparkEngine PRIVATE SPARK_HAS_IMGUI=1)
+        # The exe injects this imgui's context into game modules, so in-tree
+        # modules may link the same target (spark_configure_module_imgui).
+        set(SPARK_ENGINE_IMGUI_FOR_MODULES TRUE)
         message(STATUS "SparkEngine: game-mode ImGui overlay ENABLED")
     endif()
 endif()
