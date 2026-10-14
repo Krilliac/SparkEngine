@@ -6,7 +6,7 @@
 #include "RTSFogOfWarSystem.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -328,7 +328,7 @@ namespace RTS
 
     void RTSFogOfWarSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RTS Fog of War"))
         {
             ImGui::Text("Map size: %dx%d", m_mapWidth, m_mapHeight);

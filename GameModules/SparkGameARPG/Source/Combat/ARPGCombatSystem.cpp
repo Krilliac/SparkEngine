@@ -6,7 +6,7 @@
 #include "ARPGCombatSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -140,7 +140,7 @@ namespace ARPG
 
     void ARPGCombatSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("ARPG Combat System"))
         {
             ImGui::Text("Attacks: %zu | Crits: %zu | Active DoTs: %zu", m_totalAttacksProcessed, m_totalCrits,

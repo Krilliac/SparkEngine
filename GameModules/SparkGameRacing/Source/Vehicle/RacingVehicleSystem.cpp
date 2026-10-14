@@ -17,7 +17,7 @@
 #include <limits>
 #include <unordered_set>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -418,7 +418,7 @@ namespace Racing
 
     void RacingVehicleSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Vehicles"))
             return;
 

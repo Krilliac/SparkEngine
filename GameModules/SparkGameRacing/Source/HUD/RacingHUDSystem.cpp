@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -70,7 +70,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderSpeedometer()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         ImGui::Text("Speed: %d km/h", static_cast<int>(m_data.speed));
 
         // Speed bar gauge
@@ -86,7 +86,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderTachometer()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         float rpmFraction = std::clamp(m_data.rpm, 0.0f, 1.0f);
         ImVec4 rpmColor = rpmFraction > 0.85f ? ImVec4(1.0f, 0.0f, 0.0f, 1.0f) : ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, rpmColor);
@@ -97,7 +97,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderMinimap()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!m_showMinimap || m_minimapEntries.empty())
             return;
 
@@ -140,7 +140,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderPositionIndicator()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.2f, 1.0f), "%u%s / %u", m_data.position,
                            GetPositionSuffix(m_data.position), m_data.totalRacers);
 #endif
@@ -148,7 +148,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderLapCounter()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         ImGui::Text("Lap %u / %u", m_data.currentLap, m_data.totalLaps);
         ImGui::Text("Lap Time: %.2f s", m_data.lapTime);
         if (m_data.bestLapTime >= 0.0f)
@@ -159,7 +159,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderBoostMeter()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         float nitroFraction = std::clamp(m_data.nitroLevel, 0.0f, 1.0f);
         ImVec4 nitroColor = m_data.boostActive > 0.0f ? ImVec4(0.2f, 0.6f, 1.0f, 1.0f) : ImVec4(0.3f, 0.3f, 0.8f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, nitroColor);
@@ -170,7 +170,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderCountdown()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (m_data.raceState != RaceState::Countdown)
             return;
 
@@ -190,7 +190,7 @@ namespace Racing
 
     void RacingHUDSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing HUD"))
             return;
 

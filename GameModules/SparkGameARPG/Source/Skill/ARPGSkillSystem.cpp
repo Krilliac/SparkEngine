@@ -8,7 +8,7 @@
 #include "Hero/ARPGHeroSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -307,7 +307,7 @@ namespace ARPG
 
     void ARPGSkillSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("ARPG Skill System"))
         {
             ImGui::Text("Total skills: %zu", m_allSkills.size());

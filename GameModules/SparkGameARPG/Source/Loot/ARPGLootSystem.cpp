@@ -6,7 +6,7 @@
 #include "ARPGLootSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -287,7 +287,7 @@ namespace ARPG
 
     void ARPGLootSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("ARPG Loot System"))
         {
             ImGui::Text("Affix pool: %zu | Generated: %zu", m_affixPool.size(), m_generatedCount);

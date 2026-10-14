@@ -7,7 +7,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -338,7 +338,7 @@ namespace MMO
 
     void MMODungeonSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Dungeon System"))
         {
             ImGui::Text("Dungeons: %zu | Active Instances: %zu", m_dungeons.size(), m_instances.size());

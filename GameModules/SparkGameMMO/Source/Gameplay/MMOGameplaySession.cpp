@@ -11,7 +11,7 @@
 #include "WorldBoss/MMOWorldBossSystem.h"
 #include "Utils/SparkConsole.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -469,7 +469,7 @@ namespace MMO
 
     void MMOGameplaySession::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO Playable Session", ImGuiTreeNodeFlags_DefaultOpen))
             return;
 

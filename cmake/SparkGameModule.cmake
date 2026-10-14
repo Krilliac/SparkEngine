@@ -241,6 +241,34 @@ function(spark_configure_module_abi TARGET_NAME)
         VERBATIM)
 endfunction()
 
+#[=============================================================================[
+  spark_configure_module_imgui(<target>)
+
+  Gives a Windows game module its in-game ImGui UI when the shared `imgui`
+  target exists: the DLL statically links its own ImGui object code and
+  SPARK_HAS_IMGUI=1 compiles its UI draw paths (IModule::OnImGui ->
+  RenderDebugUI/HUD code). The engine executable owns the one live context and
+  injects it, with its allocators, through the module's SparkModuleInjectImGui
+  export (SparkSDK ModuleDllMain.h), so module draws land in the game-mode
+  overlay. This is independent of ENABLE_EDITOR, which only selects whether the
+  SparkEditor target is built and is never a compile definition.
+
+  POSIX modules are left without ImGui: they resolve engine symbols from the
+  host executable, which has no game-mode ImGui overlay there, so their
+  SPARK_HAS_IMGUI-guarded UI compiles out.
+#]=============================================================================]
+function(spark_configure_module_imgui TARGET_NAME)
+    if(NOT WIN32 OR NOT TARGET imgui)
+        return()
+    endif()
+    get_target_property(_spark_module_defs ${TARGET_NAME} COMPILE_DEFINITIONS)
+    if(_spark_module_defs AND "SPARK_HAS_IMGUI=1" IN_LIST _spark_module_defs)
+        return() # the module already wires ImGui itself (SparkGameMMOFPS)
+    endif()
+    target_link_libraries(${TARGET_NAME} PRIVATE imgui)
+    target_compile_definitions(${TARGET_NAME} PRIVATE SPARK_HAS_IMGUI=1)
+endfunction()
+
 function(spark_add_game_module TARGET_NAME)
     add_library(${TARGET_NAME} SHARED ${ARGN})
 
@@ -284,6 +312,7 @@ function(spark_add_game_module TARGET_NAME)
     endif()
 
     spark_configure_module_abi(${TARGET_NAME})
+    spark_configure_module_imgui(${TARGET_NAME})
 
     # Stable-v1 packages bind first-party game-module DLLs to the engine
     # release version. Standalone consumers without the Windows resource helper

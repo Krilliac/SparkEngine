@@ -2055,6 +2055,10 @@ if(BUILD_GAME_MODULES)
         add_subdirectory("${_MOD_DIR}" "${CMAKE_BINARY_DIR}/GameModules/${_MOD_NAME}")
 
         if(TARGET ${_MOD_NAME})
+            # In-game module UI is guarded by SPARK_HAS_IMGUI (ImGui available),
+            # never by the ENABLE_EDITOR build option.
+            spark_configure_module_imgui(${_MOD_NAME})
+
             # On Windows, link the import library so the engine can resolve
             # DLL exports at load time.  On Linux/macOS, game modules are
             # loaded at runtime via dlopen (ModuleManager), so we must NOT

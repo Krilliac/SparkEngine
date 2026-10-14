@@ -11,7 +11,7 @@
 #include <cmath>
 #include <limits>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -519,7 +519,7 @@ namespace Racing
 
     void RacingTrackSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Track"))
             return;
 

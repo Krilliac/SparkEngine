@@ -23,7 +23,7 @@
 #include <filesystem>
 #include <string_view>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -614,7 +614,7 @@ void GameplayShowcase::SpawnExhibit()
 
 void GameplayShowcase::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("Gameplay Showcase"))
         return;
 

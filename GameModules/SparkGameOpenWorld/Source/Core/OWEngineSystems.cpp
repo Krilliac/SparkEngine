@@ -88,7 +88,7 @@ namespace OpenWorld
 
     void OWEngineSystems::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         // Engine system debug is rendered by the engine's own panels
 #endif
     }

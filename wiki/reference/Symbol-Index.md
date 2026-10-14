@@ -36470,7 +36470,7 @@
 | `RenderDebrisMonitor` | function | SparkEditor | [DestructionEditorPanel.h:L53](../../SparkEditor/Source/Panels/DestructionEditorPanel.h#L53) |  |
 | `RenderDebug` | function | SparkEngine | [PhysicsSystem.h:L449](../../SparkEngine/Source/Physics/PhysicsSystem.h#L449) |  |
 | `RenderDebugInfo` | function | SparkEditor | [LevelStreamingSystem.h:L321](../../SparkEditor/Source/LevelStreaming/LevelStreamingSystem.h#L321) | Render debugging information |
-| `RenderDebugUI` | function | GameModules | [GameplayShowcase.h:L81](../../GameModules/SparkGame/Source/Core/GameplayShowcase.h#L81) | Render debug UI overlay (requires ENABLE_EDITOR / ImGui) |
+| `RenderDebugUI` | function | GameModules | [GameplayShowcase.h:L81](../../GameModules/SparkGame/Source/Core/GameplayShowcase.h#L81) | Render debug UI overlay (compiled in when SPARK_HAS_IMGUI is defined) |
 | `RenderDebugUI` | function | GameModules | [ARPGCombatSystem.h:L76](../../GameModules/SparkGameARPG/Source/Combat/ARPGCombatSystem.h#L76) |  |
 | `RenderDebugUI` | function | GameModules | [ARPGEngineSystems.h:L91](../../GameModules/SparkGameARPG/Source/Core/ARPGEngineSystems.h#L91) | Render debug UI panel (editor only). |
 | `RenderDebugUI` | function | GameModules | [ARPGDungeonSystem.h:L65](../../GameModules/SparkGameARPG/Source/Dungeon/ARPGDungeonSystem.h#L65) |  |

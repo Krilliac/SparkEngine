@@ -6,7 +6,7 @@
 #include "OWDynamicEventSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -422,7 +422,7 @@ namespace OpenWorld
 
     void OWDynamicEventSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Dynamic Events"))
             return;
 

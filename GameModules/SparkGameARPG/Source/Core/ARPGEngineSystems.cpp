@@ -20,7 +20,7 @@
 #include "Graphics/WeatherSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -161,7 +161,7 @@ namespace ARPG
 
     void ARPGEngineSystems::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!m_initialized)
             return;
 

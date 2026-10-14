@@ -6,7 +6,7 @@
 #include "OWGatheringSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -522,7 +522,7 @@ namespace OpenWorld
 
     void OWGatheringSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Gathering & Crafting"))
             return;
 

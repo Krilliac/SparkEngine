@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -443,7 +443,7 @@ namespace Platformer
 
     void PlatformerLevelSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Levels"))
             return;
 

@@ -478,7 +478,7 @@ namespace Racing
 
     void RacingEngineSystems::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         // ImGui debug panel for engine integration state would go here
 #endif
     }
