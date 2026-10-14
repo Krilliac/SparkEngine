@@ -2,7 +2,7 @@
   "version": 2,
   "algorithm": "sha256",
   "root": "Assets",
-  "fileCount": 1225,
+  "fileCount": 1228,
   "entries": [
     {
       "path": "Audio/MMO/ambient_arena.wav",
@@ -1413,10 +1413,17 @@
     },
     {
       "path": "Engine/Branding/README.md",
-      "sha256": "7266daea1caef6768ba372f2043f682062617e7dddca196e3878e91fc0ff5237",
-      "size": 1587,
+      "sha256": "4a956f9e4ff8382006c28e823c5fd226685e0b2f4e350cbe895e80e59a22b3f8",
+      "size": 2734,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original SparkEngine startup splash and wordmark produced by Assets/Engine/Branding/generate_splash.py [engine-branding]"
+    },
+    {
+      "path": "Engine/Branding/generate_logomark.py",
+      "sha256": "d55126f2d870af36b1697e3506573d5edb4ddc8b6f9a2d8a65df24c6cb20de59",
+      "size": 7980,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original four-point spark logomark (SVG outlines and multi-size ICO) emitted by Assets/Engine/Branding/generate_logomark.py from the geometry constants shared with Spark::Ui::DrawLogomark; generated, stdlib-only, bytes reproduce exactly and are hash-bound [engine-logomark]"
     },
     {
       "path": "Engine/Branding/generate_splash.py",
@@ -1424,6 +1431,20 @@
       "size": 10246,
       "license": "LicenseRef-SparkOpenLicense-1.0",
       "provenance": "Repository-original SparkEngine startup splash and wordmark produced by Assets/Engine/Branding/generate_splash.py [engine-branding]"
+    },
+    {
+      "path": "Engine/Branding/sparkengine.ico",
+      "sha256": "fe38e2021b643c0254ef609a04e1d56c7a4b1345dd6e364ec65e44a6e4c1a9a9",
+      "size": 9154,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original four-point spark logomark (SVG outlines and multi-size ICO) emitted by Assets/Engine/Branding/generate_logomark.py from the geometry constants shared with Spark::Ui::DrawLogomark; generated, stdlib-only, bytes reproduce exactly and are hash-bound [engine-logomark]"
+    },
+    {
+      "path": "Engine/Branding/sparkengine_logomark.svg",
+      "sha256": "24efbe903be2de8f5617a603728de53375b584dd0d6c94995dd1f8cd432d22ee",
+      "size": 701,
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original four-point spark logomark (SVG outlines and multi-size ICO) emitted by Assets/Engine/Branding/generate_logomark.py from the geometry constants shared with Spark::Ui::DrawLogomark; generated, stdlib-only, bytes reproduce exactly and are hash-bound [engine-logomark]"
     },
     {
       "path": "Engine/Branding/sparkengine_splash.wav",

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "lane": "LA",
+  "description": "SparkLauncher ImGui front end.",
+  "allowlisted_tables": {},
+  "total": 7,
+  "files": {
+    "SparkLauncher/src/LauncherApp.cpp": 7,
+    "SparkLauncher/src/LauncherApp.h": 0,
+    "SparkLauncher/src/LauncherBackend.h": 0,
+    "SparkLauncher/src/LauncherBackendLinux.cpp": 0,
+    "SparkLauncher/src/LauncherBackendWindows.cpp": 0,
+    "SparkLauncher/src/LauncherViews.cpp": 0,
+    "SparkLauncher/src/LauncherViews.h": 0,
+    "SparkLauncher/src/main.cpp": 0
+  }
+}

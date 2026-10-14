@@ -1605,6 +1605,23 @@
       ]
     },
     {
+      "id": "editor-preferences-corpus",
+      "parser_id": "editor-preferences",
+      "corpus_dir": "FuzzerTests/corpora/editor-preferences",
+      "last_verified": "2026-10-14",
+      "content_digest": "4e686572a6005ddc0df8afda597dc3136288a52c8bbeb033865c1587b3ae3e8d",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
       "id": "editor-window-layout-corpus",
       "parser_id": "editor-window-layout",
       "corpus_dir": "FuzzerTests/corpora/editor-window-layout",

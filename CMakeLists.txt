@@ -1563,11 +1563,15 @@ endif()
 
 # Game-mode ImGui overlay (module HUDs without the editor). Reuses the shared
 # `imgui` static library target (core + win32/dx11 backends on Windows).
+# SparkUIKit (the Spark UI kit) is linked by name here and created by add_subdirectory(SparkUI)
+# further down; it always exists when imgui does, and CMake resolves the name at generate time.
+include("${CMAKE_SOURCE_DIR}/cmake/SparkUIFonts.cmake")
 if(WIN32)
     include("${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
     if(TARGET imgui)
-        target_link_libraries(SparkEngine PRIVATE imgui)
+        target_link_libraries(SparkEngine PRIVATE imgui SparkUIKit)
         target_compile_definitions(SparkEngine PRIVATE SPARK_HAS_IMGUI=1)
+        spark_stage_ui_fonts(SparkEngine)
         message(STATUS "SparkEngine: game-mode ImGui overlay ENABLED")
     endif()
 endif()
@@ -2108,9 +2112,21 @@ elseif(NOT WIN32)
     endif()
 endif()
 
+# SparkUI: SparkUITokens always, SparkUIKit whenever the shared imgui target exists. Creating the
+# imgui target here (instead of first inside SparkEditor) lets the editor, launcher, installer GUI
+# and SparkTests all see SparkUIKit; the guard keeps configs that never built imgui unchanged.
+if(SPARK_EDITOR_DEPS_OK AND (ENABLE_EDITOR OR ENABLE_LAUNCHER OR ENABLE_INSTALLER))
+    include("${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
+endif()
+add_subdirectory(SparkUI)
+
 if(ENABLE_EDITOR AND EXISTS "${CMAKE_SOURCE_DIR}/SparkEditor/CMakeLists.txt" AND SPARK_EDITOR_DEPS_OK)
     message(STATUS "Adding SparkEditor to build...")
     add_subdirectory(SparkEditor)
+    # EditorPreferences (globbed from SparkEditor/Source) includes the ImGui-free SparkUI/Enums.h.
+    if(TARGET SparkEditor)
+        target_link_libraries(SparkEditor PRIVATE SparkUITokens)
+    endif()
 elseif(ENABLE_EDITOR AND NOT SPARK_EDITOR_DEPS_OK)
     message(STATUS "SparkEditor skipped — ${SPARK_EDITOR_SKIP_REASON}")
 

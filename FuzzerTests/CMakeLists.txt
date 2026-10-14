@@ -3657,6 +3657,53 @@ set_tests_properties(FuzzEditorThemeImportSmoke PROPERTIES
     WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
 )
 
+# EditorPreferences.cpp is ImGui-free; its header only needs SparkUI's enum header.
+add_executable(SparkFuzzEditorPreferences
+    FuzzEditorPreferences.cpp
+    FuzzEditorPreferencesProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorPreferences.cpp"
+)
+set_source_files_properties(
+    FuzzEditorPreferencesProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorPreferences.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzEditorPreferences PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkUI/Include"
+)
+target_compile_features(SparkFuzzEditorPreferences PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzEditorPreferences PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzEditorPreferences PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzEditorPreferences PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzEditorPreferencesSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzEditorPreferences>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        -runs=8
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-preferences"
+)
+set_tests_properties(FuzzEditorPreferencesSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
 # EditorWindowManager.cpp holds only the layout persistence and its JSON helpers, so
 # the shipped LoadLayoutFromFile is linked as is.
 add_executable(SparkFuzzEditorWindowLayout

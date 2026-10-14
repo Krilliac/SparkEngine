@@ -174,6 +174,7 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzAssetCooker",
     "SparkFuzzLauncherTemplate",
     "SparkFuzzLauncherModuleManifest",
+    "SparkFuzzEditorPreferences",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 
@@ -2433,6 +2434,7 @@ class TestRepositoryIntegration(unittest.TestCase):
             "editor-theme-import": ("EditorThemeImport", "SparkEditor::ParseThemeDocument", "SparkFuzzParseEditorTheme", 9, 3),
             "editor-window-layout": ("EditorWindowLayout", "SparkEditor::EditorWindowManager::LoadLayoutFromFile", "SparkFuzzLoadEditorWindowLayout", 8, 3),
             "editor-layout": ("EditorLayout", "SparkEditor::EditorLayoutManager::LoadLayout", "SparkFuzzLoadEditorLayout", 13, 3),
+            "editor-preferences": ("EditorPreferences", "SparkEditor::ParseEditorPreferences", "SparkFuzzParseEditorPreferences", 8, 1),
         }
         inventory = parser_inventory.load_inventory(REPO_ROOT)
         parsers = {item.parser_id: item for item in inventory.parsers}

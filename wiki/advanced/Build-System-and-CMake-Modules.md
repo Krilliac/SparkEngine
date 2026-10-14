@@ -518,6 +518,26 @@ existing CRT/toolset contract.
 enabling a compiler. It does not establish native ABI compatibility; the installed
 SDK consumer build and module-load checks remain necessary.
 
+### SparkUIFonts.cmake
+
+**Source:** `cmake/SparkUIFonts.cmake`
+
+Stages the shared Spark UI fonts (IBM Plex Sans, JetBrains Mono, Font Awesome and their
+`LICENSES/`, all from `SparkEditor/Fonts`) next to an executable, in
+`<exe dir>/EditorAssets/Fonts`, which is the first place `Spark::Ui::FindFontDirectory` looks.
+The root `CMakeLists.txt` includes it before the `SparkEngine` executable block.
+
+```cmake
+include(cmake/SparkUIFonts.cmake)
+spark_stage_ui_fonts(SparkEngine)   # POST_BUILD copy into $<TARGET_FILE_DIR:SparkEngine>/EditorAssets/Fonts
+```
+
+The POST_BUILD step runs the same file in script mode
+(`cmake -DSPARK_UI_FONTS_SOURCE=<dir> -DSPARK_UI_FONTS_DEST=<dir> -P cmake/SparkUIFonts.cmake`).
+Several executables share one output directory, so the copy takes a file lock on the destination
+and copies only files whose contents differ; concurrent and repeated builds are safe. It fails the
+build when the source directory holds no fonts. Install rules stay with each consumer.
+
 ### SparkEngineConfig.cmake
 
 Enables `find_package(SparkEngine)` for standalone game projects. Defines the `Spark::SparkEngineLib` imported target.
