@@ -3649,7 +3649,7 @@ add_test(
         -max_len=65536
         -timeout=1
         -rss_limit_mb=256
-        -runs=9
+        -runs=11
         "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/editor-theme-import"
 )
 set_tests_properties(FuzzEditorThemeImportSmoke PROPERTIES

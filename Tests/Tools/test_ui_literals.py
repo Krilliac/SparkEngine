@@ -21,7 +21,7 @@ import check_ui_literals as literals  # noqa: E402  (tools/ui is put on the path
 import migrate_ui_literals as migrate  # noqa: E402
 
 MIN_SCANNED_FILES = 50
-EXPECTED_LANES = {"P1", "P2", "P3", "P4", "P5", "L2", "GM", "L1", "LA", "IN"}
+EXPECTED_LANES = {"P1", "P2", "P3", "P4", "P5", "L2", "GM", "L1", "LA", "IN", "TD"}
 
 FIXTURE = """\
 #include <imgui.h>
