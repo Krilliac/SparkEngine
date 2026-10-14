@@ -1,6 +1,7 @@
 #include "GitRunner.h"
 
 #include "InstallState.h"
+#include "PathUtf8.h"
 #include "ProcessRunner.h"
 
 #include <array>
@@ -120,6 +121,21 @@ namespace SparkInstaller
             }
             return true;
         }
+
+        // Paths reach GitRunner as UTF-8; ProcessRunner needs the OS narrow
+        // encoding. A path the code page cannot hold is refused, never mangled.
+        bool ToProcessPath(const std::string& utf8, std::string& narrow, const LogSink& log)
+        {
+            if (ProcessArgFromUtf8(utf8, narrow))
+            {
+                return true;
+            }
+            if (log)
+            {
+                log("error: path cannot be passed to git in this system's code page: " + utf8);
+            }
+            return false;
+        }
     } // namespace
 
     std::string GitRunner::EncodeProcessRunnerArgument(std::string_view argument)
@@ -139,17 +155,23 @@ namespace SparkInstaller
         return encoded;
     }
 
-    int GitRunner::Run(const std::string& args, const std::string& cwd, const LogSink& log) const
+    int GitRunner::Run(const std::string& args, const std::string& cwd, const LogSink& log,
+                       std::string_view displayArgs) const
     {
+        std::string processCwd;
+        if (!ToProcessPath(cwd, processCwd, log))
+        {
+            return -1;
+        }
         SparkBuild::ProcessRunner runner;
         std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
         if (log)
         {
-            log("$ git " + args);
+            log("$ git " + (displayArgs.empty() ? args : std::string(displayArgs)));
         }
 
         std::string output;
-        int exitCode = runner.RunSync(cmd, cwd, output);
+        int exitCode = runner.RunSync(cmd, processCwd, output);
         if (log && !output.empty())
         {
             log(output);
@@ -185,13 +207,22 @@ namespace SparkInstaller
             return false;
         }
 
-        std::string args = "clone --recurse-submodules --progress";
+        std::string processRepoUrl;
+        std::string processDestination;
+        if (!ToProcessPath(repoUrl, processRepoUrl, log) || !ToProcessPath(destination, processDestination, log))
+        {
+            return false;
+        }
+        std::string options = "clone --recurse-submodules --progress";
         if (!ref.empty())
         {
-            args += " --branch " + EncodeProcessRunnerArgument(ref);
+            options += " --branch " + EncodeProcessRunnerArgument(ref);
         }
-        args += " -- " + EncodeProcessRunnerArgument(repoUrl) + " " + EncodeProcessRunnerArgument(destination);
-        return Run(args, {}, log) == 0;
+        const std::string args = options + " -- " + EncodeProcessRunnerArgument(processRepoUrl) + " " +
+                                 EncodeProcessRunnerArgument(processDestination);
+        const std::string displayArgs =
+            options + " -- " + EncodeProcessRunnerArgument(repoUrl) + " " + EncodeProcessRunnerArgument(destination);
+        return Run(args, {}, log, displayArgs) == 0;
     }
 
     bool GitRunner::Fetch(const std::string& destination, const LogSink& log) const
@@ -202,6 +233,11 @@ namespace SparkInstaller
     bool GitRunner::WorkingTreeClean(const std::string& destination, const LogSink& log) const
     {
         const std::string args = "status --porcelain --untracked-files=all";
+        std::string processDestination;
+        if (!ToProcessPath(destination, processDestination, log))
+        {
+            return false;
+        }
         SparkBuild::ProcessRunner runner;
         std::string command = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
         if (log)
@@ -210,7 +246,7 @@ namespace SparkInstaller
         }
 
         std::string output;
-        if (runner.RunSync(command, destination, output) != 0)
+        if (runner.RunSync(command, processDestination, output) != 0)
         {
             if (log)
             {
@@ -261,11 +297,16 @@ namespace SparkInstaller
     bool GitRunner::IgnoredFiles(const std::string& destination, std::vector<std::string>& paths,
                                  const LogSink& log) const
     {
+        std::string processDestination;
+        if (!ToProcessPath(destination, processDestination, log))
+        {
+            return false;
+        }
         SparkBuild::ProcessRunner runner;
         std::string output;
         const std::string command =
             EncodeProcessRunnerArgument(m_gitExe) + " ls-files --others --ignored --exclude-standard -z";
-        if (runner.RunSync(command, destination, output) != 0)
+        if (runner.RunSync(command, processDestination, output) != 0)
         {
             if (log)
             {
@@ -340,10 +381,15 @@ namespace SparkInstaller
 
     std::string GitRunner::HeadCommit(const std::string& destination) const
     {
+        std::string processDestination;
+        if (!ToProcessPath(destination, processDestination, {}))
+        {
+            return {};
+        }
         SparkBuild::ProcessRunner runner;
         std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " rev-parse HEAD";
         std::string output;
-        if (runner.RunSync(cmd, destination, output) != 0)
+        if (runner.RunSync(cmd, processDestination, output) != 0)
         {
             return {};
         }

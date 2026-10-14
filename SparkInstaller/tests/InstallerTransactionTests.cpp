@@ -1256,6 +1256,59 @@ namespace
         return failures;
     }
 
+    // The destination arrives as UTF-8 from every frontend. On Windows a narrow
+    // fs::path reads it in the ANSI code page, so U+00EB arrived as two cp1252
+    // characters and the whole install landed in a mojibake sibling directory.
+    int RunFreshInstallUtf8DestinationTest(const fs::path& executable)
+    {
+        const std::string name = "fresh install UTF-8 destination";
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+#ifdef _WIN32
+        const fs::path destination = root / fs::path(L"Zo\u00EB-install");
+#else
+        const fs::path destination = root / fs::path("Zo\xC3\xAB-install");
+#endif
+        // root is ASCII, so its narrow form is also its UTF-8 form. The
+        // installer normalises the destination to native separators.
+        const std::string utf8Destination =
+            root.string() + static_cast<char>(fs::path::preferred_separator) + "Zo\xC3\xAB-install";
+        fs::path lockFile = destination;
+        lockFile += ".sparkinstall-lock";
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        context.destination = utf8Destination;
+        context.configManager.config.buildPath.clear();
+        const int result = SparkInstaller::Installer::Run(context);
+
+        failures += Check(result == 0, name + ": expected success, got " + std::to_string(result) + "\n" + log);
+        failures += Check(fs::is_regular_file(destination / SparkInstaller::InstallState::FileName()),
+                          name + ": install state was not written inside the requested UTF-8 destination\n" + log);
+        failures += Check(fs::exists(destination / "CMakeLists.txt"),
+                          name + ": the clone was not activated at the requested UTF-8 destination");
+        std::error_code error;
+        for (const fs::directory_entry& entry : fs::directory_iterator(root, error))
+        {
+            const fs::path leaf = entry.path().filename();
+            failures +=
+                Check(leaf == "tools" || leaf == destination.filename() || leaf == lockFile.filename(),
+                      name + ": the install wrote outside the requested destination: " + entry.path().generic_string());
+        }
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(utf8Destination, loaded) &&
+                              loaded.destination == utf8Destination && context.destination == utf8Destination,
+                          name + ": the installer did not keep the destination as UTF-8: " + context.destination);
+        failures += Check(log.find(" at " + utf8Destination) != std::string::npos,
+                          name + ": the log did not report the UTF-8 destination\n" + log);
+
+        fs::remove_all(root, error);
+        return failures;
+    }
+
     // The destination turned non-empty after the emptiness check: activation
     // must refuse and leave both trees intact, and succeed once it is empty.
     int RunActivateStagedTreeTest()
@@ -1409,6 +1462,7 @@ int main(int argc, char* argv[])
         failures += RunPostBuildHeadCommitFailureTest(executable);
         failures += RunFreshInstallCloneFailureTest(executable);
         failures += RunFreshInstallTrailingSeparatorTest(executable);
+        failures += RunFreshInstallUtf8DestinationTest(executable);
         failures += RunActivateStagedTreeTest();
     }
     if (interrupted)

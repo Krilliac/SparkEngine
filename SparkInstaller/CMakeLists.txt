@@ -34,6 +34,8 @@ set(INSTALLER_SOURCES
     src/GitBootstrap.cpp
     src/InstallState.h
     src/InstallState.cpp
+    src/PathUtf8.h
+    src/PathUtf8.cpp
     src/tui/WizardTui.h
     src/tui/WizardTui.cpp
 )
@@ -78,6 +80,10 @@ target_include_directories(SparkInstaller PRIVATE
 )
 
 target_link_libraries(SparkInstaller PRIVATE SparkBuildCore)
+if(WIN32)
+    # main.cpp reads the UTF-16 command line with CommandLineToArgvW.
+    target_link_libraries(SparkInstaller PRIVATE shell32)
+endif()
 
 if(INSTALLER_GUI_AVAILABLE)
     target_compile_definitions(SparkInstaller PRIVATE SPARKINSTALLER_ENABLE_GUI=1)
@@ -134,6 +140,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
         tests/PortableGitCacheTests.cpp
         src/GitRunner.cpp
         src/GitBootstrap.cpp
+        src/PathUtf8.cpp
     )
     target_include_directories(SparkInstallerGitTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -151,6 +158,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
     add_executable(SparkInstallerInstallStateTests
         tests/InstallStateTests.cpp
         src/InstallState.cpp
+        src/PathUtf8.cpp
     )
     target_include_directories(SparkInstallerInstallStateTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -171,6 +179,7 @@ if(SPARKINSTALLER_BUILD_TESTS)
         src/InstallState.cpp
         src/GitRunner.cpp
         src/GitBootstrap.cpp
+        src/PathUtf8.cpp
     )
     target_include_directories(SparkInstallerTransactionTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

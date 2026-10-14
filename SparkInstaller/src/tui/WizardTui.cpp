@@ -1,6 +1,7 @@
 #include "WizardTui.h"
 
 #include "InstallState.h"
+#include "PathUtf8.h"
 #include "Terminal.h"
 
 #include <filesystem>
@@ -122,7 +123,7 @@ namespace SparkInstaller
         PrintWelcome();
 
         std::string suggestedDest =
-            ctx.destination.empty() ? (fs::current_path() / "SparkEngine").string() : ctx.destination;
+            ctx.destination.empty() ? PathToUtf8(fs::current_path() / "SparkEngine") : ctx.destination;
         ctx.destination = PromptDestination(suggestedDest);
 
         // If the destination already looks like an install, offer update flow and reuse prior state.

@@ -1,4 +1,5 @@
 #include "InstallState.h"
+#include "PathUtf8.h"
 
 #include <chrono>
 #include <filesystem>
@@ -32,6 +33,78 @@ namespace
         state.installerVersion = "1.0.0";
         state.options["BUILD_TESTS"] = true;
         return state;
+    }
+
+    // A destination string is UTF-8 (TUI, GUI and command line all hand the
+    // installer UTF-8). On Windows a narrow fs::path would read it in the ANSI
+    // code page and write the markers into a mojibake sibling directory.
+    std::filesystem::path NonAsciiLeaf()
+    {
+#ifdef _WIN32
+        return std::filesystem::path(L"Zo\u00EB-install");
+#else
+        return std::filesystem::path("Zo\xC3\xAB-install");
+#endif
+    }
+
+    int RunUtf8DestinationTest()
+    {
+        const auto root = MakeTestRoot();
+        const auto wideDestination = root / NonAsciiLeaf();
+        // root is ASCII, so its narrow form is also its UTF-8 form.
+        const std::string utf8Destination = root.string() + "/Zo\xC3\xAB-install";
+        std::error_code error;
+        std::filesystem::create_directories(wideDestination, error);
+        int failures = Check(!error, "could not create the non-ASCII install-state test root");
+        if (failures != 0)
+            return failures;
+
+        const auto state = StateWithCommit("utf8-commit");
+        failures += Check(state.Save(utf8Destination), "install state save to a UTF-8 destination failed");
+        failures += Check(std::filesystem::is_regular_file(wideDestination / SparkInstaller::InstallState::FileName()),
+                          "install state for a UTF-8 destination was not written inside that destination");
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(utf8Destination, loaded) &&
+                              loaded.commit == "utf8-commit" && loaded.destination == utf8Destination,
+                          "install state for a UTF-8 destination did not round-trip");
+
+        failures += Check(SparkInstaller::InstallState::WritePendingMarker(utf8Destination, "Working", "utf8-commit"),
+                          "pending marker write to a UTF-8 destination failed");
+        failures +=
+            Check(std::filesystem::is_regular_file(wideDestination / SparkInstaller::InstallState::PendingFileName()),
+                  "pending marker for a UTF-8 destination was not written inside that destination");
+        std::string ref;
+        std::string commit;
+        failures += Check(SparkInstaller::InstallState::ReadPendingMarker(utf8Destination, ref, commit) &&
+                              ref == "Working" && commit == "utf8-commit",
+                          "pending marker for a UTF-8 destination did not round-trip");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
+    // The conversion helpers themselves: UTF-8 maps to the intended path and
+    // back, and ill-formed UTF-8 is recognised instead of silently remapped.
+    int RunPathUtf8HelperTest()
+    {
+        const std::string utf8 = "Zo\xC3\xAB-install";
+        int failures = Check(SparkInstaller::PathFromUtf8(utf8) == NonAsciiLeaf(),
+                             "PathFromUtf8 did not map UTF-8 to the intended path");
+        failures += Check(SparkInstaller::PathToUtf8(NonAsciiLeaf()) == utf8, "PathToUtf8 did not produce UTF-8");
+        failures += Check(SparkInstaller::IsValidUtf8(utf8) && SparkInstaller::IsValidUtf8(""),
+                          "IsValidUtf8 rejected well-formed UTF-8");
+        failures += Check(!SparkInstaller::IsValidUtf8("Zo\xEB") && !SparkInstaller::IsValidUtf8("\xC0\xAF") &&
+                              !SparkInstaller::IsValidUtf8("\xED\xA0\x80") && !SparkInstaller::IsValidUtf8("\xC3"),
+                          "IsValidUtf8 accepted ill-formed UTF-8");
+        std::string narrow = "unchanged";
+        failures += Check(SparkInstaller::ProcessArgFromUtf8("ascii", narrow) && narrow == "ascii",
+                          "ProcessArgFromUtf8 changed an ASCII path");
+#ifdef _WIN32
+        narrow = "unchanged";
+        failures += Check(!SparkInstaller::ProcessArgFromUtf8("Zo\xEB", narrow) && narrow == "unchanged",
+                          "ProcessArgFromUtf8 accepted ill-formed UTF-8");
+#endif
+        return failures;
     }
 
     int RunAtomicReplacementTest()
@@ -389,6 +462,8 @@ int main()
         RunStateSizeAndEncodingBoundTest(),
         RunDuplicateKeyRejectedTest(),
         RunPendingMarkerRoundTripAndBoundTest(),
+        RunUtf8DestinationTest(),
+        RunPathUtf8HelperTest(),
     };
     for (const int failures : results)
     {
