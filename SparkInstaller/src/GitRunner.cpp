@@ -124,9 +124,10 @@ namespace SparkInstaller
             return true;
         }
 
-        // Paths reach GitRunner as UTF-8; ProcessRunner needs the OS narrow
-        // encoding. A path the code page cannot hold is refused, never mangled.
-        bool ToProcessPath(const std::string& utf8, std::string& narrow, const LogSink& log)
+        // Paths and URLs reach GitRunner as UTF-8; ProcessRunner needs the OS
+        // narrow encoding. A value the code page cannot hold is refused, never
+        // mangled. @p what names the value in the error.
+        bool ToProcessArg(const std::string& utf8, std::string& narrow, const char* what, const LogSink& log)
         {
             if (ProcessArgFromUtf8(utf8, narrow))
             {
@@ -134,7 +135,7 @@ namespace SparkInstaller
             }
             if (log)
             {
-                log("error: path cannot be passed to git in this system's code page: " + utf8);
+                log(std::string("error: ") + what + " cannot be passed to git in this system's code page: " + utf8);
             }
             return false;
         }
@@ -161,7 +162,7 @@ namespace SparkInstaller
                        std::string_view displayArgs) const
     {
         std::string processCwd;
-        if (!ToProcessPath(cwd, processCwd, log))
+        if (!ToProcessArg(cwd, processCwd, "working directory", log))
         {
             return -1;
         }
@@ -211,7 +212,8 @@ namespace SparkInstaller
 
         std::string processRepoUrl;
         std::string processDestination;
-        if (!ToProcessPath(repoUrl, processRepoUrl, log) || !ToProcessPath(destination, processDestination, log))
+        if (!ToProcessArg(repoUrl, processRepoUrl, "repository URL", log) ||
+            !ToProcessArg(destination, processDestination, "clone destination", log))
         {
             return false;
         }
@@ -236,7 +238,7 @@ namespace SparkInstaller
     {
         const std::string args = "status --porcelain --untracked-files=all";
         std::string processDestination;
-        if (!ToProcessPath(destination, processDestination, log))
+        if (!ToProcessArg(destination, processDestination, "install path", log))
         {
             return false;
         }
@@ -300,7 +302,7 @@ namespace SparkInstaller
                                  const LogSink& log) const
     {
         std::string processDestination;
-        if (!ToProcessPath(destination, processDestination, log))
+        if (!ToProcessArg(destination, processDestination, "install path", log))
         {
             return false;
         }
@@ -384,7 +386,7 @@ namespace SparkInstaller
     std::string GitRunner::HeadCommit(const std::string& destination) const
     {
         std::string processDestination;
-        if (!ToProcessPath(destination, processDestination, {}))
+        if (!ToProcessArg(destination, processDestination, "install path", {}))
         {
             return {};
         }

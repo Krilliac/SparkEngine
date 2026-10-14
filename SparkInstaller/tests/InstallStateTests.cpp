@@ -202,6 +202,28 @@ namespace
 #endif
     }
 
+    // cp932/936/950 put 0x5C in the trail byte of many characters; SparkBuild
+    // quoting would double it, so the check must find it whatever the
+    // machine's own code page is.
+    int RunDbcsBackslashTrailTest()
+    {
+#ifdef _WIN32
+        // U+8868 in cp932 is 0x95 0x5C; U+30BD is 0x83 0x5C.
+        int failures = Check(SparkInstaller::ContainsDbcsBackslashTrail("C:\\My Games\\\x95\x5C", 932),
+                             "cp932 trail byte 0x5C was not detected (U+8868)");
+        failures += Check(SparkInstaller::ContainsDbcsBackslashTrail("\x83\x5C", 932),
+                          "cp932 trail byte 0x5C was not detected (U+30BD)");
+        // A plain separator after a complete double-byte character is not a trail byte.
+        failures += Check(!SparkInstaller::ContainsDbcsBackslashTrail("C:\\\x93\xFA\\x", 932),
+                          "a separator after a complete cp932 character was reported as a trail byte");
+        failures += Check(!SparkInstaller::ContainsDbcsBackslashTrail("C:\\My Games\\Zo\xEB", 1252),
+                          "a single-byte code page reported a double-byte trail");
+        return failures;
+#else
+        return 0;
+#endif
+    }
+
     int RunAtomicReplacementTest()
     {
         const auto root = MakeTestRoot();
@@ -560,6 +582,7 @@ int main()
         RunUtf8DestinationTest(),
         RunPathUtf8HelperTest(),
         RunUnrepresentableProcessArgTest(),
+        RunDbcsBackslashTrailTest(),
     };
     for (const int failures : results)
     {

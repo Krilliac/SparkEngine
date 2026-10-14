@@ -43,6 +43,24 @@ namespace SparkInstaller
         }
     } // namespace
 
+    bool ContainsDbcsBackslashTrail(std::string_view bytes, unsigned int codePage)
+    {
+        for (std::size_t index = 0; index < bytes.size(); ++index)
+        {
+            const auto byte = static_cast<BYTE>(bytes[index]);
+            if (::IsDBCSLeadByteEx(codePage, byte))
+            {
+                // A lead byte always consumes the next byte as its trail.
+                if (index + 1 < bytes.size() && bytes[index + 1] == '\\')
+                {
+                    return true;
+                }
+                ++index;
+            }
+        }
+        return false;
+    }
+
     std::string Utf8FromWide(std::wstring_view wide)
     {
         if (wide.empty() || wide.size() > static_cast<std::size_t>(INT_MAX))
@@ -194,6 +212,12 @@ namespace SparkInstaller
         if (::WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wide.data(), inputSize, converted.data(), size, nullptr,
                                   &usedDefault) != size ||
             usedDefault)
+        {
+            return false;
+        }
+        // SparkBuild's quoting doubles backslashes byte by byte, which would
+        // corrupt a double-byte character whose trail byte is 0x5C.
+        if (ContainsDbcsBackslashTrail(converted, ::GetACP()))
         {
             return false;
         }

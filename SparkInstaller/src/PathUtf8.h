@@ -39,10 +39,18 @@ namespace SparkInstaller
     // UTF-8 text -> the narrow encoding SparkBuild::ProcessRunner passes to the
     // OS (the ANSI code page on Windows; the bytes unchanged elsewhere). On
     // Windows returns false, leaving @p narrow untouched, when the text is not
-    // valid UTF-8 or the code page cannot represent it exactly.
+    // valid UTF-8, the code page cannot represent it exactly, or a converted
+    // double-byte character has a 0x5C trail byte (ContainsDbcsBackslashTrail).
     [[nodiscard]] bool ProcessArgFromUtf8(std::string_view utf8, std::string& narrow);
 
 #ifdef _WIN32
+    // True when @p bytes, encoded in the double-byte code page @p codePage,
+    // holds a character whose trail byte is 0x5C ('\\'), e.g. U+8868 is
+    // 0x95 0x5C in cp932. SparkBuild's argument quoting doubles backslashes
+    // byte by byte, so such a character would be mangled; ProcessArgFromUtf8
+    // refuses it. Always false for a single-byte code page.
+    [[nodiscard]] bool ContainsDbcsBackslashTrail(std::string_view bytes, unsigned int codePage);
+
     // UTF-16 -> UTF-8, for Windows APIs that report text as wide strings.
     [[nodiscard]] std::string Utf8FromWide(std::wstring_view wide);
 #endif

@@ -216,10 +216,20 @@ namespace SparkInstaller::Preflight
         if (!recoveryOnly && !ctx.skipBuild)
         {
             const std::string& cmakePath = ctx.configManager.config.cmakePath;
-            const std::string cmake = cmakePath.empty() ? "cmake" : GitRunner::EncodeProcessRunnerArgument(cmakePath);
+            // cmakePath is UTF-8; ProcessRunner needs the process code page.
+            std::string processCmakePath;
+            const bool encodable = ProcessArgFromUtf8(cmakePath, processCmakePath);
+            const std::string cmake =
+                processCmakePath.empty() ? "cmake" : GitRunner::EncodeProcessRunnerArgument(processCmakePath);
             SparkBuild::ProcessRunner runner;
             std::string output;
-            if (runner.RunSync(cmake + " --version", {}, output) != 0)
+            if (!encodable)
+            {
+                failures.push_back(
+                    {"cmake-path-encoding", cmakePath + " cannot be passed to a process in this system's code page; "
+                                                        "use a CMake path without those characters"});
+            }
+            else if (runner.RunSync(cmake + " --version", {}, output) != 0)
             {
                 failures.push_back(
                     {"cmake-unavailable", (cmakePath.empty() ? std::string("cmake on PATH") : cmakePath) +
