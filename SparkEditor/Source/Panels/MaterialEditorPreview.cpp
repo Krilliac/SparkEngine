@@ -17,6 +17,9 @@
 #include <cmath>
 #include <iostream>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -46,7 +49,7 @@ namespace SparkEditor
         // Blend mode
         const char* blendNames[] = {"Opaque", "Alpha Blend", "Additive", "Multiply", "Custom"};
         int currentBlend = static_cast<int>(state.blendMode);
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         if (ImGui::Combo("Blend Mode", &currentBlend, blendNames, 5))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: blend mode changed to '%s'",
@@ -60,7 +63,7 @@ namespace SparkEditor
         if (state.blendMode == MaterialRenderState::BlendMode::AlphaBlend ||
             state.blendMode == MaterialRenderState::BlendMode::Custom)
         {
-            ImGui::SetNextItemWidth(200.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
             if (ImGui::SliderFloat("Alpha Clip Threshold", &state.alphaClipThreshold, 0.0f, 1.0f, "%.2f"))
             {
                 selected->isModified = true;
@@ -73,7 +76,7 @@ namespace SparkEditor
         // Cull mode
         const char* cullNames[] = {"Back", "Front", "None"};
         int currentCull = static_cast<int>(state.cullMode);
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         if (ImGui::Combo("Cull Mode", &currentCull, cullNames, 3))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: cull mode changed to '%s'",
@@ -124,7 +127,7 @@ namespace SparkEditor
         ImGui::Spacing();
 
         // Render queue
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         if (ImGui::InputInt("Render Queue", &state.renderQueue, 100, 500))
         {
             state.renderQueue = std::clamp(state.renderQueue, 0, 5000);
@@ -158,15 +161,17 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_EYE " Material Preview");
         ImGui::Separator();
 
-        float previewSize = std::min(ImGui::GetContentRegionAvail().x, 300.0f);
+        float previewSize = std::min(ImGui::GetContentRegionAvail().x, Spark::Ui::Px(300.0f));
         ImVec2 previewRegion(previewSize, previewSize);
 
         // Preview area with border
         ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            cursorPos, ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y), IM_COL32(30, 30, 30, 255));
-        ImGui::GetWindowDrawList()->AddRect(
-            cursorPos, ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y), IM_COL32(80, 80, 80, 255));
+        ImGui::GetWindowDrawList()->AddRectFilled(cursorPos,
+                                                  ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y),
+                                                  Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
+        ImGui::GetWindowDrawList()->AddRect(cursorPos,
+                                            ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y),
+                                            Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
 
         // CPU-side preview: draw a stylized sphere using material parameters
         float centerX = cursorPos.x + previewRegion.x * 0.5f;
@@ -290,7 +295,8 @@ namespace SparkEditor
 
             // Outline
             drawList->AddRect(ImVec2(centerX - halfSize, centerY - halfSize),
-                              ImVec2(centerX + halfSize, centerY + halfSize), IM_COL32(200, 200, 200, 100));
+                              ImVec2(centerX + halfSize, centerY + halfSize),
+                              Spark::Ui::Col(Spark::Ui::Role::BorderStrong));
         }
         else
         {
@@ -307,7 +313,8 @@ namespace SparkEditor
             drawList->AddRectFilled(ImVec2(centerX - halfSize, centerY - halfSize * 0.5f),
                                     ImVec2(centerX + halfSize, centerY + halfSize * 0.5f), planeColor);
             drawList->AddRect(ImVec2(centerX - halfSize, centerY - halfSize * 0.5f),
-                              ImVec2(centerX + halfSize, centerY + halfSize * 0.5f), IM_COL32(200, 200, 200, 100));
+                              ImVec2(centerX + halfSize, centerY + halfSize * 0.5f),
+                              Spark::Ui::Col(Spark::Ui::Role::BorderStrong));
         }
 
         // Advance cursor past the preview region
@@ -317,12 +324,12 @@ namespace SparkEditor
         // Preview info
         const char* shapeNames[] = {"Sphere", "Cube", "Plane", "Cylinder", "Custom"};
         const char* lightingNames[] = {"Default", "Scene Lights", "IBL Only", "Unlit"};
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Shape: %s | Lighting: %s | Rotation: %s",
-                           shapeNames[static_cast<int>(m_previewShape)],
-                           lightingNames[static_cast<int>(m_previewLighting)], m_previewRotate ? "On" : "Off");
+        Spark::Ui::SecondaryText("Shape: %s | Lighting: %s | Rotation: %s",
+                                 shapeNames[static_cast<int>(m_previewShape)],
+                                 lightingNames[static_cast<int>(m_previewLighting)], m_previewRotate ? "On" : "Off");
 
         ImGui::Spacing();
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         ImGui::SliderFloat("Rotation Speed", &m_previewRotationSpeed, 0.0f, 180.0f, "%.1f deg/s");
     }
 

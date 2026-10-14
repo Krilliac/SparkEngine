@@ -9,6 +9,7 @@
 
 #include "PlayControlPanel.h"
 #include "GameModuleSelectorPanel.h"
+#include "../Core/EditorIcons.h"
 #include "Core/ProjectManager.h"
 #include "../Utils/EditorLaunchContext.h"
 #include "../Utils/EditorProcessLaunch.h"
@@ -18,6 +19,8 @@
 #include <filesystem>
 #ifdef _WIN32
 #include <windows.h>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #endif
 
 namespace SparkEditor
@@ -126,15 +129,15 @@ namespace SparkEditor
 
     void PlayControlPanel::RenderPlayBar()
     {
-        ImGui::TextUnformatted("Play");
+        Spark::Ui::SubHeader("Play");
 
         const bool hasSelector = m_gameModuleSelector != nullptr;
         const std::string selectedPath = hasSelector ? m_gameModuleSelector->GetLaunchSelectionPath() : std::string();
         const bool hasModule = !selectedPath.empty();
 
         if (!hasSelector)
-            ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.3f, 1.0f),
-                               "Game Module Selector not wired — cannot determine which module to launch.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning,
+                                  "Game Module Selector not wired — cannot determine which module to launch.");
         else if (!hasModule)
             ImGui::TextDisabled(
                 "Select a module in the Game Module Selector panel (radio button) to enable launching.");
@@ -150,7 +153,7 @@ namespace SparkEditor
             ImGui::SetTooltip("Windowed client, no scripted -exec.");
 
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(80.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(5.0f));
         ImGui::SliderInt("bots##DedicatedBots", &m_botCount, 0, 32);
         ImGui::SameLine();
         if (ImGui::Button("Launch Dedicated + Bots"))
@@ -166,17 +169,17 @@ namespace SparkEditor
         ImGui::EndDisabled();
 
         if (!m_statusMessage.empty())
-            ImGui::TextColored(ImVec4(0.75f, 0.75f, 0.75f, 1.0f), "%s", m_statusMessage.c_str());
+            Spark::Ui::SecondaryText("%s", m_statusMessage.c_str());
     }
 
     void PlayControlPanel::RenderQuickConnect()
     {
-        ImGui::TextUnformatted("Quick Connect");
+        Spark::Ui::SubHeader("Quick Connect");
 
         const bool hasSelector = m_gameModuleSelector != nullptr;
         const bool hasModule = hasSelector && !m_gameModuleSelector->GetLaunchSelectionPath().empty();
 
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(12.0f));
         ImGui::InputText("host:port", m_quickConnectBuf, sizeof(m_quickConnectBuf));
 
         ImGui::SameLine();
@@ -188,14 +191,10 @@ namespace SparkEditor
 
     void PlayControlPanel::RenderStatus()
     {
-        ImGui::TextUnformatted("Status");
+        Spark::Ui::SubHeader("Status");
 
-        ImVec4 stopColor(0.65f, 0.15f, 0.15f, 1.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, stopColor);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-        if (ImGui::Button("STOP ALL", ImVec2(120, 32)))
+        if (Spark::Ui::DangerButton(ICON_FA_STOP " STOP ALL"))
             StopAll();
-        ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
         size_t aliveCount = 0;
@@ -225,16 +224,16 @@ namespace SparkEditor
                 ImGui::TextUnformatted(inst.label.c_str());
                 ImGui::TableSetColumnIndex(3);
                 if (inst.alive)
-                    ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), "running");
+                    Spark::Ui::StatusText(Spark::Ui::Status::Success, "running");
                 else
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "exited (%lu)", inst.exitCode);
+                    ImGui::TextColored(Spark::Ui::ColV(Spark::Ui::Role::TextSecondary), "exited (%lu)", inst.exitCode);
             }
             ImGui::EndTable();
         }
 
         ImGui::Spacing();
         ImGui::TextUnformatted("exec_audit.log (tail)");
-        ImGui::BeginChild("##ExecAuditLog", ImVec2(0, 220), true, ImGuiWindowFlags_HorizontalScrollbar);
+        ImGui::BeginChild("##ExecAuditLog", Spark::Ui::Px2(0, 220), true, ImGuiWindowFlags_HorizontalScrollbar);
         for (const auto& line : m_logLines)
             ImGui::TextUnformatted(line.c_str());
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())

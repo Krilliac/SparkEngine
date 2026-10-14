@@ -11,6 +11,8 @@
 #include <cmath>
 #include "Utils/LogMacros.h"
 
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -125,12 +127,14 @@ namespace SparkEditor
     {
         if (m_selectedPoint < 0 || m_selectedPoint >= static_cast<int>(m_points.size()))
         {
-            ImGui::TextDisabled("Select a control point to edit");
+            Spark::Ui::SecondaryText("Select a control point to edit");
             return;
         }
 
         auto& pt = m_points[m_selectedPoint];
-        ImGui::Text("Point %d", m_selectedPoint);
+        char pointTitle[32];
+        std::snprintf(pointTitle, sizeof(pointTitle), "Point %d", m_selectedPoint);
+        Spark::Ui::SubHeader(pointTitle);
 
         float pos[3] = {pt.position.x, pt.position.y, pt.position.z};
         if (ImGui::DragFloat3("Position", pos, 0.1f))
@@ -183,7 +187,7 @@ namespace SparkEditor
 
         ImGui::Separator();
 
-        if (ImGui::Button(ICON_FA_TRASH " Delete Point") && m_points.size() > 1)
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete Point") && m_points.size() > 1)
         {
             m_points.erase(m_points.begin() + m_selectedPoint);
             if (m_selectedPoint >= static_cast<int>(m_points.size()))

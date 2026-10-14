@@ -1464,6 +1464,8 @@ if(TARGET imgui)
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AdvancedAssetPipelineUI.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/AssetPipeline/AssetProcessors.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorPanel.cpp"
+        # ThemeCustomizer::ShowThemeEditor (EditorTheme.cpp) opens the Appearance window.
+        "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorAppearanceWindow.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorTheme.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Core/EditorNotificationManager.cpp"
         "${CMAKE_SOURCE_DIR}/SparkEditor/Source/Panels/AssetBrowserPanel.cpp"

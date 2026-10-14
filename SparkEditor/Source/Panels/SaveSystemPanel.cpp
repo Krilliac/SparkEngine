@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <optional>
 #include <imgui.h>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -252,25 +254,36 @@ namespace SparkEditor
 
     void SaveSystemPanel::RenderSaveSlots()
     {
-        ImGui::Text("Directory: %s", m_saveDirectory.c_str());
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_REFRESH " Rescan"))
-            RefreshSlots();
+        if (Spark::Ui::BeginPanelToolbar("##SaveSlotsToolbar"))
+        {
+            if (Spark::Ui::SecondaryButton(ICON_FA_REFRESH " Rescan"))
+                RefreshSlots();
+            ImGui::SameLine();
+            ImGui::AlignTextToFramePadding();
+            Spark::Ui::SecondaryText("Directory:");
+            ImGui::SameLine();
+            Spark::Ui::MonoText("%s", m_saveDirectory.c_str());
+            Spark::Ui::EndPanelToolbar();
+        }
 
         if (m_slots.empty())
         {
-            ImGui::TextDisabled("No save files in this directory.");
+            if (Spark::Ui::EmptyState(ICON_FA_SAVE, "No save files in this directory",
+                                      "Saves written by a running game appear here after a rescan.", "Rescan"))
+            {
+                RefreshSlots();
+            }
             return;
         }
 
         if (ImGui::BeginTable("SaveSlotTable", 5,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+                              ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
             ImGui::TableSetupColumn("Slot");
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Scene");
-            ImGui::TableSetupColumn("Play Time", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Saved", ImGuiTableColumnFlags_WidthFixed, 130);
+            ImGui::TableSetupColumn("Play Time", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Saved", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(130));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_slots.size()); ++i)
@@ -295,10 +308,10 @@ namespace SparkEditor
                 ImGui::TableNextColumn();
                 const int minutes = static_cast<int>(slot.metadata.playTime) / 60;
                 const int seconds = static_cast<int>(slot.metadata.playTime) % 60;
-                ImGui::Text("%d:%02d", minutes, seconds);
+                Spark::Ui::TableNumber("%d:%02d", minutes, seconds);
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(FormatTimestamp(slot.metadata.timestamp).c_str());
+                Spark::Ui::MonoText("%s", FormatTimestamp(slot.metadata.timestamp).c_str());
             }
 
             ImGui::EndTable();
@@ -308,15 +321,19 @@ namespace SparkEditor
     void SaveSystemPanel::RenderSlotActions()
     {
         const SaveSlotInfo slot = m_slots[static_cast<size_t>(m_selectedSlot)];
-        ImGui::Text("Selected: %s (%.1f KB)", slot.slotName.c_str(), static_cast<double>(slot.fileSizeBytes) / 1024.0);
+        Spark::Ui::SecondaryText("Selected:");
+        ImGui::SameLine();
+        ImGui::TextUnformatted(slot.slotName.c_str());
+        ImGui::SameLine();
+        Spark::Ui::MonoText("(%.1f KB)", static_cast<double>(slot.fileSizeBytes) / 1024.0);
 
         if (m_renaming)
         {
-            ImGui::SetNextItemWidth(200);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(200));
             const bool commit = ImGui::InputText("##rename", m_renameBuffer, sizeof(m_renameBuffer),
                                                  ImGuiInputTextFlags_EnterReturnsTrue);
             ImGui::SameLine();
-            if (commit || ImGui::Button("OK"))
+            if (commit || Spark::Ui::PrimaryButton("OK"))
             {
                 if (!RenameSlot(slot.slotName, m_renameBuffer))
                 {
@@ -326,44 +343,59 @@ namespace SparkEditor
                 m_renaming = false;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel"))
+            if (Spark::Ui::SecondaryButton("Cancel"))
                 m_renaming = false;
             return;
         }
 
-        ImGui::BeginDisabled(!CanLoad());
-        if (ImGui::Button(ICON_FA_DOWNLOAD " Load Save"))
-            LoadSlot(slot.slotName);
-        ImGui::EndDisabled();
-        if (!CanLoad())
+        const bool canLoad = CanLoad();
+        {
+            const Spark::Ui::ScopedDisabled disabled(!canLoad, "Needs a running game session.");
+            if (Spark::Ui::PrimaryButton(ICON_FA_DOWNLOAD " Load Save"))
+                LoadSlot(slot.slotName);
+        }
+        if (!canLoad)
         {
             ImGui::SameLine();
-            ImGui::TextDisabled("(needs a running game session)");
+            ImGui::AlignTextToFramePadding();
+            Spark::Ui::SecondaryText("(needs a running game session)");
         }
 
-        if (ImGui::Button(ICON_FA_PEN " Rename"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_PEN " Rename"))
         {
             m_renaming = true;
             std::snprintf(m_renameBuffer, sizeof(m_renameBuffer), "%s", slot.slotName.c_str());
         }
 
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        constexpr const char* kDeletePopupId = "Delete save?##SaveSystemPanel";
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete"))
+            ImGui::OpenPopup(kDeletePopupId);
+        // The delete removes the file from disk, so it is confirmed first.
+        if (Spark::Ui::ConfirmDestructive(kDeletePopupId, "Delete save?",
+                                          "The save file is removed from disk. This cannot be undone.", "Delete"))
             DeleteSlot(slot.slotName);
     }
 
     void SaveSystemPanel::RenderAutosaveSettings()
     {
-        if (ImGui::DragInt("Autosave Rotation", &m_autosaveRotation, 1.0f, 1, 10))
+        if (Spark::Ui::BeginPropertyGrid("AutosaveSettings"))
         {
-            m_autosaveRotation = std::clamp(m_autosaveRotation, 1, 10);
-            System().SetMaxAutoSaves(m_autosaveRotation);
+            Spark::Ui::PropertyLabel("Autosave Rotation");
+            if (ImGui::DragInt("##AutosaveRotation", &m_autosaveRotation, 1.0f, 1, 10))
+            {
+                m_autosaveRotation = std::clamp(m_autosaveRotation, 1, 10);
+                System().SetMaxAutoSaves(m_autosaveRotation);
+            }
+            Spark::Ui::EndPropertyGrid();
         }
-        ImGui::TextDisabled("SaveSystem keeps the last %d autosave slots.", m_autosaveRotation);
+        Spark::Ui::SecondaryText("SaveSystem keeps the last %d autosave slots.", m_autosaveRotation);
 
         ImGui::Separator();
-        ImGui::TextDisabled("When autosaves and quicksaves are written is decided by the");
-        ImGui::TextDisabled("running game module, not by the editor.");
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("When autosaves and quicksaves are written is decided by the running game module, not "
+                                 "by the editor.");
+        ImGui::PopTextWrapPos();
     }
 
 } // namespace SparkEditor

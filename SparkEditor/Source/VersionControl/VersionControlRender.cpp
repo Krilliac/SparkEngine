@@ -4,6 +4,9 @@
  */
 
 #include "VersionControlSystem.h"
+#include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/Process.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
@@ -42,6 +45,34 @@ namespace SparkEditor
             return status == 0 && !selectedPath.empty() && std::filesystem::is_directory(selectedPath);
         }
 #endif
+
+        /// Shared empty state of every tab that needs an open repository.
+        void NoRepositoryState()
+        {
+            Spark::Ui::EmptyState(ICON_FA_CODE_BRANCH, "No repository open",
+                                  "Open a repository from the Overview tab.");
+        }
+
+        /// Text role of a change's status letter; the letter ([M], [A], ...) carries the meaning.
+        Spark::Ui::Role ChangeStatusRole(FileStatus status)
+        {
+            switch (status)
+            {
+            case FileStatus::MODIFIED:
+                return Spark::Ui::Role::WarningText;
+            case FileStatus::ADDED:
+                return Spark::Ui::Role::SuccessText;
+            case FileStatus::DELETED:
+            case FileStatus::CONFLICTED:
+                return Spark::Ui::Role::ErrorText;
+            case FileStatus::RENAMED:
+                return Spark::Ui::Role::InfoText;
+            case FileStatus::UNTRACKED:
+                return Spark::Ui::Role::TextSecondary;
+            default:
+                return Spark::Ui::Role::TextPrimary;
+            }
+        }
     } // namespace
 
     // ============================================================================
@@ -52,8 +83,9 @@ namespace SparkEditor
     {
         if (!m_repositoryInfo)
         {
-            ImGui::Text("No repository open.");
-            if (ImGui::Button("Open Repository..."))
+            if (Spark::Ui::EmptyState(ICON_FA_CODE_BRANCH, "No repository open",
+                                      "Open a Git working copy to see its status, history and branches.",
+                                      ICON_FA_FOLDER_OPEN " Open Repository..."))
             {
                 std::string selectedPath;
                 bool selected = false;
@@ -88,54 +120,57 @@ namespace SparkEditor
             return;
         }
 
-        ImGui::Text("Repository Path:");
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "%s", m_repositoryInfo->path.c_str());
-
-        ImGui::Text("Current Branch:");
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%s", m_repositoryInfo->currentBranch.name.c_str());
-
-        ImGui::Text("Remote URL:");
-        ImGui::SameLine();
-        ImGui::TextWrapped("%s", m_repositoryInfo->remoteURL.empty() ? "(none)" : m_repositoryInfo->remoteURL.c_str());
-
-        ImGui::Text("Status:");
-        ImGui::SameLine();
-        if (m_repositoryInfo->isClean)
+        if (Spark::Ui::BeginPropertyGrid("RepositoryOverview"))
         {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "Clean");
-        }
-        else
-        {
-            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "Dirty (%zu changed files)",
-                               m_repositoryInfo->changedFiles.size());
-        }
+            Spark::Ui::PropertyLabel("Repository Path");
+            Spark::Ui::MonoText("%s", m_repositoryInfo->path.c_str());
 
-        if (m_repositoryInfo->hasLFS)
-        {
-            ImGui::Text("LFS:");
-            ImGui::SameLine();
-            ImGui::Text("%s", m_repositoryInfo->lfsVersion.c_str());
+            Spark::Ui::PropertyLabel("Current Branch");
+            Spark::Ui::TextRole(Spark::Ui::Role::AccentText, ICON_FA_CODE_BRANCH " %s",
+                                m_repositoryInfo->currentBranch.name.c_str());
+
+            Spark::Ui::PropertyLabel("Remote URL");
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::MonoText("%s",
+                                m_repositoryInfo->remoteURL.empty() ? "(none)" : m_repositoryInfo->remoteURL.c_str());
+            ImGui::PopTextWrapPos();
+
+            Spark::Ui::PropertyLabel("Status");
+            if (m_repositoryInfo->isClean)
+            {
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Clean");
+            }
+            else
+            {
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Dirty (%zu changed files)",
+                                      m_repositoryInfo->changedFiles.size());
+            }
+
+            if (m_repositoryInfo->hasLFS)
+            {
+                Spark::Ui::PropertyLabel("LFS");
+                Spark::Ui::MonoText("%s", m_repositoryInfo->lfsVersion.c_str());
+            }
+            Spark::Ui::EndPropertyGrid();
         }
 
         ImGui::Separator();
-        if (ImGui::Button("Refresh"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_SYNC_ALT " Refresh"))
         {
             RefreshStatus();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Fetch"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_DOWNLOAD " Fetch"))
         {
             Fetch();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Pull"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_ARROW_DOWN " Pull"))
         {
             Pull();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Push"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_ARROW_UP " Push"))
         {
             Push();
         }
@@ -145,12 +180,13 @@ namespace SparkEditor
     {
         if (!m_repositoryInfo)
         {
-            ImGui::Text("No repository open.");
+            NoRepositoryState();
             return;
         }
 
-        ImGui::Text("Changed Files:");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Changed Files");
+        if (m_repositoryInfo->changedFiles.empty())
+            Spark::Ui::SecondaryText("Working tree clean.");
 
         // Track staging selection per file
         static std::unordered_map<std::string, bool> selectedFiles;
@@ -160,32 +196,25 @@ namespace SparkEditor
             bool& selected = selectedFiles[change.filePath];
 
             const char* statusLabel = "";
-            ImVec4 statusColor(1.0f, 1.0f, 1.0f, 1.0f);
             switch (change.status)
             {
             case FileStatus::MODIFIED:
                 statusLabel = "[M]";
-                statusColor = ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
                 break;
             case FileStatus::ADDED:
                 statusLabel = "[A]";
-                statusColor = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
                 break;
             case FileStatus::DELETED:
                 statusLabel = "[D]";
-                statusColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
                 break;
             case FileStatus::RENAMED:
                 statusLabel = "[R]";
-                statusColor = ImVec4(0.5f, 0.5f, 1.0f, 1.0f);
                 break;
             case FileStatus::UNTRACKED:
                 statusLabel = "[?]";
-                statusColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
                 break;
             case FileStatus::CONFLICTED:
                 statusLabel = "[C]";
-                statusColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
                 break;
             default:
                 statusLabel = "[ ]";
@@ -194,15 +223,18 @@ namespace SparkEditor
 
             ImGui::Checkbox(("##stage_" + change.filePath).c_str(), &selected);
             ImGui::SameLine();
-            ImGui::TextColored(statusColor, "%s", statusLabel);
+            {
+                Spark::Ui::ScopedRoleColor statusColor(ImGuiCol_Text, ChangeStatusRole(change.status));
+                Spark::Ui::MonoText("%s", statusLabel);
+            }
             ImGui::SameLine();
-            ImGui::Text("%s", change.filePath.c_str());
+            Spark::Ui::MonoText("%s", change.filePath.c_str());
         }
 
         ImGui::Separator();
 
         // Stage/unstage buttons
-        if (ImGui::Button("Stage Selected"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Stage Selected"))
         {
             std::vector<std::string> toStage;
             for (auto& [path, sel] : selectedFiles)
@@ -218,7 +250,7 @@ namespace SparkEditor
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Unstage Selected"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_MINUS " Unstage Selected"))
         {
             std::vector<std::string> toUnstage;
             for (auto& [path, sel] : selectedFiles)
@@ -234,13 +266,12 @@ namespace SparkEditor
             }
         }
 
-        ImGui::Separator();
-        ImGui::Text("Commit Message:");
+        Spark::Ui::SubHeader("Commit Message");
 
         static char commitMsgBuf[1024] = "";
-        ImGui::InputTextMultiline("##commit_msg", commitMsgBuf, sizeof(commitMsgBuf), ImVec2(-1, 80));
+        ImGui::InputTextMultiline("##commit_msg", commitMsgBuf, sizeof(commitMsgBuf), ImVec2(-1, Spark::Ui::Px(80)));
 
-        if (ImGui::Button("Commit"))
+        if (Spark::Ui::PrimaryButton(ICON_FA_CHECK " Commit"))
         {
             std::string msg(commitMsgBuf);
             if (!msg.empty())
@@ -255,16 +286,22 @@ namespace SparkEditor
     {
         if (!m_repositoryInfo)
         {
-            ImGui::Text("No repository open.");
+            NoRepositoryState();
             return;
         }
 
-        if (ImGui::Button("Refresh History"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_SYNC_ALT " Refresh History"))
         {
             GetCommitHistory(100);
         }
 
         ImGui::Separator();
+
+        if (m_commitHistory.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_HISTORY, "No history loaded", "Refresh to load the last 100 commits.");
+            return;
+        }
 
         for (const auto& commit : m_commitHistory)
         {
@@ -281,7 +318,7 @@ namespace SparkEditor
     {
         if (!m_repositoryInfo)
         {
-            ImGui::Text("No repository open.");
+            NoRepositoryState();
             return;
         }
 
@@ -289,7 +326,7 @@ namespace SparkEditor
         static char newBranchName[256] = "";
         ImGui::InputText("New Branch", newBranchName, sizeof(newBranchName));
         ImGui::SameLine();
-        if (ImGui::Button("Create"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Create"))
         {
             std::string name(newBranchName);
             if (!name.empty())
@@ -302,7 +339,7 @@ namespace SparkEditor
         ImGui::Separator();
 
         // List branches
-        if (ImGui::Button("Refresh Branches"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_SYNC_ALT " Refresh Branches"))
         {
             VCSOperationResult result = ExecuteGit({"branch", "-a"}, m_repositoryInfo->path);
             if (result.success)
@@ -319,7 +356,8 @@ namespace SparkEditor
 
             if (branch.isCurrent)
             {
-                ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "* %s", branch.name.c_str());
+                Spark::Ui::TextRole(Spark::Ui::Role::AccentText, ICON_FA_CODE_BRANCH " %s (current)",
+                                    branch.name.c_str());
             }
             else
             {
@@ -335,7 +373,12 @@ namespace SparkEditor
                     MergeBranch(branch.name);
                 }
                 ImGui::SameLine();
-                if (ImGui::SmallButton("Delete"))
+                bool deleteClicked = false;
+                {
+                    Spark::Ui::ScopedRoleColor dangerText(ImGuiCol_Text, Spark::Ui::Role::ErrorText);
+                    deleteClicked = ImGui::SmallButton("Delete");
+                }
+                if (deleteClicked)
                 {
                     DeleteBranch(branch.name);
                 }
@@ -349,30 +392,30 @@ namespace SparkEditor
     {
         if (!m_repositoryInfo)
         {
-            ImGui::Text("No repository open.");
+            NoRepositoryState();
             return;
         }
 
         if (m_repositoryInfo->conflicts.empty())
         {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "No merge conflicts.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "No merge conflicts.");
             return;
         }
 
-        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
-                           "%zu conflict(s) detected:", m_repositoryInfo->conflicts.size());
+        Spark::Ui::StatusText(Spark::Ui::Status::Error,
+                              "%zu conflict(s) detected:", m_repositoryInfo->conflicts.size());
         ImGui::Separator();
 
         for (auto& conflict : m_repositoryInfo->conflicts)
         {
             ImGui::PushID(conflict.filePath.c_str());
 
-            ImGui::Text("%s", conflict.filePath.c_str());
+            Spark::Ui::MonoText("%s", conflict.filePath.c_str());
             ImGui::SameLine();
 
             if (conflict.isResolved)
             {
-                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "(Resolved: %s)", conflict.resolution.c_str());
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Resolved: %s", conflict.resolution.c_str());
             }
             else
             {
@@ -402,8 +445,7 @@ namespace SparkEditor
 
     void VersionControlSystem::RenderSettingsPanel()
     {
-        ImGui::Text("User Information");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("User Information");
 
         static char userName[256] = "";
         static char userEmail[256] = "";
@@ -428,8 +470,7 @@ namespace SparkEditor
         ImGui::Checkbox("Sign Commits", &m_userInfo.signCommits);
 
         ImGui::Spacing();
-        ImGui::Text("Collaboration Settings");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Collaboration Settings");
 
         ImGui::Checkbox("Real-time Sync", &m_collaborationSettings.enableRealtimeSync);
         ImGui::Checkbox("File Locking", &m_collaborationSettings.enableFileLocking);
@@ -442,31 +483,29 @@ namespace SparkEditor
         ImGui::Checkbox("Auto-Sync on Idle", &m_collaborationSettings.autoSyncOnIdle);
 
         ImGui::Spacing();
-        ImGui::Text("Notifications");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Notifications");
         ImGui::Checkbox("Notify on Conflicts", &m_collaborationSettings.notifyOnConflicts);
         ImGui::Checkbox("Notify on Updates", &m_collaborationSettings.notifyOnUpdates);
         ImGui::Checkbox("Notify on Locks", &m_collaborationSettings.notifyOnLocks);
         ImGui::Checkbox("Desktop Notifications", &m_collaborationSettings.showDesktopNotifications);
 
         ImGui::Spacing();
-        ImGui::Text("LFS Settings");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("LFS Settings");
 
         if (m_repositoryInfo && m_repositoryInfo->hasLFS)
         {
-            ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "LFS Enabled: %s", m_repositoryInfo->lfsVersion.c_str());
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "LFS Enabled: %s", m_repositoryInfo->lfsVersion.c_str());
         }
         else
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "LFS not detected");
-            if (ImGui::Button("Initialize LFS"))
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "LFS not detected");
+            if (Spark::Ui::SecondaryButton("Initialize LFS"))
             {
                 InitializeLFS();
             }
         }
 
-        ImGui::Text("LFS Patterns:");
+        Spark::Ui::SecondaryText("LFS Patterns:");
         for (const auto& pattern : m_lfsPatterns)
         {
             ImGui::BulletText("%s", pattern.c_str());

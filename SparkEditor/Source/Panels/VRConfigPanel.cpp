@@ -5,9 +5,10 @@
 
 #include "VRConfigPanel.h"
 #include "../Core/EditorIcons.h"
-#include <imgui.h>
-#include <iostream>
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
+
+#include <imgui.h>
 
 namespace SparkEditor
 {
@@ -66,68 +67,84 @@ namespace SparkEditor
     {
         if (m_vrAvailable)
         {
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), ICON_FA_CHECK " VR Runtime Available");
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "VR Runtime Available");
         }
         else
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.5f, 0.2f, 1.0f), ICON_FA_EXCLAMATION " No VR Runtime Detected");
-            ImGui::TextDisabled("Install OpenXR or SteamVR to enable VR support.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "No VR Runtime Detected");
+            Spark::Ui::SecondaryText("Install OpenXR or SteamVR to enable VR support.");
         }
 
         ImGui::Separator();
-        ImGui::Text("Recommended Render Size: %d x %d", m_renderWidth, m_renderHeight);
-
-        const char* trackingSpaces[] = {"Seated", "Room Scale"};
-        ImGui::Combo("Tracking Space", &m_trackingSpace, trackingSpaces, 2);
-
-        if (ImGui::Button("Recenter Tracking"))
+        if (Spark::Ui::BeginPropertyGrid("VRDevice"))
         {
-            // Would call VRSystem::RecenterTracking()
+            Spark::Ui::PropertyLabel("Recommended Render Size");
+            Spark::Ui::MonoText("%d x %d", m_renderWidth, m_renderHeight);
+            const char* trackingSpaces[] = {"Seated", "Room Scale"};
+            Spark::Ui::PropertyLabel("Tracking Space");
+            ImGui::Combo("##TrackingSpace", &m_trackingSpace, trackingSpaces, 2);
+            Spark::Ui::EndPropertyGrid();
         }
+
+        Spark::Ui::UnavailableFeature("Recenter Tracking",
+                                      "The editor holds no VR session; recentering runs in the launched game.");
     }
 
     void VRConfigPanel::RenderTrackingInfo()
     {
-        ImGui::Text("Head Position: (%.2f, %.2f, %.2f)", m_headPosition[0], m_headPosition[1], m_headPosition[2]);
-        ImGui::Text("Head Orientation: (%.2f, %.2f, %.2f, %.2f)", m_headOrientation[0], m_headOrientation[1],
-                    m_headOrientation[2], m_headOrientation[3]);
+        if (Spark::Ui::BeginPropertyGrid("VRTracking"))
+        {
+            Spark::Ui::PropertyLabel("Head Position");
+            Spark::Ui::MonoText("(%.2f, %.2f, %.2f)", m_headPosition[0], m_headPosition[1], m_headPosition[2]);
+            Spark::Ui::PropertyLabel("Head Orientation");
+            Spark::Ui::MonoText("(%.2f, %.2f, %.2f, %.2f)", m_headOrientation[0], m_headOrientation[1],
+                                m_headOrientation[2], m_headOrientation[3]);
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Separator();
-        ImGui::TextDisabled("State preview does not update VR tracking.");
-        ImGui::TextDisabled(
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("State preview does not update VR tracking.");
+        Spark::Ui::SecondaryText(
             "Use Play Control > Launch Game to test runtime VR tracking (state preview is not gameplay).");
+        ImGui::PopTextWrapPos();
     }
 
     void VRConfigPanel::RenderControllerMapping()
     {
-        ImGui::Text("Left Controller: %s",
-                    m_leftControllerConnected ? (ICON_FA_CHECK " Connected") : (ICON_FA_TIMES " Disconnected"));
-        ImGui::Text("Right Controller: %s",
-                    m_rightControllerConnected ? (ICON_FA_CHECK " Connected") : (ICON_FA_TIMES " Disconnected"));
+        if (Spark::Ui::BeginPropertyGrid("VRControllers"))
+        {
+            Spark::Ui::PropertyLabel("Left Controller");
+            Spark::Ui::StatusText(m_leftControllerConnected ? Spark::Ui::Status::Success : Spark::Ui::Status::Neutral,
+                                  "%s", m_leftControllerConnected ? "Connected" : "Disconnected");
+            Spark::Ui::PropertyLabel("Right Controller");
+            Spark::Ui::StatusText(m_rightControllerConnected ? Spark::Ui::Status::Success : Spark::Ui::Status::Neutral,
+                                  "%s", m_rightControllerConnected ? "Connected" : "Disconnected");
+            Spark::Ui::PropertyLabel("Left Trigger");
+            Spark::Ui::MonoText("%.2f", m_leftTrigger);
+            Spark::Ui::PropertyLabel("Right Trigger");
+            Spark::Ui::MonoText("%.2f", m_rightTrigger);
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Separator();
-        ImGui::Text("Left Trigger: %.2f", m_leftTrigger);
-        ImGui::Text("Right Trigger: %.2f", m_rightTrigger);
-
-        ImGui::Separator();
-        ImGui::TextDisabled("Controller button mapping is configured in Project Settings.");
+        Spark::Ui::SecondaryText("Controller button mapping is configured in Project Settings.");
     }
 
     void VRConfigPanel::RenderHapticTest()
     {
-        ImGui::SliderFloat("Amplitude", &m_hapticAmplitude, 0.0f, 1.0f, "%.2f");
-        ImGui::SliderFloat("Duration", &m_hapticDuration, 0.01f, 1.0f, "%.2f s");
+        if (Spark::Ui::BeginPropertyGrid("VRHaptics"))
+        {
+            Spark::Ui::PropertyLabel("Amplitude");
+            ImGui::SliderFloat("##Amplitude", &m_hapticAmplitude, 0.0f, 1.0f, "%.2f");
+            Spark::Ui::PropertyLabel("Duration");
+            ImGui::SliderFloat("##Duration", &m_hapticDuration, 0.01f, 1.0f, "%.2f s");
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Separator();
-        if (ImGui::Button("Test Left"))
-        {
-            // Would call VRSystem::TriggerHaptic(true, m_hapticAmplitude, m_hapticDuration)
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Test Right"))
-        {
-            // Would call VRSystem::TriggerHaptic(false, m_hapticAmplitude, m_hapticDuration)
-        }
+        Spark::Ui::UnavailableFeature("Haptic test pulses",
+                                      "The editor holds no VR session; test haptics in the launched game.");
     }
 
 } // namespace SparkEditor

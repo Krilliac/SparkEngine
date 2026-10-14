@@ -5,8 +5,13 @@
 
 #include "ScriptDebugPanel.h"
 
+#include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 #include <imgui.h>
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 namespace SparkEditor
@@ -96,34 +101,44 @@ namespace SparkEditor
 
     void ScriptDebugPanel::RenderToolbar()
     {
+        if (!Spark::Ui::BeginPanelToolbar("ScriptDebugToolbar"))
+            return;
+
         if (m_isPaused)
         {
-            if (ImGui::Button("Continue"))
+            if (Spark::Ui::PrimaryButton(ICON_FA_PLAY " Continue"))
                 Continue();
             ImGui::SameLine();
-            if (ImGui::Button("Step Over"))
+            if (Spark::Ui::SecondaryButton(ICON_FA_STEP_FORWARD " Step Over"))
                 StepOver();
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "PAUSED at Node %u", m_pausedAtNode);
+            ImGui::AlignTextToFramePadding();
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "PAUSED at Node %u", m_pausedAtNode);
         }
         else
         {
-            if (ImGui::Button("Pause"))
+            if (Spark::Ui::SecondaryButton(ICON_FA_PAUSE " Pause"))
                 m_isPaused = true;
         }
 
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
         ImGui::Checkbox("Debug Compile", &m_debugCompile);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("When enabled, compiled scripts emit trace calls at each node");
 
         ImGui::SameLine();
-        if (ImGui::Button("Clear Trace"))
+        if (Spark::Ui::IconButton("clearTrace", ICON_FA_ERASER, "Clear the trace log"))
             m_traceLog.clear();
 
-        ImGui::SameLine();
-        ImGui::Text("Breakpoints: %zu | Watches: %zu | Trace: %zu", m_breakpoints.size(), m_watches.size(),
-                    m_traceLog.size());
+        Spark::Ui::ToolbarSeparator();
+        ImGui::AlignTextToFramePadding();
+        Spark::Ui::KeyValue("Breakpoints", "%zu", m_breakpoints.size());
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Watches", "%zu", m_watches.size());
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Trace", "%zu", m_traceLog.size());
+
+        Spark::Ui::EndPanelToolbar();
     }
 
     void ScriptDebugPanel::RenderBreakpoints()
@@ -137,13 +152,13 @@ namespace SparkEditor
             ImGui::SameLine();
 
             if (bp.isHit)
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Node %u [%s] (hit %u times)", bp.nodeId,
-                                   bp.scriptName.c_str(), bp.hitCount);
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "Node %u [%s] (hit %u times)", bp.nodeId,
+                                      bp.scriptName.c_str(), bp.hitCount);
             else
                 ImGui::Text("Node %u [%s]", bp.nodeId, bp.scriptName.c_str());
 
             ImGui::SameLine();
-            if (ImGui::SmallButton("X"))
+            if (Spark::Ui::IconButton("remove", ICON_FA_XMARK, "Remove breakpoint"))
             {
                 m_breakpoints.erase(m_breakpoints.begin() + static_cast<ptrdiff_t>(i));
                 ImGui::PopID();
@@ -154,9 +169,13 @@ namespace SparkEditor
         }
 
         if (m_breakpoints.empty())
-            ImGui::TextDisabled("No breakpoints set. Click on a node pin in the Visual Script editor.");
+        {
+            Spark::Ui::EmptyState(ICON_FA_BUG, "No breakpoints set",
+                                  "Click on a node pin in the Visual Script editor.");
+            return;
+        }
 
-        if (ImGui::Button("Clear All"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Clear All"))
             ClearAllBreakpoints();
     }
 
@@ -164,10 +183,10 @@ namespace SparkEditor
     {
         // Add watch input
         static char watchName[64] = "";
-        ImGui::SetNextItemWidth(150.0f);
-        ImGui::InputText("##watch", watchName, sizeof(watchName));
+        ImGui::SetNextItemWidth(Spark::Ui::Px(150.0f));
+        ImGui::InputTextWithHint("##watch", "Variable name", watchName, sizeof(watchName));
         ImGui::SameLine();
-        if (ImGui::Button("Add Watch") && watchName[0] != '\0')
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add Watch") && watchName[0] != '\0')
         {
             AddWatch(watchName, "auto");
             watchName[0] = '\0';
@@ -175,65 +194,74 @@ namespace SparkEditor
 
         ImGui::Separator();
 
+        if (m_watches.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_EYE, "No watches", "Add a variable name above to watch its value.");
+            return;
+        }
+
         // Watch list
-        ImGui::Columns(3, "WatchCols");
-        ImGui::SetColumnWidth(0, 120.0f);
-        ImGui::SetColumnWidth(1, 60.0f);
-        ImGui::Text("Name");
-        ImGui::NextColumn();
-        ImGui::Text("Type");
-        ImGui::NextColumn();
-        ImGui::Text("Value");
-        ImGui::NextColumn();
-        ImGui::Separator();
+        if (!Spark::Ui::BeginDataTable("WatchTable", 4))
+            return;
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(120.0f));
+        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60.0f));
+        ImGui::TableSetupColumn("Value");
+        ImGui::TableSetupColumn("##remove", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(28.0f));
+        ImGui::TableHeadersRow();
 
         for (size_t i = 0; i < m_watches.size(); i++)
         {
             auto& w = m_watches[i];
             ImGui::PushID(static_cast<int>(i));
+            ImGui::TableNextRow();
 
-            ImGui::Text("%s", w.name.c_str());
-            ImGui::NextColumn();
-            ImGui::TextDisabled("%s", w.type.c_str());
-            ImGui::NextColumn();
-
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(w.name.c_str());
+            ImGui::TableNextColumn();
+            Spark::Ui::SecondaryText("%s", w.type.c_str());
+            ImGui::TableNextColumn();
             if (w.currentValue.empty())
                 ImGui::TextDisabled("(not set)");
             else
-                ImGui::Text("%s", w.currentValue.c_str());
+                Spark::Ui::MonoText("%s", w.currentValue.c_str());
 
-            ImGui::SameLine();
-            if (ImGui::SmallButton("X"))
+            ImGui::TableNextColumn();
+            if (Spark::Ui::IconButton("remove", ICON_FA_XMARK, "Remove watch"))
             {
                 m_watches.erase(m_watches.begin() + static_cast<ptrdiff_t>(i));
                 ImGui::PopID();
-                ImGui::NextColumn();
                 break;
             }
-            ImGui::NextColumn();
 
             ImGui::PopID();
         }
-        ImGui::Columns(1);
+        ImGui::EndTable();
     }
 
     void ScriptDebugPanel::RenderTraceLog()
     {
-        ImGui::Text("Execution Trace (%zu entries)", m_traceLog.size());
-        ImGui::Separator();
+        char header[64];
+        std::snprintf(header, sizeof(header), "Execution Trace (%zu entries)", m_traceLog.size());
+        Spark::Ui::SubHeader(header);
+
+        if (m_traceLog.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_STREAM, "No trace data", "Enable 'Debug Compile' and run a script.");
+            return;
+        }
 
         ImGui::BeginChild("TraceScroll", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
         // Show most recent first
         for (auto it = m_traceLog.rbegin(); it != m_traceLog.rend(); ++it)
         {
-            ImGui::TextDisabled("[%.2fs]", it->timestamp);
+            {
+                Spark::Ui::ScopedRoleColor muted(ImGuiCol_Text, Spark::Ui::Role::TextSecondary);
+                Spark::Ui::MonoText("[%.2fs]", it->timestamp);
+            }
             ImGui::SameLine();
             ImGui::Text("Node %u (%s): %s", it->nodeId, it->nodeName.c_str(), it->output.c_str());
         }
-
-        if (m_traceLog.empty())
-            ImGui::TextDisabled("No trace data. Enable 'Debug Compile' and run a script.");
 
         ImGui::EndChild();
     }
@@ -354,12 +382,11 @@ namespace SparkEditor
 
     void ScriptDebugPanel::RenderCallStack()
     {
-        ImGui::Text("Execution Call Stack");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Execution Call Stack");
 
         if (m_traceLog.empty())
         {
-            ImGui::TextDisabled("No execution data");
+            Spark::Ui::EmptyState(ICON_FA_LIST, "No execution data");
             return;
         }
 
@@ -370,8 +397,8 @@ namespace SparkEditor
             const auto& entry = m_traceLog[i - 1];
             bool isTop = (i == m_traceLog.size());
             if (isTop && m_isPaused)
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "-> Node %u (%s)", entry.nodeId,
-                                   entry.nodeName.c_str());
+                Spark::Ui::TextRole(Spark::Ui::Role::AccentText, "-> Node %u (%s)", entry.nodeId,
+                                    entry.nodeName.c_str());
             else
                 ImGui::Text("   Node %u (%s)", entry.nodeId, entry.nodeName.c_str());
         }

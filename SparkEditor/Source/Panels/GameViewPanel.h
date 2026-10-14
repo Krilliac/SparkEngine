@@ -90,7 +90,8 @@ namespace SparkEditor
       private:
         void RenderToolbar();
         void RenderGameContent();
-        void RenderFPSHUD();
+        /// @brief Draw the simulated FPS HUD over the content area starting at @p areaMin, @p areaSize large.
+        void RenderFPSHUD(const ImVec2& areaMin, const ImVec2& areaSize);
         void HandleInput(float deltaTime);
         ImVec2 GetConstrainedViewportSize(const ImVec2& available) const;
         void RenderCrosshair(float cx, float cy);

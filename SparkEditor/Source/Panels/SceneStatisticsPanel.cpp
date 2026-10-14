@@ -11,6 +11,8 @@
 #include "Core/Reflection.h"
 #include "Engine/ECS/Components.h"
 #include "Physics/PhysicsSystem.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <algorithm>
@@ -162,49 +164,46 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::RenderEntityStats()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CUBE " Entity Statistics",
-                                    m_showEntitySection ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        if (Spark::Ui::SectionHeader("Entity Statistics", ICON_FA_CUBE, m_showEntitySection))
         {
             m_showEntitySection = true;
 
             if (!IsWorldConnected())
             {
-                ImGui::TextDisabled("Preview - not connected: no World is wired to this panel.");
+                Spark::Ui::Banner(Spark::Ui::Status::Info, "Preview - not connected: no World is wired to this panel.");
                 ImGui::Spacing();
                 return;
             }
 
-            ImGui::Columns(2, "EntityStatsColumns", false);
-            ImGui::SetColumnWidth(0, 180.0f);
-
-            ImGui::TextDisabled("Total Entities");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_totalEntities);
-            ImGui::NextColumn();
-
-            ImGui::Columns(1);
+            if (Spark::Ui::BeginPropertyGrid("EntityStatsGrid"))
+            {
+                Spark::Ui::PropertyLabel("Total Entities");
+                Spark::Ui::MonoText("%d", m_totalEntities);
+                Spark::Ui::EndPropertyGrid();
+            }
 
             if (ImGui::TreeNode("Component Breakdown"))
             {
-                ImGui::BeginChild("ComponentTable", ImVec2(0, 200), true);
+                ImGui::BeginChild("ComponentTable", Spark::Ui::Px2(0, 200), true);
 
-                ImGui::Columns(2, "ComponentColumns");
-                ImGui::SetColumnWidth(0, 180.0f);
-                ImGui::TextDisabled("Component Type");
-                ImGui::NextColumn();
-                ImGui::TextDisabled("Count");
-                ImGui::NextColumn();
-                ImGui::Separator();
-
-                for (const auto& [type, count] : m_componentCounts)
+                if (Spark::Ui::BeginDataTable("ComponentCounts", 2))
                 {
-                    ImGui::Text("%s", type.c_str());
-                    ImGui::NextColumn();
-                    ImGui::Text("%d", count);
-                    ImGui::NextColumn();
+                    ImGui::TableSetupScrollFreeze(0, 1);
+                    ImGui::TableSetupColumn("Component Type");
+                    ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Em(5.0f));
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& [type, count] : m_componentCounts)
+                    {
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted(type.c_str());
+                        ImGui::TableNextColumn();
+                        Spark::Ui::TableNumber("%d", count);
+                    }
+                    ImGui::EndTable();
                 }
 
-                ImGui::Columns(1);
                 ImGui::EndChild();
                 ImGui::TreePop();
             }
@@ -219,43 +218,31 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::RenderRenderStats()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CAMERA " Render Statistics",
-                                    m_showRenderSection ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        if (Spark::Ui::SectionHeader("Render Statistics", ICON_FA_CAMERA, m_showRenderSection))
         {
             m_showRenderSection = true;
 
             if (!m_hasRenderStats)
             {
-                ImGui::TextDisabled("Preview - not connected: the viewport has not reported render");
-                ImGui::TextDisabled("statistics to this panel.");
+                Spark::Ui::Banner(Spark::Ui::Status::Info,
+                                  "Preview - not connected: the viewport has not reported render statistics to "
+                                  "this panel.");
                 ImGui::Spacing();
                 return;
             }
 
-            ImGui::Columns(2, "RenderStatsColumns", false);
-            ImGui::SetColumnWidth(0, 180.0f);
-
-            ImGui::TextDisabled("Draw Calls");
-            ImGui::NextColumn();
-            ImGui::Text("%u", m_renderStats.drawn);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Candidates");
-            ImGui::NextColumn();
-            ImGui::Text("%u", m_renderStats.candidates);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Visible");
-            ImGui::NextColumn();
-            ImGui::Text("%u", m_renderStats.visible);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Rejected");
-            ImGui::NextColumn();
-            ImGui::Text("%u", m_renderStats.rejected);
-            ImGui::NextColumn();
-
-            ImGui::Columns(1);
+            if (Spark::Ui::BeginPropertyGrid("RenderStatsGrid"))
+            {
+                Spark::Ui::PropertyLabel("Draw Calls");
+                Spark::Ui::MonoText("%u", m_renderStats.drawn);
+                Spark::Ui::PropertyLabel("Candidates");
+                Spark::Ui::MonoText("%u", m_renderStats.candidates);
+                Spark::Ui::PropertyLabel("Visible");
+                Spark::Ui::MonoText("%u", m_renderStats.visible);
+                Spark::Ui::PropertyLabel("Rejected");
+                Spark::Ui::MonoText("%u", m_renderStats.rejected);
+                Spark::Ui::EndPropertyGrid();
+            }
             ImGui::Spacing();
         }
         else
@@ -266,48 +253,32 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::RenderPhysicsStats()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_BOLT " Physics Statistics",
-                                    m_showPhysicsSection ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        if (Spark::Ui::SectionHeader("Physics Statistics", ICON_FA_BOLT, m_showPhysicsSection))
         {
             m_showPhysicsSection = true;
 
             if (!m_hasPhysicsStats)
             {
-                ImGui::TextDisabled("Preview - not connected: no PhysicsSystem is running in this");
-                ImGui::TextDisabled("process.");
+                Spark::Ui::Banner(Spark::Ui::Status::Info,
+                                  "Preview - not connected: no PhysicsSystem is running in this process.");
                 ImGui::Spacing();
                 return;
             }
 
-            ImGui::Columns(2, "PhysicsStatsColumns", false);
-            ImGui::SetColumnWidth(0, 180.0f);
-
-            ImGui::TextDisabled("Active Rigid Bodies");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_physicsStats.activeRigidBodies);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Total Rigid Bodies");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_physicsStats.totalRigidBodies);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Collision Pairs");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_physicsStats.collisionPairs);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Raycasts/Frame");
-            ImGui::NextColumn();
-            ImGui::Text("%d", m_physicsStats.raycastsPerFrame);
-            ImGui::NextColumn();
-
-            ImGui::TextDisabled("Simulation Time");
-            ImGui::NextColumn();
-            ImGui::Text("%.2f ms", m_physicsStats.simulationTimeMs);
-            ImGui::NextColumn();
-
-            ImGui::Columns(1);
+            if (Spark::Ui::BeginPropertyGrid("PhysicsStatsGrid"))
+            {
+                Spark::Ui::PropertyLabel("Active Rigid Bodies");
+                Spark::Ui::MonoText("%d", m_physicsStats.activeRigidBodies);
+                Spark::Ui::PropertyLabel("Total Rigid Bodies");
+                Spark::Ui::MonoText("%d", m_physicsStats.totalRigidBodies);
+                Spark::Ui::PropertyLabel("Collision Pairs");
+                Spark::Ui::MonoText("%d", m_physicsStats.collisionPairs);
+                Spark::Ui::PropertyLabel("Raycasts/Frame");
+                Spark::Ui::MonoText("%d", m_physicsStats.raycastsPerFrame);
+                Spark::Ui::PropertyLabel("Simulation Time");
+                Spark::Ui::MonoText("%.2f ms", m_physicsStats.simulationTimeMs);
+                Spark::Ui::EndPropertyGrid();
+            }
             ImGui::Spacing();
         }
         else
@@ -318,20 +289,21 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::RenderMemoryStats()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CHART_BAR " Memory Usage",
-                                    m_showMemorySection ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        if (Spark::Ui::SectionHeader("Memory Usage", ICON_FA_CHART_BAR, m_showMemorySection))
         {
             m_showMemorySection = true;
 
             if (m_hasProcessMemory)
             {
-                ImGui::Text("Editor process memory: %.1f MB", m_processMemoryMB);
-                ImGui::TextDisabled("Reported by the OS for this process. Per-asset memory");
-                ImGui::TextDisabled("breakdowns are not instrumented yet.");
+                Spark::Ui::KeyValue("Editor process memory", "%.1f MB", m_processMemoryMB);
+                ImGui::PushTextWrapPos(0.0f);
+                Spark::Ui::SecondaryText(
+                    "Reported by the OS for this process. Per-asset memory breakdowns are not instrumented yet.");
+                ImGui::PopTextWrapPos();
             }
             else
             {
-                ImGui::TextDisabled("Process memory is unavailable on this platform.");
+                Spark::Ui::UnavailableFeature("Process memory", "This platform does not report it.");
             }
 
             ImGui::Spacing();
@@ -344,24 +316,25 @@ namespace SparkEditor
 
     void SceneStatisticsPanel::RenderPerformanceGraphs()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_BOLT " Performance",
-                                    m_showPerformanceSection ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        if (Spark::Ui::SectionHeader("Performance", ICON_FA_BOLT, m_showPerformanceSection))
         {
             m_showPerformanceSection = true;
 
-            ImGui::Text("FPS: %.1f (avg: %.1f, min: %.1f, max: %.1f)", m_currentFps, m_averageFps, m_minFps, m_maxFps);
+            Spark::Ui::KeyValue("FPS", "%.1f  (avg %.1f, min %.1f, max %.1f)", m_currentFps, m_averageFps, m_minFps,
+                                m_maxFps);
 
             ImGui::PlotLines("##FPSGraph", m_fpsHistory.data(), static_cast<int>(HISTORY_SIZE),
-                             static_cast<int>(m_historyIndex), "FPS", 0.0f, 120.0f, ImVec2(0, 60));
+                             static_cast<int>(m_historyIndex), "FPS", 0.0f, 120.0f, Spark::Ui::Px2(0, 60));
 
-            ImGui::Text("Frame Time: %.2f ms", m_currentFrameTime * 1000.0f);
+            Spark::Ui::KeyValue("Frame Time", "%.2f ms", m_currentFrameTime * 1000.0f);
             ImGui::PlotLines("##FrameTimeGraph", m_frameTimeHistory.data(), static_cast<int>(HISTORY_SIZE),
-                             static_cast<int>(m_historyIndex), "Frame Time (ms)", 0.0f, 33.3f, ImVec2(0, 60));
+                             static_cast<int>(m_historyIndex), "Frame Time (ms)", 0.0f, 33.3f, Spark::Ui::Px2(0, 60));
 
             if (m_hasRenderStats)
             {
                 ImGui::PlotHistogram("##DrawCallsGraph", m_drawCallHistory.data(), static_cast<int>(HISTORY_SIZE),
-                                     static_cast<int>(m_historyIndex), "Draw Calls", 0.0f, 500.0f, ImVec2(0, 40));
+                                     static_cast<int>(m_historyIndex), "Draw Calls", 0.0f, 500.0f,
+                                     Spark::Ui::Px2(0, 40));
             }
 
             ImGui::Spacing();

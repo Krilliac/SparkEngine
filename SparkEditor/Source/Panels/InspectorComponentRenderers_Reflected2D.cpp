@@ -9,6 +9,8 @@
  */
 
 #include "InspectorComponentRenderers_ReflectedInternal.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -36,7 +38,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderSpriteAnimatorComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FILM " Sprite Animator");
+        bool headerOpen = Spark::Ui::SectionHeader("Sprite Animator", ICON_FA_FILM, false);
         if (ImGui::BeginPopupContextItem("##SpriteAnimatorCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -45,9 +47,9 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
-            ImGui::TextDisabled("Edit clips in the Sprite Animation Editor panel");
-            ImGui::Unindent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
+            Spark::Ui::SecondaryText("Edit clips in the Sprite Animation Editor panel");
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -57,7 +59,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderTerrainComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_MOUNTAIN " Terrain");
+        bool headerOpen = Spark::Ui::SectionHeader("Terrain", ICON_FA_MOUNTAIN, false);
         if (ImGui::BeginPopupContextItem("##TerrainCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -66,7 +68,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TERRAIN);
             auto* d = comp ? comp->GetData<TerrainSceneData>() : nullptr;
             if (d)
@@ -93,9 +95,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -140,7 +142,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderTilemapComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_TH " Tilemap");
+        bool headerOpen = Spark::Ui::SectionHeader("Tilemap", ICON_FA_TH, false);
         if (ImGui::BeginPopupContextItem("##TilemapCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -149,7 +151,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::TILEMAP);
             auto* d = comp ? comp->GetData<TilemapData>() : nullptr;
             if (d)
@@ -165,13 +167,13 @@ namespace SparkEditor
                     FIELD_BOOL(TilemapData, generateCollision, "Generate Collision"),
                 };
                 RenderReflectedFields(d, fields);
-                ImGui::TextDisabled("Paint tiles in the Tilemap Editor panel");
+                Spark::Ui::SecondaryText("Paint tiles in the Tilemap Editor panel");
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -181,7 +183,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderNineSliceComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BORDER_ALL " Nine-Slice");
+        bool headerOpen = Spark::Ui::SectionHeader("Nine-Slice", ICON_FA_BORDER_ALL, false);
         if (ImGui::BeginPopupContextItem("##NineSliceCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -190,7 +192,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::NINE_SLICE);
             auto* d = comp ? comp->GetData<NineSliceData>() : nullptr;
             if (d)
@@ -215,9 +217,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 

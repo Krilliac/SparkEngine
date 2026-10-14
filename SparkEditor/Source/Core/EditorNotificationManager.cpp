@@ -1,151 +1,300 @@
 /**
  * @file EditorNotificationManager.cpp
- * @brief Implementation of the SparkEditor toast notification queue.
+ * @brief Implementation of the SparkEditor toast stack and bell history.
  */
 
 #include "EditorNotificationManager.h"
 
-#include "EditorIcons.h"
-#include "EditorTheme.h"
+#include <SparkUI/Fonts.h>
+#include <SparkUI/Glyphs.h>
+#include <SparkUI/Runtime.h>
+#include <SparkUI/Widgets.h>
 
 #include <imgui.h>
 
 #include <algorithm>
+#include <array>
+#include <ctime>
+#include <iterator>
+#include <string>
+#include <utility>
 
 namespace SparkEditor
 {
 
+    namespace
+    {
+        namespace Ui = Spark::Ui;
+
+        /// Seconds over which an expiring toast fades out when motion is allowed.
+        constexpr float kFadeSeconds = 0.5f;
+
+        Ui::Status ToStatus(NotificationSeverity severity) noexcept
+        {
+            switch (severity)
+            {
+            case NotificationSeverity::Success:
+                return Ui::Status::Success;
+            case NotificationSeverity::Warning:
+                return Ui::Status::Warning;
+            case NotificationSeverity::Error:
+                return Ui::Status::Error;
+            case NotificationSeverity::Info:
+                break;
+            }
+            return Ui::Status::Info;
+        }
+
+        std::string LocalClockNow()
+        {
+            const std::time_t now = std::time(nullptr);
+            std::tm local{};
+#if defined(_WIN32)
+            localtime_s(&local, &now);
+#else
+            localtime_r(&now, &local);
+#endif
+            char text[16] = {};
+            std::strftime(text, sizeof(text), "%H:%M:%S", &local);
+            return text;
+        }
+
+        /// Measured layout of one toast, shared by the measuring and drawing passes.
+        struct ToastLayout
+        {
+            float height = 0.0f;
+            float titleHeight = 0.0f;
+        };
+    } // namespace
+
+    float EditorNotificationManager::DefaultDuration(NotificationSeverity severity) noexcept
+    {
+        switch (severity)
+        {
+        case NotificationSeverity::Warning:
+            return 8.0f;
+        case NotificationSeverity::Error:
+            return 0.0f;
+        case NotificationSeverity::Info:
+        case NotificationSeverity::Success:
+            break;
+        }
+        return 4.0f;
+    }
+
+    NotificationSeverity EditorNotificationManager::SeverityFromType(std::string_view type) noexcept
+    {
+        if (type == "error")
+            return NotificationSeverity::Error;
+        if (type == "warning")
+            return NotificationSeverity::Warning;
+        if (type == "success")
+            return NotificationSeverity::Success;
+        return NotificationSeverity::Info;
+    }
+
+    void EditorNotificationManager::Notify(NotificationSeverity severity, std::string title, std::string body,
+                                           float seconds)
+    {
+        Entry entry;
+        entry.severity = severity;
+        entry.title = std::move(title);
+        entry.body = std::move(body);
+        entry.clock = LocalClockNow();
+
+        m_history.push_back(entry);
+        if (m_history.size() > kMaxHistory)
+            m_history.erase(m_history.begin(), m_history.begin() + (m_history.size() - kMaxHistory));
+        ++m_unread;
+
+        Toast toast;
+        toast.entry = std::move(entry);
+        toast.id = m_nextId++;
+        // Errors wait for the user: a failure that vanishes on its own is easy to miss.
+        toast.duration =
+            severity == NotificationSeverity::Error ? 0.0f : (seconds > 0.0f ? seconds : DefaultDuration(severity));
+        toast.timeLeft = toast.duration;
+        m_toasts.push_back(std::move(toast));
+
+        // Beyond the visible limit the oldest toast leaves the screen; it is still in the history.
+        if (m_toasts.size() > kMaxVisibleToasts)
+            m_toasts.erase(m_toasts.begin(), m_toasts.begin() + (m_toasts.size() - kMaxVisibleToasts));
+    }
+
     void EditorNotificationManager::Show(const std::string& message, const std::string& type, float duration)
     {
-        Notification notification;
-        notification.message = message;
-        notification.type = type;
-        notification.duration = duration;
-        notification.timeLeft = duration;
-        notification.timestamp = std::chrono::steady_clock::now();
-
-        m_notifications.push_back(notification);
+        Notify(SeverityFromType(type), message, {}, duration);
     }
 
     void EditorNotificationManager::Update(float deltaTime)
     {
-        auto it = m_notifications.begin();
-        while (it != m_notifications.end())
+        for (Toast& toast : m_toasts)
         {
-            it->timeLeft -= deltaTime;
-            if (it->timeLeft <= 0.0f && it->duration > 0.0f)
-            {
-                it = m_notifications.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
+            if (toast.duration > 0.0f && !toast.paused)
+                toast.timeLeft -= deltaTime;
         }
+        std::erase_if(m_toasts, [](const Toast& toast) { return toast.duration > 0.0f && toast.timeLeft <= 0.0f; });
     }
 
-    // NOTE: Intentionally exceeds 50-line guideline — linear UI layout code
+    // NOTE: Intentionally exceeds the 60-line guideline -- one linear measure-then-draw pass over the stack.
     void EditorNotificationManager::Render()
     {
-        const auto& theme = EditorTheme::GetCurrentThemeData();
-        const float NOTIFICATION_MAX_WIDTH = 360.0f;
-        const float NOTIFICATION_MIN_HEIGHT = 56.0f;
-        const float NOTIFICATION_SPACING = 8.0f;
-        const float NOTIFICATION_INSET = 16.0f;
-        const float NOTIFICATION_PADDING_Y = 12.0f;
-        const float NOTIFICATION_TEXT_LEFT = 40.0f;
-        const float NOTIFICATION_TEXT_RIGHT = 14.0f;
+        if (m_toasts.empty())
+            return;
 
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        float yOffset = viewport->WorkPos.y + 12.0f;
-        const float notificationWidth =
-            std::min(NOTIFICATION_MAX_WIDTH, std::max(1.0f, viewport->WorkSize.x - 2.0f * NOTIFICATION_INSET));
-        const float textWrapWidth =
-            std::max(1.0f, notificationWidth - NOTIFICATION_TEXT_LEFT - NOTIFICATION_TEXT_RIGHT);
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float inset = Ui::Px(16.0f);
+        const float spacing = Ui::Px(8.0f);
+        const float padX = Ui::Px(12.0f);
+        const float padY = Ui::Px(10.0f);
+        const float gap = Ui::Px(4.0f);
+        const float stripe = Ui::Px(3.0f);
+        const float rounding = Ui::Px(6.0f);
+        const float closeSide = std::max(Ui::Px(24.0f), ImGui::GetFrameHeight());
+        const float maxWidth = std::max(1.0f, viewport->WorkSize.x - Ui::Px(32.0f));
+        const float width = std::min(std::max(Ui::Em(26.0f), Ui::Px(280.0f)), maxWidth);
+        const float textLeft = stripe + padX;
+        const float wrapWidth = std::max(1.0f, width - textLeft - padX);
 
-        for (size_t i = 0; i < m_notifications.size(); ++i)
+        // Measure every toast first so the stack can grow upward from the bottom edge.
+        std::array<ToastLayout, kMaxVisibleToasts> layouts{};
+        for (std::size_t i = 0; i < m_toasts.size(); ++i)
         {
-            const auto& notification = m_notifications[i];
+            const Entry& entry = m_toasts[i].entry;
+            ToastLayout& layout = layouts[i];
+            layout.titleHeight = ImGui::CalcTextSize(entry.title.c_str(), nullptr, false, wrapWidth).y;
+            layout.height = padY + closeSide + gap + layout.titleHeight + padY;
+            if (!entry.body.empty())
+                layout.height += gap + ImGui::CalcTextSize(entry.body.c_str(), nullptr, false, wrapWidth).y;
+        }
 
-            // Fade out in last 0.5 seconds
+        // Newest toast sits lowest; older ones stack above it, so index 0 (oldest) is on top.
+        std::array<float, kMaxVisibleToasts> tops{};
+        float bottom = viewport->WorkPos.y + viewport->WorkSize.y - inset;
+        for (std::size_t i = m_toasts.size(); i-- > 0;)
+        {
+            tops[i] = bottom - layouts[i].height;
+            bottom = tops[i] - spacing;
+        }
+        const float left = viewport->WorkPos.x + viewport->WorkSize.x - width - inset;
+
+        const ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+
+        std::uint64_t dismissedId = 0;
+        for (std::size_t i = 0; i < m_toasts.size(); ++i)
+        {
+            Toast& toast = m_toasts[i];
+            const ToastLayout& layout = layouts[i];
+            const Ui::Status status = ToStatus(toast.entry.severity);
+
             float alpha = 1.0f;
-            if (notification.duration > 0.0f && notification.timeLeft < 0.5f)
-            {
-                alpha = std::max(0.0f, notification.timeLeft / 0.5f);
-            }
+            if (!Ui::ReduceMotion() && toast.duration > 0.0f && toast.timeLeft < kFadeSeconds)
+                alpha = std::max(0.0f, toast.timeLeft / kFadeSeconds);
 
-            const ImVec2 textSize = ImGui::CalcTextSize(notification.message.c_str(), nullptr, false, textWrapWidth);
-            const float notificationHeight =
-                std::max(NOTIFICATION_MIN_HEIGHT, textSize.y + 2.0f * NOTIFICATION_PADDING_Y);
-            ImVec2 notificationPos(viewport->WorkPos.x + viewport->WorkSize.x - notificationWidth - NOTIFICATION_INSET,
-                                   yOffset);
+            ImGui::SetNextWindowPos(ImVec2(left, tops[i]));
+            ImGui::SetNextWindowSize(ImVec2(width, layout.height));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, Ui::Px(1.0f));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, Ui::ColV(Ui::Role::SurfaceOverlay, alpha));
+            ImGui::PushStyleColor(ImGuiCol_Border, Ui::ColV(Ui::Role::BorderSubtle, alpha));
 
-            ImGui::SetNextWindowPos(notificationPos);
-            ImGui::SetNextWindowSize(ImVec2(notificationWidth, notificationHeight));
-            ImGui::SetNextWindowBgAlpha(0.95f * alpha);
-
-            std::string windowName = "##Notification" + std::to_string(i);
-            ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                     ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking |
-                                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-                                     ImGuiWindowFlags_NoSavedSettings;
-
-            // Theme-matched accent colors
-            ImVec4 accentColor = theme.accentSecondary.WithAlpha(alpha).ToImVec4();
-            const char* icon = ICON_FA_INFO_CIRCLE;
-            if (notification.type == "error")
-            {
-                accentColor = theme.textError.WithAlpha(alpha).ToImVec4();
-                icon = ICON_FA_TIMES;
-            }
-            else if (notification.type == "warning")
-            {
-                accentColor = theme.textWarning.WithAlpha(alpha).ToImVec4();
-                icon = ICON_FA_EXCLAMATION;
-            }
-            else if (notification.type == "success")
-            {
-                accentColor = theme.textSuccess.WithAlpha(alpha).ToImVec4();
-                icon = ICON_FA_CHECK;
-            }
-
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, theme.popupRounding);
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, theme.backgroundLight.WithAlpha(0.95f * alpha).ToImVec4());
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(accentColor.x, accentColor.y, accentColor.z, 0.25f * alpha));
+            const std::string windowName = "##Notification" + std::to_string(i);
             if (ImGui::Begin(windowName.c_str(), nullptr, flags))
             {
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                ImVec2 wp = ImGui::GetWindowPos();
-                ImVec2 ws = ImGui::GetWindowSize();
+                ImGui::PushID(static_cast<int>(toast.id));
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const ImVec2 windowPos = ImGui::GetWindowPos();
+                drawList->AddRectFilled(windowPos, ImVec2(windowPos.x + stripe, windowPos.y + layout.height),
+                                        Ui::Col(Ui::StatusTextRole(status), alpha), rounding,
+                                        ImDrawFlags_RoundCornersLeft);
 
-                // Left accent stripe (3px, rounded left corners)
-                dl->AddRectFilled(wp, ImVec2(wp.x + 3, wp.y + ws.y), ImGui::ColorConvertFloat4ToU32(accentColor),
-                                  theme.popupRounding, ImDrawFlags_RoundCornersLeft);
+                // Header: glyph + status word, then the posting time, then the dismiss button.
+                ImGui::SetCursorPos(ImVec2(textLeft, padY + (closeSide - ImGui::GetTextLineHeight()) * 0.5f));
+                {
+                    Ui::ScopedRoleColor statusColor(ImGuiCol_Text, Ui::StatusTextRole(status), alpha);
+                    ImGui::TextUnformatted(Ui::StatusGlyph(status));
+                    ImGui::SameLine();
+                    Ui::ScopedFont strong(Ui::FontRole::Strong);
+                    ImGui::TextUnformatted(Ui::StatusWord(status));
+                }
+                ImGui::SameLine();
+                {
+                    Ui::ScopedRoleColor clockColor(ImGuiCol_Text, Ui::Role::TextSecondary, alpha);
+                    Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
+                    ImGui::TextUnformatted(toast.entry.clock.c_str());
+                }
 
-                // Subtle background gradient overlay (darker at bottom)
-                dl->AddRectFilledMultiColor(wp, ImVec2(wp.x + ws.x, wp.y + ws.y),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0)),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0)),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)),
-                                            ImGui::ColorConvertFloat4ToU32(ImVec4(0, 0, 0, 0.1f * alpha)));
+                ImGui::SetCursorPos(ImVec2(width - padX * 0.5f - closeSide, padY));
+                if (Ui::IconButton("##dismiss", Ui::Glyph::kXmark, "Dismiss"))
+                    dismissedId = toast.id;
 
-                // Keep the icon vertically centered while the text starts at a
-                // stable top padding and can grow to multiple lines.
-                const ImVec2 iconPos(wp.x + 14.0f, wp.y + (notificationHeight - ImGui::GetTextLineHeight()) * 0.5f);
-                dl->AddText(iconPos, ImGui::ColorConvertFloat4ToU32(accentColor), icon);
-                ImGui::SetCursorPos(ImVec2(NOTIFICATION_TEXT_LEFT, NOTIFICATION_PADDING_Y));
-                ImGui::PushTextWrapPos(notificationWidth - NOTIFICATION_TEXT_RIGHT);
-                ImGui::PushStyleColor(ImGuiCol_Text, theme.text.WithAlpha(alpha).ToImVec4());
-                ImGui::TextUnformatted(notification.message.c_str());
-                ImGui::PopStyleColor();
+                ImGui::PushTextWrapPos(width - padX);
+                ImGui::SetCursorPos(ImVec2(textLeft, padY + closeSide + gap));
+                {
+                    Ui::ScopedRoleColor titleColor(ImGuiCol_Text, Ui::Role::TextPrimary, alpha);
+                    ImGui::TextUnformatted(toast.entry.title.c_str());
+                }
+                if (!toast.entry.body.empty())
+                {
+                    ImGui::SetCursorPos(ImVec2(textLeft, padY + closeSide + gap + layout.titleHeight + gap));
+                    Ui::ScopedRoleColor bodyColor(ImGuiCol_Text, Ui::Role::TextSecondary, alpha);
+                    ImGui::TextUnformatted(toast.entry.body.c_str());
+                }
                 ImGui::PopTextWrapPos();
+
+                // Reading or reaching for a toast keeps it on screen.
+                toast.paused = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) ||
+                               ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+                ImGui::PopID();
             }
             ImGui::End();
             ImGui::PopStyleColor(2);
-            ImGui::PopStyleVar(2);
-            yOffset += notificationHeight + NOTIFICATION_SPACING;
+            ImGui::PopStyleVar(3);
         }
+
+        if (dismissedId != 0)
+            std::erase_if(m_toasts, [dismissedId](const Toast& toast) { return toast.id == dismissedId; });
+    }
+
+    void EditorNotificationManager::RenderHistory()
+    {
+        m_unread = 0;
+        if (m_history.empty())
+        {
+            Ui::SecondaryText("No notifications yet.");
+            return;
+        }
+
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + Ui::Em(28.0f));
+        for (auto it = m_history.rbegin(); it != m_history.rend(); ++it)
+        {
+            const Ui::Status status = ToStatus(it->severity);
+            ImGui::PushID(static_cast<int>(std::distance(m_history.rbegin(), it)));
+            {
+                Ui::ScopedRoleColor statusColor(ImGuiCol_Text, Ui::StatusTextRole(status));
+                ImGui::TextUnformatted(Ui::StatusGlyph(status));
+            }
+            ImGui::SameLine();
+            {
+                Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
+                Ui::ScopedRoleColor clockColor(ImGuiCol_Text, Ui::Role::TextSecondary);
+                ImGui::TextUnformatted(it->clock.c_str());
+            }
+            ImGui::SameLine();
+            ImGui::TextUnformatted(it->title.c_str());
+            if (!it->body.empty())
+                Ui::SecondaryText("%s", it->body.c_str());
+            ImGui::PopID();
+        }
+        ImGui::PopTextWrapPos();
+
+        ImGui::Separator();
+        if (Ui::SecondaryButton("Dismiss all toasts"))
+            DismissAll();
     }
 
 } // namespace SparkEditor

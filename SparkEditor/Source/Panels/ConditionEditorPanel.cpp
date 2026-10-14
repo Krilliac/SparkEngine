@@ -10,6 +10,8 @@
 #include <iostream>
 #include <cstring>
 #include <cstdio>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -61,7 +63,7 @@ namespace SparkEditor
 
     void ConditionEditorPanel::RenderConditionBuilder()
     {
-        ImGui::TextDisabled("Condition sets: groups are combined with AND. Each group uses its own logic.");
+        Spark::Ui::SecondaryText("Condition sets: groups are combined with AND. Each group uses its own logic.");
 
         if (ImGui::Button(ICON_FA_PLUS " Add Group"))
         {
@@ -82,7 +84,7 @@ namespace SparkEditor
             if (g < static_cast<int>(m_groups.size()) - 1)
             {
                 ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.3f, 1.0f), "--- AND ---");
+                Spark::Ui::SubHeader("AND");
                 ImGui::Spacing();
             }
         }
@@ -95,10 +97,11 @@ namespace SparkEditor
         char headerText[64];
         snprintf(headerText, sizeof(headerText), "Group %d (%s)", groupIndex + 1, group.logic == 0 ? "AND" : "OR");
 
-        bool open = ImGui::CollapsingHeader(headerText, ImGuiTreeNodeFlags_DefaultOpen);
+        bool open = Spark::Ui::SectionHeader(headerText);
 
-        // Delete group button on same line
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20);
+        // Delete group button right-aligned on the header row
+        const float deleteWidth = ImGui::CalcTextSize(ICON_FA_TRASH).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - deleteWidth);
         if (ImGui::SmallButton(ICON_FA_TRASH "##delgroup"))
         {
             m_groups.erase(m_groups.begin() + groupIndex);
@@ -151,17 +154,17 @@ namespace SparkEditor
             ImGui::Separator();
 
             // Condition type dropdown
-            ImGui::SetNextItemWidth(180);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(180));
             ImGui::Combo("##Type", &cond.type, conditionTypeNames, IM_ARRAYSIZE(conditionTypeNames));
 
             ImGui::SameLine();
             ImGui::Checkbox("NOT", &cond.negated);
 
             // Parameter inputs
-            ImGui::SetNextItemWidth(150);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(150));
             ImGui::InputText("Param 1", cond.param1, sizeof(cond.param1));
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(150);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(150));
             ImGui::InputText("Param 2", cond.param2, sizeof(cond.param2));
 
             ImGui::SameLine();
@@ -192,8 +195,8 @@ namespace SparkEditor
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
             ImGui::TableSetupColumn("Name");
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 120);
-            ImGui::TableSetupColumn("##Del", ImGuiTableColumnFlags_WidthFixed, 30);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(120));
+            ImGui::TableSetupColumn("##Del", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(30));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_variables.size()); ++i)
@@ -226,11 +229,11 @@ namespace SparkEditor
 
         // Add new variable
         ImGui::Separator();
-        ImGui::SetNextItemWidth(200);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200));
         ImGui::InputText("Name##newvar", m_newVarName, sizeof(m_newVarName));
         ImGui::SameLine();
         int newVal = static_cast<int>(m_newVarValue);
-        ImGui::SetNextItemWidth(100);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(100));
         if (ImGui::InputInt("Value##newvar", &newVal))
             m_newVarValue = newVal;
         ImGui::SameLine();
@@ -255,8 +258,8 @@ namespace SparkEditor
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
             ImGui::TableSetupColumn("Name");
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, 50);
-            ImGui::TableSetupColumn("##Del", ImGuiTableColumnFlags_WidthFixed, 30);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(50));
+            ImGui::TableSetupColumn("##Del", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(30));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_flags.size()); ++i)
@@ -286,7 +289,7 @@ namespace SparkEditor
 
         // Add new flag
         ImGui::Separator();
-        ImGui::SetNextItemWidth(200);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200));
         ImGui::InputText("Name##newflag", m_newFlagName, sizeof(m_newFlagName));
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_PLUS " Add Flag") && strlen(m_newFlagName) > 0)

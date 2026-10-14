@@ -14,9 +14,24 @@
 #include <iostream>
 #include <cstdio>
 #include <cmath>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// Categorical colour role of a spawn team; teams also carry their own icon, so the colour is
+        /// never the only cue.
+        Spark::Ui::Role TeamRole(int teamId)
+        {
+            if (teamId == 1)
+                return Spark::Ui::Role::Category5; // Team Alpha: blue
+            if (teamId == 2)
+                return Spark::Ui::Role::Category6; // Team Bravo: vermillion
+            return Spark::Ui::Role::TextPrimary;   // Free for all
+        }
+    } // namespace
 
     FPSToolsPanel::FPSToolsPanel() : EditorPanel("FPS Tools", "fps_tools_panel") {}
 
@@ -112,7 +127,7 @@ namespace SparkEditor
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: added spawn point '%s'", sp.name.c_str());
         }
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_TRASH " Remove") && m_selectedSpawn >= 0)
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Remove") && m_selectedSpawn >= 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: removed spawn point '%s'",
                            m_spawnPoints[m_selectedSpawn].name.c_str());
@@ -122,19 +137,12 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Spawn point list
-        ImGui::BeginChild("SpawnList", ImVec2(200, 0), true);
+        ImGui::BeginChild("SpawnList", Spark::Ui::Px2(200, 0), true);
         for (int i = 0; i < (int)m_spawnPoints.size(); i++)
         {
             auto& sp = m_spawnPoints[i];
             const char* teamIcon = sp.teamId == 1 ? ICON_FA_SHIELD " " : sp.teamId == 2 ? ICON_FA_FLAG " " : "";
-            ImVec4 teamColor = sp.teamId == 1   ? ImVec4(0.2f, 0.5f, 0.9f, 1.0f)
-                               : sp.teamId == 2 ? ImVec4(0.9f, 0.3f, 0.2f, 1.0f)
-                                                : ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
-
-            if (!sp.active)
-                teamColor.w = 0.4f;
-
-            ImGui::PushStyleColor(ImGuiCol_Text, teamColor);
+            ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::ColV(TeamRole(sp.teamId), sp.active ? 1.0f : 0.4f));
             char label[64];
             snprintf(label, sizeof(label), "%s%s##sp%d", teamIcon, sp.name.c_str(), i);
             if (ImGui::Selectable(label, m_selectedSpawn == i))
@@ -169,31 +177,32 @@ namespace SparkEditor
             ImGui::Combo("Team", &sp.teamId, teamLabels, 3);
             ImGui::Checkbox("Active", &sp.active);
 
-            ImGui::Separator();
-
             // Minimap preview of spawn positions
-            ImGui::Text(ICON_FA_MAP " Spawn Overview");
-            ImVec2 mapSize(200, 200);
+            Spark::Ui::SubHeader(ICON_FA_MAP " Spawn Overview");
+            const ImVec2 mapSize = Spark::Ui::Px2(200.0f, 200.0f);
             ImVec2 mapPos = ImGui::GetCursorScreenPos();
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            dl->AddRectFilled(mapPos, ImVec2(mapPos.x + mapSize.x, mapPos.y + mapSize.y), IM_COL32(20, 25, 30, 255),
-                              4.0f);
-            dl->AddRect(mapPos, ImVec2(mapPos.x + mapSize.x, mapPos.y + mapSize.y), IM_COL32(60, 70, 80, 200), 4.0f);
+            const float mapRounding = Spark::Ui::Px(4.0f);
+            dl->AddRectFilled(mapPos, ImVec2(mapPos.x + mapSize.x, mapPos.y + mapSize.y),
+                              Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken), mapRounding);
+            dl->AddRect(mapPos, ImVec2(mapPos.x + mapSize.x, mapPos.y + mapSize.y),
+                        Spark::Ui::Col(Spark::Ui::Role::BorderSubtle), mapRounding);
 
             // Grid
             for (int g = 1; g < 8; g++)
             {
                 float gx = mapPos.x + g * mapSize.x / 8;
                 float gy = mapPos.y + g * mapSize.y / 8;
-                dl->AddLine(ImVec2(gx, mapPos.y), ImVec2(gx, mapPos.y + mapSize.y), IM_COL32(40, 45, 50, 100));
-                dl->AddLine(ImVec2(mapPos.x, gy), ImVec2(mapPos.x + mapSize.x, gy), IM_COL32(40, 45, 50, 100));
+                const ImU32 gridColor = Spark::Ui::Col(Spark::Ui::Role::BorderSubtle, 0.5f);
+                dl->AddLine(ImVec2(gx, mapPos.y), ImVec2(gx, mapPos.y + mapSize.y), gridColor);
+                dl->AddLine(ImVec2(mapPos.x, gy), ImVec2(mapPos.x + mapSize.x, gy), gridColor);
             }
 
             // Draw spawn points
             float mapCX = mapPos.x + mapSize.x * 0.5f;
             float mapCY = mapPos.y + mapSize.y * 0.5f;
-            float mapScale = 4.0f;
+            const float mapScale = Spark::Ui::Px(4.0f); // map pixels per world unit
 
             for (int i = 0; i < (int)m_spawnPoints.size(); i++)
             {
@@ -204,35 +213,34 @@ namespace SparkEditor
                 if (sx < mapPos.x || sx > mapPos.x + mapSize.x || sy < mapPos.y || sy > mapPos.y + mapSize.y)
                     continue;
 
-                ImU32 col = s.teamId == 1   ? IM_COL32(50, 130, 230, s.active ? 220 : 100)
-                            : s.teamId == 2 ? IM_COL32(230, 70, 50, s.active ? 220 : 100)
-                                            : IM_COL32(200, 200, 200, s.active ? 200 : 80);
+                const ImU32 col = Spark::Ui::Col(TeamRole(s.teamId), s.active ? 0.86f : 0.4f);
 
                 if (i == m_selectedSpawn)
                 {
-                    dl->AddCircle(ImVec2(sx, sy), 8.0f, IM_COL32(255, 255, 255, 200), 12, 2.0f);
+                    dl->AddCircle(ImVec2(sx, sy), Spark::Ui::Px(8.0f),
+                                  Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), 12, Spark::Ui::Px(2.0f));
                 }
 
                 // Direction arrow
                 float rad = MathUtils::DegreesToRadians(s.rotY);
-                float arrowLen = 8.0f;
-                dl->AddCircleFilled(ImVec2(sx, sy), 4.0f, col, 8);
-                dl->AddLine(ImVec2(sx, sy), ImVec2(sx + sinf(rad) * arrowLen, sy - cosf(rad) * arrowLen), col, 2.0f);
+                const float arrowLen = Spark::Ui::Px(8.0f);
+                dl->AddCircleFilled(ImVec2(sx, sy), Spark::Ui::Px(4.0f), col, 8);
+                dl->AddLine(ImVec2(sx, sy), ImVec2(sx + sinf(rad) * arrowLen, sy - cosf(rad) * arrowLen), col,
+                            Spark::Ui::Px(2.0f));
             }
 
             ImGui::Dummy(mapSize);
         }
         else
         {
-            ImGui::Text("Select a spawn point to edit");
+            Spark::Ui::EmptyState(ICON_FA_FLAG, "No spawn point selected", "Select a spawn point to edit");
         }
         ImGui::EndChild();
     }
 
     void FPSToolsPanel::RenderGameModeConfig()
     {
-        ImGui::Text(ICON_FA_GAMEPAD " Game Mode Configuration");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_GAMEPAD " Game Mode Configuration");
 
         const char* gameModes[] = {"Free Play",   "Deathmatch", "Team Deathmatch",    "Capture the Flag", "Domination",
                                    "Elimination", "Gun Game",   "Search and Destroy", "King of the Hill", "Survival"};
@@ -245,85 +253,54 @@ namespace SparkEditor
         }
 
         ImGui::Spacing();
-        ImGui::Text(ICON_FA_COG " Rules");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_COG " Rules");
 
-        ImGui::Columns(2, "GameModeRules", false);
-        ImGui::SetColumnWidth(0, 160);
-
-        ImGui::Text("Score Limit");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderInt("##ScoreLimit", &m_scoreLimit, 0, 500);
-        ImGui::NextColumn();
-
-        ImGui::Text("Time Limit (sec)");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##TimeLimit", &m_timeLimit, 0, 3600, "%.0f");
-        ImGui::NextColumn();
-
-        ImGui::Text("Respawn Delay");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##RespawnDelay", &m_respawnDelay, 0, 30, "%.1f s");
-        ImGui::NextColumn();
-
-        ImGui::Text("Teams Enabled");
-        ImGui::NextColumn();
-        ImGui::Checkbox("##Teams", &m_teamsEnabled);
-        ImGui::NextColumn();
-
-        ImGui::Text("Friendly Fire");
-        ImGui::NextColumn();
-        ImGui::Checkbox("##FriendlyFire", &m_friendlyFire);
-        ImGui::NextColumn();
-
-        ImGui::Columns(1);
-
-        ImGui::Spacing();
-        ImGui::Text(ICON_FA_BOLT " Modifiers");
-        ImGui::Separator();
-
-        ImGui::Columns(2, "Modifiers", false);
-        ImGui::SetColumnWidth(0, 160);
-
-        ImGui::Text("Damage Multiplier");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##DamageMult", &m_damageMultiplier, 0.1f, 5.0f, "%.1fx");
-        ImGui::NextColumn();
-
-        ImGui::Text("Health Multiplier");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##HealthMult", &m_healthMultiplier, 0.1f, 5.0f, "%.1fx");
-        ImGui::NextColumn();
-
-        ImGui::Text("Speed Multiplier");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##SpeedMult", &m_speedMultiplier, 0.1f, 5.0f, "%.1fx");
-        ImGui::NextColumn();
-
-        ImGui::Text("Headshots");
-        ImGui::NextColumn();
-        ImGui::Checkbox("##Headshots", &m_headshots);
-        ImGui::NextColumn();
-
-        if (m_headshots)
+        if (Spark::Ui::BeginPropertyGrid("GameModeRules"))
         {
-            ImGui::Text("Headshot Multiplier");
-            ImGui::NextColumn();
-            ImGui::SetNextItemWidth(-1);
-            ImGui::SliderFloat("##HSMult", &m_headshotMultiplier, 1.0f, 10.0f, "%.1fx");
-            ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Score Limit");
+            ImGui::SliderInt("##ScoreLimit", &m_scoreLimit, 0, 500);
+
+            Spark::Ui::PropertyLabel("Time Limit (sec)");
+            ImGui::SliderFloat("##TimeLimit", &m_timeLimit, 0, 3600, "%.0f");
+
+            Spark::Ui::PropertyLabel("Respawn Delay");
+            ImGui::SliderFloat("##RespawnDelay", &m_respawnDelay, 0, 30, "%.1f s");
+
+            Spark::Ui::PropertyLabel("Teams Enabled");
+            ImGui::Checkbox("##Teams", &m_teamsEnabled);
+
+            Spark::Ui::PropertyLabel("Friendly Fire");
+            ImGui::Checkbox("##FriendlyFire", &m_friendlyFire);
+            Spark::Ui::EndPropertyGrid();
         }
 
-        ImGui::Columns(1);
+        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_BOLT " Modifiers");
+
+        if (Spark::Ui::BeginPropertyGrid("Modifiers"))
+        {
+            Spark::Ui::PropertyLabel("Damage Multiplier");
+            ImGui::SliderFloat("##DamageMult", &m_damageMultiplier, 0.1f, 5.0f, "%.1fx");
+
+            Spark::Ui::PropertyLabel("Health Multiplier");
+            ImGui::SliderFloat("##HealthMult", &m_healthMultiplier, 0.1f, 5.0f, "%.1fx");
+
+            Spark::Ui::PropertyLabel("Speed Multiplier");
+            ImGui::SliderFloat("##SpeedMult", &m_speedMultiplier, 0.1f, 5.0f, "%.1fx");
+
+            Spark::Ui::PropertyLabel("Headshots");
+            ImGui::Checkbox("##Headshots", &m_headshots);
+
+            if (m_headshots)
+            {
+                Spark::Ui::PropertyLabel("Headshot Multiplier");
+                ImGui::SliderFloat("##HSMult", &m_headshotMultiplier, 1.0f, 10.0f, "%.1fx");
+            }
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Spacing();
-        if (ImGui::Button(ICON_FA_PLAY " Apply & Start Match", ImVec2(-1, 30)))
+        if (ImGui::Button(ICON_FA_PLAY " Apply & Start Match", ImVec2(-1.0f, Spark::Ui::Px(30.0f))))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "FPSToolsPanel: applying game mode settings and starting match");
             // Apply game mode settings
@@ -332,81 +309,53 @@ namespace SparkEditor
 
     void FPSToolsPanel::RenderPlayerConfig()
     {
-        ImGui::Text(ICON_FA_USER " Player Configuration");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_USER " Player Configuration");
 
-        ImGui::Text(ICON_FA_HEART " Health & Armor");
-        ImGui::Columns(2, "PlayerHealth", false);
-        ImGui::SetColumnWidth(0, 160);
+        Spark::Ui::SubHeader(ICON_FA_HEART " Health & Armor");
+        if (Spark::Ui::BeginPropertyGrid("PlayerHealth"))
+        {
+            Spark::Ui::PropertyLabel("Max Health");
+            ImGui::SliderFloat("##MaxHealth", &m_playerHealth, 1.0f, 1000.0f, "%.0f");
 
-        ImGui::Text("Max Health");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##MaxHealth", &m_playerHealth, 1.0f, 1000.0f, "%.0f");
-        ImGui::NextColumn();
-
-        ImGui::Text("Max Armor");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##MaxArmor", &m_playerArmor, 0.0f, 500.0f, "%.0f");
-        ImGui::NextColumn();
-
-        ImGui::Columns(1);
+            Spark::Ui::PropertyLabel("Max Armor");
+            ImGui::SliderFloat("##MaxArmor", &m_playerArmor, 0.0f, 500.0f, "%.0f");
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Spacing();
-        ImGui::Text(ICON_FA_ARROWS_ALT " Movement");
-        ImGui::Columns(2, "PlayerMovement", false);
-        ImGui::SetColumnWidth(0, 160);
+        Spark::Ui::SubHeader(ICON_FA_ARROWS_ALT " Movement");
+        if (Spark::Ui::BeginPropertyGrid("PlayerMovement"))
+        {
+            Spark::Ui::PropertyLabel("Move Speed");
+            ImGui::SliderFloat("##MoveSpeed", &m_playerSpeed, 1.0f, 30.0f, "%.1f");
 
-        ImGui::Text("Move Speed");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##MoveSpeed", &m_playerSpeed, 1.0f, 30.0f, "%.1f");
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Jump Height");
+            ImGui::SliderFloat("##JumpHeight", &m_playerJumpHeight, 0.5f, 20.0f, "%.1f");
 
-        ImGui::Text("Jump Height");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##JumpHeight", &m_playerJumpHeight, 0.5f, 20.0f, "%.1f");
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Gravity");
+            ImGui::SliderFloat("##Gravity", &m_playerGravity, 1.0f, 50.0f, "%.1f");
 
-        ImGui::Text("Gravity");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##Gravity", &m_playerGravity, 1.0f, 50.0f, "%.1f");
-        ImGui::NextColumn();
-
-        ImGui::Text("Friction");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##Friction", &m_playerFriction, 0.0f, 1.0f, "%.2f");
-        ImGui::NextColumn();
-
-        ImGui::Columns(1);
+            Spark::Ui::PropertyLabel("Friction");
+            ImGui::SliderFloat("##Friction", &m_playerFriction, 0.0f, 1.0f, "%.2f");
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Spacing();
-        ImGui::Text(ICON_FA_CAMERA " Camera");
-        ImGui::Columns(2, "PlayerCamera", false);
-        ImGui::SetColumnWidth(0, 160);
+        Spark::Ui::SubHeader(ICON_FA_CAMERA " Camera");
+        if (Spark::Ui::BeginPropertyGrid("PlayerCamera"))
+        {
+            Spark::Ui::PropertyLabel("Mouse Sensitivity");
+            ImGui::SliderFloat("##Sensitivity", &m_mouseSensitivity, 0.1f, 10.0f, "%.1f");
 
-        ImGui::Text("Mouse Sensitivity");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##Sensitivity", &m_mouseSensitivity, 0.1f, 10.0f, "%.1f");
-        ImGui::NextColumn();
-
-        ImGui::Text("Field of View");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##FOV", &m_fov, 60.0f, 120.0f,
-                           "%.0f"
-                           "\xc2\xb0");
-        ImGui::NextColumn();
-
-        ImGui::Columns(1);
+            Spark::Ui::PropertyLabel("Field of View");
+            ImGui::SliderFloat("##FOV", &m_fov, 60.0f, 120.0f,
+                               "%.0f"
+                               "\xc2\xb0");
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Spacing();
-        if (ImGui::Button(ICON_FA_CHECK " Apply Player Settings", ImVec2(-1, 30)))
+        if (ImGui::Button(ICON_FA_CHECK " Apply Player Settings", ImVec2(-1.0f, Spark::Ui::Px(30.0f))))
         {
             // Apply settings to player
         }
@@ -414,42 +363,27 @@ namespace SparkEditor
 
     void FPSToolsPanel::RenderCombatTesting()
     {
-        ImGui::Text(ICON_FA_CROSSHAIRS " Combat Testing Calculator");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_CROSSHAIRS " Combat Testing Calculator");
 
-        ImGui::Text("Scenario Setup:");
-        ImGui::Columns(2, "CombatSetup", false);
-        ImGui::SetColumnWidth(0, 160);
+        Spark::Ui::SecondaryText("Scenario Setup");
+        if (Spark::Ui::BeginPropertyGrid("CombatSetup"))
+        {
+            Spark::Ui::PropertyLabel("Incoming Damage");
+            ImGui::SliderFloat("##TestDmg", &m_testDamage, 1.0f, 500.0f, "%.1f");
 
-        ImGui::Text("Incoming Damage");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##TestDmg", &m_testDamage, 1.0f, 500.0f, "%.1f");
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Target Health");
+            ImGui::SliderFloat("##TestHP", &m_testHealth, 1.0f, 1000.0f, "%.0f");
 
-        ImGui::Text("Target Health");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##TestHP", &m_testHealth, 1.0f, 1000.0f, "%.0f");
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Target Armor");
+            ImGui::SliderFloat("##TestArm", &m_testArmor, 0.0f, 500.0f, "%.0f");
 
-        ImGui::Text("Target Armor");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##TestArm", &m_testArmor, 0.0f, 500.0f, "%.0f");
-        ImGui::NextColumn();
-
-        ImGui::Text("Distance (units)");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
-        ImGui::SliderFloat("##TestDist", &m_testDistance, 1.0f, 200.0f, "%.1f");
-        ImGui::NextColumn();
-
-        ImGui::Columns(1);
+            Spark::Ui::PropertyLabel("Distance (units)");
+            ImGui::SliderFloat("##TestDist", &m_testDistance, 1.0f, 200.0f, "%.1f");
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_CHART_BAR " Damage Calculation Results");
+        Spark::Ui::SubHeader(ICON_FA_CHART_BAR " Damage Calculation Results");
 
         // Calculate damage with armor absorption
         float armorAbsorption = 0.5f; // 50% damage reduction from armor
@@ -483,88 +417,79 @@ namespace SparkEditor
 
         float headshotDmg = m_testDamage * m_headshotMultiplier;
 
-        ImGui::Columns(2, "DamageResults", false);
-        ImGui::SetColumnWidth(0, 200);
+        if (Spark::Ui::BeginPropertyGrid("DamageResults"))
+        {
+            Spark::Ui::PropertyLabel("Health Damage");
+            Spark::Ui::MonoText("%.1f", healthDamage);
 
-        ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "Health Damage:");
-        ImGui::NextColumn();
-        ImGui::Text("%.1f", healthDamage);
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Armor Absorbed");
+            Spark::Ui::MonoText("%.1f", armorDamage);
 
-        ImGui::TextColored(ImVec4(0.2f, 0.5f, 0.9f, 1.0f), "Armor Absorbed:");
-        ImGui::NextColumn();
-        ImGui::Text("%.1f", armorDamage);
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Remaining Health");
+            float remainHP = std::max(0.0f, m_testHealth - healthDamage);
+            Spark::Ui::StatusText(remainHP > 0 ? Spark::Ui::Status::Success : Spark::Ui::Status::Error, "%.1f",
+                                  remainHP);
 
-        ImGui::Text("Remaining Health:");
-        ImGui::NextColumn();
-        float remainHP = std::max(0.0f, m_testHealth - healthDamage);
-        ImGui::TextColored(remainHP > 0 ? ImVec4(0.3f, 0.8f, 0.3f, 1) : ImVec4(0.9f, 0.2f, 0.2f, 1), "%.1f", remainHP);
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Remaining Armor");
+            Spark::Ui::MonoText("%.1f", std::max(0.0f, m_testArmor - armorDamage));
 
-        ImGui::Text("Remaining Armor:");
-        ImGui::NextColumn();
-        ImGui::Text("%.1f", std::max(0.0f, m_testArmor - armorDamage));
-        ImGui::NextColumn();
+            Spark::Ui::PropertyLabel("Shots to Kill");
+            Spark::Ui::MonoText("%d", shotsToKill);
 
-        ImGui::Text("Shots to Kill:");
-        ImGui::NextColumn();
-        ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.1f, 1.0f), "%d", shotsToKill);
-        ImGui::NextColumn();
-
-        ImGui::Text("Headshot Damage:");
-        ImGui::NextColumn();
-        ImGui::TextColored(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), "%.1f (%.1fx)", headshotDmg, m_headshotMultiplier);
-        ImGui::NextColumn();
-
-        ImGui::Columns(1);
+            Spark::Ui::PropertyLabel("Headshot Damage");
+            Spark::Ui::MonoText("%.1f (%.1fx)", headshotDmg, m_headshotMultiplier);
+            Spark::Ui::EndPropertyGrid();
+        }
 
         // Visual damage breakdown
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text("Damage Breakdown:");
+        Spark::Ui::SubHeader("Damage Breakdown");
 
         float totalBar = m_testHealth + m_testArmor;
         if (totalBar > 0)
         {
             ImVec2 barPos = ImGui::GetCursorScreenPos();
             float barW = ImGui::GetContentRegionAvail().x;
-            float barH = 24.0f;
+            const float barH = Spark::Ui::Px(24.0f);
+            const float barRounding = Spark::Ui::Px(3.0f);
+            const float labelInset = Spark::Ui::Px(4.0f);
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
             // Background
-            dl->AddRectFilled(barPos, ImVec2(barPos.x + barW, barPos.y + barH), IM_COL32(30, 35, 40, 255), 3.0f);
+            dl->AddRectFilled(barPos, ImVec2(barPos.x + barW, barPos.y + barH),
+                              Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken), barRounding);
 
             // Armor portion
             float armorW = (m_testArmor / totalBar) * barW;
             dl->AddRectFilled(ImVec2(barPos.x, barPos.y), ImVec2(barPos.x + armorW, barPos.y + barH),
-                              IM_COL32(45, 140, 240, 180), 3.0f);
+                              Spark::Ui::Col(Spark::Ui::Role::Secondary, 0.7f), barRounding);
 
             // Health portion
             dl->AddRectFilled(ImVec2(barPos.x + armorW, barPos.y), ImVec2(barPos.x + barW, barPos.y + barH),
-                              IM_COL32(76, 175, 80, 180), 3.0f);
+                              Spark::Ui::Col(Spark::Ui::Role::SuccessText, 0.7f), barRounding);
 
             // Damage marker
             float dmgX = barPos.x + armorW + (healthDamage / m_testHealth) * (barW - armorW);
-            dl->AddLine(ImVec2(dmgX, barPos.y), ImVec2(dmgX, barPos.y + barH), IM_COL32(229, 57, 53, 255), 2.0f);
+            dl->AddLine(ImVec2(dmgX, barPos.y), ImVec2(dmgX, barPos.y + barH),
+                        Spark::Ui::Col(Spark::Ui::Role::ErrorText), Spark::Ui::Px(2.0f));
 
             // Labels
-            dl->AddText(ImVec2(barPos.x + 4, barPos.y + 4), IM_COL32(255, 255, 255, 220), ICON_FA_SHIELD " Armor");
-            dl->AddText(ImVec2(barPos.x + armorW + 4, barPos.y + 4), IM_COL32(255, 255, 255, 220),
+            const ImU32 labelColor = Spark::Ui::Col(Spark::Ui::Role::TextOnAccent);
+            dl->AddText(ImVec2(barPos.x + labelInset, barPos.y + labelInset), labelColor, ICON_FA_SHIELD " Armor");
+            dl->AddText(ImVec2(barPos.x + armorW + labelInset, barPos.y + labelInset), labelColor,
                         ICON_FA_HEART " Health");
 
-            ImGui::Dummy(ImVec2(barW, barH + 4));
+            ImGui::Dummy(ImVec2(barW, barH + labelInset));
         }
     }
 
     void FPSToolsPanel::RenderLevelDesignTools()
     {
-        ImGui::Text(ICON_FA_MAP " Level Design Tools");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_MAP " Level Design Tools");
 
-        if (ImGui::CollapsingHeader(ICON_FA_BOMB " Explosive Volumes", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Explosive Volumes", ICON_FA_BOMB))
         {
-            ImGui::Text("Place explosive barrels, gas tanks, and environmental hazards.");
+            Spark::Ui::SecondaryText("Place explosive barrels, gas tanks, and environmental hazards.");
             if (ImGui::Button("Add Explosive Barrel"))
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing explosive barrel at cursor position");
@@ -581,9 +506,9 @@ namespace SparkEditor
             }
         }
 
-        if (ImGui::CollapsingHeader(ICON_FA_SHIELD " Cover Points"))
+        if (Spark::Ui::SectionHeader("Cover Points", ICON_FA_SHIELD, false))
         {
-            ImGui::Text("Mark positions where AI and players can take cover.");
+            Spark::Ui::SecondaryText("Mark positions where AI and players can take cover.");
             if (ImGui::Button("Add Full Cover"))
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing full cover point at cursor position");
@@ -595,9 +520,9 @@ namespace SparkEditor
             }
         }
 
-        if (ImGui::CollapsingHeader(ICON_FA_BULLSEYE " Objective Markers"))
+        if (Spark::Ui::SectionHeader("Objective Markers", ICON_FA_BULLSEYE, false))
         {
-            ImGui::Text("Place capture points, bomb sites, and flag positions.");
+            Spark::Ui::SecondaryText("Place capture points, bomb sites, and flag positions.");
             if (ImGui::Button("Add Capture Point"))
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Placing capture point at cursor position");
@@ -614,9 +539,9 @@ namespace SparkEditor
             }
         }
 
-        if (ImGui::CollapsingHeader(ICON_FA_CUBE " Pickup Spawns"))
+        if (Spark::Ui::SectionHeader("Pickup Spawns", ICON_FA_CUBE, false))
         {
-            ImGui::Text("Configure weapon, ammo, health, and armor pickup locations.");
+            Spark::Ui::SecondaryText("Configure weapon, ammo, health, and armor pickup locations.");
 
             static int pickupType = 0;
             const char* pickupTypes[] = {"Health Pack", "Armor Pack", "Ammo Crate", "Weapon Spawn"};
@@ -632,9 +557,9 @@ namespace SparkEditor
             }
         }
 
-        if (ImGui::CollapsingHeader(ICON_FA_LOCATION_ARROW " Navigation"))
+        if (Spark::Ui::SectionHeader("Navigation", ICON_FA_LOCATION_ARROW, false))
         {
-            ImGui::Text("AI navigation mesh and pathfinding tools.");
+            Spark::Ui::SecondaryText("AI navigation mesh and pathfinding tools.");
             if (ImGui::Button("Generate NavMesh"))
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Generating navigation mesh for current scene");

@@ -9,6 +9,8 @@
 #include "Utils/Validate.h"
 #include <imgui.h>
 #include <sstream>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -92,37 +94,41 @@ namespace SparkEditor
         if (isConnected)
         {
             bool isHost = m_collabSession->IsHost();
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "%s",
-                               m_collabSession->IsStandaloneBroker()
-                                   ? "Connected to standalone broker"
-                                   : (isHost ? "Hosting session" : "Connected to session"));
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "%s",
+                                  m_collabSession->IsStandaloneBroker()
+                                      ? "Connected to standalone broker"
+                                      : (isHost ? "Hosting session" : "Connected to session"));
 
-            if (m_collabSession->IsStandaloneBroker())
+            if (Spark::Ui::BeginPropertyGrid("CollabConnection"))
             {
-                ImGui::SameLine();
-                ImGui::Text("at %s (session: %s)", m_collabSession->GetHostAddress().c_str(),
-                            m_collabSession->GetStandaloneSessionId().c_str());
-            }
-            else if (isHost)
-            {
-                ImGui::SameLine();
-                ImGui::Text("on port %u", m_collabSession->GetPort());
+                if (m_collabSession->IsStandaloneBroker())
+                {
+                    Spark::Ui::PropertyLabel("Broker");
+                    Spark::Ui::MonoText("%s", m_collabSession->GetHostAddress().c_str());
+                    Spark::Ui::PropertyLabel("Session");
+                    Spark::Ui::MonoText("%s", m_collabSession->GetStandaloneSessionId().c_str());
+                }
+                else if (isHost)
+                {
+                    Spark::Ui::PropertyLabel("Port");
+                    Spark::Ui::MonoText("%u", m_collabSession->GetPort());
 
-                // Collaborators need this code to join; share it out of band.
-                ImGui::Text("Join code:");
-                ImGui::SameLine();
-                ImGui::TextUnformatted(m_collabSession->GetJoinCode().c_str());
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Copy"))
-                    ImGui::SetClipboardText(m_collabSession->GetJoinCode().c_str());
-            }
-            else
-            {
-                ImGui::SameLine();
-                ImGui::Text("at %s:%u", m_collabSession->GetHostAddress().c_str(), m_collabSession->GetPort());
+                    // Collaborators need this code to join; share it out of band.
+                    Spark::Ui::PropertyLabel("Join code");
+                    Spark::Ui::MonoText("%s", m_collabSession->GetJoinCode().c_str());
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton(ICON_FA_COPY " Copy"))
+                        ImGui::SetClipboardText(m_collabSession->GetJoinCode().c_str());
+                }
+                else
+                {
+                    Spark::Ui::PropertyLabel("Host");
+                    Spark::Ui::MonoText("%s:%u", m_collabSession->GetHostAddress().c_str(), m_collabSession->GetPort());
+                }
+                Spark::Ui::EndPropertyGrid();
             }
 
-            if (ImGui::Button("Disconnect"))
+            if (Spark::Ui::DangerButton("Disconnect"))
             {
                 m_collabSession->Disconnect();
                 m_statusMessage = "Disconnected.";
@@ -130,25 +136,28 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::Text("User Name:");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(150.0f);
-            ImGui::InputText("##UserName", m_userNameBuffer, sizeof(m_userNameBuffer));
+            if (Spark::Ui::BeginPropertyGrid("CollabIdentity"))
+            {
+                Spark::Ui::PropertyLabel("User Name");
+                ImGui::InputText("##UserName", m_userNameBuffer, sizeof(m_userNameBuffer));
+                Spark::Ui::PropertyLabel("Transport");
+                ImGui::Checkbox("Use standalone SparkCollabServer", &m_useStandaloneBroker);
+                Spark::Ui::EndPropertyGrid();
+            }
 
-            ImGui::Checkbox("Use standalone SparkCollabServer", &m_useStandaloneBroker);
             if (m_useStandaloneBroker)
             {
-                ImGui::Text("Endpoint:");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(260.0f);
-                ImGui::InputText("##BrokerEndpoint", m_brokerEndpointBuffer, sizeof(m_brokerEndpointBuffer));
+                Spark::Ui::SubHeader("Standalone broker");
+                if (Spark::Ui::BeginPropertyGrid("CollabBroker"))
+                {
+                    Spark::Ui::PropertyLabel("Endpoint");
+                    ImGui::InputText("##BrokerEndpoint", m_brokerEndpointBuffer, sizeof(m_brokerEndpointBuffer));
+                    Spark::Ui::PropertyLabel("Session");
+                    ImGui::InputText("##BrokerSession", m_brokerSessionBuffer, sizeof(m_brokerSessionBuffer));
+                    Spark::Ui::EndPropertyGrid();
+                }
 
-                ImGui::Text("Session:");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(180.0f);
-                ImGui::InputText("##BrokerSession", m_brokerSessionBuffer, sizeof(m_brokerSessionBuffer));
-
-                if (ImGui::Button("Create Broker Session"))
+                if (Spark::Ui::PrimaryButton("Create Broker Session"))
                 {
                     if (m_collabSession && m_collabSession->HostStandaloneBroker(
                                                m_brokerEndpointBuffer, m_brokerSessionBuffer, m_userNameBuffer))
@@ -161,7 +170,7 @@ namespace SparkEditor
                     }
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Join Broker Session"))
+                if (Spark::Ui::SecondaryButton("Join Broker Session"))
                 {
                     if (m_collabSession && m_collabSession->ConnectStandaloneBroker(
                                                m_brokerEndpointBuffer, m_brokerSessionBuffer, m_userNameBuffer))
@@ -176,12 +185,20 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::Text("Port:");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(80.0f);
-                ImGui::InputInt("##Port", &m_portValue, 0, 0);
+                Spark::Ui::SubHeader("Peer session");
+                if (Spark::Ui::BeginPropertyGrid("CollabPeer"))
+                {
+                    Spark::Ui::PropertyLabel("Port");
+                    ImGui::InputInt("##Port", &m_portValue, 0, 0);
+                    Spark::Ui::PropertyLabel("Address", "Host address to join; not used when hosting.");
+                    ImGui::InputText("##Address", m_hostAddressBuffer, sizeof(m_hostAddressBuffer));
+                    Spark::Ui::PropertyLabel("Join code", "The code the host shares with collaborators.");
+                    ImGui::InputText("##JoinCode", m_joinCodeBuffer, sizeof(m_joinCodeBuffer),
+                                     ImGuiInputTextFlags_Password);
+                    Spark::Ui::EndPropertyGrid();
+                }
 
-                if (ImGui::Button("Host Peer Session"))
+                if (Spark::Ui::PrimaryButton("Host Peer Session"))
                 {
                     const auto port = static_cast<uint16_t>(m_portValue);
                     if (m_collabSession && m_collabSession->Host(port, m_userNameBuffer))
@@ -189,19 +206,8 @@ namespace SparkEditor
                     else
                         m_statusMessage = "Failed to host peer session.";
                 }
-
                 ImGui::SameLine();
-                ImGui::Text("Address:");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(150.0f);
-                ImGui::InputText("##Address", m_hostAddressBuffer, sizeof(m_hostAddressBuffer));
-                ImGui::Text("Join code:");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(420.0f);
-                ImGui::InputText("##JoinCode", m_joinCodeBuffer, sizeof(m_joinCodeBuffer),
-                                 ImGuiInputTextFlags_Password);
-                ImGui::SameLine();
-                if (ImGui::Button("Join Peer Session"))
+                if (Spark::Ui::SecondaryButton("Join Peer Session"))
                 {
                     const auto port = static_cast<uint16_t>(m_portValue);
                     if (m_collabSession &&
@@ -217,7 +223,11 @@ namespace SparkEditor
 
         if (!m_statusMessage.empty())
         {
-            ImGui::TextWrapped("%s", m_statusMessage.c_str());
+            const Spark::Ui::Status status =
+                m_statusMessage.starts_with("Failed") ? Spark::Ui::Status::Error : Spark::Ui::Status::Info;
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::StatusText(status, "%s", m_statusMessage.c_str());
+            ImGui::PopTextWrapPos();
         }
     }
 
@@ -228,10 +238,11 @@ namespace SparkEditor
 
         auto peers = m_collabSession->GetConnectedPeers();
 
-        if (ImGui::CollapsingHeader("Connected Peers", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Connected Peers", ICON_FA_USERS))
         {
             for (const auto& peer : peers)
             {
+                // The peer's assigned colour identifies them across viewport highlights; the name is always shown.
                 ImVec4 col(peer.color.r, peer.color.g, peer.color.b, peer.color.a);
                 ImGui::PushStyleColor(ImGuiCol_Text, col);
                 ImGui::BulletText("%s", peer.userName.c_str());
@@ -241,24 +252,25 @@ namespace SparkEditor
                 bool isLocal = (peer.id == m_collabSession->GetLocalPeerID());
                 if (isLocal)
                 {
-                    ImGui::TextDisabled("(you)");
+                    Spark::Ui::SecondaryText("(you)");
                 }
                 else
                 {
                     if (!peer.selectedNode.empty())
                     {
-                        ImGui::TextDisabled("editing: %s", peer.selectedNode.c_str());
+                        Spark::Ui::SecondaryText("editing: %s", peer.selectedNode.c_str());
                     }
                     else
                     {
-                        ImGui::TextDisabled("idle");
+                        Spark::Ui::SecondaryText("idle");
                     }
                 }
             }
 
             if (peers.empty())
             {
-                ImGui::TextDisabled("No peers connected.");
+                Spark::Ui::EmptyState(ICON_FA_USERS, "No peers connected.",
+                                      "Share the join code or broker session so collaborators can join.");
             }
         }
     }
@@ -270,11 +282,11 @@ namespace SparkEditor
 
         auto locks = m_collabSession->GetAllLocks();
 
-        if (ImGui::CollapsingHeader("Active Locks", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Active Locks", ICON_FA_LOCK))
         {
             if (locks.empty())
             {
-                ImGui::TextDisabled("No active locks.");
+                Spark::Ui::SecondaryText("No active locks.");
             }
             else
             {
@@ -286,8 +298,8 @@ namespace SparkEditor
 
                     ImGui::BulletText("%s", lock.nodeId.c_str());
                     ImGui::SameLine();
-                    ImGui::TextDisabled("by %s (%.0fs / %.0fs)", lock.ownerName.c_str(), elapsed,
-                                        lock.maxDurationSeconds);
+                    Spark::Ui::SecondaryText("by %s (%.0fs / %.0fs)", lock.ownerName.c_str(), elapsed,
+                                             lock.maxDurationSeconds);
 
                     if (isLocal)
                     {
@@ -305,23 +317,24 @@ namespace SparkEditor
 
     void CollaborationPanel::RenderEditLog()
     {
-        if (ImGui::CollapsingHeader("Recent Edits"))
+        if (Spark::Ui::SectionHeader("Recent Edits", ICON_FA_HISTORY, false))
         {
             // Received edits carry only a type and a peer-local node id, and nothing
             // applies them yet: say so rather than implying scenes stay in sync.
-            ImGui::TextDisabled("Activity log only: peers' edits are not applied to your scene.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Info,
+                                  "Activity log only: peers' edits are not applied to your scene.");
             if (m_editLog.empty())
             {
-                ImGui::TextDisabled("No edits recorded.");
+                Spark::Ui::SecondaryText("No edits recorded.");
             }
             else
             {
                 // Show most recent first
                 for (auto it = m_editLog.rbegin(); it != m_editLog.rend(); ++it)
                 {
-                    ImGui::TextDisabled("[%.1fs]", it->timestamp);
+                    Spark::Ui::MonoText("[%.1fs]", it->timestamp);
                     ImGui::SameLine();
-                    ImGui::Text("%s", it->description.c_str());
+                    ImGui::TextUnformatted(it->description.c_str());
                 }
             }
         }
@@ -334,13 +347,20 @@ namespace SparkEditor
 
         auto stats = m_collabSession->GetStats();
 
-        if (ImGui::CollapsingHeader("Session Statistics"))
+        if (Spark::Ui::SectionHeader("Session Statistics", ICON_FA_CHART_BAR, false) &&
+            Spark::Ui::BeginPropertyGrid("CollabStats"))
         {
-            ImGui::Text("Peers: %u", stats.peerCount);
-            ImGui::Text("Active Locks: %u", stats.activeLocks);
-            ImGui::Text("Edits Sent: %u", stats.editsBroadcast);
-            ImGui::Text("Edits Received: %u", stats.editsReceived);
-            ImGui::Text("Session Duration: %.0fs", stats.sessionDuration);
+            Spark::Ui::PropertyLabel("Peers");
+            Spark::Ui::MonoText("%u", stats.peerCount);
+            Spark::Ui::PropertyLabel("Active Locks");
+            Spark::Ui::MonoText("%u", stats.activeLocks);
+            Spark::Ui::PropertyLabel("Edits Sent");
+            Spark::Ui::MonoText("%u", stats.editsBroadcast);
+            Spark::Ui::PropertyLabel("Edits Received");
+            Spark::Ui::MonoText("%u", stats.editsReceived);
+            Spark::Ui::PropertyLabel("Session Duration");
+            Spark::Ui::MonoText("%.0fs", stats.sessionDuration);
+            Spark::Ui::EndPropertyGrid();
         }
     }
 

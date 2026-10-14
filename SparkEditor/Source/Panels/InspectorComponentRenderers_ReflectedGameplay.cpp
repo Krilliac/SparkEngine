@@ -9,6 +9,8 @@
  */
 
 #include "InspectorComponentRenderers_ReflectedInternal.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -48,7 +50,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderHealthComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_HEART " Health");
+        bool headerOpen = Spark::Ui::SectionHeader("Health", ICON_FA_HEART, false);
         if (ImGui::BeginPopupContextItem("##HealthCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -57,7 +59,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::HEALTH);
             auto* d = comp ? comp->GetData<HealthData>() : nullptr;
             if (d)
@@ -74,9 +76,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -112,7 +114,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderWeatherComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CLOUD_SUN " Weather Zone");
+        bool headerOpen = Spark::Ui::SectionHeader("Weather Zone", ICON_FA_CLOUD_SUN, false);
         if (ImGui::BeginPopupContextItem("##WeatherCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -121,7 +123,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::WEATHER);
             auto* d = comp ? comp->GetData<WeatherData>() : nullptr;
             if (d)
@@ -138,9 +140,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -150,7 +152,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderAIAgentComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BRAIN " AI Agent");
+        bool headerOpen = Spark::Ui::SectionHeader("AI Agent", ICON_FA_BRAIN, false);
         if (ImGui::BeginPopupContextItem("##AIAgentCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -159,7 +161,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::AI_AGENT);
             auto* d = comp ? comp->GetData<AIAgentData>() : nullptr;
             if (d)
@@ -184,9 +186,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -214,7 +216,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderParticleEmitterComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_FIRE " Particle Emitter");
+        bool headerOpen = Spark::Ui::SectionHeader("Particle Emitter", ICON_FA_FIRE, false);
         if (ImGui::BeginPopupContextItem("##ParticleEmitterCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -223,7 +225,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PARTICLE_SYSTEM);
             auto* d = comp ? comp->GetData<ParticleEmitterData>() : nullptr;
             if (d)
@@ -252,9 +254,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 

@@ -19,6 +19,7 @@
 #include "../CommandHistory.h"
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
@@ -31,8 +32,9 @@ namespace SparkEditor
     // Reflection-driven field rendering
     // ============================================================================
 
-    // Render a single field widget based on its FieldInfo metadata.
-    static bool RenderSingleField(const Spark::FieldInfo& field, char* dst)
+    // Render a single field widget based on its FieldInfo metadata. @p label is the widget's
+    // ImGui label; the property grid draws the visible field name, so callers pass a hidden one.
+    static bool RenderSingleField(const Spark::FieldInfo& field, char* dst, const char* label)
     {
         // Enum fields with names → combo dropdown
         if (field.type == Spark::FieldType::Enum || (field.type == Spark::FieldType::Int && !field.enumNames.empty()))
@@ -48,28 +50,28 @@ namespace SparkEditor
                     items += '\0';
                 }
                 items += '\0';
-                return ImGui::Combo(field.name.c_str(), val, items.c_str());
+                return ImGui::Combo(label, val, items.c_str());
             }
             else
             {
-                return ImGui::DragInt(field.name.c_str(), val);
+                return ImGui::DragInt(label, val);
             }
         }
 
         switch (field.type)
         {
         case Spark::FieldType::Bool:
-            return ImGui::Checkbox(field.name.c_str(), reinterpret_cast<bool*>(dst));
+            return ImGui::Checkbox(label, reinterpret_cast<bool*>(dst));
 
         case Spark::FieldType::Int:
             if (field.hasRange)
             {
-                return ImGui::SliderInt(field.name.c_str(), reinterpret_cast<int*>(dst),
-                                        static_cast<int>(field.rangeMin), static_cast<int>(field.rangeMax));
+                return ImGui::SliderInt(label, reinterpret_cast<int*>(dst), static_cast<int>(field.rangeMin),
+                                        static_cast<int>(field.rangeMax));
             }
             else
             {
-                return ImGui::DragInt(field.name.c_str(), reinterpret_cast<int*>(dst));
+                return ImGui::DragInt(label, reinterpret_cast<int*>(dst));
             }
 
         // Floating-point fields are copied in and out of the raw byte storage so the
@@ -78,9 +80,9 @@ namespace SparkEditor
         {
             float value = 0.0f;
             std::memcpy(&value, dst, sizeof(value));
-            const bool changed =
-                field.hasRange ? ImGui::SliderFloat(field.name.c_str(), &value, field.rangeMin, field.rangeMax, "%.3f")
-                               : ImGui::DragFloat(field.name.c_str(), &value, 0.1f);
+            const bool changed = field.hasRange
+                                     ? ImGui::SliderFloat(label, &value, field.rangeMin, field.rangeMax, "%.3f")
+                                     : ImGui::DragFloat(label, &value, 0.1f);
             if (changed)
                 std::memcpy(dst, &value, sizeof(value));
             return changed;
@@ -91,7 +93,7 @@ namespace SparkEditor
             double stored = 0.0;
             std::memcpy(&stored, dst, sizeof(stored));
             auto value = static_cast<float>(stored);
-            if (ImGui::DragFloat(field.name.c_str(), &value, 0.1f))
+            if (ImGui::DragFloat(label, &value, 0.1f))
             {
                 stored = static_cast<double>(value);
                 std::memcpy(dst, &stored, sizeof(stored));
@@ -104,7 +106,7 @@ namespace SparkEditor
             // Editor data types use char[N] arrays; handle as fixed buffer
             if (field.size > sizeof(std::string))
             {
-                return ImGui::InputText(field.name.c_str(), reinterpret_cast<char*>(dst), field.size);
+                return ImGui::InputText(label, reinterpret_cast<char*>(dst), field.size);
             }
             else
             {
@@ -112,7 +114,7 @@ namespace SparkEditor
                 char buf[256];
                 strncpy(buf, str->c_str(), sizeof(buf) - 1);
                 buf[sizeof(buf) - 1] = '\0';
-                if (ImGui::InputText(field.name.c_str(), buf, sizeof(buf)))
+                if (ImGui::InputText(label, buf, sizeof(buf)))
                 {
                     *str = buf;
                     return true;
@@ -124,7 +126,7 @@ namespace SparkEditor
         {
             float v[2] = {};
             std::memcpy(v, dst, sizeof(v));
-            if (ImGui::DragFloat2(field.name.c_str(), v, 0.1f))
+            if (ImGui::DragFloat2(label, v, 0.1f))
             {
                 std::memcpy(dst, v, sizeof(v));
                 return true;
@@ -137,7 +139,7 @@ namespace SparkEditor
             float v[3] = {};
             std::memcpy(v, dst, sizeof(v));
             const DirectX::XMFLOAT3 before{v[0], v[1], v[2]};
-            InspectorPanel::DrawVec3Control(field.name.c_str(), v, 0.0f, 0.1f);
+            InspectorPanel::DrawVec3Control(label, v, 0.0f, 0.1f);
             const bool changed = before.x != v[0] || before.y != v[1] || before.z != v[2];
             if (changed)
                 std::memcpy(dst, v, sizeof(v));
@@ -148,7 +150,7 @@ namespace SparkEditor
         {
             float v[4] = {};
             std::memcpy(v, dst, sizeof(v));
-            if (ImGui::ColorEdit4(field.name.c_str(), v))
+            if (ImGui::ColorEdit4(label, v))
             {
                 std::memcpy(dst, v, sizeof(v));
                 return true;
@@ -157,7 +159,7 @@ namespace SparkEditor
         }
 
         default:
-            ImGui::TextDisabled("%s (unsupported type)", field.name.c_str());
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Unsupported field type");
             return false;
         }
         return false;
@@ -193,115 +195,82 @@ namespace SparkEditor
         return true; // Controlling field not found — show by default
     }
 
+    // Render one visible field as a property-grid row: the field name in the label column, the
+    // widget in the value column. The widget stays ImGui's last item when @p afterField runs.
+    static bool RenderFieldRow(const Spark::FieldInfo& field, void* data,
+                               const std::function<void(const Spark::FieldInfo&)>& afterField)
+    {
+        const char* tooltip = field.tooltip.empty() ? nullptr : field.tooltip.c_str();
+        if (field.readOnly)
+        {
+            Spark::Ui::PropertyLabel((field.name + " (read-only)").c_str(), tooltip);
+        }
+        else
+        {
+            Spark::Ui::PropertyLabel(field.name.c_str(), tooltip);
+        }
+
+        auto* dst = static_cast<char*>(data) + field.offset;
+        ImGui::PushID(field.fieldName.c_str());
+        if (field.readOnly)
+            ImGui::BeginDisabled();
+        const bool changed = RenderSingleField(field, dst, "##value");
+        if (field.readOnly)
+            ImGui::EndDisabled();
+        ImGui::PopID();
+
+        if (afterField)
+        {
+            afterField(field);
+        }
+        if (tooltip != nullptr && ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", tooltip);
+        return changed;
+    }
+
     bool InspectorPanel::RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields,
                                                const std::function<void(const Spark::FieldInfo&)>& afterField)
     {
         if (!data)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Editor, "Inspector: RenderReflectedFields called with null data");
-            ImGui::TextDisabled("(Component data unavailable)");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             return false;
         }
 
-        bool changed = false;
-
-        // Check if any field has a category assigned
-        bool hasCategories = false;
+        // Collect categories in order of first appearance; uncategorised fields form the "" group.
+        std::vector<const std::string*> categories;
         for (const auto& field : fields)
         {
-            if (!field.category.empty())
-            {
-                hasCategories = true;
-                break;
-            }
+            const bool known = std::any_of(categories.begin(), categories.end(),
+                                           [&field](const std::string* c) { return *c == field.category; });
+            if (!known)
+                categories.push_back(&field.category);
         }
 
-        if (hasCategories)
+        // Each field list is a static or registry-owned vector, so its address scopes the grid IDs.
+        ImGui::PushID(static_cast<const void*>(&fields));
+        bool changed = false;
+        for (const std::string* category : categories)
         {
-            // Collect unique categories in order of first appearance
-            std::vector<std::string> categories;
-            for (const auto& field : fields)
+            if (!category->empty())
             {
-                const auto& cat = field.category;
-                bool found = false;
-                for (const auto& c : categories)
-                {
-                    if (c == cat)
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                    categories.push_back(cat);
+                Spark::Ui::SubHeader(category->c_str());
             }
-
-            for (const auto& cat : categories)
+            ImGui::PushID(category->c_str());
+            if (Spark::Ui::BeginPropertyGrid("##fields"))
             {
-                bool inSection = !cat.empty();
-                if (inSection)
-                {
-                    ImGui::Separator();
-                    ImGui::TextDisabled("%s", cat.c_str());
-                }
-
                 for (const auto& field : fields)
                 {
-                    if (field.category != cat)
+                    if (field.category != *category || !IsFieldVisible(field, data, fields))
                         continue;
-                    if (!IsFieldVisible(field, data, fields))
-                        continue;
-
-                    auto* dst = static_cast<char*>(data) + field.offset;
-                    if (field.readOnly)
-                        ImGui::BeginDisabled();
-                    changed |= RenderSingleField(field, dst);
-                    if (field.readOnly)
-                        ImGui::EndDisabled();
-
-                    if (afterField)
-                    {
-                        afterField(field);
-                    }
-                    if (!field.tooltip.empty() && ImGui::IsItemHovered())
-                        ImGui::SetTooltip("%s", field.tooltip.c_str());
-
-                    if (field.readOnly)
-                    {
-                        ImGui::SameLine();
-                        ImGui::TextDisabled("(read-only)");
-                    }
+                    changed |= RenderFieldRow(field, data, afterField);
                 }
+                Spark::Ui::EndPropertyGrid();
             }
+            ImGui::PopID();
         }
-        else
-        {
-            // Flat rendering (no categories)
-            for (const auto& field : fields)
-            {
-                if (!IsFieldVisible(field, data, fields))
-                    continue;
-                auto* dst = static_cast<char*>(data) + field.offset;
-                if (field.readOnly)
-                    ImGui::BeginDisabled();
-                changed |= RenderSingleField(field, dst);
-                if (field.readOnly)
-                    ImGui::EndDisabled();
-
-                if (afterField)
-                {
-                    afterField(field);
-                }
-                if (!field.tooltip.empty() && ImGui::IsItemHovered())
-                    ImGui::SetTooltip("%s", field.tooltip.c_str());
-
-                if (field.readOnly)
-                {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("(read-only)");
-                }
-            }
-        }
+        ImGui::PopID();
         return changed;
     }
 

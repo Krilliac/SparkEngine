@@ -480,9 +480,17 @@ no runtime or exact-commit CI result is claimed for them.
 | `editor-project-file` | `SparkFuzzEditorProjectFile` | extracted project and recent-list readers used by `ProjectManager`; accepted fields round-trip |
 | `editor-recovery-snapshot` | `SparkFuzzEditorRecovery` | `EditorRecoveryStore::LoadForProject`; primary/backup recovery and restored world invariants |
 | `editor-scene-ini-import` | `SparkFuzzEditorSceneImport` | extracted `ParseGameSceneIni` used by the import panel; finite transforms and deterministic parse |
-| `editor-theme-import` | `SparkFuzzEditorThemeImport` | extracted `ParseThemeDocument` used by theme import; finite colours and export/import round-trip |
+| `editor-theme-import` | `SparkFuzzEditorThemeImport` | extracted `ParseThemeDocument` used by theme import; finite colours and in-range metrics, base values kept for undefined keys, export/import round-trip |
 | `editor-window-layout` | `SparkFuzzEditorWindowLayout` | `EditorWindowManager::LoadLayoutFromFile`; finite layout fields and save/load agreement |
 | `editor-layout` | `SparkFuzzEditorLayout` | `EditorLayoutManager::LoadLayout`; finite layout state and save/load agreement |
+
+The theme document covers every colour, metric and feature flag of `EditorThemeData` (the original
+25-colour documents still import). `ParseThemeDocument(text, base, out, error)` starts from a base theme and
+replaces only the keys the document defines. The harness parses each input over two different populated bases
+and requires that every field differing between the results equals its own base, so a key the reader skipped is
+proven to keep the base value rather than an opaque-black fill. A default-constructed base (no Ember Signal
+roles) derives the undefined roles from the colours the document does define. The corpus carries a full Ember
+Signal document and a metric edge-value document (non-finite, out-of-range and malformed numbers and flags).
 
 The window-layout and layout targets are the permitted substitutes for the still-blocked
 `editor-scene-binary` and `editor-crash-recovery-state` records in this batch. The binary

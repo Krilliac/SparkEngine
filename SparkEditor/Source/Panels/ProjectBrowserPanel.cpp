@@ -6,6 +6,7 @@
  */
 
 #include "ProjectBrowserPanel.h"
+#include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
 #include "../Utils/FolderDialog.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
@@ -20,12 +21,24 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #endif
 
 namespace fs = std::filesystem;
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// @brief Template card size: an icon row, a name row and three description rows, so the
+        ///        card grows with the font instead of clipping at larger UI scales.
+        ImVec2 TemplateCardSize()
+        {
+            const float line = ImGui::GetTextLineHeightWithSpacing();
+            return ImVec2(Spark::Ui::Em(9.0f), Spark::Ui::Px(12.0f) * 2.0f + line * 6.0f);
+        }
+    } // namespace
 
     ProjectBrowserPanel::ProjectBrowserPanel(ProjectManager* projectManager)
         : EditorPanel("Project Browser", "project_browser_panel"), m_projectManager(projectManager)
@@ -121,7 +134,7 @@ namespace SparkEditor
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImVec2 center = ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
                                viewport->WorkPos.y + viewport->WorkSize.y * 0.5f);
-        ImVec2 modalSize = ImVec2(820, 560);
+        ImVec2 modalSize = Spark::Ui::Px2(820.0f, 560.0f);
 
         ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(modalSize, ImGuiCond_Always);
@@ -133,7 +146,7 @@ namespace SparkEditor
         ImGui::GetBackgroundDrawList()->AddRectFilled(
             viewport->WorkPos,
             ImVec2(viewport->WorkPos.x + viewport->WorkSize.x, viewport->WorkPos.y + viewport->WorkSize.y),
-            IM_COL32(0, 0, 0, 140));
+            Spark::Ui::Col(Spark::Ui::Role::ModalScrim));
 
         if (ImGui::Begin("Spark Engine - Project Browser###project_browser_modal", &m_showModal, flags))
         {
@@ -172,7 +185,7 @@ namespace SparkEditor
         ImGui::Spacing();
 
         // Open project button
-        if (ImGui::Button("Browse...", ImVec2(100, 30)))
+        if (ImGui::Button("Browse...", Spark::Ui::Px2(100, 30)))
         {
             std::string path;
             if (BrowseForFolder(path))
@@ -196,7 +209,7 @@ namespace SparkEditor
 
         if (!m_openError.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::ColV(Spark::Ui::Role::ErrorText));
             ImGui::TextWrapped("%s", m_openError.c_str());
             ImGui::PopStyleColor();
         }
@@ -206,25 +219,17 @@ namespace SparkEditor
 
         if (recentProjects.empty())
         {
-            ImGui::Spacing();
-            ImGui::Spacing();
-            float windowWidth = ImGui::GetContentRegionAvail().x;
-            std::string text = "No recent projects";
-            float textWidth = ImGui::CalcTextSize(text.c_str()).x;
-            ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
-            ImGui::TextDisabled("%s", text.c_str());
-
-            ImGui::Spacing();
-            std::string hint = "Create a new project or open an existing one to get started.";
-            float hintWidth = ImGui::CalcTextSize(hint.c_str()).x;
-            ImGui::SetCursorPosX((windowWidth - hintWidth) * 0.5f);
-            ImGui::TextDisabled("%s", hint.c_str());
+            Spark::Ui::EmptyState(ICON_FA_FOLDER_OPEN, "No recent projects",
+                                  "Create a new project or open an existing one to get started.");
             return;
         }
 
         // Recent projects header
+        // "Clear All" sits flush right, measured from its own label so it never clips.
+        const float headerRightEdge = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
+        const float clearAllWidth = ImGui::CalcTextSize("Clear All").x + ImGui::GetStyle().FramePadding.x * 2.0f;
         ImGui::Text("Recent Projects");
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80);
+        ImGui::SameLine(headerRightEdge - clearAllWidth);
         if (ImGui::SmallButton("Clear All"))
         {
             m_projectManager->ClearRecentProjects();
@@ -237,6 +242,13 @@ namespace SparkEditor
         {
             int removeIdx = -1;
 
+            // Two text rows per entry; every offset derives from the font so rows never overlap.
+            const float rowPad = Spark::Ui::Px(6.0f);
+            const float rowIndent = Spark::Ui::Px(10.0f);
+            const float lineStep = ImGui::GetTextLineHeightWithSpacing();
+            const float rowHeight = rowPad * 2.0f + lineStep + ImGui::GetTextLineHeight();
+            const float removeWidth = ImGui::CalcTextSize(ICON_FA_TIMES).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+
             for (size_t i = 0; i < recentProjects.size(); ++i)
             {
                 const auto& rp = recentProjects[i];
@@ -246,13 +258,13 @@ namespace SparkEditor
                 // Highlight invalid projects
                 if (!rp.valid)
                 {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::ColV(Spark::Ui::Role::TextSecondary));
                 }
 
                 // Clickable selectable for the whole row
                 bool selected = false;
                 if (ImGui::Selectable("##project_entry", &selected, ImGuiSelectableFlags_AllowDoubleClick,
-                                      ImVec2(0, 50)))
+                                      ImVec2(0.0f, rowHeight)))
                 {
                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                     {
@@ -272,11 +284,13 @@ namespace SparkEditor
 
                 // Draw content over the selectable
                 ImVec2 itemMin = ImGui::GetItemRectMin();
-                ImGui::SetCursorScreenPos(ImVec2(itemMin.x + 10, itemMin.y + 6));
+                const float rowRight = itemMin.x + ImGui::GetContentRegionAvail().x;
+                const float secondLineY = itemMin.y + rowPad + lineStep;
+                ImGui::SetCursorScreenPos(ImVec2(itemMin.x + rowIndent, itemMin.y + rowPad));
                 ImGui::Text("%s", rp.name.c_str());
 
-                ImGui::SetCursorScreenPos(ImVec2(itemMin.x + 10, itemMin.y + 28));
-                ImGui::TextDisabled("%s", rp.path.c_str());
+                ImGui::SetCursorScreenPos(ImVec2(itemMin.x + rowIndent, secondLineY));
+                Spark::Ui::SecondaryText("%s", rp.path.c_str());
 
                 // Engine version on the right
                 std::string verText = rp.engineVersion.empty() ? "" : ("v" + rp.engineVersion);
@@ -284,26 +298,32 @@ namespace SparkEditor
                 {
                     float verWidth = ImGui::CalcTextSize(verText.c_str()).x;
                     ImGui::SetCursorScreenPos(
-                        ImVec2(itemMin.x + ImGui::GetContentRegionAvail().x - verWidth - 60, itemMin.y + 6));
-                    ImGui::TextDisabled("%s", verText.c_str());
+                        ImVec2(rowRight - verWidth - removeWidth - rowIndent * 2.0f, itemMin.y + rowPad));
+                    Spark::Ui::SecondaryText("%s", verText.c_str());
                 }
 
                 // Remove button
-                ImGui::SetCursorScreenPos(ImVec2(itemMin.x + ImGui::GetContentRegionAvail().x - 30, itemMin.y + 14));
-                if (ImGui::SmallButton("X"))
+                ImGui::SetCursorScreenPos(ImVec2(rowRight - removeWidth - rowIndent,
+                                                 itemMin.y + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f));
+                if (ImGui::SmallButton(ICON_FA_TIMES))
                 {
                     removeIdx = static_cast<int>(i);
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("Remove from recent projects");
                 }
 
                 if (!rp.valid)
                 {
                     ImGui::PopStyleColor();
                     // Show missing indicator
+                    const float missingWidth =
+                        ImGui::CalcTextSize(Spark::Ui::StatusGlyph(Spark::Ui::Status::Warning)).x +
+                        Spark::Ui::Em(0.4f) + ImGui::CalcTextSize("Missing").x;
                     ImGui::SetCursorScreenPos(
-                        ImVec2(itemMin.x + ImGui::GetContentRegionAvail().x - 100, itemMin.y + 28));
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.2f, 1.0f));
-                    ImGui::TextUnformatted("(missing)");
-                    ImGui::PopStyleColor();
+                        ImVec2(rowRight - missingWidth - removeWidth - rowIndent * 2.0f, secondLineY));
+                    Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Missing");
                 }
 
                 ImGui::PopID();
@@ -326,13 +346,16 @@ namespace SparkEditor
         ImGui::Spacing();
 
         // Template selection
-        ImGui::Text("Choose a Template:");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader("Choose a Template");
 
-        if (ImGui::BeginChild("TemplateSelection", ImVec2(0, 170), ImGuiChildFlags_Borders))
+        // One row of cards plus padding and a horizontal scrollbar's worth of slack.
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const ImVec2 cardSize = TemplateCardSize();
+        const float selectionHeight = cardSize.y + style.WindowPadding.y * 2.0f + style.ScrollbarSize;
+        if (ImGui::BeginChild("TemplateSelection", ImVec2(0.0f, selectionHeight), ImGuiChildFlags_Borders))
         {
-            float cardWidth = 140.0f;
-            float spacing = 10.0f;
+            float cardWidth = cardSize.x;
+            float spacing = style.ItemSpacing.x;
             float totalWidth = ImGui::GetContentRegionAvail().x;
             int cols = std::max(1, static_cast<int>((totalWidth + spacing) / (cardWidth + spacing)));
 
@@ -357,10 +380,10 @@ namespace SparkEditor
         ImGui::Text("Project Settings:");
         ImGui::Spacing();
 
-        ImGui::SetNextItemWidth(400);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(24.0f));
         ImGui::InputText("Project Name", m_newProjectName, sizeof(m_newProjectName));
 
-        ImGui::SetNextItemWidth(400);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(24.0f));
         ImGui::InputText("Location", m_newProjectPath, sizeof(m_newProjectPath));
         ImGui::SameLine();
         if (ImGui::Button("Browse...##location"))
@@ -379,7 +402,7 @@ namespace SparkEditor
             ImGui::TextDisabled("Project will be created at: %s", fullPath.c_str());
         }
 
-        ImGui::SetNextItemWidth(400);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(24.0f));
         ImGui::InputText("Description (optional)", m_newProjectDescription, sizeof(m_newProjectDescription));
 
         ImGui::Spacing();
@@ -387,7 +410,7 @@ namespace SparkEditor
         // Error message
         if (!m_createError.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::ColV(Spark::Ui::Role::ErrorText));
             ImGui::TextWrapped("%s", m_createError.c_str());
             ImGui::PopStyleColor();
         }
@@ -400,7 +423,7 @@ namespace SparkEditor
             ImGui::BeginDisabled();
         }
 
-        if (ImGui::Button("Create Project", ImVec2(160, 36)))
+        if (ImGui::Button("Create Project", Spark::Ui::Px2(160, 36)))
         {
             m_createError.clear();
 
@@ -442,7 +465,7 @@ namespace SparkEditor
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(100, 36)))
+        if (ImGui::Button("Cancel", Spark::Ui::Px2(100, 36)))
         {
             m_showModal = false;
         }
@@ -456,19 +479,17 @@ namespace SparkEditor
 
         ImGui::PushID(static_cast<int>(tmpl));
 
-        ImVec2 cardSize(130, 130);
+        const ImVec2 cardSize = TemplateCardSize();
+        const float cardPad = Spark::Ui::Px(12.0f);
+        const float line = ImGui::GetTextLineHeightWithSpacing();
 
-        // Card background
-        if (isSelected)
-        {
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.2f, 0.4f, 0.7f, 0.5f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.5f, 0.9f, 1.0f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.15f, 0.15f, 0.15f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-        }
+        // Card background: the selected card is filled and outlined in the accent roles, and a
+        // thicker border marks it too so the selection never relies on hue alone.
+        const Spark::Ui::ScopedRoleColor cardBg(ImGuiCol_ChildBg, isSelected ? Spark::Ui::Role::SurfaceSelected
+                                                                             : Spark::Ui::Role::SurfaceRaised);
+        const Spark::Ui::ScopedRoleColor cardBorder(ImGuiCol_Border, isSelected ? Spark::Ui::Role::AccentFill
+                                                                                : Spark::Ui::Role::BorderSubtle);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, isSelected ? 2.0f * Spark::Ui::Scale() : 1.0f);
 
         if (ImGui::BeginChild("##card", cardSize, ImGuiChildFlags_Borders))
         {
@@ -481,24 +502,24 @@ namespace SparkEditor
             // Center icon
             float iconWidth = ImGui::CalcTextSize(icon).x;
             ImGui::SetCursorPosX((cardSize.x - iconWidth) * 0.5f);
-            ImGui::SetCursorPosY(20);
+            ImGui::SetCursorPosY(cardPad);
             ImGui::Text("%s", icon);
 
             // Center name
             float nameWidth = ImGui::CalcTextSize(name.c_str()).x;
             ImGui::SetCursorPosX((cardSize.x - nameWidth) * 0.5f);
-            ImGui::SetCursorPosY(60);
+            ImGui::SetCursorPosY(cardPad + line * 1.5f);
             ImGui::Text("%s", name.c_str());
 
             // Short description
-            ImGui::SetCursorPosY(85);
-            ImGui::PushTextWrapPos(cardSize.x - 5);
-            ImGui::TextDisabled("%s", desc.substr(0, 60).c_str());
+            ImGui::SetCursorPosY(cardPad + line * 2.75f);
+            ImGui::PushTextWrapPos(cardSize.x - ImGui::GetStyle().WindowPadding.x);
+            Spark::Ui::SecondaryText("%s", desc.substr(0, 60).c_str());
             ImGui::PopTextWrapPos();
         }
         ImGui::EndChild();
 
-        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar();
         ImGui::PopID();
     }
 

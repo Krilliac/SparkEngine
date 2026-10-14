@@ -6,7 +6,10 @@
 #include "AbilityEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
+#include <algorithm>
 #include <iostream>
 #include <cstring>
 
@@ -34,9 +37,9 @@ namespace SparkEditor
             ImGui::Text("Abilities: %d | Auras: %d | Procs: %d", static_cast<int>(m_abilities.size()),
                         static_cast<int>(m_auras.size()), static_cast<int>(m_procs.size()));
 
-            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 200);
-            ImGui::SetNextItemWidth(200);
-            ImGui::InputText(ICON_FA_FILTER " Filter", m_filterText, sizeof(m_filterText));
+            // The search field fills the remaining row from this offset.
+            ImGui::SameLine(ImGui::GetContentRegionAvail().x - Spark::Ui::Em(14.0f));
+            Spark::Ui::SearchField("AbilityFilter", m_filterText, sizeof(m_filterText), "Filter by name");
 
             ImGui::Separator();
 
@@ -112,7 +115,7 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::TextDisabled("Select an ability to edit");
+            Spark::Ui::EmptyState(ICON_FA_MAGIC, "No ability selected", "Select an ability to edit");
         }
         ImGui::EndChild();
     }
@@ -123,9 +126,10 @@ namespace SparkEditor
         ImGui::Separator();
 
         ImGui::InputText("Name", ability.name, sizeof(ability.name));
-        ImGui::InputTextMultiline("Description", ability.description, sizeof(ability.description), ImVec2(-1, 50));
+        ImGui::InputTextMultiline("Description", ability.description, sizeof(ability.description),
+                                  ImVec2(-1.0f, Spark::Ui::Em(3.5f)));
 
-        if (ImGui::CollapsingHeader("Targeting", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Targeting"))
         {
             const char* targetTypes[] = {"Self", "Single Target", "Area of Effect", "Cone", "Projectile"};
             ImGui::Combo("Target Type", &ability.targetType, targetTypes, IM_ARRAYSIZE(targetTypes));
@@ -134,7 +138,7 @@ namespace SparkEditor
             ImGui::Checkbox("Requires Target", &ability.requiresTarget);
         }
 
-        if (ImGui::CollapsingHeader("Casting", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Casting"))
         {
             ImGui::DragFloat("Cast Time", &ability.castTime, 0.1f, 0.0f, 30.0f, "%.1f s");
             ImGui::DragFloat("Cooldown", &ability.cooldown, 0.1f, 0.0f, 3600.0f, "%.1f s");
@@ -150,14 +154,14 @@ namespace SparkEditor
             }
         }
 
-        if (ImGui::CollapsingHeader("Effects"))
+        if (Spark::Ui::SectionHeader("Effects", nullptr, false))
         {
             ImGui::Text("Effect slots: %d", ability.effectCount);
-            ImGui::TextDisabled("Effects are configured via AbilitySystem::RegisterAbility()");
+            Spark::Ui::SecondaryText("Effects are configured via AbilitySystem::RegisterAbility()");
         }
 
         ImGui::Separator();
-        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "AbilityEditorPanel: deleted ability #%u", ability.id);
             m_abilities.erase(m_abilities.begin() + m_selectedAbility);
@@ -207,7 +211,7 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::TextDisabled("Select an aura to edit");
+            Spark::Ui::EmptyState(ICON_FA_SHIELD, "No aura selected", "Select an aura to edit");
         }
         ImGui::EndChild();
     }
@@ -227,7 +231,7 @@ namespace SparkEditor
         const char* schools[] = {"Physical", "Fire", "Ice", "Lightning", "Nature", "Shadow", "Holy", "Arcane"};
         ImGui::Combo("School", &aura.school, schools, IM_ARRAYSIZE(schools));
 
-        if (ImGui::CollapsingHeader("Duration & Ticking", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Duration & Ticking"))
         {
             ImGui::Checkbox("Permanent", &aura.isPermanent);
             if (!aura.isPermanent)
@@ -237,13 +241,13 @@ namespace SparkEditor
             ImGui::DragFloat("Value/Tick", &aura.valuePerTick, 1.0f, -10000.0f, 10000.0f, "%.0f");
         }
 
-        if (ImGui::CollapsingHeader("Modifiers"))
+        if (Spark::Ui::SectionHeader("Modifiers", nullptr, false))
         {
             ImGui::DragFloat("Flat Modifier", &aura.flatModifier, 1.0f, -10000.0f, 10000.0f, "%.0f");
             ImGui::DragFloat("Percent Modifier", &aura.percentModifier, 0.01f, -10.0f, 10.0f, "%.2f");
         }
 
-        if (ImGui::CollapsingHeader("Stacking"))
+        if (Spark::Ui::SectionHeader("Stacking", nullptr, false))
         {
             const char* stackTypes[] = {"None (Refresh)", "Stacking", "Separate"};
             ImGui::Combo("Stack Type", &aura.stackType, stackTypes, IM_ARRAYSIZE(stackTypes));
@@ -251,14 +255,14 @@ namespace SparkEditor
                 ImGui::DragInt("Max Stacks", &aura.maxStacks, 1.0f, 1, 999);
         }
 
-        if (ImGui::CollapsingHeader("Flags"))
+        if (Spark::Ui::SectionHeader("Flags", nullptr, false))
         {
             ImGui::Checkbox("Hidden (no UI)", &aura.isHidden);
             ImGui::Checkbox("Dispellable", &aura.dispellable);
         }
 
         ImGui::Separator();
-        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete"))
         {
             m_auras.erase(m_auras.begin() + m_selectedAura);
             m_selectedAura = -1;
@@ -280,13 +284,13 @@ namespace SparkEditor
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
                                   ImGuiTableFlags_ScrollY))
         {
-            ImGui::TableSetupColumn("##Sel", ImGuiTableColumnFlags_WidthFixed, 20);
-            ImGui::TableSetupColumn("Source Aura", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Triggered Ability", ImGuiTableColumnFlags_WidthFixed, 100);
+            ImGui::TableSetupColumn("##Sel", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(20));
+            ImGui::TableSetupColumn("Source Aura", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Triggered Ability", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(100));
             ImGui::TableSetupColumn("Triggers");
-            ImGui::TableSetupColumn("Chance", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Cooldown", ImGuiTableColumnFlags_WidthFixed, 70);
-            ImGui::TableSetupColumn("Charges", ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("Chance", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("Cooldown", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(70));
+            ImGui::TableSetupColumn("Charges", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_procs.size()); ++i)
@@ -315,7 +319,7 @@ namespace SparkEditor
                     if (proc.triggerMask & (1u << t))
                     {
                         ImGui::SameLine();
-                        ImGui::TextDisabled("%s", triggerNames[t]);
+                        Spark::Ui::SecondaryText("%s", triggerNames[t]);
                     }
                 }
 
@@ -370,7 +374,7 @@ namespace SparkEditor
             ImGui::DragFloat("Internal Cooldown", &proc.cooldown, 0.1f, 0.0f, 300.0f, "%.1f s");
             ImGui::DragInt("Charges (0=unlimited)", &proc.charges, 1.0f, 0, 999);
 
-            if (ImGui::Button(ICON_FA_TRASH " Delete Proc"))
+            if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete Proc"))
             {
                 m_procs.erase(m_procs.begin() + m_selectedProc);
                 m_selectedProc = -1;

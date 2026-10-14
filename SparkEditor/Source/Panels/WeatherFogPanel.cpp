@@ -6,6 +6,8 @@
 #include "WeatherFogPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Core/EngineContext.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include <cstdio>
 #include <imgui.h>
@@ -83,7 +85,7 @@ namespace SparkEditor
         {
             const auto type = static_cast<Spark::WeatherType>(i);
             char label[128];
-            snprintf(label, sizeof(label), "%s %s", typeIcons[i], Spark::WeatherSystem::GetWeatherTypeName(type));
+            std::snprintf(label, sizeof(label), "%s %s", typeIcons[i], Spark::WeatherSystem::GetWeatherTypeName(type));
             if (ImGui::Selectable(label, m_selectedType == type))
                 m_selectedType = type;
         }
@@ -93,49 +95,78 @@ namespace SparkEditor
     {
         const Spark::WeatherState preset = GetSelectedPreset();
 
-        ImGui::Text("%s preset (engine values)", Spark::WeatherSystem::GetWeatherTypeName(m_selectedType));
-        ImGui::Separator();
+        char title[96];
+        std::snprintf(title, sizeof(title), "%s preset (engine values)",
+                      Spark::WeatherSystem::GetWeatherTypeName(m_selectedType));
+        Spark::Ui::SubHeader(title);
 
-        ImGui::Text("Precipitation rate: %.0f /s", preset.precipitationRate);
-        ImGui::Text("Wind speed: %.1f m/s (gustiness %.2f)", preset.windSpeed, preset.windGustiness);
-        ImGui::Text("Fog density: %.3f  (%.0f m - %.0f m)", preset.fogDensity, preset.fogStartDistance,
-                    preset.fogEndDistance);
-        ImGui::Text("Fog color:");
-        ImGui::SameLine();
-        ImGui::ColorButton("##FogColor",
-                           ImVec4(preset.fogColor.x, preset.fogColor.y, preset.fogColor.z, preset.fogColor.w),
-                           ImGuiColorEditFlags_NoTooltip, ImVec2(40, 20));
-        ImGui::Text("Ambient x%.2f  Directional x%.2f", preset.ambientMultiplier, preset.directionalMultiplier);
-        ImGui::Text("Lightning: %.1f /min   Wetness: %.2f   Snow: %.2f", preset.lightningFrequency, preset.wetness,
-                    preset.snowCoverage);
+        if (Spark::Ui::BeginPropertyGrid("WeatherPresetValues"))
+        {
+            Spark::Ui::PropertyLabel("Precipitation rate");
+            Spark::Ui::MonoText("%.0f /s", preset.precipitationRate);
+            Spark::Ui::PropertyLabel("Wind speed");
+            Spark::Ui::MonoText("%.1f m/s (gustiness %.2f)", preset.windSpeed, preset.windGustiness);
+            Spark::Ui::PropertyLabel("Fog density");
+            Spark::Ui::MonoText("%.3f  (%.0f m - %.0f m)", preset.fogDensity, preset.fogStartDistance,
+                                preset.fogEndDistance);
+            Spark::Ui::PropertyLabel("Fog color");
+            ImGui::ColorButton("##FogColor",
+                               ImVec4(preset.fogColor.x, preset.fogColor.y, preset.fogColor.z, preset.fogColor.w),
+                               ImGuiColorEditFlags_NoTooltip, Spark::Ui::Px2(40, 20));
+            Spark::Ui::PropertyLabel("Lighting");
+            Spark::Ui::MonoText("Ambient x%.2f  Directional x%.2f", preset.ambientMultiplier,
+                                preset.directionalMultiplier);
+            Spark::Ui::PropertyLabel("Lightning");
+            Spark::Ui::MonoText("%.1f /min", preset.lightningFrequency);
+            Spark::Ui::PropertyLabel("Wetness");
+            Spark::Ui::MonoText("%.2f", preset.wetness);
+            Spark::Ui::PropertyLabel("Snow");
+            Spark::Ui::MonoText("%.2f", preset.snowCoverage);
+            Spark::Ui::EndPropertyGrid();
+        }
 
-        ImGui::Separator();
-        ImGui::SliderFloat("Intensity", &m_intensity, 0.0f, 1.0f);
-        ImGui::SliderFloat("Transition", &m_transitionSeconds, 0.1f, 30.0f, "%.1f s");
+        Spark::Ui::SubHeader("Apply");
+        if (Spark::Ui::BeginPropertyGrid("WeatherApply"))
+        {
+            Spark::Ui::PropertyLabel("Intensity");
+            ImGui::SliderFloat("##Intensity", &m_intensity, 0.0f, 1.0f);
+            Spark::Ui::PropertyLabel("Transition");
+            ImGui::SliderFloat("##Transition", &m_transitionSeconds, 0.1f, 30.0f, "%.1f s");
+            Spark::Ui::EndPropertyGrid();
+        }
 
         const bool connected = IsWeatherSystemConnected();
-        ImGui::BeginDisabled(!connected);
-        if (ImGui::Button(ICON_FA_CHECK " Apply to Scene"))
         {
-            ApplySelected();
+            const Spark::Ui::ScopedDisabled disabled(!connected, "No WeatherSystem is registered in this process.");
+            if (Spark::Ui::PrimaryButton(ICON_FA_CHECK " Apply to Scene"))
+            {
+                ApplySelected();
+            }
         }
-        ImGui::EndDisabled();
 
         if (!connected)
         {
-            ImGui::TextDisabled("Preview - not connected: no WeatherSystem is registered in this");
-            ImGui::TextDisabled("process. Start a game session to apply weather.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Info,
+                                  "Preview - not connected: no WeatherSystem is registered in this process.");
+            Spark::Ui::SecondaryText("Start a game session to apply weather.");
             return;
         }
 
         const Spark::WeatherState& current = ResolveWeatherSystem()->GetCurrentState();
-        ImGui::Separator();
-        ImGui::Text("Live weather: %s (intensity %.2f)", Spark::WeatherSystem::GetWeatherTypeName(current.type),
-                    current.intensity);
-        if (ResolveWeatherSystem()->IsTransitioning())
+        Spark::Ui::SubHeader("Live weather");
+        if (Spark::Ui::BeginPropertyGrid("WeatherLive"))
         {
-            ImGui::SameLine();
-            ImGui::Text("- transitioning %.0f%%", ResolveWeatherSystem()->GetTransitionProgress() * 100.0f);
+            Spark::Ui::PropertyLabel("Type");
+            ImGui::TextUnformatted(Spark::WeatherSystem::GetWeatherTypeName(current.type));
+            Spark::Ui::PropertyLabel("Intensity");
+            Spark::Ui::MonoText("%.2f", current.intensity);
+            if (ResolveWeatherSystem()->IsTransitioning())
+            {
+                Spark::Ui::PropertyLabel("Transition");
+                Spark::Ui::StatusText(Spark::Ui::Status::Info, "%.0f%%",
+                                      ResolveWeatherSystem()->GetTransitionProgress() * 100.0f);
+            }
+            Spark::Ui::EndPropertyGrid();
         }
     }
 

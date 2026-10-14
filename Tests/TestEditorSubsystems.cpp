@@ -10,6 +10,7 @@
 #include "TestFramework.h"
 #include "Fixtures/ScopedEditorProfile.h"
 #include "Core/EditorTheme.h"
+#include "Core/EditorThemeDocument.h"
 #include "Core/TutorialSystem.h"
 #include "Workflow/EditorWorkflow.h"
 #include "Prototyping/PrototypingSystem.h"
@@ -152,6 +153,221 @@ TEST(EditorThemeData_StyleValues)
     EXPECT_NEAR(data.grabMinSize, 10.0f, 0.01f);
     EXPECT_NEAR(data.fontScale, 1.0f, 0.01f);
     EXPECT_TRUE(data.enableShadows);
+}
+
+// ============================================================================
+// EditorThemeDocument Tests (the SEC-120 import/export format; ImGui-free)
+// ============================================================================
+
+namespace
+{
+    bool SameThemeColor(const ThemeColor& a, const ThemeColor& b)
+    {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    }
+
+    /// Distinct, exactly printable colour per index (multiples of 1/64).
+    ThemeColor DistinctColor(std::size_t index)
+    {
+        const auto step = [index](std::size_t salt) { return static_cast<float>((index * 3 + salt) % 64) / 64.0f; };
+        return ThemeColor(step(1), step(2), step(3), 0.5f + static_cast<float>(index % 8) / 16.0f);
+    }
+
+    /// A populated theme whose every colour, metric and flag differs from a default EditorThemeData.
+    EditorThemeData FullyPopulatedTheme()
+    {
+        EditorThemeData theme;
+        theme.name = "Round Trip";
+        theme.description = "every field set";
+        theme.author = "tests";
+        for (std::size_t i = 0; i < kThemeColourFields.size(); ++i)
+        {
+            theme.*kThemeColourFields[i].member = DistinctColor(i);
+        }
+        for (std::size_t i = 0; i < theme.statusFills.size(); ++i)
+        {
+            theme.statusFills[i] = DistinctColor(kThemeColourFields.size() + i);
+        }
+        const auto midpoint = [](const ThemeMetricField& field)
+        { return field.minimum + (field.maximum - field.minimum) * 0.375f; };
+        for (const ThemeMetricField& field : kThemeMetricFields)
+        {
+            theme.*field.member = midpoint(field);
+        }
+        for (const ThemeMetricField& field : kThemeTypographyFields)
+        {
+            theme.*field.member = midpoint(field);
+        }
+        theme.enableAnimations = false;
+        theme.enableGradients = false;
+        theme.enableShadows = false;
+        theme.fontFamily = "Test Sans";
+        theme.appearance = Spark::Ui::Appearance::Light;
+        theme.density = Spark::Ui::Density::Compact;
+        return theme;
+    }
+
+    /// A document in the original 25-colour format.
+    std::string LegacyThemeDocument(const std::string& name)
+    {
+        std::string text = "{\n  \"name\": \"" + name + "\",\n  \"description\": \"old\",\n  \"author\": \"x\",\n";
+        text += "  \"colors\": {\n";
+        constexpr std::size_t kLegacyColourCount = 25;
+        for (std::size_t i = 0; i < kLegacyColourCount; ++i)
+        {
+            const ThemeColor c = DistinctColor(i);
+            text += "    \"" + std::string(kThemeColourFields[i].key) + "\": [" + std::to_string(c.r) + ", " +
+                    std::to_string(c.g) + ", " + std::to_string(c.b) + ", " + std::to_string(c.a) + "]";
+            text += i + 1 < kLegacyColourCount ? ",\n" : "\n";
+        }
+        return text + "  }\n}\n";
+    }
+} // namespace
+
+TEST(EditorThemeDocument_RoundTripsEveryColourAndMetric)
+{
+    const EditorThemeData original = FullyPopulatedTheme();
+    const std::string document = WriteThemeDocument(original);
+
+    // Parse over a base that differs everywhere, so a field the document lost would show.
+    EditorThemeData base;
+    base.name = "base";
+    base.borderStrong = ThemeColor(0.9f, 0.9f, 0.9f);
+    EditorThemeData parsed;
+    std::string error = "stale";
+    EXPECT_TRUE(ParseThemeDocument(document, base, parsed, &error));
+    EXPECT_TRUE(error.empty());
+
+    EXPECT_EQ(parsed.name, original.name);
+    EXPECT_EQ(parsed.description, original.description);
+    EXPECT_EQ(parsed.author, original.author);
+    for (const ThemeColourField& field : kThemeColourFields)
+    {
+        EXPECT_TRUE(SameThemeColor(parsed.*field.member, original.*field.member));
+    }
+    for (std::size_t i = 0; i < original.statusFills.size(); ++i)
+    {
+        EXPECT_TRUE(SameThemeColor(parsed.statusFills[i], original.statusFills[i]));
+    }
+    for (const ThemeMetricField& field : kThemeMetricFields)
+    {
+        EXPECT_EQ(parsed.*field.member, original.*field.member);
+    }
+    for (const ThemeMetricField& field : kThemeTypographyFields)
+    {
+        EXPECT_EQ(parsed.*field.member, original.*field.member);
+    }
+    for (const ThemeFlagField& field : kThemeFlagFields)
+    {
+        EXPECT_EQ(parsed.*field.member, original.*field.member);
+    }
+    EXPECT_EQ(parsed.fontFamily, std::string("Test Sans"));
+    EXPECT_TRUE(parsed.appearance == Spark::Ui::Appearance::Light);
+    EXPECT_TRUE(parsed.density == Spark::Ui::Density::Compact);
+    EXPECT_EQ(WriteThemeDocument(parsed), document);
+}
+
+TEST(EditorThemeDocument_LegacyDocumentKeepsBaseValuesForMissingKeys)
+{
+    EditorThemeData base = FullyPopulatedTheme();
+    base.name = "Base";
+    base.frameRounding = 11.0f;
+    EditorThemeData parsed;
+    EXPECT_TRUE(ParseThemeDocument(LegacyThemeDocument("Old Theme"), base, parsed));
+    EXPECT_EQ(parsed.name, std::string("Old Theme"));
+
+    // The 25 colours the document carries come from it ...
+    for (std::size_t i = 0; i < 25; ++i)
+    {
+        const ThemeColor expected = DistinctColor(i);
+        const ThemeColor& got = parsed.*kThemeColourFields[i].member;
+        EXPECT_NEAR(got.r, expected.r, 0.0001f);
+        EXPECT_NEAR(got.b, expected.b, 0.0001f);
+    }
+    // ... and everything else keeps the base value instead of falling back to opaque black.
+    for (std::size_t i = 25; i < kThemeColourFields.size(); ++i)
+    {
+        EXPECT_TRUE(SameThemeColor(parsed.*kThemeColourFields[i].member, base.*kThemeColourFields[i].member));
+    }
+    for (std::size_t i = 0; i < base.statusFills.size(); ++i)
+    {
+        EXPECT_TRUE(SameThemeColor(parsed.statusFills[i], base.statusFills[i]));
+    }
+    EXPECT_TRUE(parsed.titleBar.r > 0.0f || parsed.titleBar.g > 0.0f || parsed.titleBar.b > 0.0f);
+    EXPECT_EQ(parsed.frameRounding, 11.0f);
+    EXPECT_EQ(parsed.fontFamily, std::string("Test Sans"));
+    EXPECT_TRUE(parsed.appearance == Spark::Ui::Appearance::Light);
+}
+
+TEST(EditorThemeDocument_LegacyDocumentOverDefaultBaseDerivesEmberRoles)
+{
+    EditorThemeData parsed;
+    EXPECT_TRUE(ParseThemeDocument(LegacyThemeDocument("Old Theme"), EditorThemeData(), parsed));
+
+    // Roles with a legacy source are copied from it; none stays the default opaque black.
+    EXPECT_TRUE(SameThemeColor(parsed.buttonDisabled, parsed.textDisabled));
+    EXPECT_TRUE(SameThemeColor(parsed.menuItem, parsed.backgroundLight));
+    EXPECT_TRUE(SameThemeColor(parsed.borderStrong, parsed.borderLight));
+    EXPECT_TRUE(SameThemeColor(parsed.surfaceOverlay, parsed.backgroundLight));
+    EXPECT_TRUE(SameThemeColor(parsed.textInfo, parsed.textAccent));
+    EXPECT_TRUE(SameThemeColor(parsed.accentText, parsed.textAccent));
+
+    // An error fill is the opaque background pulled 15 % towards the error text colour.
+    const ThemeColor& error = parsed.statusFills[static_cast<std::size_t>(ThemeStatusFill::Error)];
+    EXPECT_NEAR(error.r, parsed.background.r + (parsed.textError.r - parsed.background.r) * 0.15f, 0.0001f);
+    EXPECT_NEAR(error.g, parsed.background.g + (parsed.textError.g - parsed.background.g) * 0.15f, 0.0001f);
+    EXPECT_NEAR(error.a, 1.0f, 0.0001f);
+    EXPECT_FALSE(SameThemeColor(error, ThemeColor()));
+}
+
+TEST(EditorThemeDocument_DefinedRolesAreNeverDerived)
+{
+    std::string document = LegacyThemeDocument("Mixed");
+    const std::string colorsOpen = "  \"colors\": {\n";
+    document.insert(document.find(colorsOpen) + colorsOpen.size(), "    \"textInfo\": [0.5, 0.25, 0.125, 1],\n");
+    EditorThemeData parsed;
+    EXPECT_TRUE(ParseThemeDocument(document, EditorThemeData(), parsed));
+    EXPECT_NEAR(parsed.textInfo.r, 0.5f, 0.0001f);
+    EXPECT_NEAR(parsed.textInfo.g, 0.25f, 0.0001f);
+    EXPECT_FALSE(SameThemeColor(parsed.textInfo, parsed.textAccent));
+}
+
+TEST(EditorThemeDocument_MalformedValuesKeepBaseAndMetricsClamp)
+{
+    const EditorThemeData base = FullyPopulatedTheme();
+    const std::string document =
+        "{\"name\": \"Odd\",\n"
+        "\"colors\": {\n\"background\": [nan, 0, 0, 1],\n\"text\": [0.5, 0.25],\n\"button\": [inf, 1, 1, 1]\n},\n"
+        "\"metrics\": {\n\"frameRounding\": nan,\n\"windowRounding\": 5000,\n\"fontSize\": -3,\n"
+        "\"enableShadows\": maybe\n}\n}\n";
+    EditorThemeData parsed;
+    EXPECT_TRUE(ParseThemeDocument(document, base, parsed));
+    EXPECT_TRUE(SameThemeColor(parsed.background, base.background));
+    EXPECT_TRUE(SameThemeColor(parsed.text, base.text));
+    EXPECT_TRUE(SameThemeColor(parsed.button, base.button));
+    EXPECT_EQ(parsed.frameRounding, base.frameRounding);
+    EXPECT_EQ(parsed.windowRounding, 64.0f);
+    EXPECT_EQ(parsed.fontSize, 6.0f);
+    EXPECT_EQ(parsed.enableShadows, base.enableShadows);
+}
+
+TEST(EditorThemeDocument_DocumentWithoutNameIsRejected)
+{
+    EditorThemeData parsed;
+    std::string error;
+    EXPECT_FALSE(ParseThemeDocument("{\"description\": \"nameless\"}", EditorThemeData(), parsed, &error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_FALSE(ParseThemeDocument("not a theme", parsed));
+}
+
+TEST(EditorThemeDocument_TwoArgumentOverloadUsesTheCurrentThemeAsBase)
+{
+    EditorThemeData theme = FullyPopulatedTheme();
+    const EditorThemeData before = theme;
+    EXPECT_TRUE(ParseThemeDocument(LegacyThemeDocument("In Place"), theme));
+    EXPECT_EQ(theme.name, std::string("In Place"));
+    EXPECT_TRUE(SameThemeColor(theme.titleBar, before.titleBar));
+    EXPECT_TRUE(SameThemeColor(theme.accentHover, before.accentHover));
 }
 
 // ============================================================================
@@ -3099,7 +3315,7 @@ TEST(Gated_EditorTheme_BuiltinThemes)
 
 namespace
 {
-    struct ThemeColourField
+    struct ListedColourField
     {
         const char* name;
         ThemeColor EditorThemeData::*member;
@@ -3107,7 +3323,7 @@ namespace
 
     // Every ThemeColor member of EditorThemeData, listed independently of EditorTheme.cpp so a
     // field the adapter forgets shows up as a colour that reaches no sink.
-    const ThemeColourField kAllThemeColourFields[] = {
+    const ListedColourField kAllThemeColourFields[] = {
         {"background", &EditorThemeData::background},
         {"backgroundDark", &EditorThemeData::backgroundDark},
         {"backgroundLight", &EditorThemeData::backgroundLight},
@@ -3215,7 +3431,7 @@ TEST(Gated_EditorTheme_ApplyToImGuiMapsEveryField)
             ++probe;
             return ThemeColor(0.0123f, 0.0011f + 0.0137f * static_cast<float>(probe), 0.9871f, 1.0f);
         };
-        for (const ThemeColourField& field : kAllThemeColourFields)
+        for (const ListedColourField& field : kAllThemeColourFields)
         {
             EditorThemeData data = *base;
             data.name = "Gated sentinel palette";
@@ -3271,7 +3487,7 @@ TEST(Gated_EditorTheme_BlendedThemeBlendsAllColours)
     EditorThemeData second;
     first.name = "Gated Uniform Blend A";
     second.name = "Gated Uniform Blend B";
-    for (const ThemeColourField& field : kAllThemeColourFields)
+    for (const ListedColourField& field : kAllThemeColourFields)
     {
         first.*(field.member) = UniformColour(0.2f);
         second.*(field.member) = UniformColour(0.6f);
@@ -3293,7 +3509,7 @@ TEST(Gated_EditorTheme_BlendedThemeBlendsAllColours)
     EXPECT_TRUE(blended != nullptr);
     if (blended)
     {
-        for (const ThemeColourField& field : kAllThemeColourFields)
+        for (const ListedColourField& field : kAllThemeColourFields)
         {
             const bool midpoint = SameRgb(0.4f, 0.4f, 0.4f, blended->*(field.member));
             if (!midpoint)

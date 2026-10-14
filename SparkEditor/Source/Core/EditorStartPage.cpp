@@ -1,0 +1,208 @@
+/**
+ * @file EditorStartPage.cpp
+ * @brief Implementation of the dockable Start tab.
+ */
+
+#include "EditorStartPage.h"
+
+#include "EditorIcons.h"
+
+#include <Spark/Version.h>
+#include <SparkUI/Brand.h>
+#include <SparkUI/Fonts.h>
+#include <SparkUI/Runtime.h>
+#include <SparkUI/Widgets.h>
+
+#include <imgui.h>
+
+#include <cstddef>
+#include <string>
+
+namespace SparkEditor
+{
+
+    namespace
+    {
+        namespace Ui = Spark::Ui;
+
+        /// Width below which the recent-scenes and shortcut columns stack.
+        constexpr float kTwoColumnMinEm = 44.0f;
+
+        struct ShortcutRow
+        {
+            const char* keys;
+            const char* action;
+        };
+
+        constexpr ShortcutRow kShortcuts[] = {
+            {"Ctrl+N", "New scene"},
+            {"Ctrl+O", "Open scene"},
+            {"Ctrl+S", "Save scene"},
+            {"Ctrl+P", "Command palette"},
+            {"Ctrl+F", "Search"},
+            {"Ctrl+Z / Ctrl+Y", "Undo / redo"},
+            {"W / E / R", "Move / rotate / scale tool"},
+            {"F5", "Open Play Control"},
+            {"Ctrl+= / Ctrl+- / Ctrl+0", "UI scale up / down / 100%"},
+        };
+    } // namespace
+
+    StartPageResult EditorStartPage::Draw(EditorPreferences& prefs, unsigned int centreDockId)
+    {
+        StartPageResult result;
+        if (!m_open)
+            return result;
+
+        if (centreDockId != 0)
+            ImGui::SetNextWindowDockID(centreDockId, ImGuiCond_FirstUseEver);
+        if (m_focusRequested)
+        {
+            ImGui::SetNextWindowFocus();
+            m_focusRequested = false;
+        }
+
+        const bool visible = ImGui::Begin(kWindowName, &m_open, ImGuiWindowFlags_NoCollapse);
+        if (visible)
+        {
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput &&
+                ImGui::IsKeyPressed(ImGuiKey_Escape))
+            {
+                m_open = false;
+            }
+
+            DrawHero();
+            result.action = DrawActions();
+
+            const bool twoColumns = ImGui::GetContentRegionAvail().x >= Ui::Em(kTwoColumnMinEm);
+            if (twoColumns && ImGui::BeginTable("##startColumns", 2, ImGuiTableFlags_NoSavedSettings))
+            {
+                ImGui::TableNextColumn();
+                if (DrawRecentScenes(prefs, result.recentScene))
+                    result.action = StartPageAction::OpenRecentScene;
+                ImGui::TableNextColumn();
+                DrawShortcutSheet();
+                ImGui::EndTable();
+            }
+            else
+            {
+                if (DrawRecentScenes(prefs, result.recentScene))
+                    result.action = StartPageAction::OpenRecentScene;
+                DrawShortcutSheet();
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            if (ImGui::Checkbox("Show at startup", &prefs.showStartPage))
+                result.preferencesChanged = true;
+            ImGui::SameLine();
+            Ui::SecondaryText("Reopen any time from Help > Welcome.");
+        }
+        ImGui::End();
+        return result;
+    }
+
+    void EditorStartPage::DrawHero()
+    {
+        const float height = Ui::Px(112.0f);
+        const float markSize = Ui::Px(64.0f);
+        const float inset = Ui::Px(24.0f);
+        const ImVec2 min = ImGui::GetCursorScreenPos();
+        const ImVec2 max(min.x + ImGui::GetContentRegionAvail().x, min.y + height);
+        const float rounding = Ui::Px(Ui::ActiveTokens().metrics.rCard);
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(min, max, Ui::Col(Ui::Role::SurfaceRaised), rounding);
+        // A faint wash keeps text contrast on the raised surface; the full-strength gradient is the bottom rule.
+        Ui::DrawBrandGradient(drawList, min, max, 0.14f);
+        Ui::DrawBrandGradient(drawList, ImVec2(min.x, max.y - Ui::Px(3.0f)), max);
+        Ui::DrawLogomark(drawList, ImVec2(min.x + inset + markSize * 0.5f, min.y + height * 0.5f), markSize, true);
+
+        const float textLeft = min.x + inset * 2.0f + markSize;
+        const float displaySize = Ui::FontSize(Ui::FontRole::Display);
+        const float monoSize = Ui::FontSize(Ui::FontRole::MonoSmall);
+        const float textTop = min.y + (height - displaySize - Ui::Px(4.0f) - monoSize) * 0.5f;
+
+        ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop));
+        {
+            Ui::ScopedFont display(Ui::FontRole::Display);
+            Ui::TextRole(Ui::Role::TextPrimary, "Spark Engine");
+        }
+        ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop + displaySize + Ui::Px(4.0f)));
+        {
+            Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
+            Ui::TextRole(Ui::Role::TextSecondary, "Editor %d.%d.%d", SPARK_ENGINE_VERSION_MAJOR,
+                         SPARK_ENGINE_VERSION_MINOR, SPARK_ENGINE_VERSION_PATCH);
+        }
+
+        ImGui::SetCursorScreenPos(ImVec2(min.x, max.y + Ui::Px(12.0f)));
+    }
+
+    StartPageAction EditorStartPage::DrawActions()
+    {
+        StartPageAction action = StartPageAction::None;
+        if (Ui::PrimaryButton(ICON_FA_FOLDER_OPEN "  Open Scene..."))
+            action = StartPageAction::OpenScene;
+        ImGui::SameLine();
+        if (Ui::SecondaryButton(ICON_FA_FILE "  New Scene"))
+            action = StartPageAction::NewScene;
+        ImGui::SameLine();
+        if (Ui::SecondaryButton(ICON_FA_FOLDER_OPEN "  Open Project Folder"))
+            action = StartPageAction::OpenProjectFolder;
+        ImGui::SameLine();
+        if (Ui::SecondaryButton(ICON_FA_UNDO "  Reset workspace layout"))
+            action = StartPageAction::ResetLayout;
+        ImGui::Spacing();
+        return action;
+    }
+
+    bool EditorStartPage::DrawRecentScenes(const EditorPreferences& prefs, std::string& chosen)
+    {
+        Ui::SubHeader("Recent scenes");
+        if (prefs.recentScenes.empty())
+        {
+            Ui::SecondaryText("Scenes you open or save appear here.");
+            return false;
+        }
+
+        bool picked = false;
+        for (const std::string& scene : prefs.recentScenes)
+        {
+            // Split by hand: the stored path is UTF-8, which a narrow std::filesystem::path may not round-trip.
+            const std::size_t slash = scene.find_last_of("/\\");
+            const std::string fileName = slash == std::string::npos ? scene : scene.substr(slash + 1);
+            const std::string folder = slash == std::string::npos ? std::string() : scene.substr(0, slash);
+            ImGui::PushID(scene.c_str());
+            if (ImGui::Selectable(fileName.c_str(), false, ImGuiSelectableFlags_AllowOverlap))
+            {
+                chosen = scene;
+                picked = true;
+            }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+                ImGui::SetTooltip("%s", scene.c_str());
+            ImGui::SameLine();
+            {
+                Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
+                Ui::TextRole(Ui::Role::TextSecondary, "%s", folder.c_str());
+            }
+            ImGui::PopID();
+        }
+        return picked;
+    }
+
+    void EditorStartPage::DrawShortcutSheet()
+    {
+        Ui::SubHeader("Keyboard shortcuts");
+        if (!ImGui::BeginTable("##shortcuts", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+            return;
+        for (const ShortcutRow& row : kShortcuts)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            Ui::KeyHint(row.keys);
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(row.action);
+        }
+        ImGui::EndTable();
+    }
+
+} // namespace SparkEditor

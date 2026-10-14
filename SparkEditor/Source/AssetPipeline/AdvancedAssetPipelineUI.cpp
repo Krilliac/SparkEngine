@@ -13,10 +13,35 @@
 #include <fstream>
 #include <sstream>
 
+#include "SparkUI/Widgets.h"
+
 namespace fs = std::filesystem;
 
 namespace SparkEditor
 {
+
+    namespace
+    {
+        /// @brief Status colour and glyph for a processing state; the state's word is always printed beside it.
+        Spark::Ui::Status StatusForProcessing(ProcessingStatus status)
+        {
+            switch (status)
+            {
+            case ProcessingStatus::COMPLETED:
+                return Spark::Ui::Status::Success;
+            case ProcessingStatus::FAILED:
+                return Spark::Ui::Status::Error;
+            case ProcessingStatus::PROCESSING:
+                return Spark::Ui::Status::Info;
+            case ProcessingStatus::CANCELLED:
+                return Spark::Ui::Status::Warning;
+            case ProcessingStatus::PENDING:
+            case ProcessingStatus::SKIPPED:
+                break;
+            }
+            return Spark::Ui::Status::Neutral;
+        }
+    } // namespace
 
     // =========================================================================
     // Private methods
@@ -26,7 +51,7 @@ namespace SparkEditor
     {
         // Search filter
         static char searchBuf[256] = {};
-        ImGui::InputText("Search", searchBuf, sizeof(searchBuf));
+        Spark::Ui::SearchField("AssetSearch", searchBuf, sizeof(searchBuf), "Search assets");
         m_searchFilter = searchBuf;
 
         // Type filter combo
@@ -60,8 +85,7 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Asset table
-        if (ImGui::BeginTable("AssetTable", 4,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY))
+        if (Spark::Ui::BeginDataTable("AssetTable", 4, ImGuiTableFlags_BordersOuter))
         {
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Type");
@@ -106,21 +130,22 @@ namespace SparkEditor
                 int statusIdx = static_cast<int>(metadata.status);
                 if (statusIdx >= 0 && statusIdx < 6)
                 {
-                    ImGui::Text("%s", statusNames[statusIdx]);
+                    Spark::Ui::StatusText(StatusForProcessing(metadata.status), "%s", statusNames[statusIdx]);
                 }
 
                 ImGui::TableSetColumnIndex(3);
                 if (metadata.sourceFileSize > 1024 * 1024)
                 {
-                    ImGui::Text("%.2f MB", static_cast<float>(metadata.sourceFileSize) / (1024.0f * 1024.0f));
+                    Spark::Ui::TableNumber("%.2f MB",
+                                           static_cast<float>(metadata.sourceFileSize) / (1024.0f * 1024.0f));
                 }
                 else if (metadata.sourceFileSize > 1024)
                 {
-                    ImGui::Text("%.2f KB", static_cast<float>(metadata.sourceFileSize) / 1024.0f);
+                    Spark::Ui::TableNumber("%.2f KB", static_cast<float>(metadata.sourceFileSize) / 1024.0f);
                 }
                 else
                 {
-                    ImGui::Text("%zu B", metadata.sourceFileSize);
+                    Spark::Ui::TableNumber("%zu B", metadata.sourceFileSize);
                 }
             }
 
@@ -130,8 +155,7 @@ namespace SparkEditor
 
     void AdvancedAssetPipeline::RenderProcessingQueue()
     {
-        ImGui::Text("Processing Queue");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Processing Queue");
 
         std::lock_guard<std::mutex> lock(m_queueMutex);
         ImGui::Text("Jobs in queue: %d", static_cast<int>(m_processingQueue.size()));
@@ -159,14 +183,13 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::Text("Queue is empty.");
+            Spark::Ui::SecondaryText("Queue is empty.");
         }
     }
 
     void AdvancedAssetPipeline::RenderBatchOperations()
     {
-        ImGui::Text("Batch Operations");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Batch Operations");
 
         std::vector<std::pair<uint32_t, BatchOperation>> snapshots;
         {
@@ -178,7 +201,7 @@ namespace SparkEditor
 
         if (snapshots.empty())
         {
-            ImGui::Text("No batch operations.");
+            Spark::Ui::EmptyState(nullptr, "No batch operations.");
             return;
         }
 
@@ -207,12 +230,11 @@ namespace SparkEditor
 
     void AdvancedAssetPipeline::RenderAssetInspector()
     {
-        ImGui::Text("Asset Inspector");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Asset Inspector");
 
         if (m_selectedAsset.empty())
         {
-            ImGui::Text("No asset selected. Select an asset from the Assets tab.");
+            Spark::Ui::EmptyState(nullptr, "No asset selected.", "Select an asset from the Assets tab.");
             return;
         }
 
@@ -220,37 +242,37 @@ namespace SparkEditor
         auto it = m_assetMetadata.find(m_selectedAsset);
         if (it == m_assetMetadata.end())
         {
-            ImGui::Text("Asset not found in metadata cache.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Asset not found in metadata cache.");
             return;
         }
 
         const auto& metadata = it->second;
 
-        ImGui::Text("GUID: %s", metadata.guid.c_str());
-        ImGui::Text("Source: %s", metadata.sourceFilePath.c_str());
-        ImGui::Text("Processed: %s", metadata.processedFilePath.c_str());
-        ImGui::Text("Type: %d", static_cast<int>(metadata.type));
-        ImGui::Text("Processor: %s", metadata.processorName.c_str());
+        Spark::Ui::KeyValue("GUID:", "%s", metadata.guid.c_str());
+        Spark::Ui::KeyValue("Source:", "%s", metadata.sourceFilePath.c_str());
+        Spark::Ui::KeyValue("Processed:", "%s", metadata.processedFilePath.c_str());
+        Spark::Ui::KeyValue("Type:", "%d", static_cast<int>(metadata.type));
+        Spark::Ui::KeyValue("Processor:", "%s", metadata.processorName.c_str());
 
         ImGui::Separator();
 
-        ImGui::Text("Source size: %zu bytes", metadata.sourceFileSize);
-        ImGui::Text("Processed size: %zu bytes", metadata.processedFileSize);
-        ImGui::Text("Processing time: %.3f seconds", metadata.processingTime);
+        Spark::Ui::KeyValue("Source size:", "%zu bytes", metadata.sourceFileSize);
+        Spark::Ui::KeyValue("Processed size:", "%zu bytes", metadata.processedFileSize);
+        Spark::Ui::KeyValue("Processing time:", "%.3f seconds", metadata.processingTime);
 
         const char* statusNames[] = {"Pending", "Processing", "Completed", "Failed", "Skipped", "Cancelled"};
         int statusIdx = static_cast<int>(metadata.status);
         if (statusIdx >= 0 && statusIdx < 6)
         {
-            ImGui::Text("Status: %s", statusNames[statusIdx]);
+            Spark::Ui::StatusText(StatusForProcessing(metadata.status), "Status: %s", statusNames[statusIdx]);
         }
 
         if (!metadata.errorMessage.empty())
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Error: %s", metadata.errorMessage.c_str());
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "Error: %s", metadata.errorMessage.c_str());
         }
 
-        ImGui::Text("Checksum: %s", metadata.checksum.c_str());
+        Spark::Ui::KeyValue("Checksum:", "%s", metadata.checksum.c_str());
 
         ImGui::Separator();
 
@@ -287,8 +309,7 @@ namespace SparkEditor
             auto lodCountIt = metadata.customData.find("lod.level_count");
             if (lodCountIt != metadata.customData.end())
             {
-                ImGui::Separator();
-                ImGui::Text("Auto-LOD Preview");
+                Spark::Ui::SubHeader("Auto-LOD Preview");
                 ImGui::Text("Profile: %s/%s",
                             metadata.customData.contains("lod.profile_platform")
                                 ? metadata.customData.at("lod.profile_platform").c_str()
@@ -331,7 +352,7 @@ namespace SparkEditor
 
         ImGui::Separator();
 
-        if (ImGui::Button("Reprocess"))
+        if (Spark::Ui::PrimaryButton("Reprocess"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Reprocessing asset: %s", m_selectedAsset.c_str());
             ProcessAsset(m_selectedAsset, m_currentImportSettings);
@@ -346,12 +367,11 @@ namespace SparkEditor
 
     void AdvancedAssetPipeline::RenderDependencyViewer()
     {
-        ImGui::Text("Dependency Viewer");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Dependency Viewer");
 
         if (m_selectedAsset.empty())
         {
-            ImGui::Text("Select an asset to view its dependencies.");
+            Spark::Ui::EmptyState(nullptr, "No asset selected.", "Select an asset to view its dependencies.");
             return;
         }
 
@@ -407,8 +427,7 @@ namespace SparkEditor
 
     void AdvancedAssetPipeline::RenderProcessingStatistics()
     {
-        ImGui::Text("Processing Statistics");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Processing Statistics");
 
         auto stats = GetProcessingStatistics();
 
@@ -477,8 +496,7 @@ namespace SparkEditor
 
     void AdvancedAssetPipeline::RenderImportSettings()
     {
-        ImGui::Text("Import Settings");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Import Settings");
 
         // Common settings
         ImGui::Checkbox("Enabled", &m_currentImportSettings.enabled);
@@ -495,7 +513,7 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Texture settings
-        if (ImGui::CollapsingHeader("Texture Settings"))
+        if (Spark::Ui::SectionHeader("Texture Settings", nullptr, false))
         {
             auto& texSettings = m_currentImportSettings.textureSettings;
 
@@ -514,7 +532,7 @@ namespace SparkEditor
         }
 
         // Mesh settings
-        if (ImGui::CollapsingHeader("Mesh Settings"))
+        if (Spark::Ui::SectionHeader("Mesh Settings", nullptr, false))
         {
             auto& meshSettings = m_currentImportSettings.meshSettings;
 
@@ -525,7 +543,7 @@ namespace SparkEditor
             ImGui::Checkbox("Optimize Mesh", &meshSettings.optimizeMesh);
             ImGui::Checkbox("Weld Vertices", &meshSettings.weldVertices);
             ImGui::SliderFloat("Weld Threshold", &meshSettings.weldThreshold, 0.00001f, 0.01f, "%.5f");
-            ImGui::SeparatorText("Auto LOD");
+            Spark::Ui::SubHeader("Auto LOD");
             ImGui::Checkbox("Auto Generate LODs", &meshSettings.autoGenerateLODs);
             ImGui::Checkbox("Preview Generated LODs", &meshSettings.previewGeneratedLODs);
 
@@ -545,7 +563,7 @@ namespace SparkEditor
         }
 
         // Audio settings
-        if (ImGui::CollapsingHeader("Audio Settings"))
+        if (Spark::Ui::SectionHeader("Audio Settings", nullptr, false))
         {
             auto& audioSettings = m_currentImportSettings.audioSettings;
 
@@ -564,7 +582,7 @@ namespace SparkEditor
         }
 
         // Animation settings
-        if (ImGui::CollapsingHeader("Animation Settings"))
+        if (Spark::Ui::SectionHeader("Animation Settings", nullptr, false))
         {
             auto& animSettings = m_currentImportSettings.animationSettings;
 

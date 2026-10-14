@@ -111,7 +111,7 @@ namespace SparkEditor
         std::string m_projectRoot;
 
         GraphicsEngine* m_graphics = nullptr; ///< Non-owning; owned by EditorUI
-        float m_thumbSize = 96.0f;
+        float m_thumbSize = 96.0f;            ///< Logical pixels; scaled with Spark::Ui::Px when drawn
     };
 
 } // namespace SparkEditor

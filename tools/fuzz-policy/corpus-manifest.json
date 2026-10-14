@@ -1583,8 +1583,8 @@
       "id": "editor-theme-import-corpus",
       "parser_id": "editor-theme-import",
       "corpus_dir": "FuzzerTests/corpora/editor-theme-import",
-      "last_verified": "2026-10-01",
-      "content_digest": "d0da7bbe63dbf1199a14f8c3b2d75406bbf648c892aad191e7be2302b81d2f1a",
+      "last_verified": "2026-10-14",
+      "content_digest": "da85aaf092944dd1cc0b8fcca24fb296a0ae9e7a964aaa0717ff8fc47314c9a7",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,

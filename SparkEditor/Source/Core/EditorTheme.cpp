@@ -6,6 +6,7 @@
  */
 
 #include "EditorTheme.h"
+#include "EditorAppearanceWindow.h"
 #include "EditorThemeDocument.h"
 #include "Utils/LocalFileCache.h"
 #include "Utils/Validate.h"
@@ -1317,137 +1318,9 @@ namespace SparkEditor
 
     void ThemeCustomizer::ShowThemeEditor()
     {
-        if (!ImGui::Begin("Theme Editor", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-        {
-            ImGui::End();
-            return;
-        }
-
-        // Get current theme
-        auto currentThemeName = EditorTheme::GetCurrentThemeName();
-        ImGui::Text("Current Theme: %s", currentThemeName.c_str());
-        ImGui::Separator();
-
-        const EditorThemeData* themePtr = EditorTheme::GetTheme(currentThemeName);
-        if (!themePtr)
-        {
-            ImGui::Text("No theme loaded.");
-            ImGui::End();
-            return;
-        }
-
-        // Work on a mutable copy
-        static EditorThemeData editTheme;
-        static bool initialized = false;
-        if (!initialized)
-        {
-            editTheme = *themePtr;
-            initialized = true;
-        }
-
-        EditorThemeData& theme = editTheme;
-        bool changed = false;
-
-        // Theme metadata
-        if (ImGui::CollapsingHeader("Theme Info", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            char nameBuf[256];
-            strncpy(nameBuf, theme.name.c_str(), sizeof(nameBuf) - 1);
-            nameBuf[sizeof(nameBuf) - 1] = '\0';
-            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf)))
-            {
-                theme.name = nameBuf;
-                changed = true;
-            }
-        }
-
-        // Background colors
-        if (ImGui::CollapsingHeader("Background Colors"))
-        {
-            auto editColor = [&](const char* label, ThemeColor& color)
-            {
-                float c[4] = {color.r, color.g, color.b, color.a};
-                if (ImGui::ColorEdit4(label, c))
-                {
-                    color = ThemeColor(c[0], c[1], c[2], c[3]);
-                    changed = true;
-                }
-            };
-            editColor("Background", theme.background);
-            editColor("Background Dark", theme.backgroundDark);
-            editColor("Background Light", theme.backgroundLight);
-            editColor("Background Accent", theme.backgroundAccent);
-            editColor("Background Header", theme.backgroundHeader);
-            editColor("Background Active", theme.backgroundActive);
-            editColor("Background Hover", theme.backgroundHover);
-            editColor("Background Selected", theme.backgroundSelected);
-        }
-
-        // Text colors
-        if (ImGui::CollapsingHeader("Text Colors"))
-        {
-            auto editColor = [&](const char* label, ThemeColor& color)
-            {
-                float c[4] = {color.r, color.g, color.b, color.a};
-                if (ImGui::ColorEdit4(label, c))
-                {
-                    color = ThemeColor(c[0], c[1], c[2], c[3]);
-                    changed = true;
-                }
-            };
-            editColor("Text", theme.text);
-            editColor("Text Disabled", theme.textDisabled);
-            editColor("Text Secondary", theme.textSecondary);
-            editColor("Text Accent", theme.textAccent);
-            editColor("Text Warning", theme.textWarning);
-            editColor("Text Error", theme.textError);
-            editColor("Text Success", theme.textSuccess);
-        }
-
-        // UI Element colors
-        if (ImGui::CollapsingHeader("UI Elements"))
-        {
-            auto editColor = [&](const char* label, ThemeColor& color)
-            {
-                float c[4] = {color.r, color.g, color.b, color.a};
-                if (ImGui::ColorEdit4(label, c))
-                {
-                    color = ThemeColor(c[0], c[1], c[2], c[3]);
-                    changed = true;
-                }
-            };
-            editColor("Button", theme.button);
-            editColor("Button Hovered", theme.buttonHovered);
-            editColor("Button Active", theme.buttonActive);
-            editColor("Frame", theme.frame);
-            editColor("Frame Hovered", theme.frameHovered);
-            editColor("Frame Active", theme.frameActive);
-            editColor("Border", theme.border);
-            editColor("Border Light", theme.borderLight);
-        }
-
-        ImGui::Separator();
-
-        if (changed)
-        {
-            EditorTheme::ApplyTheme(theme);
-        }
-
-        // Actions
-        if (ImGui::Button("Apply Theme"))
-        {
-            EditorTheme::ApplyTheme(theme);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Reset to Default"))
-        {
-            EditorTheme::ApplyTheme("Ember Studio");
-            const EditorThemeData* resetTheme = EditorTheme::GetTheme("Ember Studio");
-            if (resetTheme)
-                editTheme = *resetTheme;
-        }
-
-        ImGui::End();
+        // Theme editing is the View > Appearance window (palette, appearance, density, UI scale). EditorUI owns
+        // it and opens it on its next frame; colour-level customisation goes through ImportTheme/ExportTheme.
+        EditorAppearanceWindow::RequestOpen();
     }
 
     bool ThemeCustomizer::ExportTheme(const EditorThemeData& theme, const std::string& filepath,

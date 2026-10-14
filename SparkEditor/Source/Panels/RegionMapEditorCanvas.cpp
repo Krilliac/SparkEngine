@@ -29,28 +29,87 @@ namespace SparkEditor
 
     namespace
     {
+        /// Region-map canvas art. The canvas is a view of TERRAFRONT game data, not editor chrome:
+        /// tier and faction hues follow the game's own palette, and the map surface stays dark in
+        /// every editor appearance so those hues read the same everywhere. The table is exempt
+        /// from the UI-literal ratchet by name (tools/ui/literal-baselines/P3.json).
+        struct RegionMapCanvasArt
+        {
+            ImU32 background;      ///< Map surface.
+            ImU32 worldBounds;     ///< Continent outline.
+            ImU32 grid;            ///< 512 m grid lines.
+            ImU32 conduit;         ///< Region-to-region conduit lines.
+            ImU32 linkHighlight;   ///< Link-mode rubber band and first-picked region outline.
+            ImU32 selectedOutline; ///< Outline of the selected region.
+            ImU32 regionLabel;     ///< Region name under each hex.
+            ImU32 hint;            ///< Legend / hint line.
+            ImU32 markerOutline;   ///< Dark outline that separates markers from the hex fill.
+            ImU32 capturePoint;    ///< Capture point marker (yellow circle).
+            ImU32 spawn;           ///< Spawn marker (green dot).
+            ImU32 vehicleTerminal; ///< Vehicle terminal marker (cyan square).
+            ImU32 tierSkyanchor;   ///< Hex fill per tier.
+            ImU32 tierFort;
+            ImU32 tierFacility;
+            ImU32 tierOutpost;
+            ImU32 tierUnknown; ///< Unknown tier: alarming red.
+            ImU32 ownerMra;    ///< Hex outline per owning faction.
+            ImU32 ownerAuc;
+            ImU32 ownerHlx;
+            ImU32 ownerNeutral; ///< Neutral / unassigned.
+        };
+
+        constexpr RegionMapCanvasArt kRegionMapCanvasArt = {
+            .background = IM_COL32(24, 26, 30, 255),
+            .worldBounds = IM_COL32(90, 95, 105, 200),
+            .grid = IM_COL32(60, 63, 70, 120),
+            .conduit = IM_COL32(120, 180, 220, 160),
+            .linkHighlight = IM_COL32(255, 255, 120, 255),
+            .selectedOutline = IM_COL32(255, 255, 255, 255),
+            .regionLabel = IM_COL32(225, 228, 235, 255),
+            .hint = IM_COL32(170, 175, 185, 255),
+            .markerOutline = IM_COL32(30, 30, 30, 255),
+            .capturePoint = IM_COL32(250, 210, 70, 255),
+            .spawn = IM_COL32(110, 230, 110, 255),
+            .vehicleTerminal = IM_COL32(90, 220, 235, 255),
+            .tierSkyanchor = IM_COL32(255, 215, 90, 110),
+            .tierFort = IM_COL32(230, 140, 80, 100),
+            .tierFacility = IM_COL32(170, 110, 240, 110),
+            .tierOutpost = IM_COL32(120, 200, 120, 90),
+            .tierUnknown = IM_COL32(220, 70, 70, 120),
+            .ownerMra = IM_COL32(80, 140, 255, 255),
+            .ownerAuc = IM_COL32(255, 170, 60, 255),
+            .ownerHlx = IM_COL32(200, 90, 255, 255),
+            .ownerNeutral = IM_COL32(150, 150, 150, 255),
+        };
+
+        /// @p colour with its alpha channel replaced by @p alpha (0-255).
+        constexpr ImU32 WithAlpha(ImU32 colour, unsigned alpha)
+        {
+            return (colour & ~IM_COL32_A_MASK) | (static_cast<ImU32>(alpha) << IM_COL32_A_SHIFT);
+        }
+
         ImU32 TierFillColor(const std::string& tier)
         {
             if (tier == "skyanchor")
-                return IM_COL32(255, 215, 90, 110);
+                return kRegionMapCanvasArt.tierSkyanchor;
             if (tier == "fort")
-                return IM_COL32(230, 140, 80, 100);
+                return kRegionMapCanvasArt.tierFort;
             if (tier == "facility")
-                return IM_COL32(170, 110, 240, 110);
+                return kRegionMapCanvasArt.tierFacility;
             if (tier == "outpost")
-                return IM_COL32(120, 200, 120, 90);
-            return IM_COL32(220, 70, 70, 120); // unknown tier: alarming red
+                return kRegionMapCanvasArt.tierOutpost;
+            return kRegionMapCanvasArt.tierUnknown;
         }
 
         ImU32 OwnerColor(const std::string& owner)
         {
             if (owner == "MRA")
-                return IM_COL32(80, 140, 255, 255);
+                return kRegionMapCanvasArt.ownerMra;
             if (owner == "AUC")
-                return IM_COL32(255, 170, 60, 255);
+                return kRegionMapCanvasArt.ownerAuc;
             if (owner == "HLX")
-                return IM_COL32(200, 90, 255, 255);
-            return IM_COL32(150, 150, 150, 255); // neutral / unassigned
+                return kRegionMapCanvasArt.ownerHlx;
+            return kRegionMapCanvasArt.ownerNeutral;
         }
 
         float TierWorldRadius(const std::string& tier)
@@ -279,17 +338,17 @@ namespace SparkEditor
 
         // ---- Drawing ----
         dl->PushClipRect(p0, p1, true);
-        dl->AddRectFilled(p0, p1, IM_COL32(24, 26, 30, 255));
+        dl->AddRectFilled(p0, p1, kRegionMapCanvasArt.background);
 
         // World bounds + coarse grid.
         const ImVec2 wMin = toScreen(0.0f, sizeM);
         const ImVec2 wMax = toScreen(sizeM, 0.0f);
-        dl->AddRect(wMin, wMax, IM_COL32(90, 95, 105, 200));
+        dl->AddRect(wMin, wMax, kRegionMapCanvasArt.worldBounds);
         const float gridStep = 512.0f;
         for (float g = gridStep; g < sizeM; g += gridStep)
         {
-            dl->AddLine(toScreen(g, 0.0f), toScreen(g, sizeM), IM_COL32(60, 63, 70, 120));
-            dl->AddLine(toScreen(0.0f, g), toScreen(sizeM, g), IM_COL32(60, 63, 70, 120));
+            dl->AddLine(toScreen(g, 0.0f), toScreen(g, sizeM), kRegionMapCanvasArt.grid);
+            dl->AddLine(toScreen(0.0f, g), toScreen(sizeM, g), kRegionMapCanvasArt.grid);
         }
 
         // Conduits underneath the regions.
@@ -300,14 +359,15 @@ namespace SparkEditor
                 continue;
             const Region& a = m_regions[static_cast<size_t>(c.first)];
             const Region& b = m_regions[static_cast<size_t>(c.second)];
-            dl->AddLine(toScreen(a.centerX, a.centerZ), toScreen(b.centerX, b.centerZ), IM_COL32(120, 180, 220, 160),
+            dl->AddLine(toScreen(a.centerX, a.centerZ), toScreen(b.centerX, b.centerZ), kRegionMapCanvasArt.conduit,
                         2.0f);
         }
         // Link-mode rubber band.
         if (m_linkMode && m_linkFirst >= 0 && m_linkFirst < static_cast<int>(m_regions.size()))
         {
             const Region& a = m_regions[static_cast<size_t>(m_linkFirst)];
-            dl->AddLine(toScreen(a.centerX, a.centerZ), io.MousePos, IM_COL32(255, 255, 120, 200), 1.5f);
+            dl->AddLine(toScreen(a.centerX, a.centerZ), io.MousePos, WithAlpha(kRegionMapCanvasArt.linkHighlight, 200),
+                        1.5f);
         }
 
         // Regions as pointy-top hexes.
@@ -329,40 +389,40 @@ namespace SparkEditor
             float thick = 2.0f;
             if (isLinkFirst)
             {
-                outline = IM_COL32(255, 255, 120, 255);
+                outline = kRegionMapCanvasArt.linkHighlight;
                 thick = 3.0f;
             }
             else if (isSel)
             {
-                outline = IM_COL32(255, 255, 255, 255);
+                outline = kRegionMapCanvasArt.selectedOutline;
                 thick = 3.0f;
             }
             dl->AddPolyline(pts, 6, outline, thick, ImDrawFlags_Closed);
 
             const std::string& label = r.name.empty() ? r.key : r.name;
             const ImVec2 ts = ImGui::CalcTextSize(label.c_str());
-            dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y + rpx + 2.0f), IM_COL32(225, 228, 235, 255), label.c_str());
+            dl->AddText(ImVec2(c.x - ts.x * 0.5f, c.y + rpx + 2.0f), kRegionMapCanvasArt.regionLabel, label.c_str());
 
             // Markers: capture points (yellow circles), spawns (green dots),
             // vehicle terminal (cyan square).
             for (const auto& cp : r.capturePoints)
             {
                 const ImVec2 sp = toScreen(cp[0], cp[1]);
-                dl->AddCircleFilled(sp, 5.0f, IM_COL32(250, 210, 70, 255));
-                dl->AddCircle(sp, 5.0f, IM_COL32(30, 30, 30, 255));
+                dl->AddCircleFilled(sp, 5.0f, kRegionMapCanvasArt.capturePoint);
+                dl->AddCircle(sp, 5.0f, kRegionMapCanvasArt.markerOutline);
             }
             for (const auto& sw : r.spawns)
             {
                 const ImVec2 sp = toScreen(sw[0], sw[1]);
-                dl->AddCircleFilled(sp, 3.5f, IM_COL32(110, 230, 110, 255));
+                dl->AddCircleFilled(sp, 3.5f, kRegionMapCanvasArt.spawn);
             }
             if (r.hasVehicleTerminal)
             {
                 const ImVec2 sp = toScreen(r.vehicleTerminal[0], r.vehicleTerminal[1]);
                 dl->AddRectFilled(ImVec2(sp.x - 4.5f, sp.y - 4.5f), ImVec2(sp.x + 4.5f, sp.y + 4.5f),
-                                  IM_COL32(90, 220, 235, 255));
+                                  kRegionMapCanvasArt.vehicleTerminal);
                 dl->AddRect(ImVec2(sp.x - 4.5f, sp.y - 4.5f), ImVec2(sp.x + 4.5f, sp.y + 4.5f),
-                            IM_COL32(30, 30, 30, 255));
+                            kRegionMapCanvasArt.markerOutline);
             }
         }
 
@@ -370,7 +430,7 @@ namespace SparkEditor
         const char* hint = m_linkMode ? (m_linkFirst >= 0 ? "Link mode: click the second region (click empty to cancel)"
                                                           : "Link mode: click the first region")
                                       : "Drag hexes/markers to move. Wheel = zoom, right/middle drag = pan.";
-        dl->AddText(ImVec2(p0.x + 6.0f, p0.y + 4.0f), IM_COL32(170, 175, 185, 255), hint);
+        dl->AddText(ImVec2(p0.x + 6.0f, p0.y + 4.0f), kRegionMapCanvasArt.hint, hint);
         dl->PopClipRect();
     }
 

@@ -6,12 +6,115 @@
 #include "ProjectSettingsPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Core/EngineSettings.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
+
+#include <array>
+#include <cstddef>
+#include <cstdio>
+#include <string_view>
+#include <utility>
+
 #include <imgui.h>
-#include <iostream>
 
 namespace SparkEditor
 {
+    namespace
+    {
+        constexpr const char* kResetPopupId = "Reset project settings?##ProjectSettings";
+
+        /**
+         * @brief RAII Spark::Ui property grid for one settings section.
+         *
+         * When BeginPropertyGrid() declines (clipped window) the rows still render, stacked, because
+         * PropertyLabel() falls back to the stacked layout without an open grid.
+         */
+        class ScopedPropertyGrid
+        {
+          public:
+            explicit ScopedPropertyGrid(const char* id) : m_open(Spark::Ui::BeginPropertyGrid(id)) {}
+            ~ScopedPropertyGrid()
+            {
+                if (m_open)
+                {
+                    Spark::Ui::EndPropertyGrid();
+                }
+            }
+            ScopedPropertyGrid(const ScopedPropertyGrid&) = delete;
+            ScopedPropertyGrid& operator=(const ScopedPropertyGrid&) = delete;
+
+          private:
+            bool m_open;
+        };
+
+        /**
+         * @brief Starts one property-grid row: the visible part of @p label (before any "##") goes
+         *        in the label column and Id() is the hidden id of the value-column control.
+         *
+         * Fixed buffers keep the per-frame row free of heap allocations; every label in this panel is
+         * a short literal well under the capacity (longer text is truncated, never overflowed).
+         */
+        class GridRow
+        {
+          public:
+            explicit GridRow(const char* label)
+            {
+                const std::string_view full(label);
+                const std::string_view visible = full.substr(0, full.find("##"));
+                std::snprintf(m_visible.data(), m_visible.size(), "%.*s", static_cast<int>(visible.size()),
+                              visible.data());
+                std::snprintf(m_id.data(), m_id.size(), "##%s", label);
+                Spark::Ui::PropertyLabel(m_visible.data());
+            }
+
+            [[nodiscard]] const char* Id() const { return m_id.data(); }
+
+          private:
+            static constexpr std::size_t kCapacity = 128;
+            std::array<char, kCapacity> m_visible{};
+            std::array<char, kCapacity + 2> m_id{};
+        };
+
+        /// Property-grid forms of the ImGui value widgets: same arguments, label drawn in the grid.
+        namespace Grid
+        {
+            template <typename... Args> bool DragFloat(const char* label, Args&&... args)
+            {
+                const GridRow row(label);
+                return ImGui::DragFloat(row.Id(), std::forward<Args>(args)...);
+            }
+
+            template <typename... Args> bool DragInt(const char* label, Args&&... args)
+            {
+                const GridRow row(label);
+                return ImGui::DragInt(row.Id(), std::forward<Args>(args)...);
+            }
+
+            template <typename... Args> bool SliderFloat(const char* label, Args&&... args)
+            {
+                const GridRow row(label);
+                return ImGui::SliderFloat(row.Id(), std::forward<Args>(args)...);
+            }
+
+            template <typename... Args> bool SliderInt(const char* label, Args&&... args)
+            {
+                const GridRow row(label);
+                return ImGui::SliderInt(row.Id(), std::forward<Args>(args)...);
+            }
+
+            bool Checkbox(const char* label, bool* value)
+            {
+                const GridRow row(label);
+                return ImGui::Checkbox(row.Id(), value);
+            }
+
+            template <typename... Args> bool Combo(const char* label, Args&&... args)
+            {
+                const GridRow row(label);
+                return ImGui::Combo(row.Id(), std::forward<Args>(args)...);
+            }
+        } // namespace Grid
+    } // namespace
 
     ProjectSettingsPanel::ProjectSettingsPanel() : EditorPanel("Project Settings", "project_settings_panel") {}
 
@@ -175,7 +278,12 @@ namespace SparkEditor
     {
         auto& settings = EngineSettings::GetInstance();
 
-        if (ImGui::Button(ICON_FA_SAVE " Save"))
+        if (!Spark::Ui::BeginPanelToolbar("##ProjectSettingsToolbar"))
+        {
+            return;
+        }
+
+        if (Spark::Ui::PrimaryButton(ICON_FA_SAVE " Save"))
         {
             // Save() reports whether the atomic write actually landed; a read-only or
             // locked settings file must keep the dirty flag and surface the failure.
@@ -193,7 +301,15 @@ namespace SparkEditor
         }
 
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_UNDO " Reset to Defaults"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_UNDO " Reset to Defaults"))
+        {
+            ImGui::OpenPopup(kResetPopupId);
+        }
+        // Resetting overwrites every category in memory, so it asks first; Save still has to follow.
+        if (Spark::Ui::ConfirmDestructive(kResetPopupId, "Reset project settings?",
+                                          "Every settings category returns to its engine default. Nothing is written "
+                                          "to disk until you press Save.",
+                                          "Reset to Defaults"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Project settings reset to defaults");
             settings.ResetToDefaults();
@@ -203,14 +319,18 @@ namespace SparkEditor
         if (m_modified)
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), ICON_FA_EXCLAMATION_TRIANGLE " Unsaved changes");
+            ImGui::AlignTextToFramePadding();
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Unsaved changes");
         }
 
         if (!m_saveError.empty())
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1, 0.35f, 0.3f, 1), ICON_FA_EXCLAMATION_TRIANGLE " %s", m_saveError.c_str());
+            ImGui::AlignTextToFramePadding();
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", m_saveError.c_str());
         }
+
+        Spark::Ui::EndPanelToolbar();
     }
 
     // =========================================================================
@@ -220,21 +340,22 @@ namespace SparkEditor
     void ProjectSettingsPanel::RenderGraphicsTab()
     {
         auto& gfx = EngineSettings::GetInstance().Graphics();
+        const ScopedPropertyGrid grid("Graphics");
 
-        if (ImGui::DragInt("Window Width", &gfx.windowWidth, 1, 640, 7680))
+        if (Grid::DragInt("Window Width", &gfx.windowWidth, 1, 640, 7680))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Graphics: window width changed to %d", gfx.windowWidth);
             m_modified = true;
         }
-        if (ImGui::DragInt("Window Height", &gfx.windowHeight, 1, 480, 4320))
+        if (Grid::DragInt("Window Height", &gfx.windowHeight, 1, 480, 4320))
             m_modified = true;
-        if (ImGui::Checkbox("Fullscreen", &gfx.fullscreen))
+        if (Grid::Checkbox("Fullscreen", &gfx.fullscreen))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "Graphics: fullscreen %s",
                            gfx.fullscreen ? "enabled" : "disabled");
             m_modified = true;
         }
-        if (ImGui::Checkbox("VSync", &gfx.vsync))
+        if (Grid::Checkbox("VSync", &gfx.vsync))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Graphics: VSync %s", gfx.vsync ? "enabled" : "disabled");
             m_modified = true;
@@ -248,7 +369,7 @@ namespace SparkEditor
             aaIndex = 2;
         else if (gfx.antiAliasing >= 8)
             aaIndex = 3;
-        if (ImGui::Combo("Anti-Aliasing", &aaIndex, aaItems, 4))
+        if (Grid::Combo("Anti-Aliasing", &aaIndex, aaItems, 4))
         {
             const int aaMap[] = {1, 2, 4, 8};
             gfx.antiAliasing = aaMap[aaIndex];
@@ -256,12 +377,12 @@ namespace SparkEditor
         }
 
         const char* shadowItems[] = {"Off", "Low", "Medium", "High"};
-        if (ImGui::Combo("Shadow Quality", &gfx.shadowQuality, shadowItems, 4))
+        if (Grid::Combo("Shadow Quality", &gfx.shadowQuality, shadowItems, 4))
             m_modified = true;
 
-        if (ImGui::SliderFloat("Render Scale", &gfx.renderScale, 0.25f, 2.0f, "%.2f"))
+        if (Grid::SliderFloat("Render Scale", &gfx.renderScale, 0.25f, 2.0f, "%.2f"))
             m_modified = true;
-        if (ImGui::Checkbox("HDR", &gfx.hdr))
+        if (Grid::Checkbox("HDR", &gfx.hdr))
             m_modified = true;
     }
 
@@ -274,10 +395,11 @@ namespace SparkEditor
         auto& r = EngineSettings::GetInstance().Rendering();
         auto& game = EngineSettings::GetInstance().Game();
 
-        if (ImGui::CollapsingHeader("Pipeline", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Pipeline"))
         {
+            const ScopedPropertyGrid grid("Pipeline");
             const char* pathItems[] = {"Forward", "Deferred", "Forward+", "Clustered"};
-            if (ImGui::Combo("Render Path", &r.renderPath, pathItems, 4))
+            if (Grid::Combo("Render Path", &r.renderPath, pathItems, 4))
             {
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "Rendering: render path changed to %s",
                                pathItems[r.renderPath]);
@@ -285,17 +407,18 @@ namespace SparkEditor
             }
 
             const char* presetItems[] = {"Low", "Medium", "High", "Ultra", "Custom"};
-            if (ImGui::Combo("Quality Preset", &r.qualityPreset, presetItems, 5))
+            if (Grid::Combo("Quality Preset", &r.qualityPreset, presetItems, 5))
                 m_modified = true;
 
-            if (ImGui::Checkbox("Show FPS", &game.showFPS))
+            if (Grid::Checkbox("Show FPS", &game.showFPS))
                 m_modified = true;
-            if (ImGui::Checkbox("Show Debug Info", &game.showDebugInfo))
+            if (Grid::Checkbox("Show Debug Info", &game.showDebugInfo))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Textures & Filtering"))
+        if (Spark::Ui::SectionHeader("Textures & Filtering", nullptr, false))
         {
+            const ScopedPropertyGrid grid("Textures & Filtering");
             const char* texSizes[] = {"512", "1024", "2048", "4096", "8192"};
             int texIdx = 2;
             if (r.maxTextureSize <= 512)
@@ -308,24 +431,25 @@ namespace SparkEditor
                 texIdx = 3;
             else
                 texIdx = 4;
-            if (ImGui::Combo("Max Texture Size", &texIdx, texSizes, 5))
+            if (Grid::Combo("Max Texture Size", &texIdx, texSizes, 5))
             {
                 const int sizes[] = {512, 1024, 2048, 4096, 8192};
                 r.maxTextureSize = sizes[texIdx];
                 m_modified = true;
             }
-            if (ImGui::Checkbox("Anisotropic Filtering", &r.anisotropicFiltering))
+            if (Grid::Checkbox("Anisotropic Filtering", &r.anisotropicFiltering))
                 m_modified = true;
             if (r.anisotropicFiltering)
             {
-                if (ImGui::SliderInt("Anisotropy Level", &r.anisotropyLevel, 1, 16))
+                if (Grid::SliderInt("Anisotropy Level", &r.anisotropyLevel, 1, 16))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Shadows & Lighting"))
+        if (Spark::Ui::SectionHeader("Shadows & Lighting", nullptr, false))
         {
-            if (ImGui::Checkbox("Shadows", &r.shadows))
+            const ScopedPropertyGrid grid("Shadows & Lighting");
+            if (Grid::Checkbox("Shadows", &r.shadows))
                 m_modified = true;
             if (r.shadows)
             {
@@ -339,72 +463,77 @@ namespace SparkEditor
                     sIdx = 2;
                 else
                     sIdx = 3;
-                if (ImGui::Combo("Shadow Map Size", &sIdx, shadowSizes, 4))
+                if (Grid::Combo("Shadow Map Size", &sIdx, shadowSizes, 4))
                 {
                     const int sizes[] = {512, 1024, 2048, 4096};
                     r.shadowMapSize = sizes[sIdx];
                     m_modified = true;
                 }
-                if (ImGui::SliderInt("Cascade Count", &r.cascadeCount, 1, 4))
+                if (Grid::SliderInt("Cascade Count", &r.cascadeCount, 1, 4))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Effects Toggles"))
+        if (Spark::Ui::SectionHeader("Effects Toggles", nullptr, false))
         {
-            if (ImGui::Checkbox("Bloom", &r.bloom))
+            const ScopedPropertyGrid grid("Effects Toggles");
+            if (Grid::Checkbox("Bloom", &r.bloom))
                 m_modified = true;
-            if (ImGui::Checkbox("SSAO", &r.ssao))
+            if (Grid::Checkbox("SSAO", &r.ssao))
                 m_modified = true;
-            if (ImGui::Checkbox("TAA", &r.taa))
+            if (Grid::Checkbox("TAA", &r.taa))
                 m_modified = true;
-            if (ImGui::Checkbox("Motion Blur", &r.motionBlur))
+            if (Grid::Checkbox("Motion Blur", &r.motionBlur))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Culling & LOD"))
+        if (Spark::Ui::SectionHeader("Culling & LOD", nullptr, false))
         {
-            if (ImGui::Checkbox("Frustum Culling", &r.frustumCulling))
+            const ScopedPropertyGrid grid("Culling & LOD");
+            if (Grid::Checkbox("Frustum Culling", &r.frustumCulling))
                 m_modified = true;
-            if (ImGui::Checkbox("Occlusion Culling", &r.occlusionCulling))
+            if (Grid::Checkbox("Occlusion Culling", &r.occlusionCulling))
                 m_modified = true;
-            if (ImGui::Checkbox("Portal Culling", &r.portalCulling))
+            if (Grid::Checkbox("Portal Culling", &r.portalCulling))
                 m_modified = true;
-            if (ImGui::Checkbox("Level of Detail", &r.levelOfDetail))
+            if (Grid::Checkbox("Level of Detail", &r.levelOfDetail))
                 m_modified = true;
-            if (ImGui::DragInt("Max Draw Calls", &r.maxDrawCalls, 10, 100, 100000))
+            if (Grid::DragInt("Max Draw Calls", &r.maxDrawCalls, 10, 100, 100000))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Dynamic Quality Scaler"))
+        if (Spark::Ui::SectionHeader("Dynamic Quality Scaler", nullptr, false))
         {
+            const ScopedPropertyGrid grid("Dynamic Quality Scaler");
             auto& dq = EngineSettings::GetInstance().DynamicQuality();
-            if (ImGui::Checkbox("Dynamic Quality Enabled", &dq.enabled))
+            if (Grid::Checkbox("Dynamic Quality Enabled", &dq.enabled))
                 m_modified = true;
             if (dq.enabled)
             {
-                if (ImGui::DragFloat("Target Frame Time", &dq.targetFrameTimeMs, 0.5f, 4.0f, 66.0f, "%.1f ms"))
+                if (Grid::DragFloat("Target Frame Time", &dq.targetFrameTimeMs, 0.5f, 4.0f, 66.0f, "%.1f ms"))
                     m_modified = true;
-                ImGui::Text("Render Scale: %.2f - %.2f (step %.2f)", dq.minRenderScale, dq.maxRenderScale,
-                            dq.renderScaleStep);
-                if (ImGui::DragFloat("Min Render Scale", &dq.minRenderScale, 0.05f, 0.25f, dq.maxRenderScale))
+                Spark::Ui::PropertyLabel("Render Scale Range");
+                Spark::Ui::MonoText("%.2f - %.2f (step %.2f)", dq.minRenderScale, dq.maxRenderScale,
+                                    dq.renderScaleStep);
+                if (Grid::DragFloat("Min Render Scale", &dq.minRenderScale, 0.05f, 0.25f, dq.maxRenderScale))
                     m_modified = true;
-                if (ImGui::DragFloat("Max Render Scale", &dq.maxRenderScale, 0.05f, dq.minRenderScale, 2.0f))
+                if (Grid::DragFloat("Max Render Scale", &dq.maxRenderScale, 0.05f, dq.minRenderScale, 2.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Shadow Scale Min", &dq.minShadowScale, 0.05f, 0.1f, dq.maxShadowScale))
+                if (Grid::DragFloat("Shadow Scale Min", &dq.minShadowScale, 0.05f, 0.1f, dq.maxShadowScale))
                     m_modified = true;
-                if (ImGui::DragFloat("Shadow Scale Max", &dq.maxShadowScale, 0.05f, dq.minShadowScale, 1.0f))
+                if (Grid::DragFloat("Shadow Scale Max", &dq.maxShadowScale, 0.05f, dq.minShadowScale, 1.0f))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Debug"))
+        if (Spark::Ui::SectionHeader("Debug", nullptr, false))
         {
-            if (ImGui::Checkbox("Wireframe Mode", &r.wireframeMode))
+            const ScopedPropertyGrid grid("Debug");
+            if (Grid::Checkbox("Wireframe Mode", &r.wireframeMode))
                 m_modified = true;
-            if (ImGui::Checkbox("Debug Mode", &r.debugMode))
+            if (Grid::Checkbox("Debug Mode", &r.debugMode))
                 m_modified = true;
-            if (ImGui::Checkbox("GPU Timing", &r.enableGPUTiming))
+            if (Grid::Checkbox("GPU Timing", &r.enableGPUTiming))
                 m_modified = true;
         }
     }
@@ -422,155 +551,163 @@ namespace SparkEditor
         auto& taa = EngineSettings::GetInstance().TAA();
         auto& mb = EngineSettings::GetInstance().MotionBlur();
 
-        if (ImGui::CollapsingHeader("Bloom", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Bloom"))
         {
-            if (ImGui::Checkbox("Bloom Enabled", &pp.bloomEnabled))
+            const ScopedPropertyGrid grid("Bloom");
+            if (Grid::Checkbox("Bloom Enabled", &pp.bloomEnabled))
                 m_modified = true;
             if (pp.bloomEnabled)
             {
-                if (ImGui::DragFloat("Threshold", &pp.bloomThreshold, 0.05f, 0.0f, 10.0f))
+                if (Grid::DragFloat("Threshold", &pp.bloomThreshold, 0.05f, 0.0f, 10.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Intensity##Bloom", &pp.bloomIntensity, 0.05f, 0.0f, 10.0f))
+                if (Grid::DragFloat("Intensity##Bloom", &pp.bloomIntensity, 0.05f, 0.0f, 10.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Radius", &pp.bloomRadius, 0.1f, 0.0f, 10.0f))
+                if (Grid::DragFloat("Radius", &pp.bloomRadius, 0.1f, 0.0f, 10.0f))
                     m_modified = true;
-                if (ImGui::SliderFloat("Soft Knee", &pp.bloomSoftKnee, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Soft Knee", &pp.bloomSoftKnee, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::SliderInt("Iterations", &pp.bloomIterations, 1, 16))
+                if (Grid::SliderInt("Iterations", &pp.bloomIterations, 1, 16))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Tone Mapping"))
+        if (Spark::Ui::SectionHeader("Tone Mapping", nullptr, false))
         {
+            const ScopedPropertyGrid grid("Tone Mapping");
             const char* tmItems[] = {"None", "Reinhard", "ReinhardJodie", "Uncharted2", "ACES", "AgX", "FilmicALU"};
-            if (ImGui::Combo("Operator", &pp.toneMappingOperator, tmItems, 7))
+            if (Grid::Combo("Operator", &pp.toneMappingOperator, tmItems, 7))
                 m_modified = true;
-            if (ImGui::DragFloat("Exposure", &pp.exposure, 0.05f, 0.01f, 20.0f))
+            if (Grid::DragFloat("Exposure", &pp.exposure, 0.05f, 0.01f, 20.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Gamma", &pp.gamma, 0.05f, 0.5f, 5.0f))
+            if (Grid::DragFloat("Gamma", &pp.gamma, 0.05f, 0.5f, 5.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("White Point", &pp.whitePoint, 0.1f, 1.0f, 50.0f))
+            if (Grid::DragFloat("White Point", &pp.whitePoint, 0.1f, 1.0f, 50.0f))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Color Grading"))
+        if (Spark::Ui::SectionHeader("Color Grading", nullptr, false))
         {
-            if (ImGui::Checkbox("Color Grading Enabled", &pp.colorGradingEnabled))
+            const ScopedPropertyGrid grid("Color Grading");
+            if (Grid::Checkbox("Color Grading Enabled", &pp.colorGradingEnabled))
                 m_modified = true;
             if (pp.colorGradingEnabled)
             {
-                if (ImGui::SliderFloat("Temperature", &pp.temperature, -1.0f, 1.0f))
+                if (Grid::SliderFloat("Temperature", &pp.temperature, -1.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::SliderFloat("Tint", &pp.tint, -1.0f, 1.0f))
+                if (Grid::SliderFloat("Tint", &pp.tint, -1.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Contrast", &pp.contrast, 0.01f, 0.0f, 3.0f))
+                if (Grid::DragFloat("Contrast", &pp.contrast, 0.01f, 0.0f, 3.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Brightness", &pp.brightness, 0.01f, -1.0f, 1.0f))
+                if (Grid::DragFloat("Brightness", &pp.brightness, 0.01f, -1.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Saturation", &pp.saturation, 0.01f, 0.0f, 3.0f))
+                if (Grid::DragFloat("Saturation", &pp.saturation, 0.01f, 0.0f, 3.0f))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("SSAO"))
+        if (Spark::Ui::SectionHeader("SSAO", nullptr, false))
         {
-            if (ImGui::Checkbox("SSAO Enabled", &ssao.enabled))
+            const ScopedPropertyGrid grid("SSAO");
+            if (Grid::Checkbox("SSAO Enabled", &ssao.enabled))
                 m_modified = true;
             if (ssao.enabled)
             {
-                if (ImGui::DragFloat("Radius##SSAO", &ssao.radius, 0.05f, 0.01f, 5.0f))
+                if (Grid::DragFloat("Radius##SSAO", &ssao.radius, 0.05f, 0.01f, 5.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Intensity##SSAO", &ssao.intensity, 0.05f, 0.0f, 5.0f))
+                if (Grid::DragFloat("Intensity##SSAO", &ssao.intensity, 0.05f, 0.0f, 5.0f))
                     m_modified = true;
-                if (ImGui::SliderInt("Sample Count##SSAO", &ssao.sampleCount, 4, 64))
+                if (Grid::SliderInt("Sample Count##SSAO", &ssao.sampleCount, 4, 64))
                     m_modified = true;
-                if (ImGui::DragFloat("Bias", &ssao.bias, 0.005f, 0.0f, 0.5f, "%.3f"))
+                if (Grid::DragFloat("Bias", &ssao.bias, 0.005f, 0.0f, 0.5f, "%.3f"))
                     m_modified = true;
-                if (ImGui::Checkbox("Blur##SSAO", &ssao.blur))
+                if (Grid::Checkbox("Blur##SSAO", &ssao.blur))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Screen-Space Reflections"))
+        if (Spark::Ui::SectionHeader("Screen-Space Reflections", nullptr, false))
         {
-            if (ImGui::Checkbox("SSR Enabled", &ssr.enabled))
+            const ScopedPropertyGrid grid("Screen-Space Reflections");
+            if (Grid::Checkbox("SSR Enabled", &ssr.enabled))
                 m_modified = true;
             if (ssr.enabled)
             {
-                if (ImGui::DragFloat("Max Distance##SSR", &ssr.maxDistance, 1.0f, 1.0f, 500.0f))
+                if (Grid::DragFloat("Max Distance##SSR", &ssr.maxDistance, 1.0f, 1.0f, 500.0f))
                     m_modified = true;
-                if (ImGui::SliderInt("Max Steps##SSR", &ssr.maxSteps, 8, 256))
+                if (Grid::SliderInt("Max Steps##SSR", &ssr.maxSteps, 8, 256))
                     m_modified = true;
-                if (ImGui::DragFloat("Thickness##SSR", &ssr.thickness, 0.05f, 0.01f, 5.0f))
+                if (Grid::DragFloat("Thickness##SSR", &ssr.thickness, 0.05f, 0.01f, 5.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Fade Start", &ssr.fadeStart, 1.0f, 0.0f, ssr.fadeEnd))
+                if (Grid::DragFloat("Fade Start", &ssr.fadeStart, 1.0f, 0.0f, ssr.fadeEnd))
                     m_modified = true;
-                if (ImGui::DragFloat("Fade End", &ssr.fadeEnd, 1.0f, ssr.fadeStart, 500.0f))
+                if (Grid::DragFloat("Fade End", &ssr.fadeEnd, 1.0f, ssr.fadeStart, 500.0f))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Volumetric Lighting"))
+        if (Spark::Ui::SectionHeader("Volumetric Lighting", nullptr, false))
         {
-            if (ImGui::Checkbox("Volumetric Enabled", &vol.enabled))
+            const ScopedPropertyGrid grid("Volumetric Lighting");
+            if (Grid::Checkbox("Volumetric Enabled", &vol.enabled))
                 m_modified = true;
             if (vol.enabled)
             {
-                if (ImGui::SliderInt("Sample Count##Vol", &vol.sampleCount, 8, 128))
+                if (Grid::SliderInt("Sample Count##Vol", &vol.sampleCount, 8, 128))
                     m_modified = true;
-                if (ImGui::DragFloat("Scattering", &vol.scattering, 0.01f, 0.0f, 1.0f))
+                if (Grid::DragFloat("Scattering", &vol.scattering, 0.01f, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Extinction", &vol.extinction, 0.001f, 0.0f, 0.1f, "%.4f"))
+                if (Grid::DragFloat("Extinction", &vol.extinction, 0.001f, 0.0f, 0.1f, "%.4f"))
                     m_modified = true;
-                if (ImGui::SliderFloat("Anisotropy##Vol", &vol.anisotropy, -1.0f, 1.0f))
+                if (Grid::SliderFloat("Anisotropy##Vol", &vol.anisotropy, -1.0f, 1.0f))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Temporal Anti-Aliasing"))
+        if (Spark::Ui::SectionHeader("Temporal Anti-Aliasing", nullptr, false))
         {
-            if (ImGui::Checkbox("TAA Enabled", &taa.enabled))
+            const ScopedPropertyGrid grid("Temporal Anti-Aliasing");
+            if (Grid::Checkbox("TAA Enabled", &taa.enabled))
                 m_modified = true;
             if (taa.enabled)
             {
                 const char* qualItems[] = {"Low", "Medium", "High", "Ultra"};
-                if (ImGui::Combo("Quality##TAA", &taa.quality, qualItems, 4))
+                if (Grid::Combo("Quality##TAA", &taa.quality, qualItems, 4))
                     m_modified = true;
                 const char* jitterItems[] = {"Halton 2,3", "Blue Noise", "Uniform 8x", "Interleaved Gradient"};
-                if (ImGui::Combo("Jitter Pattern", &taa.jitterPattern, jitterItems, 4))
+                if (Grid::Combo("Jitter Pattern", &taa.jitterPattern, jitterItems, 4))
                     m_modified = true;
-                if (ImGui::SliderFloat("History Blend", &taa.historyBlendFactor, 0.0f, 1.0f))
+                if (Grid::SliderFloat("History Blend", &taa.historyBlendFactor, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::SliderFloat("Sharpness##TAA", &taa.sharpness, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Sharpness##TAA", &taa.sharpness, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::SliderFloat("Ghosting Rejection", &taa.ghostingRejectionStrength, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Ghosting Rejection", &taa.ghostingRejectionStrength, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::SliderFloat("Flicker Reduction", &taa.flickerReduction, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Flicker Reduction", &taa.flickerReduction, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::Checkbox("Use Motion Vectors", &taa.useMotionVectors))
+                if (Grid::Checkbox("Use Motion Vectors", &taa.useMotionVectors))
                     m_modified = true;
-                if (ImGui::Checkbox("Use YCoCg", &taa.useYCoCg))
+                if (Grid::Checkbox("Use YCoCg", &taa.useYCoCg))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Motion Blur"))
+        if (Spark::Ui::SectionHeader("Motion Blur", nullptr, false))
         {
-            if (ImGui::Checkbox("Motion Blur Enabled", &mb.enabled))
+            const ScopedPropertyGrid grid("Motion Blur");
+            if (Grid::Checkbox("Motion Blur Enabled", &mb.enabled))
                 m_modified = true;
             if (mb.enabled)
             {
                 const char* mbTypes[] = {"Camera Only", "Per-Object", "Combined"};
-                if (ImGui::Combo("Type##MB", &mb.type, mbTypes, 3))
+                if (Grid::Combo("Type##MB", &mb.type, mbTypes, 3))
                     m_modified = true;
-                if (ImGui::SliderFloat("Intensity##MB", &mb.intensity, 0.0f, 2.0f))
+                if (Grid::SliderFloat("Intensity##MB", &mb.intensity, 0.0f, 2.0f))
                     m_modified = true;
-                if (ImGui::SliderInt("Sample Count##MB", &mb.sampleCount, 2, 32))
+                if (Grid::SliderInt("Sample Count##MB", &mb.sampleCount, 2, 32))
                     m_modified = true;
-                if (ImGui::DragFloat("Max Blur Radius", &mb.maxBlurRadius, 1.0f, 1.0f, 128.0f))
+                if (Grid::DragFloat("Max Blur Radius", &mb.maxBlurRadius, 1.0f, 1.0f, 128.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Velocity Scale", &mb.velocityScale, 0.1f, 0.0f, 10.0f))
+                if (Grid::DragFloat("Velocity Scale", &mb.velocityScale, 0.1f, 0.0f, 10.0f))
                     m_modified = true;
             }
         }
@@ -585,33 +722,35 @@ namespace SparkEditor
         auto& audio = EngineSettings::GetInstance().Audio();
         auto& ext = EngineSettings::GetInstance().AudioExtended();
 
-        if (ImGui::CollapsingHeader("Volume", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Volume"))
         {
-            if (ImGui::SliderFloat("Master Volume", &audio.masterVolume, 0.0f, 1.0f))
+            const ScopedPropertyGrid grid("Volume");
+            if (Grid::SliderFloat("Master Volume", &audio.masterVolume, 0.0f, 1.0f))
                 m_modified = true;
-            if (ImGui::SliderFloat("SFX Volume", &audio.sfxVolume, 0.0f, 1.0f))
+            if (Grid::SliderFloat("SFX Volume", &audio.sfxVolume, 0.0f, 1.0f))
                 m_modified = true;
-            if (ImGui::SliderFloat("Music Volume", &audio.musicVolume, 0.0f, 1.0f))
+            if (Grid::SliderFloat("Music Volume", &audio.musicVolume, 0.0f, 1.0f))
                 m_modified = true;
-            if (ImGui::SliderFloat("Voice Volume", &audio.voiceVolume, 0.0f, 1.0f))
+            if (Grid::SliderFloat("Voice Volume", &audio.voiceVolume, 0.0f, 1.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Mute on Focus Loss", &audio.muteOnFocusLoss))
+            if (Grid::Checkbox("Mute on Focus Loss", &audio.muteOnFocusLoss))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("3D Audio & Effects"))
+        if (Spark::Ui::SectionHeader("3D Audio & Effects", nullptr, false))
         {
-            if (ImGui::Checkbox("Enable 3D Audio", &ext.enable3D))
+            const ScopedPropertyGrid grid("3D Audio & Effects");
+            if (Grid::Checkbox("Enable 3D Audio", &ext.enable3D))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Reverb", &ext.enableReverb))
+            if (Grid::Checkbox("Enable Reverb", &ext.enableReverb))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable EAX", &ext.enableEAX))
+            if (Grid::Checkbox("Enable EAX", &ext.enableEAX))
                 m_modified = true;
-            if (ImGui::DragFloat("Doppler Scale", &ext.dopplerScale, 0.1f, 0.0f, 10.0f))
+            if (Grid::DragFloat("Doppler Scale", &ext.dopplerScale, 0.1f, 0.0f, 10.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Distance Scale", &ext.distanceScale, 0.1f, 0.1f, 100.0f))
+            if (Grid::DragFloat("Distance Scale", &ext.distanceScale, 0.1f, 0.1f, 100.0f))
                 m_modified = true;
-            if (ImGui::DragInt("Max Sources", &ext.maxSources, 1, 8, 256))
+            if (Grid::DragInt("Max Sources", &ext.maxSources, 1, 8, 256))
                 m_modified = true;
         }
     }
@@ -625,36 +764,39 @@ namespace SparkEditor
         auto& ctrl = EngineSettings::GetInstance().Controls();
         auto& game = EngineSettings::GetInstance().Game();
 
-        if (ImGui::CollapsingHeader("Mouse", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Mouse"))
         {
-            if (ImGui::DragFloat("Sensitivity", &ctrl.mouseSensitivity, 0.05f, 0.05f, 10.0f))
+            const ScopedPropertyGrid grid("Mouse");
+            if (Grid::DragFloat("Sensitivity", &ctrl.mouseSensitivity, 0.05f, 0.05f, 10.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Invert Mouse Y", &ctrl.invertMouseY))
+            if (Grid::Checkbox("Invert Mouse Y", &ctrl.invertMouseY))
                 m_modified = true;
-            if (ImGui::DragFloat("Dead Zone", &ctrl.mouseDeadZone, 0.01f, 0.0f, 0.5f))
+            if (Grid::DragFloat("Dead Zone", &ctrl.mouseDeadZone, 0.01f, 0.0f, 0.5f))
                 m_modified = true;
-            if (ImGui::Checkbox("Raw Mouse Input", &ctrl.rawMouseInput))
+            if (Grid::Checkbox("Raw Mouse Input", &ctrl.rawMouseInput))
                 m_modified = true;
-            if (ImGui::Checkbox("Mouse Acceleration", &ctrl.mouseAcceleration))
+            if (Grid::Checkbox("Mouse Acceleration", &ctrl.mouseAcceleration))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Controller"))
+        if (Spark::Ui::SectionHeader("Controller", nullptr, false))
         {
-            if (ImGui::DragFloat("Left Stick Dead Zone", &ctrl.controllerDeadZoneLeft, 0.01f, 0.0f, 0.5f))
+            const ScopedPropertyGrid grid("Controller");
+            if (Grid::DragFloat("Left Stick Dead Zone", &ctrl.controllerDeadZoneLeft, 0.01f, 0.0f, 0.5f))
                 m_modified = true;
-            if (ImGui::DragFloat("Right Stick Dead Zone", &ctrl.controllerDeadZoneRight, 0.01f, 0.0f, 0.5f))
+            if (Grid::DragFloat("Right Stick Dead Zone", &ctrl.controllerDeadZoneRight, 0.01f, 0.0f, 0.5f))
                 m_modified = true;
-            if (ImGui::DragFloat("Controller Sensitivity", &ctrl.controllerSensitivity, 0.1f, 0.1f, 10.0f))
+            if (Grid::DragFloat("Controller Sensitivity", &ctrl.controllerSensitivity, 0.1f, 0.1f, 10.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Controller Vibration", &ctrl.controllerVibration))
+            if (Grid::Checkbox("Controller Vibration", &ctrl.controllerVibration))
                 m_modified = true;
-            if (ImGui::Checkbox("Invert Controller Y", &ctrl.invertControllerY))
+            if (Grid::Checkbox("Invert Controller Y", &ctrl.invertControllerY))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Game Display"))
+        if (Spark::Ui::SectionHeader("Game Display", nullptr, false))
         {
+            const ScopedPropertyGrid grid("Game Display");
             const char* diffItems[] = {"Easy", "Normal", "Hard", "Nightmare"};
             int diffIdx = 1;
             if (game.difficulty == "Easy")
@@ -663,13 +805,13 @@ namespace SparkEditor
                 diffIdx = 2;
             else if (game.difficulty == "Nightmare")
                 diffIdx = 3;
-            if (ImGui::Combo("Difficulty", &diffIdx, diffItems, 4))
+            if (Grid::Combo("Difficulty", &diffIdx, diffItems, 4))
             {
                 const char* diffNames[] = {"Easy", "Normal", "Hard", "Nightmare"};
                 game.difficulty = diffNames[diffIdx];
                 m_modified = true;
             }
-            if (ImGui::DragFloat("Field of View", &game.fieldOfView, 1.0f, 30.0f, 150.0f, "%.0f"))
+            if (Grid::DragFloat("Field of View", &game.fieldOfView, 1.0f, 30.0f, 150.0f, "%.0f"))
                 m_modified = true;
         }
     }
@@ -682,24 +824,28 @@ namespace SparkEditor
     {
         auto& phys = EngineSettings::GetInstance().Physics();
 
-        ImGui::Text("Gravity");
-        if (ImGui::DragFloat("Gravity X", &phys.gravityX, 0.1f, -100.0f, 100.0f))
-            m_modified = true;
-        if (ImGui::DragFloat("Gravity Y", &phys.gravityY, 0.1f, -100.0f, 100.0f))
-            m_modified = true;
-        if (ImGui::DragFloat("Gravity Z", &phys.gravityZ, 0.1f, -100.0f, 100.0f))
-            m_modified = true;
+        Spark::Ui::SubHeader("Gravity");
+        {
+            const ScopedPropertyGrid grid("Gravity");
+            if (Grid::DragFloat("Gravity X", &phys.gravityX, 0.1f, -100.0f, 100.0f))
+                m_modified = true;
+            if (Grid::DragFloat("Gravity Y", &phys.gravityY, 0.1f, -100.0f, 100.0f))
+                m_modified = true;
+            if (Grid::DragFloat("Gravity Z", &phys.gravityZ, 0.1f, -100.0f, 100.0f))
+                m_modified = true;
+        }
 
-        ImGui::Separator();
-        if (ImGui::DragFloat("Fixed Timestep", &phys.fixedTimestep, 0.001f, 0.001f, 0.1f, "%.4f"))
+        Spark::Ui::SubHeader("Simulation");
+        const ScopedPropertyGrid grid("Simulation");
+        if (Grid::DragFloat("Fixed Timestep", &phys.fixedTimestep, 0.001f, 0.001f, 0.1f, "%.4f"))
             m_modified = true;
-        if (ImGui::DragInt("Max Sub-steps", &phys.maxSubSteps, 1, 1, 16))
+        if (Grid::DragInt("Max Sub-steps", &phys.maxSubSteps, 1, 1, 16))
             m_modified = true;
-        if (ImGui::DragFloat("Default Friction", &phys.defaultFriction, 0.01f, 0.0f, 1.0f))
+        if (Grid::DragFloat("Default Friction", &phys.defaultFriction, 0.01f, 0.0f, 1.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Default Restitution", &phys.defaultRestitution, 0.01f, 0.0f, 1.0f))
+        if (Grid::DragFloat("Default Restitution", &phys.defaultRestitution, 0.01f, 0.0f, 1.0f))
             m_modified = true;
-        if (ImGui::Checkbox("Debug Draw", &phys.debugDraw))
+        if (Grid::Checkbox("Debug Draw", &phys.debugDraw))
             m_modified = true;
     }
 
@@ -710,28 +856,29 @@ namespace SparkEditor
     void ProjectSettingsPanel::RenderAITab()
     {
         auto& ai = EngineSettings::GetInstance().AI();
+        const ScopedPropertyGrid grid("AI");
 
-        if (ImGui::DragFloat("Detection Range", &ai.detectionRange, 0.5f, 1.0f, 200.0f))
+        if (Grid::DragFloat("Detection Range", &ai.detectionRange, 0.5f, 1.0f, 200.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Attack Range", &ai.attackRange, 0.5f, 1.0f, 100.0f))
+        if (Grid::DragFloat("Attack Range", &ai.attackRange, 0.5f, 1.0f, 100.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Melee Range", &ai.meleeRange, 0.1f, 0.5f, 10.0f))
+        if (Grid::DragFloat("Melee Range", &ai.meleeRange, 0.1f, 0.5f, 10.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Move Speed", &ai.moveSpeed, 0.1f, 0.1f, 50.0f))
+        if (Grid::DragFloat("Move Speed", &ai.moveSpeed, 0.1f, 0.1f, 50.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Turn Speed", &ai.turnSpeed, 1.0f, 10.0f, 720.0f, "%.0f deg/s"))
+        if (Grid::DragFloat("Turn Speed", &ai.turnSpeed, 1.0f, 10.0f, 720.0f, "%.0f deg/s"))
             m_modified = true;
-        if (ImGui::SliderFloat("Accuracy", &ai.accuracy, 0.0f, 1.0f))
+        if (Grid::SliderFloat("Accuracy", &ai.accuracy, 0.0f, 1.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Reaction Time", &ai.reactionTime, 0.01f, 0.0f, 5.0f, "%.2f s"))
+        if (Grid::DragFloat("Reaction Time", &ai.reactionTime, 0.01f, 0.0f, 5.0f, "%.2f s"))
             m_modified = true;
-        if (ImGui::DragFloat("Cover Search Radius", &ai.coverSearchRadius, 0.5f, 1.0f, 100.0f))
+        if (Grid::DragFloat("Cover Search Radius", &ai.coverSearchRadius, 0.5f, 1.0f, 100.0f))
             m_modified = true;
-        if (ImGui::Checkbox("Can Strafe", &ai.canStrafe))
+        if (Grid::Checkbox("Can Strafe", &ai.canStrafe))
             m_modified = true;
-        if (ImGui::Checkbox("Can Sprint", &ai.canSprint))
+        if (Grid::Checkbox("Can Sprint", &ai.canSprint))
             m_modified = true;
-        if (ImGui::Checkbox("Can Use Cover", &ai.canUseCover))
+        if (Grid::Checkbox("Can Use Cover", &ai.canUseCover))
             m_modified = true;
     }
 
@@ -743,43 +890,46 @@ namespace SparkEditor
     {
         auto& p = EngineSettings::GetInstance().Player();
 
-        if (ImGui::CollapsingHeader("Health & Defense", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Health & Defense"))
         {
-            if (ImGui::DragFloat("Max Health", &p.maxHealth, 1.0f, 1.0f, 1000.0f))
+            const ScopedPropertyGrid grid("Health & Defense");
+            if (Grid::DragFloat("Max Health", &p.maxHealth, 1.0f, 1.0f, 1000.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Max Armor", &p.maxArmor, 1.0f, 0.0f, 1000.0f))
+            if (Grid::DragFloat("Max Armor", &p.maxArmor, 1.0f, 0.0f, 1000.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Max Shield", &p.maxShield, 1.0f, 0.0f, 500.0f))
+            if (Grid::DragFloat("Max Shield", &p.maxShield, 1.0f, 0.0f, 500.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Shield Recharge Rate", &p.shieldRechargeRate, 0.5f, 0.0f, 100.0f))
+            if (Grid::DragFloat("Shield Recharge Rate", &p.shieldRechargeRate, 0.5f, 0.0f, 100.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Shield Recharge Delay", &p.shieldRechargeDelay, 0.1f, 0.0f, 30.0f, "%.1f s"))
+            if (Grid::DragFloat("Shield Recharge Delay", &p.shieldRechargeDelay, 0.1f, 0.0f, 30.0f, "%.1f s"))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Movement", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Movement"))
         {
-            if (ImGui::DragFloat("Move Speed##Player", &p.moveSpeed, 0.1f, 0.1f, 50.0f))
+            const ScopedPropertyGrid grid("Movement");
+            if (Grid::DragFloat("Move Speed##Player", &p.moveSpeed, 0.1f, 0.1f, 50.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Jump Height", &p.jumpHeight, 0.1f, 0.0f, 20.0f))
+            if (Grid::DragFloat("Jump Height", &p.jumpHeight, 0.1f, 0.0f, 20.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Gravity Force", &p.gravityForce, 0.5f, 1.0f, 100.0f))
+            if (Grid::DragFloat("Gravity Force", &p.gravityForce, 0.5f, 1.0f, 100.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Friction##Player", &p.friction, 0.01f, 0.0f, 1.0f))
+            if (Grid::DragFloat("Friction##Player", &p.friction, 0.01f, 0.0f, 1.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Sprint Multiplier", &p.sprintMultiplier, 0.1f, 1.0f, 5.0f))
+            if (Grid::DragFloat("Sprint Multiplier", &p.sprintMultiplier, 0.1f, 1.0f, 5.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Crouch Multiplier", &p.crouchMultiplier, 0.05f, 0.1f, 1.0f))
+            if (Grid::DragFloat("Crouch Multiplier", &p.crouchMultiplier, 0.05f, 0.1f, 1.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("ADS Speed Multiplier", &p.adsSpeedMultiplier, 0.05f, 0.1f, 1.0f))
+            if (Grid::DragFloat("ADS Speed Multiplier", &p.adsSpeedMultiplier, 0.05f, 0.1f, 1.0f))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Energy"))
+        if (Spark::Ui::SectionHeader("Energy", nullptr, false))
         {
-            if (ImGui::DragFloat("Max Energy", &p.maxEnergy, 1.0f, 0.0f, 500.0f))
+            const ScopedPropertyGrid grid("Energy");
+            if (Grid::DragFloat("Max Energy", &p.maxEnergy, 1.0f, 0.0f, 500.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Energy Regen Rate", &p.energyRegenRate, 0.5f, 0.0f, 100.0f))
+            if (Grid::DragFloat("Energy Regen Rate", &p.energyRegenRate, 0.5f, 0.0f, 100.0f))
                 m_modified = true;
         }
     }
@@ -792,47 +942,50 @@ namespace SparkEditor
     {
         auto& gm = EngineSettings::GetInstance().GameMode();
 
-        if (ImGui::CollapsingHeader("Scoring", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Scoring"))
         {
-            if (ImGui::DragInt("Score Limit", &gm.scoreLimit, 1, 0, 1000))
+            const ScopedPropertyGrid grid("Scoring");
+            if (Grid::DragInt("Score Limit", &gm.scoreLimit, 1, 0, 1000))
                 m_modified = true;
-            if (ImGui::DragInt("Kill Points", &gm.killPoints, 1, 0, 500))
+            if (Grid::DragInt("Kill Points", &gm.killPoints, 1, 0, 500))
                 m_modified = true;
-            if (ImGui::DragInt("Assist Points", &gm.assistPoints, 1, 0, 500))
+            if (Grid::DragInt("Assist Points", &gm.assistPoints, 1, 0, 500))
                 m_modified = true;
-            if (ImGui::DragInt("Objective Points", &gm.objectivePoints, 1, 0, 1000))
+            if (Grid::DragInt("Objective Points", &gm.objectivePoints, 1, 0, 1000))
                 m_modified = true;
-            if (ImGui::DragInt("Headshot Bonus", &gm.headshotBonus, 1, 0, 200))
+            if (Grid::DragInt("Headshot Bonus", &gm.headshotBonus, 1, 0, 200))
                 m_modified = true;
-            if (ImGui::DragInt("Death Penalty", &gm.deathPenalty, 1, 0, 200))
+            if (Grid::DragInt("Death Penalty", &gm.deathPenalty, 1, 0, 200))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Rules", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Rules"))
         {
-            if (ImGui::DragInt("Round Limit", &gm.roundLimit, 1, 0, 100))
+            const ScopedPropertyGrid grid("Rules");
+            if (Grid::DragInt("Round Limit", &gm.roundLimit, 1, 0, 100))
                 m_modified = true;
-            if (ImGui::DragFloat("Time Limit", &gm.timeLimit, 1.0f, 0.0f, 3600.0f, "%.0f s"))
+            if (Grid::DragFloat("Time Limit", &gm.timeLimit, 1.0f, 0.0f, 3600.0f, "%.0f s"))
                 m_modified = true;
-            if (ImGui::DragFloat("Respawn Delay", &gm.respawnDelay, 0.1f, 0.0f, 30.0f, "%.1f s"))
+            if (Grid::DragFloat("Respawn Delay", &gm.respawnDelay, 0.1f, 0.0f, 30.0f, "%.1f s"))
                 m_modified = true;
-            if (ImGui::Checkbox("Auto Respawn", &gm.autoRespawn))
+            if (Grid::Checkbox("Auto Respawn", &gm.autoRespawn))
                 m_modified = true;
-            if (ImGui::Checkbox("Friendly Fire", &gm.friendlyFire))
+            if (Grid::Checkbox("Friendly Fire", &gm.friendlyFire))
                 m_modified = true;
-            if (ImGui::Checkbox("Headshots", &gm.headshots))
+            if (Grid::Checkbox("Headshots", &gm.headshots))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Multipliers"))
+        if (Spark::Ui::SectionHeader("Multipliers", nullptr, false))
         {
-            if (ImGui::DragFloat("Damage Multiplier", &gm.damageMultiplier, 0.1f, 0.1f, 10.0f))
+            const ScopedPropertyGrid grid("Multipliers");
+            if (Grid::DragFloat("Damage Multiplier", &gm.damageMultiplier, 0.1f, 0.1f, 10.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Health Multiplier", &gm.healthMultiplier, 0.1f, 0.1f, 10.0f))
+            if (Grid::DragFloat("Health Multiplier", &gm.healthMultiplier, 0.1f, 0.1f, 10.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Speed Multiplier", &gm.speedMultiplier, 0.1f, 0.1f, 10.0f))
+            if (Grid::DragFloat("Speed Multiplier", &gm.speedMultiplier, 0.1f, 0.1f, 10.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Headshot Multiplier", &gm.headshotMultiplier, 0.1f, 1.0f, 10.0f))
+            if (Grid::DragFloat("Headshot Multiplier", &gm.headshotMultiplier, 0.1f, 1.0f, 10.0f))
                 m_modified = true;
         }
     }
@@ -844,20 +997,21 @@ namespace SparkEditor
     void ProjectSettingsPanel::RenderCameraTab()
     {
         auto& cam = EngineSettings::GetInstance().Camera();
+        const ScopedPropertyGrid grid("Camera");
 
-        if (ImGui::DragFloat("Move Speed", &cam.moveSpeed, 0.1f, 0.1f, 100.0f))
+        if (Grid::DragFloat("Move Speed", &cam.moveSpeed, 0.1f, 0.1f, 100.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Rotation Speed", &cam.rotationSpeed, 0.1f, 0.1f, 20.0f))
+        if (Grid::DragFloat("Rotation Speed", &cam.rotationSpeed, 0.1f, 0.1f, 20.0f))
             m_modified = true;
-        if (ImGui::DragFloat("Default FOV", &cam.defaultFov, 1.0f, 30.0f, 150.0f, "%.0f"))
+        if (Grid::DragFloat("Default FOV", &cam.defaultFov, 1.0f, 30.0f, 150.0f, "%.0f"))
             m_modified = true;
-        if (ImGui::DragFloat("Zoomed FOV", &cam.zoomedFov, 1.0f, 10.0f, 90.0f, "%.0f"))
+        if (Grid::DragFloat("Zoomed FOV", &cam.zoomedFov, 1.0f, 10.0f, 90.0f, "%.0f"))
             m_modified = true;
-        if (ImGui::Checkbox("Smooth Movement", &cam.smoothMovement))
+        if (Grid::Checkbox("Smooth Movement", &cam.smoothMovement))
             m_modified = true;
-        if (ImGui::DragFloat("Near Plane", &cam.nearPlane, 0.01f, 0.001f, 10.0f, "%.3f"))
+        if (Grid::DragFloat("Near Plane", &cam.nearPlane, 0.01f, 0.001f, 10.0f, "%.3f"))
             m_modified = true;
-        if (ImGui::DragFloat("Far Plane", &cam.farPlane, 10.0f, 10.0f, 100000.0f, "%.0f"))
+        if (Grid::DragFloat("Far Plane", &cam.farPlane, 10.0f, 10.0f, 100000.0f, "%.0f"))
             m_modified = true;
     }
 
@@ -869,61 +1023,66 @@ namespace SparkEditor
     {
         auto& ed = EngineSettings::GetInstance().Editor();
 
-        if (ImGui::CollapsingHeader("Grid & Snapping", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Grid & Snapping"))
         {
-            if (ImGui::DragFloat("Grid Size", &ed.gridSize, 0.1f, 0.1f, 100.0f))
+            const ScopedPropertyGrid grid("Grid & Snapping");
+            if (Grid::DragFloat("Grid Size", &ed.gridSize, 0.1f, 0.1f, 100.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Snap to Grid", &ed.snapToGrid))
+            if (Grid::Checkbox("Snap to Grid", &ed.snapToGrid))
                 m_modified = true;
-            if (ImGui::Checkbox("Show Grid", &ed.showGrid))
+            if (Grid::Checkbox("Show Grid", &ed.showGrid))
                 m_modified = true;
-            if (ImGui::DragFloat("Rotation Snap", &ed.rotationSnap, 1.0f, 0.0f, 90.0f, "%.0f deg"))
+            if (Grid::DragFloat("Rotation Snap", &ed.rotationSnap, 1.0f, 0.0f, 90.0f, "%.0f deg"))
                 m_modified = true;
-            if (ImGui::DragFloat("Scale Snap", &ed.scaleSnap, 0.05f, 0.0f, 1.0f))
+            if (Grid::DragFloat("Scale Snap", &ed.scaleSnap, 0.05f, 0.0f, 1.0f))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Gizmo & Visualization", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Gizmo & Visualization"))
         {
-            if (ImGui::DragFloat("Gizmo Scale", &ed.gizmoScale, 0.1f, 0.1f, 10.0f))
+            const ScopedPropertyGrid grid("Gizmo & Visualization");
+            if (Grid::DragFloat("Gizmo Scale", &ed.gizmoScale, 0.1f, 0.1f, 10.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Show Gizmo Labels", &ed.showGizmoLabels))
+            if (Grid::Checkbox("Show Gizmo Labels", &ed.showGizmoLabels))
                 m_modified = true;
-            if (ImGui::Checkbox("Wireframe Overlay", &ed.showWireframeOverlay))
+            if (Grid::Checkbox("Wireframe Overlay", &ed.showWireframeOverlay))
                 m_modified = true;
-            if (ImGui::Checkbox("Show Bounds", &ed.showBounds))
+            if (Grid::Checkbox("Show Bounds", &ed.showBounds))
                 m_modified = true;
-            if (ImGui::Checkbox("Show Colliders", &ed.showColliders))
+            if (Grid::Checkbox("Show Colliders", &ed.showColliders))
                 m_modified = true;
-            if (ImGui::Checkbox("Show NavMesh", &ed.showNavMesh))
+            if (Grid::Checkbox("Show NavMesh", &ed.showNavMesh))
                 m_modified = true;
-            if (ImGui::Checkbox("Show Light Radius", &ed.showLightRadius))
+            if (Grid::Checkbox("Show Light Radius", &ed.showLightRadius))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Autosave & History"))
+        if (Spark::Ui::SectionHeader("Autosave & History", nullptr, false))
         {
-            if (ImGui::Checkbox("Autosave Enabled", &ed.autosaveEnabled))
+            const ScopedPropertyGrid grid("Autosave & History");
+            if (Grid::Checkbox("Autosave Enabled", &ed.autosaveEnabled))
                 m_modified = true;
-            if (ImGui::DragFloat("Autosave Interval", &ed.autosaveIntervalSeconds, 10.0f, 30.0f, 3600.0f, "%.0f s"))
+            if (Grid::DragFloat("Autosave Interval", &ed.autosaveIntervalSeconds, 10.0f, 30.0f, 3600.0f, "%.0f s"))
                 m_modified = true;
-            if (ImGui::DragInt("Undo History Size", &ed.undoHistorySize, 1, 10, 1000))
+            if (Grid::DragInt("Undo History Size", &ed.undoHistorySize, 1, 10, 1000))
                 m_modified = true;
-            if (ImGui::DragInt("Recent Files Max", &ed.recentFilesMax, 1, 1, 50))
+            if (Grid::DragInt("Recent Files Max", &ed.recentFilesMax, 1, 1, 50))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Navigation"))
+        if (Spark::Ui::SectionHeader("Navigation", nullptr, false))
         {
-            if (ImGui::DragFloat("Camera Speed Multiplier", &ed.cameraSpeedMultiplier, 0.1f, 0.1f, 10.0f))
+            const ScopedPropertyGrid grid("Navigation");
+            if (Grid::DragFloat("Camera Speed Multiplier", &ed.cameraSpeedMultiplier, 0.1f, 0.1f, 10.0f))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Collaboration"))
+        if (Spark::Ui::SectionHeader("Collaboration", nullptr, false))
         {
-            if (ImGui::Checkbox("Enable Collaboration", &ed.enableCollaboration))
+            const ScopedPropertyGrid grid("Collaboration");
+            if (Grid::Checkbox("Enable Collaboration", &ed.enableCollaboration))
                 m_modified = true;
-            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Requires restart");
         }
     }
 
@@ -935,49 +1094,53 @@ namespace SparkEditor
     {
         auto& net = EngineSettings::GetInstance().Network();
 
-        if (ImGui::CollapsingHeader("Server", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Server"))
         {
-            if (ImGui::DragInt("Server Port", &net.serverPort, 1, 1024, 65535))
+            const ScopedPropertyGrid grid("Server");
+            if (Grid::DragInt("Server Port", &net.serverPort, 1, 1024, 65535))
             {
                 SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Network: server port changed to %d", net.serverPort);
                 m_modified = true;
             }
-            if (ImGui::DragInt("Max Clients", &net.maxClients, 1, 1, 128))
+            if (Grid::DragInt("Max Clients", &net.maxClients, 1, 1, 128))
                 m_modified = true;
-            if (ImGui::DragFloat("Connection Timeout", &net.connectionTimeout, 0.5f, 1.0f, 60.0f, "%.1f s"))
+            if (Grid::DragFloat("Connection Timeout", &net.connectionTimeout, 0.5f, 1.0f, 60.0f, "%.1f s"))
                 m_modified = true;
-            if (ImGui::DragFloat("Heartbeat Interval", &net.heartbeatInterval, 0.1f, 0.1f, 10.0f, "%.1f s"))
-                m_modified = true;
-        }
-
-        if (ImGui::CollapsingHeader("Replication"))
-        {
-            if (ImGui::DragFloat("Replication Rate", &net.replicationRate, 1.0f, 1.0f, 120.0f, "%.0f Hz"))
-                m_modified = true;
-            if (ImGui::DragFloat("Reliable Retransmit Base", &net.reliableRetransmitBase, 0.05f, 0.1f, 5.0f, "%.2f s"))
-                m_modified = true;
-            if (ImGui::DragInt("Max Reliable Retries", &net.maxReliableRetries, 1, 1, 20))
+            if (Grid::DragFloat("Heartbeat Interval", &net.heartbeatInterval, 0.1f, 0.1f, 10.0f, "%.1f s"))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Buffers & Features"))
+        if (Spark::Ui::SectionHeader("Replication", nullptr, false))
         {
-            if (ImGui::DragInt("Send Buffer Size", &net.sendBufferSize, 1024, 4096, 1048576))
+            const ScopedPropertyGrid grid("Replication");
+            if (Grid::DragFloat("Replication Rate", &net.replicationRate, 1.0f, 1.0f, 120.0f, "%.0f Hz"))
                 m_modified = true;
-            if (ImGui::DragInt("Receive Buffer Size", &net.receiveBufferSize, 1024, 4096, 1048576))
+            if (Grid::DragFloat("Reliable Retransmit Base", &net.reliableRetransmitBase, 0.05f, 0.1f, 5.0f, "%.2f s"))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Compression", &net.enableCompression))
+            if (Grid::DragInt("Max Reliable Retries", &net.maxReliableRetries, 1, 1, 20))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Lag Simulation (Dev Only)"))
+        if (Spark::Ui::SectionHeader("Buffers & Features", nullptr, false))
         {
-            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "For development/testing only");
-            if (ImGui::DragFloat("Simulated Latency", &net.simulatedLatencyMs, 1.0f, 0.0f, 500.0f, "%.0f ms"))
+            const ScopedPropertyGrid grid("Buffers & Features");
+            if (Grid::DragInt("Send Buffer Size", &net.sendBufferSize, 1024, 4096, 1048576))
                 m_modified = true;
-            if (ImGui::SliderFloat("Simulated Packet Loss", &net.simulatedPacketLoss, 0.0f, 1.0f, "%.2f"))
+            if (Grid::DragInt("Receive Buffer Size", &net.receiveBufferSize, 1024, 4096, 1048576))
                 m_modified = true;
-            if (ImGui::DragFloat("Simulated Jitter", &net.simulatedJitterMs, 0.5f, 0.0f, 100.0f, "%.0f ms"))
+            if (Grid::Checkbox("Enable Compression", &net.enableCompression))
+                m_modified = true;
+        }
+
+        if (Spark::Ui::SectionHeader("Lag Simulation (Dev Only)", nullptr, false))
+        {
+            const ScopedPropertyGrid grid("Lag Simulation (Dev Only)");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "For development/testing only");
+            if (Grid::DragFloat("Simulated Latency", &net.simulatedLatencyMs, 1.0f, 0.0f, 500.0f, "%.0f ms"))
+                m_modified = true;
+            if (Grid::SliderFloat("Simulated Packet Loss", &net.simulatedPacketLoss, 0.0f, 1.0f, "%.2f"))
+                m_modified = true;
+            if (Grid::DragFloat("Simulated Jitter", &net.simulatedJitterMs, 0.5f, 0.0f, 100.0f, "%.0f ms"))
                 m_modified = true;
         }
     }
@@ -990,34 +1153,37 @@ namespace SparkEditor
     {
         auto& s = EngineSettings::GetInstance().Scripting();
 
-        if (ImGui::CollapsingHeader("Hot Reload", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Hot Reload"))
         {
-            if (ImGui::Checkbox("Hot Reload Enabled", &s.hotReloadEnabled))
+            const ScopedPropertyGrid grid("Hot Reload");
+            if (Grid::Checkbox("Hot Reload Enabled", &s.hotReloadEnabled))
                 m_modified = true;
             if (s.hotReloadEnabled)
             {
-                if (ImGui::DragFloat("Poll Interval", &s.hotReloadPollInterval, 0.1f, 0.1f, 10.0f, "%.1f s"))
+                if (Grid::DragFloat("Poll Interval", &s.hotReloadPollInterval, 0.1f, 0.1f, 10.0f, "%.1f s"))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Execution", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Execution"))
         {
-            if (ImGui::DragInt("Context Pool Size", &s.contextPoolSize, 1, 1, 64))
+            const ScopedPropertyGrid grid("Execution");
+            if (Grid::DragInt("Context Pool Size", &s.contextPoolSize, 1, 1, 64))
                 m_modified = true;
-            if (ImGui::DragFloat("Execution Timeout", &s.executionTimeoutMs, 10.0f, 10.0f, 10000.0f, "%.0f ms"))
+            if (Grid::DragFloat("Execution Timeout", &s.executionTimeoutMs, 10.0f, 10.0f, 10000.0f, "%.0f ms"))
                 m_modified = true;
-            if (ImGui::DragInt("Max Call Stack Depth", &s.maxCallStackDepth, 1, 8, 256))
+            if (Grid::DragInt("Max Call Stack Depth", &s.maxCallStackDepth, 1, 8, 256))
                 m_modified = true;
-            if (ImGui::DragInt("Max Script Memory", &s.maxScriptMemoryMB, 1, 8, 512, "%d MB"))
+            if (Grid::DragInt("Max Script Memory", &s.maxScriptMemoryMB, 1, 8, 512, "%d MB"))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Debug"))
+        if (Spark::Ui::SectionHeader("Debug", nullptr, false))
         {
-            if (ImGui::Checkbox("Generate Debug Info", &s.generateDebugInfo))
+            const ScopedPropertyGrid grid("Debug");
+            if (Grid::Checkbox("Generate Debug Info", &s.generateDebugInfo))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Profiler", &s.enableProfiler))
+            if (Grid::Checkbox("Enable Profiler", &s.enableProfiler))
                 m_modified = true;
         }
     }
@@ -1030,32 +1196,35 @@ namespace SparkEditor
     {
         auto& a = EngineSettings::GetInstance().Animation();
 
-        if (ImGui::CollapsingHeader("Blending & Playback", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Blending & Playback"))
         {
-            if (ImGui::DragFloat("Default Blend Time", &a.defaultBlendTime, 0.01f, 0.0f, 2.0f, "%.2f s"))
+            const ScopedPropertyGrid grid("Blending & Playback");
+            if (Grid::DragFloat("Default Blend Time", &a.defaultBlendTime, 0.01f, 0.0f, 2.0f, "%.2f s"))
                 m_modified = true;
-            if (ImGui::DragInt("Max Active Montages", &a.maxActiveMontages, 1, 1, 16))
+            if (Grid::DragInt("Max Active Montages", &a.maxActiveMontages, 1, 1, 16))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Root Motion", &a.enableRootMotion))
+            if (Grid::Checkbox("Enable Root Motion", &a.enableRootMotion))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Animation Events", &a.enableAnimationEvents))
+            if (Grid::Checkbox("Enable Animation Events", &a.enableAnimationEvents))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Inverse Kinematics"))
+        if (Spark::Ui::SectionHeader("Inverse Kinematics", nullptr, false))
         {
-            if (ImGui::DragInt("IK Solver Iterations", &a.ikSolverIterations, 1, 1, 50))
+            const ScopedPropertyGrid grid("Inverse Kinematics");
+            if (Grid::DragInt("IK Solver Iterations", &a.ikSolverIterations, 1, 1, 50))
                 m_modified = true;
-            if (ImGui::DragFloat("IK Tolerance", &a.ikTolerance, 0.0001f, 0.0001f, 0.1f, "%.4f"))
+            if (Grid::DragFloat("IK Tolerance", &a.ikTolerance, 0.0001f, 0.0001f, 0.1f, "%.4f"))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Quality & LOD"))
+        if (Spark::Ui::SectionHeader("Quality & LOD", nullptr, false))
         {
+            const ScopedPropertyGrid grid("Quality & LOD");
             const char* compItems[] = {"None", "Low", "Medium", "High"};
-            if (ImGui::Combo("Compression Quality", &a.compressionQuality, compItems, 4))
+            if (Grid::Combo("Compression Quality", &a.compressionQuality, compItems, 4))
                 m_modified = true;
-            if (ImGui::DragFloat("LOD Distance Multiplier", &a.lodDistanceMultiplier, 0.1f, 0.1f, 5.0f))
+            if (Grid::DragFloat("LOD Distance Multiplier", &a.lodDistanceMultiplier, 0.1f, 0.1f, 5.0f))
                 m_modified = true;
         }
     }
@@ -1095,7 +1264,7 @@ namespace SparkEditor
                 int extIdx = idx + 1;
                 if (idx == -1)
                     extIdx = 0;
-                if (ImGui::Combo(label, &extIdx, extItems, 8))
+                if (Grid::Combo(label, &extIdx, extItems, 8))
                 {
                     if (extIdx == 0)
                         level = "";
@@ -1106,7 +1275,7 @@ namespace SparkEditor
             }
             else
             {
-                if (ImGui::Combo(label, &idx, levelItems, 7))
+                if (Grid::Combo(label, &idx, levelItems, 7))
                 {
                     level = levelItems[idx];
                     m_modified = true;
@@ -1114,16 +1283,19 @@ namespace SparkEditor
             }
         };
 
-        if (ImGui::CollapsingHeader("Global", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Global"))
         {
+            const ScopedPropertyGrid grid("Global");
             levelCombo("Global Level", log.globalLevel);
             levelCombo("Stack Trace Level", log.stackTraceLevel);
         }
 
-        if (ImGui::CollapsingHeader("Per-Category Overrides"))
+        if (Spark::Ui::SectionHeader("Per-Category Overrides", nullptr, false))
         {
-            ImGui::TextWrapped("Set per-category levels, or leave as '(Use Global)' to inherit.");
-            ImGui::Separator();
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::SecondaryText("Set per-category levels, or leave as '(Use Global)' to inherit.");
+            ImGui::PopTextWrapPos();
+            const ScopedPropertyGrid grid("Per-Category Overrides");
             levelCombo("Core", log.coreLevel, true);
             levelCombo("Graphics##Log", log.graphicsLevel, true);
             levelCombo("Physics##Log", log.physicsLevel, true);
@@ -1151,52 +1323,55 @@ namespace SparkEditor
     {
         auto& a = EngineSettings::GetInstance().Accessibility();
 
-        if (ImGui::CollapsingHeader("Vision", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Vision"))
         {
+            const ScopedPropertyGrid grid("Vision");
             const char* cbItems[] = {"Off", "Protanopia", "Deuteranopia", "Tritanopia"};
-            if (ImGui::Combo("Colorblind Mode", &a.colorblindMode, cbItems, 4))
+            if (Grid::Combo("Colorblind Mode", &a.colorblindMode, cbItems, 4))
                 m_modified = true;
             if (a.colorblindMode > 0)
             {
-                if (ImGui::SliderFloat("Colorblind Strength", &a.colorblindStrength, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Colorblind Strength", &a.colorblindStrength, 0.0f, 1.0f))
                     m_modified = true;
             }
-            if (ImGui::Checkbox("High Contrast", &a.highContrast))
+            if (Grid::Checkbox("High Contrast", &a.highContrast))
                 m_modified = true;
-            if (ImGui::Checkbox("Large Text", &a.largeText))
+            if (Grid::Checkbox("Large Text", &a.largeText))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Audio Accessibility"))
+        if (Spark::Ui::SectionHeader("Audio Accessibility", nullptr, false))
         {
-            if (ImGui::Checkbox("Closed Captions", &a.closedCaptions))
+            const ScopedPropertyGrid grid("Audio Accessibility");
+            if (Grid::Checkbox("Closed Captions", &a.closedCaptions))
                 m_modified = true;
-            if (ImGui::Checkbox("Screen Reader", &a.screenReader))
+            if (Grid::Checkbox("Screen Reader", &a.screenReader))
                 m_modified = true;
             if (a.screenReader)
             {
-                if (ImGui::DragFloat("TTS Rate", &a.textToSpeechRate, 0.1f, 0.5f, 3.0f))
+                if (Grid::DragFloat("TTS Rate", &a.textToSpeechRate, 0.1f, 0.5f, 3.0f))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Motor Accessibility"))
+        if (Spark::Ui::SectionHeader("Motor Accessibility", nullptr, false))
         {
-            if (ImGui::Checkbox("Reduce Motion", &a.reduceMotion))
+            const ScopedPropertyGrid grid("Motor Accessibility");
+            if (Grid::Checkbox("Reduce Motion", &a.reduceMotion))
                 m_modified = true;
-            if (ImGui::DragFloat("Hold Time Multiplier", &a.holdTimeMultiplier, 0.1f, 0.5f, 5.0f))
+            if (Grid::DragFloat("Hold Time Multiplier", &a.holdTimeMultiplier, 0.1f, 0.5f, 5.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Toggle Aim", &a.toggleAim))
+            if (Grid::Checkbox("Toggle Aim", &a.toggleAim))
                 m_modified = true;
-            if (ImGui::Checkbox("Toggle Sprint", &a.toggleSprint))
+            if (Grid::Checkbox("Toggle Sprint", &a.toggleSprint))
                 m_modified = true;
-            if (ImGui::Checkbox("Toggle Crouch", &a.toggleCrouch))
+            if (Grid::Checkbox("Toggle Crouch", &a.toggleCrouch))
                 m_modified = true;
-            if (ImGui::Checkbox("Auto-Aim", &a.autoAim))
+            if (Grid::Checkbox("Auto-Aim", &a.autoAim))
                 m_modified = true;
             if (a.autoAim)
             {
-                if (ImGui::SliderFloat("Auto-Aim Strength", &a.autoAimStrength, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Auto-Aim Strength", &a.autoAimStrength, 0.0f, 1.0f))
                     m_modified = true;
             }
         }
@@ -1210,50 +1385,56 @@ namespace SparkEditor
     {
         auto& vr = EngineSettings::GetInstance().VR();
 
-        if (ImGui::Checkbox("Enable VR", &vr.enabled))
-            m_modified = true;
+        {
+            const ScopedPropertyGrid grid("VR");
+            if (Grid::Checkbox("Enable VR", &vr.enabled))
+                m_modified = true;
+        }
         if (vr.enabled)
         {
-            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "VR mode changes require restart");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "VR mode changes require restart");
 
-            if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader("Display"))
             {
-                if (ImGui::DragInt("Render Target Width", &vr.renderTargetWidth, 1, 640, 4096))
+                const ScopedPropertyGrid grid("Display");
+                if (Grid::DragInt("Render Target Width", &vr.renderTargetWidth, 1, 640, 4096))
                     m_modified = true;
-                if (ImGui::DragInt("Render Target Height", &vr.renderTargetHeight, 1, 640, 4096))
+                if (Grid::DragInt("Render Target Height", &vr.renderTargetHeight, 1, 640, 4096))
                     m_modified = true;
-                if (ImGui::SliderFloat("Render Scale##VR", &vr.renderScale, 0.5f, 2.0f))
+                if (Grid::SliderFloat("Render Scale##VR", &vr.renderScale, 0.5f, 2.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("IPD", &vr.ipd, 0.001f, 0.050f, 0.080f, "%.3f m"))
+                if (Grid::DragFloat("IPD", &vr.ipd, 0.001f, 0.050f, 0.080f, "%.3f m"))
                     m_modified = true;
-                if (ImGui::Checkbox("Reprojection", &vr.reprojection))
+                if (Grid::Checkbox("Reprojection", &vr.reprojection))
                     m_modified = true;
             }
 
-            if (ImGui::CollapsingHeader("Tracking"))
+            if (Spark::Ui::SectionHeader("Tracking", nullptr, false))
             {
+                const ScopedPropertyGrid grid("Tracking");
                 const char* trackItems[] = {"Seated", "Room Scale"};
-                if (ImGui::Combo("Tracking Space", &vr.trackingSpace, trackItems, 2))
+                if (Grid::Combo("Tracking Space", &vr.trackingSpace, trackItems, 2))
                     m_modified = true;
-                if (ImGui::Checkbox("Head Tracking", &vr.headTrackingEnabled))
+                if (Grid::Checkbox("Head Tracking", &vr.headTrackingEnabled))
                     m_modified = true;
-                if (ImGui::Checkbox("Controller Tracking", &vr.controllerTrackingEnabled))
+                if (Grid::Checkbox("Controller Tracking", &vr.controllerTrackingEnabled))
                     m_modified = true;
             }
 
-            if (ImGui::CollapsingHeader("Comfort"))
+            if (Spark::Ui::SectionHeader("Comfort", nullptr, false))
             {
+                const ScopedPropertyGrid grid("Comfort");
                 const char* comfortItems[] = {"Off", "Vignette", "Snap Turn"};
-                if (ImGui::Combo("Comfort Mode", &vr.comfortMode, comfortItems, 3))
+                if (Grid::Combo("Comfort Mode", &vr.comfortMode, comfortItems, 3))
                     m_modified = true;
                 if (vr.comfortMode == 2)
                 {
-                    if (ImGui::DragFloat("Snap Turn Angle", &vr.snapTurnAngle, 5.0f, 15.0f, 90.0f, "%.0f deg"))
+                    if (Grid::DragFloat("Snap Turn Angle", &vr.snapTurnAngle, 5.0f, 15.0f, 90.0f, "%.0f deg"))
                         m_modified = true;
                 }
-                if (ImGui::SliderFloat("Haptic Amplitude", &vr.hapticAmplitude, 0.0f, 1.0f))
+                if (Grid::SliderFloat("Haptic Amplitude", &vr.hapticAmplitude, 0.0f, 1.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Haptic Duration", &vr.hapticDuration, 0.01f, 0.01f, 1.0f, "%.2f s"))
+                if (Grid::DragFloat("Haptic Duration", &vr.hapticDuration, 0.01f, 0.01f, 1.0f, "%.2f s"))
                     m_modified = true;
             }
         }
@@ -1268,41 +1449,43 @@ namespace SparkEditor
         auto& d = EngineSettings::GetInstance().Destruction();
         auto& dl = EngineSettings::GetInstance().Dialogue();
 
-        if (ImGui::CollapsingHeader("Destruction", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Destruction"))
         {
-            if (ImGui::DragFloat("Debris Lifetime", &d.debrisLifetime, 0.5f, 0.0f, 60.0f, "%.1f s"))
+            const ScopedPropertyGrid grid("Destruction");
+            if (Grid::DragFloat("Debris Lifetime", &d.debrisLifetime, 0.5f, 0.0f, 60.0f, "%.1f s"))
                 m_modified = true;
-            if (ImGui::DragFloat("Damage Threshold", &d.damageThreshold, 1.0f, 0.0f, 500.0f))
+            if (Grid::DragFloat("Damage Threshold", &d.damageThreshold, 1.0f, 0.0f, 500.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Damage Multiplier##Dest", &d.damageMultiplier, 0.1f, 0.0f, 10.0f))
+            if (Grid::DragFloat("Damage Multiplier##Dest", &d.damageMultiplier, 0.1f, 0.0f, 10.0f))
                 m_modified = true;
-            if (ImGui::DragInt("Max Damage Stages", &d.maxDamageStages, 1, 1, 10))
+            if (Grid::DragInt("Max Damage Stages", &d.maxDamageStages, 1, 1, 10))
                 m_modified = true;
-            if (ImGui::DragFloat("Scatter Force", &d.scatterForce, 0.5f, 0.0f, 50.0f))
+            if (Grid::DragFloat("Scatter Force", &d.scatterForce, 0.5f, 0.0f, 50.0f))
                 m_modified = true;
-            if (ImGui::DragInt("Max Debris Pieces", &d.maxDebrisPieces, 1, 1, 500))
+            if (Grid::DragInt("Max Debris Pieces", &d.maxDebrisPieces, 1, 1, 500))
                 m_modified = true;
-            if (ImGui::Checkbox("Physics Debris", &d.enablePhysicsDebris))
+            if (Grid::Checkbox("Physics Debris", &d.enablePhysicsDebris))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Dialogue & DRS"))
+        if (Spark::Ui::SectionHeader("Dialogue & DRS", nullptr, false))
         {
-            if (ImGui::DragFloat("Default Cooldown", &dl.defaultCooldown, 0.5f, 0.0f, 60.0f, "%.1f s"))
+            const ScopedPropertyGrid grid("Dialogue & DRS");
+            if (Grid::DragFloat("Default Cooldown", &dl.defaultCooldown, 0.5f, 0.0f, 60.0f, "%.1f s"))
                 m_modified = true;
-            if (ImGui::DragInt("Default Priority", &dl.defaultPriority, 1, 0, 100))
+            if (Grid::DragInt("Default Priority", &dl.defaultPriority, 1, 0, 100))
                 m_modified = true;
-            if (ImGui::DragInt("Max Rules Per Signal", &dl.maxRulesPerSignal, 1, 1, 64))
+            if (Grid::DragInt("Max Rules Per Signal", &dl.maxRulesPerSignal, 1, 1, 64))
                 m_modified = true;
-            if (ImGui::DragFloat("Typing Speed", &dl.typingSpeed, 1.0f, 5.0f, 200.0f, "%.0f chars/s"))
+            if (Grid::DragFloat("Typing Speed", &dl.typingSpeed, 1.0f, 5.0f, 200.0f, "%.0f chars/s"))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Barks", &dl.enableBarks))
+            if (Grid::Checkbox("Enable Barks", &dl.enableBarks))
                 m_modified = true;
             if (dl.enableBarks)
             {
-                if (ImGui::DragFloat("Bark Range", &dl.barkRange, 0.5f, 1.0f, 100.0f))
+                if (Grid::DragFloat("Bark Range", &dl.barkRange, 0.5f, 1.0f, 100.0f))
                     m_modified = true;
-                if (ImGui::DragFloat("Bark Cooldown", &dl.barkCooldown, 0.5f, 0.0f, 60.0f, "%.1f s"))
+                if (Grid::DragFloat("Bark Cooldown", &dl.barkCooldown, 0.5f, 0.0f, 60.0f, "%.1f s"))
                     m_modified = true;
             }
         }
@@ -1317,31 +1500,36 @@ namespace SparkEditor
         auto& mod = EngineSettings::GetInstance().Modding();
         auto& loc = EngineSettings::GetInstance().Localization();
 
-        if (ImGui::CollapsingHeader("Modding", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Modding"))
         {
-            if (ImGui::Checkbox("Enable Modding", &mod.enableModding))
+            const ScopedPropertyGrid grid("Modding");
+            if (Grid::Checkbox("Enable Modding", &mod.enableModding))
                 m_modified = true;
-            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Requires restart");
             if (mod.enableModding)
             {
-                if (ImGui::Checkbox("Allow Script Mods", &mod.allowScriptMods))
+                if (Grid::Checkbox("Allow Script Mods", &mod.allowScriptMods))
                     m_modified = true;
-                if (ImGui::Checkbox("Allow Asset Overrides", &mod.allowAssetOverrides))
+                if (Grid::Checkbox("Allow Asset Overrides", &mod.allowAssetOverrides))
                     m_modified = true;
-                if (ImGui::Checkbox("Sandbox Mods", &mod.sandboxMods))
+                if (Grid::Checkbox("Sandbox Mods", &mod.sandboxMods))
                     m_modified = true;
                 // Neither script setting is enforced yet; say so instead of implying a sandbox.
-                ImGui::TextDisabled("Script mods are always refused: no sandboxed mod-script loader exists yet");
-                if (ImGui::DragInt("Max Loaded Mods", &mod.maxLoadedMods, 1, 1, 128))
+                Spark::Ui::PropertyLabel("Script Mods");
+                Spark::Ui::UnavailableFeature("Script mod loading",
+                                              "Script mods are always refused: no sandboxed mod-script loader "
+                                              "exists yet.");
+                if (Grid::DragInt("Max Loaded Mods", &mod.maxLoadedMods, 1, 1, 128))
                     m_modified = true;
             }
         }
 
-        if (ImGui::CollapsingHeader("Localization"))
+        if (Spark::Ui::SectionHeader("Localization", nullptr, false))
         {
-            if (ImGui::Checkbox("Auto-Detect Language", &loc.autoDetectLanguage))
+            const ScopedPropertyGrid grid("Localization");
+            if (Grid::Checkbox("Auto-Detect Language", &loc.autoDetectLanguage))
                 m_modified = true;
-            if (ImGui::Checkbox("Load All Languages", &loc.loadAllLanguages))
+            if (Grid::Checkbox("Load All Languages", &loc.loadAllLanguages))
                 m_modified = true;
         }
     }
@@ -1355,31 +1543,33 @@ namespace SparkEditor
         auto& sv = EngineSettings::GetInstance().SaveSystem();
         auto& rp = EngineSettings::GetInstance().Replay();
 
-        if (ImGui::CollapsingHeader("Save System", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Save System"))
         {
-            if (ImGui::DragInt("Max Auto-Save Slots", &sv.maxAutoSaveSlots, 1, 1, 10))
+            const ScopedPropertyGrid grid("Save System");
+            if (Grid::DragInt("Max Auto-Save Slots", &sv.maxAutoSaveSlots, 1, 1, 10))
                 m_modified = true;
-            if (ImGui::DragFloat("Auto-Save Interval", &sv.autoSaveInterval, 10.0f, 0.0f, 3600.0f, "%.0f s"))
+            if (Grid::DragFloat("Auto-Save Interval", &sv.autoSaveInterval, 10.0f, 0.0f, 3600.0f, "%.0f s"))
                 m_modified = true;
-            if (ImGui::DragInt("Max Manual Saves", &sv.maxManualSaves, 1, 1, 1000))
+            if (Grid::DragInt("Max Manual Saves", &sv.maxManualSaves, 1, 1, 1000))
                 m_modified = true;
-            if (ImGui::Checkbox("Compress Saves", &sv.compressSaves))
+            if (Grid::Checkbox("Compress Saves", &sv.compressSaves))
                 m_modified = true;
-            if (ImGui::Checkbox("Backup on Save", &sv.backupOnSave))
+            if (Grid::Checkbox("Backup on Save", &sv.backupOnSave))
                 m_modified = true;
-            if (ImGui::Checkbox("Enable Cloud Saves", &sv.enableCloudSaves))
+            if (Grid::Checkbox("Enable Cloud Saves", &sv.enableCloudSaves))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Replay"))
+        if (Spark::Ui::SectionHeader("Replay", nullptr, false))
         {
-            if (ImGui::Checkbox("Auto-Record", &rp.autoRecord))
+            const ScopedPropertyGrid grid("Replay");
+            if (Grid::Checkbox("Auto-Record", &rp.autoRecord))
                 m_modified = true;
-            if (ImGui::DragFloat("Record Interval", &rp.recordInterval, 0.01f, 0.01f, 1.0f, "%.3f s"))
+            if (Grid::DragFloat("Record Interval", &rp.recordInterval, 0.01f, 0.01f, 1.0f, "%.3f s"))
                 m_modified = true;
-            if (ImGui::DragInt("Max Frame Count", &rp.maxFrameCount, 1000, 1000, 10000000))
+            if (Grid::DragInt("Max Frame Count", &rp.maxFrameCount, 1000, 1000, 10000000))
                 m_modified = true;
-            if (ImGui::DragInt("Max Entity Count", &rp.maxEntityCount, 1000, 100, 1000000))
+            if (Grid::DragInt("Max Entity Count", &rp.maxEntityCount, 1000, 100, 1000000))
                 m_modified = true;
         }
     }
@@ -1393,35 +1583,37 @@ namespace SparkEditor
         auto& p = EngineSettings::GetInstance().Particles();
         auto& d = EngineSettings::GetInstance().Decals();
 
-        if (ImGui::CollapsingHeader("Particles", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Particles"))
         {
-            if (ImGui::DragInt("Max Particles", &p.maxParticles, 100, 100, 100000))
+            const ScopedPropertyGrid grid("Particles");
+            if (Grid::DragInt("Max Particles", &p.maxParticles, 100, 100, 100000))
                 m_modified = true;
-            if (ImGui::DragInt("Max Emitters", &p.maxEmitters, 1, 1, 1024))
+            if (Grid::DragInt("Max Emitters", &p.maxEmitters, 1, 1, 1024))
                 m_modified = true;
-            if (ImGui::DragFloat("Simulation Rate", &p.simulationRate, 1.0f, 15.0f, 120.0f, "%.0f Hz"))
+            if (Grid::DragFloat("Simulation Rate", &p.simulationRate, 1.0f, 15.0f, 120.0f, "%.0f Hz"))
                 m_modified = true;
-            if (ImGui::DragFloat("LOD Distance Mult##Part", &p.lodDistanceMultiplier, 0.1f, 0.1f, 5.0f))
+            if (Grid::DragFloat("LOD Distance Mult##Part", &p.lodDistanceMultiplier, 0.1f, 0.1f, 5.0f))
                 m_modified = true;
-            if (ImGui::DragFloat("Global Scale##Part", &p.globalScale, 0.1f, 0.1f, 5.0f))
+            if (Grid::DragFloat("Global Scale##Part", &p.globalScale, 0.1f, 0.1f, 5.0f))
                 m_modified = true;
-            if (ImGui::Checkbox("Soft Particles", &p.softParticles))
+            if (Grid::Checkbox("Soft Particles", &p.softParticles))
                 m_modified = true;
-            if (ImGui::Checkbox("GPU Particles", &p.gpuParticles))
+            if (Grid::Checkbox("GPU Particles", &p.gpuParticles))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Decals"))
+        if (Spark::Ui::SectionHeader("Decals", nullptr, false))
         {
-            if (ImGui::Checkbox("Enable Decals", &d.enableDecals))
+            const ScopedPropertyGrid grid("Decals");
+            if (Grid::Checkbox("Enable Decals", &d.enableDecals))
                 m_modified = true;
             if (d.enableDecals)
             {
-                if (ImGui::DragInt("Max Decals", &d.maxDecals, 1, 1, 1024))
+                if (Grid::DragInt("Max Decals", &d.maxDecals, 1, 1, 1024))
                     m_modified = true;
-                if (ImGui::DragFloat("Default Lifetime", &d.defaultLifetime, 1.0f, 0.0f, 300.0f, "%.0f s"))
+                if (Grid::DragFloat("Default Lifetime", &d.defaultLifetime, 1.0f, 0.0f, 300.0f, "%.0f s"))
                     m_modified = true;
-                if (ImGui::DragFloat("Fade Time", &d.fadeTime, 0.1f, 0.0f, 10.0f, "%.1f s"))
+                if (Grid::DragFloat("Fade Time", &d.fadeTime, 0.1f, 0.0f, 10.0f, "%.1f s"))
                     m_modified = true;
             }
         }
@@ -1435,31 +1627,34 @@ namespace SparkEditor
     {
         auto& mem = EngineSettings::GetInstance().Memory();
 
-        if (ImGui::CollapsingHeader("Streaming Budgets", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Streaming Budgets"))
         {
-            if (ImGui::DragInt("Texture Budget", &mem.textureStreamingBudgetMB, 32, 64, 4096, "%d MB"))
+            const ScopedPropertyGrid grid("Streaming Budgets");
+            if (Grid::DragInt("Texture Budget", &mem.textureStreamingBudgetMB, 32, 64, 4096, "%d MB"))
                 m_modified = true;
-            if (ImGui::DragInt("Mesh Budget", &mem.meshStreamingBudgetMB, 32, 32, 2048, "%d MB"))
+            if (Grid::DragInt("Mesh Budget", &mem.meshStreamingBudgetMB, 32, 32, 2048, "%d MB"))
                 m_modified = true;
-            if (ImGui::DragInt("Audio Budget", &mem.audioStreamingBudgetMB, 16, 16, 1024, "%d MB"))
+            if (Grid::DragInt("Audio Budget", &mem.audioStreamingBudgetMB, 16, 16, 1024, "%d MB"))
                 m_modified = true;
-            if (ImGui::DragInt("Shader Cache", &mem.shaderCacheSizeMB, 16, 16, 512, "%d MB"))
+            if (Grid::DragInt("Shader Cache", &mem.shaderCacheSizeMB, 16, 16, 512, "%d MB"))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Garbage Collection"))
+        if (Spark::Ui::SectionHeader("Garbage Collection", nullptr, false))
         {
-            if (ImGui::DragFloat("GC Interval", &mem.gcInterval, 5.0f, 5.0f, 600.0f, "%.0f s"))
+            const ScopedPropertyGrid grid("Garbage Collection");
+            if (Grid::DragFloat("GC Interval", &mem.gcInterval, 5.0f, 5.0f, 600.0f, "%.0f s"))
                 m_modified = true;
-            if (ImGui::SliderFloat("GC Aggressiveness", &mem.gcAggressiveness, 0.0f, 1.0f))
+            if (Grid::SliderFloat("GC Aggressiveness", &mem.gcAggressiveness, 0.0f, 1.0f))
                 m_modified = true;
         }
 
-        if (ImGui::CollapsingHeader("Debug"))
+        if (Spark::Ui::SectionHeader("Debug", nullptr, false))
         {
-            if (ImGui::Checkbox("Memory Tracking", &mem.enableMemoryTracking))
+            const ScopedPropertyGrid grid("Debug");
+            if (Grid::Checkbox("Memory Tracking", &mem.enableMemoryTracking))
                 m_modified = true;
-            ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Requires restart");
         }
     }
 
@@ -1471,29 +1666,36 @@ namespace SparkEditor
     {
         auto& os = EngineSettings::GetInstance().OnlineServices();
 
-        if (ImGui::Checkbox("Enable Online Services", &os.enableOnlineServices))
-            m_modified = true;
-        ImGui::TextColored(ImVec4(1, 0.6f, 0, 1), "Requires restart");
+        {
+            const ScopedPropertyGrid grid("Online Services");
+            if (Grid::Checkbox("Enable Online Services", &os.enableOnlineServices))
+                m_modified = true;
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Requires restart");
+
+            if (os.enableOnlineServices)
+            {
+                const char* backendItems[] = {"Null", "Steam", "Epic", "Custom"};
+                if (Grid::Combo("Platform Backend", &os.platformBackend, backendItems, 4))
+                    m_modified = true;
+                if (Grid::DragFloat("Session Timeout", &os.sessionTimeout, 10.0f, 30.0f, 3600.0f, "%.0f s"))
+                    m_modified = true;
+                if (Grid::DragInt("Max Search Results", &os.maxSessionSearchResults, 1, 5, 200))
+                    m_modified = true;
+            }
+        }
 
         if (os.enableOnlineServices)
         {
-            const char* backendItems[] = {"Null", "Steam", "Epic", "Custom"};
-            if (ImGui::Combo("Platform Backend", &os.platformBackend, backendItems, 4))
-                m_modified = true;
-            if (ImGui::DragFloat("Session Timeout", &os.sessionTimeout, 10.0f, 30.0f, 3600.0f, "%.0f s"))
-                m_modified = true;
-            if (ImGui::DragInt("Max Search Results", &os.maxSessionSearchResults, 1, 5, 200))
-                m_modified = true;
-
-            if (ImGui::CollapsingHeader("Voice Chat"))
+            if (Spark::Ui::SectionHeader("Voice Chat", nullptr, false))
             {
-                if (ImGui::Checkbox("Enable Voice Chat", &os.enableVoiceChat))
+                const ScopedPropertyGrid grid("Voice Chat");
+                if (Grid::Checkbox("Enable Voice Chat", &os.enableVoiceChat))
                     m_modified = true;
                 if (os.enableVoiceChat)
                 {
-                    if (ImGui::SliderFloat("Voice Volume", &os.voiceChatVolume, 0.0f, 1.0f))
+                    if (Grid::SliderFloat("Voice Volume", &os.voiceChatVolume, 0.0f, 1.0f))
                         m_modified = true;
-                    if (ImGui::Checkbox("Push to Talk", &os.pushToTalk))
+                    if (Grid::Checkbox("Push to Talk", &os.pushToTalk))
                         m_modified = true;
                 }
             }
@@ -1506,12 +1708,19 @@ namespace SparkEditor
 
     void ProjectSettingsPanel::RenderProjectInfoTab()
     {
-        ImGui::Text("Engine: SparkEngine");
-        ImGui::Text("Settings File: %s", EngineSettings::GetInstance().GetFilePath().c_str());
+        {
+            const ScopedPropertyGrid grid("Project");
+            Spark::Ui::PropertyLabel("Engine");
+            ImGui::TextUnformatted("SparkEngine");
+            Spark::Ui::PropertyLabel("Settings File");
+            Spark::Ui::MonoText("%s", EngineSettings::GetInstance().GetFilePath().c_str());
+        }
         ImGui::Separator();
 
-        ImGui::TextWrapped("Project settings are loaded from settings.ini at startup and saved on demand. "
-                           "Changes made here take effect immediately for most subsystems.");
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("Project settings are loaded from settings.ini at startup and saved on demand. "
+                                 "Changes made here take effect immediately for most subsystems.");
+        ImGui::PopTextWrapPos();
     }
 
 } // namespace SparkEditor

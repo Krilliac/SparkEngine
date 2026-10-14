@@ -20,6 +20,9 @@
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Engine/ECS/Components.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Fonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <imgui_internal.h> // ImGui::GetActiveID — identifies the widget that owns an open edit gesture
 #include <iostream>
@@ -91,12 +94,8 @@ namespace SparkEditor
             }
             else if (m_inspectedObjectID == INVALID_OBJECT_ID && m_inspectedObject.empty())
             {
-                float avail = ImGui::GetContentRegionAvail().y;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail * 0.4f);
-                float textWidth = ImGui::CalcTextSize(ICON_FA_MOUSE_POINTER " Select an object to inspect").x;
-                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - textWidth) * 0.5f);
-                ImGui::TextColored(ImVec4(0.55f, 0.58f, 0.62f, 1.0f),
-                                   ICON_FA_MOUSE_POINTER " Select an object to inspect");
+                Spark::Ui::EmptyState(ICON_FA_MOUSE_POINTER, "Select an object to inspect",
+                                      "Pick an entity in the Hierarchy or the Scene view to edit its components.");
             }
             else
             {
@@ -110,7 +109,7 @@ namespace SparkEditor
 
                 // Full-width "Add Component" button
                 float btnWidth = ImGui::GetContentRegionAvail().x;
-                if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(btnWidth, 30)))
+                if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(btnWidth, Spark::Ui::Px(30.0f))))
                 {
                     m_showAddComponentMenu = true;
                 }
@@ -595,9 +594,9 @@ namespace SparkEditor
             obj = m_scene->FindObject(m_inspectedObjectID);
         }
 
-        if (ImGui::CollapsingHeader(ICON_FA_CUBE " Object Properties", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Object Properties", ICON_FA_CUBE, true))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             // Name editing
             char nameBuffer[256];
@@ -704,83 +703,87 @@ namespace SparkEditor
                 ImGui::Checkbox("Static", &isStatic);
             }
 
-            // Tag dropdown
-            const char* tags[] = {"Default", "Player", "Enemy", "Weapon", "Terrain", "Trigger"};
-            int currentTag = 0;
-            if (obj)
+            // Tag and layer share a label/control grid that stacks in narrow docks.
+            if (Spark::Ui::BeginPropertyGrid("##ObjectTagLayer"))
             {
-                for (int i = 0; i < IM_ARRAYSIZE(tags); ++i)
+                // Tag dropdown
+                const char* tags[] = {"Default", "Player", "Enemy", "Weapon", "Terrain", "Trigger"};
+                int currentTag = 0;
+                if (obj)
                 {
-                    if (obj->tag == tags[i])
+                    for (int i = 0; i < IM_ARRAYSIZE(tags); ++i)
                     {
-                        currentTag = i;
-                        break;
+                        if (obj->tag == tags[i])
+                        {
+                            currentTag = i;
+                            break;
+                        }
                     }
                 }
-            }
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
-            if (ImGui::Combo("Tag", &currentTag, tags, IM_ARRAYSIZE(tags)))
-            {
+                Spark::Ui::PropertyLabel("Tag");
+                if (ImGui::Combo("##Tag", &currentTag, tags, IM_ARRAYSIZE(tags)))
+                {
+                    if (obj)
+                    {
+                        std::string oldTag = obj->tag;
+                        std::string newTag = tags[currentTag];
+                        SceneFile* capturedScene = m_scene;
+                        ObjectID capturedID = m_inspectedObjectID;
+                        auto& history = Spark::Editor::CommandHistory::GetInstance();
+                        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                            [capturedScene, capturedID, newTag]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->tag = newTag;
+                            },
+                            [capturedScene, capturedID, oldTag]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->tag = oldTag;
+                            },
+                            "Change Tag to " + newTag));
+                    }
+                }
+
+                // Layer dropdown
+                const char* layers[] = {"Default", "Ignore Raycast", "Water", "UI", "Ground", "Player"};
+                int currentLayer = 0;
                 if (obj)
                 {
-                    std::string oldTag = obj->tag;
-                    std::string newTag = tags[currentTag];
-                    SceneFile* capturedScene = m_scene;
-                    ObjectID capturedID = m_inspectedObjectID;
-                    auto& history = Spark::Editor::CommandHistory::GetInstance();
-                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                        [capturedScene, capturedID, newTag]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->tag = newTag;
-                        },
-                        [capturedScene, capturedID, oldTag]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->tag = oldTag;
-                        },
-                        "Change Tag to " + newTag));
+                    currentLayer = (std::min)(obj->layer, static_cast<int>(IM_ARRAYSIZE(layers) - 1));
+                    currentLayer = (std::max)(currentLayer, 0);
                 }
-            }
-
-            // Layer dropdown
-            const char* layers[] = {"Default", "Ignore Raycast", "Water", "UI", "Ground", "Player"};
-            int currentLayer = 0;
-            if (obj)
-            {
-                currentLayer = (std::min)(obj->layer, static_cast<int>(IM_ARRAYSIZE(layers) - 1));
-                currentLayer = (std::max)(currentLayer, 0);
-            }
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
-            if (ImGui::Combo("Layer", &currentLayer, layers, IM_ARRAYSIZE(layers)))
-            {
-                if (obj)
+                Spark::Ui::PropertyLabel("Layer");
+                if (ImGui::Combo("##Layer", &currentLayer, layers, IM_ARRAYSIZE(layers)))
                 {
-                    int oldLayer = obj->layer;
-                    int newLayer = currentLayer;
-                    SceneFile* capturedScene = m_scene;
-                    ObjectID capturedID = m_inspectedObjectID;
-                    auto& history = Spark::Editor::CommandHistory::GetInstance();
-                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                        [capturedScene, capturedID, newLayer]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->layer = newLayer;
-                        },
-                        [capturedScene, capturedID, oldLayer]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->layer = oldLayer;
-                        },
-                        "Change Layer"));
+                    if (obj)
+                    {
+                        int oldLayer = obj->layer;
+                        int newLayer = currentLayer;
+                        SceneFile* capturedScene = m_scene;
+                        ObjectID capturedID = m_inspectedObjectID;
+                        auto& history = Spark::Editor::CommandHistory::GetInstance();
+                        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                            [capturedScene, capturedID, newLayer]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->layer = newLayer;
+                            },
+                            [capturedScene, capturedID, oldLayer]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->layer = oldLayer;
+                            },
+                            "Change Layer"));
+                    }
                 }
+                Spark::Ui::EndPropertyGrid();
             }
-
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -1315,8 +1318,11 @@ namespace SparkEditor
         // for context. Renaming ECS entities is out of scope for this unit.
         const ::NameComponent* nc = world->GetComponent<::NameComponent>(entity);
         const char* label = (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
-        ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f), ICON_FA_CUBE " %s", label);
-        ImGui::TextDisabled("Entity #%u", rawEntity);
+        {
+            const Spark::Ui::ScopedFont heading(Spark::Ui::FontRole::H2);
+            ImGui::Text(ICON_FA_CUBE " %s", label);
+        }
+        Spark::Ui::KeyValue("Entity", "#%u", rawEntity);
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -1330,13 +1336,13 @@ namespace SparkEditor
                 continue;
 
             ImGui::PushID(type.c_str());
-            if (ImGui::CollapsingHeader(type.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader(type.c_str(), nullptr, true))
             {
                 void* comp = factory.GetComponentRaw(type, world, rawEntity);
                 const Spark::TypeInfo* ti = typeRegistry.FindTypeByName(type);
                 if (comp && ti)
                 {
-                    ImGui::Indent(4);
+                    ImGui::Indent(Spark::Ui::Px(4.0f));
                     // Only the first change of a gesture needs the pre-edit
                     // snapshot; skip the serialization while one is pending.
                     const std::string before = (m_editorUI && !m_pendingWorldEdit.HasPending())
@@ -1397,16 +1403,17 @@ namespace SparkEditor
                                 m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
                             if (factory.RemoveComponent(type, world, rawEntity) && m_editorUI)
                                 m_editorUI->RecordAppliedDocumentMutation(removeBefore, "Remove " + type);
-                            ImGui::Unindent(4);
+                            ImGui::Unindent(Spark::Ui::Px(4.0f));
                             ImGui::PopID();
                             continue;
                         }
                     }
-                    ImGui::Unindent(4);
+                    ImGui::Unindent(Spark::Ui::Px(4.0f));
                 }
                 else
                 {
-                    ImGui::TextDisabled("(no reflection data registered for '%s')", type.c_str());
+                    Spark::Ui::StatusText(Spark::Ui::Status::Warning, "No reflection data registered for '%s'",
+                                          type.c_str());
                 }
             }
             ImGui::PopID();
@@ -1417,7 +1424,7 @@ namespace SparkEditor
         ImGui::Spacing();
 
         float btnWidth = ImGui::GetContentRegionAvail().x;
-        if (ImGui::Button(ICON_FA_PLUS " Add Component##World", ImVec2(btnWidth, 30)))
+        if (ImGui::Button(ICON_FA_PLUS " Add Component##World", ImVec2(btnWidth, Spark::Ui::Px(30.0f))))
         {
             m_showWorldAddComponentMenu = true;
         }

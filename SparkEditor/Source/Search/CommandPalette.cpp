@@ -6,9 +6,11 @@
  */
 
 #include "CommandPalette.h"
-#include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
+#include <SparkUI/Fonts.h>
+#include <SparkUI/Runtime.h>
+#include <SparkUI/Widgets.h>
 #include <imgui.h>
 #include <algorithm>
 #include <cctype>
@@ -70,8 +72,10 @@ namespace SparkEditor
     }
 
     void CommandPalette::Render()
+    // NOTE: Intentionally exceeds the 60-line guideline -- scrim, search field, result rows and footer in order.
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
+        namespace Ui = Spark::Ui;
         if (!m_isOpen)
         {
             return;
@@ -84,24 +88,51 @@ namespace SparkEditor
             return;
         }
 
-        // Semi-transparent backdrop
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-        drawList->AddRectFilled(ImVec2(0, 0), displaySize, IM_COL32(0, 0, 0, 128));
+        // Scrim: dims the editor behind the palette and closes the palette when clicked.
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->Pos);
+        ImGui::SetNextWindowSize(viewport->Size);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Ui::ColV(Ui::Role::ModalScrim));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        const ImGuiWindowFlags scrimFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav |
+                                            ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus;
+        if (ImGui::Begin("##CommandPaletteScrim", nullptr, scrimFlags) && ImGui::IsWindowHovered() &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            Close();
+        }
+        ImGui::End();
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+        if (!m_isOpen)
+        {
+            return;
+        }
 
         // Centered palette window
-        float paletteWidth = std::min(600.0f, displaySize.x * 0.6f);
-        float paletteX = (displaySize.x - paletteWidth) * 0.5f;
-        float paletteY = displaySize.y * 0.15f;
+        const float paletteWidth = std::min(Ui::Em(46.0f), viewport->Size.x * 0.6f);
+        const float paletteX = viewport->Pos.x + (viewport->Size.x - paletteWidth) * 0.5f;
+        const float paletteY = viewport->Pos.y + viewport->Size.y * 0.15f;
 
         ImGui::SetNextWindowPos(ImVec2(paletteX, paletteY));
-        ImGui::SetNextWindowSize(ImVec2(paletteWidth, 0));
+        ImGui::SetNextWindowSize(ImVec2(paletteWidth, 0.0f));
         ImGui::SetNextWindowFocus();
 
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse;
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                       ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                                       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking |
+                                       ImGuiWindowFlags_NoSavedSettings;
 
-        if (ImGui::Begin("##CommandPalette", &m_isOpen, flags))
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Ui::ColV(Ui::Role::SurfaceOverlay));
+        ImGui::PushStyleColor(ImGuiCol_Border, Ui::ColV(Ui::Role::BorderSubtle));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, Ui::Px(Ui::ActiveTokens().metrics.rPopup));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Ui::Px2(10.0f, 10.0f));
+        const bool visible = ImGui::Begin("##CommandPalette", &m_isOpen, flags);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(2);
+        if (visible)
         {
             // Search input
             if (m_focusInput)
@@ -109,12 +140,7 @@ namespace SparkEditor
                 ImGui::SetKeyboardFocusHere();
                 m_focusInput = false;
             }
-
-            ImGui::SetNextItemWidth(-1);
-            bool inputChanged = ImGui::InputTextWithHint("##PaletteInput", ICON_FA_SEARCH " Type a command...",
-                                                         m_inputBuffer, sizeof(m_inputBuffer));
-
-            if (inputChanged)
+            if (Ui::SearchField("##PaletteInput", m_inputBuffer, sizeof(m_inputBuffer), "Type a command..."))
             {
                 SetFilter(m_inputBuffer);
             }
@@ -133,78 +159,78 @@ namespace SparkEditor
                 }
             }
 
-            ImGui::Separator();
-
             // Hint text
             if (m_currentFilter.empty())
             {
-                ImGui::TextDisabled("Type '>' for commands, scene actions, and layouts");
+                Ui::SecondaryText("Type '>' for commands, scene actions, and layouts");
             }
+            ImGui::Separator();
 
             // Results list
-            float maxHeight = std::min(400.0f, displaySize.y * 0.5f);
-            ImGui::BeginChild("PaletteResults", ImVec2(0, maxHeight), false);
+            const float maxHeight = std::min(Ui::Em(28.0f), viewport->Size.y * 0.5f);
+            const float rowHeight = ImGui::GetFrameHeight() + Ui::Px(6.0f);
+            ImGui::BeginChild("PaletteResults", ImVec2(0.0f, maxHeight), ImGuiChildFlags_None);
 
             for (size_t i = 0; i < GetVisibleActionCount(); ++i)
             {
                 const auto& action = m_allActions[m_filteredIndices[i]];
-                bool isSelected = (static_cast<int>(i) == m_selectedIndex);
+                const bool isSelected = (static_cast<int>(i) == m_selectedIndex);
 
                 ImGui::PushID(static_cast<int>(i));
+                const float rowLeft = ImGui::GetCursorPosX();
+                const float rowTop = ImGui::GetCursorPosY();
+                const float rowRight = rowLeft + ImGui::GetContentRegionAvail().x;
+                const float textTop = rowTop + (rowHeight - ImGui::GetTextLineHeight()) * 0.5f;
 
-                if (ImGui::Selectable(("##PaletteItem" + std::to_string(i)).c_str(), isSelected, 0, ImVec2(0, 28)))
+                if (ImGui::Selectable("##PaletteItem", isSelected, ImGuiSelectableFlags_AllowOverlap,
+                                      ImVec2(0.0f, rowHeight)))
                 {
                     m_selectedIndex = static_cast<int>(i);
                     ExecuteSelected();
                     ImGui::PopID();
                     break;
                 }
+                if (isSelected && (ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_UpArrow)))
+                    ImGui::SetScrollHereY();
 
-                // Render action content on same line
-                ImGui::SameLine(8);
-
-                // Category badge
-                ImVec4 badgeColor = ImVec4(0.3f, 0.5f, 0.8f, 1.0f);
-                if (action.category == "Panel")
-                {
-                    badgeColor = ImVec4(0.3f, 0.7f, 0.3f, 1.0f);
-                }
-                else if (action.category == "Layout")
-                {
-                    badgeColor = ImVec4(0.8f, 0.6f, 0.2f, 1.0f);
-                }
-                else if (action.category == "Scene")
-                {
-                    badgeColor = ImVec4(0.7f, 0.3f, 0.7f, 1.0f);
-                }
-
-                ImGui::TextColored(badgeColor, "[%s]", action.category.c_str());
+                // Category badge, name, then the shortcut right-aligned on the same row.
+                ImGui::SameLine(rowLeft + Ui::Px(8.0f));
+                ImGui::SetCursorPosY(textTop);
+                Ui::Badge(action.category.c_str(), Ui::Status::Neutral);
                 ImGui::SameLine();
-                ImGui::Text("%s", action.name.c_str());
+                ImGui::SetCursorPosY(textTop);
+                ImGui::TextUnformatted(action.name.c_str());
 
                 if (!action.shortcut.empty())
                 {
-                    float shortcutWidth = ImGui::CalcTextSize(action.shortcut.c_str()).x;
-                    ImGui::SameLine(ImGui::GetContentRegionAvail().x - shortcutWidth + 8);
-                    ImGui::TextDisabled("%s", action.shortcut.c_str());
+                    float shortcutWidth = 0.0f;
+                    {
+                        Ui::ScopedFont hintFont(Ui::FontRole::Small);
+                        shortcutWidth = ImGui::CalcTextSize(action.shortcut.c_str()).x;
+                    }
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), rowRight - shortcutWidth - Ui::Px(8.0f)));
+                    ImGui::SetCursorPosY(textTop);
+                    Ui::KeyHint(action.shortcut.c_str());
                 }
+                ImGui::SetCursorPosY(rowTop + rowHeight + ImGui::GetStyle().ItemSpacing.y);
 
                 ImGui::PopID();
             }
 
             if (m_filteredIndices.empty() && !m_currentFilter.empty())
             {
-                ImGui::TextDisabled("No matching commands found");
+                Ui::SecondaryText("No matching commands found");
             }
 
             ImGui::EndChild();
 
-            // Status bar
+            // Footer
             ImGui::Separator();
             if (GetVisibleActionCount() < m_filteredIndices.size())
-                ImGui::TextDisabled("%zu of %zu actions shown", GetVisibleActionCount(), m_filteredIndices.size());
+                Ui::SecondaryText("%zu of %zu actions shown", GetVisibleActionCount(), m_filteredIndices.size());
             else
-                ImGui::TextDisabled("%zu actions available", m_filteredIndices.size());
+                Ui::SecondaryText("%zu actions available", m_filteredIndices.size());
         }
         ImGui::End();
     }

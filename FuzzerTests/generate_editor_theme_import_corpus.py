@@ -3,7 +3,8 @@
 
 Each seed is a whole theme file as ThemeCustomizer::ImportTheme hands it to
 SparkEditor::ParseThemeDocument: what ExportTheme writes, hand-edited variants, damaged
-documents, and the non-finite colour regression fixture.
+documents, the non-finite colour regression fixture, and the Ember Signal documents that also
+carry every colour, metric and feature flag.
 """
 
 from __future__ import annotations
@@ -22,6 +23,43 @@ COLOR_KEYS = (
     "buttonHovered", "buttonActive", "frame", "frameHovered", "frameActive", "border",
     "borderLight", "borderAccent", "borderSeparator",
 )
+
+
+EMBER_COLOR_KEYS = (
+    "buttonDisabled", "titleBar", "titleBarActive", "titleBarText", "menuBar", "menuItem", "menuItemHovered",
+    "scrollbar", "scrollbarGrab", "scrollbarGrabHovered", "scrollbarGrabActive", "tab", "tabHovered", "tabActive",
+    "tabUnfocused", "accent", "accentSecondary", "focus", "selection", "drop", "graph1", "graph2", "graph3",
+    "graph4", "graph5", "borderStrong", "surfaceOverlay", "surfaceSelectedUnfocused", "textOnAccent", "textInfo",
+    "accentHover", "accentActive", "accentText", "statusFillInfo", "statusFillSuccess", "statusFillWarning",
+    "statusFillError",
+)
+
+METRIC_KEYS = (
+    "windowRounding", "childRounding", "frameRounding", "popupRounding", "scrollbarRounding", "grabRounding",
+    "tabRounding", "windowBorderSize", "childBorderSize", "popupBorderSize", "frameBorderSize", "indentSpacing",
+    "scrollbarSize", "grabMinSize", "windowPaddingX", "windowPaddingY", "framePaddingX", "framePaddingY",
+    "itemSpacingX", "itemSpacingY", "itemInnerSpacingX", "itemInnerSpacingY", "shadowOpacity", "shadowSize",
+    "fontSize", "fontScale", "focusRingWidth",
+)
+
+
+def ember_signal(name: str, metrics: dict[str, str] | None = None, flags: str = "true") -> bytes:
+    """The document WriteThemeDocument writes today: strings, every colour, every metric and flag."""
+    colors = []
+    for index, key in enumerate(COLOR_KEYS + EMBER_COLOR_KEYS):
+        level = round(0.05 + (index % 30) * 0.03, 2)
+        colors.append(f'    "{key}": [{level}, {round(level / 2, 3)}, {round(level / 3, 3)}, 1]')
+    entries = []
+    for index, key in enumerate(METRIC_KEYS):
+        value = (metrics or {}).get(key, str(2 + index % 5))
+        entries.append(f'    "{key}": {value}')
+    for key in ("enableAnimations", "enableGradients", "enableShadows"):
+        entries.append(f'    "{key}": {flags}')
+    lines = ["{", '  "version": 1,', f'  "name": "{name}",', '  "description": "Ember Signal document",',
+             '  "author": "Spark Engine Team",', '  "appearance": "light",', '  "density": "compact",',
+             '  "fontFamily": "IBM Plex Sans",', '  "colors": {', ",\n".join(colors), "  },", '  "metrics": {',
+             ",\n".join(entries), "  }", "}"]
+    return ("\n".join(lines) + "\n").encode("utf-8")
 
 
 def exported(name: str, description: str, author: str, colors: dict[str, str] | None = None) -> bytes:
@@ -48,6 +86,10 @@ def main() -> int:
 
     seeds = {
         "valid-exported-theme.json": exported("Spark Dusk", "Warm dark theme", "Spark Engine Team"),
+        "valid-ember-signal-theme.json": ember_signal("Ember Signal Import"),
+        "metric-edge-values.json": ember_signal(
+            "Edges", {"windowRounding": "5000", "frameRounding": "nan", "fontSize": "-3", "fontScale": "inf",
+                      "shadowOpacity": "1e39", "focusRingWidth": "0x1p-1"}, flags="maybe"),
         "valid-name-only.json": b'{"name": "Bare"}',
         "valid-unicode-and-backslashes.json": exported("Café \\\\ Night", "line one\\nline two", "神"),
         "three-component-colors.json": exported("Opaque", "alpha omitted",
