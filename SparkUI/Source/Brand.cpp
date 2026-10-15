@@ -123,24 +123,6 @@ namespace Spark::Ui
                                           GradientAt(1.0f, alpha), GradientAt(0.5f, alpha));
     }
 
-    void DrawSoftShadow(ImDrawList* drawList, ImVec2 min, ImVec2 max, float rounding, float size, float opacity)
-    {
-        if (drawList == nullptr || size <= 0.0f || opacity <= 0.0f)
-        {
-            return;
-        }
-        constexpr int kLayers = 6;
-        for (int layer = kLayers; layer >= 1; --layer)
-        {
-            const float t = static_cast<float>(layer) / static_cast<float>(kLayers);
-            const float grow = size * t;
-            const float layerAlpha = opacity * (1.0f - t) * (1.0f - t) * 0.5f + opacity / (2.0f * kLayers);
-            drawList->AddRectFilled(ImVec2(min.x - grow, min.y - grow * 0.5f), ImVec2(max.x + grow, max.y + grow),
-                                    ImGui::ColorConvertFloat4ToU32(ImVec4(0.0f, 0.0f, 0.0f, layerAlpha)),
-                                    rounding + grow);
-        }
-    }
-
     void BrandHeader(const char* title, const char* subtitle)
     {
         const float markSize = Em(2.4f);

@@ -950,6 +950,22 @@ namespace SparkLauncher
         }
     } // namespace
 
+    namespace
+    {
+        /// Ember tokens for @p appearance with the launcher's Comfortable metrics and body size.
+        Ui::Tokens LauncherTokens(Spark::Ui::Appearance appearance)
+        {
+            Ui::Tokens tokens = Ui::GenerateTokens(Ui::BuiltinSeed(Ui::PaletteId::Ember), appearance);
+            // The Comfortable profile replaces the spacing only; the appearance's focus ring width
+            // (3 px in High Contrast) stays.
+            const float focusRing = tokens.metrics.focusRing;
+            tokens.metrics = Ui::MetricsFor(Ui::Density::Standard, Ui::MetricsProfile::Comfortable);
+            tokens.metrics.focusRing = focusRing;
+            tokens.type.body = kComfortableBodyPx;
+            return tokens;
+        }
+    } // namespace
+
     void InstallLauncherStyle(float dpiScale, Spark::Ui::Appearance appearance)
     {
         ImGuiContext* context = ImGui::GetCurrentContext();
@@ -957,13 +973,7 @@ namespace SparkLauncher
         {
             return;
         }
-        Ui::Tokens tokens = Ui::GenerateTokens(Ui::BuiltinSeed(Ui::PaletteId::Ember), appearance);
-        // The Comfortable profile replaces the spacing only; the appearance's focus ring width
-        // (3 px in High Contrast) stays.
-        const float focusRing = tokens.metrics.focusRing;
-        tokens.metrics = Ui::MetricsFor(Ui::Density::Standard, Ui::MetricsProfile::Comfortable);
-        tokens.metrics.focusRing = focusRing;
-        tokens.type.body = kComfortableBodyPx;
+        const Ui::Tokens tokens = LauncherTokens(appearance);
         Ui::Install(context, tokens, dpiScale, 1.0f, false);
         Ui::InstallFocusRing(context);
 
@@ -973,6 +983,11 @@ namespace SparkLauncher
         {
             std::fprintf(stderr, "SparkLauncher fonts: %s\n", fonts.diagnostic.c_str());
         }
+    }
+
+    void SetLauncherAppearance(Spark::Ui::Appearance appearance)
+    {
+        Ui::SetTokens(LauncherTokens(appearance));
     }
 
     void DrawLauncher(LauncherApp& app)

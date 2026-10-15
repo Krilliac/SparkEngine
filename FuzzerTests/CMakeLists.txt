@@ -3669,8 +3669,11 @@ set_source_files_properties(
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source/Core/EditorPreferences.cpp"
     PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
 )
+# EditorPreferences.cpp reads through Utils/EditorFileRead.h, which uses the header-only
+# Engine/Modding/HeldHandles.h (std and OS headers only: no ImGui, no ProjectManager).
 target_include_directories(SparkFuzzEditorPreferences PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkEditor/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkUI/Include"
 )
 target_compile_features(SparkFuzzEditorPreferences PRIVATE cxx_std_23)

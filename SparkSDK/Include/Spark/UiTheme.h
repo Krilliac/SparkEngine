@@ -64,9 +64,9 @@ namespace Spark::Ui::Sdk
     static_assert(sizeof(SparkUiRuntimeBlock) == 64, "SparkUiRuntimeBlock layout is part of the host contract");
 
     /// @brief Ember Dark SuccessText, used when the host publishes no block.
-    inline constexpr ImU32 kFallbackSuccess = IM_COL32(0x72, 0xFC, 0xCB, 255);
+    inline constexpr ImU32 kFallbackSuccess = IM_COL32(0x82, 0xFF, 0xD9, 255);
     /// @brief Ember Dark WarningText, used when the host publishes no block.
-    inline constexpr ImU32 kFallbackWarning = IM_COL32(0xFF, 0xD0, 0x5E, 255);
+    inline constexpr ImU32 kFallbackWarning = IM_COL32(0xFF, 0xD8, 0x67, 255);
     /// @brief Ember Dark ErrorText, used when the host publishes no block.
     inline constexpr ImU32 kFallbackError = IM_COL32(0xFF, 0xAA, 0xB9, 255);
     /// @brief Ember Dark TextOnAccent, used on success-filled buttons when no block is published.
@@ -133,12 +133,6 @@ namespace Spark::Ui::Sdk
     inline ImFont* HudFontBold()
     {
         return FindFont("Spark.Bold");
-    }
-
-    /// @brief Monospace face for numbers and identifiers.
-    inline ImFont* MonoFont()
-    {
-        return FindFont("Spark.Mono");
     }
 
     /// @brief Push success-tinted button colours (4 colours); pair with PopSuccessButton().

@@ -42,6 +42,15 @@ namespace SparkLauncher
      */
     void InstallLauncherStyle(float dpiScale, Spark::Ui::Appearance appearance);
 
+    /**
+     * @brief Re-theme the launcher for @p appearance after an OS light/dark or High Contrast change.
+     *
+     * Switches to the same Ember token set InstallLauncherStyle() builds for @p appearance, at the
+     * current scale; fonts are not reloaded. Call between frames on the UI thread, after
+     * InstallLauncherStyle().
+     */
+    void SetLauncherAppearance(Spark::Ui::Appearance appearance);
+
     /// @brief Draw the whole launcher for one frame: rail, status banner and the active page.
     void DrawLauncher(LauncherApp& app);
 } // namespace SparkLauncher

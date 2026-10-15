@@ -22,6 +22,7 @@
 #include "Utils/LogMacros.h"
 #include "SparkUI/Dpi.h"
 #include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
@@ -129,6 +130,7 @@ namespace SparkEditor
                                                      Spark::Ui::Appearance::Dark, m_preferences.density),
                            m_dpiScale, m_preferences.uiScale > 0.0f ? m_preferences.uiScale : 1.0f,
                            m_preferences.reduceMotion);
+        Spark::Ui::InstallFocusRing(ImGui::GetCurrentContext());
         io.ConfigNavCursorVisibleAlways = m_preferences.alwaysShowFocus;
 
         // Setup Platform/Renderer backends

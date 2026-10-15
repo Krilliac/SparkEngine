@@ -189,11 +189,6 @@ namespace SparkInstaller
         return requested;
     }
 
-    void GuiBackend_Quit()
-    {
-        g_quit = true;
-    }
-
     void GuiBackend_Shutdown()
     {
         if (g_glBackendReady)

@@ -43,9 +43,6 @@ namespace Spark::Ui
     /// @brief Fill a rectangle with the brand gradient (diagonal, or top-to-bottom when @p vertical).
     void DrawBrandGradient(ImDrawList* drawList, ImVec2 min, ImVec2 max, float alpha = 1.0f, bool vertical = false);
 
-    /// @brief Draw a soft drop shadow of @p size pixels around a rounded rectangle.
-    void DrawSoftShadow(ImDrawList* drawList, ImVec2 min, ImVec2 max, float rounding, float size, float opacity);
-
     /// @brief Logomark plus Display-face title and optional subtitle in the current window.
     void BrandHeader(const char* title, const char* subtitle = nullptr);
 } // namespace Spark::Ui

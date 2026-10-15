@@ -61,8 +61,8 @@ the block; a module only reads it and never stores the pointer across frames.
   `kFallbackError` and `kFallbackTextOnAccent` are the Ember Dark values.
 - `FindFont(name)` returns the atlas font whose config name is `name`
   (`"Spark.Body"`, `"Spark.Strong"`, `"Spark.Bold"` or `"Spark.Mono"`), or
-  the current font when none matches; `HudFont()`, `HudFontBold()` and
-  `MonoFont()` are shorthands. It returns `nullptr` only without a context.
+  the current font when none matches; `HudFont()` and `HudFontBold()` are
+  shorthands. It returns `nullptr` only without a context.
 - `PushSuccessButton()` pushes four success-tinted button colours with
   `TextOnAccent` text; pair it with `PopSuccessButton()`.
 

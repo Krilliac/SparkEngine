@@ -34,9 +34,6 @@ namespace Spark::Ui
     /// @brief sRGB-encoded component to linear light.
     float SrgbToLinear(float c) noexcept;
 
-    /// @brief Linear-light component to sRGB encoding (clamped to [0, 1]).
-    float LinearToSrgb(float c) noexcept;
-
     /// @brief WCAG 2.x relative luminance of the colour's RGB (alpha ignored).
     float RelativeLuminance(Rgba c) noexcept;
 
@@ -61,9 +58,6 @@ namespace Spark::Ui
     /// @brief Simulate @p kind (Machado, Oliveira and Fernandes 2009, severity 1.0) and return
     ///        the perceived colour in OKLab.
     OkLab SimulateCvdLab(Rgba c, Cvd kind) noexcept;
-
-    /// @brief Simulate @p kind and return the perceived colour as sRGB.
-    Rgba SimulateCvd(Rgba c, Cvd kind) noexcept;
 
     /// @brief Euclidean OKLab distance.
     float DeltaE(OkLab x, OkLab y) noexcept;

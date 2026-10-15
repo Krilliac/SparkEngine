@@ -806,15 +806,16 @@ namespace SparkEditor
                 nodeOpen = ImGui::TreeNodeEx("##node", flags, "%s %s", icon, object->name.c_str());
             }
 
-            // Selected rows carry a 2 px strip at the left edge in the navigation-cursor colour.
+            // Selected rows carry a 2 px strip at the left edge in the focus colour. ImGuiCol_NavCursor
+            // reads transparent mid-frame while the focus-ring hook owns the cursor, so use the token.
             if (IsObjectSelected(object->id))
             {
                 const ImVec2 itemMin = ImGui::GetItemRectMin();
                 const ImVec2 itemMax = ImGui::GetItemRectMax();
-                const ImVec4 strip = ImGui::GetStyleColorVec4(ImGuiCol_NavCursor);
                 ImGui::GetWindowDrawList()->AddRectFilled(
                     ImVec2(ImGui::GetWindowPos().x, itemMin.y),
-                    ImVec2(ImGui::GetWindowPos().x + Spark::Ui::Px(2.0f), itemMax.y), ImGui::GetColorU32(strip));
+                    ImVec2(ImGui::GetWindowPos().x + Spark::Ui::Px(2.0f), itemMax.y),
+                    Spark::Ui::Col(Spark::Ui::Role::BorderFocus));
             }
 
             if (!object->active)

@@ -80,11 +80,6 @@ namespace Spark::Ui
         return static_cast<float>(ToLinear(c));
     }
 
-    float LinearToSrgb(float c) noexcept
-    {
-        return static_cast<float>(ToEncoded(c));
-    }
-
     float RelativeLuminance(Rgba c) noexcept
     {
         return static_cast<float>(0.2126 * ToLinear(c.r) + 0.7152 * ToLinear(c.g) + 0.0722 * ToLinear(c.b));
@@ -171,13 +166,6 @@ namespace Spark::Ui
     {
         const std::array<double, 3> linear = SimulatedLinear(c, kind);
         return LabFromLinear(linear[0], linear[1], linear[2]);
-    }
-
-    Rgba SimulateCvd(Rgba c, Cvd kind) noexcept
-    {
-        const std::array<double, 3> linear = SimulatedLinear(c, kind);
-        return Rgba{static_cast<float>(ToEncoded(linear[0])), static_cast<float>(ToEncoded(linear[1])),
-                    static_cast<float>(ToEncoded(linear[2])), c.a};
     }
 
     float DeltaE(OkLab x, OkLab y) noexcept

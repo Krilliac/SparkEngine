@@ -87,9 +87,6 @@ namespace SparkInstaller
     ///          to close under a running install.
     bool GuiBackend_ConsumeCloseRequest();
 
-    /// @brief Make the next GuiBackend_BeginFrame return false.
-    void GuiBackend_Quit();
-
     /// @brief Destroy the ImGui context, graphics device and window. Safe after a failed or
     ///        partial GuiBackend_Init and safe to call twice.
     void GuiBackend_Shutdown();

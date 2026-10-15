@@ -4786,13 +4786,13 @@ set_tests_properties(FPSSceneMaterialContract PROPERTIES
 
 # Spark UI library (SparkUI/): the nine built-in token sets pass the accessibility audit and
 # its RED fixture fails it; with ImGui, the style mapping is absolute and idempotent, fonts fall
-# back without asserting and resolve by config name, property grids stack when narrow, scale
-# changes wait for the next frame, runtime state is per context, and the SDK theme block
-# round-trips with fallbacks equal to Ember Dark.
+# back without asserting, load from a non-ASCII directory and resolve by config name, property
+# grids stack when narrow, scale changes wait for the next frame, runtime state is per context,
+# and the SDK theme block round-trips with fallbacks equal to Ember Dark.
 if(TARGET imgui)
-    set(_spark_ui_kit_count 12)
+    set(_spark_ui_kit_count 20)
 else()
-    set(_spark_ui_kit_count 3)
+    set(_spark_ui_kit_count 8)
 endif()
 add_test(NAME SparkUiKit COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(SparkUiKit PROPERTIES
@@ -4805,7 +4805,7 @@ unset(_spark_ui_kit_count)
 # finite clamped scale, ten recent scenes, control-character-free strings, atomic save.
 add_test(NAME EditorPreferences COMMAND $<TARGET_FILE:SparkTests> --warn-is-error)
 set_tests_properties(EditorPreferences PROPERTIES
-    ENVIRONMENT "SPARK_TEST_FILE=TestEditorPreferences.cpp;SPARK_TEST_NAME_PREFIX=EditorPreferences_;SPARK_TEST_EXPECT_COUNT=10"
+    ENVIRONMENT "SPARK_TEST_FILE=TestEditorPreferences.cpp;SPARK_TEST_NAME_PREFIX=EditorPreferences_;SPARK_TEST_EXPECT_COUNT=14"
     LABELS "editor;ui;unit"
     TIMEOUT 60)
 

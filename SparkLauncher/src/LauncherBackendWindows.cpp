@@ -29,6 +29,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include <string_view>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
@@ -57,6 +58,7 @@ namespace SparkLauncher
         IDXGISwapChain* g_swapChain = nullptr;
         ID3D11RenderTargetView* g_mainRTV = nullptr;
         bool g_quit = false;
+        bool g_systemAppearanceChanged = false; ///< Set by WndProc, applied by Backend_BeginFrame.
 
         LONG ScaleToDevice(int logical, float scale)
         {
@@ -209,6 +211,21 @@ namespace SparkLauncher
                 }
                 return 0;
             }
+            case WM_SETTINGCHANGE:
+            {
+                // Apps light/dark ("ImmersiveColorSet") and High Contrast arrive here. Only flag the change:
+                // the message can be dispatched inside a frame, so Backend_BeginFrame re-themes before NewFrame.
+                const auto* area = reinterpret_cast<const wchar_t*>(lParam);
+                if (wParam == SPI_SETHIGHCONTRAST ||
+                    (area != nullptr && std::wstring_view(area) == L"ImmersiveColorSet"))
+                {
+                    g_systemAppearanceChanged = true;
+                }
+                break;
+            }
+            case WM_THEMECHANGED:
+                g_systemAppearanceChanged = true;
+                break;
             case WM_SYSCOMMAND:
                 if ((wParam & 0xfff0) == SC_KEYMENU)
                     return 0;
@@ -326,6 +343,16 @@ namespace SparkLauncher
         }
         if (g_quit)
             return false;
+
+        // A light/dark or High Contrast switch made while the launcher runs is followed between frames,
+        // where SetTokens rebuilds the style at once, so the caption reads the new SurfaceSunken.
+        if (g_systemAppearanceChanged)
+        {
+            g_systemAppearanceChanged = false;
+            const Spark::Ui::Appearance appearance = SystemAppearance();
+            SetLauncherAppearance(appearance);
+            ApplyCaptionTheme(g_hwnd, appearance);
+        }
 
         // A DPI change received above is applied here, between frames.
         Spark::Ui::BeginFrameScale();

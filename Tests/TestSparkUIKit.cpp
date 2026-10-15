@@ -450,6 +450,36 @@ TEST(Gated_SparkUi_FindFontByConfigName)
     EXPECT_TRUE(FindFontDirectory(fs::path()).empty());
 }
 
+TEST(Gated_SparkUi_LoadFontSetUnicodeDirectory)
+{
+    // A non-ASCII install folder must load: LoadFontSet hands ImGui UTF-8, and a path(std::string) or
+    // path::string() round trip would go through the ANSI code page on Windows and lose these characters.
+    ScopedImGuiContext context;
+    ScopedTempDirectory root("spark-ui-fonts-unicode");
+    const fs::path fontDir = root.Path() / fs::path(u8"Schrift-éß-字体");
+    fs::create_directories(fontDir);
+    std::size_t staged = 0;
+    for (const fs::directory_entry& entry : fs::directory_iterator(SourceFontDirectory()))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".ttf")
+        {
+            fs::copy_file(entry.path(), fontDir / entry.path().filename());
+            ++staged;
+        }
+    }
+    ASSERT_TRUE(staged >= 4);
+
+    const std::array<fs::path, 1> probes = {fontDir};
+    EXPECT_TRUE(FindFontDirectory(fs::path(), probes) == fontDir);
+
+    const FontSet set = LoadFontSet(*ImGui::GetIO().Fonts, fontDir, 15.0f);
+    ScopedImGuiContext::BuildAtlas();
+    ASSERT_TRUE(set.body != nullptr && set.strong != nullptr && set.bold != nullptr && set.mono != nullptr);
+    EXPECT_TRUE(set.custom);
+    EXPECT_TRUE(set.diagnostic.empty());
+    EXPECT_TRUE(set.strong != set.body && set.bold != set.body && set.mono != set.body);
+}
+
 TEST(Gated_SparkUi_PropertyGridStacksWhenNarrow)
 {
     ScopedImGuiContext context;
