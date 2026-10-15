@@ -76,3 +76,29 @@ function(spark_real_path out_var path)
     file(REAL_PATH "${_spark_pending}" _spark_real)
     set(${out_var} "${_spark_real}" PARENT_SCOPE)
 endfunction()
+
+# spark_path_crosses_link(<out_var> <path>)
+#
+# TRUE when any existing component of <path> is a symbolic link or (on Windows)
+# a directory junction. Comparing <path> with file(REAL_PATH) cannot answer this
+# on Windows: REAL_PATH also expands 8.3 short names, so the hosted runners'
+# %TEMP% (C:/Users/RUNNER~1/...) would always look like a link. IS_SYMLINK is
+# true for symlinks and junctions on every supported CMake.
+function(spark_path_crosses_link out_var path)
+    file(TO_CMAKE_PATH "${path}" _spark_path)
+    cmake_path(ABSOLUTE_PATH _spark_path NORMALIZE)
+    cmake_path(GET _spark_path ROOT_PATH _spark_walk)
+    cmake_path(GET _spark_path RELATIVE_PART _spark_relative)
+    string(REPLACE "/" ";" _spark_components "${_spark_relative}")
+    foreach(_spark_component IN LISTS _spark_components)
+        if(_spark_component STREQUAL "")
+            continue()
+        endif()
+        cmake_path(APPEND _spark_walk "${_spark_component}")
+        if(IS_SYMLINK "${_spark_walk}")
+            set(${out_var} TRUE PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+    set(${out_var} FALSE PARENT_SCOPE)
+endfunction()
