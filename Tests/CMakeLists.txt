@@ -1768,12 +1768,17 @@ if(Python3_Interpreter_FOUND)
     if(TARGET SparkMMOSessionGatePeer)
         add_test(NAME MMOIntegratedWorld_TwoClientSessionGate
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Tests/TestMOD320SessionGateProcess.py
-                --peer $<TARGET_FILE:SparkMMOSessionGatePeer>)
+                --peer $<TARGET_FILE:SparkMMOSessionGatePeer> --timeout 150)
+        # TIMEOUT must exceed the script's own worst case so a hang ends in its FAIL line
+        # and peer logs, not a CTest kill: 150 s --timeout deadline, + up to 30 s for the
+        # killed server to be reaped before the cold restart, + up to 10 s cleanup per
+        # peer (server, two clients) = ~210 s, so 300 s leaves headroom for slow runners.
+        # Each peer polls with 60 s connect/reply/state bounds around a 600000-round PBKDF2
+        # login, then the server is killed and cold-restarted on the same store; run alone
+        # so that work does not compete with a concurrent ctest job.
         set_tests_properties(MMOIntegratedWorld_TwoClientSessionGate PROPERTIES
             LABELS "mmo;network;security;integration;process"
-            TIMEOUT 180
-            # Three processes race a 2 s authentication budget around a 600000-round
-            # PBKDF2; run alone so the timing does not depend on a concurrent ctest job.
+            TIMEOUT 300
             RUN_SERIAL TRUE)
     endif()
     get_target_property(_spark_test_sources SparkTests SOURCES)

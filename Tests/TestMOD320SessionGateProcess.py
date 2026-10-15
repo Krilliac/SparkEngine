@@ -227,7 +227,10 @@ def main() -> int:
 
         # Cold restart: no graceful shutdown, no flush; only what was committed survives.
         server.process.kill()
-        server.process.wait(timeout=30)
+        try:
+            server.process.wait(timeout=30)
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError("killed server did not exit within 30 s; cannot cold-restart") from error
         peers.remove(server)
         restarted = launch(args.peer, "server", "--store", store)
         peers.append(restarted)

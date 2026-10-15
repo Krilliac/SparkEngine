@@ -391,8 +391,20 @@ namespace
             guild.motd = "survives a process kill";
             guild.leaderId = leader->characterId;
             guild.bankCurrency = 320;
-            guild.members.push_back({leader->characterId, leader->name, MMO::GuildRank::Leader});
-            guild.members.push_back({member->characterId, member->name, MMO::GuildRank::Member});
+            guild.members.push_back(MMO::GuildMember{.playerId = leader->characterId,
+                                                     .name = leader->name,
+                                                     .rank = MMO::GuildRank::Leader,
+                                                     .level = 1,
+                                                     .isOnline = false,
+                                                     .contribution = 0.0F,
+                                                     .note = {}});
+            guild.members.push_back(MMO::GuildMember{.playerId = member->characterId,
+                                                     .name = member->name,
+                                                     .rank = MMO::GuildRank::Member,
+                                                     .level = 1,
+                                                     .isOnline = false,
+                                                     .contribution = 0.0F,
+                                                     .note = {}});
             MMO::WorldSaveData world;
             world.guilds.push_back(std::move(guild));
             world.nextGuildId = 2;
