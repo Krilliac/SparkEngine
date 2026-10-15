@@ -104,6 +104,7 @@ build. Those normal build gates remain mandatory after recovery.
 | No existing component of the destination path is a symlink or NTFS junction (on Linux/macOS, root-owned system symlinks such as macOS `/var` are allowed). | `destination-link` |
 | That directory exists as a directory and accepts a create + remove of a `.sparkinstaller-preflight-<pid>` probe file. | `destination-not-directory`, `destination-not-writable` |
 | Free space on that volume meets the disk budget below. | `insufficient-free-space`, `free-space-unknown` |
+| The configured CMake path converts to the system code page that process launch uses (skipped with `--skip-build`). | `cmake-path-encoding` |
 | `cmake --version` runs (skipped with `--skip-build`). | `cmake-unavailable` |
 | Update mode: an existing `.sparkengine-install.json` parses. | `corrupt-install-marker` |
 
