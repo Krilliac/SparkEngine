@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -790,6 +793,66 @@ class DocsLinksHostileTests(unittest.TestCase):
                     self.assertEqual([], errors)
                 else:
                     self.assertTrue(any("source line anchor exceeds" in row["error"] for row in errors), errors)
+
+    def test_clean_clone_without_generated_api_never_passes(self) -> None:
+        # A clean clone tracks no docs/api. Every link into it is unverifiable, so the run must
+        # fail and say "unchecked" rather than blame the author or pass silently.
+        for markup in ("[API](api/README.md)", "[API home](api/)", "[manifest](api/.manifest.json)"):
+            with self.subTest(markup=markup), LinkFixture() as fixture:
+                shutil.rmtree(fixture.api)
+                write(fixture.docs / "Guide.md", "# Guide\n\n" + markup + "\n")
+                errors = links.validate_docs_links(
+                    fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+                )
+                messages = [row["error"] for row in errors]
+                self.assertIn("generated API root is missing or unsafe", messages, errors)
+                self.assertIn(links.GENERATED_UNCHECKED_ERROR, messages, errors)
+                self.assertFalse(any("target does not exist" in message for message in messages), errors)
+
+    def test_clean_clone_without_any_api_link_still_fails(self) -> None:
+        with LinkFixture() as fixture:
+            shutil.rmtree(fixture.api)
+            errors = links.validate_docs_links(
+                fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+            )
+            self.assertEqual(["generated API root is missing or unsafe"], [row["error"] for row in errors])
+
+    def test_generated_api_present_resolves_the_same_links(self) -> None:
+        with LinkFixture() as fixture:
+            write(fixture.docs / "Guide.md", "# Guide\n\n[API](api/README.md)\n")
+            self.assertEqual([], links.validate_docs_links(
+                fixture.catalog, generated_root=fixture.api, source_sha=EXACT_SHA,
+            ))
+
+    def run_main(self, fixture: "LinkFixture", *arguments: str) -> tuple[int, str]:
+        output = io.StringIO()
+        with mock.patch.object(links, "load_json", return_value=fixture.catalog), \
+                mock.patch.object(links, "SITE_CONTRACT_ROOT", fixture.root), \
+                contextlib.redirect_stdout(output):
+            code = links.main(list(arguments))
+        return code, output.getvalue()
+
+    def test_cli_in_a_clean_clone_exits_nonzero_and_labels_unchecked_targets(self) -> None:
+        with LinkFixture() as fixture:
+            shutil.rmtree(fixture.api)
+            write(fixture.docs / "Guide.md", "# Guide\n\n[API](api/README.md)\n")
+            code, output = self.run_main(fixture, "--generated-root", str(fixture.api), "--source-sha", EXACT_SHA)
+            self.assertEqual(1, code, output)
+            self.assertIn("NOT checked", output)
+            self.assertNotIn("All documentation links", output)
+
+    def test_cli_routes_only_does_not_claim_links_were_valid(self) -> None:
+        with LinkFixture() as fixture:
+            code, output = self.run_main(fixture, "--routes-only")
+            self.assertEqual(0, code, output)
+            self.assertIn("NOT checked", output)
+            self.assertNotIn("All documentation links", output)
+
+    def test_cli_with_generated_api_reports_the_full_pass(self) -> None:
+        with LinkFixture() as fixture:
+            code, output = self.run_main(fixture, "--generated-root", str(fixture.api), "--source-sha", EXACT_SHA)
+            self.assertEqual(0, code, output)
+            self.assertIn("All documentation links", output)
 
     def test_missing_catalog_root_document_is_rejected(self) -> None:
         with LinkFixture() as fixture:

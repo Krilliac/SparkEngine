@@ -2395,6 +2395,87 @@ class PublicClaimInvariantTests(ContractTestCase):
         self.assertNotIn("global release gates", content.lower())
         self.assertIn("every declared profile's required gates", content)
 
+    def status_errors(self, text: str, surface: str = "wiki/Example-Page.md") -> list[str]:
+        capabilities = self.mutable["readiness"]["capabilities"]
+        return site_data_validate.status_label_claim_errors({surface: text}, capabilities)
+
+    def test_status_label_stronger_than_capability_is_rejected(self) -> None:
+        # Vulkan is experimental in readiness.json; "supported" and "stable" overclaim it.
+        for label in ("supported", "stable", "production-ready"):
+            with self.subTest(label=label):
+                errors = self.status_errors(f"The Vulkan backend is {label} on desktop.\n")
+                self.assertEqual(1, len(errors), errors)
+                self.assertIn("is stronger than the validated state of capability rendering.vulkan", errors[0])
+                self.assertIn("wiki/Example-Page.md:1:", errors[0])
+
+    def test_status_label_naming_no_capability_is_not_a_capability_claim(self) -> None:
+        # File formats, API features and flags are "supported" without being capabilities.
+        text = (
+            "The Frobnicator subsystem is supported.\n"
+            "The legacy binary scene format is supported.\n"
+            "| glTF | supported |\n"
+        )
+        self.assertEqual([], self.status_errors(text))
+
+    def test_status_label_in_table_row_and_parenthesis_is_resolved(self) -> None:
+        errors = self.status_errors("| Metal | supported |\n| Mobile platforms | stable |\n")
+        self.assertEqual(2, len(errors), errors)
+        errors = self.status_errors("Vulkan (production-ready) ships in the installer.\n")
+        self.assertEqual(1, len(errors), errors)
+
+    def test_status_label_backed_by_the_capability_passes(self) -> None:
+        text = (
+            "The Direct3D 11 backend is supported.\n"
+            "Vulkan is experimental.\n"
+            "Console platforms are planned.\n"
+            "Metal is not supported.\n"
+            "| Windows host | supported |\n"
+            "Direct3D 12 (experimental, opt-in) needs a flag.\n"
+        )
+        self.assertEqual([], self.status_errors(text))
+
+    def test_status_label_inside_fence_and_negation_is_not_a_claim(self) -> None:
+        text = "```\nVulkan is supported\n```\nThis is not a declaration that Vulkan is stable.\n"
+        self.assertEqual([], self.status_errors(text))
+
+    def test_status_label_follows_a_capability_status_change(self) -> None:
+        capabilities = copy.deepcopy(self.mutable["readiness"]["capabilities"])
+        text = "The Vulkan backend is supported.\n"
+        self.assertNotEqual(
+            [], site_data_validate.status_label_claim_errors({"wiki/Example-Page.md": text}, capabilities)
+        )
+        for capability in capabilities:
+            if capability["id"] == "rendering.vulkan":
+                capability["support"] = "supported"
+        self.assertEqual(
+            [], site_data_validate.status_label_claim_errors({"wiki/Example-Page.md": text}, capabilities)
+        )
+
+    def test_validator_rejects_unbacked_status_label_on_a_discovered_surface(self) -> None:
+        source = REPO_ROOT / "wiki/advanced/Codebase-Bloat-Audit.md"
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            text = original_read(path, *args, **kwargs)
+            return text + "\nThe Vulkan backend is production-ready.\n" if path == source else text
+
+        with mock.patch.object(Path, "read_text", read):
+            validator = site_data_validate.Validator(self.mutable)
+            validator.validate_status_labels()
+        self.assertTrue(
+            any(
+                error.startswith("wiki/advanced/Codebase-Bloat-Audit.md:")
+                and "rendering.vulkan" in error
+                for error in validator.errors
+            ),
+            validator.errors,
+        )
+
+    def test_live_tree_status_labels_are_all_backed(self) -> None:
+        validator = site_data_validate.Validator(self.mutable)
+        validator.validate_status_labels()
+        self.assertEqual([], validator.errors)
+
 
 class DerivedEvidenceTests(ContractTestCase):
     """Frozen case 9: changing state cannot leave stale hand-authored facts."""
@@ -3568,6 +3649,20 @@ class ProseCrossReferenceTests(ContractTestCase):
         item = self.items_of(self.mutable)["RDY-000"]
         item["risks"].append("SHA-256 digests, UTF-8 text, and X-100 are not work-item IDs; nor is G100.")
         self.assertEqual([], self.prose_errors())
+
+    @staticmethod
+    def numeric_errors(text: str, entries: list[dict[str, str]] | None = None) -> list[str]:
+        return site_data_validate.public_numeric_claim_errors(
+            {"README.md": text}, entries or [], lambda: {}, {}
+        )
+
+    def test_units_versions_and_prose_numbers_are_not_counts(self) -> None:
+        text = (
+            "Allocate 64 bytes, wait 30 seconds, and allow 250 milliseconds.\n"
+            "Requires DirectX 11 on Windows 11 with C++23 and version 2 of the format.\n"
+            "Phase 2 starts after the review; 3 is the default.\n"
+        )
+        self.assertEqual([], self.numeric_errors(text))
 
 
 class PublicNumericClaimTests(ContractTestCase):

@@ -2727,6 +2727,176 @@ def _numeric_claim_scan(
     return masked, tuple(block_errors), tuple(claims)
 
 
+# A status word in public prose whose subject names a capability in docs/site/readiness.json
+# must not be stronger than that capability's validated state. A status word whose subject
+# names no capability (a file format, an API feature, a build flag) is not a capability claim
+# and is left alone: rejecting every unbound "X is supported" flagged formats and flags far
+# more often than capabilities.
+STATUS_LABEL_RANKS = {
+    "planned": 0,
+    "in progress": 0,
+    "experimental": 1,
+    "supported": 2,
+    "stable": 3,
+    "production-ready": 3,
+}
+_STATUS_LABEL = (
+    r"production[- ]ready|stable|supported|experimental|planned|in[- ]progress"
+)
+_STATUS_NEGATION = re.compile(
+    r"\b(?:not|never|no longer|isn't|aren't|cannot|can't|nor|neither|without)\b[^.;]{0,24}$"
+)
+_STATUS_COPULA = re.compile(
+    r"(?P<subject>[^.;:|!?()]{2,90}?)\s+(?:is|are|remains?|remained|becomes?|stays?)\s+"
+    r"(?:(?:now|currently|still|only|also|an?|the)\s+)*"
+    rf"(?P<label>{_STATUS_LABEL})(?![\w-])"
+)
+_STATUS_PAREN = re.compile(rf"(?P<subject>[^()|.;:!?]{{2,60}}?)\s*\((?P<label>{_STATUS_LABEL})(?![\w-])(?:[,;:][^)]*)?\)")
+_STATUS_LABEL_CELL = re.compile(rf"(?P<label>{_STATUS_LABEL})(?![\w-])[^|]{{0,24}}")
+_STATUS_ANAPHORA = frozenset({"it", "this", "that", "which", "they", "these", "those", "there", "what", "who"})
+# Head nouns that name a role rather than a thing; the heading or file name supplies the thing.
+_STATUS_ROLE_NOUNS = frozenset({
+    "backend", "module", "runtime", "platform", "feature", "support", "path", "host", "api", "renderer",
+    "page", "system", "toolkit", "workflow", "layer", "implementation", "port", "profile",
+})
+_STATUS_STOP_WORDS = frozenset({"a", "an", "the", "all", "of", "and", "or", "in", "on", "for", "to", "its", "our"})
+_STATUS_CAPABILITY_SUFFIXES = (" host", " runtime", " platforms", " modules", " workflow", " toolkit")
+
+
+def _status_capability_aliases(capabilities: Iterable[dict[str, Any]]) -> list[tuple[str, str, int]]:
+    """Return (alias, capability id, validated rank) for every way public prose names a capability."""
+    aliases: list[tuple[str, str, int]] = []
+    for capability in capabilities:
+        if not isinstance(capability, dict) or not isinstance(capability.get("id"), str):
+            continue
+        support = capability.get("support")
+        rank = {"unsupported": 0, "experimental": 1, "supported": 2, "primary": 2}.get(support, 0)
+        if capability.get("release") == "ready" and rank >= 2:
+            rank = 3
+        name = str(capability.get("name", "")).casefold()
+        names = {name, capability["id"].rsplit(".", 1)[-1].casefold()}
+        names.update(part.strip() for part in name.split("/"))
+        for suffix in _STATUS_CAPABILITY_SUFFIXES:
+            if name.endswith(suffix):
+                names.add(name[: -len(suffix)])
+        names.add(name.replace(" ", ""))
+        for alias in names:
+            if len(alias) >= 3:
+                aliases.append((alias, capability["id"], rank))
+    return aliases
+
+
+def _status_resolve(subject: str, aliases: list[tuple[str, str, int]]) -> tuple[str, int] | None:
+    """The capability the subject names: the longest alias found as whole words wins."""
+    best: tuple[int, str, int] | None = None
+    for alias, capability_id, rank in aliases:
+        if re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", subject):
+            if best is None or len(alias) > best[0]:
+                best = (len(alias), capability_id, rank)
+    return None if best is None else (best[1], best[2])
+
+
+def _status_subject_words(subject: str) -> list[str]:
+    cleaned = re.sub(r"^[\s>#*+\-\d.)]+", "", subject)
+    return [word for word in re.findall(r"[\w+/.-]+", cleaned) if word]
+
+
+def _status_headings_and_lines(masked: str) -> Iterable[tuple[int, str, str]]:
+    """Yield (first line number, normalized unit, nearest preceding heading).
+
+    A unit is a table row, a list item, or a paragraph joined across its wrapped lines, so
+    a negation on the previous wrapped line ("not a declaration that ... is stable") still
+    governs the status word.
+    """
+    heading = ""
+    pending: list[str] = []
+    start = 0
+    for number, line in enumerate(masked.splitlines() + [""], start=1):
+        is_heading = bool(re.match(r"\s{0,3}#{1,6}\s", line))
+        is_row = line.lstrip().startswith("|")
+        standalone = is_heading or is_row or bool(re.match(r"\s*(?:[-+*]|\d+[.)])\s", line))
+        if pending and (not line.strip() or standalone):
+            yield start, _normalized_claim_text(" ".join(pending)), heading
+            pending = []
+        if is_heading:
+            heading = _normalized_claim_text(re.sub(r"^\s*#+\s*", "", line))
+        elif line.strip():
+            if not pending:
+                start = number
+            pending.append(line.strip())
+            if is_row:
+                yield start, _normalized_claim_text(" ".join(pending)), heading
+                pending = []
+
+
+def _status_candidates(line: str) -> Iterable[tuple[str, str, int]]:
+    """Yield (subject, label, start offset) pairs from a prose line or table row."""
+    if line.startswith("|"):
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        if cells and not all(set(cell) <= set("-: ") for cell in cells):
+            for cell in cells[1:]:
+                match = _STATUS_LABEL_CELL.fullmatch(cell)
+                if match and cells[0]:
+                    yield cells[0], match.group("label"), 0
+        return
+    seen: set[int] = set()
+    for pattern in (_STATUS_COPULA, _STATUS_PAREN):
+        for match in pattern.finditer(line):
+            if match.start("label") in seen:
+                continue
+            seen.add(match.start("label"))
+            yield match.group("subject"), match.group("label"), match.start("label")
+
+
+def status_label_claim_errors(surface_texts: dict[str, str], capabilities: Any) -> list[str]:
+    """Return errors for status words that no validated capability backs.
+
+    A status word (supported, stable, production-ready, experimental, planned, in progress)
+    attached to a subject is resolved against the capability names in readiness.json. It fails
+    when it is stronger than the capability's validated support/release state. Subjects that
+    name no capability are not capability claims and are skipped. Negated uses ("not supported")
+    and anaphoric subjects ("it is stable") assert nothing resolvable and are skipped.
+    """
+    if not isinstance(capabilities, list):
+        return ["readiness.capabilities: must be an array to resolve status labels"]
+    aliases = _status_capability_aliases(capabilities)
+    errors: list[str] = []
+    for surface in sorted(surface_texts):
+        if surface in GENERATED_CLAIM_SURFACES or surface.startswith(GENERATED_CLAIM_PREFIXES):
+            continue
+        masked, _ = _mask_public_claim_prose(surface_texts[surface])
+        context_name = _normalized_claim_text(Path(surface).stem.replace("-", " ").replace("_", " "))
+        for number, line, heading in _status_headings_and_lines(masked):
+            for subject, label, offset in _status_candidates(line):
+                label_key = re.sub(r"[- ]", " ", label).replace("production ready", "production-ready")
+                rank = STATUS_LABEL_RANKS.get(label_key)
+                if rank is None:
+                    continue
+                if _STATUS_NEGATION.search(line[:offset]) or re.search(r"\b(?:not|never|no longer|cannot|isn't|aren't)\b", subject):
+                    continue
+                words = _status_subject_words(subject)[-6:]
+                if not words or words[-1] in _STATUS_ANAPHORA or words[0] in _STATUS_ANAPHORA:
+                    continue
+                text = " ".join(words)
+                resolved = _status_resolve(text, aliases)
+                if resolved is None and (
+                    all(word in _STATUS_ROLE_NOUNS or word in _STATUS_STOP_WORDS for word in words)
+                    or words[-1] in _STATUS_ROLE_NOUNS and len(words) <= 2
+                ):
+                    resolved = _status_resolve(f"{heading} {context_name}", aliases)
+                if resolved is None:
+                    # "X is supported" about a file format, flag or API feature is not a
+                    # capability claim; only a named capability can be overclaimed.
+                    continue
+                capability_id, validated = resolved
+                if rank > validated:
+                    errors.append(
+                        f"{surface}:{number}: status label {label!r} on {text!r} is stronger than the validated "
+                        f"state of capability {capability_id} (rank {validated})"
+                    )
+    return errors
+
+
 @functools.lru_cache(maxsize=1)
 def _tracked_spellings() -> tuple[frozenset[str], dict[str, str]]:
     """Exact tracked file and directory spellings, plus a case-folded lookup into them.
@@ -3974,6 +4144,15 @@ class Validator:
             public_numeric_claim_errors(texts, entries, source_metric_values, managed_numeric_claim_patterns())
         )
 
+    def validate_status_labels(self) -> None:
+        """Every status word on a governed surface resolves to a capability that backs it."""
+        texts: dict[str, str] = {}
+        for surface in sorted(public_numeric_claim_surfaces()):
+            path = REPO_ROOT / surface
+            if path.suffix == ".md" and path.is_file():
+                texts[surface] = path.read_text(encoding="utf-8", errors="replace")
+        self.errors.extend(status_label_claim_errors(texts, self.contract["readiness"].get("capabilities")))
+
     def validate_online_service_boundary(self) -> None:
         """Online-service boundary (OD-08, NET-110): no hosted-service or local-store production claim,
         a boundary specification whose diagram, boundary table and adapter register match the code, and no
@@ -4518,6 +4697,7 @@ class Validator:
         for finding in check_documented_build_commands():
             self.error(f"{finding.path}:{finding.line}", finding.message)
         self.validate_public_numeric_claims()
+        self.validate_status_labels()
         self.validate_discovered_public_claims()
         self.validate_online_service_boundary()
         for message in installer_platform_ownership_errors(self.contract):
