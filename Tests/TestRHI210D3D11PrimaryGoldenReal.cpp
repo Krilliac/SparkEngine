@@ -12,7 +12,7 @@
 #ifdef _WIN32
 #include "RHI210D3D11EngineFixture.h"
 #include "RHI210D3D11GoldenSupport.h"
-#include "Game/CubeObject.h"
+#include <Spark/CubeObject.h>
 #include "Graphics/GraphicsRenderPipelinesShadowPass.h"
 #include "Utils/GoldenImageManifest.h"
 #include <d3d11sdklayers.h>
