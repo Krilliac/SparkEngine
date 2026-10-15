@@ -234,7 +234,7 @@ class RuleSelfTests(unittest.TestCase):
         self.assertTrue(find_timestamp_ids("x.cpp", code))
 
     def test_timestamp_field_is_allowed(self) -> None:
-        code = strip_comments("void F()\n{\n  data.createdAt = GetTimestamp();\n  bool ok = sessionId == 3;\n}\n")
+        code = strip_comments("void F()\n{\n  data.createdAt = GetTimestamp();\n  data.characterId = m_next++;\n  bool ok = sessionId == 3;\n}\n")
         self.assertEqual(find_timestamp_ids("x.cpp", code), [])
 
     def test_counter_allocator_is_allowed(self) -> None:
