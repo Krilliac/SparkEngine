@@ -226,10 +226,26 @@ PACKAGE_MANAGERS = {
     "apt-get": "apt", "apt": "apt", "brew": "brew", "pip": "pip", "pip3": "pip",
     "choco": "choco", "npm": "npm", "winget": "winget",
 }
+# Versioned pip launchers (`pip3.12`) are the same installer as `pip`.
+VERSIONED_PIP_RE = re.compile(r"^pip[0-9]+(?:\.[0-9]+)?$")
+# Legacy Chocolatey shims that are an install with the verb built in.
+IMPLICIT_INSTALL_COMMANDS = {"cinst": "choco", "cup": "choco"}
 # pip options whose value is the next token rather than a package to install.
 PIP_VALUE_OPTIONS = frozenset({"-r", "--requirement", "-c", "--constraint"})
-# The subcommands that install: npm also accepts the `i` alias.
-INSTALL_VERBS = {"npm": frozenset({"install", "i"})}
+# Every subcommand that installs a package, per manager, aliases included: a
+# missed alias (`npm add`, `winget add`) would install with no gate at all.
+# `npm ci` / `clean-install` install exactly what package-lock.json pins and are
+# not installs here; `choco upgrade` and `winget upgrade` install when absent.
+INSTALL_VERBS = {
+    "npm": frozenset({
+        "install", "i", "add", "in", "ins", "inst", "insta", "instal",
+        "isnt", "isnta", "isntal", "isntall", "install-test", "it",
+    }),
+    "winget": frozenset({"install", "add", "upgrade", "update"}),
+    "choco": frozenset({"install", "upgrade"}),
+    "apt": frozenset({"install", "reinstall"}),
+    "brew": frozenset({"install", "reinstall"}),
+}
 DEFAULT_INSTALL_VERBS = frozenset({"install"})
 # Options whose value is the next token, per manager, so the value is not read as a package.
 MANAGER_VALUE_OPTIONS = {
@@ -248,14 +264,26 @@ PACKAGE_NAME_OPTIONS = {"winget": ("--id", "--name", "--moniker")}
 # A version pin in a winget/choco command line: `--version 1.2.3` or `--version=1.2.3`.
 VERSION_OPTIONS = {"winget": ("--version", "-v"), "choco": ("--version",)}
 # choco options that switch installer checksum verification off.
-CHOCO_CHECKSUM_BYPASS = frozenset({"--ignore-checksums", "--ignorechecksum", "--ignore-checksum"})
+# Every spelling choco accepts; options are compared case-insensitively.
+CHOCO_CHECKSUM_BYPASS = frozenset({
+    "--ignore-checksums", "--ignorechecksums", "--ignorechecksum", "--ignore-checksum",
+    "--allow-empty-checksums", "--allowemptychecksums", "--allowemptychecksum",
+    "--allow-empty-checksums-secure", "--allowemptychecksumssecure", "--allowemptychecksumsecure",
+})
 # An npm install argument that names one exact version (no range, tag or URL).
 NPM_EXACT_SPEC_RE = re.compile(r"^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+@[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?$")
 # A fetch piped (or process-substituted) into an interpreter runs unverified remote code.
 _FETCH_TOOLS = r"(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)"
 _INTERPRETERS = r"(?:sh|bash|zsh|dash|ksh|python3?|perl|ruby|node|pwsh|powershell|iex|Invoke-Expression)"
+# A language interpreter given its program inline (`python3 -c '...'`, `node -e '...'`) reads the
+# piped response as data -- the common JSON-parsing idiom -- unless that program evals its input.
+# Shells and PowerShell get no such exemption: `bash -c "$(cat)"` runs stdin as surely as `bash`.
+_DATA_INTERPRETERS = r"(?:python3?|perl|ruby|node)"
+_SHELL_INTERPRETERS = r"(?:sh|bash|zsh|dash|ksh|pwsh|powershell|iex|Invoke-Expression)"
+_INLINE_PROGRAM = r"(?:\s+-[A-Za-z]+)*?\s+-(?:c|e|-eval)\s+(?!-(?:\s|$))(?![^\n]*\b(?:exec|eval|compile)\b)"
+_PIPE_TARGET = rf"(?:{_DATA_INTERPRETERS}\b(?!{_INLINE_PROGRAM})|{_SHELL_INTERPRETERS}\b)"
 FETCH_PIPED_INTERPRETER_RE = re.compile(
-    rf"\b{_FETCH_TOOLS}\b[^\n;&]*?(?<!\|)\|(?!\|)\s*(?:sudo\s+(?:-\S+\s+)*)?(?:/usr/bin/env\s+)?{_INTERPRETERS}\b"
+    rf"\b{_FETCH_TOOLS}\b[^\n;&]*?(?<!\|)\|(?!\|)\s*(?:sudo\s+(?:-\S+\s+)*)?(?:/usr/bin/env\s+)?{_PIPE_TARGET}"
     rf"|\b{_INTERPRETERS}\s+<\(\s*{_FETCH_TOOLS}\b"
     rf"|\b(?:iex|Invoke-Expression)\b[^\n]*\b{_FETCH_TOOLS}\b"
     r"|\.DownloadString\(",
@@ -2908,14 +2936,19 @@ def _shell_install_commands(script: str) -> list[tuple[str, list[str]]]:
         comment = next((i for i, token in enumerate(tokens) if token.startswith("#")), len(tokens))
         tokens = tokens[:comment]
         for index, token in enumerate(tokens):
-            manager = PACKAGE_MANAGERS.get(token)
+            manager = PACKAGE_MANAGERS.get(token) or ("pip" if VERSIONED_PIP_RE.match(token) else None)
             if manager is None:
-                continue
-            position = index + 1
-            while position < len(tokens) and tokens[position].startswith("-"):
-                position += 1
-            if position >= len(tokens) or tokens[position] not in INSTALL_VERBS.get(manager, DEFAULT_INSTALL_VERBS):
-                continue
+                manager = IMPLICIT_INSTALL_COMMANDS.get(token)
+                if manager is None:
+                    continue
+                position = index  # the command is the install verb
+            else:
+                position = index + 1
+                while position < len(tokens) and tokens[position].startswith("-"):
+                    position += 1
+                verbs = INSTALL_VERBS.get(manager, DEFAULT_INSTALL_VERBS)
+                if position >= len(tokens) or tokens[position].lower() not in verbs:
+                    continue
             arguments: list[str] = []
             for argument in tokens[position + 1:]:
                 if argument in SHELL_COMMAND_BREAKS:
@@ -2976,7 +3009,9 @@ def unmanaged_install_problems(script: str) -> list[str]:
             )
             if not pinned:
                 problems.append(f"{manager} install must pin the package with --version")
-            if manager == "choco" and any(argument in CHOCO_CHECKSUM_BYPASS for argument in arguments):
+            if manager == "choco" and any(
+                argument.split("=", 1)[0].lower() in CHOCO_CHECKSUM_BYPASS for argument in arguments
+            ):
                 problems.append("choco install must not disable installer checksum verification")
         elif manager == "npm":
             names = [argument for argument in arguments if not argument.startswith("-")]

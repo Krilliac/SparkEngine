@@ -17,7 +17,8 @@ also carry a reviewed package-URL mapping (``purl`` with its ``purl_review``) or
 commit no advisory names, must also record the upstream release it derives
 from (``upstream_version``, ``+N`` for N commits past it) with its evidence: the
 release tag's commit, checked against the gitlink, or a reviewed source. The
-upstream release is the package version and a ``pkg:generic`` purl.
+upstream release is the package version; the purls carry it only when the pin is
+that release, and otherwise name the pinned commit (``1.0+3`` is no upstream ref).
 
 The document is bound to a source commit the same way REL-100 build provenance
 is: it records the commit SHA and the SHA-256 of the *committed*
@@ -304,6 +305,23 @@ def _source_url(source: str) -> str | None:
     return token if token.startswith("https://") else None
 
 
+def _upstream_purl_version(dep: Dependency) -> str | None:
+    """The purl version for a dependency's upstream release, or None when no real upstream ref names it.
+
+    A purl version must be something upstream publishes. ``upstream_version`` "1.92.9b" is the
+    release tag and is used as-is, but "1.92.9b+35" (35 commits past it) is no upstream version
+    at all, so a submodule pinned past its release is named by its pinned commit instead, and a
+    vendored tree past one (no commit to name) gets a version-less purl. ``versionInfo`` still
+    carries "1.92.9b+35" for scanners that compare against advisory ranges.
+    """
+    if not dep.upstream_version:
+        return None
+    match = supply_chain.UPSTREAM_VERSION_RE.fullmatch(dep.upstream_version)
+    if match is not None and not match.group("ahead"):
+        return dep.upstream_version
+    return dep.pin if dep.kind == "submodule" else None
+
+
 def _package(dep: Dependency) -> dict[str, Any]:
     url = _source_url(dep.source)
     github = GITHUB_URL_RE.match(url) if url else None
@@ -344,30 +362,31 @@ def _package(dep: Dependency) -> dict[str, Any]:
         package["comment"] += f" No CPE: {dep.cpe_unavailable_reason}"
         if dep.purl_unavailable_reason:
             package["comment"] += f" No reviewed purl: {dep.purl_unavailable_reason}"
+    release_ref = _upstream_purl_version(dep)
     if dep.purl and dep.upstream_version:
         package["comment"] += f" Reviewed purl: {dep.purl_review}"
         references.append(
             {
                 "referenceCategory": "PACKAGE-MANAGER",
                 "referenceType": "purl",
-                "referenceLocator": f"{dep.purl}@{quote(dep.upstream_version, safe='.')}",
+                "referenceLocator": f"{dep.purl}@{quote(release_ref, safe='.')}" if release_ref else dep.purl,
             }
         )
     if github and purl_version:
         owner, repo = github.group(1).lower(), github.group(2).lower()
-        references.append(
-            {
-                "referenceCategory": "PACKAGE-MANAGER",
-                "referenceType": "purl",
-                "referenceLocator": f"pkg:github/{owner}/{repo}@{purl_version}",
-            }
-        )
+        locator = f"pkg:github/{owner}/{repo}@{purl_version}"
+        if all(ref["referenceLocator"] != locator for ref in references):
+            references.append(
+                {"referenceCategory": "PACKAGE-MANAGER", "referenceType": "purl", "referenceLocator": locator}
+            )
     if dep.upstream_version:
+        name = quote(dep.name, safe="")
         references.append(
             {
                 "referenceCategory": "PACKAGE-MANAGER",
                 "referenceType": "purl",
-                "referenceLocator": f"pkg:generic/{quote(dep.name, safe='')}@{quote(dep.upstream_version, safe='.')}",
+                "referenceLocator": f"pkg:generic/{name}@{quote(release_ref, safe='.')}" if release_ref
+                else f"pkg:generic/{name}",
             }
         )
     if references:

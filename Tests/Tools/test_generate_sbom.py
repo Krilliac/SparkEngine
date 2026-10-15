@@ -16,6 +16,7 @@ Run:  python3 -m unittest Tests.Tools.test_generate_sbom -v
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import io
 import json
@@ -945,6 +946,22 @@ class TestInventoryConsistency(unittest.TestCase):
         (dep,) = self.inventory(self.fields("a" * 40), self.record(upstream_version="1.0.0+3",
                                                                    upstream_tag_commit="c" * 40))
         self.assertEqual(sbom._package(dep)["versionInfo"], "1.0.0+3")
+
+    def test_pin_past_the_release_puts_the_commit_not_a_fake_version_in_purls(self) -> None:
+        (dep,) = self.inventory(self.fields("a" * 40), self.record(
+            upstream_version="1.0.0+3", upstream_tag_commit="c" * 40, cpe=None,
+            cpe_unavailable_reason="The fixture has no NVD product.",
+            purl="pkg:github/example/sub", purl_review="Fixture: reviewed upstream."))
+        package = sbom._package(dep)
+        self.assertEqual(package["versionInfo"], "1.0.0+3")
+        locators = [ref["referenceLocator"] for ref in package["externalRefs"]]
+        # The reviewed purl and the source-URL purl are the same locator, emitted once.
+        self.assertEqual(locators, [f"pkg:github/example/sub@{'a' * 40}", f"pkg:generic/Sub@{'a' * 40}"])
+        self.assertFalse([locator for locator in locators if "%2B" in locator or "+" in locator], locators)
+        # A vendored tree past its release has no commit to name, so its purls carry no version.
+        vendored = dataclasses.replace(dep, kind="vendored")
+        self.assertIsNone(sbom._upstream_purl_version(vendored))
+        self.assertIn("pkg:generic/Sub", [ref["referenceLocator"] for ref in sbom._package(vendored)["externalRefs"]])
 
     def test_a_reviewed_version_source_stands_in_for_a_tag(self) -> None:
         (dep,) = self.inventory(self.fields("a" * 40), self.record(

