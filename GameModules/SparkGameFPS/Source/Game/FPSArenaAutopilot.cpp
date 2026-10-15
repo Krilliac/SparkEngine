@@ -134,6 +134,11 @@ namespace SparkFPS
                 nearestDistance = distance;
             }
         }
+        if (!nearest)
+        {
+            SetForwardHeld(input, false);
+            return false;
+        }
 
         // Yaw is read back from the camera's forward vector, so the error stays
         // correct whatever pitch the camera has or however Yaw() wraps its angle.

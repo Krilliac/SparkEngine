@@ -160,9 +160,13 @@ namespace Spark::Daemon
             // in any session, already holds an instance of this name, so the
             // daemon never silently joins a pipe another account squatted.
             const DWORD openMode = PIPE_ACCESS_DUPLEX | (firstInstance ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0u);
-            return ::CreateNamedPipeW(pipeName.c_str(), openMode,
-                                      PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                                      PIPE_UNLIMITED_INSTANCES, 64u * 1024u, 64u * 1024u, 0, security);
+            HANDLE pipe =
+                ::CreateNamedPipeW(pipeName.c_str(), openMode,
+                                   PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_NOWAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                                   PIPE_UNLIMITED_INSTANCES, 64u * 1024u, 64u * 1024u, 0, security);
+            // Failure is INVALID_HANDLE_VALUE; fold a null handle into it too so
+            // callers test one sentinel and never pass null to ConnectNamedPipe.
+            return pipe != nullptr ? pipe : INVALID_HANDLE_VALUE;
         }
 
         std::wstring EndpointMutexName(std::wstring_view endpoint)
