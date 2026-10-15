@@ -2924,7 +2924,12 @@ class TestShippedArtefacts(unittest.TestCase):
 
     def test_shipped_matrix_carries_both_canonical_rows(self) -> None:
         matrix = vc.load_strict_json(self.MATRIX)
-        self.assertEqual({row["id"] for row in matrix["rows"]}, {D3D11_ID, NULLRHI_ID})
+        certifiable = {row["id"] for row in matrix["rows"] if row["tier"] in vc.CERTIFIABLE_TIERS}
+        self.assertEqual(certifiable, {D3D11_ID, NULLRHI_ID})
+        # OD-31: the self-hosted runner's integrated GPU is a second driver row,
+        # declared experimental so it never enters a release claim.
+        others = {row["id"]: row["tier"] for row in matrix["rows"] if row["id"] not in certifiable}
+        self.assertEqual(others, {"win11-x64-msvc143-d3d11-amd-igpu": "experimental"})
 
     def test_shipped_matrix_is_unstamped(self) -> None:
         """Until a real collection stamps it, the matrix must fail closed."""

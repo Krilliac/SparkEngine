@@ -866,6 +866,21 @@
       "sha256": "091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19",
       "output": "archive",
       "verification": "get-file-hash"
+    },
+    {
+      "name": "CMake 4.4.1 GPU certification archive",
+      "class": "downloads",
+      "license_spdx": "BSD-3-Clause",
+      "owner": "Krilliac",
+      "justification": "The self-hosted GPU certification job needs the same pinned CMake 4.4.1 as Windows Shipping. The archive is hash-checked before extraction, lives in RUNNER_TEMP and never enters engine packages.",
+      "path": ".github/workflows/gpu-certification.yml",
+      "pin_path": ".github/workflows/gpu-certification.yml",
+      "command": "Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip' -OutFile $archive",
+      "source_url": "https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip",
+      "url": "https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip",
+      "sha256": "091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19",
+      "output": "archive",
+      "verification": "get-file-hash"
     }
   ]
 }
