@@ -25,7 +25,7 @@ from common import SITE_CONTRACT_ROOT, github_heading_slug, load_json
 import docs_contract
 from docs_contract import validate_api_manifest
 
-MAX_DOCUMENTS = 1500
+MAX_DOCUMENTS = 3000
 MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 256 * 1024 * 1024
 MAX_LINKS = 150000
