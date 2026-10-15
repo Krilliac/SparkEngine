@@ -1,6 +1,6 @@
 # Codebase Statistics
 
-Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-09-12.
+Comprehensive metrics and analysis of the SparkEngine codebase. Updated 2026-10-15.
 This source inventory is not readiness evidence. The `stable-v1` Windows 11
 x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
@@ -10,21 +10,21 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 321291 |
+| **SparkEngine/Source** | 320842 |
 | **SparkEditor/Source** | 103591 |
 | **GameModules** | 142614 |
 | **External services** | 11280 |
 | **Asset pipeline** | 2504 |
-| **Tests** | 182920 |
+| **Tests** | 182881 |
 | **SparkConsole/src** | 1701 |
 | **SparkShaderCompiler/src** | 680 |
-| **Total C++ (excl. ThirdParty)** | **~777873** |
+| **Total C++ (excl. ThirdParty)** | **~777385** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1059 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1058 |
 | Implementation files (.c/.cc/.cpp/.cxx/.mm) | 1580 |
 | HLSL shader files | 42 |
 | GLSL shader files | 14 |
@@ -42,9 +42,9 @@ Graphics contains 121125 lines, or 37% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 121125 | 37.6% |
+| Graphics | 121125 | 37.7% |
 | Engine (all subsystems) | 89088 | 27.7% |
-| Utils | 46113 | 14.3% |
+| Utils | 45664 | 14.2% |
 | Core | 31065 | 9.6% |
 | Physics | 10799 | 3.3% |
 | Audio | 6884 | 2.1% |
@@ -110,7 +110,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 605 |
-| TEST() definitions | 7329 |
+| TEST() definitions | 7327 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
