@@ -54,7 +54,6 @@ function(spark_validate_windows_shipping_toolchain)
         "CMAKE_GENERATOR_PLATFORM|${_locked_architecture}"
         "CMAKE_GENERATOR_TOOLSET|${_selector}"
         "CMAKE_VS_PLATFORM_TOOLSET|${_locked_platformToolset}"
-        "CMAKE_VS_PLATFORM_TOOLSET_VERSION|${_locked_msvcToolsVersion}"
         "CMAKE_VS_PLATFORM_TOOLSET_HOST_ARCHITECTURE|${_locked_hostArchitecture}"
         "CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION|${_locked_windowsSdkVersion}")
     foreach(_language IN ITEMS C CXX)
@@ -70,6 +69,14 @@ function(spark_validate_windows_shipping_toolchain)
             message(FATAL_ERROR "Windows Shipping toolchain mismatch: ${_key}='${${_key}}', requires '${_expected}'")
         endif()
     endforeach()
+    # CMake leaves CMAKE_VS_PLATFORM_TOOLSET_VERSION empty when the requested version= is the instance's
+    # default toolset (hosted runners). Empty is accepted here only because the compiler, linker and
+    # archiver paths below must still sit in VC/Tools/MSVC/<locked version>; a non-empty value must match.
+    if(NOT "${CMAKE_VS_PLATFORM_TOOLSET_VERSION}" STREQUAL ""
+            AND NOT CMAKE_VS_PLATFORM_TOOLSET_VERSION STREQUAL _locked_msvcToolsVersion)
+        message(FATAL_ERROR "Windows Shipping toolchain mismatch: CMAKE_VS_PLATFORM_TOOLSET_VERSION="
+            "'${CMAKE_VS_PLATFORM_TOOLSET_VERSION}', requires '${_locked_msvcToolsVersion}'")
+    endif()
     if(NOT CMAKE_GENERATOR_INSTANCE MATCHES "^([A-Za-z]:[/\\]|[/\\][/\\])")
         message(FATAL_ERROR "Windows Shipping toolchain requires an absolute Visual Studio instance")
     endif()

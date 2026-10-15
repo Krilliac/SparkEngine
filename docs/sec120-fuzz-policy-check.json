@@ -13,7 +13,7 @@
   "coverage_claim": false,
   "inputs": {
     "corpus_manifest": "ea62a2434a02f04a6917993ef8e9bb88c4121c84c1a54409d5292e89f07feb89",
-    "inventory": "7c8b148094eb8ea2d6916c961a0380fa463d9a463637a1debe403d10657b374b"
+    "inventory": "8e885cfb3adfda493c2190d5e9975332050c4e822d084d1e0a0b98d6798bdb79"
   },
   "inventory": {
     "blocked_count": 64,
@@ -65,7 +65,7 @@
       "SparkSDK/Include",
       "GameModules"
     ],
-    "scanned_file_count": 2194,
+    "scanned_file_count": 2210,
     "unclassified_candidate_count": 0
   },
   "passed": false,
