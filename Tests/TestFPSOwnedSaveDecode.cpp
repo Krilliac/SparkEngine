@@ -109,7 +109,9 @@ TEST(FPSInputDispatch_DecodeOwnedPrimary)
     // The loaded profile must expose every declared field and nothing else, so the caller can assert each one.
     ASSERT_EQ(canonical.size(), kDeclaredProfileKeys.size());
     for (const char* key : kDeclaredProfileKeys)
+    {
         ASSERT_TRUE(canonical.count(key) == 1u);
+    }
     RequirePrimaryOnly(directory);
     ASSERT_TRUE(ReadPrimary(primary) == before);
     auto canonicalJson = nlohmann::json::object();

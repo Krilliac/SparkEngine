@@ -1086,8 +1086,8 @@ void Game::DisconnectNetwork()
 void Game::ApplyMultiplayerResults(SparkFPS::FPSMultiplayerSystem& multiplayer)
 {
     // The session owns the reconcile, health, death and respawn logic; this only applies its verdict
-    // to the rendered Player. A Player that does not exist yet simply misses the edge, and the next
-    // first-report teleport/health values resync it once it does.
+    // to the rendered Player. While no Player exists the update is not taken, so its pending edges stay
+    // queued in the session and are applied on the first frame a Player does exist.
     if (m_player)
     {
         const SparkFPS::LocalPlayerUpdate update = multiplayer.TakeLocalPlayerUpdate();
