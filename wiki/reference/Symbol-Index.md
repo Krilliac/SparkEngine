@@ -3354,7 +3354,7 @@
 | `BoundedMessageQueue` | struct | SparkEditor | [CollaborativeEditSession.h:L409](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L409) | A message queue bounded by both entry count and approximate bytes. |
 | `BoundedReadStatus` | enum | SparkEditor | [EditorFileRead.h:L38](../../SparkEditor/Source/Utils/EditorFileRead.h#L38) | Outcome of ReadRegularFileBounded. |
 | `BoundedString` | function | SparkEditor | [JSONSceneSerializer.cpp:L137](../../SparkEditor/Source/SceneSystem/JSONSceneSerializer.cpp#L137) |  |
-| `boundEndpoint` | struct | SparkDaemon | [DaemonServer.cpp:L413](../../SparkDaemon/src/DaemonServer.cpp#L413) |  |
+| `boundEndpoint` | struct | SparkDaemon | [DaemonServer.cpp:L417](../../SparkDaemon/src/DaemonServer.cpp#L417) |  |
 | `BoundingBox` | struct | SparkEngine | [CollisionSystem.h:L33](../../SparkEngine/Source/Physics/CollisionSystem.h#L33) | Axis-aligned bounding box for collision detection |
 | `BoundingBox::GetCenter` | method | SparkEngine | [CollisionSystem.cpp:L17](../../SparkEngine/Source/Physics/CollisionSystem.cpp#L17) |  |
 | `BoundingBox::GetExtents` | method | SparkEngine | [CollisionSystem.cpp:L22](../../SparkEngine/Source/Physics/CollisionSystem.cpp#L22) |  |
@@ -8197,12 +8197,12 @@
 | `DaemonFixture` | function | Tests | [TestShaderDiskCacheDaemon.cpp:L80](../../Tests/TestShaderDiskCacheDaemon.cpp#L80) |  |
 | `DaemonServer` | class | SparkDaemon | [DaemonServer.h:L34](../../SparkDaemon/src/DaemonServer.h#L34) |  |
 | `DaemonServer` | function | SparkDaemon | [DaemonServer.h:L39](../../SparkDaemon/src/DaemonServer.h#L39) |  |
-| `DaemonServer::AddService` | method | SparkDaemon | [DaemonServer.cpp:L213](../../SparkDaemon/src/DaemonServer.cpp#L213) |  |
-| `DaemonServer::HandleConnection` | method | SparkDaemon | [DaemonServer.cpp:L588](../../SparkDaemon/src/DaemonServer.cpp#L588) |  |
-| `DaemonServer::ReapFinishedWorkers` | method | SparkDaemon | [DaemonServer.cpp:L553](../../SparkDaemon/src/DaemonServer.cpp#L553) |  |
-| `DaemonServer::Run` | method | SparkDaemon | [DaemonServer.cpp:L229](../../SparkDaemon/src/DaemonServer.cpp#L229) |  |
-| `DaemonServer::SnapshotStats` | method | SparkDaemon | [DaemonServer.cpp:L571](../../SparkDaemon/src/DaemonServer.cpp#L571) |  |
-| `DaemonServer::Stop` | method | SparkDaemon | [DaemonServer.cpp:L221](../../SparkDaemon/src/DaemonServer.cpp#L221) |  |
+| `DaemonServer::AddService` | method | SparkDaemon | [DaemonServer.cpp:L217](../../SparkDaemon/src/DaemonServer.cpp#L217) |  |
+| `DaemonServer::HandleConnection` | method | SparkDaemon | [DaemonServer.cpp:L592](../../SparkDaemon/src/DaemonServer.cpp#L592) |  |
+| `DaemonServer::ReapFinishedWorkers` | method | SparkDaemon | [DaemonServer.cpp:L557](../../SparkDaemon/src/DaemonServer.cpp#L557) |  |
+| `DaemonServer::Run` | method | SparkDaemon | [DaemonServer.cpp:L233](../../SparkDaemon/src/DaemonServer.cpp#L233) |  |
+| `DaemonServer::SnapshotStats` | method | SparkDaemon | [DaemonServer.cpp:L575](../../SparkDaemon/src/DaemonServer.cpp#L575) |  |
+| `DaemonServer::Stop` | method | SparkDaemon | [DaemonServer.cpp:L225](../../SparkDaemon/src/DaemonServer.cpp#L225) |  |
 | `DaemonStats` | struct | SparkEngine | [DaemonProtocol.h:L73](../../SparkEngine/Source/Utils/DaemonProtocol.h#L73) | Aggregate daemon-wide stats returned by `ControlMessage::StatsRequest`. |
 | `DaemonStatsProvider` | alias | SparkDaemon | [ControlService.h:L23](../../SparkDaemon/src/ControlService.h#L23) | Provides the live DaemonStats reply for `StatsRequest`. |
 | `DaemonStatsSnapshot` | struct | SparkEngine | [DaemonDiagnostics.h:L25](../../SparkEngine/Source/Utils/DaemonDiagnostics.h#L25) |  |
@@ -10802,7 +10802,7 @@
 | `EndpointFor` | function | SparkGateway | [GatewayAreaControl.cpp:L514](../../SparkGateway/src/GatewayAreaControl.cpp#L514) |  |
 | `EndpointIsActive` | function | SparkDaemon | [DaemonServer.cpp:L72](../../SparkDaemon/src/DaemonServer.cpp#L72) |  |
 | `EndpointIsActive` | function | SparkGateway | [GatewayAreaControl.cpp:L265](../../SparkGateway/src/GatewayAreaControl.cpp#L265) |  |
-| `EndpointMutexName` | function | SparkDaemon | [DaemonServer.cpp:L168](../../SparkDaemon/src/DaemonServer.cpp#L168) |  |
+| `EndpointMutexName` | function | SparkDaemon | [DaemonServer.cpp:L172](../../SparkDaemon/src/DaemonServer.cpp#L172) |  |
 | `endpointStatus` | struct | SparkEngine | [DaemonLifecycleSpawn.cpp:L89](../../SparkEngine/Source/Utils/DaemonLifecycleSpawn.cpp#L89) |  |
 | `EndPropertyGrid` | function | SparkUI | [Widgets.h:L136](../../SparkUI/Include/SparkUI/Widgets.h#L136) | Close the grid opened by BeginPropertyGrid(). |
 | `EndPropertyGrid` | function | SparkUI | [Widgets.cpp:L471](../../SparkUI/Source/Widgets.cpp#L471) |  |
@@ -11645,7 +11645,7 @@
 | `exeRelative` | function | SparkInstaller | [GitBootstrap.cpp:L270](../../SparkInstaller/src/GitBootstrap.cpp#L270) |  |
 | `ExeRelative` | function | SparkInstaller | [PortableGitCacheTests.cpp:L39](../../SparkInstaller/tests/PortableGitCacheTests.cpp#L39) |  |
 | `ExhibitProp` | struct | GameModules | [GameplayShowcase.cpp:L586](../../GameModules/SparkGame/Source/Core/GameplayShowcase.cpp#L586) |  |
-| `existing` | struct | SparkDaemon | [DaemonServer.cpp:L381](../../SparkDaemon/src/DaemonServer.cpp#L381) |  |
+| `existing` | struct | SparkDaemon | [DaemonServer.cpp:L385](../../SparkDaemon/src/DaemonServer.cpp#L385) |  |
 | `existing` | struct | SparkEngine | [SceneManager.cpp:L471](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L471) |  |
 | `existing` | struct | SparkGateway | [GatewayAreaControl.cpp:L287](../../SparkGateway/src/GatewayAreaControl.cpp#L287) |  |
 | `ExistingDefaultAudio` | function | SparkEngine | [StartupSplash.cpp:L375](../../SparkEngine/Source/Core/StartupSplash.cpp#L375) |  |
@@ -13598,10 +13598,10 @@
 | `FPSArenaAutopilot` | class | GameModules | [FPSArenaAutopilot.h:L65](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.h#L65) | What the autopilot may see of the arena this frame. |
 | `FPSArenaAutopilot::Disable` | method | GameModules | [FPSArenaAutopilot.cpp:L66](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L66) |  |
 | `FPSArenaAutopilot::Enable` | method | GameModules | [FPSArenaAutopilot.cpp:L58](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L58) |  |
-| `FPSArenaAutopilot::FormatLoopLine` | method | GameModules | [FPSArenaAutopilot.cpp:L160](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L160) |  |
-| `FPSArenaAutopilot::PhaseName` | method | GameModules | [FPSArenaAutopilot.cpp:L170](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L170) |  |
+| `FPSArenaAutopilot::FormatLoopLine` | method | GameModules | [FPSArenaAutopilot.cpp:L165](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L165) |  |
+| `FPSArenaAutopilot::PhaseName` | method | GameModules | [FPSArenaAutopilot.cpp:L175](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L175) |  |
 | `FPSArenaAutopilot::ReadTally` | method | GameModules | [FPSArenaAutopilot.cpp:L72](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L72) |  |
-| `FPSArenaAutopilot::SetForwardHeld` | method | GameModules | [FPSArenaAutopilot.cpp:L186](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L186) |  |
+| `FPSArenaAutopilot::SetForwardHeld` | method | GameModules | [FPSArenaAutopilot.cpp:L191](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L191) |  |
 | `FPSArenaAutopilot::Step` | method | GameModules | [FPSArenaAutopilot.cpp:L98](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L98) |  |
 | `FPSArenaAutopilot::UpdatePhase` | method | GameModules | [FPSArenaAutopilot.cpp:L88](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L88) |  |
 | `FPSBoundEventBus` | function | Tests | [event_module.cpp:L45](../../Tests/FPSGameplayEvents/event_module.cpp#L45) |  |
@@ -25682,12 +25682,12 @@
 | `lock` | function | SparkDaemon | [CollaborationService.cpp:L262](../../SparkDaemon/src/CollaborationService.cpp#L262) |  |
 | `lock` | function | SparkDaemon | [CollaborationService.cpp:L299](../../SparkDaemon/src/CollaborationService.cpp#L299) |  |
 | `lock` | function | SparkDaemon | [CollaborationService.cpp:L330](../../SparkDaemon/src/CollaborationService.cpp#L330) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L203](../../SparkDaemon/src/DaemonServer.cpp#L203) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L325](../../SparkDaemon/src/DaemonServer.cpp#L325) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L350](../../SparkDaemon/src/DaemonServer.cpp#L350) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L510](../../SparkDaemon/src/DaemonServer.cpp#L510) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L526](../../SparkDaemon/src/DaemonServer.cpp#L526) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L555](../../SparkDaemon/src/DaemonServer.cpp#L555) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L207](../../SparkDaemon/src/DaemonServer.cpp#L207) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L329](../../SparkDaemon/src/DaemonServer.cpp#L329) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L354](../../SparkDaemon/src/DaemonServer.cpp#L354) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L514](../../SparkDaemon/src/DaemonServer.cpp#L514) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L530](../../SparkDaemon/src/DaemonServer.cpp#L530) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L559](../../SparkDaemon/src/DaemonServer.cpp#L559) |  |
 | `lock` | function | SparkDaemon | [OrchestrationService.cpp:L942](../../SparkDaemon/src/OrchestrationService.cpp#L942) |  |
 | `lock` | function | SparkDaemon | [OrchestrationService.cpp:L1129](../../SparkDaemon/src/OrchestrationService.cpp#L1129) |  |
 | `lock` | function | SparkDaemon | [OrchestrationService.cpp:L1145](../../SparkDaemon/src/OrchestrationService.cpp#L1145) |  |
@@ -46380,7 +46380,7 @@
 | `std` | struct | SparkEngine | [ContainerUtils.h:L53](../../SparkEngine/Source/Utils/ContainerUtils.h#L53) |  |
 | `std` | struct | SparkEngine | [ContainerUtils.h:L64](../../SparkEngine/Source/Utils/ContainerUtils.h#L64) |  |
 | `std` | struct | Tests | [TestContainerUtils.cpp:L24](../../Tests/TestContainerUtils.cpp#L24) |  |
-| `std::abs` | method | GameModules | [FPSArenaAutopilot.cpp:L157](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L157) |  |
+| `std::abs` | method | GameModules | [FPSArenaAutopilot.cpp:L162](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L162) |  |
 | `std::abs` | method | SparkEngine | [NavMesh.cpp:L359](../../SparkEngine/Source/Engine/AI/NavMesh.cpp#L359) |  |
 | `std::abs` | method | Templates | [GameModule.h:L317](../../Templates/PlatformerKit/Source/GameModule.h#L317) |  |
 | `std::abs` | method | Tests | [RHI210D3D11GoldenSupport.h:L767](../../Tests/RHI210D3D11GoldenSupport.h#L767) |  |
@@ -54325,7 +54325,7 @@
 | `WaitForIdle` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L138](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L138) |  |
 | `WaitForJob` | function | SparkEngine | [JobSystem.h:L345](../../SparkEngine/Source/Utils/JobSystem.h#L345) | Block until a job is queued or the pool is stopping. |
 | `WaitForLifecycleSocket` | function | Tests | [TestDaemonLifecycle.cpp:L72](../../Tests/TestDaemonLifecycle.cpp#L72) |  |
-| `WaitForPeerClose` | function | SparkDaemon | [DaemonServer.cpp:L179](../../SparkDaemon/src/DaemonServer.cpp#L179) |  |
+| `WaitForPeerClose` | function | SparkDaemon | [DaemonServer.cpp:L183](../../SparkDaemon/src/DaemonServer.cpp#L183) |  |
 | `WaitForPidFile` | function | SparkBuild | [ProcessRunnerTests.cpp:L69](../../SparkBuild/tests/ProcessRunnerTests.cpp#L69) |  |
 | `WaitForProcessGroupExit` | function | SparkBuild | [ProcessRunner.cpp:L163](../../SparkBuild/src/ProcessRunner.cpp#L163) |  |
 | `WaitForSdcSocket` | function | Tests | [TestShaderDiskCacheDaemon.cpp:L58](../../Tests/TestShaderDiskCacheDaemon.cpp#L58) |  |

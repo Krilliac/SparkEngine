@@ -6711,12 +6711,12 @@
 | `DaemonCVarGuard` | function | Tests | [TestDaemonLifecycle.cpp:L100](../../Tests/TestDaemonLifecycle.cpp#L100) |  |
 | `DaemonFixture` | function | Tests | [TestShaderDiskCacheDaemon.cpp:L80](../../Tests/TestShaderDiskCacheDaemon.cpp#L80) |  |
 | `DaemonServer` | function | SparkDaemon | [DaemonServer.h:L39](../../SparkDaemon/src/DaemonServer.h#L39) |  |
-| `DaemonServer::AddService` | method | SparkDaemon | [DaemonServer.cpp:L213](../../SparkDaemon/src/DaemonServer.cpp#L213) |  |
-| `DaemonServer::HandleConnection` | method | SparkDaemon | [DaemonServer.cpp:L588](../../SparkDaemon/src/DaemonServer.cpp#L588) |  |
-| `DaemonServer::ReapFinishedWorkers` | method | SparkDaemon | [DaemonServer.cpp:L553](../../SparkDaemon/src/DaemonServer.cpp#L553) |  |
-| `DaemonServer::Run` | method | SparkDaemon | [DaemonServer.cpp:L229](../../SparkDaemon/src/DaemonServer.cpp#L229) |  |
-| `DaemonServer::SnapshotStats` | method | SparkDaemon | [DaemonServer.cpp:L571](../../SparkDaemon/src/DaemonServer.cpp#L571) |  |
-| `DaemonServer::Stop` | method | SparkDaemon | [DaemonServer.cpp:L221](../../SparkDaemon/src/DaemonServer.cpp#L221) |  |
+| `DaemonServer::AddService` | method | SparkDaemon | [DaemonServer.cpp:L217](../../SparkDaemon/src/DaemonServer.cpp#L217) |  |
+| `DaemonServer::HandleConnection` | method | SparkDaemon | [DaemonServer.cpp:L592](../../SparkDaemon/src/DaemonServer.cpp#L592) |  |
+| `DaemonServer::ReapFinishedWorkers` | method | SparkDaemon | [DaemonServer.cpp:L557](../../SparkDaemon/src/DaemonServer.cpp#L557) |  |
+| `DaemonServer::Run` | method | SparkDaemon | [DaemonServer.cpp:L233](../../SparkDaemon/src/DaemonServer.cpp#L233) |  |
+| `DaemonServer::SnapshotStats` | method | SparkDaemon | [DaemonServer.cpp:L575](../../SparkDaemon/src/DaemonServer.cpp#L575) |  |
+| `DaemonServer::Stop` | method | SparkDaemon | [DaemonServer.cpp:L225](../../SparkDaemon/src/DaemonServer.cpp#L225) |  |
 | `DamageBoss` | function | GameModules | [MMOWorldBossSystem.h:L111](../../GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.h#L111) |  |
 | `DamageCoroutineTarget` | function | GameModules | [GameplayShowcase.h:L151](../../GameModules/SparkGame/Source/Core/GameplayShowcase.h#L151) |  |
 | `DamageLocalPlayer` | function | GameModules | [MMOPlayerSystem.h:L111](../../GameModules/SparkGameMMO/Source/Player/MMOPlayerSystem.h#L111) |  |
@@ -8861,7 +8861,7 @@
 | `EndpointFor` | function | SparkGateway | [GatewayAreaControl.cpp:L514](../../SparkGateway/src/GatewayAreaControl.cpp#L514) |  |
 | `EndpointIsActive` | function | SparkDaemon | [DaemonServer.cpp:L72](../../SparkDaemon/src/DaemonServer.cpp#L72) |  |
 | `EndpointIsActive` | function | SparkGateway | [GatewayAreaControl.cpp:L265](../../SparkGateway/src/GatewayAreaControl.cpp#L265) |  |
-| `EndpointMutexName` | function | SparkDaemon | [DaemonServer.cpp:L168](../../SparkDaemon/src/DaemonServer.cpp#L168) |  |
+| `EndpointMutexName` | function | SparkDaemon | [DaemonServer.cpp:L172](../../SparkDaemon/src/DaemonServer.cpp#L172) |  |
 | `EndPropertyGrid` | function | SparkUI | [Widgets.h:L136](../../SparkUI/Include/SparkUI/Widgets.h#L136) | Close the grid opened by BeginPropertyGrid(). |
 | `EndPropertyGrid` | function | SparkUI | [Widgets.cpp:L471](../../SparkUI/Source/Widgets.cpp#L471) |  |
 | `EndRound` | function | GameModules | [GameMode.h:L68](../../GameModules/SparkGameFPS/Source/Game/GameMode.h#L68) | End the current round |
@@ -11205,10 +11205,10 @@
 | `fov` | function | Tests | [TestConsoleVariables.cpp:L565](../../Tests/TestConsoleVariables.cpp#L565) |  |
 | `FPSArenaAutopilot::Disable` | method | GameModules | [FPSArenaAutopilot.cpp:L66](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L66) |  |
 | `FPSArenaAutopilot::Enable` | method | GameModules | [FPSArenaAutopilot.cpp:L58](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L58) |  |
-| `FPSArenaAutopilot::FormatLoopLine` | method | GameModules | [FPSArenaAutopilot.cpp:L160](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L160) |  |
-| `FPSArenaAutopilot::PhaseName` | method | GameModules | [FPSArenaAutopilot.cpp:L170](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L170) |  |
+| `FPSArenaAutopilot::FormatLoopLine` | method | GameModules | [FPSArenaAutopilot.cpp:L165](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L165) |  |
+| `FPSArenaAutopilot::PhaseName` | method | GameModules | [FPSArenaAutopilot.cpp:L175](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L175) |  |
 | `FPSArenaAutopilot::ReadTally` | method | GameModules | [FPSArenaAutopilot.cpp:L72](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L72) |  |
-| `FPSArenaAutopilot::SetForwardHeld` | method | GameModules | [FPSArenaAutopilot.cpp:L186](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L186) |  |
+| `FPSArenaAutopilot::SetForwardHeld` | method | GameModules | [FPSArenaAutopilot.cpp:L191](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L191) |  |
 | `FPSArenaAutopilot::Step` | method | GameModules | [FPSArenaAutopilot.cpp:L98](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L98) |  |
 | `FPSArenaAutopilot::UpdatePhase` | method | GameModules | [FPSArenaAutopilot.cpp:L88](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L88) |  |
 | `FPSBoundEventBus` | function | Tests | [event_module.cpp:L45](../../Tests/FPSGameplayEvents/event_module.cpp#L45) |  |
@@ -22039,12 +22039,12 @@
 | `lock` | function | SparkDaemon | [CollaborationService.cpp:L262](../../SparkDaemon/src/CollaborationService.cpp#L262) |  |
 | `lock` | function | SparkDaemon | [CollaborationService.cpp:L299](../../SparkDaemon/src/CollaborationService.cpp#L299) |  |
 | `lock` | function | SparkDaemon | [CollaborationService.cpp:L330](../../SparkDaemon/src/CollaborationService.cpp#L330) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L203](../../SparkDaemon/src/DaemonServer.cpp#L203) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L325](../../SparkDaemon/src/DaemonServer.cpp#L325) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L350](../../SparkDaemon/src/DaemonServer.cpp#L350) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L510](../../SparkDaemon/src/DaemonServer.cpp#L510) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L526](../../SparkDaemon/src/DaemonServer.cpp#L526) |  |
-| `lock` | function | SparkDaemon | [DaemonServer.cpp:L555](../../SparkDaemon/src/DaemonServer.cpp#L555) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L207](../../SparkDaemon/src/DaemonServer.cpp#L207) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L329](../../SparkDaemon/src/DaemonServer.cpp#L329) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L354](../../SparkDaemon/src/DaemonServer.cpp#L354) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L514](../../SparkDaemon/src/DaemonServer.cpp#L514) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L530](../../SparkDaemon/src/DaemonServer.cpp#L530) |  |
+| `lock` | function | SparkDaemon | [DaemonServer.cpp:L559](../../SparkDaemon/src/DaemonServer.cpp#L559) |  |
 | `lock` | function | SparkDaemon | [OrchestrationService.cpp:L942](../../SparkDaemon/src/OrchestrationService.cpp#L942) |  |
 | `lock` | function | SparkDaemon | [OrchestrationService.cpp:L1129](../../SparkDaemon/src/OrchestrationService.cpp#L1129) |  |
 | `lock` | function | SparkDaemon | [OrchestrationService.cpp:L1145](../../SparkDaemon/src/OrchestrationService.cpp#L1145) |  |
@@ -39428,7 +39428,7 @@
 | `StatusTime` | function | SparkLauncher | [LauncherApp.h:L77](../../SparkLauncher/src/LauncherApp.h#L77) | When the current status message was set. |
 | `StatusWord` | function | SparkUI | [Runtime.h:L102](../../SparkUI/Include/SparkUI/Runtime.h#L102) | English word of a status: "Note", "Info", "Success", "Warning", "Error". |
 | `StatusWord` | function | SparkUI | [Runtime.cpp:L323](../../SparkUI/Source/Runtime.cpp#L323) |  |
-| `std::abs` | method | GameModules | [FPSArenaAutopilot.cpp:L157](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L157) |  |
+| `std::abs` | method | GameModules | [FPSArenaAutopilot.cpp:L162](../../GameModules/SparkGameFPS/Source/Game/FPSArenaAutopilot.cpp#L162) |  |
 | `std::abs` | method | SparkEngine | [NavMesh.cpp:L359](../../SparkEngine/Source/Engine/AI/NavMesh.cpp#L359) |  |
 | `std::abs` | method | Templates | [GameModule.h:L317](../../Templates/PlatformerKit/Source/GameModule.h#L317) |  |
 | `std::abs` | method | Tests | [RHI210D3D11GoldenSupport.h:L767](../../Tests/RHI210D3D11GoldenSupport.h#L767) |  |
@@ -46152,7 +46152,7 @@
 | `WaitForIdle` | function | Tests | [TestTransientBufferAllocatorPhaseX.cpp:L138](../../Tests/TestTransientBufferAllocatorPhaseX.cpp#L138) |  |
 | `WaitForJob` | function | SparkEngine | [JobSystem.h:L345](../../SparkEngine/Source/Utils/JobSystem.h#L345) | Block until a job is queued or the pool is stopping. |
 | `WaitForLifecycleSocket` | function | Tests | [TestDaemonLifecycle.cpp:L72](../../Tests/TestDaemonLifecycle.cpp#L72) |  |
-| `WaitForPeerClose` | function | SparkDaemon | [DaemonServer.cpp:L179](../../SparkDaemon/src/DaemonServer.cpp#L179) |  |
+| `WaitForPeerClose` | function | SparkDaemon | [DaemonServer.cpp:L183](../../SparkDaemon/src/DaemonServer.cpp#L183) |  |
 | `WaitForPidFile` | function | SparkBuild | [ProcessRunnerTests.cpp:L69](../../SparkBuild/tests/ProcessRunnerTests.cpp#L69) |  |
 | `WaitForProcessGroupExit` | function | SparkBuild | [ProcessRunner.cpp:L163](../../SparkBuild/src/ProcessRunner.cpp#L163) |  |
 | `WaitForSdcSocket` | function | Tests | [TestShaderDiskCacheDaemon.cpp:L58](../../Tests/TestShaderDiskCacheDaemon.cpp#L58) |  |

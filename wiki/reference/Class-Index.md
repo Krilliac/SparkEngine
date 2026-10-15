@@ -507,7 +507,7 @@
 | `BottleneckDistribution` | struct | SparkEngine | [GPUStallProfiler.h:L144](../../SparkEngine/Source/Utils/GPUStallProfiler.h#L144) | Get bottleneck distribution over recent history (percentage per type). |
 | `BoundChar` | struct | GameModules | [TFOutfitSystem.h:L189](../../GameModules/SparkGameMMOFPS/Source/Game/TFOutfitSystem.h#L189) |  |
 | `BoundedMessageQueue` | struct | SparkEditor | [CollaborativeEditSession.h:L409](../../SparkEditor/Source/Communication/CollaborativeEditSession.h#L409) | A message queue bounded by both entry count and approximate bytes. |
-| `boundEndpoint` | struct | SparkDaemon | [DaemonServer.cpp:L413](../../SparkDaemon/src/DaemonServer.cpp#L413) |  |
+| `boundEndpoint` | struct | SparkDaemon | [DaemonServer.cpp:L417](../../SparkDaemon/src/DaemonServer.cpp#L417) |  |
 | `BoundingBox` | struct | SparkEngine | [CollisionSystem.h:L33](../../SparkEngine/Source/Physics/CollisionSystem.h#L33) | Axis-aligned bounding box for collision detection |
 | `BoundingSphere` | struct | SparkEngine | [MeshClusterSystem.h:L45](../../SparkEngine/Source/Graphics/MeshClusterSystem.h#L45) |  |
 | `BoundingSphere` | struct | SparkEngine | [CollisionSystem.h:L75](../../SparkEngine/Source/Physics/CollisionSystem.h#L75) | Bounding sphere for collision detection |
@@ -1495,7 +1495,7 @@
 | `ExecScriptPlayer` | class | SparkEngine | [ExecScript.h:L62](../../SparkEngine/Source/Core/ExecScript.h#L62) | Plays an `-exec` script against the console from the main loop. |
 | `ExecutionSentinel` | class | Tests | [TestModuleVersion.cpp:L134](../../Tests/TestModuleVersion.cpp#L134) |  |
 | `ExhibitProp` | struct | GameModules | [GameplayShowcase.cpp:L586](../../GameModules/SparkGame/Source/Core/GameplayShowcase.cpp#L586) |  |
-| `existing` | struct | SparkDaemon | [DaemonServer.cpp:L381](../../SparkDaemon/src/DaemonServer.cpp#L381) |  |
+| `existing` | struct | SparkDaemon | [DaemonServer.cpp:L385](../../SparkDaemon/src/DaemonServer.cpp#L385) |  |
 | `existing` | struct | SparkEngine | [SceneManager.cpp:L471](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L471) |  |
 | `existing` | struct | SparkGateway | [GatewayAreaControl.cpp:L287](../../SparkGateway/src/GatewayAreaControl.cpp#L287) |  |
 | `Expectation` | struct | Tests | [TestShaderCompilerReal.cpp:L424](../../Tests/TestShaderCompilerReal.cpp#L424) |  |
