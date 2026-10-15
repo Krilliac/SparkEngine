@@ -293,9 +293,12 @@ namespace SparkFPS
         status += " | Projectiles: " + std::to_string(m_projectiles.size());
         status += " | Tick: " + std::to_string(m_tickRate) + "Hz";
         status += " | Seq: " + std::to_string(m_stateSequence);
-        auto metrics = GetDebugMetrics();
-        status += " | RTT: " + std::to_string(static_cast<int>(metrics.rttMs)) + "ms";
-        status += " | Loss: " + std::to_string(static_cast<int>(metrics.packetLossPercent)) + "%";
+        const auto metrics = GetDebugMetrics();
+        status += " | RTT: " +
+                  (metrics.rttMeasured ? std::to_string(static_cast<int>(metrics.rttMs)) + "ms" : std::string("n/a"));
+        status +=
+            " | Loss: " + (metrics.lossMeasured ? std::to_string(static_cast<int>(metrics.packetLossPercent)) + "%"
+                                                : std::string("n/a"));
         status += " | Corrections: " + std::to_string(metrics.correctionCount);
         return status;
     }
@@ -303,10 +306,24 @@ namespace SparkFPS
     FPSMultiplayerSystem::MultiplayerDebugMetrics FPSMultiplayerSystem::GetDebugMetrics() const
     {
         MultiplayerDebugMetrics out;
-        const auto& stats = Spark::Net::NetworkManager::GetInstance().GetStats();
-        out.packetLossPercent = stats.packetLoss * 100.0f;
-        out.rttMs = stats.ping;
         out.correctionCount = m_correctionCount;
+        // Only a connected client has a link to measure. NetworkManager's stats read 0 before the first
+        // RTT sample and on a host, and a 0 must not be shown as a 0 ms / 0 % measurement.
+        if (m_isServer || !IsConnected())
+        {
+            return out;
+        }
+        const auto& stats = Spark::Net::NetworkManager::GetInstance().GetStats();
+        out.rttMeasured = stats.ping > 0.0f;
+        if (out.rttMeasured)
+        {
+            out.rttMs = stats.ping;
+        }
+        out.lossMeasured = stats.packetsReceived > 0;
+        if (out.lossMeasured)
+        {
+            out.packetLossPercent = stats.packetLoss * 100.0f;
+        }
         return out;
     }
 

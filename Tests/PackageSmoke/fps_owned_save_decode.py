@@ -17,6 +17,11 @@ import xml.etree.ElementTree as ET
 CASE = 'FPSInputDispatch_DecodeOwnedPrimary'
 PREFIX = 'SPARK_FPS_SAVE_DECODE '
 INPUT_CAP = 16 * 1024 * 1024
+# Every key FPSLocalProfile::WriteTo emits (FPSLocalProfile.cpp): the schema stamp plus one entry per declared
+# field. A save whose canonical profile lacks one, or carries another, is not a complete profile round trip.
+PROFILE_PREFIX = 'fps.profile.'
+DECLARED_PROFILE_KEYS = frozenset(PROFILE_PREFIX + name for name in (
+    'version', 'level', 'xp', 'class', 'weapon', 'kills', 'deaths', 'score', 'playTime', 'health', 'armor'))
 TEXT_CAP = 128 * 1024
 
 
@@ -75,7 +80,14 @@ def parse_receipt(stdout, stderr, expected):
     # native ReadFrom path; do not implement another persisted-profile parser.
     require(isinstance(profile, dict) and profile and
             all(isinstance(k, str) and isinstance(v, str) and '\n' not in k+v and '\r' not in k+v and
-                k.startswith('fps.profile.') for k, v in profile.items()), 'canonical profile map')
+                k.startswith(PROFILE_PREFIX) for k, v in profile.items()), 'canonical profile map')
+    require(set(profile) == DECLARED_PROFILE_KEYS, 'canonical profile must carry exactly the declared fields')
+    for key, value in profile.items():
+        try:
+            number = float(value)
+        except ValueError:
+            number = math.nan
+        require(math.isfinite(number), 'canonical profile value must be a finite number: '+key)
     return receipt
 
 

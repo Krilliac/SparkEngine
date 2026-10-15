@@ -1083,10 +1083,53 @@ void Game::DisconnectNetwork()
     FPS_CONSOLE(wasServer ? "Server stopped" : "Disconnected from server", "INFO");
 }
 
+void Game::ApplyMultiplayerResults(SparkFPS::FPSMultiplayerSystem& multiplayer)
+{
+    // The session owns the reconcile, health, death and respawn logic; this only applies its verdict
+    // to the rendered Player. A Player that does not exist yet simply misses the edge, and the next
+    // first-report teleport/health values resync it once it does.
+    if (m_player)
+    {
+        const SparkFPS::LocalPlayerUpdate update = multiplayer.TakeLocalPlayerUpdate();
+        if (update.valid)
+        {
+            if (update.healthChanged)
+            {
+                m_player->Console_SetHealth(update.health);
+            }
+            if (update.teleport)
+            {
+                m_player->Console_SetPosition(update.posX, update.posY, update.posZ);
+            }
+            if (update.died)
+            {
+                FPS_CONSOLE("Server reports the local player died", "INFO");
+            }
+            else if (update.respawned)
+            {
+                FPS_CONSOLE("Server respawned the local player", "INFO");
+            }
+        }
+    }
+
+    // Remote players are tracked by the session; the game has no render proxy for them yet.
+    const SparkFPS::RemoteProxyDelta proxies = multiplayer.TakeRemoteProxyDelta();
+    for (const uint32_t clientId : proxies.added)
+    {
+        FPS_LOG_INFO("Remote player {} joined the session", clientId);
+    }
+    for (const uint32_t clientId : proxies.removed)
+    {
+        FPS_LOG_INFO("Remote player {} left the session", clientId);
+    }
+}
+
 void Game::UpdateMultiplayer(float dt)
 {
     auto& multiplayer = SparkFPS::FPSMultiplayerSystem::GetInstance();
     multiplayer.Update(dt);
+    ApplyMultiplayerResults(multiplayer);
+
     // Input goes out only once the session is live: a client whose handshake is still
     // pending has no id for the server to apply it to.
     if (!multiplayer.IsConnected() || !m_player || !m_input)

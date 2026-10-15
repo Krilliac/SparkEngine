@@ -1466,4 +1466,193 @@ TEST(FPSMultiplayerProduction_RejectedConnectEndsSession)
     EXPECT_TRUE(Spark::Net::NetworkManager::GetInstance().GetRole() == Spark::Net::NetworkRole::None);
 }
 
+namespace
+{
+    /// A server snapshot for the local client with the fields the consumption tests vary.
+    NetworkPlayerState LocalSnapshot(uint32_t clientId, uint32_t sequence, float x, float z, float health, bool alive)
+    {
+        NetworkPlayerState snapshot;
+        snapshot.clientId = clientId;
+        snapshot.sequenceNumber = sequence;
+        snapshot.posX = x;
+        snapshot.posY = 1.0f;
+        snapshot.posZ = z;
+        snapshot.health = health;
+        snapshot.isAlive = alive;
+        return snapshot;
+    }
+} // namespace
+
+TEST(FPSMultiplayerProduction_LocalPlayerConsumesServerHealthDeathAndRespawn)
+{
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(fakeServer.IsReady());
+
+    auto& client = FPSMultiplayerSystem::GetInstance();
+    Spark::Net::NetworkManager::GetInstance().Shutdown();
+    client.Initialize(false);
+    ASSERT_TRUE(client.Connect("127.0.0.1", fakeServer.Port()));
+
+    // No id yet: nothing to apply, even when a snapshot is already queued.
+    EXPECT_FALSE(client.TakeLocalPlayerUpdate().valid);
+
+    constexpr uint32_t kAssignedId = 7;
+    ASSERT_TRUE(fakeServer.AcceptClient(client, kAssignedId));
+    EXPECT_FALSE(client.TakeLocalPlayerUpdate().valid); // handshake done, no authoritative snapshot yet
+
+    // First report: spawn position and health, so the rendered Player starts where the server put it.
+    Access::DeliverSnapshot(client, LocalSnapshot(kAssignedId, 1, 3.0f, -2.0f, 100.0f, true));
+    client.Update(kFrame);
+    LocalPlayerUpdate update = client.TakeLocalPlayerUpdate();
+    ASSERT_TRUE(update.valid);
+    EXPECT_TRUE(update.teleport);
+    EXPECT_TRUE(update.healthChanged);
+    EXPECT_FALSE(update.died);
+    EXPECT_FALSE(update.respawned);
+    EXPECT_NEAR(update.posX, 3.0f, 1e-4f);
+    EXPECT_NEAR(update.posZ, -2.0f, 1e-4f);
+    EXPECT_NEAR(update.health, 100.0f, 1e-6f);
+
+    // Edges are consumed: an unchanged frame reports nothing to apply.
+    client.Update(kFrame);
+    update = client.TakeLocalPlayerUpdate();
+    EXPECT_TRUE(update.valid);
+    EXPECT_FALSE(update.healthChanged);
+    EXPECT_FALSE(update.teleport);
+    EXPECT_FALSE(update.died);
+
+    // Server-applied damage: health changes, the Player is not moved.
+    Access::DeliverSnapshot(client, LocalSnapshot(kAssignedId, 2, 3.0f, -2.0f, 40.0f, true));
+    client.Update(kFrame);
+    update = client.TakeLocalPlayerUpdate();
+    EXPECT_TRUE(update.healthChanged);
+    EXPECT_NEAR(update.health, 40.0f, 1e-6f);
+    EXPECT_FALSE(update.teleport);
+    EXPECT_FALSE(update.died);
+
+    // Server-decided death.
+    Access::DeliverSnapshot(client, LocalSnapshot(kAssignedId, 3, 3.0f, -2.0f, 0.0f, false));
+    client.Update(kFrame);
+    update = client.TakeLocalPlayerUpdate();
+    EXPECT_TRUE(update.died);
+    EXPECT_FALSE(update.isAlive);
+    EXPECT_TRUE(update.healthChanged);
+    EXPECT_FALSE(update.respawned);
+
+    // Server respawn elsewhere: full health and a teleport to the spawn point.
+    Access::DeliverSnapshot(client, LocalSnapshot(kAssignedId, 4, 9.0f, 9.0f, 100.0f, true));
+    client.Update(kFrame);
+    update = client.TakeLocalPlayerUpdate();
+    EXPECT_TRUE(update.respawned);
+    EXPECT_TRUE(update.teleport);
+    EXPECT_TRUE(update.isAlive);
+    EXPECT_NEAR(update.health, 100.0f, 1e-6f);
+    EXPECT_NEAR(update.posX, 9.0f, 1e-4f);
+    EXPECT_NEAR(update.posZ, 9.0f, 1e-4f);
+
+    // A reconcile correction (the server disagrees with the prediction) snaps the Player once.
+    Access::DeliverSnapshot(client, LocalSnapshot(kAssignedId, 5, 12.0f, 9.0f, 100.0f, true));
+    client.Update(kFrame);
+    update = client.TakeLocalPlayerUpdate();
+    EXPECT_TRUE(update.teleport);
+    EXPECT_FALSE(update.respawned);
+    EXPECT_NEAR(update.posX, 12.0f, 1e-4f);
+    client.Update(kFrame);
+    EXPECT_FALSE(client.TakeLocalPlayerUpdate().teleport);
+
+    // Ending the session leaves nothing to apply.
+    client.Disconnect();
+    EXPECT_FALSE(client.TakeLocalPlayerUpdate().valid);
+}
+
+TEST(FPSMultiplayerProduction_RemotePlayerProxiesFollowSessionState)
+{
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(fakeServer.IsReady());
+
+    auto& client = FPSMultiplayerSystem::GetInstance();
+    Spark::Net::NetworkManager::GetInstance().Shutdown();
+    client.Initialize(false);
+    ASSERT_TRUE(client.Connect("127.0.0.1", fakeServer.Port()));
+    constexpr uint32_t kAssignedId = 7;
+    ASSERT_TRUE(fakeServer.AcceptClient(client, kAssignedId));
+    client.TakeRemoteProxyDelta(); // drain proxies left by an earlier session of this process-wide singleton
+
+    // The local player and a remote player arrive; only the remote one is a proxy.
+    Access::DeliverSnapshot(client, LocalSnapshot(kAssignedId, 1, 0.0f, 0.0f, 100.0f, true));
+    Access::DeliverSnapshot(client, LocalSnapshot(3, 1, 4.0f, 5.0f, 80.0f, true));
+    client.Update(kFrame);
+    RemoteProxyDelta delta = client.TakeRemoteProxyDelta();
+    ASSERT_EQ(delta.added.size(), static_cast<size_t>(1));
+    EXPECT_EQ(delta.added.front(), static_cast<uint32_t>(3));
+    EXPECT_TRUE(delta.removed.empty());
+    ASSERT_EQ(client.GetRemoteProxies().size(), static_cast<size_t>(1));
+    const RemotePlayerProxy& proxy = client.GetRemoteProxies().at(3);
+    EXPECT_NEAR(proxy.posX, 4.0f, 1e-4f);
+    EXPECT_NEAR(proxy.health, 80.0f, 1e-6f);
+    EXPECT_TRUE(proxy.isAlive);
+
+    // A later snapshot updates the proxy in place; nobody joined or left.
+    Access::DeliverSnapshot(client, LocalSnapshot(3, 2, 4.0f, 5.0f, 0.0f, false));
+    client.Update(kFrame);
+    delta = client.TakeRemoteProxyDelta();
+    EXPECT_TRUE(delta.added.empty());
+    EXPECT_TRUE(delta.removed.empty());
+    EXPECT_FALSE(client.GetRemoteProxies().at(3).isAlive);
+    EXPECT_NEAR(client.GetRemoteProxies().at(3).health, 0.0f, 1e-6f);
+
+    // The remote player leaves: its proxy is removed exactly once.
+    Access::Leave(client, 3);
+    delta = client.TakeRemoteProxyDelta();
+    ASSERT_EQ(delta.removed.size(), static_cast<size_t>(1));
+    EXPECT_EQ(delta.removed.front(), static_cast<uint32_t>(3));
+    EXPECT_TRUE(client.GetRemoteProxies().empty());
+    EXPECT_TRUE(client.TakeRemoteProxyDelta().removed.empty());
+}
+
+TEST(FPSMultiplayerProduction_ProxiesAndLocalUpdateEmptyWithoutSession)
+{
+    FPSSessionGuard guard;
+    auto& system = FPSMultiplayerSystem::GetInstance();
+    system.Initialize(true);
+    system.TakeRemoteProxyDelta();
+    EXPECT_FALSE(system.TakeLocalPlayerUpdate().valid);
+    EXPECT_TRUE(system.TakeRemoteProxyDelta().added.empty());
+}
+
+TEST(FPSMultiplayerProduction_LinkMetricsAreNotFabricatedWithoutAMeasuredLink)
+{
+    // A host measures no client link: RTT and loss must read as unavailable, not as 0 ms / 0 %.
+    {
+        FPSSessionGuard guard;
+        auto& server = FPSMultiplayerSystem::GetInstance();
+        ASSERT_TRUE(StartServer(server));
+        const auto metrics = server.GetDebugMetrics();
+        EXPECT_FALSE(metrics.rttMeasured);
+        EXPECT_FALSE(metrics.lossMeasured);
+        EXPECT_NEAR(metrics.rttMs, 0.0f, 1e-9f);
+        const std::string status = server.Console_GetStatus();
+        EXPECT_TRUE(status.find("RTT: n/a") != std::string::npos);
+        EXPECT_TRUE(status.find("Loss: n/a") != std::string::npos);
+        EXPECT_TRUE(status.find("RTT: 0ms") == std::string::npos);
+    }
+
+    // A client that is still handshaking is "connecting" and has no measured link either.
+    LoopbackPeer fakeServer; // declared before the guard: its Winsock reference outlives Shutdown()
+    FPSSessionGuard guard;
+    ASSERT_TRUE(fakeServer.IsReady());
+    auto& client = FPSMultiplayerSystem::GetInstance();
+    Spark::Net::NetworkManager::GetInstance().Shutdown();
+    client.Initialize(false);
+    ASSERT_TRUE(client.Connect("127.0.0.1", fakeServer.Port()));
+    EXPECT_FALSE(client.IsConnected());
+    EXPECT_FALSE(client.GetDebugMetrics().rttMeasured);
+    EXPECT_FALSE(client.GetDebugMetrics().lossMeasured);
+    const std::string connecting = client.Console_GetStatus();
+    EXPECT_TRUE(connecting.find("Client (connecting)") != std::string::npos);
+    EXPECT_TRUE(connecting.find("RTT: n/a") != std::string::npos);
+}
+
 #endif // ENABLE_NETWORKING
