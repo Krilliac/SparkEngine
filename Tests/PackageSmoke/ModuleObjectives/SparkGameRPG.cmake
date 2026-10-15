@@ -2,9 +2,12 @@
 # its reward and the hero's state survive a process restart. Included by
 # Tests/PackageSmoke/RunInstalledModuleObjective.cmake (grammar documented there).
 #
-# The patrolling guard (NPC 3, Village) is sampled with rpg_npc_route while the autopilot hunts: its first leg is a
-#   100 m NavMesh route walked at 3 m/s after a 3 s wait, so the samples at 10 s and 20 s must show a route in
-#   progress and a position that advanced along it.
+# The patrolling guard (NPC 3, Village) is sampled with rpg_npc_route while the autopilot hunts. It starts on its
+#   first waypoint (-50, 0, 100) with waypointWaitTimer 0 (NPCData default; the waypoint's 3 s waitTime only applies
+#   when it arrives back there), so the first RPGNPCSystem::Update plans the 100 m NavMesh leg to (50, 0, 100) and
+#   it walks at WALK_SPEED 3 m/s: about 30 m along by 10 s and 60 m by 20 s, both inside the ~33 s leg. The samples
+#   at 10 s and 20 s must therefore show a route in progress and a position that advanced along it (~30 m apart;
+#   the verifier below demands at least 10 m, which absorbs any frames the system ran before the script's clock).
 #
 # writer: rpg_autoplay hunts Shadow Wolves through the session actions (rest, travel, attack, flee) with real
 #   ability cooldowns; at 240 s the autopilot must report the quest completed, the journal must hold it as

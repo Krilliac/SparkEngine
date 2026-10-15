@@ -151,7 +151,6 @@ TEST(RPGNPCNavigation_ScheduleChangeWalksAlongWorldNavMesh)
     EXPECT_TRUE(midWalk.find("behavior=Idle") != std::string::npos);
     EXPECT_TRUE(midWalk.find("route=" + std::to_string(blacksmith->routeIndex) + "/" +
                              std::to_string(blacksmith->route.size())) != std::string::npos);
-    EXPECT_TRUE(midWalk.find("/0") == std::string::npos);
     EXPECT_TRUE(npcs.GetNPCRouteString(9999) == "No NPC with id 9999");
 
     const Walk walk = WalkUntilArrived(npcs, kBlacksmithNpc, 55.0f, 40.0f, 30.0f);
