@@ -55,6 +55,7 @@
     {"name": "d3d12.dll", "version": "10.0.26100.9278", "source": "system"},
     {"name": "d3dcompiler_47.dll", "version": "10.0.26100.9457", "source": "system"},
     {"name": "dbghelp.dll", "version": "10.0.26100.9444", "source": "system"},
+    {"name": "dwmapi.dll", "version": "10.0.26100.9278", "source": "system"},
     {"name": "dxgi.dll", "version": "10.0.26100.9444", "source": "system"},
     {"name": "gdi32.dll", "version": "10.0.26100.8328", "source": "system"},
     {"name": "imm32.dll", "version": "10.0.26100.9278", "source": "system"},
