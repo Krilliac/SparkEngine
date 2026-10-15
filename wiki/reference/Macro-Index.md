@@ -921,6 +921,7 @@
 | `PropertyValue` | alias | SparkEditor | [EditorCommand.h:L73](../../SparkEditor/Source/UndoRedo/EditorCommand.h#L73) | Property value variant type for generic property changes |
 | `PropertyValue` | alias | Tests | [TestEditorCommands.cpp:L23](../../Tests/TestEditorCommands.cpp#L23) |  |
 | `PS` | alias | SparkEngine | [EngineSettings.cpp:L66](../../SparkEngine/Source/Core/EngineSettings.cpp#L66) |  |
+| `PublishingEntry` | alias | SparkSDK | [EventBus.h:L332](../../SparkSDK/Include/Spark/EventBus.h#L332) |  |
 | `Query` | alias | Tests | [TestGPUProfiler.cpp:L146](../../Tests/TestGPUProfiler.cpp#L146) |  |
 | `QueryValue` | alias | SparkEngine | [AsyncDatabase.h:L39](../../SparkEngine/Source/Engine/Persistence/AsyncDatabase.h#L39) | A single value returned from a query column. |
 | `QueueKeys` | alias | Tests | [TestSparkServerHealth.cpp:L324](../../Tests/TestSparkServerHealth.cpp#L324) |  |
@@ -1121,7 +1122,6 @@
 | `SPARK_ENSURES` | macro | SparkEngine | [Contracts.h:L51](../../SparkEngine/Source/Core/Contracts.h#L51) |  |
 | `SPARK_ENSURES` | macro | SparkEngine | [Contracts.h:L59](../../SparkEngine/Source/Core/Contracts.h#L59) |  |
 | `SPARK_ENSURES` | macro | SparkEngine | [Contracts.h:L66](../../SparkEngine/Source/Core/Contracts.h#L66) |  |
-| `SPARK_EVENTBUS_MSAN` | macro | SparkSDK | [EventBus.h:L75](../../SparkSDK/Include/Spark/EventBus.h#L75) |  |
 | `SPARK_EXE_EXT` | macro | SparkBuild | [Platform.h:L26](../../SparkBuild/src/Platform.h#L26) |  |
 | `SPARK_EXE_EXT` | macro | SparkBuild | [Platform.h:L30](../../SparkBuild/src/Platform.h#L30) |  |
 | `SPARK_EXPECTS` | macro | SparkEngine | [Contracts.h:L50](../../SparkEngine/Source/Core/Contracts.h#L50) |  |
@@ -1500,7 +1500,7 @@
 | `Unsigned` | alias | SparkDaemon | [BoundedWireCodec.h:L34](../../SparkDaemon/src/BoundedWireCodec.h#L34) |  |
 | `Unsigned` | alias | SparkDaemon | [BoundedWireCodec.h:L73](../../SparkDaemon/src/BoundedWireCodec.h#L73) |  |
 | `UnsubscribeFn` | alias | SparkEngine | [EntityEventBus.h:L99](../../SparkEngine/Source/Utils/EntityEventBus.h#L99) |  |
-| `UnsubscribeFn` | alias | SparkSDK | [EventBus.h:L150](../../SparkSDK/Include/Spark/EventBus.h#L150) | Return whether this handle is currently subscribed. |
+| `UnsubscribeFn` | alias | SparkSDK | [EventBus.h:L145](../../SparkSDK/Include/Spark/EventBus.h#L145) | Return whether this handle is currently subscribed. |
 | `UpdateCallback` | alias | SparkEngine | [TweenSystem.h:L88](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L88) | A single tween operation that interpolates a value over time. |
 | `UpdateFn` | alias | SparkSDK | [StateMachine.h:L82](../../SparkSDK/Include/Spark/StateMachine.h#L82) |  |
 | `UT` | alias | GameModules | [RTSBuildingSystem.cpp:L353](../../GameModules/SparkGameRTS/Source/Building/RTSBuildingSystem.cpp#L353) |  |
