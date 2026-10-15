@@ -1,0 +1,164 @@
+name: GPU certification (self-hosted)
+
+# OD-31: exact-commit evidence for the declared primary D3D11 row
+# (win11-x64-msvc143-d3d11), collected on the owner's self-hosted GPU runner.
+#
+# The repository is public. A self-hosted runner executes whatever a workflow
+# hands it, so this workflow must never gain a trigger that untrusted code can
+# reach: no pull_request, pull_request_target, issue_comment, workflow_run or
+# schedule. workflow_dispatch needs write access, and Working only moves
+# through reviewed, gated merges. Release secrets never reach this runner: the
+# stable-release and nightly-release environments stay on GitHub-hosted jobs.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "Working" ]
+
+permissions: {}
+
+concurrency:
+  # One physical row: run certifications one at a time, and never cancel one
+  # mid-build, because a cancelled collector leaves no evidence at all.
+  group: gpu-certification
+  cancel-in-progress: false
+
+jobs:
+  d3d11-primary-row:
+    name: "GPU row win11-x64-msvc143-d3d11 (RTX 5070 Ti)"
+    if: >-
+      github.repository == 'Krilliac/SparkEngine' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/Working'))
+    runs-on: [ self-hosted, Windows, X64, spark-gpu ]
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    env:
+      SPARK_CERT_ROW: win11-x64-msvc143-d3d11
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+        persist-credentials: false
+        # A self-hosted workspace persists between jobs; start from a clean
+        # tree so no earlier build or output can enter this commit's evidence.
+        clean: true
+
+    - name: Require the row's GPU on this runner
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $names = @(Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name })
+        if ($names -notcontains 'NVIDIA GeForce RTX 5070 Ti') {
+          throw "This runner does not carry the row's GPU; adapters: $($names -join ', ')"
+        }
+
+    - name: Pin CMake and CPack for the Shipping tree
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP 'cmake-4.4.1-windows-x86_64.zip'
+        $root = Join-Path $env:RUNNER_TEMP 'spark-cmake-4.4.1'
+        $cmakeSha256 = '091919e1cde162b69d2d5e0f3b1f5670c973e72133f78126fbb18042947d6f19'
+        if (Test-Path -LiteralPath $root) { throw 'Pinned CMake directory must be fresh' }
+        Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.1/cmake-4.4.1-windows-x86_64.zip' -OutFile $archive
+        $cmakeActual = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash
+        if ($cmakeActual -ne $cmakeSha256) { throw 'Pinned CMake archive checksum mismatch' }
+        Expand-Archive -LiteralPath $archive -DestinationPath $root
+        $bin = Join-Path $root 'cmake-4.4.1-windows-x86_64/bin'
+        $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        & (Join-Path $bin 'cmake.exe') --version
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Enter the pinned MSVC developer environment
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $pin = Get-Content -Raw -LiteralPath 'cmake/WindowsShippingToolchain.json' | ConvertFrom-Json
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        $vs = & $vswhere -version '[17.0,18.0)' -products * `
+          -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath |
+          Select-Object -First 1
+        if (-not $vs) { throw 'Visual Studio 2022 with the x64 C++ tools was not found' }
+        $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+        # The collector reads the toolset from VCToolsVersion and the version
+        # from the cl banner, so later steps need the whole vcvars environment.
+        $lines = & cmd.exe /d /c "`"$vcvars`" -vcvars_ver=$($pin.msvcToolsVersion) >nul && set"
+        if ($LASTEXITCODE -ne 0) { throw 'vcvars64.bat failed' }
+        foreach ($line in $lines) {
+          if ($line -match '^([^=]+)=(.*)$') {
+            "$($Matches[1])=$($Matches[2])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+        }
+
+    - name: Check cl against the Shipping toolchain pin
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $pin = Get-Content -Raw -LiteralPath 'cmake/WindowsShippingToolchain.json' | ConvertFrom-Json
+        $want = $pin.compilerVersion -replace '\.0$', ''
+        $banner = @(cmd.exe /d /c 'cl 2>&1')[0]
+        if ($banner -notmatch "Version $([regex]::Escape($want)) ") {
+          throw "cl reports '$banner' but the Shipping pin needs $want; update Visual Studio 2022 on this runner"
+        }
+        Write-Output $banner
+
+    - name: Configure the Windows Shipping tree with tests
+      shell: powershell
+      run: |
+        cmake --preset windows-shipping -DBUILD_TESTS=ON
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Build MinSizeRel
+      shell: powershell
+      run: |
+        # --parallel 1: MSBuild /m starts a linker per project on top of cl /MP,
+        # which can exhaust the workstation's memory commit.
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Stage the Shipping package and check its import closure
+      shell: powershell
+      run: |
+        ctest --test-dir build/windows-shipping -C MinSizeRel `
+          -R '^WindowsCertification_PackageDependencyClosure$' --no-tests=error --output-on-failure
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Collect row evidence
+      shell: powershell
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $runs = @(Get-ChildItem -Directory -LiteralPath 'build/windows-shipping/package-closure/MinSizeRel' -Filter 'run-*')
+        if ($runs.Count -ne 1) { throw "Expected exactly one staged package run, found $($runs.Count)" }
+        $package = Join-Path $runs[0].FullName 'install/bin'
+        $pin = Get-Content -Raw -LiteralPath 'cmake/WindowsShippingToolchain.json' | ConvertFrom-Json
+        $cert = Join-Path $env:RUNNER_TEMP 'gpu-cert'
+        python -B Tools/platform-cert/collect_evidence.py `
+          --plan "docs/certification/plans/$env:SPARK_CERT_ROW.json" `
+          --evidence-dir "$cert/evidence" --artifact-root "$cert/artifacts" --clean-artifacts `
+          --compiler-command cl --package-root $package `
+          --windows-sdk-version $pin.windowsSdkVersion --from-github-env
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Report the row against the support matrix
+      shell: powershell
+      run: |
+        # ledger-consistency fails on any structural error in the matrix or in
+        # the evidence just collected, and otherwise states plainly that the row
+        # is not certified: it cannot certify while the plan's uncovered
+        # categories have no probe, and this step must not pretend otherwise.
+        $cert = Join-Path $env:RUNNER_TEMP 'gpu-cert'
+        python -B Tools/platform-cert/validate_certification.py `
+          --evidence-dir "$cert/evidence" --artifact-root "$cert/artifacts" `
+          --from-github-env --mode ledger-consistency
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Upload row evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: gpu-cert-win11-x64-msvc143-d3d11-${{ github.sha }}
+        path: ${{ runner.temp }}/gpu-cert
+        if-no-files-found: ignore
+        retention-days: 90
