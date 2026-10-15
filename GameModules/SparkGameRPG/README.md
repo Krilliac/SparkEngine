@@ -32,9 +32,10 @@ automated sessions:
     rpg_talk <npc-id>
     rpg_use <item-id>
     rpg_accept <quest-id>
+    rpg_npc_route <npc-id>
 
 Discovery and engine-integration commands include rpg_areas, rpg_classes,
-rpg_items, rpg_quests, rpg_npcs, rpg_save, rpg_load, rpg_weather, and rpg_time.
+rpg_items, rpg_quests, rpg_npcs, rpg_npc_route, rpg_save, rpg_load, rpg_weather, and rpg_time.
 
 `rpg_autoplay <quest-id> [quarry name]` hands the adventure to
 `Source/Gameplay/RPGQuestAutopilot`, an automated player for Thornwood hunting quests. Each
@@ -84,6 +85,11 @@ patrolling NPC plans a `FindPath` route to the next waypoint and walks it at 3 m
 found away from its waypoint with no route (after a load or a rebake) replans the leg. A waypoint with no
 path leaves the guard where it stands until its waypoint changes, the NavMesh is rebaked, or a save is
 loaded.
+`rpg_npc_route <npc-id>` prints one NPC's behavior, position and route progress, for example
+`[3] Captain Aldric (Area 1) behavior=Patrol pos=(-12.00, 0.00, 100.00) route=2/5`: `route=<next>/<count>` counts
+the NavMesh waypoints of the walk in progress and reads `0/0` while the NPC stands. The packaged
+RPGQuestSlicePackage_WolfHuntRestart run samples the patrolling guard (NPC 3) twice and requires a live NavMesh
+route and a moved position.
 `ctest --test-dir build/linux-gcc-release -R RPGNPCNavigation --output-on-failure` runs the tests
 (Tests/TestMOD350RPGNPCNavigationReal.cpp).
 

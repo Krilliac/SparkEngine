@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <sstream>
 
 namespace RPG
@@ -430,6 +431,42 @@ namespace RPG
                                                                 : "Hostile")
                << "]\n";
         }
+        return ss.str();
+    }
+
+    std::string RPGNPCSystem::GetNPCRouteString(uint32_t npcId) const
+    {
+        const NPCData* npc = GetNPC(npcId);
+        if (!npc)
+            return "No NPC with id " + std::to_string(npcId);
+
+        const char* behavior = "Unknown";
+        switch (npc->currentBehavior)
+        {
+        case NPCBehavior::Idle:
+            behavior = "Idle";
+            break;
+        case NPCBehavior::Patrol:
+            behavior = "Patrol";
+            break;
+        case NPCBehavior::Guard:
+            behavior = "Guard";
+            break;
+        case NPCBehavior::Merchant:
+            behavior = "Merchant";
+            break;
+        case NPCBehavior::QuestGiver:
+            behavior = "QuestGiver";
+            break;
+        default:
+            break;
+        }
+
+        std::ostringstream ss;
+        ss << std::fixed << std::setprecision(2);
+        ss << "[" << npcId << "] " << npc->name << " (Area " << npc->areaId << ") behavior=" << behavior << " pos=("
+           << npc->posX << ", " << npc->posY << ", " << npc->posZ << ") route=" << npc->routeIndex << "/"
+           << npc->route.size();
         return ss.str();
     }
 

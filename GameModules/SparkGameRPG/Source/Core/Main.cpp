@@ -488,6 +488,17 @@ void SparkGameRPGModule::RegisterConsoleCommands()
     registerCommand("rpg_npcs",
                     [this](const std::vector<std::string>&) -> std::string { return m_npcSystem->GetNPCListString(); });
 
+    registerCommand("rpg_npc_route",
+                    [this](const std::vector<std::string>& args) -> std::string
+                    {
+                        uint32_t npcId = 0;
+                        if (args.size() != 1 || !ParseUint(args[0], npcId))
+                        {
+                            return "Usage: rpg_npc_route <npc-id>";
+                        }
+                        return m_npcSystem->GetNPCRouteString(npcId);
+                    });
+
     registerCommand("rpg_items", [this](const std::vector<std::string>&) -> std::string
                     { return m_inventorySystem->GetItemListString(); });
 
@@ -501,6 +512,7 @@ void SparkGameRPGModule::RegisterConsoleCommands()
                                "  rpg_use <item-id> | rpg_accept <quest-id>\n"
                                "  rpg_autoplay <quest-id> [quarry name] | rpg_autoplay off\n"
                                "  rpg_areas | rpg_classes | rpg_items | rpg_quests | rpg_npcs\n"
+                               "  rpg_npc_route <npc-id>\n"
                                "  rpg_save <slot> | rpg_load <slot> | rpg_weather <type> | rpg_time <hour>";
                     });
 

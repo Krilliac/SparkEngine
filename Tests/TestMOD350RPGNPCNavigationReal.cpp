@@ -18,6 +18,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using namespace RPG;
@@ -144,11 +145,21 @@ TEST(RPGNPCNavigation_ScheduleChangeWalksAlongWorldNavMesh)
     EXPECT_FALSE(blacksmith->route.empty());
     EXPECT_LT(Distance2D(blacksmith->posX, blacksmith->posZ, 50.0f, 30.0f), kWalkSpeed * 1.0f + 0.01f);
 
+    // rpg_npc_route reports the live walk: the route counters of the NPC record, and a route that is not empty.
+    const std::string midWalk = npcs.GetNPCRouteString(kBlacksmithNpc);
+    EXPECT_TRUE(midWalk.find("[1] ") == 0);
+    EXPECT_TRUE(midWalk.find("behavior=Idle") != std::string::npos);
+    EXPECT_TRUE(midWalk.find("route=" + std::to_string(blacksmith->routeIndex) + "/" +
+                             std::to_string(blacksmith->route.size())) != std::string::npos);
+    EXPECT_TRUE(midWalk.find("/0") == std::string::npos);
+    EXPECT_TRUE(npcs.GetNPCRouteString(9999) == "No NPC with id 9999");
+
     const Walk walk = WalkUntilArrived(npcs, kBlacksmithNpc, 55.0f, 40.0f, 30.0f);
     EXPECT_TRUE(walk.arrived);
     EXPECT_LE(walk.largestStep, kWalkSpeed * kFrameSeconds + 0.001f);
     EXPECT_NEAR(blacksmith->posX, 55.0f, 0.25f);
     EXPECT_NEAR(blacksmith->posZ, 40.0f, 0.25f);
+    EXPECT_TRUE(npcs.GetNPCRouteString(kBlacksmithNpc).find("route=0/0") != std::string::npos);
 
     npcs.Shutdown();
     world.Shutdown();
