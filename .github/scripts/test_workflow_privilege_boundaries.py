@@ -25,6 +25,7 @@ SUMMARY = ROOT / ".github" / "workflows" / "summary.yml"
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 MSVC = ROOT / ".github" / "workflows" / "msvc.yml"
 OPERATIONS = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
+GPU_CERTIFICATION = ROOT / ".github" / "workflows" / "gpu-certification.yml"
 CODEQL_ACTION_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -347,6 +348,36 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
                 self.assertEqual(_permissions(job), {"contents": "read"})
                 self.assertIn("persist-credentials: false", job)
                 self.assertNotIn("secrets.", job)
+        _assert_full_sha_pins(self, text)
+
+    def test_only_gpu_certification_names_the_self_hosted_runner(self) -> None:
+        # OD-31: the repository is public, so a self-hosted label anywhere else
+        # (including inside a matrix value or expression) could hand the owner's
+        # workstation to a trigger that untrusted code reaches.
+        for workflow in sorted(WORKFLOW_ROOT.glob("*.y*ml")):
+            if workflow == GPU_CERTIFICATION:
+                continue
+            text = workflow.read_text(encoding="utf-8").lower()
+            with self.subTest(workflow=workflow.name):
+                self.assertNotIn("self-hosted", text)
+                self.assertNotIn("spark-gpu", text)
+
+    def test_gpu_certification_has_only_trusted_triggers_and_no_privilege(self) -> None:
+        text = GPU_CERTIFICATION.read_text(encoding="utf-8")
+        workflow = parse_workflow_yaml(text)
+        self.assertEqual(workflow["on"], {"workflow_dispatch": None, "push": {"branches": ["Working"]}})
+        self.assertEqual(workflow["permissions"], {})
+        self.assertNotIn("secrets.", text)
+        self.assertNotIn("environment:", text)
+        self.assertNotIn("id-token", text)
+        for name, job in workflow["jobs"].items():
+            with self.subTest(job=name):
+                self.assertEqual(job["permissions"], {"contents": "read"})
+                self.assertIn("github.repository == 'Krilliac/SparkEngine'", job["if"])
+                self.assertIn("spark-gpu", job["runs-on"])
+                for step in job["steps"]:
+                    if str(step.get("uses", "")).startswith("actions/checkout@"):
+                        self.assertEqual(step["with"]["persist-credentials"], False)
         _assert_full_sha_pins(self, text)
 
 

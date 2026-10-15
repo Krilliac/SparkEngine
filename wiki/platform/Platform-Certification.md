@@ -46,6 +46,7 @@ The support matrix (`docs/certification/support-matrix.json`) declares every pla
 |--------|------|---------|-------------------|
 | `win11-x64-msvc143-d3d11` | primary | D3D11 | All 13 |
 | `win11-x64-msvc143-nullrhi` | supported | NullRHI | 9 (no renderer/content/input/audio) |
+| `win11-x64-msvc143-d3d11-amd-igpu` | experimental | D3D11 | Not certifiable; no job yet (OD-31) |
 
 ## Evidence Records
 
@@ -243,16 +244,58 @@ probed or uncovered category is in the row's `evidenceRequired`, every `ctest -R
 selector names an `add_test` in `Tests/CMakeLists.txt`, every ctest probe passes
 `--no-tests=error`, and every named preset exists in `CMakePresets.json`.
 
-### Remaining blockers for PLT-200 completion
+### Self-hosted GPU runner (OD-31)
 
-The certification infrastructure is in place. What remains is **physical-host evidence collection** — an operator must:
+The primary D3D11 row's hardware is the owner's workstation (Ryzen 9 9900X3D, RTX 5070 Ti). OD-31 makes it a
+GitHub Actions self-hosted runner labelled `spark-gpu`, and `.github/workflows/gpu-certification.yml` collects
+exact-commit evidence for `win11-x64-msvc143-d3d11` on it. The job enters the pinned MSVC environment, refuses a
+`cl` that differs from `cmake/WindowsShippingToolchain.json`, configures `windows-shipping` with tests, builds
+MinSizeRel, stages the package through `WindowsCertification_PackageDependencyClosure`, runs
+`collect_evidence.py --from-github-env --package-root`, checks the record with `validate_certification.py --mode
+ledger-consistency`, and uploads it as `gpu-cert-<row>-<sha>`.
 
-- Build, install, launch, and exercise SparkEngine on a Windows 11 x64 machine with an NVIDIA GPU (D3D11 row)
-- Build, install, launch, and exercise SparkEngine in NullRHI headless mode (NullRHI row)
-- Record the results as evidence JSON files
-- Run the validator to confirm pass
+What it does not do:
 
-This cannot be automated away — it requires real hardware running real builds.
+- **Certify the row.** The plan's uncovered categories (install, launch, renderer, input, audio, crash, upgrade,
+  rollback, uninstall) still have no hardware probe, so the validator reports the row as not certified.
+- **Stand in for a clean host.** The workstation is not a clean machine; clean-host categories stay deferred
+  under OD-27.
+- **Measure the iGPU row.** The engine always creates the default D3D11 adapter and the collector records the first
+  WMI adapter, so `win11-x64-msvc143-d3d11-amd-igpu` stays experimental with no job until both can target it.
+
+The repository is public, so the workflow runs only on `workflow_dispatch` and pushes to `Working`, and its job
+refuses any other repository. No `pull_request`, `pull_request_target`, `issue_comment`, `workflow_run` or
+`schedule` trigger may ever reach the `spark-gpu` label, and release environments stay on GitHub-hosted runners.
+
+The triggers in this file are not the whole boundary: a fork pull request runs the workflows in its own head, so it
+can add a new workflow that targets `spark-gpu`. Two controls close that path. The repository must require approval
+for workflows from **all** outside collaborators (the default only stops first-time contributors), and
+`test_workflow_privilege_boundaries.py` fails if any other workflow names `self-hosted` or `spark-gpu`, or if
+`gpu-certification.yml` gains a trigger, secret, environment or write permission. The test is defence in depth only,
+since a pull request can edit it too; approval is the control that holds. This is a personal account, so runner
+groups restricted to one workflow are not available. An ephemeral runner in a VM would isolate jobs better, but
+loses direct GPU access; the runner instead runs as a non-administrator account holding no secrets.
+
+#### Registering the runner
+
+The owner runs these steps; they need a registration token and install a Windows service.
+
+1. In Settings, Actions, General, set "Approval for running fork pull request workflows from contributors" to
+   require approval for all outside collaborators. Do this first: the repository is on "first-time contributors"
+   today, which would let anyone with one merged pull request run code on the workstation.
+2. Update Visual Studio 2022 (Visual Studio Installer, Update) until a Developer PowerShell `cl` prints
+   `Version 19.44.35229`. The Shipping configure refuses any other compiler build.
+3. Install Python 3.12 for all users with "Add to PATH", so the service account finds `python`.
+4. Create a standard local account for the service (not an administrator), e.g. `spark-runner`.
+5. On GitHub, open Settings, Actions, Runners, New self-hosted runner, Windows x64. Download and extract the runner
+   into `C:\actions-runner` (outside any user profile) as that page shows.
+6. In `C:\actions-runner`, run `.\config.cmd --url https://github.com/Krilliac/SparkEngine --token <TOKEN>
+   --name spark-gpu-01 --labels spark-gpu --work _work --runasservice`, and give `.\spark-runner` when it asks for
+   the service account. `self-hosted`, `Windows` and `X64` are added automatically.
+7. After the workflow reaches `Working`, start it from Actions, GPU certification, Run workflow.
+
+A run builds the whole Shipping tree with `--parallel 1` and holds the GPU for its duration, so expect it to compete
+with local work on the same machine.
 
 ## Running Tests
 
@@ -309,3 +352,4 @@ the v0.9.0 qualification step fails closed.
 - **Commit:** `360c05e883d4d5d1c0d050455a5cbb226cce3ffc`
 - **Status:** Infrastructure complete; evidence collection pending
 - **Updated:** 2026-09-30: fresh-stage closure enforcement and retained reports; current-tree measurement pending
+- **Updated:** 2026-10-15: OD-31 self-hosted GPU runner, experimental iGPU row, measured primary-row identity
