@@ -7,6 +7,10 @@ if(NOT DEFINED SPARK_FUZZ_PROJECT_ROOT)
     set(SPARK_FUZZ_PROJECT_ROOT "${CMAKE_SOURCE_DIR}")
 endif()
 
+# SparkEngine/Source/Core/PlatformTypes.h forwards to the SDK header <Spark/Detail/PlatformTypes.h>,
+# so every target that compiles engine sources needs the SDK include root.
+include_directories("${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include")
+
 add_executable(SparkFuzzJsonUtils
     FuzzJsonUtils.cpp
     FuzzJsonUtilsProduction.cpp
