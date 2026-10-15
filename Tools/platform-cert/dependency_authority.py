@@ -442,6 +442,12 @@ def default_platform_runtime() -> list[dict[str, Any]]:
             [],
             "HTTP client; only SparkInstaller.exe and SparkBuild.exe import it.",
         ),
+        system(
+            "dwmapi.dll",
+            [],
+            "Desktop Window Manager (dark title bar, window backdrop); only SparkEditor.exe and "
+            "SparkLauncher.exe import it.",
+        ),
     ]
 
 
