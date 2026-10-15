@@ -1104,7 +1104,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*745 test-bearing `.cpp`/`.mm` files, 8639 source-level test definitions*
+*745 test-bearing `.cpp`/`.mm` files, 8645 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1340,7 +1340,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestFPSGameCameraReloadReal` | 0 |
 | `TestFPSGameplayIntegration` | 17 |
 | `TestFPSLANLoopback` | 2 |
-| `TestFPSMultiplayer` | 19 |
+| `TestFPSMultiplayer` | 23 |
 | `TestFPSOwnedSaveDecode` | 1 |
 | `TestFPSWeatherPort` | 8 |
 | `TestFastNoise2SIMD` | 32 |
@@ -1377,11 +1377,11 @@ extents; this does not change plane order or clip-space calculations.
 | `TestGPUStallProfilerPhaseCC` | 10 |
 | `TestGTAOEffect` | 8 |
 | `TestGameModeReal` | 11 |
-| `TestGameModuleMMO` | 46 |
+| `TestGameModuleMMO` | 47 |
 | `TestGameModulePlatformerARPG` | 37 |
 | `TestGameModuleRPG` | 35 |
 | `TestGameModuleRTS` | 39 |
-| `TestGameModuleRacing` | 29 |
+| `TestGameModuleRacing` | 30 |
 | `TestGameObjectTransforms` | 24 |
 | `TestGamePackager` | 14 |
 | `TestGameViewPanel` | 3 |

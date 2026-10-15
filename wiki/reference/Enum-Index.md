@@ -328,7 +328,7 @@
 | `Format` | enum | SparkEditor | [AssetPipelineTypes.h:L87](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L87) |  |
 | `Format` | enum | SparkEditor | [AssetPipelineTypes.h:L124](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L124) |  |
 | `FormationType` | enum | SparkEngine | [FormationSystem.h:L57](../../SparkEngine/Source/Engine/AI/FormationSystem.h#L57) | Supported formation shapes. |
-| `FPSMessageType` | enum | GameModules | [MultiplayerSystem.h:L92](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L92) | FPS message types carried on NetworkManager. |
+| `FPSMessageType` | enum | GameModules | [MultiplayerSystem.h:L93](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L93) | FPS message types carried on NetworkManager. |
 | `FPSQuickLoadStatus` | enum | GameModules | [FPSQuickLoad.h:L25](../../GameModules/SparkGameFPS/Source/Game/FPSQuickLoad.h#L25) |  |
 | `FractalType` | enum | SparkEngine | [FastNoiseLite.h:L54](../../SparkEngine/Source/Graphics/FastNoiseLite.h#L54) |  |
 | `FrameBottleneck` | enum | SparkEngine | [GPUStallProfiler.h:L23](../../SparkEngine/Source/Utils/GPUStallProfiler.h#L23) | Frame bottleneck classification. |
@@ -490,13 +490,13 @@
 | `MetricType` | enum | SparkEditor | [ProfilerEnums.h:L88](../../SparkEditor/Source/Enums/ProfilerEnums.h#L88) | Performance metric types |
 | `MinimapBlipType` | enum | GameModules | [HUDSystem.h:L90](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L90) | Minimap blip types |
 | `MMOStarterFaction` | enum | Templates | [GameModule.h:L14](../../Templates/MMOStarter/Source/GameModule.h#L14) |  |
-| `MMOStmtId` | enum | GameModules | [MMOPersistenceSystem.h:L102](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L102) | Prepared statement IDs for MMO database operations |
+| `MMOStmtId` | enum | GameModules | [MMOPersistenceSystem.h:L103](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L103) | Prepared statement IDs for MMO database operations |
 | `MobileQualityPreset` | enum | SparkEngine | [MobilePlatform.h:L94](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L94) | GPU quality presets for mobile performance. |
 | `Mode` | enum | GameModules | [TFSpectator.h:L108](../../GameModules/SparkGameMMOFPS/Source/Game/TFSpectator.h#L108) |  |
 | `Mode` | enum | SparkEngine | [AdvancedPlacementComponents.h:L215](../../SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h#L215) | Enables ragdoll physics on a skeletal mesh entity. |
 | `Mode` | enum | SparkEngine | [PlacementComponents.h:L35](../../SparkEngine/Source/Engine/ECS/Components/PlacementComponents.h#L35) | Applies wind force to particles, vegetation, and cloth within range. |
 | `Mode` | enum | SparkEngine | [NetworkTrustStore.h:L104](../../SparkEngine/Source/Engine/Networking/NetworkTrustStore.h#L104) | Which server keys a client accepts. |
-| `Mode` | enum | SparkEngine | [FreezeSystem.h:L32](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L32) |  |
+| `Mode` | enum | SparkEngine | [FreezeSystem.h:L34](../../SparkEngine/Source/Engine/SaveSystem/FreezeSystem.h#L34) |  |
 | `Mode` | enum | SparkInstaller | [InstallerContext.h:L12](../../SparkInstaller/src/InstallerContext.h#L12) |  |
 | `Mode` | enum | Tests | [TestFreezeSystem.cpp:L18](../../Tests/TestFreezeSystem.cpp#L18) |  |
 | `ModScriptScan` | enum | SparkEngine | [ModSystemLifecycle.cpp:L33](../../SparkEngine/Source/Engine/Modding/ModSystemLifecycle.cpp#L33) |  |
@@ -564,7 +564,7 @@
 | `PackageCompressionType` | enum | SparkEditor | [BuildSystemEnums.h:L106](../../SparkEditor/Source/Enums/BuildSystemEnums.h#L106) | Compression types for packaging |
 | `PackagePlatform` | enum | SparkEngine | [GamePackager.h:L48](../../SparkEngine/Source/Engine/Build/GamePackager.h#L48) | Target platform for the package |
 | `PacketViolation` | enum | SparkEngine | [PacketValidator.h:L37](../../SparkEngine/Source/Engine/Networking/PacketValidator.h#L37) | Why a packet was rejected |
-| `Page` | enum | SparkInstaller | [WizardGui.cpp:L44](../../SparkInstaller/src/gui/WizardGui.cpp#L44) |  |
+| `Page` | enum | SparkInstaller | [WizardGui.cpp:L45](../../SparkInstaller/src/gui/WizardGui.cpp#L45) |  |
 | `PakCompression` | enum | SparkEngine | [SparkPak.h:L50](../../SparkEngine/Source/Core/SparkPak.h#L50) | Compression method for individual entries. |
 | `PaletteId` | enum | SparkUI | [Enums.h:L55](../../SparkUI/Include/SparkUI/Enums.h#L55) | Built-in palette families. |
 | `PanelCategory` | enum | SparkEditor | [EditorPanel.h:L25](../../SparkEditor/Source/Core/EditorPanel.h#L25) | Category classification for editor panels. |
@@ -604,7 +604,7 @@
 | `PlatformType` | enum | GameModules | [PlatformerEnums.h:L40](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L40) | Types of platforms with different behaviors |
 | `PlaybackCamera` | enum | SparkEngine | [ReplaySystem.h:L28](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L28) |  |
 | `PlaybackState` | enum | SparkEngine | [ReplaySystem.h:L37](../../SparkEngine/Source/Engine/Replay/ReplaySystem.h#L37) |  |
-| `PlayerActionFlags` | enum | GameModules | [MultiplayerSystem.h:L109](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L109) | Replicated player state sent in each snapshot. |
+| `PlayerActionFlags` | enum | GameModules | [MultiplayerSystem.h:L110](../../GameModules/SparkGameFPS/Source/Game/MultiplayerSystem.h#L110) | Replicated player state sent in each snapshot. |
 | `PlayerClass` | enum | SparkSDK | [GameTypes.h:L224](../../SparkSDK/Include/Spark/GameTypes.h#L224) | Player class types for class-based FPS gameplay |
 | `PlayerState` | enum | GameModules | [PlatformerEnums.h:L21](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L21) | Player movement and action states |
 | `PlaylistMode` | enum | SparkEngine | [MusicManager.h:L113](../../SparkEngine/Source/Audio/MusicManager.h#L113) |  |
@@ -618,7 +618,7 @@
 | `PostProcessPass` | enum | Tests | [TestPostProcessingPipeline.cpp:L13](../../Tests/TestPostProcessingPipeline.cpp#L13) |  |
 | `PowerUpType` | enum | GameModules | [LootSystem.h:L30](../../GameModules/SparkGameFPS/Source/Game/LootSystem.h#L30) | Types of power-up pickups |
 | `PowerUpType` | enum | GameModules | [PlatformerEnums.h:L100](../../GameModules/SparkGamePlatformer/Source/Enums/PlatformerEnums.h#L100) | Temporary power-up effects |
-| `PreflightDestination` | enum | SparkInstaller | [InstallerTransactionTests.cpp:L951](../../SparkInstaller/tests/InstallerTransactionTests.cpp#L951) |  |
+| `PreflightDestination` | enum | SparkInstaller | [InstallerTransactionTests.cpp:L962](../../SparkInstaller/tests/InstallerTransactionTests.cpp#L962) |  |
 | `Preset` | enum | SparkEngine | [VolumeComponents.h:L305](../../SparkEngine/Source/Engine/ECS/Components/VolumeComponents.h#L305) | Defines a spatial zone where audio reverb is applied. |
 | `PreviewLighting` | enum | SparkEditor | [MaterialEditorPanel.h:L265](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L265) |  |
 | `PreviewShape` | enum | SparkEditor | [MaterialEditorPanel.h:L255](../../SparkEditor/Source/Panels/MaterialEditorPanel.h#L255) |  |
@@ -811,7 +811,7 @@
 | `Status` | enum | SparkUI | [Enums.h:L32](../../SparkUI/Include/SparkUI/Enums.h#L32) | Semantic status. Rendered as glyph + word + colour, never by colour alone. |
 | `StencilOperation` | enum | SparkEngine | [GraphicsEnums.h:L104](../../SparkEngine/Source/Enums/GraphicsEnums.h#L104) | Stencil operations |
 | `Step` | enum | GameModules | [TFTutorial.h:L76](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorial.h#L76) |  |
-| `StepState` | enum | SparkInstaller | [WizardGui.cpp:L409](../../SparkInstaller/src/gui/WizardGui.cpp#L409) |  |
+| `StepState` | enum | SparkInstaller | [WizardGui.cpp:L410](../../SparkInstaller/src/gui/WizardGui.cpp#L410) |  |
 | `StoreLoadStatus` | enum | GameModules | [TFSocialSystem.h:L151](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L151) |  |
 | `StreamingMethod` | enum | SparkEditor | [LevelStreamingEnums.h:L43](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L43) | Streaming methods |
 | `StreamingQuality` | enum | SparkEditor | [LevelStreamingEnums.h:L116](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L116) | Streaming quality settings |
