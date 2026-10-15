@@ -60,9 +60,6 @@ namespace Racing
         /** @brief Release subscriptions and clean up registrations. */
         void Shutdown();
 
-        /** @brief Render debug UI for engine system integrations. */
-        void RenderDebugUI();
-
         // ---- Console command helpers ----
 
         /** @brief Save race progress to a named slot. */

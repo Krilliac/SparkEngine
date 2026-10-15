@@ -7,7 +7,7 @@
 #include "Engine/ECS/Components.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -468,7 +468,7 @@ namespace Platformer
 
     void PlatformerHazardSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Hazards"))
             return;
 

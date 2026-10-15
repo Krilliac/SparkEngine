@@ -13,19 +13,19 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 |---------|------:|
 | **SparkEngine/Source** | 347663 |
 | **SparkEditor/Source** | 106742 |
-| **GameModules** | 163990 |
+| **GameModules** | 163966 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3231 |
-| **Tests** | 278877 |
+| **Tests** | 278971 |
 | **SparkConsole/src** | 1866 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~937425** |
+| **Total C++ (excl. ThirdParty)** | **~937495** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1269 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1270 |
 | Implementation files (.c/.cc/.cpp/.cxx/.mm) | 2007 |
 | HLSL shader files | 44 |
 | GLSL shader files | 14 |
@@ -111,7 +111,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | Test files | 742 |
-| TEST() definitions | 8566 |
+| TEST() definitions | 8568 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics

@@ -8,7 +8,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -458,7 +458,7 @@ namespace MMO
 
     void MMOCharacterSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Character System"))
         {
             ImGui::Text("Races: %zu | Classes: %zu | Characters: %zu", m_races.size(), m_classes.size(),

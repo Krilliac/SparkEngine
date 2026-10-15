@@ -7,7 +7,7 @@
 #include "Unit/RTSUnitSystem.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -350,7 +350,7 @@ namespace RTS
 
     void RTSResourceSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RTS Resource System"))
         {
             for (const auto& [faction, res] : m_playerResources)

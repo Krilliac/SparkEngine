@@ -7,7 +7,7 @@
 #include "Engine/ECS/Components.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -334,7 +334,7 @@ namespace ARPG
 
     void ARPGDungeonSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("ARPG Dungeon System"))
         {
             ImGui::Text("Tiers: %zu | Floors explored: %zu", m_tierConfigs.size(), m_floors.size());

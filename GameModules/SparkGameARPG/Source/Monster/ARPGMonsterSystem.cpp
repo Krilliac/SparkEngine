@@ -6,7 +6,7 @@
 #include "ARPGMonsterSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -371,7 +371,7 @@ namespace ARPG
 
     void ARPGMonsterSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("ARPG Monster System"))
         {
             ImGui::Text("Templates: %zu | Active: %zu", m_templates.size(), m_activeMonsters.size());

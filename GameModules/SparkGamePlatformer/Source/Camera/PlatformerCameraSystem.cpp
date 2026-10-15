@@ -6,7 +6,7 @@
 #include "PlatformerCameraSystem.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -202,7 +202,7 @@ namespace Platformer
 
     void PlatformerCameraSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Camera"))
             return;
 

@@ -8,7 +8,7 @@
 
 #include <cmath>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -293,7 +293,7 @@ namespace RTS
 
     void RTSMatchSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RTS Match System"))
         {
             const char* stateNames[] = {"Setup", "Playing", "Paused", "Victory", "Defeat"};

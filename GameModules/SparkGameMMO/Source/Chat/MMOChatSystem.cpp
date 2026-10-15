@@ -11,7 +11,7 @@
 #include "Engine/Networking/NetworkManager.h"
 #endif
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -295,7 +295,7 @@ namespace MMO
 
     void MMOChatSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO Chat"))
             return;
 

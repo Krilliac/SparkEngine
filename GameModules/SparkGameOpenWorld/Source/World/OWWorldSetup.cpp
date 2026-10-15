@@ -8,7 +8,7 @@
 #include "Engine/Streaming/SceneManifest.h"
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -415,7 +415,7 @@ namespace OpenWorld
 
     void OWWorldSetup::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Open World Map"))
             return;
 

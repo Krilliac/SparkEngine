@@ -17,7 +17,7 @@
 #include "Engine/Streaming/SeamlessAreaManager.h"
 #include "Engine/World/WorldOriginSystem.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -492,7 +492,7 @@ namespace MMO
 
     void MMOWorldSetup::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO World"))
             return;
 

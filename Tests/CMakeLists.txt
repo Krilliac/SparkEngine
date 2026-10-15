@@ -1332,7 +1332,10 @@ target_compile_definitions(SparkTests PRIVATE
 
 # ImGui â€” enables full editor tests, OpenWorld module tests, CommandPalette, etc.
 if(TARGET imgui)
-    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_IMGUI)
+    # SPARK_HAS_IMGUI matches what a game module gets when ImGui is available
+    # (spark_configure_module_imgui), so the module sources compiled below
+    # keep their in-game UI draw paths and the tests can exercise them.
+    target_compile_definitions(SparkTests PRIVATE SPARK_TEST_HAS_IMGUI SPARK_HAS_IMGUI=1)
     target_link_libraries(SparkTests PRIVATE imgui)
 
     # OpenWorld module sources (all use ImGui for RenderDebugUI)
@@ -2857,6 +2860,31 @@ set_tests_properties(ModuleVersionCompatibility PROPERTIES
     LABELS "module;sdk;unit"
     RUN_SERIAL TRUE
     TIMEOUT 120)
+
+# Windows game modules link the engine's in-tree ImGui and define
+# SPARK_HAS_IMGUI (spark_configure_module_imgui). Each built image must carry a
+# string only its guarded in-game UI references; a module whose UI is compiled
+# out (e.g. guarded by the never-defined ENABLE_EDITOR) fails.
+if(WIN32 AND SPARK_ENGINE_IMGUI_FOR_MODULES)
+    set(_spark_ui_modules
+        SparkGame SparkGameARPG SparkGameFPS SparkGameMMO SparkGameOpenWorld
+        SparkGamePlatformer SparkGameRPG SparkGameRTS SparkGameRacing)
+    set(_spark_ui_markers
+        "Gameplay Showcase" "ARPG Combat System" "Start / Restart Survival" "MMO Chat"
+        "Open World Player" "Platformer Player" "RPG Combat System" "RTS Match System" "Racing Track")
+    foreach(_spark_ui_module _spark_ui_marker IN ZIP_LISTS _spark_ui_modules _spark_ui_markers)
+        if(TARGET ${_spark_ui_module})
+            add_test(NAME GameModuleImGuiUI_${_spark_ui_module}
+                COMMAND ${CMAKE_COMMAND}
+                    "-DMODULE_IMAGE=$<TARGET_FILE:${_spark_ui_module}>"
+                    "-DMARKER=${_spark_ui_marker}"
+                    -P "${CMAKE_SOURCE_DIR}/cmake/CheckModuleImGuiCompiledIn.cmake")
+            set_tests_properties(GameModuleImGuiUI_${_spark_ui_module} PROPERTIES
+                LABELS "module;unit"
+                TIMEOUT 60)
+        endif()
+    endforeach()
+endif()
 
 # MOD-300: the real SparkGame image runs its spawn -> damage -> heal coroutine on the
 # host CoroutineScheduler, stops and destroys it before unload, cancels on a lost target,

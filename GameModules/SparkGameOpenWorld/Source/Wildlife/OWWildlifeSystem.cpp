@@ -6,7 +6,7 @@
 #include "OWWildlifeSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -614,7 +614,7 @@ namespace OpenWorld
 
     void OWWildlifeSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Wildlife"))
             return;
 

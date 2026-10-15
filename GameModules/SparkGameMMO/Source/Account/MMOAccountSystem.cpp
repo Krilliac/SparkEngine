@@ -9,7 +9,7 @@
 #include "Utils/PasswordHash.h"
 #include "Utils/SecureRandom.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -521,7 +521,7 @@ namespace MMO
 
     void MMOAccountSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         if (ImGui::TreeNode("MMO Account System"))
         {

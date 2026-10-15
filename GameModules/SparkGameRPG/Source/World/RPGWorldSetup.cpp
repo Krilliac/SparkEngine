@@ -7,7 +7,7 @@
 #include <Spark/ModuleLog.h>
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -251,7 +251,7 @@ namespace RPG
 
     void RPGWorldSetup::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("RPG World"))
             return;
 
