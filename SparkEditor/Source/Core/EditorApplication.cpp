@@ -12,6 +12,7 @@
  */
 
 #include "EditorApplication.h"
+#include "EditorAppearanceWindow.h"
 #include "EditorUI.h"
 #include "EditorFonts.h"
 #include "EditorTheme.h"
@@ -27,8 +28,8 @@
 #include "Utils/LogMacros.h"
 #include <memory>
 #include <iostream>
-#include <optional>
 #include <stdexcept>
+#include <utility>
 
 // Dear ImGui includes
 #include <imgui.h>
@@ -55,53 +56,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace SparkEditor
 {
-    namespace
-    {
-        /// Appearance the operating system asks for: high contrast wins, then the app light/dark
-        /// setting. Linux/SDL builds have no portable query and report Dark.
-        Spark::Ui::Appearance SystemAppearance()
-        {
-#ifdef _WIN32
-            HIGHCONTRASTW highContrast{};
-            highContrast.cbSize = sizeof(highContrast);
-            if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(highContrast), &highContrast, 0) != FALSE &&
-                (highContrast.dwFlags & HCF_HIGHCONTRASTON) != 0)
-            {
-                return Spark::Ui::Appearance::HighContrast;
-            }
-            DWORD appsUseLightTheme = 0;
-            DWORD valueSize = sizeof(appsUseLightTheme);
-            const LSTATUS status =
-                RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                             L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &appsUseLightTheme, &valueSize);
-            if (status == ERROR_SUCCESS && appsUseLightTheme != 0)
-            {
-                return Spark::Ui::Appearance::Light;
-            }
-#endif
-            return Spark::Ui::Appearance::Dark;
-        }
-
-        /// Appearance override for a stored preference; "dark" (and anything unknown) keeps the
-        /// palette's own appearance.
-        std::optional<Spark::Ui::Appearance> AppearanceOverrideFor(const std::string& appearance)
-        {
-            if (appearance == "light")
-            {
-                return Spark::Ui::Appearance::Light;
-            }
-            if (appearance == "hc")
-            {
-                return Spark::Ui::Appearance::HighContrast;
-            }
-            if (appearance == "system")
-            {
-                return SystemAppearance();
-            }
-            return std::nullopt;
-        }
-    } // namespace
-
     // Out-of-class definition of the static application pointer. The
     // declaration lives in EditorApplication.h so WindowProc and other
     // methods defined in EditorApplicationWindows.cpp can reach it via
@@ -198,11 +152,16 @@ namespace SparkEditor
         // Initialize EditorUI (this creates all panels including console)
         console.LogInfo("Initializing EditorUI...");
         m_ui = std::make_unique<EditorUI>();
+        // The preferences read once at startup move into EditorUI, which owns the live copy from here on.
+        // Test-mode launches never read or write the user's file.
+        m_ui->AdoptPreferences(std::move(m_preferences), !m_config.testMode && m_preferencesLoad.CanSave());
+        m_preferences = EditorPreferences{};
         if (!m_ui->Initialize(m_config))
         {
             console.LogError("Failed to initialize EditorUI");
             return failInitialization();
         }
+        NotifyPreferencesLoadProblem();
         // Give EditorUI access to the plugin manager for menu bar rendering
         m_ui->SetPluginManager(&m_pluginManager);
         console.LogSuccess("EditorUI initialized successfully");
@@ -263,26 +222,50 @@ namespace SparkEditor
 
     void EditorApplication::ApplyStartupPreferences(EditorConfig& config)
     {
-        // Bounded/test launches stay deterministic: they never read the user's preferences.
+        // Bounded/test launches stay deterministic: they never read the user's preferences. This is the only
+        // place the file is read; EditorUI adopts the result once it exists.
         if (!config.testMode)
         {
-            std::string error;
-            const std::filesystem::path preferencesFile = EditorPreferencesPath();
-            std::error_code existsError;
-            if (std::filesystem::exists(preferencesFile, existsError) &&
-                !LoadEditorPreferences(preferencesFile, m_preferences, &error))
+            m_preferencesLoad = LoadEditorPreferencesForSession(EditorPreferencesPath(), m_preferences);
+            if (m_preferencesLoad.status == EditorPreferencesLoadStatus::MovedAside)
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Ignoring editor preferences '%s': %s",
-                               preferencesFile.string().c_str(), error.c_str());
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Editor preferences were rejected (%s); kept as '%s'",
+                               m_preferencesLoad.error.c_str(), m_preferencesLoad.backupPath.string().c_str());
+            }
+            else if (m_preferencesLoad.status == EditorPreferencesLoadStatus::Unreadable)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                               "Editor preferences '%s' were not loaded and will not be saved this session: %s",
+                               EditorPreferencesPath().string().c_str(), m_preferencesLoad.error.c_str());
             }
         }
+        EditorAppearanceWindow::NormalizePalette(m_preferences);
 
         // --theme applies to this session only and leaves the saved appearance and density alone.
         if (config.startupTheme.empty())
         {
             config.startupTheme = m_preferences.palette;
-            EditorTheme::SetAppearanceOverride(AppearanceOverrideFor(m_preferences.appearance));
+            EditorTheme::SetAppearanceOverride(EditorAppearanceWindow::AppearanceOverrideFor(m_preferences.appearance));
             EditorTheme::SetDensity(m_preferences.density);
+        }
+    }
+
+    void EditorApplication::NotifyPreferencesLoadProblem()
+    {
+        if (!m_ui)
+        {
+            return;
+        }
+        if (m_preferencesLoad.status == EditorPreferencesLoadStatus::MovedAside)
+        {
+            m_ui->Notify(NotificationSeverity::Warning, "Preferences reset to defaults",
+                         "The preferences file could not be read (" + m_preferencesLoad.error + "). It was kept as " +
+                             m_preferencesLoad.backupPath.string() + ".");
+        }
+        else if (m_preferencesLoad.status == EditorPreferencesLoadStatus::Unreadable)
+        {
+            m_ui->Notify(NotificationSeverity::Warning, "Preferences not loaded",
+                         "Using defaults; changes will not be saved this session (" + m_preferencesLoad.error + ").");
         }
     }
 
@@ -295,7 +278,8 @@ namespace SparkEditor
         m_dpiScale = dpiScale;
         if (m_imguiInitialized)
         {
-            EditorTheme::SetUiScale(dpiScale, Spark::Ui::UserScale());
+            // Only the DPI factor: a user-scale step queued earlier this frame keeps its pending value.
+            Spark::Ui::RequestDpiScale(dpiScale);
         }
     }
 

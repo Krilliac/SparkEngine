@@ -1,7 +1,7 @@
 /**
  * @file TokenAudit.h
  * @brief Accessibility audit of a token set: WCAG 2.x contrast minimums, colour-vision-deficiency
- *        separation and focus-ring distinctness (spec section 2.5 as amended).
+ *        separation and focus-ring distinctness (Ember Signal spec section 2.5, unrelaxed).
  *
  * ImGui-free. tools/ui/generate_palettes.py implements the same rules and refuses to write a
  * Palettes.inl that would fail them, so every built-in set passes with margin.
@@ -14,6 +14,7 @@
 
 #include "SparkUI/Tokens.h"
 
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -25,10 +26,9 @@ namespace Spark::Ui
     inline constexpr float kAuditHighContrastTextMinimum = 7.0f;
     /// @brief Minimum WCAG ratio for disabled text, borders, focus, accent fill and graph colours.
     inline constexpr float kAuditNonTextMinimum = 3.0f;
-    /// @brief Minimum OKLab distance between status texts (and status vs accent) under simulated CVD.
-    inline constexpr float kAuditMinCvdDelta = 0.06f;
-    /// @brief Minimum OKLab distance between the focus ring and the accent fill.
-    inline constexpr float kAuditMinFocusAccentDelta = 0.08f;
+    /// @brief Minimum OKLab distance between every pair of {Success, Warning, Error, Info,
+    ///        AccentFill} under simulated protan, deutan and tritan vision.
+    inline constexpr float kAuditMinCvdDelta = 0.08f;
     /// @brief Minimum OKLCH hue distance between the focus ring and the selection surface.
     inline constexpr float kAuditMinFocusHueDegrees = 60.0f;
 
@@ -46,11 +46,24 @@ namespace Spark::Ui
 
     /// @brief Run every audit rule on @p t.
     /// @return The failures, empty when the set passes. Rule names: "text-contrast",
-    ///         "disabled-contrast", "on-accent-contrast", "status-on-fill", "border-strong",
-    ///         "border-focus", "accent-on-base", "graph-on-sunken", "cvd-status-protan",
+    ///         "disabled-contrast", "on-accent-contrast", "status-on-fill", "danger-hover",
+    ///         "danger-press", "border-strong", "border-focus" (against Base, Raised, Selected and
+    ///         AccentFill), "accent-on-base", "graph-on-sunken", "cvd-status-protan",
     ///         "cvd-status-deutan", "cvd-status-tritan", "cvd-accent-protan", "cvd-accent-deutan",
-    ///         "focus-accent-distance", "focus-hue".
+    ///         "cvd-accent-tritan", "focus-hue". For the danger rules @c bg is ErrorFill, which the
+    ///         tint is laid over (see DangerTintFill()).
     std::vector<AuditFailure> AuditTokens(const Tokens& t);
+
+    /// @brief WCAG text minimum of an appearance: 7.0 in High Contrast, 4.5 otherwise.
+    float TextContrastMinimum(Appearance appearance) noexcept;
+
+    /// @brief The role from @p candidates whose worst contrast over @p backgrounds is highest.
+    /// @param worstRatio When not null, receives that worst-case ratio (0 when @p candidates is empty).
+    /// @return The chosen role; the earlier candidate on ties, Role::TextPrimary when empty.
+    /// @details For text drawn on colours that are not tokens (the brand gradient): the ink is
+    ///          chosen by measurement instead of assuming that TextOnAccent fits.
+    Role MostReadableRole(const Tokens& t, std::span<const Rgba> backgrounds, std::span<const Role> candidates,
+                          float* worstRatio = nullptr) noexcept;
 
     /// @brief TextSecondary colour of the audit's RED fixture (spec section 2.5): too dark on Base.
     inline constexpr Rgba kAuditFailFixtureTextSecondary = Hex(0x5f5a55);

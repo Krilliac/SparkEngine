@@ -117,17 +117,28 @@ namespace SparkEditor
         Ui::DrawBrandGradient(drawList, ImVec2(min.x, max.y - Ui::Px(3.0f)), max);
         Ui::DrawLogomark(drawList, ImVec2(min.x + inset + markSize * 0.5f, min.y + height * 0.5f), markSize, true);
 
+        // Line heights are measured with each font pushed: FontSize() is the logical 100 % size, while the
+        // band and gap above are device pixels, so the rendered size (logical x UI scale) is what centres.
+        float displayHeight = 0.0f;
+        {
+            Ui::ScopedFont display(Ui::FontRole::Display);
+            displayHeight = ImGui::GetFontSize();
+        }
+        float monoHeight = 0.0f;
+        {
+            Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
+            monoHeight = ImGui::GetFontSize();
+        }
+        const float lineGap = Ui::Px(4.0f);
         const float textLeft = min.x + inset * 2.0f + markSize;
-        const float displaySize = Ui::FontSize(Ui::FontRole::Display);
-        const float monoSize = Ui::FontSize(Ui::FontRole::MonoSmall);
-        const float textTop = min.y + (height - displaySize - Ui::Px(4.0f) - monoSize) * 0.5f;
+        const float textTop = min.y + (height - displayHeight - lineGap - monoHeight) * 0.5f;
 
         ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop));
         {
             Ui::ScopedFont display(Ui::FontRole::Display);
             Ui::TextRole(Ui::Role::TextPrimary, "Spark Engine");
         }
-        ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop + displaySize + Ui::Px(4.0f)));
+        ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop + displayHeight + lineGap));
         {
             Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
             Ui::TextRole(Ui::Role::TextSecondary, "Editor %d.%d.%d", SPARK_ENGINE_VERSION_MAJOR,

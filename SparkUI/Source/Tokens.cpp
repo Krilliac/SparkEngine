@@ -316,6 +316,11 @@ namespace Spark::Ui
         return index < kRoleCount ? t.color[index] : Rgba{};
     }
 
+    Rgba DangerTintFill(const Tokens& t, float tint) noexcept
+    {
+        return Composite(WithAlpha(Get(t, Role::ErrorText), tint), Get(t, Role::ErrorFill));
+    }
+
     std::string_view RoleName(Role r) noexcept
     {
         const auto index = static_cast<std::size_t>(r);

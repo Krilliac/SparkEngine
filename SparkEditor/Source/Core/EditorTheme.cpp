@@ -154,9 +154,6 @@ namespace SparkEditor
         constexpr float kBodyFontSize = 15.0f;
         constexpr float kTableRowAltAlpha = 0.45f;
         constexpr float kDropWashAlpha = 0.12f;
-        constexpr float kLegacyStatusFillMix = 0.15f;
-        constexpr float kLegacyUnfocusedSelectionMix = 0.22f;
-        constexpr float kLegacyAccentStep = 0.12f;
 
         ThemeColor FromRgba(Spark::Ui::Rgba c)
         {
@@ -343,45 +340,6 @@ namespace SparkEditor
             const Tokens tokens =
                 Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(palette.palette), appearance, density);
             return ThemeFromTokens(tokens, palette, density);
-        }
-
-        /// Dark ink or white, whichever reads better on @p fill.
-        ThemeColor ReadableInkOn(const ThemeColor& fill)
-        {
-            const Spark::Ui::Rgba darkInk = Spark::Ui::Hex(0x1a0f08);
-            const Spark::Ui::Rgba lightInk = Spark::Ui::Hex(0xffffff);
-            const Spark::Ui::Rgba background = ToRgba(fill.WithAlpha(1.0f));
-            return FromRgba(Spark::Ui::ContrastRatio(darkInk, background) >=
-                                    Spark::Ui::ContrastRatio(lightInk, background)
-                                ? darkInk
-                                : lightInk);
-        }
-
-        /// Fill the Ember Signal roles a hand-written (pre-token) palette does not set, from the
-        /// colours it does set.
-        void CompleteLegacyFields(EditorThemeData& t)
-        {
-            t.buttonDisabled = t.textDisabled;
-            t.menuItem = t.backgroundLight;
-            t.borderStrong = t.borderLight;
-            t.surfaceOverlay = t.backgroundLight;
-            t.surfaceSelectedUnfocused = t.background.Lerp(t.textSecondary, kLegacyUnfocusedSelectionMix);
-            t.textInfo = t.textAccent;
-            t.accentHover = t.accent.Lighten(kLegacyAccentStep);
-            t.accentActive = t.accent.Darken(kLegacyAccentStep);
-            t.accentText = t.textAccent;
-            t.textOnAccent = ReadableInkOn(t.accent);
-            const ThemeColor opaqueBackground = t.background.WithAlpha(1.0f);
-            StatusFill(t, ThemeStatusFill::Info) =
-                opaqueBackground.Lerp(t.textInfo.WithAlpha(1.0f), kLegacyStatusFillMix);
-            StatusFill(t, ThemeStatusFill::Success) =
-                opaqueBackground.Lerp(t.textSuccess.WithAlpha(1.0f), kLegacyStatusFillMix);
-            StatusFill(t, ThemeStatusFill::Warning) =
-                opaqueBackground.Lerp(t.textWarning.WithAlpha(1.0f), kLegacyStatusFillMix);
-            StatusFill(t, ThemeStatusFill::Error) =
-                opaqueBackground.Lerp(t.textError.WithAlpha(1.0f), kLegacyStatusFillMix);
-            t.appearance =
-                Spark::Ui::RelativeLuminance(ToRgba(t.background)) > 0.5f ? Appearance::Light : Appearance::Dark;
         }
 
         /// The registered theme, or its regeneration for the active appearance override and density
@@ -684,24 +642,15 @@ namespace SparkEditor
         return t;
     }
 
-    void EditorTheme::SetUiScale(float dpiScale, float userScale)
-    {
-        Spark::Ui::RequestScale(dpiScale, userScale);
-    }
-
-    float EditorTheme::GetUiScale()
-    {
-        return Spark::Ui::Scale();
-    }
-
     bool EditorTheme::ApplyPendingScale()
     {
         if (!Spark::Ui::BeginFrameScale())
         {
             return false;
         }
-        // BeginFrameScale rebuilt the style from the tokens; restore the per-field colour mapping.
-        if (!s_currentThemeName.empty())
+        // BeginFrameScale rebuilt the style from the tokens; restore the per-field colour mapping of
+        // the theme applied last (which is also the theme whose tokens a mid-frame switch deferred).
+        if (s_revision != 0)
         {
             ApplyFieldColours(s_currentThemeData, ImGui::GetStyle());
         }
@@ -763,9 +712,13 @@ namespace SparkEditor
             return;
         }
         // Rebuilds the whole style (metrics, colours by role, FontSizeBase) at the context's
-        // current UI scale; the widget kit reads the same tokens.
-        Spark::Ui::SetTokens(ToTokens(theme));
-        ApplyFieldColours(theme, ImGui::GetStyle());
+        // current UI scale; the widget kit reads the same tokens. A switch made inside a frame
+        // (command palette, Appearance window) is applied by ApplyPendingScale before the next
+        // NewFrame, which maps the field colours then.
+        if (Spark::Ui::SetTokens(ToTokens(theme)))
+        {
+            ApplyFieldColours(theme, ImGui::GetStyle());
+        }
     }
 
     void EditorTheme::ApplyFieldColours(const EditorThemeData& theme, ImGuiStyle& style)
@@ -1051,7 +1004,7 @@ namespace SparkEditor
         t.tabRounding = 2.0f;
         t.frameBorderSize = 0.0f;
 
-        CompleteLegacyFields(t);
+        DeriveLegacyThemeRoles(t);
         return t;
     }
 
@@ -1127,7 +1080,7 @@ namespace SparkEditor
         t.tabRounding = 0.0f;
         t.frameBorderSize = 1.0f;
 
-        CompleteLegacyFields(t);
+        DeriveLegacyThemeRoles(t);
         return t;
     }
 
@@ -1199,7 +1152,7 @@ namespace SparkEditor
         t.frameRounding = 0.0f;
         t.tabRounding = 0.0f;
         t.frameBorderSize = 1.0f;
-        CompleteLegacyFields(t);
+        DeriveLegacyThemeRoles(t);
         return t;
     }
 
@@ -1265,7 +1218,7 @@ namespace SparkEditor
         t.frameRounding = 3.0f;
         t.tabRounding = 4.0f;
         t.frameBorderSize = 0.0f;
-        CompleteLegacyFields(t);
+        DeriveLegacyThemeRoles(t);
         return t;
     }
 
@@ -1293,7 +1246,7 @@ namespace SparkEditor
         t.tabActive = t.accent;
         t.titleBarActive = t.accent.Darken(0.3f);
         t.buttonActive = t.accent;
-        CompleteLegacyFields(t);
+        DeriveLegacyThemeRoles(t);
         return t;
     }
 
@@ -1308,7 +1261,7 @@ namespace SparkEditor
         t.titleBarActive = t.accent.Darken(0.4f);
         t.buttonActive = t.accent;
         t.textAccent = t.accent;
-        CompleteLegacyFields(t);
+        DeriveLegacyThemeRoles(t);
         return t;
     }
 

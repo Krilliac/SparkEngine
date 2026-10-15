@@ -295,7 +295,8 @@ namespace SparkLauncher
 
         // --- rail ---------------------------------------------------------------------------------
 
-        /// Brand band: ember gradient, dark-ink logomark, product name and version.
+        /// Brand band: ember gradient (flat in High Contrast), logomark, product name and version, all in
+        /// the ink that measures most readable on the band (Ui::ChooseBrandBandStyle).
         void DrawRailHeader(float width)
         {
             ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -303,9 +304,18 @@ namespace SparkLauncher
             const float height = Ui::Px(kRailHeaderHeight);
             const float margin = Ui::Px(kRailMargin);
             const float logo = Ui::Px(kRailLogoSize);
-            Ui::DrawBrandGradient(drawList, origin, ImVec2(origin.x + width, origin.y + height));
+            const Ui::BrandBandStyle band = Ui::ChooseBrandBandStyle(Ui::ActiveTokens());
+            const ImVec2 bandMax(origin.x + width, origin.y + height);
+            if (band.gradient)
+            {
+                Ui::DrawBrandGradient(drawList, origin, bandMax);
+            }
+            else
+            {
+                drawList->AddRectFilled(origin, bandMax, Ui::Col(Role::SurfaceRaised));
+            }
             Ui::DrawLogomark(drawList, ImVec2(origin.x + margin + logo * 0.5f, origin.y + height * 0.5f), logo, false,
-                             Ui::Col(Role::TextOnAccent));
+                             Ui::Col(band.ink));
 
             float titleHeight = 0.0f;
             float subtitleHeight = 0.0f;
@@ -320,7 +330,7 @@ namespace SparkLauncher
             const float gap = Ui::Px(2.0f);
             const float textX = origin.x + margin + logo + Ui::Px(12.0f);
             const float textY = origin.y + (height - titleHeight - gap - subtitleHeight) * 0.5f;
-            Ui::ScopedRoleColor ink(ImGuiCol_Text, Role::TextOnAccent);
+            Ui::ScopedRoleColor ink(ImGuiCol_Text, band.ink);
             {
                 Ui::ScopedFont title(FontRole::H1);
                 ImGui::SetCursorScreenPos(ImVec2(textX, textY));
@@ -347,7 +357,6 @@ namespace SparkLauncher
             ImGui::SetCursorScreenPos(min);
             const bool pressed = ImGui::InvisibleButton(id, ImVec2(width, height));
             const bool hovered = ImGui::IsItemHovered();
-            Ui::FocusRing();
 
             ImDrawList* drawList = ImGui::GetWindowDrawList();
             const float rounding = Ui::Px(Ui::ActiveTokens().metrics.rFrame);
@@ -790,14 +799,13 @@ namespace SparkLauncher
             const bool selected = index == app.SelectedTemplate();
             const ImVec2 origin = ImGui::GetCursorScreenPos();
 
-            // Keyboard target under the card: navigation reaches it and Enter/Space selects, and its
-            // focus ring is drawn just outside the card so it stays separate from the selection border.
+            // Keyboard target under the card: navigation reaches it and Enter/Space selects. The kit's
+            // focus ring (Ui::InstallFocusRing) is drawn just outside it, apart from the selection border.
             ImGui::SetNextItemAllowOverlap();
             if (ImGui::InvisibleButton("##Select", size))
             {
                 app.SelectTemplate(index);
             }
-            Ui::FocusRing();
             ImGui::SetCursorScreenPos(origin);
 
             Ui::BeginCard("##Card", size, selected);
@@ -950,9 +958,14 @@ namespace SparkLauncher
             return;
         }
         Ui::Tokens tokens = Ui::GenerateTokens(Ui::BuiltinSeed(Ui::PaletteId::Ember), appearance);
+        // The Comfortable profile replaces the spacing only; the appearance's focus ring width
+        // (3 px in High Contrast) stays.
+        const float focusRing = tokens.metrics.focusRing;
         tokens.metrics = Ui::MetricsFor(Ui::Density::Standard, Ui::MetricsProfile::Comfortable);
+        tokens.metrics.focusRing = focusRing;
         tokens.type.body = kComfortableBodyPx;
         Ui::Install(context, tokens, dpiScale, 1.0f, false);
+        Ui::InstallFocusRing(context);
 
         const std::filesystem::path fontDirectory = Ui::FindFontDirectory(GetLauncherExecutablePath().parent_path());
         const Ui::FontSet fonts = Ui::LoadFontSet(*ImGui::GetIO().Fonts, fontDirectory, tokens.type.body);

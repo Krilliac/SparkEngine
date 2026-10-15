@@ -332,6 +332,46 @@ TEST(EditorThemeDocument_DefinedRolesAreNeverDerived)
     EXPECT_FALSE(SameThemeColor(parsed.textInfo, parsed.textAccent));
 }
 
+TEST(EditorThemeDocument_ImportDerivationMatchesBuiltInLegacyDerivation)
+{
+    // One derivation serves imported documents and the built-in legacy palettes: an imported legacy
+    // document must come out exactly as DeriveLegacyThemeRoles completes the same colours in code.
+    EditorThemeData base;
+    base.accent = ThemeColor(0.8f, 0.4f, 0.1f, 0.5f);
+    EditorThemeData parsed;
+    ASSERT_TRUE(ParseThemeDocument(LegacyThemeDocument("Old Theme"), base, parsed));
+
+    EditorThemeData expected = base;
+    for (std::size_t i = 0; i < 25; ++i)
+    {
+        expected.*kThemeColourFields[i].member = parsed.*kThemeColourFields[i].member;
+    }
+    DeriveLegacyThemeRoles(expected);
+    for (const ThemeColourField& field : kThemeColourFields)
+    {
+        EXPECT_TRUE(SameThemeColor(parsed.*field.member, expected.*field.member));
+    }
+    for (std::size_t i = 0; i < expected.statusFills.size(); ++i)
+    {
+        EXPECT_TRUE(SameThemeColor(parsed.statusFills[i], expected.statusFills[i]));
+    }
+    EXPECT_TRUE(parsed.appearance == expected.appearance);
+
+    // Hover and pressed accents move the colour only; a translucent accent stays translucent.
+    EXPECT_NEAR(parsed.accentHover.a, 0.5f, 0.0001f);
+    EXPECT_NEAR(parsed.accentActive.a, 0.5f, 0.0001f);
+    EXPECT_GT(parsed.accentHover.g, base.accent.g);
+    EXPECT_LT(parsed.accentActive.g, base.accent.g);
+
+    // A role the caller keeps is never overwritten.
+    EditorThemeData kept = expected;
+    kept.textInfo = ThemeColor(0.5f, 0.25f, 0.125f, 1.0f);
+    LegacyThemeRoleSet keep;
+    keep.set(static_cast<std::size_t>(LegacyThemeRole::TextInfo));
+    DeriveLegacyThemeRoles(kept, keep);
+    EXPECT_TRUE(SameThemeColor(kept.textInfo, ThemeColor(0.5f, 0.25f, 0.125f, 1.0f)));
+}
+
 TEST(EditorThemeDocument_MalformedValuesKeepBaseAndMetricsClamp)
 {
     const EditorThemeData base = FullyPopulatedTheme();
@@ -3064,8 +3104,9 @@ TEST(Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack)
     ImGui::NewFrame();
     notifications.Render();
 
-    ImGuiWindow* first = ImGui::FindWindowByName("##Notification0");
-    ImGuiWindow* second = ImGui::FindWindowByName("##Notification1");
+    // Toast windows are named by notification id (the first is 1), not by stack position.
+    ImGuiWindow* first = ImGui::FindWindowByName("##Notification1");
+    ImGuiWindow* second = ImGui::FindWindowByName("##Notification2");
     EXPECT_NE(first, nullptr);
     EXPECT_NE(second, nullptr);
     if (first && second)
@@ -3079,6 +3120,173 @@ TEST(Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack)
     ImGui::SetCurrentContext(previous);
 }
 
+TEST(Gated_EditorNotificationManager_FocusPauseFollowsToastWhenOlderOneLeaves)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 720.0f);
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+
+    EditorNotificationManager notifications;
+    notifications.Show("Older toast", "info", 3.0f);
+    notifications.Show("Toast the user is reading", "info", 3.0f);
+
+    ImGui::NewFrame();
+    notifications.Render();
+    ImGui::EndFrame();
+
+    // The user focuses the newer toast: its timer pauses while the older one runs out and leaves.
+    ImGui::NewFrame();
+    ImGui::SetWindowFocus("##Notification2");
+    notifications.Render();
+    ImGui::EndFrame();
+    notifications.Update(5.0f);
+    EXPECT_EQ(notifications.GetCount(), std::size_t{1});
+
+    // The focused toast moved down the stack; it keeps its window, so it keeps its focus and its pause.
+    ImGui::NewFrame();
+    notifications.Render();
+    ImGui::EndFrame();
+    notifications.Update(5.0f);
+    EXPECT_EQ(notifications.GetCount(), std::size_t{1});
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_SparkUi_SetTokensInsideFrameWaitsForNextFrame)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 720.0f);
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+
+    const Spark::Ui::Tokens original =
+        Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember), Spark::Ui::Appearance::Dark);
+    Spark::Ui::Install(context, original, 1.0f, 1.0f, false);
+    Spark::Ui::Tokens larger = original;
+    larger.type.body = original.type.body + 3.0f;
+
+    // A theme switch from a menu item happens mid-frame. ImGui restores the font size saved at PushFont over
+    // a mid-frame style.FontSizeBase change, so the switch waits for the next frame instead of half-applying.
+    ImGui::NewFrame();
+    EXPECT_FALSE(Spark::Ui::SetTokens(larger));
+    EXPECT_EQ(Spark::Ui::ActiveTokens().type.body, original.type.body);
+    EXPECT_EQ(ImGui::GetStyle().FontSizeBase, original.type.body);
+    ImGui::PushFont(nullptr, original.type.body + 7.0f);
+    ImGui::PopFont();
+    ImGui::EndFrame();
+
+    EXPECT_TRUE(Spark::Ui::BeginFrameScale());
+    EXPECT_EQ(Spark::Ui::ActiveTokens().type.body, larger.type.body);
+    EXPECT_EQ(ImGui::GetStyle().FontSizeBase, larger.type.body);
+    ImGui::NewFrame();
+    EXPECT_NEAR(ImGui::GetFontSize(), larger.type.body, 0.5f);
+    ImGui::EndFrame();
+    EXPECT_FALSE(Spark::Ui::BeginFrameScale());
+
+    // Outside a frame the switch applies at once.
+    EXPECT_TRUE(Spark::Ui::SetTokens(original));
+    EXPECT_EQ(ImGui::GetStyle().FontSizeBase, original.type.body);
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_SparkUi_DpiAndUserScaleRequestsCompose)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    const Spark::Ui::Tokens tokens =
+        Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember), Spark::Ui::Appearance::Dark);
+    Spark::Ui::Install(context, tokens, 1.0f, 1.0f, false);
+
+    // A monitor change (DPI) and Ctrl+= (user) queued before the same frame both take effect, in either order.
+    Spark::Ui::RequestDpiScale(1.5f);
+    Spark::Ui::RequestUserScale(1.25f);
+    EXPECT_TRUE(Spark::Ui::BeginFrameScale());
+    EXPECT_EQ(Spark::Ui::DpiScale(), 1.5f);
+    EXPECT_EQ(Spark::Ui::UserScale(), 1.25f);
+
+    Spark::Ui::RequestUserScale(1.0f);
+    Spark::Ui::RequestDpiScale(2.0f);
+    EXPECT_TRUE(Spark::Ui::BeginFrameScale());
+    EXPECT_EQ(Spark::Ui::DpiScale(), 2.0f);
+    EXPECT_EQ(Spark::Ui::UserScale(), 1.0f);
+
+    // One factor alone keeps the applied value of the other.
+    Spark::Ui::RequestUserScale(1.5f);
+    EXPECT_TRUE(Spark::Ui::BeginFrameScale());
+    EXPECT_EQ(Spark::Ui::DpiScale(), 2.0f);
+    EXPECT_EQ(Spark::Ui::Scale(), 3.0f);
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorDockLayout_ToolbarNodeFollowsScale)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 1080.0f);
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    ImGui::NewFrame();
+    ImGui::Begin("##DockLayoutToolbarFitTest");
+
+    // A tree built (or restored from imgui.ini) at 100 % and then shown at 150 %.
+    const ImGuiID root = 0x53444F43;
+    const EditorDockNodes nodes = BuildEditorDockLayout(root, ImVec2(1280.0f, 1080.0f), 1.0f);
+    // EXPECT, not ASSERT: an early exit would leave this context current and its frame open.
+    ImGuiDockNode* toolbar = ImGui::DockBuilderGetNode(nodes.toolbar);
+    EXPECT_TRUE(toolbar != nullptr);
+    if (toolbar != nullptr)
+    {
+        EXPECT_NEAR(toolbar->Size.y, EditorToolbarHeight(1.0f), 1.0f);
+        EXPECT_TRUE(FitEditorToolbarNode(toolbar, 1.5f));
+        EXPECT_EQ(toolbar->Size.y, EditorToolbarHeight(1.5f));
+        EXPECT_EQ(toolbar->SizeRef.y, EditorToolbarHeight(1.5f));
+        EXPECT_TRUE(toolbar->WantLockSizeOnce);
+        // Already at height: the per-frame call does nothing.
+        EXPECT_FALSE(FitEditorToolbarNode(toolbar, 1.5f));
+        EXPECT_TRUE(FitEditorToolbarNode(toolbar, 1.0f));
+        EXPECT_EQ(toolbar->Size.y, EditorToolbarHeight(1.0f));
+    }
+
+    // Only the fixed toolbar strip is resized; user-sized panels and missing nodes are left alone.
+    ImGuiDockNode* left = ImGui::DockBuilderGetNode(nodes.left);
+    EXPECT_TRUE(left != nullptr);
+    if (left != nullptr)
+    {
+        const float leftHeight = left->Size.y;
+        EXPECT_FALSE(FitEditorToolbarNode(left, 1.5f));
+        EXPECT_EQ(left->Size.y, leftHeight);
+    }
+    EXPECT_FALSE(FitEditorToolbarNode(nullptr, 1.5f));
+
+    ImGui::DockBuilderRemoveNode(root);
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
 
 TEST(Gated_InspectorVectorControl_FitsPanelWithoutChangingValues)
 {

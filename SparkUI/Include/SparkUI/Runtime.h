@@ -30,15 +30,31 @@ namespace Spark::Ui
     void Install(ImGuiContext* ctx, const Tokens& tokens, float dpiScale, float userScale, bool reduceMotion);
 
     /// @brief Store a scale change; it is applied by the next BeginFrameScale(), never mid-frame.
+    /// @details Replaces both pending factors. A host that changes only one factor uses
+    ///          RequestDpiScale() or RequestUserScale(), which keep the other pending factor.
     void RequestScale(float dpiScale, float userScale);
 
-    /// @brief Apply a pending scale change. Call before ImGui::NewFrame().
-    /// @return True when a pending change was applied.
+    /// @brief Store a new DPI factor for the next BeginFrameScale(), keeping the user factor that
+    ///        is already pending (or the applied one when nothing is pending).
+    void RequestDpiScale(float dpiScale);
+
+    /// @brief Store a new user factor for the next BeginFrameScale(), keeping the DPI factor that
+    ///        is already pending (or the applied one when nothing is pending).
+    void RequestUserScale(float userScale);
+
+    /// @brief Apply a pending scale change and pending tokens. Call before ImGui::NewFrame().
+    /// @return True when anything pending was applied (the style was rebuilt).
     bool BeginFrameScale();
 
     /// @brief Switch tokens (theme change) and re-apply the style at the current scale; the font
     ///        atlas is not reloaded.
-    void SetTokens(const Tokens& tokens);
+    /// @details Outside a frame the style is rebuilt at once. Inside a frame (between NewFrame and
+    ///          EndFrame) the tokens are stored and applied by the next BeginFrameScale(), because
+    ///          ImGui writes the font size it saved at PushFont back over a mid-frame
+    ///          style.FontSizeBase change; ActiveTokens() keeps answering the old set until then.
+    /// @return True when the style was rebuilt now, false when the change waits for the next frame
+    ///         (or no ImGui context is current).
+    bool SetTokens(const Tokens& tokens);
 
     /// @brief Tokens of the current context (Ember Dark before Install).
     const Tokens& ActiveTokens();

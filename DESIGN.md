@@ -112,30 +112,76 @@ shapes. Axis reset buttons remain visibly associated with their numeric fields.
 ## Token appendix
 
 The audited token tables are the canonical colours; this appendix records the
-values the L0 accessibility audit forced away from the original Ember Signal seed
-so reviewers can trace why a role differs from the design mock.
+values the accessibility audit forced away from the original Ember Signal seed
+so reviewers can trace why a role differs from the design mock. Regenerate the
+list with `python tools/ui/generate_palettes.py --report`.
 
-| Set | Role | Forced value |
+The audit (`SparkUI/Source/TokenAudit.cpp`, mirrored by the generator) enforces
+spec section 2.5 unrelaxed: OKLab distance of at least 0.08 between every pair of
+{Success, Warning, Error, Info, AccentFill} under simulated protan, deutan and
+tritan vision; BorderFocus at least 3:1 against SurfaceBase, SurfaceRaised,
+SurfaceSelected and AccentFill; a focus hue at least 60 degrees from
+SurfaceSelected; and the DangerButton label (ErrorText) at 4.5:1 on its hovered
+and pressed fills (ErrorText at 12 % and 20 % over ErrorFill).
+
+**AccentFill moved (spec conflict).** The spec keeps the seed accent and also
+requires the focus ring to reach 3:1 against it. For Ember Dark that is
+impossible: the dark surfaces and the selected surface push the focus luminance
+to at least 0.24, while the seed accent `#f1823a` (luminance 0.35) needs a
+focus at or above 1.15 or at or below 0.083. Under amendment item 5 the
+generator moves the accent the least distance (weighted 4:1 against focus moves)
+that lets the focus, accent and status colours pass together. The brand
+gradient and the `#f1823a` seed in the palette table are unchanged; only the
+derived AccentFill roles differ. The dark Ember Light status texts (Error
+`#420000`, Success `#004125`) are the nearest values that keep 0.08 CVD
+separation from each other and from the accent while holding 4.5:1 on their
+fills.
+
+| Set | Role | Seed | Forced value |
+|---|---|---|---|
+| Ember Dark | BorderFocus | `#68d3ee` | `#96ffff` |
+| Ember Dark | TextDisabled | `#7d766f` | `#8e8780` |
+| Ember Dark | AccentFill | `#f1823a` | `#d56918` |
+| Ember Dark | AccentFillHover | `#f4975a` | `#d97e40` |
+| Ember Dark | AccentFillActive | `#d96e28` | `#c85f10` |
+| Ember Dark | SuccessText | `#3ccfa0` | `#82ffd9` |
+| Ember Dark | WarningText | `#f2c14e` | `#ffd867` |
+| Ember Dark | ErrorText | `#ff8a9a` | `#ffaab9` |
+| Ember Dark | InfoText | `#7cc4f5` | `#81c9fa` |
+| Ember Light | BorderFocus | `#0b7fa6` | `#002d50` |
+| Ember Light | TextDisabled | `#8c847c` | `#807870` |
+| Ember Light | TextLink | `#0b6f92` | `#006689` |
+| Ember Light | AccentFill | `#b84d14` | `#c1551f` |
+| Ember Light | AccentFillHover | `#a3420f` | `#ab4a1a` |
+| Ember Light | AccentFillActive | `#8c380b` | `#943f16` |
+| Ember Light | SuccessText | `#0a7a5a` | `#004125` |
+| Ember Light | WarningText | `#865d00` | `#744c00` |
+| Ember Light | ErrorText | `#b3263f` | `#420000` |
+| Ember Light | InfoText | `#1561ad` | `#085aa5` |
+| Ember Light | Category1 | `#e69f00` | `#ba7300` |
+| Ember Light | Category2 | `#56b4e9` | `#2d8bc0` |
+| Ember Light | Category3 | `#009e73` | `#00966b` |
+| Ember Light | Category4 | `#f0e442` | `#918500` |
+| Ember Light | Category7 | `#cc79a7` | `#bb6896` |
+| Ember Light | Category8 | `#bbbbbb` | `#838383` |
+| Ember HC | BorderFocus | `#ffd400` | `#fffe56` |
+| Ember HC | AccentFill | `#ffb15c` | `#c77d1e` |
+| Ember HC | AccentFillHover | `#ffc27f` | `#c88e4b` |
+| Ember HC | AccentFillActive | `#ff9d33` | `#c66900` |
+| Ember HC | SuccessText | `#6ff0c2` | `#91ffe1` |
+| Ember HC | ErrorText | `#ff9aa8` | `#ffafbc` |
+
+Graph1, Graph3 and Graph4 follow AccentFill, SuccessText and WarningText. The
+Cobalt and Graphite families derive their accent and focus the same way:
+
+| Set | AccentFill | BorderFocus |
 |---|---|---|
-| Ember Dark | TextDisabled | `#8e8780` |
-| Ember Dark | SuccessText | `#72fccb` |
-| Ember Dark | WarningText | `#ffd05e` |
-| Ember Dark | ErrorText | `#ffaab9` |
-| Ember Dark | InfoText | `#81c9fa` |
-| Ember Light | TextDisabled | `#807870` |
-| Ember Light | TextLink | `#006689` |
-| Ember Light | Success | `#005e40` |
-| Ember Light | Warning | `#5d3600` |
-| Ember Light | Error | `#aa1b38` |
-| Ember Light | Info | `#105eaa` |
-| Ember Light | Category1 | `#ba7300` |
-| Ember Light | Category2 | `#2d8bc0` |
-| Ember Light | Category3 | `#00966b` |
-| Ember Light | Category4 | `#918500` |
-| Ember Light | Category7 | `#bb6896` |
-| Ember Light | Category8 | `#838383` |
-| Ember HC | Success | `#7dfecf` |
-| Ember HC | Error | `#ffafbc` |
+| Cobalt Dark | `#229abf` | `#fffe8b` |
+| Cobalt Light | `#007fa3` | `#311470` |
+| Cobalt HC | `#2299be` | `#fffe56` |
+| Graphite Dark | `#828994` | `#adffe6` |
+| Graphite Light | `#6f7681` | `#00331b` |
+| Graphite HC | `#888f9a` | `#ffff5d` |
 
 Field-to-role mapping used by `EditorTheme::ToTokens` and the built-in factories.
 Fields without an ImGui colour slot are carried by the token set and read by the

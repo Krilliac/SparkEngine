@@ -517,14 +517,20 @@ namespace SparkInstaller
             const float bandHeight = ui::Px(kBandHeight);
             const float padX = ImGui::GetStyle().WindowPadding.x;
 
-            ui::DrawBrandGradient(drawList, origin, ImVec2(origin.x + width, origin.y + bandHeight));
+            // The ink is chosen by measured contrast on the band; High Contrast gets a flat band.
+            const ui::BrandBandStyle band = ui::ChooseBrandBandStyle(ui::ActiveTokens());
+            const ImVec2 bandMax(origin.x + width, origin.y + bandHeight);
+            if (band.gradient)
+                ui::DrawBrandGradient(drawList, origin, bandMax);
+            else
+                drawList->AddRectFilled(origin, bandMax, ui::Col(ui::Role::SurfaceRaised));
             const float markSize = ui::Px(kLogomarkSize);
             const float markLeft = origin.x + ui::Px(kBandPad);
             ui::DrawLogomark(drawList, ImVec2(markLeft + markSize * 0.5f, origin.y + bandHeight * 0.5f), markSize,
-                             false, ui::Col(ui::Role::TextOnAccent));
+                             false, ui::Col(band.ink));
             ImGui::SetCursorPos(ImVec2(ui::Px(kBandPad) + markSize + ui::Px(12.0f), ui::Px(kBandPad + 2.0f)));
             ImGui::BeginGroup();
-            ImGui::PushStyleColor(ImGuiCol_Text, ui::ColV(ui::Role::TextOnAccent));
+            ImGui::PushStyleColor(ImGuiCol_Text, ui::ColV(band.ink));
             {
                 ui::ScopedFont title(ui::FontRole::H2);
                 ImGui::TextUnformatted("Spark Installer");
@@ -1011,6 +1017,7 @@ namespace SparkInstaller
         if (fonts.body != nullptr)
             io.FontDefault = fonts.body;
         ui::Install(ImGui::GetCurrentContext(), tokens, GuiBackend_DpiScale(), 1.0f, preferences.reduceMotion);
+        ui::InstallFocusRing(ImGui::GetCurrentContext());
 #ifdef _WIN32
         GuiBackend_SetCaptionColors(PackRgb(ui::Get(tokens, ui::Role::SurfaceSunken)),
                                     PackRgb(ui::Get(tokens, ui::Role::TextPrimary)));

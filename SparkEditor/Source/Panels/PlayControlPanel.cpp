@@ -17,10 +17,10 @@
 #include <imgui.h>
 #include <algorithm>
 #include <filesystem>
-#ifdef _WIN32
-#include <windows.h>
 #include "SparkUI/Runtime.h"
 #include "SparkUI/Widgets.h"
+#ifdef _WIN32
+#include <windows.h>
 #endif
 
 namespace SparkEditor

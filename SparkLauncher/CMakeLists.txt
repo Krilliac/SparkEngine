@@ -94,6 +94,9 @@ if(MSVC)
 endif()
 
 install(TARGETS SparkLauncher RUNTIME DESTINATION bin COMPONENT runtime)
+# The launcher loads the Spark UI fonts from bin/EditorAssets/Fonts; install them with it so a
+# package configured without the editor still ships them.
+spark_install_ui_fonts(runtime)
 
 if(BUILD_TESTS)
     enable_testing()

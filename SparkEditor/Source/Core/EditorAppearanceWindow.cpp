@@ -135,9 +135,9 @@ namespace SparkEditor
         if (prefs.palette != EditorTheme::GetCurrentThemeName())
             EditorTheme::ApplyTheme(prefs.palette);
 
-        const float userScale = prefs.uiScale > 0.0f ? prefs.uiScale : 1.0f;
-        if (userScale != Ui::UserScale())
-            EditorTheme::SetUiScale(Ui::DpiScale(), userScale);
+        // Only the user factor is requested, so a DPI change queued for the same frame survives; requesting
+        // the stored value unconditionally also overrides a different user step still pending.
+        Ui::RequestUserScale(prefs.uiScale > 0.0f ? prefs.uiScale : 1.0f);
 
         Ui::SetReduceMotion(prefs.reduceMotion);
         if (ImGui::GetCurrentContext() != nullptr)

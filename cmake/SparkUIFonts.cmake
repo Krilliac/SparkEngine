@@ -6,7 +6,14 @@
 #
 # which adds a POST_BUILD step copying every tracked font under SparkEditor/Fonts (the faces
 # and LICENSES/) to $<TARGET_FILE_DIR:<target>>/EditorAssets/Fonts, where
-# Spark::Ui::FindFontDirectory looks first. Install rules stay with each consumer.
+# Spark::Ui::FindFontDirectory looks first, and
+#
+#   spark_install_ui_fonts(<component>)
+#
+# which installs the same tree to bin/EditorAssets/Fonts under <component>. Every executable that
+# loads the fonts (SparkEngine's game overlay, SparkEditor, SparkLauncher, SparkInstaller's GUI)
+# calls both, so a package without the editor still ships the faces and their licences. The
+# install rule is registered once per component however many consumers request it.
 #
 # Script mode (the POST_BUILD step itself) performs the copy:
 #
@@ -62,4 +69,24 @@ function(spark_stage_ui_fonts target)
                 -P "${CMAKE_SOURCE_DIR}/cmake/SparkUIFonts.cmake"
         COMMENT "Staging Spark UI fonts for ${target}"
         VERBATIM)
+endfunction()
+
+function(spark_install_ui_fonts component)
+    if("${component}" STREQUAL "")
+        message(FATAL_ERROR "spark_install_ui_fonts: an install component is required")
+    endif()
+    set(_spark_font_source "${CMAKE_SOURCE_DIR}/SparkEditor/Fonts")
+    if(NOT IS_DIRECTORY "${_spark_font_source}")
+        message(WARNING "spark_install_ui_fonts(${component}): ${_spark_font_source} is missing; "
+                        "installed UIs fall back to the embedded default font")
+        return()
+    endif()
+    get_property(_spark_installed GLOBAL PROPERTY SPARK_UI_FONTS_INSTALL_COMPONENTS)
+    if("${component}" IN_LIST _spark_installed)
+        return()
+    endif()
+    set_property(GLOBAL APPEND PROPERTY SPARK_UI_FONTS_INSTALL_COMPONENTS "${component}")
+    install(DIRECTORY "${_spark_font_source}/"
+        DESTINATION bin/EditorAssets/Fonts
+        COMPONENT ${component})
 endfunction()

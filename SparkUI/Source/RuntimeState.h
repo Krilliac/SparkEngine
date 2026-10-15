@@ -31,6 +31,8 @@ namespace Spark::Ui::Detail
         float pendingDpiScale = 1.0f;
         float pendingUserScale = 1.0f;
         bool hasPendingScale = false;
+        Tokens pendingTokens; ///< Theme switched while a frame was open; applied by BeginFrameScale.
+        bool hasPendingTokens = false;
         bool reduceMotion = false;
         std::vector<PropertyGridFrame> grids;
         std::vector<bool> cardClicked; ///< One entry per open card: clicked this frame.

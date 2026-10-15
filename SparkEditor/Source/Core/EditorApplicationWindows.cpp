@@ -27,6 +27,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <string_view>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
@@ -375,7 +376,16 @@ namespace SparkEditor
 
     void EditorApplication::Render()
     {
-        // A DPI or user-scale change queued since the last frame is applied before NewFrame.
+        // "Match Windows" follows a light/dark or high-contrast switch made while the editor runs.
+        if (m_systemAppearanceChanged)
+        {
+            m_systemAppearanceChanged = false;
+            if (m_ui)
+            {
+                m_ui->FollowSystemAppearance();
+            }
+        }
+        // A DPI or user-scale change, or a theme switched mid-frame, is applied before NewFrame.
         EditorTheme::ApplyPendingScale();
         if (EditorTheme::GetRevision() != m_appliedCaptionRevision)
         {
@@ -581,6 +591,26 @@ namespace SparkEditor
             }
             return 0;
         }
+
+        case WM_SETTINGCHANGE:
+        {
+            // Apps light/dark ("ImmersiveColorSet") and high contrast arrive here. Only flag the change: the
+            // message can be dispatched from a nested loop inside a frame, so the theme is re-applied by
+            // Render() before the next NewFrame.
+            const auto* area = reinterpret_cast<const wchar_t*>(lParam);
+            if (app && (wParam == SPI_SETHIGHCONTRAST || (area && std::wstring_view(area) == L"ImmersiveColorSet")))
+            {
+                app->m_systemAppearanceChanged = true;
+            }
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
+        }
+
+        case WM_THEMECHANGED:
+            if (app)
+            {
+                app->m_systemAppearanceChanged = true;
+            }
+            return DefWindowProcW(hwnd, msg, wParam, lParam);
 
         case WM_CLOSE:
             if (app && app->OnShutdownRequested())

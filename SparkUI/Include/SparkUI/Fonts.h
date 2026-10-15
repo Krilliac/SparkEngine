@@ -49,7 +49,9 @@ namespace Spark::Ui
     ///          trips ImGui's load assertion. IBM Plex Sans falls back to Roboto; a missing SemiBold
     ///          or Bold reuses the next available face; an empty or missing directory loads the
     ///          embedded vector default font with custom = false. Font Awesome is merged into all
-    ///          four faces at 0.92 x size with a +1 px vertical offset.
+    ///          four faces at 0.92 x size with a +1 px vertical offset. Paths reach ImGui as UTF-8,
+    ///          so any Unicode install directory loads; a directory with no UTF-8 spelling (an
+    ///          unpaired UTF-16 surrogate on Windows) is treated as missing, never thrown.
     FontSet LoadFontSet(ImFontAtlas& atlas, const std::filesystem::path& fontDir, float bodyPx);
 
     /// @brief Font for @p r on the current context, found by ImFontConfig name.

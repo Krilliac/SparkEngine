@@ -179,6 +179,15 @@ namespace Spark::Ui
         Typography type{};
     };
 
+    /// @brief Alpha of ErrorText laid over ErrorFill for a hovered destructive button.
+    inline constexpr float kDangerHoverTint = 0.12f;
+    /// @brief Alpha of ErrorText laid over ErrorFill for a pressed destructive button.
+    inline constexpr float kDangerPressTint = 0.20f;
+
+    /// @brief Opaque fill of a hovered / pressed destructive button: ErrorText at @p tint over
+    ///        ErrorFill. The audit keeps the ErrorText label at 4.5:1 on it for both tints.
+    Rgba DangerTintFill(const Tokens& t, float tint) noexcept;
+
     /// @brief Seed of a built-in palette family (Ember, Cobalt, Graphite).
     const PaletteSeed& BuiltinSeed(PaletteId id) noexcept;
 

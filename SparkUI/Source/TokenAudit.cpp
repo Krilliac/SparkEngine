@@ -34,7 +34,13 @@ namespace Spark::Ui
 
             void Contrast(Role fg, Role bg, float required, std::string_view rule)
             {
-                const float ratio = ContrastRatio(Get(m_tokens, fg), Get(m_tokens, bg));
+                ContrastOn(fg, bg, Get(m_tokens, bg), required, rule);
+            }
+
+            /// Contrast of @p fg on a colour derived from role @p bg (reported against @p bg).
+            void ContrastOn(Role fg, Role bg, Rgba background, float required, std::string_view rule)
+            {
+                const float ratio = ContrastRatio(Get(m_tokens, fg), background);
                 if (ratio < required)
                 {
                     m_failures.push_back(AuditFailure{fg, bg, ratio, required, rule});
@@ -64,8 +70,6 @@ namespace Spark::Ui
                 return SimulateCvdLab(Get(m_tokens, role), kind);
             }
 
-            [[nodiscard]] OkLab Lab(Role role) const noexcept { return ToOkLab(Get(m_tokens, role)); }
-
             std::vector<AuditFailure> Take() { return std::move(m_failures); }
 
           private:
@@ -78,21 +82,19 @@ namespace Spark::Ui
             Cvd kind;
             std::string_view statusRule;
             std::string_view accentRule;
-            bool checksAccent;
         };
 
         constexpr std::array kCvdRules = {
-            CvdRule{Cvd::Protan, "cvd-status-protan", "cvd-accent-protan", true},
-            CvdRule{Cvd::Deutan, "cvd-status-deutan", "cvd-accent-deutan", true},
-            CvdRule{Cvd::Tritan, "cvd-status-tritan", "", false},
+            CvdRule{Cvd::Protan, "cvd-status-protan", "cvd-accent-protan"},
+            CvdRule{Cvd::Deutan, "cvd-status-deutan", "cvd-accent-deutan"},
+            CvdRule{Cvd::Tritan, "cvd-status-tritan", "cvd-accent-tritan"},
         };
     } // namespace
 
     std::vector<AuditFailure> AuditTokens(const Tokens& t)
     {
         Auditor audit(t);
-        const float textMinimum =
-            t.appearance == Appearance::HighContrast ? kAuditHighContrastTextMinimum : kAuditTextMinimum;
+        const float textMinimum = TextContrastMinimum(t.appearance);
 
         for (const Role fg : kBodyText)
         {
@@ -120,11 +122,16 @@ namespace Spark::Ui
         {
             audit.Contrast(kStatusText[i], kStatusFill[i], kAuditTextMinimum, "status-on-fill");
         }
+        // A hovered / pressed destructive button keeps its ErrorText label on a tinted ErrorFill.
+        audit.ContrastOn(Role::ErrorText, Role::ErrorFill, DangerTintFill(t, kDangerHoverTint), kAuditTextMinimum,
+                         "danger-hover");
+        audit.ContrastOn(Role::ErrorText, Role::ErrorFill, DangerTintFill(t, kDangerPressTint), kAuditTextMinimum,
+                         "danger-press");
         for (const Role bg : {Role::SurfaceBase, Role::SurfaceRaised, Role::SurfaceSunken})
         {
             audit.Contrast(Role::BorderStrong, bg, kAuditNonTextMinimum, "border-strong");
         }
-        for (const Role bg : {Role::SurfaceBase, Role::SurfaceRaised, Role::SurfaceSelected})
+        for (const Role bg : {Role::SurfaceBase, Role::SurfaceRaised, Role::SurfaceSelected, Role::AccentFill})
         {
             audit.Contrast(Role::BorderFocus, bg, kAuditNonTextMinimum, "border-focus");
         }
@@ -147,10 +154,6 @@ namespace Spark::Ui
         }
         for (const CvdRule& rule : kCvdRules)
         {
-            if (!rule.checksAccent)
-            {
-                continue;
-            }
             for (const Role status : kStatusText)
             {
                 audit.Distance(status, Role::AccentFill, audit.Simulated(status, rule.kind),
@@ -158,10 +161,39 @@ namespace Spark::Ui
             }
         }
 
-        audit.Distance(Role::BorderFocus, Role::AccentFill, audit.Lab(Role::BorderFocus), audit.Lab(Role::AccentFill),
-                       kAuditMinFocusAccentDelta, "focus-accent-distance");
         audit.Hue(Role::BorderFocus, Role::SurfaceSelected, kAuditMinFocusHueDegrees, "focus-hue");
         return audit.Take();
+    }
+
+    float TextContrastMinimum(Appearance appearance) noexcept
+    {
+        return appearance == Appearance::HighContrast ? kAuditHighContrastTextMinimum : kAuditTextMinimum;
+    }
+
+    Role MostReadableRole(const Tokens& t, std::span<const Rgba> backgrounds, std::span<const Role> candidates,
+                          float* worstRatio) noexcept
+    {
+        Role best = candidates.empty() ? Role::TextPrimary : candidates.front();
+        float bestWorst = 0.0f;
+        for (const Role candidate : candidates)
+        {
+            float worst = 21.0f;
+            for (const Rgba& background : backgrounds)
+            {
+                const float ratio = ContrastRatio(Get(t, candidate), background);
+                worst = ratio < worst ? ratio : worst;
+            }
+            if (worst > bestWorst)
+            {
+                bestWorst = worst;
+                best = candidate;
+            }
+        }
+        if (worstRatio != nullptr)
+        {
+            *worstRatio = bestWorst;
+        }
+        return best;
     }
 
     Tokens AuditFailFixture(Rgba textSecondary) noexcept

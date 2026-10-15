@@ -4473,6 +4473,7 @@ jobs:
             SparkShaderCompiler/src
             SparkAssetPipelineCore/src
             SparkCrashReporter/src
+            SparkUI/Source
             GameModules
           )
           for root in "${source_roots[@]}"; do

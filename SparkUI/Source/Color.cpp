@@ -102,6 +102,29 @@ namespace Spark::Ui
         return Rgba{channel(top.r, bottom.r), channel(top.g, bottom.g), channel(top.b, bottom.b), outA};
     }
 
+    float MinimumAlphaForContrast(Rgba fg, Rgba bg, float minRatio) noexcept
+    {
+        if (ContrastRatio(WithAlpha(fg, 1.0f), bg) < minRatio)
+        {
+            return 1.0f;
+        }
+        float low = 0.0f;
+        float high = 1.0f;
+        for (int i = 0; i < 24; ++i)
+        {
+            const float mid = (low + high) * 0.5f;
+            if (ContrastRatio(WithAlpha(fg, mid), bg) >= minRatio)
+            {
+                high = mid;
+            }
+            else
+            {
+                low = mid;
+            }
+        }
+        return high;
+    }
+
     float ContrastRatio(Rgba fg, Rgba bg) noexcept
     {
         const Rgba visible = fg.a < 1.0f ? Composite(fg, bg) : fg;

@@ -145,6 +145,18 @@ namespace SparkEditor
             m_settings.profile = static_cast<BuildProfile>(profileIndex);
             ApplyProfileDefaults(m_settings.profile);
         }
+        // SegmentedControl reports only a change of profile, so re-clicking the active profile no
+        // longer resets hand-edited settings; this button does that explicitly.
+        ImGui::SameLine();
+        if (ImGui::SmallButton(ICON_FA_UNDO " Reset to profile defaults"))
+        {
+            ApplyProfileDefaults(m_settings.profile);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Discard the edited settings below and restore the %s profile defaults.",
+                              GetProfileName(m_settings.profile));
+        }
 
         const char* description = "";
         switch (m_settings.profile)

@@ -3161,6 +3161,12 @@ install(FILES
 install(TARGETS SparkEngine
     RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_RUNTIME}
 )
+# The Windows game-mode ImGui overlay loads the Spark UI fonts from bin/EditorAssets/Fonts (staged
+# into the build tree by spark_stage_ui_fonts(SparkEngine)); install them with the engine so a
+# package configured without the editor still ships them.
+if(WIN32 AND TARGET imgui)
+    spark_install_ui_fonts(${SPARK_INSTALL_COMPONENT_RUNTIME})
+endif()
 foreach(_SPARK_GAME_MODULE IN LISTS _SPARK_GAME_MODULE_NAMES)
     install(TARGETS ${_SPARK_GAME_MODULE}
         RUNTIME DESTINATION bin COMPONENT ${SPARK_INSTALL_COMPONENT_SAMPLES}

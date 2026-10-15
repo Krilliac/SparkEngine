@@ -237,12 +237,26 @@ namespace SparkEditor
         // errors stay until dismissed.
         void ShowNotification(const std::string& message, const std::string& type = "info", float duration = 0.0f);
         void Notify(NotificationSeverity severity, std::string title, std::string body = {}, float seconds = 0.0f);
+        /// @brief Open the notification history (View > Notifications, the command palette); it does not need the
+        ///        status bar, so toasts pushed off screen stay reachable while the bar is hidden.
+        void OpenNotificationHistory() { m_notificationHistoryRequested = true; }
 
         // View > Appearance, Help > Welcome and the UI-scale shortcuts.
         void OpenAppearanceWindow() { m_appearanceWindow.Open(); }
         void OpenStartPage() { m_startPage.Open(); }
         /// @brief Grow (+1) or shrink (-1) the user UI scale one 12.5 % step; 0 resets it to 100 %.
         void StepUiScale(int direction);
+
+        /// @brief Take the preferences EditorApplication read at startup (the only read of the file).
+        /// @param prefs    Normalized preferences; EditorUI owns, edits and saves them from now on.
+        /// @param persist  False in test mode, or when the file could not be read and must not be overwritten.
+        /// @details Call before Initialize(), which applies them. Without this call the defaults apply and nothing
+        ///          is saved.
+        void AdoptPreferences(EditorPreferences prefs, bool persist);
+
+        /// @brief Re-read the operating system appearance when the stored appearance is "system" (Match
+        ///        Windows) and re-apply the palette. Called before NewFrame after Windows reports a change.
+        void FollowSystemAppearance();
 
         // Simple command system
         std::string ExecuteCommand(const std::string& command);
@@ -341,10 +355,12 @@ namespace SparkEditor
         bool m_firstFrame = true;
         bool m_defaultDockLayoutResetRequested = false;
 
-        // Appearance, Start page and the persisted preferences behind them. Test-mode launches never read or
-        // write the preferences file (m_persistPreferences stays false), so smoke runs cannot change user settings.
+        // Appearance, Start page and the persisted preferences behind them, adopted from EditorApplication's single
+        // startup read. Test-mode launches never write the preferences file (m_persistPreferences stays false), so
+        // smoke runs cannot change user settings; neither does a session whose file could not be read.
         EditorPreferences m_preferences;
         bool m_persistPreferences = false;
+        bool m_notificationHistoryRequested = false; ///< OpenNotificationHistory() was called; opens next Render()
         EditorAppearanceWindow m_appearanceWindow;
         EditorStartPage m_startPage;
         ImGuiID m_centreDockId = 0; ///< Centre dock node of the default layout; the Start page joins it
@@ -529,7 +545,7 @@ namespace SparkEditor
         void RenderLayoutDialogs();
         void RenderStartPage();
         void RenderAppearanceWindow();
-        void LoadPreferences();
+        void RenderNotificationHistory();
         void SavePreferences();
         void CommitPreferenceChange();
         void RememberRecentScene(const std::string& scenePath);

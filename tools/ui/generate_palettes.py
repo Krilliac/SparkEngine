@@ -10,6 +10,15 @@ Gated_SparkUi_TokenAudit_AllBuiltinSetsPass enforces in C++ (SparkUI/Source/Toke
 Status roles are shared by all three families of one appearance, so they are corrected once
 against the union of the families' surfaces.
 
+The audit rules are the binding spec section 2.5 rules, unrelaxed. Two of them cannot be met by
+moving foreground text alone, so the generator also moves (lightness only):
+  * the accent fills: BorderFocus must reach 3:1 against AccentFill as well as against Base,
+    Raised and Selected, which no focus colour can do next to a mid-luminance accent such as the
+    #f1823a seed. The accent moves by the smallest step that leaves room for a focus colour.
+  * BorderFocus itself, by the smallest step that then passes.
+Every value that differs from the Ember spec table is printed by --report and recorded in
+DESIGN.md's token appendix (spec-amendment item 5).
+
 Usage:
   python tools/ui/generate_palettes.py           # rewrite SparkUI/Source/Palettes.inl
   python tools/ui/generate_palettes.py --check   # exit 1 when the committed file is stale
@@ -47,18 +56,23 @@ STATUS = ("Success", "Warning", "Error", "Info")
 STATUS_TEXT = tuple(f"{name}Text" for name in STATUS)
 GRAPHS = ("Graph1", "Graph2", "Graph3", "Graph4", "Graph5")
 CATEGORIES = tuple(f"Category{index}" for index in range(1, 9))
-# Status texts must stay apart from each other under every simulated deficiency, and from the
-# accent under the common red-green deficiencies (spec section 2.5, with the separation the
-# L-only tuning rule can reach; see SparkUI/Source/TokenAudit.cpp).
-MIN_CVD_DELTA = 0.06
-STATUS_CVD_KINDS = ("Protan", "Deutan", "Tritan")
-ACCENT_CVD_KINDS = ("Protan", "Deutan")
-MIN_FOCUS_ACCENT_DELTA = 0.08
+# Every pair of {Success, Warning, Error, Info, AccentFill} stays apart under every simulated
+# deficiency (spec section 2.5).
+MIN_CVD_DELTA = 0.08
+CVD_KINDS = ("Protan", "Deutan", "Tritan")
+FOCUS_BACKGROUNDS = ("SurfaceBase", "SurfaceRaised", "SurfaceSelected", "AccentFill")
 MIN_FOCUS_HUE_DEGREES = 60.0
+# A hovered / pressed destructive button lays ErrorText at these alphas over ErrorFill; the label
+# (ErrorText) must keep 4.5:1 on the result. Mirrors kDangerHoverTint / kDangerPressTint in
+# SparkUI/Include/SparkUI/Tokens.h.
+DANGER_TINTS = (0.12, 0.20)
 # The generator corrects past the audit thresholds by these margins so float rounding in a
 # second implementation can never flip a pass.
 CONTRAST_MARGIN = 0.06
 DELTA_MARGIN = 0.006
+HUE_MARGIN = 1.0
+# The accent is the brand colour, so moving it costs more than moving the focus ring or a status.
+ACCENT_MOVE_WEIGHT = 4.0
 
 # Ember canonical table: role -> (Dark, Light, HighContrast) as #rrggbb or #rrggbbaa.
 EMBER = {
@@ -242,6 +256,11 @@ def with_alpha(rgba, alpha: float):
     return rgba[:3] + (alpha,)
 
 
+def danger_fill(t: dict, tint: float):
+    """Opaque fill of a hovered / pressed destructive button (ErrorText over ErrorFill)."""
+    return composite(with_alpha(t["ErrorText"], tint), t["ErrorFill"])
+
+
 # --- audit (mirrors SparkUI/Source/TokenAudit.cpp) --------------------------------------------
 
 def audit(t: dict, appearance: str) -> list[str]:
@@ -262,26 +281,22 @@ def audit(t: dict, appearance: str) -> list[str]:
         need("TextOnAccent", bg, 4.5)
     for name in STATUS:
         need(f"{name}Text", f"{name}Fill", 4.5)
+    for tint in DANGER_TINTS:
+        ratio = contrast(t["ErrorText"], danger_fill(t, tint))
+        if ratio < 4.5:
+            failures.append(f"ErrorText on danger tint {tint}: {ratio:.2f} < 4.5")
     for bg in ("SurfaceBase", "SurfaceRaised", "SurfaceSunken"):
         need("BorderStrong", bg, 3.0)
-    for bg in ("SurfaceBase", "SurfaceRaised", "SurfaceSelected"):
+    for bg in FOCUS_BACKGROUNDS:
         need("BorderFocus", bg, 3.0)
     need("AccentFill", "SurfaceBase", 3.0)
     for graph in GRAPHS + CATEGORIES:
         need(graph, "SurfaceSunken", 3.0)
-    for kind in STATUS_CVD_KINDS:
-        for x, y in itertools.combinations(STATUS_TEXT, 2):
+    for kind in CVD_KINDS:
+        for x, y in itertools.combinations(STATUS_TEXT + ("AccentFill",), 2):
             d = delta(simulate(t[x], kind), simulate(t[y], kind))
             if d < MIN_CVD_DELTA:
                 failures.append(f"{x} vs {y} under {kind}: {d:.3f} < {MIN_CVD_DELTA}")
-    for kind in ACCENT_CVD_KINDS:
-        for x in STATUS_TEXT:
-            d = delta(simulate(t[x], kind), simulate(t["AccentFill"], kind))
-            if d < MIN_CVD_DELTA:
-                failures.append(f"{x} vs AccentFill under {kind}: {d:.3f} < {MIN_CVD_DELTA}")
-    d = delta(to_oklab(t["BorderFocus"]), to_oklab(t["AccentFill"]))
-    if d < MIN_FOCUS_ACCENT_DELTA:
-        failures.append(f"BorderFocus vs AccentFill: {d:.3f} < {MIN_FOCUS_ACCENT_DELTA}")
     h = hue_distance(t["BorderFocus"], t["SurfaceSelected"])
     if h < MIN_FOCUS_HUE_DEGREES:
         failures.append(f"BorderFocus hue vs SurfaceSelected: {h:.1f} < {MIN_FOCUS_HUE_DEGREES}")
@@ -343,7 +358,7 @@ def finish(t: dict, family: str, appearance: str) -> dict:
     return {role: quantize(value) for role, value in t.items()}
 
 
-# --- correction (foreground OKLab lightness only) ---------------------------------------------
+# --- correction (OKLab lightness only) ---------------------------------------------------------
 
 def lighter_wins(t: dict) -> bool:
     return luminance(t["SurfaceBase"]) < 0.18
@@ -363,20 +378,19 @@ def lift_contrast(t: dict, role: str, backgrounds, minimum: float) -> None:
 
 
 def correct_contrast(t: dict, appearance: str) -> None:
-    text_min = 7.0 if appearance == "HighContrast" else 4.5
+    text_min = text_minimum(appearance)
     for role in BODY_TEXT:
         lift_contrast(t, role, SURFACES, text_min)
     lift_contrast(t, "TextDisabled", SURFACES, 3.0)
     lift_contrast(t, "BorderStrong", ("SurfaceBase", "SurfaceRaised", "SurfaceSunken"), 3.0)
-    lift_contrast(t, "BorderFocus", ("SurfaceBase", "SurfaceRaised", "SurfaceSelected"), 3.0)
     for role in GRAPHS + CATEGORIES:
         if role not in ("Graph1",):
             lift_contrast(t, role, ("SurfaceSunken",), 3.0)
 
 
-def separated(a: dict, b: dict, kinds) -> bool:
+def separated(a: dict, b: dict) -> bool:
     limit = MIN_CVD_DELTA + DELTA_MARGIN
-    return all(delta(a[kind], b[kind]) >= limit for kind in kinds)
+    return all(delta(a[kind], b[kind]) >= limit for kind in CVD_KINDS)
 
 
 def simulations(value) -> dict:
@@ -388,84 +402,157 @@ def lightness_steps(limit: float = 0.30, step: float = 0.005) -> list[float]:
     return sorted({round(sign * step * i, 3) for i in range(count + 1) for sign in (1, -1)}, key=lambda v: (abs(v), v))
 
 
+def status_passes_contrast(name: str, value, sets: list[tuple[dict, str]]) -> bool:
+    """Contrast rules of one status text candidate on every family's surfaces and fill."""
+    for t, appearance in sets:
+        if contrast(value, t[f"{name}Fill"]) < 4.5 + CONTRAST_MARGIN:
+            return False
+        if any(contrast(value, t[bg]) < text_minimum(appearance) + CONTRAST_MARGIN for bg in SURFACES):
+            return False
+        if name == "Error":
+            candidate = dict(t, ErrorText=value)
+            if any(contrast(value, danger_fill(candidate, tint)) < 4.5 + CONTRAST_MARGIN for tint in DANGER_TINTS):
+                return False
+    return True
+
+
+ACCENT_FILLS = ("AccentFill", "AccentFillHover", "AccentFillActive")
+
+
+def keep_ink_contrast(value, ink):
+    """Step a fill's lightness away from the ink until TextOnAccent reads on it, or None."""
+    step = 0.002 if luminance(ink) < luminance(value) else -0.002
+    for _ in range(200):
+        if contrast(ink, value) >= 4.5 + CONTRAST_MARGIN:
+            return value
+        value = quantize(shift_lightness(value, step))
+    return None
+
+
+def find_focus(t: dict, fill):
+    """Smallest BorderFocus lightness move that passes every focus rule next to @p fill.
+
+    Returns (offset, colour), or None when no lightness passes.
+
+    The ring stays on the far side of the accent from the surfaces (brighter than the accent on
+    dark surfaces, darker on light ones), so it never reads as a dimmer accent.
+    """
+    original = t["BorderFocus"]
+    dark = lighter_wins(t)
+    backgrounds = [t[bg] for bg in FOCUS_BACKGROUNDS if bg != "AccentFill"] + [fill]
+    for offset in lightness_steps(0.70):
+        focus = quantize(shift_lightness(original, offset))
+        if (luminance(focus) > luminance(fill)) != dark:
+            continue
+        if any(contrast(focus, bg) < 3.0 + CONTRAST_MARGIN for bg in backgrounds):
+            continue
+        if hue_distance(focus, t["SurfaceSelected"]) < MIN_FOCUS_HUE_DEGREES + HUE_MARGIN:
+            continue
+        return offset, focus
+    return None
+
+
+def accent_options(t: dict) -> list[tuple[float, dict]]:
+    """Accent moves that pass every accent rule except CVD separation, cheapest first.
+
+    Each option moves AccentFill/Hover/Active together (Hover and Active further only when
+    TextOnAccent needs it) and carries the BorderFocus that reaches 3:1 against the moved fill.
+    Its cost is the weighted sum of the squared accent and focus lightness moves.
+    """
+    ink = t["TextOnAccent"]
+    options = []
+    for offset in lightness_steps(0.45):
+        moved = {role: quantize(shift_lightness(t[role], offset)) for role in ACCENT_FILLS}
+        fill = moved["AccentFill"]
+        if contrast(fill, t["SurfaceBase"]) < 3.0 + CONTRAST_MARGIN or contrast(ink, fill) < 4.5 + CONTRAST_MARGIN:
+            continue
+        hover = keep_ink_contrast(moved["AccentFillHover"], ink)
+        active = keep_ink_contrast(moved["AccentFillActive"], ink)
+        focus = find_focus(t, fill)
+        if hover is None or active is None or focus is None:
+            continue
+        focus_offset, focus_colour = focus
+        options.append((ACCENT_MOVE_WEIGHT * offset * offset + focus_offset * focus_offset,
+                        {"AccentFill": fill, "AccentFillHover": hover, "AccentFillActive": active,
+                         "BorderFocus": focus_colour}))
+    if not options:
+        raise SystemExit("no accent lightness leaves room for a 3:1 focus colour")
+    options.sort(key=lambda option: option[0])
+    return options
+
+
+def apply_accent(t: dict, values: dict) -> None:
+    t.update(values)
+    t["Graph1"] = values["AccentFill"]
+    t["SelectionTextBg"] = quantize(with_alpha(values["AccentFill"], t["SelectionTextBg"][3]))
+
+
 def correct_status(sets: list[tuple[dict, str]]) -> dict:
-    """Find the smallest lightness offsets for the four status texts of one appearance.
+    """Choose the four shared status texts and every family's accent of one appearance together.
 
     The status roles are shared by all families, so contrast is checked on every family's
-    surfaces; separation from the accent is solved against Ember's fixed seed accent (the other
-    families' accents move instead, see correct_family_accent). Contrast limits each role on its
-    own, so each role first gets its feasible offsets; a pruned depth-first search then picks
-    the combination with the smallest total movement that keeps the CVD separation.
+    surfaces and each family's accent must stay CVD-separated from them. Each status role first
+    gets its contrast-feasible offsets and each family its accent options (accent_options); a
+    pruned depth-first search then picks Ember's accent, the status offsets and the cheapest
+    still-separated accent of each other family, minimising the sum of squared moves so
+    the movement spreads instead of pushing one role to an extreme. The chosen accents are
+    applied in place; the status values are returned.
     """
     ember = sets[0][0]
     feasible: dict[str, list[tuple[float, tuple]]] = {}
     for name in STATUS:
         role = f"{name}Text"
         options = []
-        for offset in lightness_steps():
+        for offset in lightness_steps(0.40):
             value = quantize(shift_lightness(ember[role], offset))
-            if all(
-                contrast(value, t[f"{name}Fill"]) >= 4.5 + CONTRAST_MARGIN
-                and all(contrast(value, t[bg]) >= text_minimum(appearance) + CONTRAST_MARGIN for bg in SURFACES)
-                for t, appearance in sets
-            ):
+            if status_passes_contrast(name, value, sets):
                 options.append((offset, value))
         if not options:
             raise SystemExit(f"{role} cannot meet contrast at any lightness")
         feasible[role] = options
     sims = {role: [simulations(value) for _, value in feasible[role]] for role in STATUS_TEXT}
-    accent = simulations(ember["AccentFill"])
-    best: list = [None, float("inf")]
+    accents = [[(cost, values, simulations(values["AccentFill"])) for cost, values in accent_options(t)]
+               for t, _ in sets]
+    best = {"cost": float("inf"), "status": None, "accents": None}
     chosen: list[int] = []
 
-    def search(depth: int, total: float) -> None:
+    def search(depth: int, total: float, ember_accent: tuple, others: list[list[tuple]]) -> None:
+        # others: per non-Ember family, its accent options (cheapest first) still separated from
+        # every status chosen so far; the cheapest of each is a lower bound on the final cost.
+        bound = total + sum(options[0][0] for options in others)
+        if bound >= best["cost"]:
+            return
         if depth == len(STATUS_TEXT):
-            best[0], best[1] = list(chosen), total
+            best["cost"] = bound
+            best["status"] = list(chosen)
+            best["accents"] = [ember_accent[1]] + [options[0][1] for options in others]
             return
         role = STATUS_TEXT[depth]
         for index, (offset, _) in enumerate(feasible[role]):
-            cost = total + abs(offset)
-            if cost >= best[1]:
+            cost = total + offset * offset
+            if cost >= best["cost"]:
                 break
             sim = sims[role][index]
-            if not separated(sim, accent, ACCENT_CVD_KINDS):
+            if not separated(sim, ember_accent[2]):
                 continue
-            if not all(separated(sim, sims[STATUS_TEXT[d]][chosen[d]], STATUS_CVD_KINDS) for d in range(depth)):
+            if not all(separated(sim, sims[STATUS_TEXT[d]][chosen[d]]) for d in range(depth)):
+                continue
+            narrowed = [[option for option in options if separated(option[2], sim)] for options in others]
+            if any(not options for options in narrowed):
                 continue
             chosen.append(index)
-            search(depth + 1, cost)
+            search(depth + 1, cost, ember_accent, narrowed)
             chosen.pop()
 
-    search(0, 0.0)
-    if best[0] is None:
-        raise SystemExit("status roles cannot be separated by lightness alone")
-    return {role: feasible[role][best[0][i]][1] for i, role in enumerate(STATUS_TEXT)}
-
-
-ACCENT_FAMILY = ("AccentFill", "AccentFillHover", "AccentFillActive", "AccentText")
-
-
-def correct_family_accent(t: dict) -> None:
-    """Move a non-Ember accent family's lightness until it separates from the shared statuses."""
-    status_sims = [simulations(t[role]) for role in STATUS_TEXT]
-    original = {role: t[role] for role in ACCENT_FAMILY}
-    for offset in lightness_steps():
-        moved = {role: quantize(shift_lightness(value, offset)) for role, value in original.items()}
-        accent = moved["AccentFill"]
-        if contrast(accent, t["SurfaceBase"]) < 3.0 + CONTRAST_MARGIN:
-            continue
-        if any(contrast(t["TextOnAccent"], moved[role]) < 4.5 + CONTRAST_MARGIN for role in ACCENT_FAMILY[:3]):
-            continue
-        if delta(to_oklab(t["BorderFocus"]), to_oklab(accent)) < MIN_FOCUS_ACCENT_DELTA + DELTA_MARGIN:
-            continue
-        accent_sim = simulations(accent)
-        if not all(separated(accent_sim, sim, ACCENT_CVD_KINDS) for sim in status_sims):
-            continue
-        t.update(moved)
-        t["Graph1"] = accent
-        t["SelectionTextBg"] = quantize(with_alpha(accent, t["SelectionTextBg"][3]))
-        return
-    raise SystemExit("accent cannot be separated from the status roles by lightness alone")
+    for option in accents[0]:
+        if option[0] >= best["cost"]:
+            break
+        search(0, option[0], option, accents[1:])
+    if best["status"] is None:
+        raise SystemExit("status roles and accents cannot be separated by lightness alone")
+    for (t, _), values in zip(sets, best["accents"]):
+        apply_accent(t, values)
+    return {role: feasible[role][best["status"][i]][1] for i, role in enumerate(STATUS_TEXT)}
 
 
 def text_minimum(appearance: str) -> float:
@@ -479,13 +566,11 @@ def build() -> dict:
         for t, _ in sets:
             correct_contrast(t, appearance)
         status = correct_status(sets)
-        for family, (t, _) in zip(FAMILIES, sets):
+        for t, _ in sets:
             t.update(status)
             t["Graph3"] = t["SuccessText"]
             t["Graph4"] = t["WarningText"]
-            if family != "Ember":
-                correct_family_accent(t)
-                lift_contrast(t, "AccentText", SURFACES, text_minimum(appearance))
+            lift_contrast(t, "AccentText", SURFACES, text_minimum(appearance))
     for (family, appearance), t in tables.items():
         failures = audit(t, appearance)
         if failures:

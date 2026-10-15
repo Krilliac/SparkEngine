@@ -22,8 +22,9 @@ namespace SparkEditor
         constexpr std::array<std::string_view, static_cast<std::size_t>(ThemeStatusFill::Count)> kStatusFillKeys = {
             "statusFillInfo", "statusFillSuccess", "statusFillWarning", "statusFillError"};
 
-        // The roles derived for a legacy document; these mirror CompleteLegacyFields in EditorTheme.cpp,
-        // which cannot be linked here because the fuzz target builds this translation unit alone.
+        // DeriveLegacyThemeRoles (below) is the one derivation of the Ember Signal roles a pre-token
+        // palette lacks; the built-in legacy factories in EditorTheme.cpp call it too. It lives in this
+        // ImGui-free translation unit so the theme-import fuzz target links it.
         constexpr float kLegacyStatusFillMix = 0.15f;
         constexpr float kLegacyUnfocusedSelectionMix = 0.22f;
         constexpr float kLegacyAccentStep = 0.12f;
@@ -224,43 +225,48 @@ namespace SparkEditor
             return coloursUnset && std::ranges::all_of(t.statusFills, IsDefaultColor);
         }
 
+        /// The colour roles DeriveLegacyThemeRoles fills and the field each one writes.
+        struct DerivedColourRole
+        {
+            LegacyThemeRole role;
+            ThemeColourMember member;
+        };
+
+        constexpr std::array<DerivedColourRole, 10> kDerivedColourRoles = {{
+            {LegacyThemeRole::ButtonDisabled, &EditorThemeData::buttonDisabled},
+            {LegacyThemeRole::MenuItem, &EditorThemeData::menuItem},
+            {LegacyThemeRole::BorderStrong, &EditorThemeData::borderStrong},
+            {LegacyThemeRole::SurfaceOverlay, &EditorThemeData::surfaceOverlay},
+            {LegacyThemeRole::SurfaceSelectedUnfocused, &EditorThemeData::surfaceSelectedUnfocused},
+            {LegacyThemeRole::TextInfo, &EditorThemeData::textInfo},
+            {LegacyThemeRole::AccentHover, &EditorThemeData::accentHover},
+            {LegacyThemeRole::AccentActive, &EditorThemeData::accentActive},
+            {LegacyThemeRole::AccentText, &EditorThemeData::accentText},
+            {LegacyThemeRole::TextOnAccent, &EditorThemeData::textOnAccent},
+        }};
+
+        constexpr std::size_t RoleIndex(LegacyThemeRole role)
+        {
+            return static_cast<std::size_t>(role);
+        }
+        static_assert(RoleIndex(LegacyThemeRole::StatusFillError) - RoleIndex(LegacyThemeRole::StatusFillInfo) + 1 ==
+                          kStatusFillKeys.size(),
+                      "the status fill roles follow ThemeStatusFill order");
+
         /// Fill every role the document did not define from the colours it did.
         void DeriveMissingRoles(EditorThemeData& t, const Defined& defined)
         {
-            const auto derive = [&](ThemeColor EditorThemeData::*member, const ThemeColor& value)
+            LegacyThemeRoleSet keep;
+            for (const DerivedColourRole& derived : kDerivedColourRoles)
             {
-                if (!defined.Has(member))
-                {
-                    t.*member = value;
-                }
-            };
-            derive(&EditorThemeData::buttonDisabled, t.textDisabled);
-            derive(&EditorThemeData::menuItem, t.backgroundLight);
-            derive(&EditorThemeData::borderStrong, t.borderLight);
-            derive(&EditorThemeData::surfaceOverlay, t.backgroundLight);
-            derive(&EditorThemeData::surfaceSelectedUnfocused,
-                   Mix(t.background, t.textSecondary, kLegacyUnfocusedSelectionMix));
-            derive(&EditorThemeData::textInfo, t.textAccent);
-            derive(&EditorThemeData::accentHover, Mix(t.accent, ThemeColor(1.0f, 1.0f, 1.0f), kLegacyAccentStep));
-            derive(&EditorThemeData::accentActive, Mix(t.accent, ThemeColor(0.0f, 0.0f, 0.0f), kLegacyAccentStep));
-            derive(&EditorThemeData::accentText, t.textAccent);
-            derive(&EditorThemeData::textOnAccent, ReadableInkOn(t.accent));
-
-            const ThemeColor opaqueBackground = Opaque(t.background);
-            const std::array<const ThemeColor*, kStatusFillKeys.size()> inks = {&t.textInfo, &t.textSuccess,
-                                                                                &t.textWarning, &t.textError};
-            for (std::size_t i = 0; i < inks.size(); ++i)
-            {
-                if (!defined.fill[i])
-                {
-                    t.statusFills[i] = Mix(opaqueBackground, Opaque(*inks[i]), kLegacyStatusFillMix);
-                }
+                keep.set(RoleIndex(derived.role), defined.Has(derived.member));
             }
-            if (!defined.appearance)
+            for (std::size_t i = 0; i < defined.fill.size(); ++i)
             {
-                t.appearance = Luminance(t.background) > kLightAppearanceLuminance ? Spark::Ui::Appearance::Light
-                                                                                   : Spark::Ui::Appearance::Dark;
+                keep.set(RoleIndex(LegacyThemeRole::StatusFillInfo) + i, defined.fill[i]);
             }
+            keep.set(RoleIndex(LegacyThemeRole::Appearance), defined.appearance);
+            DeriveLegacyThemeRoles(t, keep);
         }
 
         void ReadColours(const std::string& content, EditorThemeData& theme, Defined& defined)
@@ -333,6 +339,50 @@ namespace SparkEditor
             }
         }
     } // namespace
+
+    void DeriveLegacyThemeRoles(EditorThemeData& t, const LegacyThemeRoleSet& keep)
+    {
+        const auto derive = [&](LegacyThemeRole role, ThemeColor& field, const ThemeColor& value)
+        {
+            if (!keep.test(RoleIndex(role)))
+            {
+                field = value;
+            }
+        };
+        // Lighten/Darken semantics: the accent's own alpha is kept, only the colour moves.
+        const float accentAlpha = Unit(t.accent.a);
+
+        derive(LegacyThemeRole::ButtonDisabled, t.buttonDisabled, t.textDisabled);
+        derive(LegacyThemeRole::MenuItem, t.menuItem, t.backgroundLight);
+        derive(LegacyThemeRole::BorderStrong, t.borderStrong, t.borderLight);
+        derive(LegacyThemeRole::SurfaceOverlay, t.surfaceOverlay, t.backgroundLight);
+        derive(LegacyThemeRole::SurfaceSelectedUnfocused, t.surfaceSelectedUnfocused,
+               Mix(t.background, t.textSecondary, kLegacyUnfocusedSelectionMix));
+        derive(LegacyThemeRole::TextInfo, t.textInfo, t.textAccent);
+        derive(LegacyThemeRole::AccentHover, t.accentHover,
+               Mix(t.accent, ThemeColor(1.0f, 1.0f, 1.0f, accentAlpha), kLegacyAccentStep));
+        derive(LegacyThemeRole::AccentActive, t.accentActive,
+               Mix(t.accent, ThemeColor(0.0f, 0.0f, 0.0f, accentAlpha), kLegacyAccentStep));
+        derive(LegacyThemeRole::AccentText, t.accentText, t.textAccent);
+        derive(LegacyThemeRole::TextOnAccent, t.textOnAccent, ReadableInkOn(t.accent));
+
+        // Status fills read the final textInfo, whether the theme set it or it was derived above.
+        const ThemeColor opaqueBackground = Opaque(t.background);
+        const std::array<const ThemeColor*, kStatusFillKeys.size()> inks = {&t.textInfo, &t.textSuccess, &t.textWarning,
+                                                                            &t.textError};
+        for (std::size_t i = 0; i < inks.size(); ++i)
+        {
+            if (!keep.test(RoleIndex(LegacyThemeRole::StatusFillInfo) + i))
+            {
+                t.statusFills[i] = Mix(opaqueBackground, Opaque(*inks[i]), kLegacyStatusFillMix);
+            }
+        }
+        if (!keep.test(RoleIndex(LegacyThemeRole::Appearance)))
+        {
+            t.appearance = Luminance(t.background) > kLightAppearanceLuminance ? Spark::Ui::Appearance::Light
+                                                                               : Spark::Ui::Appearance::Dark;
+        }
+    }
 
     bool ParseThemeDocument(const std::string& content, const EditorThemeData& base, EditorThemeData& outTheme,
                             std::string* error)

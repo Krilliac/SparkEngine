@@ -136,6 +136,11 @@ if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
 endif()
 
 install(TARGETS SparkInstaller RUNTIME DESTINATION bin COMPONENT tools)
+# The wizard GUI loads the Spark UI fonts from bin/EditorAssets/Fonts. Install them in the tools
+# component, so a tools-only package carries them too (superproject builds only, as for staging).
+if(INSTALLER_GUI_AVAILABLE AND COMMAND spark_install_ui_fonts)
+    spark_install_ui_fonts(tools)
+endif()
 
 set(_sparkinstaller_tests_default ON)
 if(DEFINED BUILD_TESTS)

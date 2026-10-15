@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstring>
 #include <initializer_list>
+#include <string>
 #include <system_error>
 
 #ifdef IMGUI_ENABLE_FREETYPE
@@ -69,24 +70,44 @@ namespace Spark::Ui
             return config;
         }
 
+        // ImGui opens font files through ImFileOpen, which decodes the name as UTF-8 (on Windows it
+        // widens with CP_UTF8 and calls _wfopen). path::string() is the wrong spelling there: MSVC
+        // converts to the ANSI code page, so an accented install directory fails to open and a
+        // character the code page lacks throws std::system_error. u8string() is exact; it can
+        // only fail for a Windows name holding an unpaired UTF-16 surrogate, which no UTF-8
+        // string can express, so that path is reported as unusable instead of thrown.
+        std::string Utf8Path(const std::filesystem::path& path)
+        {
+            try
+            {
+                const std::u8string utf8 = path.u8string();
+                return std::string(utf8.begin(), utf8.end());
+            }
+            catch (const std::system_error&)
+            {
+                return {};
+            }
+        }
+
         ImFont* LoadFace(ImFontAtlas& atlas, const std::filesystem::path& file, const char* name, float sizePx,
                          const std::filesystem::path& iconFile)
         {
-            if (file.empty())
+            const std::string fileUtf8 = Utf8Path(file);
+            if (fileUtf8.empty())
             {
                 return nullptr;
             }
             ImFontConfig config = MakeConfig(name);
-            ImFont* font = atlas.AddFontFromFileTTF(file.string().c_str(), sizePx, &config);
-            if (font != nullptr && !iconFile.empty())
+            ImFont* font = atlas.AddFontFromFileTTF(fileUtf8.c_str(), sizePx, &config);
+            const std::string iconUtf8 = Utf8Path(iconFile);
+            if (font != nullptr && !iconUtf8.empty())
             {
                 ImFontConfig icons = MakeConfig(name);
                 icons.MergeMode = true;
                 icons.PixelSnapH = true;
                 icons.GlyphOffset = ImVec2(0.0f, kIconOffsetY);
                 icons.GlyphMinAdvanceX = sizePx * kIconSizeRatio;
-                atlas.AddFontFromFileTTF(iconFile.string().c_str(), sizePx * kIconSizeRatio, &icons,
-                                         kIconRanges.data());
+                atlas.AddFontFromFileTTF(iconUtf8.c_str(), sizePx * kIconSizeRatio, &icons, kIconRanges.data());
             }
             return font;
         }
@@ -163,7 +184,10 @@ namespace Spark::Ui
     {
         FontSet set;
         const float size = bodyPx > 0.0f ? bodyPx : 15.0f;
-        const bool haveDir = IsDirectory(fontDir);
+        const bool dirExists = IsDirectory(fontDir);
+        // Every face lives in fontDir, so a directory without a UTF-8 spelling makes all of them
+        // unloadable; treat it like a missing directory rather than half-loading.
+        const bool haveDir = dirExists && !Utf8Path(fontDir).empty();
         const std::filesystem::path iconFile =
             haveDir ? FirstExisting(fontDir, {"fa-solid-900.ttf"}) : std::filesystem::path{};
 
@@ -186,8 +210,18 @@ namespace Spark::Ui
             set.bold = set.body;
             set.mono = set.body;
             set.custom = false;
-            Note(set.diagnostic, haveDir ? "no body font in the font directory; using the embedded default font"
-                                         : "font directory not found; using the embedded default font");
+            if (haveDir)
+            {
+                Note(set.diagnostic, "no body font in the font directory; using the embedded default font");
+            }
+            else if (dirExists)
+            {
+                Note(set.diagnostic, "font directory path is not valid Unicode; using the embedded default font");
+            }
+            else
+            {
+                Note(set.diagnostic, "font directory not found; using the embedded default font");
+            }
             return set;
         }
         set.custom = true;

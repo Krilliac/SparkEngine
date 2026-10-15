@@ -630,6 +630,17 @@ namespace SparkEditor
             m_preferences.showStatusBar = !m_preferences.showStatusBar;
             SavePreferences();
         }
+        // Notification history stays reachable with the status bar (and its bell) hidden.
+        {
+            const std::size_t unread = m_notificationManager ? m_notificationManager->GetUnreadCount() : 0;
+            char notificationsLabel[48];
+            if (unread > 0)
+                std::snprintf(notificationsLabel, sizeof(notificationsLabel), "Notifications (%zu unread)", unread);
+            else
+                std::snprintf(notificationsLabel, sizeof(notificationsLabel), "Notifications");
+            if (ImGui::MenuItem(notificationsLabel))
+                OpenNotificationHistory();
+        }
         if (ImGui::MenuItem("Start Page", nullptr, m_startPage.IsOpen()))
         {
             if (m_startPage.IsOpen())

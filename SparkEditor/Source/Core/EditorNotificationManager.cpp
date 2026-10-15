@@ -202,7 +202,8 @@ namespace SparkEditor
             ImGui::PushStyleColor(ImGuiCol_WindowBg, Ui::ColV(Ui::Role::SurfaceOverlay, alpha));
             ImGui::PushStyleColor(ImGuiCol_Border, Ui::ColV(Ui::Role::BorderSubtle, alpha));
 
-            const std::string windowName = "##Notification" + std::to_string(i);
+            // Named by id, not stack position: focus and hover (which pause the timer) belong to this toast.
+            const std::string windowName = "##Notification" + std::to_string(toast.id);
             if (ImGui::Begin(windowName.c_str(), nullptr, flags))
             {
                 ImGui::PushID(static_cast<int>(toast.id));

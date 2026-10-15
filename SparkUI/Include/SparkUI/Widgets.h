@@ -1,11 +1,14 @@
 /**
  * @file Widgets.h
  * @brief Spark UI widget kit: role-coloured text, property grids, data tables, toolbars, buttons,
- *        status feedback, cards and focus rings, all styled from the active tokens.
+ *        status feedback, cards, the brand band ink and the token focus ring, all styled from the
+ *        active tokens.
  *
  * Thread affinity: UI thread only, between ImGui::NewFrame() and ImGui::Render() on the current
- * context. Ownership: widgets keep no state of their own beyond ImGui's per-window storage and
- * the per-context runtime (Runtime.h); the scoped helpers pop exactly what they push.
+ * context (InstallFocusRing: any time on the UI thread). Ownership: widgets keep no state of their
+ * own beyond ImGui's per-window storage and the per-context runtime (Runtime.h); the scoped
+ * helpers pop exactly what they push. The focus ring's small per-context state is owned by the
+ * context through a Shutdown hook and freed in ImGui::DestroyContext.
  */
 
 #pragma once
@@ -129,7 +132,8 @@ namespace Spark::Ui
     bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0));
     /// @brief Neutral button.
     bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0));
-    /// @brief Error-tinted button for destructive actions.
+    /// @brief Error-tinted button for destructive actions: ErrorText on ErrorFill, hovered and
+    ///        pressed states tint the fill (DangerTintFill) so the label keeps 4.5:1.
     bool DangerButton(const char* label, ImVec2 size = ImVec2(0, 0));
 
     // --- feedback ----------------------------------------------------------------------------
@@ -151,8 +155,32 @@ namespace Spark::Ui
     /// @brief Modal confirmation of a destructive action. Cancel has default focus; Esc cancels.
     /// @return True when the user confirmed this frame.
     bool ConfirmDestructive(const char* popupId, const char* title, const char* body, const char* confirmLabel);
-    /// @brief Draw the scaled focus ring around the last item when it holds keyboard/gamepad focus.
-    void FocusRing();
+    /// @brief Draw ImGui's keyboard/gamepad focus ring at the token width in every window of @p ctx.
+    /// @details Spec section 2.6: the ring is Metrics::focusRing logical pixels wide (2, or 3 in
+    ///          High Contrast), offset 1 outside the item. ImGui's own cursor is hard-wired to
+    ///          max(2, 1.5 x scale) pixels, so for each frame the hook hides it (ImGuiCol_NavCursor
+    ///          reads transparent between NewFrame and EndFrame; read Role::BorderFocus for the
+    ///          focus colour instead) and redraws it at the start of EndFrame into the focused
+    ///          window's draw list. Idempotent: a second call on the same context does nothing.
+    ///          Every Spark UI host calls it once after Install().
+    void InstallFocusRing(ImGuiContext* ctx);
+
+    // --- brand -------------------------------------------------------------------------------
+
+    /// @brief How a brand band (launcher rail header, installer step rail) is painted.
+    struct BrandBandStyle
+    {
+        bool gradient = true;          ///< Paint the brand gradient; false = flat SurfaceRaised.
+        Role ink = Role::TextOnAccent; ///< Role for the band's text and logomark.
+        float worstContrast = 0.0f;    ///< Ink contrast on the band's least favourable colour.
+    };
+
+    /// @brief Choose the band paint and ink for @p t by measured contrast.
+    /// @details The gradient stops are fixed (Brand.h), so no appearance role is assumed to read on
+    ///          them: TextOnAccent and TextPrimary are measured on every stop and the better one
+    ///          wins. When neither reaches the appearance's text minimum (High Contrast needs 7:1)
+    ///          the band is flat SurfaceRaised with TextPrimary instead.
+    BrandBandStyle ChooseBrandBandStyle(const Tokens& t) noexcept;
 
     // --- cards -------------------------------------------------------------------------------
 

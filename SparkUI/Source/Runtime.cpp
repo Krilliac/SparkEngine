@@ -115,6 +115,7 @@ namespace Spark::Ui
         state.dpiScale = SaneFactor(dpiScale);
         state.userScale = SaneFactor(userScale);
         state.hasPendingScale = false;
+        state.hasPendingTokens = false;
         state.reduceMotion = reduceMotion;
         ApplyScaled(*ctx, state);
     }
@@ -129,31 +130,73 @@ namespace Spark::Ui
         }
     }
 
+    void RequestDpiScale(float dpiScale)
+    {
+        if (Detail::RuntimeState* state = Detail::CurrentState())
+        {
+            if (!state->hasPendingScale)
+            {
+                state->pendingUserScale = state->userScale;
+            }
+            state->pendingDpiScale = SaneFactor(dpiScale);
+            state->hasPendingScale = true;
+        }
+    }
+
+    void RequestUserScale(float userScale)
+    {
+        if (Detail::RuntimeState* state = Detail::CurrentState())
+        {
+            if (!state->hasPendingScale)
+            {
+                state->pendingDpiScale = state->dpiScale;
+            }
+            state->pendingUserScale = SaneFactor(userScale);
+            state->hasPendingScale = true;
+        }
+    }
+
     bool BeginFrameScale()
     {
         ImGuiContext* ctx = ImGui::GetCurrentContext();
         Detail::RuntimeState* state = FindState(ctx);
-        if (state == nullptr || !state->hasPendingScale)
+        if (state == nullptr || (!state->hasPendingScale && !state->hasPendingTokens))
         {
             return false;
         }
-        state->dpiScale = state->pendingDpiScale;
-        state->userScale = state->pendingUserScale;
-        state->hasPendingScale = false;
+        if (state->hasPendingScale)
+        {
+            state->dpiScale = state->pendingDpiScale;
+            state->userScale = state->pendingUserScale;
+            state->hasPendingScale = false;
+        }
+        if (state->hasPendingTokens)
+        {
+            state->tokens = state->pendingTokens;
+            state->hasPendingTokens = false;
+        }
         ApplyScaled(*ctx, *state);
         return true;
     }
 
-    void SetTokens(const Tokens& tokens)
+    bool SetTokens(const Tokens& tokens)
     {
         ImGuiContext* ctx = ImGui::GetCurrentContext();
         if (ctx == nullptr)
         {
-            return;
+            return false;
         }
         Detail::RuntimeState& state = EnsureState(ctx);
+        if (ctx->WithinFrameScope)
+        {
+            state.pendingTokens = tokens;
+            state.hasPendingTokens = true;
+            return false;
+        }
         state.tokens = tokens;
+        state.hasPendingTokens = false;
         ApplyScaled(*ctx, state);
+        return true;
     }
 
     const Tokens& ActiveTokens()

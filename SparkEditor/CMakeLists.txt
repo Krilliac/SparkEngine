@@ -241,11 +241,7 @@ foreach(_spark_editor_service SparkServer SparkGateway SparkDaemon SparkCollabSe
 endforeach()
 
 install(TARGETS SparkEditor RUNTIME DESTINATION bin COMPONENT runtime)
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Fonts")
-    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/Fonts/"
-        DESTINATION bin/EditorAssets/Fonts
-        COMPONENT runtime)
-endif()
+spark_install_ui_fonts(runtime)
 
 # Visual Studio settings
 if(MSVC)

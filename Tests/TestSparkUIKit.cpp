@@ -11,6 +11,7 @@
 #include "TestFramework.h"
 
 #include "SparkUI/Color.h"
+#include "SparkUI/Dpi.h"
 #include "SparkUI/TokenAudit.h"
 #include "SparkUI/Tokens.h"
 
@@ -18,6 +19,8 @@
 #include <cstddef>
 #include <iostream>
 #include <cstdint>
+#include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,6 +31,11 @@ namespace
 
     constexpr std::array kFamilies = {PaletteId::Ember, PaletteId::Cobalt, PaletteId::Graphite};
     constexpr std::array kAppearances = {Appearance::Dark, Appearance::Light, Appearance::HighContrast};
+
+    Tokens EmberTokens(Appearance appearance)
+    {
+        return GenerateTokens(BuiltinSeed(PaletteId::Ember), appearance);
+    }
 
     void PrintFailures(std::string_view label, const std::vector<AuditFailure>& failures)
     {
@@ -78,6 +86,118 @@ TEST(Gated_SparkUi_TokenAudit_FailFixtureFails)
     EXPECT_EQ(AuditTokens(AuditFailFixture(Get(emberDark, Role::TextSecondary))).size(), std::size_t{0});
 }
 
+namespace
+{
+    bool HasFailure(const std::vector<AuditFailure>& failures, std::string_view rule, Role fg, Role bg)
+    {
+        for (const AuditFailure& failure : failures)
+        {
+            if (failure.rule == rule && failure.fg == fg && failure.bg == bg && failure.ratio < failure.required)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+} // namespace
+
+TEST(Gated_SparkUi_TokenAudit_EnforcesUnrelaxedSpecRules)
+{
+    // Spec section 2.5 thresholds, not a relaxed variant.
+    EXPECT_EQ(kAuditMinCvdDelta, 0.08f);
+    EXPECT_EQ(kAuditNonTextMinimum, 3.0f);
+    EXPECT_EQ(TextContrastMinimum(Appearance::HighContrast), 7.0f);
+    EXPECT_EQ(TextContrastMinimum(Appearance::Light), 4.5f);
+
+    // BorderFocus must reach 3:1 against AccentFill: the original seed pair (#68d3ee ring next to
+    // the #f1823a accent, about 1.5:1) is a failure even though it passes on every surface.
+    Tokens seedPair = GenerateTokens(BuiltinSeed(PaletteId::Ember), Appearance::Dark);
+    seedPair.color[static_cast<std::size_t>(Role::BorderFocus)] = Hex(0x68d3ee);
+    seedPair.color[static_cast<std::size_t>(Role::AccentFill)] = Hex(0xf1823a);
+    const std::vector<AuditFailure> focus = AuditTokens(seedPair);
+    PrintFailures("seed focus/accent", focus);
+    EXPECT_TRUE(HasFailure(focus, "border-focus", Role::BorderFocus, Role::AccentFill));
+
+    // Accent pairs are checked under tritan vision too: an error colour equal to the accent fails there.
+    Tokens accentTwin = GenerateTokens(BuiltinSeed(PaletteId::Ember), Appearance::Dark);
+    accentTwin.color[static_cast<std::size_t>(Role::ErrorText)] = Get(accentTwin, Role::AccentFill);
+    const std::vector<AuditFailure> cvd = AuditTokens(accentTwin);
+    EXPECT_TRUE(HasFailure(cvd, "cvd-accent-tritan", Role::ErrorText, Role::AccentFill));
+    EXPECT_TRUE(HasFailure(cvd, "cvd-accent-protan", Role::ErrorText, Role::AccentFill));
+
+    // The destructive button's hovered / pressed fills are audited: a fill already close to the
+    // label leaves no room for the tint.
+    Tokens weakDanger = GenerateTokens(BuiltinSeed(PaletteId::Ember), Appearance::Dark);
+    weakDanger.color[static_cast<std::size_t>(Role::ErrorFill)] = Hex(0x8a5058);
+    const std::vector<AuditFailure> danger = AuditTokens(weakDanger);
+    EXPECT_TRUE(HasFailure(danger, "danger-press", Role::ErrorText, Role::ErrorFill));
+}
+
+TEST(Gated_SparkUi_DangerButtonLabelReadsInEveryState)
+{
+    std::size_t checked = 0;
+    for (const PaletteId family : kFamilies)
+    {
+        for (const Appearance appearance : kAppearances)
+        {
+            const Tokens tokens = GenerateTokens(BuiltinSeed(family), appearance);
+            const Rgba label = Get(tokens, Role::ErrorText);
+            EXPECT_GE(ContrastRatio(label, Get(tokens, Role::ErrorFill)), 4.5f);
+            EXPECT_GE(ContrastRatio(label, DangerTintFill(tokens, kDangerHoverTint)), 4.5f);
+            EXPECT_GE(ContrastRatio(label, DangerTintFill(tokens, kDangerPressTint)), 4.5f);
+            // Hover and press are visibly different from the resting fill and from each other.
+            EXPECT_TRUE(DangerTintFill(tokens, kDangerHoverTint) != Get(tokens, Role::ErrorFill));
+            EXPECT_TRUE(DangerTintFill(tokens, kDangerPressTint) != DangerTintFill(tokens, kDangerHoverTint));
+            ++checked;
+        }
+    }
+    EXPECT_EQ(checked, std::size_t{9});
+}
+
+TEST(Gated_SparkUi_MostReadableRoleMeasuresContrast)
+{
+    const Tokens light = GenerateTokens(BuiltinSeed(PaletteId::Ember), Appearance::Light);
+    // Ember Light's TextOnAccent is white, which fails on the bright end of an orange ramp.
+    const std::array ramp = {Hex(0xe8611a), Hex(0xf1823a), Hex(0xffc857)};
+    const std::array inks = {Role::TextOnAccent, Role::TextPrimary};
+    float worst = 0.0f;
+    EXPECT_TRUE(MostReadableRole(light, ramp, inks, &worst) == Role::TextPrimary);
+    EXPECT_GE(worst, 4.5f);
+
+    const Tokens dark = EmberTokens(Appearance::Dark);
+    EXPECT_TRUE(MostReadableRole(dark, ramp, inks, &worst) == Role::TextOnAccent);
+    EXPECT_GE(worst, 4.5f);
+
+    EXPECT_TRUE(MostReadableRole(dark, ramp, std::span<const Role>{}, &worst) == Role::TextPrimary);
+    EXPECT_EQ(worst, 0.0f);
+}
+
+TEST(Gated_SparkUi_MinimumAlphaForContrastIsTight)
+{
+    const Rgba fg = Hex(0xffd867);
+    const Rgba bg = Hex(0x1a1716);
+    const float alpha = MinimumAlphaForContrast(fg, bg, 3.0f);
+    EXPECT_GT(alpha, 0.0f);
+    EXPECT_LT(alpha, 1.0f);
+    EXPECT_GE(ContrastRatio(WithAlpha(fg, alpha), bg), 3.0f);
+    EXPECT_LT(ContrastRatio(WithAlpha(fg, alpha - 0.01f), bg), 3.0f);
+    // Unreachable even when opaque: the caller gets full opacity.
+    EXPECT_EQ(MinimumAlphaForContrast(Hex(0x202020), bg, 3.0f), 1.0f);
+}
+
+TEST(Gated_SparkUi_SdlDpiUsesRatioOrDisplayDpiNeverBoth)
+{
+    // HiDPI framebuffer (Wayland 2x): the backend already scales through DisplayFramebufferScale.
+    EXPECT_EQ(SdlDpiScale(2.0f, 192.0f), 1.0f);
+    // Unscaled framebuffer: display DPI / 96.
+    EXPECT_EQ(SdlDpiScale(1.0f, 144.0f), 1.5f);
+    EXPECT_EQ(SdlDpiScale(1.0f, 96.0f), 1.0f);
+    // No information falls back to 1.
+    EXPECT_EQ(SdlDpiScale(1.0f, 0.0f), 1.0f);
+    EXPECT_EQ(SdlDpiScale(std::numeric_limits<float>::quiet_NaN(), 120.0f), 1.25f);
+    EXPECT_EQ(SdlDpiScale(1.0f, std::numeric_limits<float>::infinity()), 1.0f);
+}
+
 TEST(Gated_SparkUi_TokenColourScienceReferenceValues)
 {
     EXPECT_NEAR(ContrastRatio(Hex(0xffffff), Hex(0x000000)), 21.0f, 0.01f);
@@ -109,6 +229,7 @@ TEST(Gated_SparkUi_TokenColourScienceReferenceValues)
 #define SPARK_HAS_IMGUI 1
 #endif
 
+#include "SparkUI/Brand.h"
 #include "SparkUI/Fonts.h"
 #include "SparkUI/Runtime.h"
 #include "SparkUI/Style.h"
@@ -116,6 +237,7 @@ TEST(Gated_SparkUi_TokenColourScienceReferenceValues)
 
 #include <Spark/UiTheme.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <chrono>
 #include <cmath>
@@ -450,6 +572,87 @@ TEST(Gated_SparkUi_RuntimeBlockRoundTrip)
     block.magic = 0;
     EXPECT_TRUE(Sdk::Runtime() == nullptr);
     io.UserData = nullptr;
+}
+
+TEST(Gated_SparkUi_BrandBandInkReadsInEveryAppearance)
+{
+    for (const Appearance appearance : kAppearances)
+    {
+        const Tokens tokens = EmberTokens(appearance);
+        const BrandBandStyle band = ChooseBrandBandStyle(tokens);
+        EXPECT_GE(band.worstContrast, TextContrastMinimum(appearance));
+        if (band.gradient)
+        {
+            for (const std::uint32_t stop : kBrandGradientStops)
+            {
+                EXPECT_GE(ContrastRatio(Get(tokens, band.ink), Hex(stop)), TextContrastMinimum(appearance));
+            }
+        }
+        else
+        {
+            EXPECT_GE(ContrastRatio(Get(tokens, band.ink), Get(tokens, Role::SurfaceRaised)),
+                      TextContrastMinimum(appearance));
+        }
+    }
+    // Light no longer puts white on the gradient; High Contrast (7:1) cannot use the gradient at all.
+    EXPECT_TRUE(ChooseBrandBandStyle(EmberTokens(Appearance::Light)).ink == Role::TextPrimary);
+    EXPECT_TRUE(ChooseBrandBandStyle(EmberTokens(Appearance::Dark)).gradient);
+    EXPECT_FALSE(ChooseBrandBandStyle(EmberTokens(Appearance::HighContrast)).gradient);
+}
+
+TEST(Gated_SparkUi_FocusRingUsesTokenWidthInEveryHost)
+{
+    ScopedImGuiContext context;
+    ScopedImGuiContext::BuildAtlas();
+    Install(context.Get(), EmberTokens(Appearance::HighContrast), 1.0f, 1.0f, false);
+    EXPECT_EQ(ActiveTokens().metrics.focusRing, 3.0f);
+    InstallFocusRing(context.Get());
+    InstallFocusRing(context.Get());
+    const ImGuiID owner = ImHashStr("SparkUi.FocusRing");
+    int hooks = 0;
+    for (const ImGuiContextHook& hook : context.Get()->Hooks)
+    {
+        hooks += hook.Owner == owner ? 1 : 0;
+    }
+    EXPECT_EQ(hooks, 3); // installed once: NewFramePost, EndFramePre, Shutdown
+
+    const ImVec4 focusColour = ImGui::GetStyleColorVec4(ImGuiCol_NavCursor);
+    EXPECT_GT(focusColour.w, 0.0f);
+
+    ImGuiContext& g = *context.Get();
+    ImGuiID buttonId = 0;
+    // Returns the focus window's vertex count after the frame.
+    const auto frame = [&](bool focusFirst, bool cursorVisible)
+    {
+        ImGui::NewFrame();
+        // ImGui's own 2 px cursor is hidden for the frame; the hook draws the token ring instead.
+        EXPECT_EQ(ImGui::GetStyleColorVec4(ImGuiCol_NavCursor).w, 0.0f);
+        ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f));
+        ImGui::SetNextWindowSize(ImVec2(300.0f, 200.0f));
+        ImGui::Begin("Focus ring host", nullptr, ImGuiWindowFlags_NoSavedSettings);
+        if (focusFirst)
+        {
+            ImGui::SetKeyboardFocusHere();
+        }
+        g.NavCursorVisible = cursorVisible;
+        ImGui::Button("Focusable");
+        buttonId = ImGui::GetItemID();
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImGui::End();
+        ImGui::EndFrame();
+        return drawList->VtxBuffer.Size;
+    };
+
+    frame(true, true);
+    const int withRing = frame(false, true);
+    EXPECT_EQ(g.NavId, buttonId);
+    const int withoutRing = frame(false, false);
+    EXPECT_GT(withRing, withoutRing);
+
+    // The colour is back after every frame, so themes and readers outside the frame see it.
+    const ImVec4 restored = ImGui::GetStyleColorVec4(ImGuiCol_NavCursor);
+    EXPECT_EQ(restored.w, focusColour.w);
+    EXPECT_EQ(restored.x, focusColour.x);
 }
 
 TEST(Gated_SparkUi_SdkFallbackColoursMatchEmberDark)

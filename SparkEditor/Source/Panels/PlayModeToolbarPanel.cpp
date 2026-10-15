@@ -15,11 +15,20 @@
 #include <iostream>
 #include <cmath>
 #include <optional>
+#include "SparkUI/Color.h"
 #include "SparkUI/Runtime.h"
 #include "SparkUI/Widgets.h"
+#include <algorithm>
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// Alpha of the Paused line's dim blink phase, raised when the palette needs more for 3:1.
+        constexpr float kPausedBlinkDimAlpha = 0.4f;
+        /// Smallest contrast the dim phase may reach (WCAG non-text minimum; the bright phase is 4.5:1+).
+        constexpr float kPausedBlinkMinContrast = 3.0f;
+    } // namespace
 
     // ============================================================================
     // Construction / Lifecycle
@@ -481,8 +490,15 @@ namespace SparkEditor
 
         case PlayModeState::Paused:
         {
-            // Blink by fading the whole status line; the "Paused" word stays readable throughout.
-            const float blinkAlpha = m_statusBlinkTimer < 0.5f ? 1.0f : 0.4f;
+            // Blink by fading the whole status line at 1 Hz; Reduce Motion keeps it steady. The dim
+            // phase never drops the word below 3:1 on the panel background (alpha measured, not fixed).
+            namespace Ui = Spark::Ui;
+            const Ui::Tokens& tokens = Ui::ActiveTokens();
+            const float dimAlpha =
+                std::max(kPausedBlinkDimAlpha,
+                         Ui::MinimumAlphaForContrast(Ui::Get(tokens, Ui::Role::WarningText),
+                                                     Ui::Get(tokens, Ui::Role::SurfaceBase), kPausedBlinkMinContrast));
+            const float blinkAlpha = Ui::ReduceMotion() || m_statusBlinkTimer < 0.5f ? 1.0f : dimAlpha;
             ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * blinkAlpha);
             Spark::Ui::StatusText(Spark::Ui::Status::Warning, ICON_FA_PAUSE " Paused");
             ImGui::PopStyleVar();

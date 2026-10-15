@@ -269,6 +269,102 @@ TEST(EditorPreferences_LoadMissingFileFails)
     EXPECT_TRUE(prefs == Customized());
 }
 
+TEST(EditorPreferences_ByteOrderMarkAccepted)
+{
+    // Notepad and other editors save UTF-8 with a BOM; a hand-edited file must not be rejected for it.
+    EditorPreferences parsed;
+    std::string error;
+    ASSERT_TRUE(SparkEditor::ParseEditorPreferences("\xEF\xBB\xBFversion=1\npalette=Cobalt Forge\n", parsed, &error));
+    EXPECT_EQ(parsed.palette, std::string("Cobalt Forge"));
+
+    // Only a leading BOM is skipped; one in the middle stays part of the line it is on.
+    EXPECT_FALSE(SparkEditor::ParseEditorPreferences("\n\xEF\xBB\xBFversion=1\n", parsed, &error));
+}
+
+TEST(EditorPreferences_SessionLoadMovesRejectedFileAside)
+{
+    using SparkEditor::EditorPreferencesLoadStatus;
+    ScopedTempDirectory directory;
+    const fs::path file = directory.Path() / "editor-preferences.ini";
+    const std::string newer = "version=2\npalette=Cobalt Forge\nfutureKey=1\n";
+    {
+        std::ofstream stream(file, std::ios::binary);
+        stream << newer;
+    }
+
+    EditorPreferences prefs = Customized();
+    const auto result = SparkEditor::LoadEditorPreferencesForSession(file, prefs);
+    ASSERT_TRUE(result.status == EditorPreferencesLoadStatus::MovedAside);
+    EXPECT_FALSE(result.error.empty());
+    EXPECT_TRUE(result.CanSave());
+    EXPECT_TRUE(prefs == EditorPreferences{});
+    fs::path firstBackup = file;
+    firstBackup += ".bak";
+    EXPECT_EQ(result.backupPath, firstBackup);
+    EXPECT_FALSE(fs::exists(file));
+    EXPECT_EQ(ReadFile(firstBackup), newer);
+
+    // The session's first save writes a fresh file; the user's original bytes survive beside it.
+    std::string error;
+    ASSERT_TRUE(SparkEditor::SaveEditorPreferences(file, prefs, &error));
+    EXPECT_EQ(ReadFile(firstBackup), newer);
+
+    // A second rejected file never replaces the first backup.
+    {
+        std::ofstream stream(file, std::ios::binary);
+        stream << "not a preferences file\n";
+    }
+    const auto second = SparkEditor::LoadEditorPreferencesForSession(file, prefs);
+    ASSERT_TRUE(second.status == EditorPreferencesLoadStatus::MovedAside);
+    fs::path secondBackup = file;
+    secondBackup += ".bak2";
+    EXPECT_EQ(second.backupPath, secondBackup);
+    EXPECT_EQ(ReadFile(firstBackup), newer);
+    EXPECT_EQ(ReadFile(secondBackup), std::string("not a preferences file\n"));
+}
+
+TEST(EditorPreferences_SessionLoadReportsEachOutcome)
+{
+    using SparkEditor::EditorPreferencesLoadStatus;
+    ScopedTempDirectory directory;
+    const fs::path file = directory.Path() / "editor-preferences.ini";
+
+    EditorPreferences prefs = Customized();
+    const auto missing = SparkEditor::LoadEditorPreferencesForSession(file, prefs);
+    EXPECT_TRUE(missing.status == EditorPreferencesLoadStatus::Missing);
+    EXPECT_TRUE(missing.CanSave());
+    EXPECT_TRUE(prefs == EditorPreferences{});
+
+    std::string error;
+    ASSERT_TRUE(SparkEditor::SaveEditorPreferences(file, Customized(), &error));
+    const auto loaded = SparkEditor::LoadEditorPreferencesForSession(file, prefs);
+    EXPECT_TRUE(loaded.status == EditorPreferencesLoadStatus::Loaded);
+    EXPECT_TRUE(loaded.CanSave());
+    EXPECT_TRUE(prefs == Customized());
+
+    // Something that is not a regular file is neither read, renamed nor overwritten.
+    fs::remove(file);
+    fs::create_directories(file / "child");
+    const auto unreadable = SparkEditor::LoadEditorPreferencesForSession(file, prefs);
+    EXPECT_TRUE(unreadable.status == EditorPreferencesLoadStatus::Unreadable);
+    EXPECT_FALSE(unreadable.CanSave());
+    EXPECT_FALSE(unreadable.error.empty());
+    EXPECT_TRUE(prefs == EditorPreferences{});
+    EXPECT_TRUE(fs::is_directory(file / "child"));
+}
+
+TEST(EditorPreferences_LoadRefusesNonRegularFile)
+{
+    ScopedTempDirectory directory;
+    const fs::path file = directory.Path() / "editor-preferences.ini";
+    fs::create_directories(file);
+    EditorPreferences prefs = Customized();
+    std::string error;
+    EXPECT_FALSE(SparkEditor::LoadEditorPreferences(file, prefs, &error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_TRUE(prefs == Customized());
+}
+
 TEST(EditorPreferences_PathIsInsideEditorDataDirectory)
 {
     const fs::path path = SparkEditor::EditorPreferencesPath();

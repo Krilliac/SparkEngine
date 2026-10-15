@@ -6,16 +6,22 @@
 #include "SparkUI/Widgets.h"
 
 #include "RuntimeState.h"
+#include "SparkUI/Brand.h"
+#include "SparkUI/Color.h"
 #include "SparkUI/Fonts.h"
 #include "SparkUI/Glyphs.h"
 #include "SparkUI/Runtime.h"
+#include "SparkUI/Style.h"
+#include "SparkUI/TokenAudit.h"
 
 #include <algorithm>
+#include <array>
 #include <cfloat>
 #include <cmath>
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
+#include <memory>
 
 #include <imgui_internal.h>
 
@@ -64,6 +70,86 @@ namespace Spark::Ui
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
+        }
+
+        /// Per-context focus ring state: ImGui's nav cursor colour while it is hidden for a frame.
+        struct FocusRingState
+        {
+            ImVec4 hiddenColour{};
+            bool hiding = false;
+        };
+
+        ImGuiID FocusRingOwnerId()
+        {
+            return ImHashStr("SparkUi.FocusRing");
+        }
+
+        void DestroyFocusRingState(ImGuiContext*, ImGuiContextHook* hook)
+        {
+            // Adopt the state InstallFocusRing released to the context so it is freed exactly once.
+            std::unique_ptr<FocusRingState> owned(static_cast<FocusRingState*>(hook->UserData));
+            hook->UserData = nullptr;
+        }
+
+        /// NewFramePost: make ImGui's own 2 px cursor transparent for this frame.
+        void HideNativeNavCursor(ImGuiContext* ctx, ImGuiContextHook* hook)
+        {
+            auto* state = static_cast<FocusRingState*>(hook->UserData);
+            if (state == nullptr)
+            {
+                return;
+            }
+            ImVec4& colour = ctx->Style.Colors[ImGuiCol_NavCursor];
+            state->hiding = colour.w > 0.0f;
+            if (state->hiding)
+            {
+                state->hiddenColour = colour;
+                colour.w = 0.0f;
+            }
+        }
+
+        /// EndFramePre: restore the cursor colour and draw the token-width ring around the nav item.
+        void DrawTokenFocusRing(ImGuiContext* ctx, ImGuiContextHook* hook)
+        {
+            auto* state = static_cast<FocusRingState*>(hook->UserData);
+            if (state == nullptr || !state->hiding)
+            {
+                return;
+            }
+            ImVec4& colour = ctx->Style.Colors[ImGuiCol_NavCursor];
+            if (colour.w == 0.0f)
+            {
+                // Still the transparent value set at NewFrame; a theme applied mid-frame wins.
+                colour = state->hiddenColour;
+            }
+            state->hiding = false;
+
+            ImGuiContext& g = *ctx;
+            ImGuiWindow* window = g.NavWindow;
+            if (!g.NavCursorVisible || g.NavId == 0 || !g.NavIdIsAlive || window == nullptr || !window->Active ||
+                window->Hidden || window->SkipRefresh || window->DC.NavHideHighlightOneFrame ||
+                (g.NavIdItemFlags & ImGuiItemFlags_NoNav) != 0)
+            {
+                return;
+            }
+            const ImGuiNavLayer layer = g.NavLayer;
+            ImRect item = ImGui::WindowRectRelToAbs(window, window->NavRectRel[layer]);
+            item.ClipWith(layer == ImGuiNavLayer_Main ? window->InnerClipRect : window->Rect());
+            if (item.GetWidth() <= 0.0f || item.GetHeight() <= 0.0f)
+            {
+                return;
+            }
+            const float thickness = std::max(1.0f, Px(ActiveTokens().metrics.focusRing));
+            const float offset = Px(1.0f) + thickness * 0.5f;
+            const ImVec2 min(item.Min.x - offset, item.Min.y - offset);
+            const ImVec2 max(item.Max.x + offset, item.Max.y + offset);
+            // Like ImGui's own cursor, the ring may extend past the window clip rectangle.
+            ImDrawList* drawList = window->DrawList;
+            drawList->PushClipRect(ImVec2(min.x - thickness, min.y - thickness),
+                                   ImVec2(max.x + thickness, max.y + thickness), false);
+            drawList->AddRect(min, max, ImGui::GetColorU32(colour), Px(ActiveTokens().metrics.rFrame) + offset, 0,
+                              thickness);
+            drawList->PopClipRect();
         }
 
         /// Rounded pill at the cursor, reserved as one item.
@@ -454,9 +540,17 @@ namespace Spark::Ui
 
     bool DangerButton(const char* label, ImVec2 size)
     {
+        // Hover and press tint the opaque ErrorFill instead of laying a translucent colour over
+        // whatever surface is behind the button, so the audited label contrast holds everywhere.
+        const Tokens& tokens = ActiveTokens();
+        const float alpha = ImGui::GetStyle().Alpha;
+        ImVec4 hovered = ToImVec4(DangerTintFill(tokens, kDangerHoverTint));
+        ImVec4 pressed = ToImVec4(DangerTintFill(tokens, kDangerPressTint));
+        hovered.w *= alpha;
+        pressed.w *= alpha;
         ImGui::PushStyleColor(ImGuiCol_Button, ColV(Role::ErrorFill));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ColV(Role::ErrorText, 0.30f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ColV(Role::ErrorText, 0.45f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, pressed);
         ImGui::PushStyleColor(ImGuiCol_Text, ColV(Role::ErrorText));
         const bool clicked = ImGui::Button(label, size);
         ImGui::PopStyleColor(4);
@@ -657,20 +751,55 @@ namespace Spark::Ui
         return confirmed;
     }
 
-    void FocusRing()
+    void InstallFocusRing(ImGuiContext* ctx)
     {
-        ImGuiContext& g = *ImGui::GetCurrentContext();
-        const ImGuiID id = g.LastItemData.ID;
-        if (id == 0 || !g.NavCursorVisible || g.NavId != id)
+        if (ctx == nullptr)
         {
             return;
         }
-        const float thickness = std::max(1.0f, Px(ActiveTokens().metrics.focusRing));
-        const float offset = Px(1.0f) + thickness * 0.5f;
-        const ImRect rect = g.LastItemData.Rect;
-        ImGui::GetWindowDrawList()->AddRect(ImVec2(rect.Min.x - offset, rect.Min.y - offset),
-                                            ImVec2(rect.Max.x + offset, rect.Max.y + offset), Col(Role::BorderFocus),
-                                            Px(ActiveTokens().metrics.rFrame) + offset, 0, thickness);
+        const ImGuiID owner = FocusRingOwnerId();
+        for (const ImGuiContextHook& hook : ctx->Hooks)
+        {
+            if (hook.Owner == owner && hook.Type == ImGuiContextHookType_Shutdown)
+            {
+                return;
+            }
+        }
+        // The context owns the state from here on; DestroyFocusRingState frees it at shutdown.
+        FocusRingState* state = std::make_unique<FocusRingState>().release();
+        const auto add = [&](ImGuiContextHookType type, ImGuiContextHookCallback callback)
+        {
+            ImGuiContextHook hook;
+            hook.Type = type;
+            hook.Owner = owner;
+            hook.Callback = callback;
+            hook.UserData = state;
+            ImGui::AddContextHook(ctx, &hook);
+        };
+        add(ImGuiContextHookType_NewFramePost, &HideNativeNavCursor);
+        add(ImGuiContextHookType_EndFramePre, &DrawTokenFocusRing);
+        add(ImGuiContextHookType_Shutdown, &DestroyFocusRingState);
+    }
+
+    // --- brand -------------------------------------------------------------------------------
+
+    BrandBandStyle ChooseBrandBandStyle(const Tokens& t) noexcept
+    {
+        std::array<Rgba, std::size(kBrandGradientStops)> stops{};
+        for (std::size_t i = 0; i < stops.size(); ++i)
+        {
+            stops[i] = Hex(kBrandGradientStops[i]);
+        }
+        constexpr std::array kInks = {Role::TextOnAccent, Role::TextPrimary};
+        BrandBandStyle style;
+        style.ink = MostReadableRole(t, stops, kInks, &style.worstContrast);
+        if (style.worstContrast < TextContrastMinimum(t.appearance))
+        {
+            style.gradient = false;
+            style.ink = Role::TextPrimary;
+            style.worstContrast = ContrastRatio(Get(t, Role::TextPrimary), Get(t, Role::SurfaceRaised));
+        }
+        return style;
     }
 
     // --- cards -------------------------------------------------------------------------------

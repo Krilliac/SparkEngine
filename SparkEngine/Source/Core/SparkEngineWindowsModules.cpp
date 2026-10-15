@@ -23,9 +23,8 @@
 #ifdef SPARK_HAS_IMGUI
 #include <SparkUI/Brand.h>   // bare-launch project selector: brand header
 #include <SparkUI/Fonts.h>   // ... font roles
-#include <SparkUI/Glyphs.h>  // ... empty-state glyph
 #include <SparkUI/Runtime.h> // ... Em()
-#include <SparkUI/Widgets.h> // ... buttons, text roles, empty state
+#include <SparkUI/Widgets.h> // ... buttons, text roles
 #include <imgui.h>           // bare-launch project selector panel
 #endif
 #include <algorithm> // std::max (project selector row layout)
@@ -157,12 +156,13 @@ bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
  *
  * Runs inside GameImGui::RenderOverlay on the main thread. Only records the
  * choice — the actual module load happens in the main loop next frame.
- * Drawn with the Spark UI kit: brand header, one row per module (name over
- * file name, Launch on the right) and an empty state when nothing is armed.
+ * Drawn with the Spark UI kit: brand header and one row per module (name over
+ * file name, Launch on the right). The panel is attached only while candidates
+ * exist (SparkEngineWindowsInit.cpp), and every path that clears them detaches it.
  */
 void DrawProjectSelectorPanel()
 {
-    if (!g_projectSelectorChoice.empty())
+    if (g_projectSelectorCandidates.empty() || !g_projectSelectorChoice.empty())
         return;
 
     namespace Ui = Spark::Ui;
@@ -176,14 +176,6 @@ void DrawProjectSelectorPanel()
 
     Ui::BrandHeader("Spark Engine", "Select a project to launch");
     ImGui::Spacing();
-
-    if (g_projectSelectorCandidates.empty())
-    {
-        Ui::EmptyState(Ui::Glyph::kCircleInfo, "No game modules found",
-                       "Place a game module next to the engine executable, or launch with -game <dll>.");
-        ImGui::End();
-        return;
-    }
 
     Ui::SubHeader("Game modules next to the engine");
     const float launchWidth = Ui::Em(6.0f);

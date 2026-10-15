@@ -36,18 +36,28 @@ namespace SparkEditor
     ///        the format is additive; it lets a later incompatible revision be detected.
     inline constexpr int kThemeDocumentVersion = 1;
 
+    // Pointer-to-member types are named once here: clang-format 18.1.3 (CI) and 18.1.8 disagree
+    // on the spacing of a declarator written as `T Class::* name`, but agree on these aliases.
+
+    /// @brief A colour field of EditorThemeData.
+    using ThemeColourMember = ThemeColor EditorThemeData::*;
+    /// @brief A numeric metric field of EditorThemeData.
+    using ThemeMetricMember = float EditorThemeData::*;
+    /// @brief A boolean feature-flag field of EditorThemeData.
+    using ThemeFlagMember = bool EditorThemeData::*;
+
     /// @brief One colour the format carries: its document key and the field it fills.
     struct ThemeColourField
     {
         std::string_view key;
-        ThemeColor EditorThemeData::*member;
+        ThemeColourMember member;
     };
 
     /// @brief One numeric metric the format carries; imported values are clamped to the range.
     struct ThemeMetricField
     {
         std::string_view key;
-        float EditorThemeData::*member;
+        ThemeMetricMember member;
         float minimum;
         float maximum;
     };
@@ -56,7 +66,7 @@ namespace SparkEditor
     struct ThemeFlagField
     {
         std::string_view key;
-        bool EditorThemeData::*member;
+        ThemeFlagMember member;
     };
 
     /// @brief Every colour field except statusFills (keyed "statusFill<Info|Success|Warning|Error>").

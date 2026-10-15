@@ -77,6 +77,12 @@ namespace Spark::Ui
         return Rgba{c.r, c.g, c.b, a};
     }
 
+    /// @brief Smallest alpha at which @p fg composited over @p bg still reaches @p minRatio.
+    /// @return A value in [0, 1]; 1 when even the opaque colour falls short.
+    /// @details For fades and blinks that must stay readable in their dim phase. Bisection over
+    ///          alpha (contrast grows monotonically with it), 24 evaluations.
+    float MinimumAlphaForContrast(Rgba fg, Rgba bg, float minRatio) noexcept;
+
     /// @brief @p c with its OKLab lightness moved by @p amount (hue and chroma kept).
     Rgba ShiftLightness(Rgba c, float amount) noexcept;
 

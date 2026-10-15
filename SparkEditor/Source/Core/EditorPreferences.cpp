@@ -3,10 +3,13 @@
  * @brief Bounded reader and writer for editor-preferences.ini.
  *
  * Numbers are read and written without the C locale (no strtod/printf), so a host that calls
- * setlocale cannot change the format.
+ * setlocale cannot change the format. Files are read through the editor's bounded regular-file
+ * reader (Utils/EditorFileRead.h), which decides on the opened handle and never blocks on a FIFO.
  */
 
 #include "EditorPreferences.h"
+
+#include "Utils/EditorFileRead.h"
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +28,10 @@ namespace SparkEditor
         constexpr std::string_view kVersionKey = "version";
         constexpr std::string_view kSupportedVersion = "1";
         constexpr std::size_t kMaxNumberChars = 16;
+        /// Written by editors such as Notepad ("UTF-8 with BOM") and PowerShell 5 Set-Content -Encoding UTF8.
+        constexpr std::string_view kUtf8ByteOrderMark = "\xEF\xBB\xBF";
+        /// Backup names tried for a rejected file: <file>.bak, then <file>.bak2 .. <file>.bak9.
+        constexpr int kMaxPreferenceBackups = 9;
 
         void SetError(std::string* error, std::string_view message)
         {
@@ -231,6 +238,11 @@ namespace SparkEditor
             return false;
         }
 
+        if (text.starts_with(kUtf8ByteOrderMark))
+        {
+            text.remove_prefix(kUtf8ByteOrderMark.size());
+        }
+
         EditorPreferences parsed;
         bool sawVersion = false;
         while (!text.empty())
@@ -316,22 +328,81 @@ namespace SparkEditor
 
     bool LoadEditorPreferences(const std::filesystem::path& file, EditorPreferences& out, std::string* error)
     {
-        std::ifstream stream(file, std::ios::binary);
-        if (!stream)
+        std::string content;
+        switch (ReadRegularFileBounded(file, kMaxEditorPreferencesBytes, content))
         {
-            SetError(error, "cannot open editor preferences");
+        case BoundedReadStatus::Ok:
+            return ParseEditorPreferences(content, out, error);
+        case BoundedReadStatus::Missing:
+            SetError(error, "the editor preferences file does not exist");
             return false;
+        case BoundedReadStatus::NotRegularFile:
+            SetError(error, "the editor preferences path is not a regular file");
+            return false;
+        case BoundedReadStatus::TooLarge:
+            SetError(error, "editor preferences exceed 64 KiB");
+            return false;
+        case BoundedReadStatus::Failed:
+            break;
         }
-        // Read at most one byte past the limit so an oversized file is rejected without being slurped.
-        std::string content(kMaxEditorPreferencesBytes + 1, '\0');
-        stream.read(content.data(), static_cast<std::streamsize>(content.size()));
-        if (stream.bad())
+        SetError(error, "cannot read editor preferences");
+        return false;
+    }
+
+    EditorPreferencesLoadResult LoadEditorPreferencesForSession(const std::filesystem::path& file,
+                                                                EditorPreferences& out)
+    {
+        out = EditorPreferences{};
+        EditorPreferencesLoadResult result;
+        std::string content;
+        switch (ReadRegularFileBounded(file, kMaxEditorPreferencesBytes, content))
         {
-            SetError(error, "cannot read editor preferences");
-            return false;
+        case BoundedReadStatus::Missing:
+            result.status = EditorPreferencesLoadStatus::Missing;
+            return result;
+        case BoundedReadStatus::NotRegularFile:
+            result.status = EditorPreferencesLoadStatus::Unreadable;
+            result.error = "the editor preferences path is not a regular file";
+            return result;
+        case BoundedReadStatus::Failed:
+            result.status = EditorPreferencesLoadStatus::Unreadable;
+            result.error = "cannot read editor preferences";
+            return result;
+        case BoundedReadStatus::TooLarge:
+            result.error = "editor preferences exceed 64 KiB";
+            break;
+        case BoundedReadStatus::Ok:
+            if (ParseEditorPreferences(content, out, &result.error))
+            {
+                result.status = EditorPreferencesLoadStatus::Loaded;
+                return result;
+            }
+            break;
         }
-        content.resize(static_cast<std::size_t>(stream.gcount()));
-        return ParseEditorPreferences(content, out, error);
+
+        // The reader rejected a regular file the user may still want (a newer editor's version, a
+        // hand edit). Move it out of the way before anything can save over it.
+        for (int attempt = 1; attempt <= kMaxPreferenceBackups; ++attempt)
+        {
+            std::filesystem::path backup = file;
+            backup += attempt == 1 ? std::string(".bak") : ".bak" + std::to_string(attempt);
+            std::error_code ec;
+            if (std::filesystem::exists(backup, ec) || ec)
+            {
+                continue;
+            }
+            std::filesystem::rename(file, backup, ec);
+            if (ec)
+            {
+                break;
+            }
+            result.status = EditorPreferencesLoadStatus::MovedAside;
+            result.backupPath = std::move(backup);
+            return result;
+        }
+        result.status = EditorPreferencesLoadStatus::Unreadable;
+        result.error += "; the file could not be moved aside, so it is left untouched";
+        return result;
     }
 
     bool SaveEditorPreferences(const std::filesystem::path& file, const EditorPreferences& prefs, std::string* error)

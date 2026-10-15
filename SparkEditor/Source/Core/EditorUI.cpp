@@ -74,6 +74,7 @@
 #include <ctime>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -266,10 +267,11 @@ namespace SparkEditor
                 }
             }
 
-            // Preferences back the Appearance window, the Start page and the recent-scene list. A test-mode
-            // launch keeps the defaults in memory and never reads or writes the user's file.
-            m_persistPreferences = !config.testMode;
-            LoadPreferences();
+            // Preferences back the Appearance window, the Start page and the recent-scene list. EditorApplication
+            // read them once and handed them over through AdoptPreferences(); a test-mode launch keeps the defaults
+            // in memory and never writes the user's file, whatever was adopted.
+            if (config.testMode)
+                m_persistPreferences = false;
 
             // Apply startup theme (CLI --theme override, else Ember Studio — matches hi-fi design)
             const std::string themeName = config.startupTheme.empty() ? "Ember Studio" : config.startupTheme;
@@ -783,6 +785,11 @@ namespace SparkEditor
             m_defaultDockLayoutResetRequested = false;
         }
 
+        // The toolbar strip follows the UI scale: a tree built, saved or restored from imgui.ini at another scale
+        // (Ctrl+=, a move to a monitor with a different DPI) would otherwise clip the toolbar buttons.
+        if (const ImGuiWindow* toolbarWindow = ImGui::FindWindowByName("##Toolbar"))
+            FitEditorToolbarNode(toolbarWindow->DockNode, Spark::Ui::Scale());
+
         // Menu bar is rendered inside the dockspace window
         RenderMainMenuBar();
 
@@ -793,6 +800,7 @@ namespace SparkEditor
         RenderPanels();
         RenderStartPage();
         m_notificationManager->Render();
+        RenderNotificationHistory();
         RenderAppearanceWindow();
         RenderModalDialogs();
         RenderRecoveryModal();
@@ -1075,19 +1083,27 @@ namespace SparkEditor
                          liveSelectedCount);
         }
 
-        // FPS is a warning below 30 and an error below 15; on the ember preview bar it stays readable instead.
+        // FPS below 30 is a warning and below 15 an error. Glyph and word carry it as well as colour, so the signal
+        // survives colour-vision deficiencies and the ember preview bar, where every label is TextOnAccent.
         const float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
+        Ui::Status fpsStatus = Ui::Status::Neutral;
+        if (fps < 15.0f)
+            fpsStatus = Ui::Status::Error;
+        else if (fps < 30.0f)
+            fpsStatus = Ui::Status::Warning;
         Ui::Role fpsRole = previewing ? Ui::Role::TextOnAccent : Ui::Role::TextPrimary;
-        if (!previewing && fps < 15.0f)
-            fpsRole = Ui::Role::ErrorText;
-        else if (!previewing && fps < 30.0f)
-            fpsRole = Ui::Role::WarningText;
+        if (!previewing && fpsStatus != Ui::Status::Neutral)
+            fpsRole = Ui::StatusTextRole(fpsStatus);
         ImGui::SameLine();
         Ui::VerticalSeparator();
         ImGui::SameLine();
         {
             Ui::ScopedFont mono(Ui::FontRole::Mono);
-            Ui::TextRole(fpsRole, "%3.0f FPS", fps);
+            if (fpsStatus == Ui::Status::Neutral)
+                Ui::TextRole(fpsRole, "%3.0f FPS", fps);
+            else
+                Ui::TextRole(fpsRole, "%s %3.0f FPS %s", Ui::StatusGlyph(fpsStatus), fps,
+                             fpsStatus == Ui::Status::Error ? "very low" : "low");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
                 ImGui::SetTooltip("Frame #%llu, %d assets in the database",
                                   static_cast<unsigned long long>(m_frameNumber), m_assetDatabaseSize);
@@ -1104,8 +1120,14 @@ namespace SparkEditor
             std::snprintf(bellLabel, sizeof(bellLabel), "%s %zu##bell", kBellGlyph, unread);
         else
             std::snprintf(bellLabel, sizeof(bellLabel), "%s##bell", kBellGlyph);
+        // On the ember preview bar the theme's hover and pressed surfaces would sit under TextOnAccent ink; the accent
+        // fill states are the surfaces that ink is specified against.
+        const Ui::Role hoverRole = previewing ? Ui::Role::AccentFillHover : Ui::Role::SurfaceHover;
+        const Ui::Role activeRole = previewing ? Ui::Role::AccentFillActive : Ui::Role::SurfaceSelected;
         {
             Ui::ScopedRoleColor buttonColor(ImGuiCol_Button, Ui::Role::SurfaceHover, 0.0f);
+            Ui::ScopedRoleColor hoverColor(ImGuiCol_ButtonHovered, hoverRole);
+            Ui::ScopedRoleColor activeColor(ImGuiCol_ButtonActive, activeRole);
             Ui::ScopedRoleColor textColor(ImGuiCol_Text, unread > 0 && !previewing ? Ui::Role::AccentText : quietRole);
             if (ImGui::SmallButton(bellLabel))
                 ImGui::OpenPopup("##notificationHistory");
@@ -1128,6 +1150,8 @@ namespace SparkEditor
         std::snprintf(scaleLabel, sizeof(scaleLabel), "%.0f%%##uiScale", Ui::UserScale() * 100.0f);
         {
             Ui::ScopedRoleColor buttonColor(ImGuiCol_Button, Ui::Role::SurfaceHover, 0.0f);
+            Ui::ScopedRoleColor hoverColor(ImGuiCol_ButtonHovered, hoverRole);
+            Ui::ScopedRoleColor activeColor(ImGuiCol_ButtonActive, activeRole);
             Ui::ScopedRoleColor textColor(ImGuiCol_Text, quietRole);
             if (ImGui::SmallButton(scaleLabel))
                 StepUiScale(0);
@@ -1314,6 +1338,28 @@ namespace SparkEditor
             CommitPreferenceChange();
     }
 
+    void EditorUI::RenderNotificationHistory()
+    {
+        namespace Ui = Spark::Ui;
+        constexpr const char* kPopup = "Notifications###SparkNotificationHistory";
+        if (m_notificationHistoryRequested)
+        {
+            m_notificationHistoryRequested = false;
+            ImGui::OpenPopup(kPopup);
+        }
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (ImGui::BeginPopup(kPopup))
+        {
+            {
+                Ui::ScopedFont strong(Ui::FontRole::Strong);
+                ImGui::TextUnformatted("Notifications");
+            }
+            ImGui::Separator();
+            m_notificationManager->RenderHistory();
+            ImGui::EndPopup();
+        }
+    }
+
     void EditorUI::CommitPreferenceChange()
     {
         EditorAppearanceWindow::ApplyPreferences(m_preferences);
@@ -1420,19 +1466,18 @@ namespace SparkEditor
         }
     }
 
-    void EditorUI::LoadPreferences()
+    void EditorUI::AdoptPreferences(EditorPreferences prefs, bool persist)
     {
-        if (!m_persistPreferences)
+        m_preferences = std::move(prefs);
+        m_persistPreferences = persist;
+    }
+
+    void EditorUI::FollowSystemAppearance()
+    {
+        if (m_preferences.appearance != "system")
             return;
-        std::string error;
-        const std::filesystem::path file = EditorPreferencesPath();
-        std::error_code existsError;
-        if (std::filesystem::exists(file, existsError) && !LoadEditorPreferences(file, m_preferences, &error))
-        {
-            Spark::SimpleConsole::GetInstance().LogWarning("Ignoring editor preferences: " + error);
-            m_preferences = EditorPreferences{};
-        }
-        EditorAppearanceWindow::NormalizePalette(m_preferences);
+        EditorTheme::SetAppearanceOverride(EditorAppearanceWindow::AppearanceOverrideFor(m_preferences.appearance));
+        m_currentTheme = EditorTheme::GetCurrentThemeName();
     }
 
     void EditorUI::SavePreferences()
@@ -1457,7 +1502,8 @@ namespace SparkEditor
         // Ctrl+0 and the status-bar reset return to Auto: the display scale with a 100 % user factor.
         m_preferences.uiScale =
             direction == 0 ? 0.0f : EditorAppearanceWindow::StepUserScale(m_preferences.uiScale, direction);
-        EditorTheme::SetUiScale(Spark::Ui::DpiScale(), m_preferences.uiScale > 0.0f ? m_preferences.uiScale : 1.0f);
+        // Only the user factor: a display-scale change queued for the same frame keeps its pending value.
+        Spark::Ui::RequestUserScale(m_preferences.uiScale > 0.0f ? m_preferences.uiScale : 1.0f);
         SavePreferences();
     }
 

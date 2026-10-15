@@ -198,6 +198,7 @@ namespace SparkEditor
                                              m_preferences.showStatusBar = !m_preferences.showStatusBar;
                                              SavePreferences();
                                          });
+        m_commandPalette->RegisterAction("Show Notifications", "Command", [this]() { OpenNotificationHistory(); });
         m_commandPalette->RegisterAction("Show Start Page", "Command", [this]() { OpenStartPage(); });
 
         // Transform tool commands

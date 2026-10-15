@@ -7,7 +7,9 @@
  * keeps the last kMaxHistory notifications with an unread count for the status-bar bell.
  *
  * Lifetime by severity: Info and Success last 4 s, Warning 8 s, Error stays until dismissed. Hovering or focusing a
- * toast pauses its timer. Toasts fade out only when Spark::Ui::ReduceMotion() is off.
+ * toast pauses its timer. Toasts fade out only when Spark::Ui::ReduceMotion() is off. Each toast is drawn in a
+ * window named after its id ("##Notification<id>"), so its hover and focus state stays with it when an older toast
+ * leaves the stack.
  *
  * Contract: game thread only (Show/Notify/Update/Render all touch ImGui-adjacent state). EditorUI owns the single
  * instance through a unique_ptr. Storage is two small vectors bounded by kMaxVisibleToasts and kMaxHistory; Render
@@ -85,7 +87,8 @@ namespace SparkEditor
         void Render();
 
         /**
-         * @brief Render the history list; call inside the status-bar bell popup. Marks everything read.
+         * @brief Render the history list; call inside a popup (the status-bar bell, or View > Notifications and
+         *        the command palette when the status bar is hidden). Marks everything read.
          */
         void RenderHistory();
 
@@ -98,16 +101,6 @@ namespace SparkEditor
          * @brief Notifications posted since the history was last opened.
          */
         std::size_t GetUnreadCount() const { return m_unread; }
-
-        /**
-         * @brief Notifications kept in the bell history.
-         */
-        std::size_t GetHistoryCount() const { return m_history.size(); }
-
-        /**
-         * @brief Reset the unread count without opening the history.
-         */
-        void MarkAllRead() { m_unread = 0; }
 
         /**
          * @brief Remove every visible toast; history is kept.

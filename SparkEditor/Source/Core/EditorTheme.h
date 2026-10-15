@@ -24,6 +24,7 @@
 #include "SparkUI/Tokens.h"
 
 #include <array>
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -244,6 +245,48 @@ namespace SparkEditor
         EditorThemeData() = default;
     };
 
+    /// @brief The roles DeriveLegacyThemeRoles fills for a palette written before the Ember Signal
+    ///        tokens existed. Status fills follow ThemeStatusFill order.
+    enum class LegacyThemeRole : std::uint8_t
+    {
+        ButtonDisabled,
+        MenuItem,
+        BorderStrong,
+        SurfaceOverlay,
+        SurfaceSelectedUnfocused,
+        TextInfo,
+        AccentHover,
+        AccentActive,
+        AccentText,
+        TextOnAccent,
+        StatusFillInfo,
+        StatusFillSuccess,
+        StatusFillWarning,
+        StatusFillError,
+        Appearance,
+        Count
+    };
+
+    /// @brief A set of LegacyThemeRole values, indexed by the enumerator.
+    using LegacyThemeRoleSet = std::bitset<static_cast<std::size_t>(LegacyThemeRole::Count)>;
+
+    /**
+     * @brief Fill the Ember Signal roles a pre-token palette does not set from the colours it does set.
+     *
+     * The one derivation shared by the code-defined legacy palettes (EditorTheme.cpp) and by legacy
+     * theme documents (ParseThemeDocument), so an imported file and the same palette defined in code
+     * always agree. Inputs are clamped to [0, 1] first, so a finite but huge imported value cannot
+     * overflow. Accent hover/active move 12 % towards white/black and keep the accent's alpha;
+     * status fills are the opaque background moved 15 % towards the opaque status text colour; the
+     * appearance is Light when the background's relative luminance is above 0.5.
+     *
+     * Defined in EditorThemeDocument.cpp, which is ImGui-free, so the theme-import fuzz target links it.
+     * Thread affinity: any thread; touches only @p theme.
+     * @param theme Theme completed in place.
+     * @param keep  Roles to leave as they are (a document that defines them); empty derives every role.
+     */
+    void DeriveLegacyThemeRoles(EditorThemeData& theme, const LegacyThemeRoleSet& keep = {});
+
     /**
  * @brief Theme registry and the EditorThemeData to Spark UI token / ImGui style adapter.
  */
@@ -315,17 +358,10 @@ namespace SparkEditor
         ///        appearance, metrics from the theme's style values.
         static Spark::Ui::Tokens ToTokens(const EditorThemeData& theme);
 
-        /// @brief Request a UI scale change (Windows WM_DPICHANGED, SDL display change, user scale).
-        /// @details Stored as pending on the current ImGui context and applied by
-        ///          ApplyPendingScale() at the start of the next frame, never mid-frame.
-        static void SetUiScale(float dpiScale, float userScale);
-
-        /// @brief Effective UI scale of the current context, clamp(dpi x user, 0.75, 3).
-        static float GetUiScale();
-
-        /// @brief Apply a pending UI scale change and re-map the current theme onto the rebuilt
-        ///        style. Call once per frame before ImGui::NewFrame().
-        /// @return True when a pending change was applied.
+        /// @brief Apply a pending UI scale change (Spark::Ui::RequestDpiScale / RequestUserScale) or
+        ///        a theme switched mid-frame, and re-map the current theme onto the rebuilt style.
+        ///        Call once per frame before ImGui::NewFrame().
+        /// @return True when anything pending was applied.
         static bool ApplyPendingScale();
 
         /// @brief Set the control density used by the built-in palettes and re-apply the theme.

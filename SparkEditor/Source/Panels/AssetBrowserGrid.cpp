@@ -220,11 +220,13 @@ namespace SparkEditor
                 drawList->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y),
                                   Spark::Ui::Col(Spark::Ui::Role::BorderStrong), radius);
 
+                // Folders take the next category colour after the file types (0-4 in GetFileTypeColor);
+                // a status role such as WarningText would make every folder read as a warning.
                 const char* icon = ICON_FA_FOLDER;
                 const ImVec2 iconSize = ImGui::CalcTextSize(icon);
                 drawList->AddText(ImVec2(pos.x + (size.x - iconSize.x) * 0.5f,
                                          pos.y + (size.y - iconSize.y) * 0.5f - Spark::Ui::Px(4.0f)),
-                                  Spark::Ui::Col(Spark::Ui::Role::WarningText), icon);
+                                  Spark::Ui::CategoryColor(5), icon);
 
                 ImGui::SetCursorScreenPos(pos);
                 ImGui::InvisibleButton(("##folder_" + folder).c_str(), size);

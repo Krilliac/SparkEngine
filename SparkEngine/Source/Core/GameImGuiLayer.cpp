@@ -23,6 +23,7 @@
 #include <SparkUI/Fonts.h>
 #include <SparkUI/Runtime.h>
 #include <SparkUI/Tokens.h>
+#include <SparkUI/Widgets.h>
 #include <Spark/UiTheme.h>
 
 #include <cstddef>
@@ -80,7 +81,10 @@ namespace Spark::GameImGui
             Ui::Tokens tokens = Ui::GenerateTokens(Ui::BuiltinSeed(Ui::PaletteId::Ember),
                                                    highContrast ? Ui::Appearance::HighContrast : Ui::Appearance::Dark,
                                                    Ui::Density::Standard);
+            // The HUD profile replaces the spacing only; High Contrast keeps its 3 px focus ring.
+            const float focusRing = tokens.metrics.focusRing;
             tokens.metrics = Ui::MetricsFor(Ui::Density::Standard, Ui::MetricsProfile::Hud);
+            tokens.metrics.focusRing = focusRing;
             if (!highContrast)
             {
                 tokens.color[static_cast<std::size_t>(Ui::Role::SurfaceBase)].a = kOverlayWindowAlpha;
@@ -134,6 +138,7 @@ namespace Spark::GameImGui
         g_appliedSettings = ReadOverlaySettings();
         Spark::Ui::Install(ImGui::GetCurrentContext(), BuildOverlayTokens(g_appliedSettings.highContrast), 1.0f,
                            g_appliedSettings.uiScale, g_appliedSettings.reduceMotion);
+        Spark::Ui::InstallFocusRing(ImGui::GetCurrentContext());
         const Spark::Ui::FontSet fonts = Spark::Ui::LoadFontSet(
             *io.Fonts, Spark::Ui::FindFontDirectory(Spark::RuntimePackage::GetExecutableDirectory()),
             Spark::Ui::ActiveTokens().type.body);

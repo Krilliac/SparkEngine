@@ -17,12 +17,12 @@
 #include <chrono>
 #include <ctime>
 #include <cstring>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #include <shlobj.h>
-#include "SparkUI/Runtime.h"
-#include "SparkUI/Widgets.h"
 #endif
 
 namespace fs = std::filesystem;
