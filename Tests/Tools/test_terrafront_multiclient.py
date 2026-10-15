@@ -956,7 +956,7 @@ def soak_logs(perf_until: float = SOAK_SECONDS, tick_ms: float = 4.0, downlink_k
             f"  movement: avg {tick_ms / 2:.3f} ms  peak {tick_ms:.3f} ms  (n=120)",
             f"  ai: avg {tick_ms / 2:.3f} ms  peak {tick_ms:.3f} ms  (n=120)",
             f"  measured total: {tick_ms:.3f} ms   headroom: {16.667 - tick_ms:.3f} ms (76%)"])
-        lines += entry(frame + 1, at + 0.6, "tf_bots", [f"    > [TF] bots active: {bots}  (tf_bots <0-32> to set)"])
+        lines += entry(frame + 1, at + 0.6, "tf_bots", [f"    > [TF] bots active: {bots}  (tf_bots <0-98> to set)"])
         at, frame = at + interval, frame + 10
     server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"))
     clients = []

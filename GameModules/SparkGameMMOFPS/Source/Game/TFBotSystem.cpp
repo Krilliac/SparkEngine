@@ -120,7 +120,7 @@ namespace Terrafront
                 },
                 "Chaos exercise mode: spawn N bots across all factions that scatter onto capture "
                 "points, fight, capture, place deployables and try vehicles to stress-test the server",
-                "TERRAFRONT", "tf_chaos <botcount 0-98> [seconds=300]");
+                "TERRAFRONT", "tf_chaos <botcount 0-" + std::to_string(kTFMaxBots) + "> [seconds=300]");
             m_chaosCmds = true;
         }
         if (!console.HasCommand("tf_validate"))
