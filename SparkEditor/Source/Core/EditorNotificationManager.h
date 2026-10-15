@@ -100,6 +100,18 @@ namespace SparkEditor
         void Render();
 
         /**
+         * @brief Render the visible toasts in the bottom-right of a screen-space area.
+         *
+         * The editor passes the central dock node, so toasts cover the scene or Start page instead of editable
+         * Inspector or Hierarchy fields. Width still follows ToastWidth() of the viewport, capped to the area.
+         * @param areaMinX Left edge of the area in screen coordinates.
+         * @param areaMinY Top edge of the area in screen coordinates.
+         * @param areaWidth Width of the area; a non-positive width or height falls back to the viewport work area.
+         * @param areaHeight Height of the area.
+         */
+        void Render(float areaMinX, float areaMinY, float areaWidth, float areaHeight);
+
+        /**
          * @brief Render the history list; call inside a popup (the status-bar bell, or View > Notifications and
          *        the command palette when the status bar is hidden). Marks everything read.
          */

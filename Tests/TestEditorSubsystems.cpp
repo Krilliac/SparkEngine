@@ -3563,6 +3563,58 @@ TEST(Gated_EditorNotificationManager_ToastWidthIsCappedByViewport)
     ImGui::SetCurrentContext(previous);
 }
 
+TEST(Gated_EditorNotificationManager_ToastStaysInsideTheGivenArea)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1920.0f, 1080.0f);
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    const Spark::Ui::Tokens tokens =
+        Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember), Spark::Ui::Appearance::Dark);
+    Spark::Ui::Install(context, tokens, 1.0f, 2.0f, false);
+
+    EditorNotificationManager notifications;
+    notifications.Notify(NotificationSeverity::Success, "Project opened",
+                         "EditorSmoke is ready. Recent scenes and the asset database were restored.");
+
+    // The editor's central dock at 200 %: the toast stays inside it, clear of the Inspector on the right.
+    const ImVec2 areaMin(440.0f, 190.0f);
+    const ImVec2 areaSize(460.0f, 560.0f);
+    ImGui::NewFrame();
+    notifications.Render(areaMin.x, areaMin.y, areaSize.x, areaSize.y);
+    const ImGuiWindow* toast = ImGui::FindWindowByName("##Notification1");
+    EXPECT_TRUE(toast != nullptr);
+    if (toast != nullptr)
+    {
+        EXPECT_GE(toast->Pos.x, areaMin.x);
+        EXPECT_GE(toast->Pos.y, areaMin.y);
+        EXPECT_LE(toast->Pos.x + toast->Size.x, areaMin.x + areaSize.x);
+        EXPECT_LE(toast->Pos.y + toast->Size.y, areaMin.y + areaSize.y);
+    }
+    ImGui::EndFrame();
+
+    // No central node yet (an empty area): the viewport work area is used.
+    ImGui::NewFrame();
+    notifications.Render(0.0f, 0.0f, 0.0f, 0.0f);
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    toast = ImGui::FindWindowByName("##Notification1");
+    EXPECT_TRUE(toast != nullptr);
+    if (toast != nullptr)
+    {
+        EXPECT_GT(toast->Pos.x + toast->Size.x, areaMin.x + areaSize.x);
+        EXPECT_LE(toast->Pos.x + toast->Size.x, viewport->WorkPos.x + viewport->WorkSize.x);
+    }
+    ImGui::EndFrame();
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
 TEST(Gated_InspectorVectorControl_FitsPanelWithoutChangingValues)
 {
     ImGuiContext* previous = ImGui::GetCurrentContext();

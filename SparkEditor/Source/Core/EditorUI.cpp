@@ -777,6 +777,8 @@ namespace SparkEditor
 
         ImGuiID dockspaceId = ImGui::GetID("SparkDockSpace");
         ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        ImVec2 toastAreaMin(0.0f, 0.0f);
+        ImVec2 toastAreaSize(0.0f, 0.0f);
 
         // Preserve a dock tree loaded from ImGui settings. A reset remains an
         // explicit destructive action, while a new workspace is still seeded.
@@ -800,6 +802,13 @@ namespace SparkEditor
                               Spark::Ui::Scale());
         }
 
+        // Toasts sit over the central dock (scene / Start page), not over editable side-dock fields.
+        if (const ImGuiDockNode* central = ImGui::DockBuilderGetCentralNode(dockspaceId))
+        {
+            toastAreaMin = central->Pos;
+            toastAreaSize = central->Size;
+        }
+
         // Menu bar is rendered inside the dockspace window
         RenderMainMenuBar();
 
@@ -809,7 +818,7 @@ namespace SparkEditor
         RenderToolbar();
         RenderPanels();
         RenderStartPage();
-        m_notificationManager->Render();
+        m_notificationManager->Render(toastAreaMin.x, toastAreaMin.y, toastAreaSize.x, toastAreaSize.y);
         RenderNotificationHistory();
         RenderAppearanceWindow();
         RenderModalDialogs();

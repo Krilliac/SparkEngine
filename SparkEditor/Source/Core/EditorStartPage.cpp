@@ -166,15 +166,27 @@ namespace SparkEditor
     StartPageAction EditorStartPage::DrawActions()
     {
         StartPageAction action = StartPageAction::None;
+
+        // The buttons flow onto a new row instead of clipping when the centre dock is narrow (high UI scale).
+        const float rowRight = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+        const auto placeNext = [rowRight](const char* label)
+        {
+            const ImGuiStyle& style = ImGui::GetStyle();
+            const float width = ImGui::CalcTextSize(label, nullptr, true).x + style.FramePadding.x * 2.0f;
+            ImGui::SameLine();
+            if (ImGui::GetCursorScreenPos().x + width > rowRight)
+                ImGui::NewLine();
+        };
+
         if (Ui::PrimaryButton(ICON_FA_FOLDER_OPEN "  Open Scene..."))
             action = StartPageAction::OpenScene;
-        ImGui::SameLine();
+        placeNext(ICON_FA_FILE "  New Scene");
         if (Ui::SecondaryButton(ICON_FA_FILE "  New Scene"))
             action = StartPageAction::NewScene;
-        ImGui::SameLine();
+        placeNext(ICON_FA_FOLDER_OPEN "  Open Project Folder");
         if (Ui::SecondaryButton(ICON_FA_FOLDER_OPEN "  Open Project Folder"))
             action = StartPageAction::OpenProjectFolder;
-        ImGui::SameLine();
+        placeNext(ICON_FA_UNDO "  Reset workspace layout");
         if (Ui::SecondaryButton(ICON_FA_UNDO "  Reset workspace layout"))
             action = StartPageAction::ResetLayout;
         ImGui::Spacing();

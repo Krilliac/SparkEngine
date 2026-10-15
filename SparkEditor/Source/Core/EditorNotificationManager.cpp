@@ -149,10 +149,23 @@ namespace SparkEditor
     // NOTE: Intentionally exceeds the 60-line guideline -- one linear measure-then-draw pass over the stack.
     void EditorNotificationManager::Render()
     {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        Render(viewport->WorkPos.x, viewport->WorkPos.y, viewport->WorkSize.x, viewport->WorkSize.y);
+    }
+
+    void EditorNotificationManager::Render(float areaMinX, float areaMinY, float areaWidth, float areaHeight)
+    {
         if (m_toasts.empty())
             return;
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (areaWidth <= 0.0f || areaHeight <= 0.0f)
+        {
+            areaMinX = viewport->WorkPos.x;
+            areaMinY = viewport->WorkPos.y;
+            areaWidth = viewport->WorkSize.x;
+            areaHeight = viewport->WorkSize.y;
+        }
         const float inset = Ui::Px(16.0f);
         const float spacing = Ui::Px(8.0f);
         const float padX = Ui::Px(12.0f);
@@ -161,7 +174,7 @@ namespace SparkEditor
         const float stripe = Ui::Px(3.0f);
         const float rounding = Ui::Px(6.0f);
         const float closeSide = std::max(Ui::Px(24.0f), ImGui::GetFrameHeight());
-        const float width = ToastWidth(viewport->WorkSize.x);
+        const float width = std::max(1.0f, std::min(ToastWidth(viewport->WorkSize.x), areaWidth - 2.0f * inset));
         const float textLeft = stripe + padX;
         const float wrapWidth = std::max(1.0f, width - textLeft - padX);
 
@@ -179,13 +192,13 @@ namespace SparkEditor
 
         // Newest toast sits lowest; older ones stack above it, so index 0 (oldest) is on top.
         std::array<float, kMaxVisibleToasts> tops{};
-        float bottom = viewport->WorkPos.y + viewport->WorkSize.y - inset;
+        float bottom = areaMinY + areaHeight - inset;
         for (std::size_t i = m_toasts.size(); i-- > 0;)
         {
             tops[i] = bottom - layouts[i].height;
             bottom = tops[i] - spacing;
         }
-        const float left = viewport->WorkPos.x + viewport->WorkSize.x - width - inset;
+        const float left = areaMinX + areaWidth - width - inset;
 
         const ImGuiWindowFlags flags =
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |

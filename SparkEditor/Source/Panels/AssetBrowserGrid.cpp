@@ -159,9 +159,15 @@ namespace SparkEditor
 
             if (!m_lastOperationMessage.empty())
             {
+                // Glyph plus message, shortened with an ellipsis (full text on hover) when the dock is narrow.
+                namespace Ui = Spark::Ui;
+                const Ui::Status status = m_lastOperationSucceeded ? Ui::Status::Success : Ui::Status::Error;
                 ImGui::SameLine();
-                Spark::Ui::StatusText(m_lastOperationSucceeded ? Spark::Ui::Status::Success : Spark::Ui::Status::Error,
-                                      "%s", m_lastOperationMessage.c_str());
+                ImGui::PushStyleColor(ImGuiCol_Text, Ui::ColV(Ui::StatusTextRole(status)));
+                ImGui::TextUnformatted(Ui::StatusGlyph(status));
+                ImGui::PopStyleColor();
+                ImGui::SameLine(0.0f, Ui::Em(0.4f));
+                Ui::TruncatedText(m_lastOperationMessage, 0.0f, Ui::StatusTextRole(status));
             }
 
             ImGui::Separator();
