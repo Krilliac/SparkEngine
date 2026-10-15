@@ -47,6 +47,12 @@ REFERENCE_DEF_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(?:<([^>]+)>|(\S+))(?:\s
 REFERENCE_USE_RE = re.compile(r"!?\[([^\]]+)\]\[([^\]]*)\]")
 AUTOLINK_RE = re.compile(r"<([^<>\s]+)>")
 EXPLICIT_ANCHOR_RE = re.compile(r"<(?:a|[^>]+)\b(?:id|name)\s*=\s*[\"']([^\"']+)[\"']", re.IGNORECASE)
+# A clean clone has no docs/api: it is generated, never tracked. A link into it cannot be
+# resolved there, and "target does not exist" would blame the author for a missing build step.
+GENERATED_UNCHECKED_ERROR = (
+    "generated-only target unchecked: docs/api has not been generated "
+    "(run docs/generate-api-docs.sh generate, then re-run with --generated-root docs/api --source-sha <sha>)"
+)
 SOURCE_LINE_RE = re.compile(r"^L([1-9][0-9]*)(?:-L([1-9][0-9]*))?$")
 
 
@@ -516,6 +522,8 @@ def resolve_link(
         path_cache[path_key] = (normalized, cached_error)
     if normalized is not None:
         logical = normalized.relative_to(repo_root.resolve()).as_posix()
+        if (logical == "docs/api" or logical.startswith("docs/api/")) and not generated_paths:
+            return GENERATED_UNCHECKED_ERROR
         if logical.startswith("docs/api/") and logical not in generated_paths:
             return "generated API target is absent from the exact manifest"
     if cached_error:
@@ -690,9 +698,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.json:
         print(json.dumps({"count": len(errors), "errors": errors}, indent=2))
     elif errors:
+        unchecked = sum(1 for error in errors if error["error"] == GENERATED_UNCHECKED_ERROR)
         print(f"Found {len(errors)} documentation contract error(s):")
+        if unchecked:
+            print(
+                f"  {unchecked} link(s) into generated docs/api were NOT checked because it is absent; "
+                "this run is a failure, not a pass."
+            )
         for error in errors[:100]:
             print(f"  {error['source']}:{error['line']}: {error['target']} - {error['error']}")
+    elif args.routes_only:
+        print(
+            "Documentation routes are valid. Links, anchors and generated API manifests were NOT "
+            "checked (--routes-only); this is not a documentation-health pass."
+        )
     else:
         print("All documentation links, anchors, manifests, and routes are valid.")
     return 1 if errors else 0
