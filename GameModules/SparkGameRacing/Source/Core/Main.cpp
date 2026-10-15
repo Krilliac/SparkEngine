@@ -297,7 +297,6 @@ void SparkGameRacingModule::OnImGui()
     m_aiDriver->RenderDebugUI();
     m_cameraSystem->RenderDebugUI();
     m_hudSystem->RenderDebugUI();
-    m_engineSystems->RenderDebugUI();
 }
 
 void SparkGameRacingModule::RegisterConsoleCommands()

@@ -6,7 +6,7 @@
 #include "RPGCharacterSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -407,7 +407,7 @@ namespace RPG
 
     void RPGCharacterSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Character System"))
         {
             ImGui::Text("Classes: %zu | Characters: %zu", m_classes.size(), m_characters.size());

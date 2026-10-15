@@ -4,7 +4,7 @@
 #include "Engine/Dialogue/DialogueSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -340,7 +340,7 @@ namespace RPG
 
     void RPGGameplayBridge::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Gameplay Bridge"))
         {
             ImGui::Text("Quest policy installed: %s",

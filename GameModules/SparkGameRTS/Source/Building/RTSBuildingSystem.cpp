@@ -8,7 +8,7 @@
 #include "Unit/RTSUnitSystem.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -418,7 +418,7 @@ namespace RTS
 
     void RTSBuildingSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RTS Building System"))
         {
             ImGui::Text("Active buildings: %zu", m_buildings.size());

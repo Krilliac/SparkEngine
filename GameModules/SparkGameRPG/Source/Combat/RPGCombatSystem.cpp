@@ -6,7 +6,7 @@
 #include "RPGCombatSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -306,7 +306,7 @@ namespace RPG
 
     void RPGCombatSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Combat System"))
         {
             ImGui::Text("Active encounters: %zu", GetActiveCombatCount());

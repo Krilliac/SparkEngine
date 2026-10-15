@@ -336,7 +336,6 @@ void SparkGameOpenWorldModule::OnImGui()
     m_settlementSystem->RenderDebugUI();
     m_gatheringSystem->RenderDebugUI();
     m_eventSystem->RenderDebugUI();
-    m_engineSystems->RenderDebugUI();
 }
 
 void SparkGameOpenWorldModule::RegisterConsoleCommands()

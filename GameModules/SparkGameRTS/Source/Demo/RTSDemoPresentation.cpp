@@ -16,7 +16,7 @@
 #include "Unit/RTSUnitSystem.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -51,7 +51,7 @@ namespace RTS
             float yawDegrees;
         };
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         ImU32 GetFactionColor(RTSFaction faction)
         {
             switch (faction)
@@ -328,7 +328,7 @@ namespace RTS
 
     void RTSDemoPresentation::RenderUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!m_units || !m_buildings || !m_resources || !m_commands || !m_fog || !m_match)
             return;
         if (ImGui::Begin("RTS Battlefield"))
@@ -364,7 +364,7 @@ namespace RTS
 
     void RTSDemoPresentation::DrawBattlefield()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         const ImVec2 available = ImGui::GetContentRegionAvail();
         const float extent = std::clamp(std::min(available.x, available.y), 280.0f, 680.0f);
         const ImVec2 canvasSize(extent, extent);

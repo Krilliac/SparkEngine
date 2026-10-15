@@ -8,7 +8,7 @@
 #include "Engine/AI/NavMesh.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -700,7 +700,7 @@ namespace RPG
 
     void RPGNPCSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG NPC System"))
         {
             ImGui::Text("NPCs: %zu | World Hour: %.1f", m_npcs.size(), m_worldHour);

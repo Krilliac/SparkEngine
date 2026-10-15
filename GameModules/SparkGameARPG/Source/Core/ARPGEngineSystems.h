@@ -87,7 +87,7 @@ namespace ARPG
         /** @brief Shutdown and release all subscriptions and registrations. */
         void Shutdown();
 
-        /** @brief Render debug UI panel (editor only). */
+        /** @brief Render the engine-integration debug panel (compiled in when SPARK_HAS_IMGUI is defined). */
         void RenderDebugUI();
 
         /**

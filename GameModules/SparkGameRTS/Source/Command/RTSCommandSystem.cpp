@@ -7,7 +7,7 @@
 #include "Unit/RTSUnitSystem.h"
 #include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -348,7 +348,7 @@ namespace RTS
 
     void RTSCommandSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RTS Command System"))
         {
             ImGui::Text("Selected units: %zu", m_selectedUnits.size());

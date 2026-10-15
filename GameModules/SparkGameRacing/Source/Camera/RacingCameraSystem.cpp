@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -299,7 +299,7 @@ namespace Racing
 
     void RacingCameraSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Camera"))
             return;
 

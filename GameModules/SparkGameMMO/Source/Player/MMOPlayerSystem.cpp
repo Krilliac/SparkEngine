@@ -17,7 +17,7 @@
 
 #include "Engine/World/SpatialGrid.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -553,7 +553,7 @@ namespace MMO
 
     void MMOPlayerSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO Players"))
             return;
 

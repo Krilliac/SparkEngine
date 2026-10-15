@@ -6,7 +6,7 @@
 #include "RPGDialogueSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -289,7 +289,7 @@ namespace RPG
 
     void RPGDialogueSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Dialogue System"))
         {
             ImGui::Text("Dialogue Trees: %zu", m_trees.size());

@@ -8,7 +8,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -1396,7 +1396,7 @@ namespace MMO
 
     void MMOPersistenceSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Persistence System"))
         {
             ImGui::Text("Status: %s", m_initialized ? "Connected" : "Offline");

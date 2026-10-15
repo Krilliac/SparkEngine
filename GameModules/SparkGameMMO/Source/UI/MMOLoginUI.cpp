@@ -9,7 +9,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -91,7 +91,7 @@ namespace MMO
 
     void MMOLoginUI::RenderUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         switch (m_state)
         {
         case LoginUIState::Login:
@@ -114,7 +114,7 @@ namespace MMO
 
     void MMOLoginUI::RenderLoginScreen()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         ImGui::SetNextWindowSize(ImVec2(400, 320), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
 
@@ -231,7 +231,7 @@ namespace MMO
 
     void MMOLoginUI::RenderCharacterSelectScreen()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!m_charSys || !m_accountSys)
             return;
 
@@ -352,7 +352,7 @@ namespace MMO
 
     void MMOLoginUI::RenderCharacterCreateScreen()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!m_charSys)
             return;
 
@@ -521,7 +521,7 @@ namespace MMO
 
     void MMOLoginUI::RenderEnteringWorldScreen()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         ImGui::SetNextWindowSize(ImVec2(300, 100), ImGuiCond_Always);
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 

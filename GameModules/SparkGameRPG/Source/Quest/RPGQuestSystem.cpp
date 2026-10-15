@@ -6,7 +6,7 @@
 #include "RPGQuestSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -324,7 +324,7 @@ namespace RPG
 
     void RPGQuestSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Quest System"))
         {
             ImGui::Text("Quests: %zu", m_quests.size());

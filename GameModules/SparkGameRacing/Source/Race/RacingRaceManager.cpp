@@ -10,7 +10,7 @@
 #include <cmath>
 #include <unordered_set>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -496,7 +496,7 @@ namespace Racing
 
     void RacingRaceManager::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Race Manager"))
             return;
 

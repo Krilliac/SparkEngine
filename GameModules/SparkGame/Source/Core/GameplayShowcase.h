@@ -77,7 +77,7 @@ class GameplayShowcase
      */
     void Update(float deltaTime);
 
-    /** @brief Render debug UI overlay (requires ENABLE_EDITOR / ImGui) */
+    /** @brief Render debug UI overlay (compiled in when SPARK_HAS_IMGUI is defined) */
     void RenderDebugUI();
 
     // --- Console command handlers ---

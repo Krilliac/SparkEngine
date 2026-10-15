@@ -6,7 +6,7 @@
 #include "OWSettlementSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -453,7 +453,7 @@ namespace OpenWorld
 
     void OWSettlementSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Settlements"))
             return;
 

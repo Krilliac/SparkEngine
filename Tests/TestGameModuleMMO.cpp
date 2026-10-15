@@ -23,6 +23,7 @@
 #include "../GameModules/SparkGameMMO/Source/WorldBoss/MMOWorldBossSystem.h"
 
 #include "../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h"
+#include "ModuleImGuiTestFrame.h"
 
 #ifdef ENABLE_NETWORKING
 #include "../GameModules/SparkGameMMO/Source/Player/MMOEntityEventCodec.h"
@@ -408,6 +409,23 @@ TEST(MMO_ChatSystem_SendMessage)
     sys.Initialize(nullptr);
 
     EXPECT_NO_THROW(sys.SendMessage(ChatChannel::Global, "Hello world!"));
+    sys.Shutdown();
+}
+
+TEST(MMO_ChatSystem_DebugUIDrawsWithImGui)
+{
+    // The chat panel is in-game UI: with ImGui linked it must lay out its header, counters and
+    // the 200px history child, not compile down to an empty function.
+    MMOChatSystem sys;
+    EXPECT_TRUE(sys.Initialize(nullptr));
+    sys.SendMessage(ChatChannel::Global, "Hello from the debug panel");
+    {
+        SparkTest::ModuleImGuiTestFrame frame;
+        const float before = ImGui::GetCursorPosY();
+        ImGui::SetNextItemOpen(true);
+        sys.RenderDebugUI();
+        EXPECT_GT(ImGui::GetCursorPosY() - before, 200.0f);
+    }
     sys.Shutdown();
 }
 

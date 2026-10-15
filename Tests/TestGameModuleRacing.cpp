@@ -18,6 +18,7 @@
 #include "../GameModules/SparkGameRacing/Source/Core/RacingPersistence.h"
 #include "../GameModules/SparkGameRacing/Source/Core/RacingRaceFlow.h"
 #include "../GameModules/SparkGameRacing/Source/HUD/RacingHUDSystem.h"
+#include "ModuleImGuiTestFrame.h"
 
 #ifdef SPARK_TEST_HAS_PHYSICS
 #include "RacingPhysicsTestWorld.h"
@@ -249,6 +250,23 @@ TEST(Racing_TrackSystem_GetTrackCount)
     sys.Initialize(nullptr);
 
     EXPECT_GT(sys.GetTrackCount(), 0u);
+    sys.Shutdown();
+}
+
+TEST(Racing_TrackSystem_DebugUIDrawsWithImGui)
+{
+    // The track panel is in-game UI: with ImGui linked it must lay out its header and rows,
+    // not compile down to an empty function.
+    RacingTrackSystem sys;
+    EXPECT_TRUE(sys.Initialize(nullptr));
+    sys.LoadDemoTrack(0);
+    {
+        SparkTest::ModuleImGuiTestFrame frame;
+        const float before = ImGui::GetCursorPosY();
+        ImGui::SetNextItemOpen(true);
+        sys.RenderDebugUI();
+        EXPECT_GT(ImGui::GetCursorPosY() - before, ImGui::GetTextLineHeightWithSpacing() * 5.0f);
+    }
     sys.Shutdown();
 }
 

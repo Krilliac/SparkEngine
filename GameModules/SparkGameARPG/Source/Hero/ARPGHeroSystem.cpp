@@ -6,7 +6,7 @@
 #include "ARPGHeroSystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -314,7 +314,7 @@ namespace ARPG
 
     void ARPGHeroSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("ARPG Hero System"))
         {
             ImGui::Text("Classes: %zu | Heroes: %zu", m_classDefs.size(), m_heroes.size());

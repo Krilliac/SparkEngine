@@ -12,7 +12,7 @@
 #include "WaveSpawner.h"
 #include "Projectiles/WeaponStats.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -171,7 +171,7 @@ void Game::UpdateArenaAutopilot(float dt)
 
 void Game::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
     if (!ImGui::CollapsingHeader("Spark Arena", ImGuiTreeNodeFlags_DefaultOpen))
     {
         return;

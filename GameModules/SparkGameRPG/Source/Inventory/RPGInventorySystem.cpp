@@ -6,7 +6,7 @@
 #include "RPGInventorySystem.h"
 #include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -509,7 +509,7 @@ namespace RPG
 
     void RPGInventorySystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Inventory System"))
         {
             ImGui::Text("Registered Items: %zu", m_items.size());
