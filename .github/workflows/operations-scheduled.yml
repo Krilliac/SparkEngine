@@ -1,8 +1,11 @@
-# Scheduled operations rehearsal: recovery drill, server soak and NullRHI soak.
+# Scheduled operations rehearsal: recovery drill, server soak, NullRHI soaks
+# (Linux and Windows), observability canary and the Terrafront 30-minute soak.
 #
 # DATA-120 needs the backup/restore and recovery drills rehearsed regularly,
-# OPS-110 needs a 30-minute release smoke plus a longer scheduled server soak,
-# and PERF-100 needs a >= 1 h NullRHI soak. Each job builds the exact commit
+# OPS-110 needs a 30-minute release smoke plus a longer scheduled server soak
+# and an observability canary, PERF-100 and HEAD-220 need a >= 1 h NullRHI soak
+# (Linux and Windows), and TF-110 needs a scheduled 30-minute Terrafront soak.
+# Each job builds the exact commit
 # it was triggered on and passes that SHA to the harness, which refuses a
 # server that reports any other commit or a dirty tree. Every job is blocking
 # for this workflow (no continue-on-error): a red run is an operations
@@ -238,4 +241,186 @@ jobs:
           ops-evidence/
           nullrhi-soak-*.log
         if-no-files-found: error
+        retention-days: 90
+
+  # HEAD-220 / PERF-100: the soak row of record is the Windows NullRHI host.
+  # run_nullrhi_soak.py samples it through kernel32 (private commit and the
+  # main thread's cycle count) and writes --report only: no Windows soak metric
+  # row is defined yet, so --out is refused on Windows by design.
+  headless-windows-soak:
+    name: "Windows NullRHI soak"
+    runs-on: windows-2022
+    timeout-minutes: 300
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the exact commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+    - name: Configure Windows Shipping
+      shell: bash
+      run: |
+        set -o pipefail
+        cmake --preset windows-shipping 2>&1 | tee windows-nullrhi-soak-configure.log
+
+    # --parallel 1 for the same MSBuild /m x cl /MP reason as build-windows-shipping.
+    - name: Build the headless host and SparkGameFPS
+      shell: bash
+      run: |
+        set -o pipefail
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 --target SparkEngine SparkGameFPS \
+          2>&1 | tee windows-nullrhi-soak-build.log
+        test -f build/windows-shipping/bin/MinSizeRel/SparkEngine.exe
+        test -f build/windows-shipping/bin/MinSizeRel/SparkGameFPS.dll
+
+    - name: Run the one-hour Windows NullRHI soak
+      shell: bash
+      run: |
+        mkdir -p ops-evidence
+        python tools/perf-budget/run_nullrhi_soak.py --engine build/windows-shipping/bin/MinSizeRel/SparkEngine.exe \
+          --module build/windows-shipping/bin/MinSizeRel/SparkGameFPS.dll --duration 3600 \
+          --expected-sha "${{ github.sha }}" --report ops-evidence/windows-nullrhi-soak-report.json
+
+    - name: Upload Windows NullRHI soak report
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: windows-nullrhi-soak-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          ops-evidence/
+          windows-nullrhi-soak-*.log
+        if-no-files-found: error
+        retention-days: 90
+
+  # OPS-110: the observability-labelled tests plus a real-server soak labelled
+  # server-soak, on linux-gcc-release. The soak test is told the exact commit,
+  # so a server that reports another commit or a dirty tree fails it.
+  observability-canary:
+    name: "Observability canary"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the exact commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Linux GCC Release
+      run: |
+        set -o pipefail
+        cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON -DENABLE_NETWORKING=ON \
+          2>&1 | tee observability-canary-configure.log
+
+    - name: Build the observability tests and server
+      run: |
+        set -o pipefail
+        cmake --build build/linux-gcc-release --target SparkTests SparkServer SparkGame --parallel "$(nproc)" \
+          2>&1 | tee observability-canary-build.log
+
+    - name: Run the observability tests
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-gcc-release -L '^observability$' --no-tests=error --output-on-failure \
+          2>&1 | tee observability-canary-tests.log
+
+    - name: Run the server soak label against the exact commit
+      env:
+        SPARK_SERVER_SOAK_EXPECTED_SHA: ${{ github.sha }}
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-gcc-release -L '^server-soak$' --no-tests=error --output-on-failure \
+          2>&1 | tee observability-canary-server-soak.log
+        mkdir -p ops-evidence
+        cp build/linux-gcc-release/server-soak-summary.json ops-evidence/server-soak-summary.json
+
+    - name: Upload observability canary evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: observability-canary-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          ops-evidence/
+          observability-canary-*.log
+        if-no-files-found: error
+        retention-days: 90
+
+  # TF-110: the 30-minute Terrafront soak (CTest TerrafrontSoak_30Min, label
+  # terrafront-soak-long). build.yml has no schedule trigger, so the long soak
+  # lives here. The selection is pinned to exactly that label before it runs.
+  terrafront-soak:
+    name: "Terrafront 30-minute soak"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout the exact commit
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+
+    - name: Configure Terrafront process tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release -DBUILD_TESTS=ON -DBUILD_GAME_MODULES=ON \
+          -DENABLE_NETWORKING=ON -DSPARK_HEADLESS_SUPPORT=ON \
+          -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON 2>&1 | tee terrafront-soak-configure.log
+
+    - name: Build Terrafront processes and tests
+      run: |
+        set -euo pipefail
+        cmake --build build/linux-gcc-release --target SparkEngine SparkGameMMOFPS SparkTests \
+          --parallel 2 2>&1 | tee terrafront-soak-build.log
+
+    - name: Pin the Terrafront long-soak selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error -L '^terrafront-soak-long$' > terrafront-soak-long-selection.json
+        python3 Tools/Terrafront/check_selection.py terrafront-soak-long-selection.json --label terrafront-soak-long
+
+    - name: Run the Terrafront 30-minute soak
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^terrafront-soak-long$' \
+          --no-tests=error --output-on-failure --output-junit terrafront-soak-long.xml \
+          2>&1 | tee terrafront-soak-long-tests.log
+
+    - name: Upload Terrafront soak summaries and audit logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: terrafront-soak-long-${{ github.sha }}-${{ github.run_attempt }}
+        if-no-files-found: error
+        path: |
+          terrafront-soak-*.log
+          terrafront-soak-long-selection.json
+          build/linux-gcc-release/terrafront-soak-long.xml
+          build/linux-gcc-release/Testing/Temporary/LastTest.log
+          build/linux-gcc-release/Testing/terrafront-*/**/summary.json
+          build/linux-gcc-release/Testing/terrafront-*/**/exec_audit.log
+          build/linux-gcc-release/Testing/terrafront-*/**/stdout.log
+          build/linux-gcc-release/Testing/terrafront-*/**/stderr.log
         retention-days: 90

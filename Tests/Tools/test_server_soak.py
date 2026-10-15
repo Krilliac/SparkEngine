@@ -201,6 +201,90 @@ class DrainSequenceTests(unittest.TestCase):
         self.assertTrue(evidence.draining_ready_false)
 
 
+class BudgetFileTests(unittest.TestCase):
+    """tools/ops/server-soak-budgets.json is the versioned source of the soak defaults."""
+
+    def write_budgets(self, mutate=None, raw: bytes | None = None) -> Path:
+        document = json.loads(soak_tool.DEFAULT_BUDGETS_PATH.read_text(encoding="utf-8"))
+        if mutate is not None:
+            mutate(document)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "budgets.json"
+        path.write_bytes(raw if raw is not None else json.dumps(document).encode("utf-8"))
+        return path
+
+    def test_shipped_file_keeps_the_provisional_defaults(self) -> None:
+        budgets = soak_tool.load_budgets()
+        self.assertTrue(budgets.version)
+        self.assertEqual(budgets.values, {
+            "rssSlopeBytesPerHour": 64 * 1024 * 1024, "rssGrowthBytes": 32 * 1024 * 1024, "tickP95Us": 8000,
+            "tickP99Us": 16000, "netQueueSlopePerHour": 3600, "netQueueCap": 4096, "minTickRateFraction": 0.5})
+        for key, rationale in budgets.rationales.items():
+            self.assertGreater(len(rationale), 20, key)
+
+    def test_config_defaults_come_from_the_file(self) -> None:
+        config = soak_tool.SoakConfig()
+        self.assertEqual(config.max_rss_slope_bytes_per_hour, 64 * 1024 * 1024)
+        self.assertEqual(config.max_rss_growth_bytes, 32 * 1024 * 1024)
+        self.assertEqual((config.max_tick_p95_us, config.max_tick_p99_us), (8000, 16000))
+        self.assertEqual(config.max_net_queue_slope_per_hour, 3600.0)
+        self.assertEqual(config.net_queue_cap, 4096)
+        self.assertEqual(config.min_tick_rate_fraction, 0.5)
+
+    def test_sha256_ignores_line_endings(self) -> None:
+        text = soak_tool.DEFAULT_BUDGETS_PATH.read_bytes().replace(b"\r\n", b"\n")
+        lf = soak_tool.load_budgets(self.write_budgets(raw=text))
+        crlf = soak_tool.load_budgets(self.write_budgets(raw=text.replace(b"\n", b"\r\n")))
+        self.assertEqual(lf.sha256, crlf.sha256)
+        self.assertEqual(len(lf.sha256), 64)
+
+    def test_missing_file_is_rejected(self) -> None:
+        with self.assertRaisesRegex(soak_tool.SoakError, "cannot be read"):
+            soak_tool.load_budgets(Path(tempfile.gettempdir()) / "no-such-spark-soak-budgets.json")
+
+    def test_unversioned_file_is_rejected(self) -> None:
+        for name, mutate in (("no version", lambda d: d.pop("version")),
+                             ("blank version", lambda d: d.update(version="  ")),
+                             ("no schemaVersion", lambda d: d.pop("schemaVersion")),
+                             ("wrong schema", lambda d: d.update(schema="other/1"))):
+            with self.subTest(name=name), self.assertRaisesRegex(soak_tool.SoakError, "unversioned"):
+                soak_tool.load_budgets(self.write_budgets(mutate))
+
+    def test_malformed_budgets_are_rejected(self) -> None:
+        for name, mutate in (("missing budget", lambda d: d["budgets"].pop("tickP99Us")),
+                             ("extra budget", lambda d: d["budgets"].update(extra={"value": 1, "rationale": "x"})),
+                             ("zero value", lambda d: d["budgets"]["tickP99Us"].update(value=0)),
+                             ("bool value", lambda d: d["budgets"]["tickP99Us"].update(value=True)),
+                             ("no rationale", lambda d: d["budgets"]["tickP99Us"].pop("rationale"))):
+            with self.subTest(name=name), self.assertRaises(soak_tool.SoakError):
+                soak_tool.load_budgets(self.write_budgets(mutate))
+        with self.assertRaises(soak_tool.SoakError):
+            soak_tool.load_budgets(self.write_budgets(raw=b"[]"))
+        with self.assertRaises(soak_tool.SoakError):
+            soak_tool.load_budgets(self.write_budgets(raw=b"{"))
+
+    def test_main_fails_when_the_budget_file_is_missing(self) -> None:
+        stderr = io.StringIO()
+        with mock.patch.object(soak_tool, "DEFAULT_BUDGETS_PATH", Path(tempfile.gettempdir()) / "no-such.json"), \
+                redirect_stderr(stderr):
+            self.assertEqual(soak_tool.main(["--server", "x", "--module", "y"]), 1)
+        self.assertIn("server_soak: FAIL: budget file", stderr.getvalue())
+
+    def test_summary_records_version_sha_and_overrides(self) -> None:
+        budgets = soak_tool.load_budgets()
+        outcome = soak_tool.SoakOutcome(samples=[(0.0, 100, 0), (1.0, 100, 60)],
+                                        last_live_health={"tickP99Us": 700, "tickSamples": 60})
+        document = soak_tool.build_summary(outcome, FAST, SHA, "2026-10-14T00:00:00Z")
+        self.assertEqual(document["budgetFile"]["version"], budgets.version)
+        self.assertEqual(document["budgetFile"]["sha256"], budgets.sha256)
+        self.assertEqual(document["budgetFile"]["path"], "tools/ops/server-soak-budgets.json")
+        # FAST loosens only rssGrowthBytes; the summary must say so.
+        self.assertEqual(document["budgetFile"]["overrides"], {"rssGrowthBytes": 64 * 1024 * 1024})
+        self.assertEqual(soak_tool.build_summary(outcome, soak_tool.SoakConfig(), SHA, "t")["budgetFile"]["overrides"],
+                         {})
+
+
 class ConfigTests(unittest.TestCase):
     def test_defaults_validate(self) -> None:
         soak_tool.SoakConfig().validate()
@@ -407,7 +491,7 @@ class QueueTests(StandInServerCase):
         measurements = document["measurements"]
         self.assertEqual(measurements["netQueueOutSlopePerHour"], 0.0)
         self.assertEqual(measurements["netQueueOutPeak"], 5)
-        self.assertEqual(document["provisionalBudgets"]["netQueuePeakCeiling"], soak_tool.NET_QUEUE_CAP - 1)
+        self.assertEqual(document["provisionalBudgets"]["netQueuePeakCeiling"], 4096 - 1)
 
     @LINUX_ONLY
     def test_growing_outgoing_queue_fails(self) -> None:

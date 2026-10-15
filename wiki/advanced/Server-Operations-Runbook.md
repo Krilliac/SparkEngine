@@ -19,9 +19,10 @@ Scope limits:
   [Online Service Boundary](Online-Service-Boundary.md)). You run these
   processes on your own hosts. Nothing here describes a service the engine
   operates for you.
-- **SLOs and alert thresholds are provisional.** No versioned tick, memory, or
-  latency budget exists yet. The numbers below are harness guards and
-  suggested starting points, not service-level objectives.
+- **SLOs and alert thresholds are provisional.** The tick, memory, and
+  latency budgets are versioned in `tools/ops/server-soak-budgets.json`
+  (each with a rationale), but they are harness guards and suggested starting
+  points, not service-level objectives.
 - A local drill pass is precursor evidence only. The drill summary says so in
   its `evidenceScope` field. It is not a recorded release drill.
 
@@ -39,8 +40,11 @@ The `Operations schedule` workflow (`.github/workflows/operations-scheduled.yml`
 rehearses this on a schedule, each job on the exact commit it names:
 `recovery-drill` runs `ctest -L recovery-drill` on Linux and Windows nightly,
 `server-soak` runs the 30-minute release smoke nightly and a 4-hour soak weekly
-through `tools/ops/server_soak.py`, and `soak-scheduled` runs the one-hour
-NullRHI soak. Their summaries are uploaded as run artifacts. The workflow
+through `tools/ops/server_soak.py`, `soak-scheduled` runs the one-hour
+Linux NullRHI soak, `headless-windows-soak` runs the one-hour Windows NullRHI
+soak, `observability-canary` runs the `observability` CTest label and a
+real-server soak bound to the exact commit, and `terrafront-soak` runs the
+30-minute Terrafront soak. Their summaries are uploaded as run artifacts. The workflow
 existing is not evidence; only its run history is. It has not run yet.
 
 ## When to Use
@@ -234,14 +238,31 @@ The engine ships no alerting. Poll the health file from your own monitoring and
 alert on the step 2 signals. Provisional starting points, matching the harness
 guards:
 
-| Alert | Suggested starting point |
-|---|---|
-| Server down | Health snapshot stale for 3 s, or three status intervals |
-| Not serving | `ready=false` without `draining` for longer than your startup time |
-| Tick budget | `tickP99Us` above 16,000 us at 60 Hz, the soak harness guard |
-| Memory growth | RSS rising faster than 64 MiB per hour, the soak harness guard |
-| Queue growth | `netQueueIn` or `netQueueOut` rising faster than 3,600 messages per hour, or a queue peak of 4096, the soak harness guards |
-| Crash loop | `SparkOrchestrator status <id>` reports `quarantined` |
+| Alert | Suggested starting point | Budget in `tools/ops/server-soak-budgets.json` |
+|---|---|---|
+| Server down | Health snapshot stale for 3 s, or three status intervals; or `live=false` | none (drill `--stale-after`) |
+| Not serving | `ready=false` without `draining` for longer than your startup time | none |
+| Tick budget | `tickP95Us` above 8,000 us or `tickP99Us` above 16,000 us at 60 Hz, the soak harness guards | `tickP95Us`, `tickP99Us` |
+| Memory growth | RSS rising faster than 64 MiB per hour, or 32 MiB over the fit window, the soak harness guards | `rssSlopeBytesPerHour`, `rssGrowthBytes` |
+| Queue growth | `netQueueIn` or `netQueueOut` rising faster than 3,600 messages per hour, or a queue peak of 4096, the soak harness guards | `netQueueSlopePerHour`, `netQueueCap` |
+| Tick rate | Achieved tick rate under half the requested rate, the soak harness guard | `minTickRateFraction` |
+| Crash loop | `SparkOrchestrator status <id>` reports `quarantined` | none |
+
+The budget file carries a `version`; `tools/ops/server_soak.py` refuses to run
+without it and records the version and sha256 in its summary. The alerts one
+snapshot can decide (`server-down`, `not-serving`, `tick-p95-over-budget`,
+`tick-p99-over-budget`, `queue-peak-at-cap`) are evaluated by
+`tools/ops/evaluate_server_alerts.py`, which exits 2 when any is firing:
+
+```
+python3 tools/ops/evaluate_server_alerts.py server-health.json
+```
+
+The recovery drill's `alerts` scenario records one alert firing and then
+clearing: the ready server evaluates clear, the final `live=false` snapshot
+after a drain makes `server-down` fire, and the restarted server clears it
+again. Staleness is the drill's job and the two growth alerts are the soak's;
+a single snapshot cannot decide them.
 
 Tune these for your game before you rely on them. They are not SLOs.
 
@@ -319,6 +340,8 @@ loop reads on its next tick, so a drain always starts on the loop thread.
 | `Spark::Server::ServerHealth` (`SparkServer/src/ServerHealth.h`) | Health snapshot fields |
 | `tools/ops/server_recovery_drill.py` | Detect, diagnose, drain, restart, and recover drill |
 | `tools/ops/server_soak.py` | Long-run memory, network-queue and tick-budget soak |
+| `tools/ops/server-soak-budgets.json` | Versioned soak and alert budgets, each with a rationale |
+| `tools/ops/evaluate_server_alerts.py` | Evaluates the snapshot-decidable alerts against the budgets |
 | `tools/ops/validate_server_health.py` | Reference parser for the `spark-server-health/1` snapshot |
 | `SparkOrchestrator` | Single-host supervision: define, start, drain, restart, status |
 | `Terrafront::TFDatabase::CreateBackup` / `RestoreFromBackup` | TERRAFRONT database backup and restore |

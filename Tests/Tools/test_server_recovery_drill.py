@@ -8,7 +8,8 @@ contract (atomic health file, one JSON snapshot per stdout line, a stop file
 that drains then stops) on every platform, and can be told to never become
 ready, fail to come back after a restart, come back as a different build,
 come back without ticking, keep its health file changing after it was killed,
-skip the draining snapshot, or exit non-zero -- proving each failure mode
+skip the draining snapshot, exit non-zero, or report over-budget tick latency
+(from the first launch or only after a restart) -- proving each failure mode
 fails the drill and that a well-behaved server passes.
 
 RunbookParityTests keep wiki/advanced/Server-Operations-Runbook.md honest:
@@ -37,12 +38,14 @@ import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_DIR = REPO_ROOT / "tools" / "ops"
 sys.path.insert(0, str(TOOL_DIR))
 
 import server_recovery_drill as drill_tool  # noqa: E402
+import server_soak as soak_tool  # noqa: E402
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 OTHER_SHA = "fedcba9876543210fedcba9876543210fedcba98"
@@ -69,11 +72,13 @@ restarted = launch > 1
 commit = OTHER_SHA if fault == "restart_wrong_commit" and restarted else SHA
 
 def publish(live, ready, draining, stopping, ticks, echo=True):
+    slow = fault == "slow_always" or (fault == "slow_after_restart" and restarted)
+    p99 = 50000 if slow else 700
     record = {"schema": "spark-server-health/1", "live": live, "ready": ready, "draining": draining,
               "stopping": stopping, "port": 1, "players": 0,
               "ticks": ticks, "loadedModules": 1 if live else 0, "gameModule": "Stand-in" if live else "",
               "map": "drill", "error": "", "version": "0.9.0", "commit": commit, "treeState": "clean",
-              "tickSamples": ticks, "tickP50Us": 50, "tickP95Us": 500, "tickP99Us": 700, "tickMaxUs": 700,
+              "tickSamples": ticks, "tickP50Us": 50, "tickP95Us": 500, "tickP99Us": p99, "tickMaxUs": p99,
               "rssBytes": None, "netQueueIn": 0, "netQueueOut": 0, "netQueueInPeak": 0, "netQueueOutPeak": 0}
     text = json.dumps(record, separators=(",", ":"))
     if echo:
@@ -278,6 +283,34 @@ class HarnessTests(unittest.TestCase):
             elif time.monotonic() - quiet_since > 1.0:
                 break
             time.sleep(0.05)
+
+    def test_alerts_scenario_records_firing_then_clearing(self) -> None:
+        document = self.run_drill(scenarios=("alerts",))
+        self.assertEqual(document["verdict"], "pass", document["failures"])
+        alerts = document["scenarios"][0]
+        self.assertEqual(alerts["name"], "alerts")
+        self.assertEqual(alerts["diagnosis"], "alert-fired")
+        self.assertEqual([event["phase"] for event in alerts["alerts"]], ["baseline", "fault", "recovered"])
+        baseline, fault, recovered = alerts["alerts"]
+        self.assertEqual(baseline["firing"], [])
+        self.assertEqual((fault["live"], fault["firing"]), (False, ["server-down"]))
+        self.assertEqual((recovered["live"], recovered["ready"], recovered["firing"]), (True, True, []))
+
+    def test_alerts_scenario_is_part_of_the_default_drill(self) -> None:
+        self.assertIn("alerts", drill_tool.supported_scenarios())
+
+    def test_alert_already_firing_on_a_healthy_server_fails(self) -> None:
+        self.assertFailsWith(self.run_drill("slow_always", ("alerts",)), "alerts: alerts: the healthy server already fires")
+
+    def test_alert_still_firing_after_restart_fails(self) -> None:
+        document = self.run_drill("slow_after_restart", ("alerts",))
+        self.assertFailsWith(document, "alerts: alerts: ['tick-p99-over-budget'] still firing after the restart")
+        self.assertEqual(document["scenarios"][0]["alerts"][-1]["firing"], ["tick-p99-over-budget"])
+
+    def test_missing_budget_file_fails_before_launch(self) -> None:
+        with mock.patch.object(soak_tool, "DEFAULT_BUDGETS_PATH", Path(self._tmp.name) / "absent.json"):
+            with self.assertRaises(drill_tool.DrillError):
+                self.run_drill(scenarios=("crash",))
 
     def test_missing_drain_snapshot_fails(self) -> None:
         self.assertFailsWith(self.run_drill("no_drain", ("drain",)), "drain: drain: no live+draining snapshot")

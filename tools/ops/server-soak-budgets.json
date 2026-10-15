@@ -1,0 +1,44 @@
+{
+  "schema": "spark-server-soak-budgets/1",
+  "schemaVersion": 1,
+  "version": "1.0.0",
+  "status": "provisional",
+  "description": "Versioned ceilings for tools/ops/server_soak.py and tools/ops/evaluate_server_alerts.py. Provisional harness guards with headroom for shared-runner noise, not governed SLOs. Changing any value requires a version bump.",
+  "budgets": {
+    "rssSlopeBytesPerHour": {
+      "value": 67108864,
+      "unit": "bytes_per_hour",
+      "rationale": "Least-squares RSS slope over the post-warm-up window. 64 MiB/h absorbs allocator noise yet still trips a steady leak of a few KiB per tick (1 KiB/tick at 60 Hz is about 211 MiB/h)."
+    },
+    "rssGrowthBytes": {
+      "value": 33554432,
+      "unit": "bytes",
+      "rationale": "Peak-minus-first RSS in the fit window. 32 MiB bounds a one-off allocator step while a leak still shows as sustained growth."
+    },
+    "tickP95Us": {
+      "value": 8000,
+      "unit": "microseconds",
+      "rationale": "A 60 Hz tick has a 16.7 ms budget; p95 must fit inside half of it."
+    },
+    "tickP99Us": {
+      "value": 16000,
+      "unit": "microseconds",
+      "rationale": "A 60 Hz tick has a 16.7 ms budget; p99 must fit inside it."
+    },
+    "netQueueSlopePerHour": {
+      "value": 3600,
+      "unit": "messages_per_hour",
+      "rationale": "Reliable traffic is never dropped, so a growing queue depth is unbounded. One message per second of sustained growth reaches the 4096 cap in about 68 minutes."
+    },
+    "netQueueCap": {
+      "value": 4096,
+      "unit": "messages",
+      "rationale": "NetworkManager::kMaxQueuedMessages: Unreliable traffic past this depth is shed, so a queue peak at the cap means traffic was already being lost."
+    },
+    "minTickRateFraction": {
+      "value": 0.5,
+      "unit": "fraction_of_requested_tick_rate",
+      "rationale": "The achieved tick rate must average at least half of the requested rate; a lower rate means the server is falling behind."
+    }
+  }
+}

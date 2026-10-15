@@ -34,6 +34,14 @@ Launches SparkEngine exactly as collect_headless_result.py does
   ``[ready + warmup, ready + duration]``. The loop runs at most 60 Hz, so it
   cannot finish before ``ready + duration``: the window never includes
   teardown, whose frees would bias the slope downward.
+* Queue depth -- a host that reports its work-queue depth prints
+  ``SPARK_HEADLESS_QUEUE_DEPTH depth=N`` lines to stdout while it runs. The
+  newest value is sampled on the ``--sample-interval`` cadence and its
+  Theil-Sen slope over the same fit window must stay at or under
+  ``--max-queue-growth-per-hour``. This is a separate check from the memory
+  slope: a queue that grows without bound fails here even when its entries are
+  too small to move RSS. A host that prints no such record is reported as
+  ``not-measured`` (never as a pass), and the run is not failed for it.
 * Exit -- any non-zero status or signal death counts as a crash. A clean exit
   must still carry exactly one valid ``SPARK_HEADLESS_TICK_STATS`` record for
   exactly the requested frame count (parse_tick_stats), proving the loop ran
@@ -56,13 +64,12 @@ crashed (a truthful crash_count of 1) or that proved the full requested frame
 count through its exit record. A run killed as hung, or one that exited
 cleanly without that proof (for example a one-hour soak that quit after 30
 seconds), writes no result: a truncated soak is not a measurement. ``--report`` writes the full local
-diagnostic record (samples, raw slope, heartbeat gaps) for any duration.
+diagnostic record (samples, raw slope, queue-depth check, heartbeat gaps) for any duration.
 
 The PERF-100 soak row of record is Windows NullRHI. No Windows soak metric row
 is defined yet, so ``--out`` is refused on Windows and a Windows run writes
-``--report`` only, as precursor data. Unbounded queue growth inside the host
-shows up here only as a rising memory slope; there is no separate queue check.
-Results from either host are precursor evidence and carry no certification
+``--report`` only, as precursor data. Queue-depth growth has its own check (see
+above), independent of the memory slope. Results from either host are precursor evidence and carry no certification
 claim.
 """
 
@@ -108,6 +115,11 @@ MAX_THEIL_SEN_SAMPLES = 1500
 # absorb allocator noise in a two-minute fit window yet still trips on a
 # steady leak of a few KiB per tick (1 KiB/tick at 60 Hz is ~211 MiB/hour).
 DEFAULT_MAX_LEAK_BYTES_PER_HOUR = 64 * 1024 * 1024
+# Provisional, like the leak ceiling. One message per second of sustained growth,
+# the same rate tools/ops/server-soak-budgets.json allows a server network queue.
+DEFAULT_MAX_QUEUE_GROWTH_PER_HOUR = 3600.0
+_QUEUE_DEPTH_PREFIX = b"SPARK_HEADLESS_QUEUE_DEPTH"
+_QUEUE_DEPTH_RE = re.compile(rb"SPARK_HEADLESS_QUEUE_DEPTH depth=(0|[1-9][0-9]{0,9})\r?")
 _READY_RE = re.compile(r"^SPARK_MODULE_READY count=1\r?$", re.MULTILINE)
 _NULLRHI_RESOURCES_PREFIX = "SPARK_HEADLESS_NULLRHI_RESOURCES"
 _NULLRHI_RESOURCES_RE = re.compile(r"SPARK_HEADLESS_NULLRHI_RESOURCES live=(0|[1-9][0-9]{0,9})")
@@ -250,6 +262,7 @@ class SoakConfig:
     startup_timeout_s: float = 120.0
     teardown_timeout_s: float = 120.0
     max_leak_bytes_per_hour: float = float(DEFAULT_MAX_LEAK_BYTES_PER_HOUR)
+    max_queue_growth_per_hour: float = DEFAULT_MAX_QUEUE_GROWTH_PER_HOUR
 
     @property
     def frames(self) -> int:
@@ -262,7 +275,8 @@ class SoakConfig:
                             ("--heartbeat-timeout", self.heartbeat_timeout_s),
                             ("--startup-timeout", self.startup_timeout_s),
                             ("--teardown-timeout", self.teardown_timeout_s),
-                            ("--max-leak-bytes-per-hour", self.max_leak_bytes_per_hour)):
+                            ("--max-leak-bytes-per-hour", self.max_leak_bytes_per_hour),
+                            ("--max-queue-growth-per-hour", self.max_queue_growth_per_hour)):
             if not math.isfinite(value) or value <= 0:
                 raise CollectionError(f"{name} must be a positive finite number")
         if not math.isfinite(self.warmup_s) or self.warmup_s < 0:
@@ -291,6 +305,52 @@ class SoakOutcome:
     fit_sample_count: int = 0
     stats: TickStats | None = None
     nullrhi_live_resources: int | None = None
+    queue_samples: list[tuple[float, int]] = field(default_factory=list)
+    queue_slope_per_hour: float | None = None
+    queue_fit_sample_count: int = 0
+
+    @property
+    def queue_status(self) -> str:
+        """``measured`` once the host reported any queue depth, else ``not-measured``."""
+        return "measured" if self.queue_samples else "not-measured"
+
+
+class QueueDepthTail:
+    """Incrementally reads the newest ``SPARK_HEADLESS_QUEUE_DEPTH depth=N`` value from the host's stdout file.
+
+    Only bytes appended since the previous poll are read, so a long soak never
+    re-reads its whole stdout. A line cut by a concurrent write is held back
+    until its newline arrives. Owned and polled by the harness thread only.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._offset = 0
+        self._partial = b""
+
+    def poll(self) -> int | None:
+        """The newest depth in the bytes appended since the last poll, or None when there is none."""
+        try:
+            with self._path.open("rb") as stream:
+                stream.seek(self._offset)
+                chunk = stream.read(MAX_STDOUT_BYTES)
+        except OSError:
+            return None
+        self._offset += len(chunk)
+        lines = (self._partial + chunk).split(b"\n")
+        self._partial = lines.pop()
+        newest: int | None = None
+        for line in lines:
+            if line.startswith(_QUEUE_DEPTH_PREFIX):
+                match = _QUEUE_DEPTH_RE.fullmatch(line)
+                if match is not None:
+                    newest = int(match.group(1))
+        return newest
+
+
+def evaluate_queue_growth(samples: list[tuple[float, int]], config: SoakConfig) -> tuple[float | None, int]:
+    """Theil-Sen queue-depth slope in messages/hour over the fit window, or (None, n) with too few samples."""
+    return fit_leak_slope(samples, config.warmup_s, config.duration_s)
 
 
 def read_main_thread_status(pid: int) -> tuple[int | None, tuple[int, int] | None]:
@@ -418,10 +478,12 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
             process = subprocess.Popen(command, cwd=engine.parent, stdin=subprocess.DEVNULL, stdout=stdout_file,
                                        stderr=stderr_file)
         sampler = make_sampler(process.pid)
+        queue_tail = QueueDepthTail(stdout_path)
         try:
             launched_at = time.monotonic()
             ready_at: float | None = None
             last_heartbeat: tuple[int, ...] | None = None
+            latest_depth: int | None = None
             last_progress_at = launched_at
             next_sample_at = 0.0
             while process.poll() is None:
@@ -451,6 +513,11 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
                     elapsed_s = now - ready_at
                     if rss_bytes is not None and elapsed_s >= next_sample_at:
                         outcome.samples.append((elapsed_s, rss_bytes))
+                        depth = queue_tail.poll()
+                        if depth is not None:
+                            latest_depth = depth
+                        if latest_depth is not None:
+                            outcome.queue_samples.append((elapsed_s, latest_depth))
                         next_sample_at = elapsed_s + config.sample_interval_s
                     if elapsed_s > exit_deadline_s:
                         outcome.hung = True
@@ -500,7 +567,24 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
         outcome.failures.append(
             f"leak: RSS slope {outcome.slope_bytes_per_hour:.0f} B/h exceeds the provisional ceiling "
             f"{config.max_leak_bytes_per_hour:.0f} B/h")
+    _evaluate_queue(config, outcome)
     return outcome
+
+
+def _evaluate_queue(config: SoakConfig, outcome: SoakOutcome) -> None:
+    """Fail a growing host queue depth; a host that reported none is not-measured, not passed."""
+    if not outcome.queue_samples:
+        return
+    outcome.queue_slope_per_hour, outcome.queue_fit_sample_count = evaluate_queue_growth(outcome.queue_samples, config)
+    if outcome.queue_slope_per_hour is None:
+        if not outcome.crashed:
+            outcome.failures.append(
+                f"insufficient queue-depth samples: {outcome.queue_fit_sample_count} in the fit window "
+                f"[{config.warmup_s:g}s, {config.duration_s:g}s], need {MIN_FIT_SAMPLES}")
+    elif outcome.queue_slope_per_hour > config.max_queue_growth_per_hour:
+        outcome.failures.append(
+            f"queue: depth slope {outcome.queue_slope_per_hour:.0f} messages/h exceeds the provisional ceiling "
+            f"{config.max_queue_growth_per_hour:.0f} messages/h")
 
 
 def build_result(outcome: SoakOutcome, commit_sha: str, timestamp: str) -> dict[str, Any]:
@@ -557,6 +641,10 @@ def build_report(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | Non
         "sampleIntervalS": config.sample_interval_s,
         "heartbeatTimeoutS": config.heartbeat_timeout_s,
         "provisionalMaxLeakBytesPerHour": config.max_leak_bytes_per_hour,
+        "queueDepth": {"status": outcome.queue_status, "slopePerHour": outcome.queue_slope_per_hour,
+                       "fitSampleCount": outcome.queue_fit_sample_count,
+                       "provisionalMaxGrowthPerHour": config.max_queue_growth_per_hour,
+                       "samples": [[round(t, 3), depth] for t, depth in outcome.queue_samples]},
         "readyAfterS": outcome.ready_after_s,
         "exitStatus": outcome.exit_status,
         "crashed": outcome.crashed,
@@ -640,6 +728,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--teardown-timeout", type=float, default=defaults.teardown_timeout_s)
     parser.add_argument("--max-leak-bytes-per-hour", type=float, default=defaults.max_leak_bytes_per_hour,
                         help="provisional harness ceiling on the fitted RSS slope (not a budget)")
+    parser.add_argument("--max-queue-growth-per-hour", type=float, default=defaults.max_queue_growth_per_hour,
+                        help="provisional ceiling on the fitted host queue-depth slope (not a budget)")
     parser.add_argument("--expected-sha", help="full commit SHA of the measured build (required with --out)")
     parser.add_argument("--out", type=Path, help="validate_result JSON (requires --duration >= 3600)")
     parser.add_argument("--report", type=Path, help="full diagnostic report JSON (any duration)")
@@ -650,7 +740,8 @@ def main(argv: list[str] | None = None) -> int:
     config = SoakConfig(duration_s=args.duration, warmup_s=warmup_s, sample_interval_s=args.sample_interval,
                         heartbeat_timeout_s=args.heartbeat_timeout, startup_timeout_s=args.startup_timeout,
                         teardown_timeout_s=args.teardown_timeout,
-                        max_leak_bytes_per_hour=args.max_leak_bytes_per_hour)
+                        max_leak_bytes_per_hour=args.max_leak_bytes_per_hour,
+                        max_queue_growth_per_hour=args.max_queue_growth_per_hour)
     if args.module is not None:
         module = args.module
     else:
@@ -666,7 +757,8 @@ def main(argv: list[str] | None = None) -> int:
     summary = (f"{config.frames} frames over {config.duration_s:g}s, leak slope {slope} "
                f"({outcome.fit_sample_count} samples), crash_count={1 if outcome.crashed else 0}, "
                f"max heartbeat gap {outcome.max_heartbeat_gap_s:.2f}s, "
-               f"NullRHI live resources at shutdown {outcome.nullrhi_live_resources}")
+               f"NullRHI live resources at shutdown {outcome.nullrhi_live_resources}, "
+               f"queue depth {outcome.queue_status}")
     if outcome.failures:
         for failure in outcome.failures:
             print(f"run_nullrhi_soak: FAIL: {failure}", file=sys.stderr)

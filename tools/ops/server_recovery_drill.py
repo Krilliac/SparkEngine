@@ -17,6 +17,12 @@ and plays the operator's side using only the operator surface:
   The server's stdout health stream must show a ``live, draining,
   ready=false`` snapshot before ``stopping``, end on ``live=false,
   ready=false``, and the process must exit 0 within ``--stop-timeout``.
+* ``alerts`` -- the alert round trip. The ready server's snapshot is evaluated
+  with tools/ops/evaluate_server_alerts.py (the versioned budgets in
+  tools/ops/server-soak-budgets.json) and must fire nothing. The operator then
+  requests a graceful stop; the server's final ``live=false`` snapshot must make
+  ``server-down`` fire. After the restart the fresh ready snapshot must clear
+  every alert. Each evaluation is recorded in the scenario's ``alerts`` list.
 
 After every scenario the server is restarted with identical arguments. The
 restart must publish a fresh ``live+ready`` snapshot within
@@ -59,12 +65,14 @@ from server_soak import (  # noqa: E402 -- sibling tool, shared health contract
     scan_drain_sequence,
     write_json_atomic,
 )
+from evaluate_server_alerts import evaluate_alerts, firing_names  # noqa: E402 -- sibling tool, runbook alerts
+from server_soak import SoakBudgets, SoakError, load_budgets  # noqa: E402
 from validate_server_health import HealthContractError, build_identity_problem  # noqa: E402
 
 SUMMARY_SCHEMA = "spark-server-recovery-drill/1"
 EVIDENCE_SCOPE = "local-precursor: operator drill on an uncertified host; not a recorded release drill"
 POSIX_ONLY_SCENARIOS = {"wedge"}
-ALL_SCENARIOS = ("crash", "wedge", "drain")
+ALL_SCENARIOS = ("crash", "wedge", "drain", "alerts")
 POLL_S = 0.05
 
 
@@ -105,6 +113,7 @@ class ScenarioResult:
     stop_s: float | None = None
     recover_s: float | None = None
     exit_status: int | None = None
+    alerts: list[dict[str, Any]] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
 
     def fail(self, message: str) -> None:
@@ -149,6 +158,7 @@ class ServerHost:
         self.process: subprocess.Popen[bytes] | None = None
         self.launches = 0
         self.previous_mtime_ns: int | None = None
+        self.budgets: SoakBudgets | None = None
         self.stdout_path = root / "server-stdout-0.log"
         self.stderr_path = root / "server-stderr-0.log"
         self.stop_file = root / "stop-0"
@@ -316,7 +326,44 @@ def _run_drain(host: ServerHost, result: ScenarioResult) -> float:
     return fault_at
 
 
-SCENARIO_RUNNERS = {"crash": _run_crash, "wedge": _run_wedge, "drain": _run_drain}
+def _record_alert_state(host: ServerHost, result: ScenarioResult, phase: str,
+                        health: dict[str, Any] | None) -> list[str] | None:
+    """Evaluate ``health`` against the budgets, record the phase on the result, and return the firing alerts."""
+    assert host.budgets is not None
+    if health is None:
+        result.fail(f"alerts: no health snapshot to evaluate at phase {phase!r}")
+        return None
+    firing = firing_names(evaluate_alerts(health, host.budgets))
+    result.alerts.append({"phase": phase, "live": health["live"], "ready": health["ready"], "firing": firing})
+    return firing
+
+
+def _run_alerts(host: ServerHost, result: ScenarioResult) -> float:
+    # The tick percentiles cover no ticks until the server has ticked, so judge the baseline after ticks advance.
+    first = read_health(host.health_file)
+    if first is not None:
+        stalled = host.wait_ticks_advance(first)
+        if stalled is not None:
+            result.fail(f"alerts: baseline: {stalled}")
+    baseline = _record_alert_state(host, result, "baseline", read_health(host.health_file))
+    if baseline:
+        result.fail(f"alerts: the healthy server already fires {baseline}")
+    fault_at = _run_drain(host, result)
+    result.diagnosis = "alert-fired"
+    firing = _record_alert_state(host, result, "fault", read_health(host.health_file))
+    if firing is not None and "server-down" not in firing:
+        result.fail(f"alerts: server-down did not fire for the stopped server (firing: {firing})")
+    return fault_at
+
+
+def _confirm_alerts_cleared(host: ServerHost, result: ScenarioResult) -> None:
+    """After the restart the fresh snapshot must clear every alert the fault raised."""
+    firing = _record_alert_state(host, result, "recovered", read_health(host.health_file))
+    if firing:
+        result.fail(f"alerts: {firing} still firing after the restart")
+
+
+SCENARIO_RUNNERS = {"crash": _run_crash, "wedge": _run_wedge, "drain": _run_drain, "alerts": _run_alerts}
 
 
 def supported_scenarios() -> tuple[str, ...]:
@@ -324,13 +371,16 @@ def supported_scenarios() -> tuple[str, ...]:
 
 
 def run_drill(launcher: Sequence[str], module: Path, config: DrillConfig, scenarios: Sequence[str], *,
-              expected_sha: str | None = None, work_dir: Path | None = None) -> DrillOutcome:
+              expected_sha: str | None = None, work_dir: Path | None = None,
+              budgets: SoakBudgets | None = None) -> DrillOutcome:
     """Run the scenarios in order against one hosted server; drill failures are recorded, not raised."""
+    budgets = budgets if budgets is not None else load_budgets()
     outcome = DrillOutcome()
     with tempfile.TemporaryDirectory(prefix="spark-server-drill-") as tmp:
         root = work_dir if work_dir is not None else Path(tmp)
         root.mkdir(parents=True, exist_ok=True)
         host = ServerHost(launcher, module, root, config)
+        host.budgets = budgets
         host.health_file.unlink(missing_ok=True)
         try:
             host.launch()
@@ -350,7 +400,9 @@ def run_drill(launcher: Sequence[str], module: Path, config: DrillConfig, scenar
                 # Every runner leaves the server dead; only a correctly handled
                 # failure is followed by a restart.
                 if result.status == "pass":
-                    _recover(host, result, fault_at, outcome.identity["commit"])
+                    recovered = _recover(host, result, fault_at, outcome.identity["commit"])
+                    if recovered and name == "alerts":
+                        _confirm_alerts_cleared(host, result)
                 outcome.failures.extend(result.failures)
                 if result.status != "pass":
                     break
@@ -394,7 +446,7 @@ def build_summary(outcome: DrillOutcome, config: DrillConfig, commit_sha: str | 
         "scenarios": [{"name": result.name, "status": result.status, "diagnosis": result.diagnosis,
                        "lastSnapshotLive": result.last_snapshot_live, "detectS": result.detect_s,
                        "stopS": result.stop_s, "recoverS": result.recover_s, "exitStatus": result.exit_status,
-                       "failures": result.failures} for result in outcome.scenarios],
+                       "alerts": result.alerts, "failures": result.failures} for result in outcome.scenarios],
         "failures": outcome.failures,
     }
 
@@ -415,8 +467,12 @@ def drill(launcher: Sequence[str], module: Path, config: DrillConfig, scenarios:
             raise DrillError(f"scenario {name!r} needs POSIX job control and cannot run on {platform.system()}")
     if not module.is_file():
         raise DrillError(f"module {module} is not a file")
+    try:
+        budgets = load_budgets()
+    except SoakError as exc:
+        raise DrillError(str(exc)) from exc
     outcome = run_drill(launcher, module.resolve(), config, scenarios, expected_sha=expected_sha,
-                        work_dir=work_dir)
+                        work_dir=work_dir, budgets=budgets)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     document = build_summary(outcome, config, expected_sha.lower() if expected_sha else None, timestamp)
     if summary is not None:

@@ -60,6 +60,23 @@ while True:
     time.sleep(1 / 60)
 """
 
+# Windows stand-in host: the harness's end-to-end run on the kernel32 sampler.
+# "growth" prints a queue depth that rises 5 per second, "flat" one that holds,
+# "silent" prints none (a host that does not report its queue depth).
+WINDOWS_HOST = """\
+import sys, time
+mode, frames = sys.argv[1], int(sys.argv[2])
+print("SPARK_MODULE_READY count=1", flush=True)
+start = time.monotonic()
+for tick in range(frames):
+    elapsed = time.monotonic() - start
+    if mode != "silent" and tick % 6 == 0:
+        print(f"SPARK_HEADLESS_QUEUE_DEPTH depth={int(elapsed * 5) if mode == 'growth' else 4}", flush=True)
+    time.sleep(1 / 60)
+print("SPARK_HEADLESS_NULLRHI_RESOURCES live=0")
+print(f"SPARK_HEADLESS_TICK_STATS backend=null frames={frames} p50_us=90 p99_us=160 max_us=900 peak_rss_kib=30000")
+"""
+
 # Stand-in host: argv check, ready marker, a sleeping 60 Hz loop with an
 # optional per-tick fault hook (which may set live_resources), then the NullRHI
 # live-resource record and the tick-stats record with its own VmHWM.
@@ -104,6 +121,77 @@ def _outcome(**overrides: object) -> soak_tool.SoakOutcome:
     for key, value in overrides.items():
         setattr(outcome, key, value)
     return outcome
+
+
+# Fault hooks for the stand-in host: report a queue depth every sixth tick.
+QUEUE_FLAT = "if tick % 6 == 0:\n    print('SPARK_HEADLESS_QUEUE_DEPTH depth=4', flush=True)"
+QUEUE_GROWTH = ("if tick % 6 == 0:\n"
+                "    print(f'SPARK_HEADLESS_QUEUE_DEPTH depth={int(elapsed * 5)}', flush=True)")
+
+
+class QueueCheckTests(unittest.TestCase):
+    """Queue-depth tailing and the growth verdict, independent of the RSS slope."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "stdout.log"
+
+    def append(self, data: bytes) -> None:
+        with self.path.open("ab") as stream:
+            stream.write(data)
+
+    def test_tail_returns_the_newest_depth_since_the_last_poll(self) -> None:
+        self.append(b"boot\n")
+        tail = soak_tool.QueueDepthTail(self.path)
+        self.assertIsNone(tail.poll())
+        self.append(b"SPARK_HEADLESS_QUEUE_DEPTH depth=3\r\nnoise\nSPARK_HEADLESS_QUEUE_DEPTH depth=9\n")
+        self.assertEqual(tail.poll(), 9)
+        self.assertIsNone(tail.poll())
+
+    def test_tail_holds_back_a_line_cut_mid_write(self) -> None:
+        tail = soak_tool.QueueDepthTail(self.path)
+        self.append(b"SPARK_HEADLESS_QUEUE_DEPTH depth=1")
+        self.assertIsNone(tail.poll())
+        self.append(b"2\n")
+        self.assertEqual(tail.poll(), 12)
+
+    def test_tail_ignores_malformed_records_and_a_missing_file(self) -> None:
+        tail = soak_tool.QueueDepthTail(self.path)
+        self.assertIsNone(tail.poll())
+        self.append(b"SPARK_HEADLESS_QUEUE_DEPTH depth=-1\nSPARK_HEADLESS_QUEUE_DEPTH depth=01\n"
+                    b"SPARK_HEADLESS_QUEUE_DEPTH depth=5 extra\n SPARK_HEADLESS_QUEUE_DEPTH depth=6\n")
+        self.assertIsNone(tail.poll())
+
+    def verdict(self, samples: list[tuple[float, int]], **outcome_fields: object) -> soak_tool.SoakOutcome:
+        outcome = soak_tool.SoakOutcome(frames=1, queue_samples=samples, **outcome_fields)
+        soak_tool._evaluate_queue(FAST, outcome)
+        return outcome
+
+    def test_no_samples_is_not_measured_and_not_failed(self) -> None:
+        outcome = self.verdict([])
+        self.assertEqual((outcome.queue_status, outcome.failures), ("not-measured", []))
+
+    def test_flat_and_slowly_growing_depth_pass(self) -> None:
+        self.assertEqual(self.verdict([(0.5 + 0.1 * i, 7) for i in range(25)]).failures, [])
+        # One late single-message step is not sustained growth (Theil-Sen median).
+        self.assertEqual(self.verdict([(0.5 + 0.1 * i, 7 + (i // 20)) for i in range(25)]).failures, [])
+
+    def test_growth_over_the_ceiling_fails_with_the_slope(self) -> None:
+        outcome = self.verdict([(0.5 + 0.1 * i, 100 + i) for i in range(25)])
+        self.assertEqual(len(outcome.failures), 1)
+        self.assertTrue(outcome.failures[0].startswith("queue: depth slope 36000 messages/h exceeds"),
+                        outcome.failures)
+        self.assertAlmostEqual(outcome.queue_slope_per_hour, 36000.0, delta=1.0)
+
+    def test_too_few_samples_in_the_window_fail_unless_crashed(self) -> None:
+        samples = [(0.5 + 0.1 * i, 4) for i in range(3)]
+        self.assertTrue(self.verdict(samples).failures[0].startswith("insufficient queue-depth samples"))
+        self.assertEqual(self.verdict(samples, crashed=True).failures, [])
+
+    def test_ceiling_must_be_positive(self) -> None:
+        with self.assertRaisesRegex(CollectionError, "--max-queue-growth-per-hour"):
+            soak_tool.SoakConfig(max_queue_growth_per_hour=0.0).validate()
 
 
 class LeakFitTests(unittest.TestCase):
@@ -233,6 +321,34 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(report["failures"], [])
         self.assertEqual(report["nullrhiLiveResourcesAtShutdown"], 0)
         self.assertGreater(len(report["rssSamples"]), soak_tool.MIN_FIT_SAMPLES)
+
+    @LINUX_ONLY
+    def test_steady_run_without_queue_records_is_not_measured(self) -> None:
+        outcome = self.soak(self.engine())
+        self.assertEqual(outcome.failures, [])
+        self.assertEqual(outcome.queue_status, "not-measured")
+        report = json.loads(self.report.read_text(encoding="utf-8"))
+        self.assertEqual(report["queueDepth"]["status"], "not-measured")
+        self.assertIsNone(report["queueDepth"]["slopePerHour"])
+
+    @LINUX_ONLY
+    def test_flat_queue_depth_passes_and_is_reported(self) -> None:
+        outcome = self.soak(self.engine(QUEUE_FLAT))
+        self.assertEqual(outcome.failures, [])
+        self.assertEqual(outcome.queue_status, "measured")
+        self.assertEqual(outcome.queue_slope_per_hour, 0.0)
+        report = json.loads(self.report.read_text(encoding="utf-8"))
+        self.assertEqual(report["queueDepth"]["status"], "measured")
+        self.assertGreaterEqual(report["queueDepth"]["fitSampleCount"], soak_tool.MIN_FIT_SAMPLES)
+
+    @LINUX_ONLY
+    def test_growing_queue_depth_fails_without_moving_rss(self) -> None:
+        # 5 messages per second is 18000/hour; the entries are an int, so RSS stays flat.
+        outcome = self.soak(self.engine(QUEUE_GROWTH))
+        self.assertEqual([f for f in outcome.failures if not f.startswith("queue:")], [], outcome.failures)
+        self.assertTrue(any(f.startswith("queue: depth slope") for f in outcome.failures), outcome.failures)
+        self.assertLess(outcome.slope_bytes_per_hour, FAST.max_leak_bytes_per_hour)
+        self.assertGreater(outcome.queue_slope_per_hour, FAST.max_queue_growth_per_hour)
 
     @LINUX_ONLY
     def test_resources_held_past_device_shutdown_fail(self) -> None:
@@ -452,6 +568,34 @@ class WindowsSamplerTests(unittest.TestCase):
         document = json.loads(report.read_text(encoding="utf-8"))
         self.assertEqual(document["memorySeries"], "PrivateUsage")
         self.assertIn("Windows NullRHI host", document["evidenceScope"])
+
+    def run_windows_host(self, mode: str) -> soak_tool.SoakOutcome:
+        host = self.root / "host.py"
+        host.write_text(WINDOWS_HOST, encoding="utf-8")
+        module = self.root / "SparkGame.dll"
+        module.write_bytes(b"MZ")
+        engine = self.root / "SparkEngine.exe"
+        engine.write_bytes(b"MZ")
+        report = self.root / "report.json"
+        command = [sys.executable, "-B", str(host), mode, str(FAST.frames)]
+        with mock.patch.object(soak_tool, "engine_command", lambda *_: command):
+            outcome = soak_tool.soak(engine, module, FAST, expected_sha=None, out=None, report=report,
+                                     budget_dir=BUDGET_DIR)
+        self.report_document = json.loads(report.read_text(encoding="utf-8"))
+        return outcome
+
+    def test_growing_queue_depth_fails_on_the_windows_sampler(self) -> None:
+        outcome = self.run_windows_host("growth")
+        self.assertTrue(any(f.startswith("queue: depth slope") for f in outcome.failures), outcome.failures)
+        self.assertEqual(self.report_document["queueDepth"]["status"], "measured")
+        self.assertGreater(self.report_document["queueDepth"]["slopePerHour"], FAST.max_queue_growth_per_hour)
+
+    def test_flat_and_silent_hosts_do_not_fail_the_queue_check(self) -> None:
+        for mode, status in (("flat", "measured"), ("silent", "not-measured")):
+            with self.subTest(mode=mode):
+                outcome = self.run_windows_host(mode)
+                self.assertFalse([f for f in outcome.failures if "queue" in f], outcome.failures)
+                self.assertEqual(self.report_document["queueDepth"]["status"], status)
 
     def test_out_is_refused_until_a_windows_row_exists(self) -> None:
         engine = self.root / "SparkEngine.exe"

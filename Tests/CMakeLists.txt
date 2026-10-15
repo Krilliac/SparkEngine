@@ -3917,7 +3917,7 @@ if(Python3_Interpreter_FOUND)
         NAME NullRHISoak_Harness
         COMMAND ${Python3_EXECUTABLE} -B
             ${CMAKE_SOURCE_DIR}/Tests/Tools/test_run_nullrhi_soak.py LeakFitTests ResultTests HarnessTests
-            WindowsSamplerTests)
+            WindowsSamplerTests QueueCheckTests)
     set_tests_properties(NullRHISoak_Harness PROPERTIES
         LABELS "perf-budget;unit;python"
         TIMEOUT 120)
@@ -6436,7 +6436,7 @@ if(Python3_Interpreter_FOUND)
             NAME ServerSoak_Harness
             COMMAND ${Python3_EXECUTABLE} -B
                 ${CMAKE_SOURCE_DIR}/Tests/Tools/test_server_soak.py
-                FitTests DrainSequenceTests ConfigTests SummaryTests HarnessTests QueueTests)
+                FitTests DrainSequenceTests BudgetFileTests ConfigTests SummaryTests HarnessTests QueueTests)
         set_tests_properties(ServerSoak_Harness PROPERTIES
             LABELS "ops;server;unit;python"
             TIMEOUT 180)
