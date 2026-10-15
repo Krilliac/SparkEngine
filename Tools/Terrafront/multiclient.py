@@ -69,13 +69,17 @@ on the server although its script asks to spawn (continent_mismatch_verdict).
 Soak (--soak-seconds; TF-110). A server with bots and two looping clients is
 sampled against soak_budgets.json: tick time (tf_perf), per-client downlink,
 replication rate and drops (the net line), and the RSS slope of every process.
-The budgets are provisional harness guards, not SLOs.
+The budgets are provisional harness guards, not SLOs. The bot count comes from
+the budget file (32 bots, the PR-lane TerrafrontSoak_Short); --soak-bots
+overrides it for the long soak, 98 bots plus the two clients being the
+100-actor run. The wall-clock --timeout must cover the soak plus its tail.
 
 Usage:
   multiclient.py --engine <SparkEngine> --module <SparkGameMMOFPS> \
       --scenario onboard_spawn_move [territory ...] --workdir <dir> [--cwd <asset root>] \
       [--impair 80,20,0.03,2,3 --seed 20260927]
   multiclient.py ... --soak-seconds 120 --workdir <dir> [--budgets soak_budgets.json]
+  multiclient.py ... --soak-seconds 1800 --soak-bots 98 --timeout 1900 --workdir <dir>
 
 Exit status 0 means every run passed; the JSON summary on stdout carries the
 per-checkpoint verdicts and measurements either way.
@@ -1422,6 +1426,7 @@ SOAK_BUDGET_KEYS = ("bots", "sampleIntervalS", "warmupS", "tickHz", "maxTickAvgP
                     "replicationHz", "minClientPacketsPerSecond", "maxClientDownlinkKBps",
                     "maxDroppedPacketFraction", "maxRssSlopeMiBPerHour", "rssSampleIntervalS")
 SOAK_SERVER_TAIL_S = 10.0
+SOAK_MAX_BOTS = 98  # kTFMaxBots (Source/Game/TFBotSystemTypes.h); the tests pin the two together
 SOAK_LOOP_S = 6.0  # one walk out, one walk back, a shot after each
 PERF_TOTAL = re.compile(r"measured total: ([\d.]+) ms")
 PERF_PEAK = re.compile(r"\bpeak ([\d.]+) ms")
@@ -1446,6 +1451,15 @@ def load_soak_budgets(path: Path) -> dict:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
             raise HarnessError(f"{path}: budget {key!r} must be a positive number, got {value!r}")
     return budgets
+
+
+def with_bot_override(budgets: dict, bots: int | None) -> dict:
+    """A copy of the budgets running `bots` bots; None keeps the file's count. Thresholds are never touched."""
+    if bots is None:
+        return budgets
+    if isinstance(bots, bool) or not isinstance(bots, int) or not 0 < bots <= SOAK_MAX_BOTS:
+        raise HarnessError(f"--soak-bots {bots!r} must be an integer in 1..{SOAK_MAX_BOTS}")
+    return {**budgets, "bots": bots}
 
 
 def percentile(values: list[float], fraction: float) -> float:
@@ -1992,10 +2006,13 @@ def read_rss(pid: int) -> int | None:
 
 def run_soak(args: argparse.Namespace, workdir: Path) -> dict:
     """TF-110 soak: server + bots + two looping clients; tick, traffic and RSS are sampled against the budgets."""
-    budgets = load_soak_budgets(args.budgets)
+    budgets = with_bot_override(load_soak_budgets(args.budgets), args.soak_bots)
     soak_seconds = args.soak_seconds
     if soak_seconds <= budgets["warmupS"] + 2 * budgets["sampleIntervalS"]:
         raise HarnessError(f"--soak-seconds {soak_seconds} leaves no post-warmup samples")
+    if args.timeout < soak_seconds + SOAK_SERVER_TAIL_S:
+        raise HarnessError(f"--timeout {args.timeout} s cannot cover a {soak_seconds} s soak plus its "
+                           f"{SOAK_SERVER_TAIL_S} s tail")
     workdir.mkdir(parents=True, exist_ok=True)
     deadline = time.monotonic() + args.timeout
     rss: dict[str, list[tuple[float, int]]] = {}
@@ -2067,6 +2084,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="one or more scenarios, run in order")
     parser.add_argument("--soak-seconds", type=float, help="run the TF-110 soak for this long instead")
     parser.add_argument("--budgets", type=Path, default=SOAK_BUDGETS_PATH, help="soak budget file")
+    parser.add_argument("--soak-bots", type=int,
+                        help=f"soak bot count overriding the budget file's (1..{SOAK_MAX_BOTS}; 98 is the 100-actor run)")
     parser.add_argument("--impair", help="'<lagMs>,<jitterMs>,<lossFrac>,<dupPct>,<reorderPct>' for every process")
     parser.add_argument("--seed", type=int, default=1, help="impairment RNG seed (process k uses seed + k)")
     parser.add_argument("--workdir", required=True, help="per-run directory for scripts, audits and saves")
@@ -2075,6 +2094,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if (args.scenario is None) == (args.soak_seconds is None):
         parser.error("give exactly one of --scenario or --soak-seconds")
+    if args.soak_bots is not None:
+        if args.soak_seconds is None:
+            parser.error("--soak-bots applies to --soak-seconds only")
+        if not 0 < args.soak_bots <= SOAK_MAX_BOTS:
+            parser.error(f"--soak-bots must be in 1..{SOAK_MAX_BOTS}")
     args.impairment = None
     if args.impair is not None:
         if args.scenario is None or any(name not in SCENARIOS for name in args.scenario):

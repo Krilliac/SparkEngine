@@ -61,7 +61,8 @@ class SelectionTests(unittest.TestCase):
         for flag in ("-DBUILD_TESTS=ON", "-DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON",
                      "-DSPARK_HEADLESS_SUPPORT=ON", "--target SparkEngine SparkGameMMOFPS SparkTests"):
             self.assertIn(flag, runs)
-        for label in check_selection.EXPECTED:
+        pr_labels = [label for label in check_selection.EXPECTED if label != "terrafront-soak-long"]
+        for label in pr_labels:
             self.assertIn(f"--show-only=json-v1 --no-tests=error -L '^{label}$'", runs)
             self.assertIn(f"check_selection.py {label}-selection.json --label {label}", runs)
             run = next(step["run"] for step in steps if f"-L '^{label}$'" in step.get("run", "")
@@ -69,6 +70,23 @@ class SelectionTests(unittest.TestCase):
             self.assertIn("--no-tests=error", run)
             self.assertIn("set -euo pipefail", run)
         for step in steps:
+            self.assertNotIn("continue-on-error", step)
+        # The 30-minute soak runs only in the named scheduled terrafront-soak job.
+        scheduled = yaml.safe_load(
+            (ROOT / ".github/workflows/operations-scheduled.yml").read_text(encoding="utf-8"))["jobs"]
+        self.assertIn("terrafront-soak", scheduled)
+        soak_job = scheduled["terrafront-soak"]
+        self.assertNotIn("continue-on-error", soak_job)
+        soak_steps = soak_job["steps"]
+        soak_runs = "\n".join(step.get("run", "") for step in soak_steps)
+        long_label = "terrafront-soak-long"
+        self.assertIn(f"--show-only=json-v1 --no-tests=error -L '^{long_label}$'", soak_runs)
+        self.assertIn(f"check_selection.py {long_label}-selection.json --label {long_label}", soak_runs)
+        long_run = next(step["run"] for step in soak_steps if f"-L '^{long_label}$'" in step.get("run", "")
+                        and "--show-only" not in step["run"])
+        self.assertIn("--no-tests=error", long_run)
+        self.assertIn("set -euo pipefail", long_run)
+        for step in soak_steps:
             self.assertNotIn("continue-on-error", step)
         upload = next(step for step in steps if "upload-artifact@" in step.get("uses", ""))
         self.assertEqual(upload["if"], "always()")

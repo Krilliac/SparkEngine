@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import re
 import sys
 import tempfile
@@ -955,7 +956,7 @@ def soak_logs(perf_until: float = SOAK_SECONDS, tick_ms: float = 4.0, downlink_k
             f"  movement: avg {tick_ms / 2:.3f} ms  peak {tick_ms:.3f} ms  (n=120)",
             f"  ai: avg {tick_ms / 2:.3f} ms  peak {tick_ms:.3f} ms  (n=120)",
             f"  measured total: {tick_ms:.3f} ms   headroom: {16.667 - tick_ms:.3f} ms (76%)"])
-        lines += entry(frame + 1, at + 0.6, "tf_bots", [f"    > [TF] bots active: {bots}  (tf_bots <0-32> to set)"])
+        lines += entry(frame + 1, at + 0.6, "tf_bots", [f"    > [TF] bots active: {bots}  (tf_bots <0-98> to set)"])
         at, frame = at + interval, frame + 10
     server = multiclient.RoleLog("server", 0, SERVER_ANCHOR, multiclient.parse_audit("\n".join(lines) + "\n"))
     clients = []
@@ -1046,6 +1047,66 @@ class SoakTests(unittest.TestCase):
         client = multiclient.soak_client_script(23000, "mra", SOAK_BUDGETS, SOAK_SECONDS)
         self.assertEqual(client.count(" tf_observe\n"), 11)
         self.assertGreater(client.count(" tf_fire\n"), 20)
+
+
+class SoakScaleTests(unittest.TestCase):
+    """The 30-minute, 100-actor soak: a bot-count override on top of the unchanged PR-lane budgets."""
+
+    LONG_SECONDS = 1800.0
+    TYPES_HEADER = Path(__file__).resolve().parents[2] / "GameModules/SparkGameMMOFPS/Source/Game/TFBotSystemTypes.h"
+
+    def test_python_cap_matches_the_engine_cap_and_reaches_100_actors(self) -> None:
+        cap = int(re.search(r"kTFMaxBots\s*=\s*(\d+)\s*;", self.TYPES_HEADER.read_text(encoding="utf-8")).group(1))
+        self.assertEqual(multiclient.SOAK_MAX_BOTS, cap)
+        self.assertEqual(cap + 2, 100)  # two soak clients
+
+    def test_override_changes_only_the_bot_count(self) -> None:
+        long = multiclient.with_bot_override(SOAK_BUDGETS, 98)
+        self.assertEqual(long["bots"], 98)
+        self.assertEqual({k: v for k, v in long.items() if k != "bots"},
+                         {k: v for k, v in SOAK_BUDGETS.items() if k != "bots"})
+        self.assertEqual(SOAK_BUDGETS["bots"], 32)  # the PR-lane TerrafrontSoak_Short keeps its 32 bots
+        self.assertIs(multiclient.with_bot_override(SOAK_BUDGETS, None), SOAK_BUDGETS)
+
+    def test_override_out_of_range_is_refused(self) -> None:
+        for bad in (0, -1, multiclient.SOAK_MAX_BOTS + 1, 2.5, True):
+            with self.assertRaises(multiclient.HarnessError):
+                multiclient.with_bot_override(SOAK_BUDGETS, bad)
+
+    def test_long_scripts_spawn_98_bots_and_sample_for_30_minutes(self) -> None:
+        budgets = multiclient.with_bot_override(SOAK_BUDGETS, 98)
+        server = multiclient.soak_server_script(23000, budgets, self.LONG_SECONDS)
+        self.assertIn("t2.0 tf_bots 98\n", server)
+        samples = math.ceil((self.LONG_SECONDS - budgets["sampleIntervalS"]) / budgets["sampleIntervalS"])
+        self.assertEqual(server.count(" tf_perf reset\n"), samples)
+        client = multiclient.soak_client_script(23000, "mra", budgets, self.LONG_SECONDS)
+        self.assertEqual(client.count(" tf_observe\n"), samples)
+
+    def test_evaluation_requires_the_overridden_bot_count(self) -> None:
+        budgets = multiclient.with_bot_override(SOAK_BUDGETS, 98)
+        server, clients = soak_logs(bots=98)
+        summary = multiclient.evaluate_soak(budgets, SOAK_SECONDS, server, clients, flat_rss())
+        self.assertTrue(summary["passed"], summary["problems"])
+        # RED proof: 32 bots do not satisfy a 98-bot run.
+        server, clients = soak_logs(bots=32)
+        summary = multiclient.evaluate_soak(budgets, SOAK_SECONDS, server, clients, flat_rss())
+        self.assertIn("bot counts", " ".join(summary["problems"]))
+        self.assertIn("expected 98", " ".join(summary["problems"]))
+
+    def test_cli_accepts_the_long_soak_and_rejects_misuse(self) -> None:
+        base = ["--engine", sys.executable, "--module", __file__, "--workdir", "unused"]
+        for extra in (["--soak-bots", "98"], ["--soak-seconds", "1800", "--soak-bots", "99"],
+                      ["--soak-seconds", "1800", "--soak-bots", "0"],
+                      ["--scenario", "onboard_spawn_move", "--soak-bots", "98"]):
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                multiclient.main([*base, *extra])
+
+    def test_run_soak_refuses_a_timeout_shorter_than_the_soak(self) -> None:
+        args = multiclient.argparse.Namespace(budgets=multiclient.SOAK_BUDGETS_PATH, soak_bots=98,
+                                              soak_seconds=self.LONG_SECONDS, timeout=200.0)
+        with tempfile.TemporaryDirectory() as workdir:
+            with self.assertRaisesRegex(multiclient.HarnessError, "cannot cover"):
+                multiclient.run_soak(args, Path(workdir))
 
 
 # --------------------------------------------------------------------------- cold restart

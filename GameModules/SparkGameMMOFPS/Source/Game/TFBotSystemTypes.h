@@ -11,6 +11,9 @@
 #include "Core/TFEvents.h"
 #include "Core/TFTypes.h"
 #include "Net/TFNetProtocol.h"
+#include "Net/TFRepProtocol.h"
+
+#include "Engine/Networking/NetworkWireLimits.h"
 
 #include <memory>
 #include <random>
@@ -26,6 +29,16 @@ namespace Terrafront
     /// Bot player ids live in their own range, distinct from real network client
     /// ids (small integers from NetworkManager) and kTFLocalHostPlayer (0xFFFFFF01).
     constexpr PlayerId kTFBotIdBase = 0xB0700000u;
-    constexpr uint32_t kTFMaxBots = 32;
+    /// Bot cap: 98 bots plus the two soak clients make the 100-actor TF-110 run.
+    /// Bots are server-side pawns, not network clients, so the cap is independent
+    /// of kMaxPlayers (client slots). Every pawn rides one unreliable RepUpdate
+    /// datagram (TFReplication::ServerBroadcastUpdates); the assert below keeps a
+    /// full-state update for every bot and every client slot inside the wire
+    /// payload limit (Spark::Net::MAX_NETWORK_MESSAGE_PAYLOAD_SIZE).
+    constexpr uint32_t kTFMaxBots = 98;
+
+    static_assert(sizeof(TF_RepUpdateHeader) + (kTFMaxBots + kMaxPlayers) * sizeof(TF_RepPawnUpdate) <=
+                      Spark::Net::MAX_NETWORK_MESSAGE_PAYLOAD_SIZE,
+                  "a full pawn update for every bot and client slot must fit one datagram");
 
 } // namespace Terrafront

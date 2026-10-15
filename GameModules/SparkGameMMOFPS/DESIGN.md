@@ -454,10 +454,17 @@ fails on any of the following:
 
 `TFPerfCounters` keeps average/peak rings, not a per-tick histogram, so the tick
 "p95" is taken across window means. The per-tick p95/p99 is still open. The
-bot count is capped by `kTFMaxBots` (32), so the run has 34 actors, not the 100
-that the W4 perf pass names. CTest `TerrafrontSoak_Short` runs 120 s (label
-`terrafront-soak`). The 30-minute gate is the same command with
-`--soak-seconds 1800`.
+W4 perf pass names a 100-entity soak; the harness targets it as 98 bots (the
+`kTFMaxBots` cap) plus two clients, but no run has yet carried that many actors.
+CTest `TerrafrontSoak_Short` runs 120 s (label `terrafront-soak`) with the 32 bots
+(34 actors) from `soak_budgets.json`. The 30-minute gate is the same command with
+`--soak-seconds 1800 --soak-bots 98` (and a `--timeout` above the soak length).
+The `tf_bots` console command (`Source/Console/TFCommandsGameplay.cpp`) now
+accepts counts up to `kTFMaxBots`, so the soak server script's `tf_bots 98` is no
+longer refused. No run has verified that 98 bots spawn or replicate, and the
+per-datagram fit (about 2.6 KB) is static arithmetic, not a measurement. The
+budgets stay provisional: the 100-actor run has no measured hosted data yet, and
+no threshold changed with the actor count.
 
 ### Cold restart (`cold_restart`, `ungraceful_restart`)
 
