@@ -77,9 +77,13 @@ land with the SEC-120 policy files.
   name a different account in the new process. `MMOPersistenceSystem::ListCharacters` is ready for that once
   accounts are durable.
 - Persistence uses the engine's key-value fallback store, and the restart tests restart it inside one process.
-  `MMOIntegratedWorld_TwoClientSessionGate` also kills the server process and starts a new one on the same
-  store. The new process reads back both characters (name, owner, authoritative position) and the saved guild
-  and never reissues a character ID. Accounts are not durable, so the clients do not reconnect to it.
+  `MMOIntegratedWorld_TwoClientSessionGate` is written to also kill the server process and start a new one on
+  the same store, but it has not been compiled or run yet, so this describes its design, not a result. The
+  persistence round-trip it checks is fixture-driven: the characters and the guild are written by explicit
+  test commands in `SessionGatePeer` (`save`, `saveworld`; the guild is a synthetic fixture), not by the
+  module's production save path in `Main.cpp`. The new process is expected to read back both characters (name,
+  owner, authoritative position) and that guild, and never reissue a character ID. This does not show that the
+  module's own guild state survives a restart. Accounts are not durable, so the clients do not reconnect to it.
 - Two dungeons have no authored scene. Each world area carries an exact-case `sceneFile` under
   `Assets/Scenes/MMO/` (for example `Assets/Scenes/MMO/town_square.scene`), and the Shadow Crypt dungeon uses
   `Assets/Scenes/MMO/shadow_crypt.scene`. Forgotten Mine and Void Spire have no scene yet, so they stay registered

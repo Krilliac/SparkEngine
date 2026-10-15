@@ -33,7 +33,8 @@ TIME_SOURCE = re.compile(
     r"\bGetTimestamp\b|time_since_epoch|\bsystem_clock\b|\bsteady_clock\b|\bhigh_resolution_clock\b|"
     r"\bstd::time\s*\(|(?<![\w:])time\s*\(|\bGetTickCount\w*|\bQueryPerformanceCounter\b"
 )
-ID_ASSIGNMENT = re.compile(r"(?<![\w.])(?:[A-Za-z_]\w*[A-Za-z_])?(?:Id|ID|id)\s*=(?!=)")
+ID_ASSIGNMENT = re.compile(r"(?<!\w)(?:[A-Za-z_]\w*[A-Za-z_])?(?:Id|ID|id)\s*(?:=(?!=)|\()")
+ID_BRACE_INIT = re.compile(r"(?<!\w)(?:[A-Za-z_]\w*[A-Za-z_])?(?:Id|ID|id)\s*\{")
 ID_ALLOCATOR = re.compile(
     r"\b(?:Generate|Allocate|Next|New|Make|Create)\w*Id\s*\([^;{}]*\)\s*(?:const\s*)?(?:noexcept\s*)?\{"
 )
@@ -122,6 +123,9 @@ def find_timestamp_ids(name: str, code: str) -> list[str]:
         assignment = ID_ASSIGNMENT.search(statement)
         if assignment and TIME_SOURCE.search(statement[assignment.end() :]):
             findings.append(f"{name}:{line_of(code, statement_match.start())}: id assigned from a clock")
+    for brace in ID_BRACE_INIT.finditer(code):
+        if TIME_SOURCE.search(function_body(code, brace.end() - 1)):
+            findings.append(f"{name}:{line_of(code, brace.start())}: id brace-initialised from a clock")
     for allocator in ID_ALLOCATOR.finditer(code):
         body = function_body(code, allocator.end() - 1)
         if TIME_SOURCE.search(body):
@@ -207,6 +211,23 @@ class RuleSelfTests(unittest.TestCase):
     def test_timestamp_assignment_is_rejected(self) -> None:
         code = strip_comments("void F()\n{\n  const uint32_t characterId = static_cast<uint32_t>(GetTimestamp());\n}\n")
         self.assertTrue(find_timestamp_ids("x.cpp", code))
+
+    def test_timestamp_member_field_assignment_is_rejected(self) -> None:
+        for statement in (
+            "account.id = static_cast<uint32_t>(std::time(nullptr));",
+            "x.characterId = GetTimestamp();",
+            "p->id = GetTimestamp();",
+        ):
+            code = strip_comments(f"void F()\n{{\n  {statement}\n}}\n")
+            self.assertTrue(find_timestamp_ids("x.cpp", code), statement)
+
+    def test_timestamp_brace_or_direct_init_is_rejected(self) -> None:
+        for statement in (
+            "const uint32_t id{static_cast<uint32_t>(std::time(nullptr))};",
+            "const uint32_t characterId(GetTimestamp());",
+        ):
+            code = strip_comments(f"void F()\n{{\n  {statement}\n}}\n")
+            self.assertTrue(find_timestamp_ids("x.cpp", code), statement)
 
     def test_timestamp_in_id_allocator_is_rejected(self) -> None:
         code = strip_comments("uint32_t AllocateCharacterId()\n{\n  return std::time(nullptr);\n}\n")
