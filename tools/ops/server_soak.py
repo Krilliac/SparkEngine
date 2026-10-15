@@ -55,6 +55,7 @@ Linux only: memory and process accounting read ``/proc``.
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import math
@@ -151,11 +152,25 @@ def load_budgets(path: Path | None = None) -> SoakBudgets:
         values[key] = value
         rationales[key] = rationale
     digest = hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
-    return SoakBudgets(version=version, sha256=digest, path=path.name, values=values, rationales=rationales)
+    return SoakBudgets(version=version, sha256=digest, path=_display_path(path), values=values,
+                       rationales=rationales)
+
+
+def _display_path(path: Path) -> str:
+    """The canonical repo path for the shipped budget file, else the path as given."""
+    if path.resolve() == DEFAULT_BUDGETS_PATH.resolve():
+        return "tools/ops/server-soak-budgets.json"
+    return str(path)
+
+
+@functools.lru_cache(maxsize=4)
+def _cached_budgets(path: Path) -> SoakBudgets:
+    # Parsed once per path: every SoakConfig() reads seven defaults from it.
+    return load_budgets(path)
 
 
 def _budget(key: str) -> float:
-    return load_budgets().values[key]
+    return _cached_budgets(DEFAULT_BUDGETS_PATH).values[key]
 
 
 @dataclass(frozen=True)
@@ -641,7 +656,7 @@ def build_summary(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | No
         "config": {"durationS": config.duration_s, "warmupS": config.warmup_s,
                    "sampleIntervalS": config.sample_interval_s, "statusIntervalMs": config.status_interval_ms,
                    "tickRateHz": config.tick_rate_hz},
-        "budgetFile": {"path": f"tools/ops/{budgets.path}", "version": budgets.version, "sha256": budgets.sha256,
+        "budgetFile": {"path": budgets.path, "version": budgets.version, "sha256": budgets.sha256,
                        "overrides": budget_overrides(config, budgets)},
         "provisionalBudgets": {"maxRssSlopeBytesPerHour": config.max_rss_slope_bytes_per_hour,
                                "maxRssGrowthBytes": config.max_rss_growth_bytes,
