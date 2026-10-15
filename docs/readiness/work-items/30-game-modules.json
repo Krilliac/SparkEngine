@@ -442,9 +442,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "prototype-module-kit"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -731,10 +729,7 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "module-FPS-singleplayer",
-        "module-FPS-package-windows"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -860,9 +855,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-FPS-multiplayer"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -1004,9 +997,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-MMO-integration"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": [
         "MMOAccount_*"
       ]
@@ -1118,9 +1109,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-ARPG"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -1234,9 +1223,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-Platformer"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -1341,9 +1328,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-RPG"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -1474,9 +1459,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-OpenWorld"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -1581,9 +1564,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-RTS"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -1699,9 +1680,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "module-Racing"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -2007,9 +1986,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "terrafront-soak"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -2150,11 +2127,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "terrafront-migration",
-        "terrafront-recovery",
-        "terrafront-soak"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     }
   ]

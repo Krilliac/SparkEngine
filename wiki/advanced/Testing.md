@@ -60,14 +60,14 @@ for the module package runs, that the job timeout exceeds the registered CTest
 | Job | Work item | Platform | Selection |
 |-----|-----------|----------|-----------|
 | `persistence-integration` | DATA-120 | Linux and Windows | `ctest -L '^persistence$'` over `SparkTests` |
-| `package-consumer-linux` | ASSET-220 | Linux | `-DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON`, then `PackageConsumer_`, `CLI_ClaimsMatchBehavior` (plus `SparkNewFromInstalledPrefixTests` and `GamePackager_` where registered) |
+| `package-consumer-linux` | ASSET-220 | Linux | `-DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON`, then `PackageConsumer_`, `CLI_ClaimsMatchBehavior` (plus `GamePackager_` where registered) |
 | `package-consumer-windows` | ASSET-220 | Windows | `SDKConsumer_InstalledEmptyProjectTemplate`, which installs the build into its own test root and builds the generated EmptyProject game against that installed SDK |
 | `scripting-integration` | ENG-200 | Linux | `ctest -L '^scripting-integration$'` with AngelScript and Jolt; `visual-script-package` stays a separate advisory job |
 | `prototype-module-kit` | MOD-295 | Linux | `ctest -L '^prototype-module-kit$'` |
 | `module-FPS-package-windows` | MOD-310, ENG-220 | Windows (`windows-shipping`) | `FPSPackage`, `FPSHeadlessPackage`, `FPSPublicSDK`; `PEImportClosure_Contract`, `FPSPackage_InstalledRuntime` and `WindowsCertification_PackageDependencyClosure` are first pinned to exactly three registered tests, and `ENABLE_VULKAN` must stay `OFF` |
 | `module-FPS-singleplayer` | MOD-310 | Windows Release | `FPSSinglePlayerSlice_InstalledArenaLoop` (registered only in Debug, Release and RelWithDebInfo) and the other `FPSSinglePlayerSlice_` tests |
 | `module-FPS-multiplayer` | MOD-315 | Linux | `FPSLANTwoClientConvergence` (builds `SparkFPSLANLoopbackPeer`), the `FPSMultiplayerProduction_` family run directly through `SparkTests`, and the NET-100 `NetworkSecurity_Transport_` tests |
-| `module-MMO-integration` | MOD-320 | Linux | `MMOIntegratedWorld`, `MMOAccount_`, `MMOWorld_`, `MMOPersistence_`, `MMO320_NoDemoIdentityGate` (builds `SparkMMOSessionGatePeer`) |
+| `module-MMO-integration` | MOD-320 | Linux | the `MMOIntegratedWorld_TwoClientSessionGate` CTest (builds `SparkMMOSessionGatePeer`), then the `MMOWorld_` and `MMOPersistence_` families run directly through `SparkTests` with `SPARK_TEST_EXPECT_COUNT` pinned and `--warn-is-error` |
 | `module-ARPG`, `module-Platformer`, `module-RPG`, `module-RTS`, `module-Racing` | MOD-330, MOD-340, MOD-350, MOD-370, MOD-380 | Windows Release, `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON` | one installed-package objective run each (`ARPGDungeonPackage_ClearAndRestart`, `PlatformerCompletionPackage_Level0ThreeMinutes`, `RPGQuestSlicePackage_WolfHuntRestart`, `RTSSkirmishPackage_DeterministicVictory`, `RacingCompleteRacePackage_Circuit`) |
 | `module-OpenWorld` | MOD-360 | Windows Release, `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON` | every CTest whose name starts with `OpenWorld` |
 | `terrafront-migration` | TF-120 | Linux | `ctest -R TerrafrontMigration` |

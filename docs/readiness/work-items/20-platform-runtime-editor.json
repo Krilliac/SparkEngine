@@ -1671,8 +1671,7 @@
         "stable-v1": "required"
       },
       "plannedCiJobs": [
-        "headless-windows-package",
-        "headless-windows-soak"
+        "headless-windows-package"
       ],
       "plannedTestSelectors": []
     },
@@ -2142,10 +2141,7 @@
       "profileApplicability": {
         "stable-v1": "required"
       },
-      "plannedCiJobs": [
-        "package-consumer-linux",
-        "package-consumer-windows"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     },
     {
@@ -2626,9 +2622,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "scripting-integration"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": []
     }
   ]

@@ -2551,7 +2551,7 @@ ADVISORY_CI_LANES = {
     "package-consumer-linux": {
         "runs-on": "ubuntu-24.04",
         "fragments": ("-DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON", "--no-tests=error",
-                      "PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_"),
+                      "PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_"),
         "tests": ("PackageConsumer_LinuxInstalledSDK", "PackageConsumer_SourceTreeBoundaryDetection",
                   "CLI_ClaimsMatchBehavior"),
     },
@@ -2596,8 +2596,9 @@ ADVISORY_CI_LANES = {
     },
     "module-MMO-integration": {
         "runs-on": "ubuntu-24.04",
-        "fragments": ("SparkMMOSessionGatePeer",
-                      "MMOIntegratedWorld|MMOAccount_|MMOWorld_|MMOPersistence_|MMO320_NoDemoIdentityGate",
+        "fragments": ("SparkMMOSessionGatePeer", "^MMOIntegratedWorld_TwoClientSessionGate$",
+                      "SPARK_TEST_NAME_PREFIX=MMOWorld_ SPARK_TEST_EXPECT_COUNT=2",
+                      "SPARK_TEST_NAME_PREFIX=MMOPersistence_ SPARK_TEST_EXPECT_COUNT=22", "--warn-is-error",
                       "--no-tests=error"),
         "tests": ("MMOIntegratedWorld_TwoClientSessionGate",),
     },
@@ -2667,6 +2668,38 @@ ADVISORY_CI_LANES = {
 SHIPPING_PRESET_ALLOWED = {"module-FPS-package-windows": "windows-shipping"}
 
 
+def advisory_selector_names(run: str) -> list[tuple[str, bool]]:
+    """Return (name, exact) for each identifier-only ctest -R alternative and SPARK_TEST_NAME_PREFIX value."""
+
+    raw: list[str] = []
+    for match in re.finditer(r"""-R\s+(?:'([^']*)'|"([^"]*)"|(\S+))""", run):
+        raw.extend(part for part in match.groups() if part)
+    selectors: list[tuple[str, bool]] = []
+    for pattern in raw:
+        for alternative in pattern.split("|"):
+            name = alternative.removeprefix("^")
+            exact = name.endswith("$")
+            name = name.removesuffix("$")
+            if re.fullmatch(r"[A-Za-z0-9_]+", name):
+                selectors.append((name, exact))
+    selectors.extend((name, False) for name in re.findall(r"SPARK_TEST_NAME_PREFIX=([A-Za-z0-9_]+)", run))
+    return selectors
+
+
+def test_selector_corpus(tests_cmake: str) -> tuple[str, set[str]]:
+    """CMake text of every Tests CMakeLists (comments removed) and every TEST(name) defined under Tests."""
+
+    cmake = [tests_cmake]
+    for path in sorted((REPO_ROOT / "Tests").rglob("CMakeLists.txt")):
+        if path != TESTS_CMAKE:
+            cmake.append(path.read_text(encoding="utf-8", errors="replace"))
+    cmake_text = re.sub(r"(?m)#.*$", "", "\n".join(cmake))
+    defined: set[str] = set()
+    for path in (REPO_ROOT / "Tests").rglob("*.cpp"):
+        defined.update(re.findall(r"(?m)^\s*TEST\((\w+)\)", path.read_text(encoding="utf-8", errors="replace")))
+    return cmake_text, defined
+
+
 def advisory_ci_lane_errors(document: dict, tests_cmake: str) -> list[str]:
     """Check each advisory PR-lane job named in ADVISORY_CI_LANES against its fail-closed contract."""
 
@@ -2680,6 +2713,7 @@ def advisory_ci_lane_errors(document: dict, tests_cmake: str) -> list[str]:
     # A name (or name prefix) counts only when an add_test(NAME ...) registers it; a mention in a CMake
     # comment or an unrelated string must not satisfy the check.
     registered_cmake = re.sub(r"(?m)#.*$", "", tests_cmake)
+    selector_cmake, defined_tests = test_selector_corpus(tests_cmake)
     for job_id, spec in ADVISORY_CI_LANES.items():
         job = jobs.get(job_id)
         if not isinstance(job, dict):
@@ -2719,6 +2753,17 @@ def advisory_ci_lane_errors(document: dict, tests_cmake: str) -> list[str]:
                 errors.append(f"{job_id} runs experimental Shipping preset {preset}")
             if preset.endswith("shipping") and preset != SHIPPING_PRESET_ALLOWED.get(job_id):
                 errors.append(f"{job_id} runs Shipping preset {preset} without ownership")
+        for name, exact in advisory_selector_names(runs):
+            # add_test(NAME <name>...) (a non-exact selector also matches a name stem such as NAME Prefix_${x}),
+            # a "<name>|<module>|..." module package run row, or NAME <stem>${x} where "<rest>" is a listed x.
+            cmake_hit = re.search(rf"\bNAME\s+{re.escape(name)}{r'[\s)]' if exact else ''}", selector_cmake) or \
+                re.search(rf'"{re.escape(name)}\|', selector_cmake) or \
+                any(name.startswith(stem) and f'"{name[len(stem):]}' in selector_cmake
+                    for stem in re.findall(r"\bNAME\s+(\w+)\$\{", selector_cmake))
+            prefix_hit = any(defined_name == name if exact else defined_name.startswith(name)
+                             for defined_name in defined_tests)
+            if not cmake_hit and not prefix_hit:
+                errors.append(f"{job_id} selects {name}, which no add_test(NAME) or TEST() definition provides")
         for name in spec["tests"]:
             if not re.search(rf"\bNAME\s+{re.escape(name)}", registered_cmake):
                 errors.append(f"{job_id} names {name}, which Tests/CMakeLists.txt does not register")
@@ -4317,6 +4362,21 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         errors = advisory_ci_lane_errors(document, commented)
         self.assertTrue(any("names NetworkSecurity_" in error for error in errors), errors)
 
+    def test_advisory_ci_lane_selectors_must_name_real_tests(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+        for old, new, fake in (
+            ("-R '^MMOIntegratedWorld_TwoClientSessionGate$'", "-R 'MMOAccount_|MMO320_NoDemoIdentityGate'",
+             "MMOAccount_"),
+            ("SPARK_TEST_NAME_PREFIX=MMOWorld_", "SPARK_TEST_NAME_PREFIX=MMOFakeFamily_", "MMOFakeFamily_"),
+        ):
+            with self.subTest(fake=fake):
+                document = copy.deepcopy(baseline)
+                for step in document["jobs"]["module-MMO-integration"]["steps"]:
+                    if old in str(step.get("run", "")):
+                        step["run"] = step["run"].replace(old, new)
+                errors = advisory_ci_lane_errors(document, self.tests_cmake)
+                self.assertTrue(any(f"selects {fake}" in error for error in errors), errors)
+
     def test_advisory_ci_lane_contract_rejects_each_regression(self) -> None:
         baseline = parse_workflow_yaml(self.build)
 
@@ -4350,8 +4410,12 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
                       "windows-shipping -DBUILD_TESTS=OFF"), "-DBUILD_TESTS=ON"),
             (edit_run("module-FPS-multiplayer", "SPARK_TEST_NAME_PREFIX=FPSMultiplayerProduction_",
                       "SPARK_TEST_NAME_PREFIX=FPSMultiplayer_"), "FPSMultiplayerProduction_"),
-            (edit_run("module-MMO-integration", "MMO320_NoDemoIdentityGate", "MMO320_Other"),
-             "MMO320_NoDemoIdentityGate"),
+            (edit_run("module-MMO-integration", "SPARK_TEST_EXPECT_COUNT=22", "SPARK_TEST_EXPECT_COUNT=21"),
+             "SPARK_TEST_EXPECT_COUNT=22"),
+            (edit_run("module-MMO-integration", "SPARK_TEST_NAME_PREFIX=MMOWorld_",
+                      "SPARK_TEST_NAME_PREFIX=MMOAccount_"), "MMOAccount_"),
+            (edit_run("module-MMO-integration", "-R '^MMOIntegratedWorld_TwoClientSessionGate$'",
+                      "-R 'MMO320_NoDemoIdentityGate'"), "MMO320_NoDemoIdentityGate"),
             (edit_run("module-Platformer", "-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON",
                       "-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=OFF"), "-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON"),
             (edit_run("package-consumer-linux", "linux-gcc-release", "linux-shipping"), "Shipping preset"),

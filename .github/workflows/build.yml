@@ -5438,7 +5438,7 @@ jobs:
     - name: Pin package consumer selection
       run: |
         set -euo pipefail
-        ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json
+        ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json
         python3 - <<'PY'
         import json
 
@@ -5453,7 +5453,7 @@ jobs:
       run: |
         set -euo pipefail
         ctest --test-dir build/linux-gcc-release \
-          -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_' \
+          -R 'PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_' \
           --no-tests=error --output-on-failure 2>&1 | tee package-consumer-tests.log
     - name: Upload package consumer logs
       if: always()
@@ -5798,8 +5798,8 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
 
-  # MOD-320: two real peer processes authenticate through the session gate, plus the account, world and
-  # persistence families and the no-demo-identity gate.
+  # MOD-320: two real peer processes authenticate through the session gate (CTest), plus the MMOWorld_ and
+  # MMOPersistence_ SparkTests families run directly with their TEST() counts pinned.
   # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
   # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
   module-MMO-integration:
@@ -5827,12 +5827,17 @@ jobs:
         set -euo pipefail
         cmake --build --preset linux-gcc-release --target SparkMMOSessionGatePeer SparkTests \
           --parallel "$(nproc)" 2>&1 | tee module-mmo-build.log
-    - name: Run MMO integration tests
+    - name: Run two-client session gate
       run: |
         set -euo pipefail
-        ctest --test-dir build/linux-gcc-release \
-          -R 'MMOIntegratedWorld|MMOAccount_|MMOWorld_|MMOPersistence_|MMO320_NoDemoIdentityGate' \
-          --no-tests=error --output-on-failure 2>&1 | tee module-mmo-tests.log
+        ctest --test-dir build/linux-gcc-release -R '^MMOIntegratedWorld_TwoClientSessionGate$' --no-tests=error           --output-on-failure 2>&1 | tee module-mmo-session-gate.log
+    - name: Run MMO world and persistence cases
+      run: |
+        set -euo pipefail
+        # Pinned to the TEST() definitions in Tests/TestGameModuleMMO.cpp (2) and
+        # Tests/TestMOD320MMOPersistenceReal.cpp (22); TestMain fails the run on any other selection size.
+        SPARK_TEST_NAME_PREFIX=MMOWorld_ SPARK_TEST_EXPECT_COUNT=2 build/linux-gcc-release/bin/SparkTests           --warn-is-error 2>&1 | tee module-mmo-world.log
+        SPARK_TEST_NAME_PREFIX=MMOPersistence_ SPARK_TEST_EXPECT_COUNT=22 build/linux-gcc-release/bin/SparkTests           --warn-is-error 2>&1 | tee module-mmo-persistence.log
     - name: Upload module MMO integration logs
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

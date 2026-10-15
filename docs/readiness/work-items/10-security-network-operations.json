@@ -921,9 +921,7 @@
       "profileApplicability": {
         "stable-v1": "outside"
       },
-      "plannedCiJobs": [
-        "persistence-integration"
-      ],
+      "plannedCiJobs": [],
       "plannedTestSelectors": [
         "Persistence_Transaction",
         "Persistence_Idempotency",
@@ -1266,8 +1264,7 @@
         "stable-v1": "outside"
       },
       "plannedCiJobs": [
-        "load-test",
-        "observability-canary"
+        "load-test"
       ],
       "plannedTestSelectors": [
         "Server_Load",
