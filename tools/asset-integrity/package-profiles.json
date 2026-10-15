@@ -6,7 +6,11 @@
       "engineSources": [
         {
           "path": "SparkEngine/Source/",
-          "reason": "Engine code every module runs on; e.g. Game/CubeObject.h and the other primitive objects load Assets/Models/<Primitive>.obj, which SparkGameFPS and SceneManager instantiate for level1.scene nodes"
+          "reason": "Engine code every module runs on; e.g. Game/PyramidObject.h and Game/RampObject.h load Assets/Models/<Primitive>.obj, which SparkGameFPS and SceneManager instantiate for level1.scene nodes"
+        },
+        {
+          "path": "SparkSDK/Include/",
+          "reason": "Public SDK headers compiled into the engine; e.g. Spark/CubeObject.h and the other SDK primitive objects load Assets/Models/<Primitive>.obj for the same level1.scene nodes"
         }
       ],
       "seeds": [
