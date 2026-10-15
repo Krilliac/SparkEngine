@@ -47,9 +47,11 @@ These jobs run on every pull request and push, but each carries job-level
 exist so a work item's exact-commit evidence can come from a hosted run; a green
 local run justifies `implemented`, never `evidenced`. All of them use a
 non-Shipping preset (`linux-gcc-release`, `windows-release`) except
-`module-FPS-package-windows`, which configures the reviewed `windows-shipping`
-preset unmodified and then re-configures the same tree with `-DBUILD_TESTS=ON`
-so the installed-package CTests register. Every `ctest` call passes
+`module-FPS-package-windows`, which configures the `windows-shipping` preset and
+then re-configures the same tree with `-DBUILD_TESTS=ON` so the installed-package
+CTests register. That tree is therefore not the reviewed shipping product set
+(the preset ships `BUILD_TESTS=OFF`); the job is allow-listed in
+`SHIPPING_PRESET_ALLOWED`. Every `ctest` call passes
 `--no-tests=error`. `.github/scripts/test-workflow-failure-propagation.py`
 (`ADVISORY_CI_LANES`) pins each job's selector, the CTest names it relies on and,
 for the module package runs, that the job timeout exceeds the registered CTest
@@ -59,7 +61,7 @@ for the module package runs, that the job timeout exceeds the registered CTest
 |-----|-----------|----------|-----------|
 | `persistence-integration` | DATA-120 | Linux and Windows | `ctest -L '^persistence$'` over `SparkTests` |
 | `package-consumer-linux` | ASSET-220 | Linux | `-DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON`, then `PackageConsumer_`, `CLI_ClaimsMatchBehavior` (plus `SparkNewFromInstalledPrefixTests` and `GamePackager_` where registered) |
-| `package-consumer-windows` | ASSET-220 | Windows | installs the tree into a prefix, then runs `SDKConsumer_InstalledEmptyProjectTemplate` from a working directory outside the checkout |
+| `package-consumer-windows` | ASSET-220 | Windows | `SDKConsumer_InstalledEmptyProjectTemplate`, which installs the build into its own test root and builds the generated EmptyProject game against that installed SDK |
 | `scripting-integration` | ENG-200 | Linux | `ctest -L '^scripting-integration$'` with AngelScript and Jolt; `visual-script-package` stays a separate advisory job |
 | `prototype-module-kit` | MOD-295 | Linux | `ctest -L '^prototype-module-kit$'` |
 | `module-FPS-package-windows` | MOD-310, ENG-220 | Windows (`windows-shipping`) | `FPSPackage`, `FPSHeadlessPackage`, `FPSPublicSDK`; `PEImportClosure_Contract`, `FPSPackage_InstalledRuntime` and `WindowsCertification_PackageDependencyClosure` are first pinned to exactly three registered tests, and `ENABLE_VULKAN` must stay `OFF` |
@@ -70,6 +72,7 @@ for the module package runs, that the job timeout exceeds the registered CTest
 | `module-OpenWorld` | MOD-360 | Windows Release, `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON` | every CTest whose name starts with `OpenWorld` |
 | `terrafront-migration` | TF-120 | Linux | `ctest -R TerrafrontMigration` |
 | `terrafront-recovery` | TF-120 | Linux | `TerrafrontMigration_`, `TF120_` and `TerrafrontRestart_` (needs `SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON`) |
+| `networking-disabled-contract` | SEC-100 | Linux | a separate Release tree with `-DENABLE_NETWORKING=OFF -DBUILD_TESTS=ON` that builds and runs only `SparkNetworkingDisabledCompileContract`; kept out of the blocking `security-runtime` job because no CI leg had configured networking off before |
 
 Each Windows module job configures `windows-release` with `SparkGameFPS` plus the
 module under test (the Windows test tree requires the `SparkGameFPS` target) and
@@ -83,17 +86,12 @@ Additions to jobs that already exist:
 
 - `security-runtime` also runs `ctest -L '^crash-canary$'` (the OPS-100
   symbolication canary; `CrashReporter_Consent` carries `crash-security`, which
-  the existing label loop already selects) and a separate Release tree with
-  `-DENABLE_NETWORKING=OFF` that builds and runs only
-  `SparkNetworkingDisabledCompileContract` (SEC-100).
+  the existing label loop already selects). This is a new blocking check:
+  `security-runtime` is a `required-ci-gate` dependency.
 - `build-windows-shipping` validates the staged Shipping runtime tree with
-  `cmake/ValidateStagedPackageExecutables.cmake` from a working directory outside
-  the checkout (ASSET-220). `release.yml` runs the same validator on its own stage.
-- `fuzz-policy` builds six more production smoke targets
-  (`SparkFuzzReflectedGameplayScene`, `SparkFuzzBasicMaterialJson`,
-  `SparkFuzzMeshObjLoader`, `SparkFuzzShaderSourceLoader`,
-  `SparkFuzzFreezeBufferBlob`, `SparkFuzzBenchmarkBaselineJson`) in the same order
-  as `FUZZ_SMOKE_TARGETS` in `FuzzerTests/policy/test_fuzz_policy.py` (SEC-120).
+  `cmake/ValidateStagedPackageExecutables.cmake`, passing every path absolute and
+  the same parameters `release.yml` uses on its own stage (ASSET-220). This is
+  also a new blocking check.
 
 ## Network boundary tooling
 

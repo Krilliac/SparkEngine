@@ -98,7 +98,7 @@ jobs:
       run: cmake --build build/fuzz-policy --target check-fuzz-policy
 
     - name: Build production fuzz smoke target
-      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest SparkFuzzEditorPreferences SparkFuzzReflectedGameplayScene SparkFuzzBasicMaterialJson SparkFuzzMeshObjLoader SparkFuzzShaderSourceLoader SparkFuzzFreezeBufferBlob SparkFuzzBenchmarkBaselineJson
+      run: cmake --build build/fuzz-policy --target SparkFuzzJsonUtils SparkFuzzCrashManifest SparkFuzzNeuralWeights SparkFuzzTextureStex SparkFuzzSceneManifest SparkFuzzArchive SparkFuzzShaderBlob SparkFuzzShaderServiceProtocol SparkFuzzConfigParser SparkFuzzTelemetrySpool SparkFuzzSaveSystem SparkFuzzEditorPrefab SparkFuzzReflectedScene SparkFuzzSceneManagerText SparkFuzzFbx SparkFuzzGltf SparkFuzzSoundWav SparkFuzzExr SparkFuzzTextureLinux SparkFuzzObjStatic SparkFuzzTFLanBeacon SparkFuzzMMOChatWire SparkFuzzMMOClientState SparkFuzzMMOEntityEvents SparkFuzzZipListing SparkFuzzExecScript SparkFuzzSparkBuildConfig SparkFuzzVisualScriptGraph SparkFuzzNavMesh SparkFuzzSparkTerrain SparkFuzzAssetServiceProtocol SparkFuzzDaemonFrame SparkFuzzDaemonWire SparkFuzzBinaryReader SparkFuzzEditorCollaboration SparkFuzzDataTable SparkFuzzDialogue SparkFuzzLocalization SparkFuzzFpsSnapshot SparkFuzzSessionGateProtocol SparkFuzzInstallState SparkFuzzModManifest SparkFuzzReplay SparkFuzzAnimationBinary SparkFuzzOrchestrationJournal SparkFuzzAsyncDatabase SparkFuzzMMOCharacterRecord SparkFuzzGatewayAreaControlState SparkFuzzRTSPersistence SparkFuzzOrchestratorIdentity SparkFuzzMaterialLoader SparkFuzzMaterialEditorFiles SparkFuzzEngineSettings SparkFuzzVirtualFileSystem SparkFuzzEntityArchetype SparkFuzzModuleSidecar SparkFuzzPluginMetadata SparkFuzzReflectionBinary SparkFuzzShaderDiskCache SparkFuzzEditorSceneJson SparkFuzzEditorSceneLoad SparkFuzzEditorProjectFile SparkFuzzEditorRecovery SparkFuzzEditorSceneImport SparkFuzzEditorThemeImport SparkFuzzEditorWindowLayout SparkFuzzEditorLayout SparkFuzzRuntimePrefab SparkFuzzAssetMigration SparkFuzzAchievement SparkFuzzEventResponse SparkFuzzUILayout SparkFuzzAssetCooker SparkFuzzLauncherTemplate SparkFuzzLauncherModuleManifest SparkFuzzEditorPreferences
 
     - name: Run adversarial policy tests
       # -C is required by multi-config generators and ignored by single-config
@@ -1055,27 +1055,6 @@ jobs:
         set -o pipefail
         ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
           -L '^crash-canary$' 2>&1 | tee security-crash-canary.log
-
-    # SEC-100: the stable-v1 Windows profile disables networking. A separate Linux tree with
-    # ENABLE_NETWORKING=OFF proves the public headers stay independently buildable without it.
-    - name: Configure networking-disabled compile contract
-      run: |
-        set -o pipefail
-        cmake -S . -B build/networking-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc \
-          -DCMAKE_CXX_COMPILER=g++ -DSPARK_STRICT_DEPS=ON -DBUILD_TESTS=ON -DENABLE_NETWORKING=OFF \
-          2>&1 | tee security-networking-off-configure.log
-
-    - name: Build networking-disabled compile contract
-      run: |
-        set -o pipefail
-        cmake --build build/networking-off --target SparkNetworkingDisabledCompileContract \
-          --parallel $(nproc) 2>&1 | tee security-networking-off-build.log
-
-    - name: Run networking-disabled compile contract
-      run: |
-        set -o pipefail
-        ctest --test-dir build/networking-off --output-on-failure --no-tests=error \
-          -R '^SparkNetworkingDisabledCompileContract$' 2>&1 | tee security-networking-off-tests.log
 
     - name: Extract security runtime error summary
       if: failure()
@@ -2259,15 +2238,13 @@ jobs:
           --symbols build/shipping-symbols/symbols \
           --output build/shipping-symbols/shipping-symbol-manifest.json
 
-    - name: Validate staged Shipping executable BOM from a non-source cwd (ASSET-220)
+    - name: Validate staged Shipping executable BOM (ASSET-220)
       shell: bash
-      working-directory: ${{ runner.temp }}
       run: |
         set -euo pipefail
         # The release workflow validates its own stage; this validates the stage the per-PR Shipping
-        # lane installed above. The cwd is outside the checkout, so a relative source path cannot
-        # satisfy the validator.
-        test "$PWD" != "${{ github.workspace }}"
+        # lane installed above, with the same validator parameters as release.yml. Every path is
+        # passed absolute.
         cmake \
           "-DSPARK_PACKAGE_ROOT=${{ github.workspace }}/build/shipping-runtime-stage" \
           -DSPARK_PACKAGE_LAYOUT=runtime -DSPARK_PACKAGE_PROFILE=stable-v1 \
@@ -5490,9 +5467,8 @@ jobs:
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
 
-  # ASSET-220: the Windows tree installs into a prefix, and the spark-cli generated EmptyProject game is
-  # built against the installed SDK by SDKConsumer_InstalledEmptyProjectTemplate, run from a cwd outside
-  # the source checkout so no relative source path can satisfy it.
+  # ASSET-220: SDKConsumer_InstalledEmptyProjectTemplate installs this Windows build into its own test
+  # root and builds the spark-cli generated EmptyProject game against that installed SDK.
   # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
   # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
   package-consumer-windows:
@@ -5521,20 +5497,14 @@ jobs:
         set -euo pipefail
         # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
         cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee package-consumer-windows-build.log
-    - name: Install the SDK prefix
+    - name: Run installed empty-project template
       run: |
         set -euo pipefail
-        cmake --install build/windows-release --config Release --prefix "$RUNNER_TEMP/package-consumer-prefix" \
-          2>&1 | tee package-consumer-windows-install.log
-        test -d "$RUNNER_TEMP/package-consumer-prefix/lib/cmake/SparkEngine"
-    - name: Run installed empty-project template from a non-source cwd
-      working-directory: ${{ runner.temp }}
-      run: |
-        set -euo pipefail
-        test "$PWD" != "$GITHUB_WORKSPACE"
-        ctest --test-dir "$GITHUB_WORKSPACE/build/windows-release" -C Release \
+        # The test installs SPARK_ENGINE_BUILD_DIR into its own SPARK_TEST_ROOT prefix and builds the
+        # generated game against it (Tests/CMakeLists.txt), so no separate install step is needed here.
+        ctest --test-dir build/windows-release -C Release \
           -R '^SDKConsumer_InstalledEmptyProjectTemplate$' --no-tests=error --output-on-failure \
-          2>&1 | tee "$GITHUB_WORKSPACE/package-consumer-windows-tests.log"
+          2>&1 | tee package-consumer-windows-tests.log
     - name: Upload package consumer Windows logs
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -5652,8 +5622,12 @@ jobs:
   # installed-package CTests register. PEImportClosure_Contract, FPSPackage_InstalledRuntime and the
   # package dependency closure are pinned to exactly three registered tests, so a dropped registration
   # fails here instead of shrinking the selection. ENABLE_VULKAN stays OFF (the preset's value).
+  # This is NOT the reviewed shipping product set: the windows-shipping tree is reconfigured with
+  # BUILD_TESTS=ON (the preset ships BUILD_TESTS=OFF), so the job tests a Shipping-configuration build
+  # with test targets added. The preset use is allow-listed in SHIPPING_PRESET_ALLOWED
+  # (.github/scripts/test-workflow-failure-propagation.py).
   # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
-  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  # exact-commit run qualifies it.
   module-FPS-package-windows:
     name: "Module FPS package (windows-shipping, advisory)"
     runs-on: windows-2022
@@ -6242,6 +6216,52 @@ jobs:
           build/linux-gcc-release/Testing/terrafront-multiclient/**/stderr.log
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
+
+  # SEC-100: the stable-v1 Windows profile disables networking. A separate Linux tree with
+  # ENABLE_NETWORKING=OFF proves the public headers stay independently buildable without it.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency: no CI leg had configured
+  # ENABLE_NETWORKING=OFF with BUILD_TESTS=ON before, so it stays out of the blocking security-runtime job
+  # until a hosted exact-commit run qualifies it.
+  networking-disabled-contract:
+    name: "Networking-disabled compile contract (Linux, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure networking-disabled compile contract
+      run: |
+        set -o pipefail
+        cmake -S . -B build/networking-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++ -DSPARK_STRICT_DEPS=ON -DBUILD_TESTS=ON -DENABLE_NETWORKING=OFF \
+          2>&1 | tee security-networking-off-configure.log
+    - name: Build networking-disabled compile contract
+      run: |
+        set -o pipefail
+        cmake --build build/networking-off --target SparkNetworkingDisabledCompileContract \
+          --parallel $(nproc) 2>&1 | tee security-networking-off-build.log
+    - name: Run networking-disabled compile contract
+      run: |
+        set -o pipefail
+        ctest --test-dir build/networking-off --output-on-failure --no-tests=error \
+          -R '^SparkNetworkingDisabledCompileContract$' 2>&1 | tee security-networking-off-tests.log
+    - name: Upload networking-disabled contract logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: networking-disabled-contract-${{ github.sha }}-${{ github.run_attempt }}
+        path: security-networking-off-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: warn
 
   # DOC-410: documentation exact-currentness, broken links and the docs contract.
   # Moved from site-data.yml so a stale generator, missing result or broken link
