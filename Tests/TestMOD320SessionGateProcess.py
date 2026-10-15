@@ -11,9 +11,10 @@ restarted process must read back both characters (name, owner, authoritative
 position), the saved guild, and must never reissue a character ID.
 
 Timing: every wait polls for the event it needs and returns the moment it
-arrives, so a fast host pays nothing.  The limits are upper bounds sized for a
-CPU-starved host (three processes sharing a 600000-round PBKDF2); the PBKDF2
-cost is never lowered.  A peer that exits early fails the wait immediately
+arrives, so a fast host pays nothing.  The limits are upper bounds intended to
+tolerate a loaded host (three processes sharing a 600000-round PBKDF2), but that
+is not demonstrated: the RateLimited retry cap is a fixed 20 attempts and the
+flow has not been run under load.  The PBKDF2 cost is never lowered.  A peer that exits early fails the wait immediately
 instead of running out the clock.
 """
 

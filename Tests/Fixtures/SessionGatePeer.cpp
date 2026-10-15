@@ -53,8 +53,9 @@ namespace
     constexpr std::string_view kBobPassword = "mod320-bob-password";
 
     // Upper bounds, not expected durations: every wait polls for readiness and returns as soon as the
-    // reply or state arrives. They are generous so a CPU-starved host (three processes sharing a
-    // 600000-round PBKDF2) is not misread as a failure; the coordinator enforces the overall limit.
+    // reply or state arrives. They are meant to tolerate a loaded host (three processes sharing a
+    // 600000-round PBKDF2); that is untested under load, and the RateLimited retry cap is a fixed 20 attempts.
+    // The coordinator enforces the overall limit.
     constexpr auto kConnectTimeout = std::chrono::seconds(60);
     constexpr auto kReplyTimeout = std::chrono::seconds(60);
     constexpr auto kStateTimeout = std::chrono::seconds(60);
