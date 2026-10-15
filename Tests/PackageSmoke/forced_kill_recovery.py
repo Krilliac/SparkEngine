@@ -353,23 +353,29 @@ def _expect_failure(label: str, action) -> None:
     raise AssertionError(f"self-test case '{label}' unexpectedly passed")
 
 
+def _check(label: str, condition: bool) -> None:
+    # Explicit raise, not assert: python -O strips assert statements.
+    if not condition:
+        raise AssertionError(f"self-test case '{label}' failed")
+
+
 def self_test() -> int:
     # Writer audit: kill is timed on the success line and only the success line.
-    assert writer_saved(_WRITER_AUDIT)
-    assert not writer_saved(_WRITER_AUDIT.replace(SAVE_WRITTEN, SAVE_FAILED))
-    assert not writer_saved(_WRITER_AUDIT.split("frame 4")[0])
-    assert not writer_saved("frame malformed\n")
-    assert not writer_saved(_WRITER_AUDIT.replace("| ok  | quicksave", "| ERR | quicksave"))
-    assert writer_saved(_WRITER_AUDIT.replace("\n", "\r\n"))
+    _check("writer-saved", writer_saved(_WRITER_AUDIT))
+    _check("writer-failed-save-not-saved", not writer_saved(_WRITER_AUDIT.replace(SAVE_WRITTEN, SAVE_FAILED)))
+    _check("writer-no-save-not-saved", not writer_saved(_WRITER_AUDIT.split("frame 4")[0]))
+    _check("writer-malformed-not-saved", not writer_saved("frame malformed\n"))
+    _check("writer-err-row-not-saved", not writer_saved(_WRITER_AUDIT.replace("| ok  | quicksave", "| ERR | quicksave")))
+    _check("writer-crlf-saved", writer_saved(_WRITER_AUDIT.replace("\n", "\r\n")))
     require_writer_saved(_WRITER_AUDIT)
     _expect_failure("writer-failed-save", lambda: require_writer_saved(_WRITER_AUDIT.replace(SAVE_WRITTEN, SAVE_FAILED)))
     _expect_failure("writer-no-save", lambda: require_writer_saved(_WRITER_AUDIT.split("frame 4")[0]))
     _expect_failure("writer-two-saves", lambda: require_writer_saved(_WRITER_AUDIT + _WRITER_AUDIT))
 
     # Save state after the kill.
-    assert classify_save_state(1234, None) == "intact"
-    assert classify_save_state(0, 99) == "recoverable"
-    assert classify_save_state(None, 99) == "recoverable"
+    _check("save-intact", classify_save_state(1234, None) == "intact")
+    _check("save-recoverable-empty", classify_save_state(0, 99) == "recoverable")
+    _check("save-recoverable-missing", classify_save_state(None, 99) == "recoverable")
     _expect_failure("save-gone", lambda: classify_save_state(None, None))
     _expect_failure("save-empty", lambda: classify_save_state(0, 0))
 

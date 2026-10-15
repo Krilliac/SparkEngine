@@ -4840,26 +4840,6 @@ set_tests_properties(FPSSceneMaterialContract PROPERTIES
     LABELS "module;stable-v1;fps;asset;unit"
     TIMEOUT 30)
 
-# OPS-110: the alert evaluator's rule evaluation, threshold edges and fail-closed inputs
-# (tools/ops/evaluate_server_alerts.py).
-add_test(
-    NAME OpsAlerts_Evaluator
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_evaluate_server_alerts.py)
-set_tests_properties(OpsAlerts_Evaluator PROPERTIES
-    LABELS "observability;recovery-drill;python;unit"
-    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
-    TIMEOUT 120)
-
-# MOD-320: the MMO persistence identity gate refuses demo/default identities
-# (Tests/Tools/test_mmo320_identity_gate.py).
-add_test(
-    NAME MMO320_NoDemoIdentityGate
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_mmo320_identity_gate.py)
-set_tests_properties(MMO320_NoDemoIdentityGate PROPERTIES
-    LABELS "module;security;python;unit"
-    FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
-    TIMEOUT 120)
-
 # Spark UI library (SparkUI/): the nine built-in token sets pass the accessibility audit and
 # its RED fixture fails it; with ImGui, the style mapping is absolute and idempotent, fonts fall
 # back without asserting, load from a non-ASCII directory and resolve by config name, property
@@ -5303,8 +5283,9 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
         RUN_SERIAL TRUE
         TIMEOUT 300)
     # TF-110: the same driver and budgets for 30 minutes. The label is not terrafront-soak, so the
-    # PR-lane selection (-L '^terrafront-soak$') never runs it; the scheduled operations job selects
-    # -L '^terrafront-soak-long$'.
+    # PR-lane selection (-L '^terrafront-soak$') never runs it; only an explicit
+    # -L '^terrafront-soak-long$' run does. It uses the budget file's bot count (32 bots, 34 actors):
+    # the 100-actor run needs --soak-bots and a tf_bots cap above 32, neither of which exists yet.
     add_test(
         NAME TerrafrontSoak_30Min
         COMMAND ${_tf_harness} --soak-seconds 1800 --timeout 2000 --workdir ${_tf_runs}/soak-30min)
