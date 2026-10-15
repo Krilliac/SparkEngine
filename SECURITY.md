@@ -244,24 +244,47 @@ it from Git history.
 - Hosted exact-SHA evidence for the vulnerability scan. grype gates the release
   SBOM in `release.yml` and, on every pull request, the lock-derived SBOM in the
   required `dependency-policy` job, where each locked dependency carries a
-  reviewed CPE (or the reason there is none) and its upstream release (see
-  `ThirdParty/POLICY.md`). Neither has a retained hosted run yet. A reason for
-  missing CPE is an inventory note, not vulnerability coverage: the GitHub and
-  generic PURLs for AngelScript, Dear ImGui, EnTT, Jolt, RecastNavigation,
-  cgltf, glad, libsodium and other CPE-less entries are not proven to match
-  grype advisories. Package-identity and advisory matching for those entries
-  remain open.
+  reviewed CPE (or the reason there is none), a reviewed purl mapping or the
+  reason there is none for every CPE-less one, and its upstream release (see
+  `ThirdParty/POLICY.md`). Both the SBOM generator and the vulnerability gate
+  fail a CPE-less dependency with neither. Neither scan has a retained hosted
+  run yet. A reason for missing CPE is an inventory note, not vulnerability
+  coverage: the purls recorded for Dear ImGui, EnTT, Jolt, RecastNavigation,
+  cgltf, glad and libsodium are reviewed identities, not proven to match grype
+  advisories, and AngelScript's upstream package identity awaits an owner
+  decision. Advisory matching for those entries remains open.
 - Hosted exact-SHA evidence for the required `secret-scan` job
 - CodeQL coverage for every shipped product. The required
   `analysis-regressions` job blocks new findings relative to a reviewed
-  baseline; baseline entries do not yet carry the owned, bounded-expiry
-  exception policy required for a universal Critical/High finding claim.
+  baseline, and every baseline entry now carries an accountable `owner` and an
+  `expires` date (see "CodeQL baseline entries" below). CodeQL JavaScript
+  coverage is not automated and remains outside that claim.
 - Owner review of the declared dependencies outside `ThirdParty/`.
   `tools/check-supply-chain.py` now fails on any undeclared system library, CI
   system package, remote web script without a pinned version and SRI hash, or
   file with a foreign license header (see "Dependencies outside ThirdParty/" in
   `ThirdParty/POLICY.md`). The declared licenses are not checked against the
   SPDX allow-list, and the editor fonts' OFL-1.1 still needs an owner decision.
+
+**CodeQL baseline entries.** `.github/codeql-baseline.json` lists each
+reviewed finding the `analysis-regressions` job accepts. An entry has exactly
+`language`, `ruleId`, `path`, `fingerprint`, `review`, `owner` and `expires`:
+`owner` names the accountable maintainer, and `expires` is an ISO date
+(`YYYY-MM-DD`) no more than 366 days ahead, the same horizon as a
+`supply-chain.lock` exception. `.github/scripts/check-analysis-results.py`
+fails the job (exit 2) on an entry with a missing or empty owner, a missing or
+malformed `expires`, an `expires` that has passed, or one beyond the horizon, so
+an accepted finding must be re-reviewed before its date rather than left in
+place. A listed finding that is no longer reported also blocks until its entry
+is removed.
+
+**Third-party code outside `ThirdParty/`.** New third-party code belongs in
+`ThirdParty/` under `ThirdParty/POLICY.md`. Anything a build, CI job, or tool
+takes from elsewhere must be hash-pinned or declared in
+`ThirdParty/supply-chain.lock`: `tools/check-supply-chain.py` fails a `pip
+install` without `--require-hashes`, an unpinned `winget`, `choco` or `npm`
+install, and any download piped into an interpreter, in workflows and
+`tools/*.sh`.
 
 **Stable release approval (REL-110):** stable publication runs in the protected
 `stable-release` environment, whose only reviewer is the repository owner.

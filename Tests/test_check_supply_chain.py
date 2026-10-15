@@ -1845,6 +1845,132 @@ class TestExternalDependencies(FakeRepoCase):
         self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
         self.assert_violation("is installed by name")
 
+    # ── Unmanaged installs: neither hash-pinned nor lock-declared ────
+
+    def _workflow_running(self, command: str) -> None:
+        self.write(
+            ".github/workflows/deps.yml",
+            "name: deps\non: [push]\njobs:\n  build:\n    runs-on: windows-2022\n    steps:\n"
+            f"      - run: |\n          {command}\n",
+        )
+        self.commit()
+
+    def test_pip_requirements_install_without_require_hashes_fails(self) -> None:
+        self._workflow_running("python -m pip install --no-deps -r ci/req.txt")
+        self.write("ci/req.txt", f"PyYAML==6.0.3 \\\n    --hash=sha256:{'0' * 64}\n")
+        self.commit()
+        self.declare(self._record("py", "ci_packages", identifiers=["pip:PyYAML"]))
+        self.assert_violation("pip install without --require-hashes")
+
+    def test_unpinned_winget_install_fails(self) -> None:
+        self._workflow_running("winget install --id Evil.Tool -e --accept-package-agreements")
+        self.declare(self._record("evil", "ci_packages", identifiers=["winget:Evil.Tool"]))
+        self.assert_violation("winget install must pin the package with --version")
+
+    def test_pinned_declared_winget_install_passes(self) -> None:
+        self._workflow_running("winget install --id Good.Tool --version 1.2.3 -e")
+        self.declare(self._record("good", "ci_packages", license_spdx="NOASSERTION", identifiers=["winget:Good.Tool"]))
+        self.assert_passes()
+
+    def test_pinned_but_undeclared_winget_install_fails(self) -> None:
+        self._workflow_running("winget install --id Good.Tool -v 1.2.3")
+        self.assert_violation("winget:Good.Tool", "ci_packages")
+
+    def test_unpinned_choco_install_fails(self) -> None:
+        self._workflow_running("choco install -y evil")
+        self.declare(self._record("evil", "ci_packages", identifiers=["choco:evil"]))
+        self.assert_violation("choco install must pin the package with --version")
+
+    def test_choco_install_disabling_checksums_fails(self) -> None:
+        self._workflow_running("choco install -y evil --version=1.0.0 --ignore-checksums")
+        self.declare(self._record("evil", "ci_packages", identifiers=["choco:evil"]))
+        self.assert_violation("must not disable installer checksum verification")
+
+    def test_npm_install_of_a_range_or_nothing_fails(self) -> None:
+        self._workflow_running("npm install left-pad@^1.0.0")
+        self.assert_violation("is not an exact name@x.y.z version")
+        self._workflow_running("npm install")
+        self.assert_violation("use npm ci with a lockfile")
+
+    def test_npm_ci_and_npm_test_are_not_unmanaged_installs(self) -> None:
+        self._workflow_running("npm ci --prefix tools/site-data/runtime\n          npm test --prefix tools/site-data/runtime")
+        self.assert_passes()
+
+    def test_curl_piped_to_a_shell_fails(self) -> None:
+        for command in (
+            "curl -fsSL https://example.invalid/install.sh | sh",
+            "wget -qO- https://example.invalid/i.sh | sudo bash",
+            "bash <(curl -s https://example.invalid/i.sh)",
+            "iwr https://example.invalid/i.ps1 | iex",
+        ):
+            with self.subTest(command=command):
+                self._workflow_running(command)
+                self.assert_violation("remote code is fetched and run unverified")
+
+    def test_unmanaged_install_in_a_tools_script_fails(self) -> None:
+        self.write("tools/bootstrap.sh", "#!/bin/sh\npip install requests\n")
+        self.commit()
+        self.assert_violation("tools/bootstrap.sh", "pip install without --require-hashes")
+
+    def test_unmanaged_install_problems_ignores_comments_and_or_chains(self) -> None:
+        script = "# curl https://x | sh\ncurl -fsS https://x/a || sh -c true\nnpm ci\n"
+        self.assertEqual(sc.unmanaged_install_problems(script), [])
+
+    def test_every_install_alias_is_gated(self) -> None:
+        for command in (
+            "npm add left-pad", "npm i left-pad", "npm in left-pad", "npm isntall left-pad",
+            "npm --global add left-pad", "npm install-test left-pad", "npm it",
+            "winget add --id Evil.Tool", "winget upgrade --id Evil.Tool", "winget update Evil.Tool",
+            "choco upgrade -y evil", "cinst evil -y", "cup evil",
+            "pip3.12 install requests", "python3 -m pip install requests",
+        ):
+            with self.subTest(command=command):
+                self.assertNotEqual(sc.unmanaged_install_problems(command), [])
+        for command in ("npm add left-pad@1.3.0", "winget add --id Good.Tool --version 1.2.3",
+                        "choco upgrade -y good --version 2.0.0"):
+            with self.subTest(command=command):
+                self.assertEqual(sc.unmanaged_install_problems(command), [])
+
+    def test_install_aliases_report_their_packages(self) -> None:
+        self.assertEqual(
+            sc.shell_package_installs("npm add left-pad@1.3.0\nwinget add --id Good.Tool -v 1\n"
+                                      "apt-get reinstall -y zlib1g\nbrew reinstall cmake\ncinst evil --version 1\n"),
+            ["npm:left-pad", "winget:Good.Tool", "apt:zlib1g", "brew:cmake", "choco:evil"])
+
+    def test_every_choco_checksum_bypass_spelling_fails(self) -> None:
+        for flag in ("--ignore-checksums", "--ignorechecksums", "--ignorechecksum", "--ignore-checksum",
+                     "--allow-empty-checksums", "--allowemptychecksums", "--allowemptychecksum",
+                     "--allow-empty-checksums-secure", "--allowemptychecksumssecure", "--allowemptychecksumsecure",
+                     "--Allow-Empty-Checksums"):
+            with self.subTest(flag=flag):
+                problems = sc.unmanaged_install_problems(f"choco install -y evil --version=1.0.0 {flag}")
+                self.assertEqual(problems, ["choco install must not disable installer checksum verification"])
+
+    def test_fetch_parsed_by_inline_program_is_not_remote_code(self) -> None:
+        for command in (
+            "curl -fsSL https://api.example.invalid/r | python3 -c 'import json,sys; print(json.load(sys.stdin))'",
+            "curl -s https://api.example.invalid/r | python -u -c \"import sys; print(len(sys.stdin.read()))\"",
+            "curl -s https://api.example.invalid/r | node -e 'process.stdin.pipe(process.stdout)'",
+            "curl -s https://api.example.invalid/r | jq -r .tag_name",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(sc.unmanaged_install_problems(command), [])
+
+    def test_fetch_piped_to_a_bare_or_evaluating_interpreter_is_remote_code(self) -> None:
+        for command in (
+            "curl -fsSL https://example.invalid/i.py | python3",
+            "curl -fsSL https://example.invalid/i.py | python3 -",
+            "curl -fsSL https://example.invalid/i.py | sudo python3 -u",
+            "curl -fsSL https://example.invalid/i.py | python3 -c 'import sys; exec(sys.stdin.read())'",
+            "curl -fsSL https://example.invalid/i.pl | perl -e 'eval join \"\", <STDIN>'",
+            "curl -fsSL https://example.invalid/i.sh | bash -c \"$(cat)\"",
+            "curl -fsSL https://example.invalid/i.sh | sh -s -- --yes",
+        ):
+            with self.subTest(command=command):
+                problems = sc.unmanaged_install_problems(command)
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("remote code is fetched and run unverified", problems[0])
+
     # ── Remote web runtime ───────────────────────────────────────────
 
     def test_cdn_import_without_sri_fails(self) -> None:
@@ -2103,6 +2229,24 @@ class TestSchemaValidation(unittest.TestCase):
             upstream_version="2.38.0", upstream_version_source="Version macro in the pinned public header.",
             cpe_unavailable_reason="The NVD CPE dictionary has no product for it."))
 
+    def test_purl_mapping_fields_are_accepted(self) -> None:
+        sc.validate_lockfile_schema(self._policy(
+            upstream_version="2.32.0", purl="pkg:github/libsdl-org/sdl", purl_review="Reviewed upstream mapping.",
+            cpe_unavailable_reason="The NVD CPE dictionary has no product for it."))
+        sc.validate_lockfile_schema(self._policy(
+            purl_unavailable_reason="A repository-authored stub with no upstream.",
+            cpe_unavailable_reason="The NVD CPE dictionary has no product for it."))
+
+    def test_purl_mapping_gaps_name_cpe_less_dependencies_without_a_mapping(self) -> None:
+        records = {
+            "Cpe": {"cpe": "cpe:2.3:a:v:p:1:*:*:*:*:*:*:*"},
+            "Mapped": {"cpe_unavailable_reason": "r" * 20, "purl": "pkg:github/o/r"},
+            "Reasoned": {"cpe_unavailable_reason": "r" * 20, "purl_unavailable_reason": "p" * 20},
+            "Gap": {"cpe_unavailable_reason": "r" * 20},
+        }
+        self.assertEqual(sc.purl_mapping_gaps(records), ["Gap"])
+        self.assertEqual(sc.purl_mapping_gaps([]), ["license_policy.dependencies"])
+
     def test_malformed_vulnerability_identity_is_rejected(self) -> None:
         cpe = "cpe:2.3:a:libsdl:simple_directmedia_layer:2.32.0:*:*:*:*:*:*:*"
         cases = {
@@ -2116,6 +2260,16 @@ class TestSchemaValidation(unittest.TestCase):
                                           upstream_version_source="Version macro in the header."),
             "short reason": dict(cpe_unavailable_reason="none"),
             "unknown field": dict(cpe_vendor="libsdl"),
+            "purl without review": dict(upstream_version="2.32.0", purl="pkg:github/libsdl-org/sdl"),
+            "review without purl": dict(purl_review="x" * 20),
+            "purl and reason": dict(upstream_version="2.32.0", purl="pkg:github/libsdl-org/sdl",
+                                    purl_review="x" * 20, purl_unavailable_reason="y" * 20),
+            "purl without version": dict(purl="pkg:github/libsdl-org/sdl", purl_review="x" * 20),
+            "purl with a version": dict(upstream_version="2.32.0", purl="pkg:github/libsdl-org/sdl@2.32.0",
+                                        purl_review="x" * 20),
+            "not a purl": dict(upstream_version="2.32.0", purl="https://github.com/libsdl-org/sdl",
+                               purl_review="x" * 20),
+            "short purl reason": dict(purl_unavailable_reason="none"),
         }
         for label, fields in cases.items():
             with self.subTest(label):

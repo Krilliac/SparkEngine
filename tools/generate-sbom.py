@@ -11,11 +11,14 @@ tools/check-supply-chain.py, never guessed), and the lockfile's integrity pin
 So that a vulnerability scanner can match the document (the PR-time
 ``dependency-policy`` job scans it with grype), every dependency's
 ``license_policy`` record must carry an NVD CPE, emitted as a ``cpe23Type``
-reference, or a reviewed ``cpe_unavailable_reason``. A submodule, whose pin is a
+reference, or a reviewed ``cpe_unavailable_reason``. A dependency without a CPE must
+also carry a reviewed package-URL mapping (``purl`` with its ``purl_review``) or a
+``purl_unavailable_reason``, so none can silently escape scanning. A submodule, whose pin is a
 commit no advisory names, must also record the upstream release it derives
 from (``upstream_version``, ``+N`` for N commits past it) with its evidence: the
 release tag's commit, checked against the gitlink, or a reviewed source. The
-upstream release is the package version and a ``pkg:generic`` purl.
+upstream release is the package version; the purls carry it only when the pin is
+that release, and otherwise name the pinned commit (``1.0+3`` is no upstream ref).
 
 The document is bound to a source commit the same way REL-100 build provenance
 is: it records the commit SHA and the SHA-256 of the *committed*
@@ -146,6 +149,10 @@ class Dependency:
     upstream_version: str | None = None
     cpe: str | None = None
     cpe_unavailable_reason: str | None = None
+    # Reviewed package-URL mapping (version-less) and its evidence, or the reason there is none.
+    purl: str | None = None
+    purl_review: str | None = None
+    purl_unavailable_reason: str | None = None
 
 
 # --------------------------------------------------------------------------- lock inventory
@@ -226,6 +233,9 @@ def load_inventory(root: Path) -> list[Dependency]:
                 upstream_version=record.get("upstream_version"),
                 cpe=record.get("cpe"),
                 cpe_unavailable_reason=record.get("cpe_unavailable_reason"),
+                purl=record.get("purl"),
+                purl_review=record.get("purl_review"),
+                purl_unavailable_reason=record.get("purl_unavailable_reason"),
             )
         )
 
@@ -240,7 +250,8 @@ def load_inventory(root: Path) -> list[Dependency]:
 def _identity_errors(name: str, kind: str, pin: str, record: dict[str, str]) -> list[str]:
     """Why a dependency cannot be matched by a vulnerability scan of this SBOM (empty when it can).
 
-    Every dependency needs a CPE or a reviewed reason there is none. A submodule
+    Every dependency needs a CPE or a reviewed reason there is none, and a dependency
+    without a CPE also needs a reviewed purl mapping or the reason none exists. A submodule
     is pinned to a commit, which no advisory names, so it also needs the upstream
     release it derives from. When that release is backed by a tag commit, the
     version says whether the gitlink is that commit ("2.32.0") or past it
@@ -250,6 +261,11 @@ def _identity_errors(name: str, kind: str, pin: str, record: dict[str, str]) -> 
     errors = []
     if "cpe" not in record and "cpe_unavailable_reason" not in record:
         errors.append(f"{name}: {where} names no cpe or cpe_unavailable_reason, so no scanner can match it")
+    if "cpe" not in record and not ({"purl", "purl_unavailable_reason"} & record.keys()):
+        errors.append(
+            f"{name}: {where} has no CPE and no reviewed purl mapping (purl with purl_review, or "
+            "purl_unavailable_reason), so the dependency can silently escape vulnerability scanning"
+        )
     if kind != "submodule":
         return errors
     version = record.get("upstream_version")
@@ -287,6 +303,23 @@ def _spdx_id(name: str) -> str:
 def _source_url(source: str) -> str | None:
     token = source.split()[0] if source.split() else ""
     return token if token.startswith("https://") else None
+
+
+def _upstream_purl_version(dep: Dependency) -> str | None:
+    """The purl version for a dependency's upstream release, or None when no real upstream ref names it.
+
+    A purl version must be something upstream publishes. ``upstream_version`` "1.92.9b" is the
+    release tag and is used as-is, but "1.92.9b+35" (35 commits past it) is no upstream version
+    at all, so a submodule pinned past its release is named by its pinned commit instead, and a
+    vendored tree past one (no commit to name) gets a version-less purl. ``versionInfo`` still
+    carries "1.92.9b+35" for scanners that compare against advisory ranges.
+    """
+    if not dep.upstream_version:
+        return None
+    match = supply_chain.UPSTREAM_VERSION_RE.fullmatch(dep.upstream_version)
+    if match is not None and not match.group("ahead"):
+        return dep.upstream_version
+    return dep.pin if dep.kind == "submodule" else None
 
 
 def _package(dep: Dependency) -> dict[str, Any]:
@@ -327,21 +360,33 @@ def _package(dep: Dependency) -> dict[str, Any]:
         references.append({"referenceCategory": "SECURITY", "referenceType": "cpe23Type", "referenceLocator": dep.cpe})
     else:
         package["comment"] += f" No CPE: {dep.cpe_unavailable_reason}"
-    if github and purl_version:
-        owner, repo = github.group(1).lower(), github.group(2).lower()
+        if dep.purl_unavailable_reason:
+            package["comment"] += f" No reviewed purl: {dep.purl_unavailable_reason}"
+    release_ref = _upstream_purl_version(dep)
+    if dep.purl and dep.upstream_version:
+        package["comment"] += f" Reviewed purl: {dep.purl_review}"
         references.append(
             {
                 "referenceCategory": "PACKAGE-MANAGER",
                 "referenceType": "purl",
-                "referenceLocator": f"pkg:github/{owner}/{repo}@{purl_version}",
+                "referenceLocator": f"{dep.purl}@{quote(release_ref, safe='.')}" if release_ref else dep.purl,
             }
         )
+    if github and purl_version:
+        owner, repo = github.group(1).lower(), github.group(2).lower()
+        locator = f"pkg:github/{owner}/{repo}@{purl_version}"
+        if all(ref["referenceLocator"] != locator for ref in references):
+            references.append(
+                {"referenceCategory": "PACKAGE-MANAGER", "referenceType": "purl", "referenceLocator": locator}
+            )
     if dep.upstream_version:
+        name = quote(dep.name, safe="")
         references.append(
             {
                 "referenceCategory": "PACKAGE-MANAGER",
                 "referenceType": "purl",
-                "referenceLocator": f"pkg:generic/{quote(dep.name, safe='')}@{quote(dep.upstream_version, safe='.')}",
+                "referenceLocator": f"pkg:generic/{name}@{quote(release_ref, safe='.')}" if release_ref
+                else f"pkg:generic/{name}",
             }
         )
     if references:

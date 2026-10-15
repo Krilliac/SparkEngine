@@ -391,34 +391,43 @@
         "spdx": "Zlib",
         "upstream_version": "2.38.0",
         "upstream_version_source": "ANGELSCRIPT_VERSION_STRING in sdk/angelscript/include/angelscript.h at the pinned commit; the codecat mirror publishes no release tags.",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no AngelScript product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no AngelScript product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl_unavailable_reason": "Owner review pending: the pin is the codecat/angelscript-mirror GitHub mirror of the SourceForge upstream, so no unambiguous upstream package URL is recorded; the mirror release tags do not name upstream versions."
       },
       "Dear ImGui": {
         "declared": "MIT",
         "spdx": "MIT",
         "upstream_version": "1.92.9b+35",
         "upstream_tag_commit": "b48d1afbe8ee8b238e2961dc363a949dd7304e23",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no Dear ImGui product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no Dear ImGui product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl": "pkg:github/ocornut/imgui",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/ocornut/imgui) is the upstream repository, so this package URL names the shipped code."
       },
       "EnTT": {
         "declared": "MIT",
         "spdx": "MIT",
         "upstream_version": "4.0.0",
         "upstream_tag_commit": "85c6bba014049b5de8fad49d25424df2f1f6a8c1",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no EnTT product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no EnTT product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl": "pkg:github/skypjack/entt",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/skypjack/entt) is the upstream repository, so this package URL names the shipped code."
       },
       "Jolt Physics": {
         "declared": "MIT",
         "spdx": "MIT",
         "upstream_version": "5.5.1",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no Jolt Physics product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no Jolt Physics product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl": "pkg:github/jrouwe/joltphysics",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/jrouwe/JoltPhysics) is the upstream repository, so this package URL names the shipped code."
       },
       "RecastNavigation": {
         "declared": "zlib",
         "spdx": "Zlib",
         "upstream_version": "1.6.0+367",
         "upstream_tag_commit": "6dc1667f580357e8a2154c28b7867bea7e8ad3a7",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no RecastNavigation product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no RecastNavigation product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl": "pkg:github/recastnavigation/recastnavigation",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/recastnavigation/recastnavigation) is the upstream repository, so this package URL names the shipped code."
       },
       "SDL2": {
         "declared": "zlib",
@@ -430,31 +439,39 @@
       "VulkanMemoryAllocator": {
         "declared": "MIT",
         "spdx": "MIT",
-        "cpe_unavailable_reason": "ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
+        "cpe_unavailable_reason": "ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe.",
+        "purl_unavailable_reason": "ThirdParty/VulkanMemoryAllocator/vk_mem_alloc.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream package URL describes the code that ships."
       },
       "cgltf": {
         "declared": "MIT",
         "spdx": "MIT",
         "upstream_version": "1.15",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no cgltf product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no cgltf product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl": "pkg:github/jkuhlmann/cgltf",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/jkuhlmann/cgltf) is the upstream repository, so this package URL names the shipped code."
       },
       "glad": {
         "declared": "MIT and Apache-2.0",
         "spdx": "MIT AND Apache-2.0",
         "upstream_version": "0.1.36",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no glad product (keyword search on 2026-09-27), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no glad product (keyword search on 2026-09-27), so no CPE can be matched.",
+        "purl": "pkg:github/dav1dde/glad",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/Dav1dde/glad) is the upstream repository, so this package URL names the shipped code."
       },
       "libsodium": {
         "declared": "ISC",
         "spdx": "ISC",
         "upstream_version": "1.0.22",
         "upstream_tag_commit": "77e1ce5d6dee871c49ef211222ba18ef0c486bda",
-        "cpe_unavailable_reason": "The NVD CPE dictionary has no libsodium product (CPE match-string and keyword searches on 2026-09-27; CVE-2025-69277 carries no CPE configuration), so no CPE can be matched."
+        "cpe_unavailable_reason": "The NVD CPE dictionary has no libsodium product (CPE match-string and keyword searches on 2026-09-27; CVE-2025-69277 carries no CPE configuration), so no CPE can be matched.",
+        "purl": "pkg:github/jedisct1/libsodium",
+        "purl_review": "Reviewed 2026-10-15: the dependencies.lock source URL (https://github.com/jedisct1/libsodium) is the upstream repository, so this package URL names the shipped code."
       },
       "miniaudio": {
         "declared": "Public Domain / MIT-0",
         "spdx": "Unlicense OR MIT-0",
-        "cpe_unavailable_reason": "ThirdParty/Audio/miniaudio/miniaudio.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
+        "cpe_unavailable_reason": "ThirdParty/Audio/miniaudio/miniaudio.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe.",
+        "purl_unavailable_reason": "ThirdParty/Audio/miniaudio/miniaudio.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream package URL describes the code that ships."
       },
       "miniz": {
         "declared": "MIT",
@@ -466,12 +483,14 @@
       "nlohmann/json": {
         "declared": "MIT",
         "spdx": "MIT",
-        "cpe_unavailable_reason": "ThirdParty/Utils/json/nlohmann_json.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
+        "cpe_unavailable_reason": "ThirdParty/Utils/json/nlohmann_json.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe.",
+        "purl_unavailable_reason": "ThirdParty/Utils/json/nlohmann_json.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream package URL describes the code that ships."
       },
       "stb_image": {
         "declared": "Public Domain / MIT",
         "spdx": "MIT OR Unlicense",
-        "cpe_unavailable_reason": "ThirdParty/Utils/stb/stb_image.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
+        "cpe_unavailable_reason": "ThirdParty/Utils/stb/stb_image.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe.",
+        "purl_unavailable_reason": "ThirdParty/Utils/stb/stb_image.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream package URL describes the code that ships."
       },
       "tinyexr": {
         "declared": "BSD-3-Clause",
@@ -488,7 +507,8 @@
       "zstd": {
         "declared": "BSD-3-Clause (library, upstream tools are dual-licensed)",
         "spdx": "BSD-3-Clause",
-        "cpe_unavailable_reason": "ThirdParty/Utils/zstd/zstd.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe."
+        "cpe_unavailable_reason": "ThirdParty/Utils/zstd/zstd.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream code ships for a CPE to describe.",
+        "purl_unavailable_reason": "ThirdParty/Utils/zstd/zstd.h is a repository-authored stub, not the upstream library (GOV-400), so no upstream package URL describes the code that ships."
       }
     }
   },

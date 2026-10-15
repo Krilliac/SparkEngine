@@ -34,6 +34,16 @@ be a valid ISO date. Malformed records fail the checker itself; expired records
 are policy violations. These records document review only and never suppress
 inventory, hash, license, action-pin, or manifest checks.
 
+### Vulnerability identity and unmanaged installs
+
+Every locked dependency without an NVD CPE must also carry a reviewed `purl`
+mapping (with `purl_review`) or a `purl_unavailable_reason` in its
+`license_policy` record; `tools/generate-sbom.py` and the vulnerability gate
+fail otherwise. The checker also fails a `pip install` without
+`--require-hashes`, an unpinned `winget`/`choco`/`npm` install, and any download
+piped into an interpreter (`curl ... | sh`) in workflows and `tools/*.sh`. See
+`ThirdParty/POLICY.md`.
+
 ---
 
 ## Manifest Format (authoritative)

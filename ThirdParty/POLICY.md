@@ -247,13 +247,23 @@ dependency that does not live in a `ThirdParty/` container. Each record has a
 | Class | Extra fields | What the checker scans |
 |---|---|---|
 | `system_libraries` | `identifiers`: `cmake:<Package>` or `pkg-config:<module>` | `find_package`, `find_dependency`, `pkg_check_modules`, and `pkg_search_module` calls in every tracked `CMakeLists.txt`, `*.cmake`, and `*.cmake.in`, with comments removed |
-| `ci_packages` | `identifiers`: `apt:<package>`, `brew:<formula>`, or `pip:<project>` | `apt-get install`, `apt install`, `brew install`, and `pip install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. A `pip install` must read a repository-relative requirements file (`-r`) whose every line is an exact `name==version` pin with `--hash=sha256:` digests; a package named on the command line cannot carry a hash and fails. |
+| `ci_packages` | `identifiers`: `apt:<package>`, `brew:<formula>`, `pip:<project>`, `winget:<id>`, `choco:<package>`, or `npm:<package>` | `apt-get install`, `apt install`, `brew install`, `pip install`, `winget install`, `choco install`, and `npm install` commands in every workflow and composite-action `run:` script, parsed as YAML. Backslash continuations are joined, and a comment or shell operator ends the package list. A `pip install` must pass `--require-hashes` and read a repository-relative requirements file (`-r`) whose every line is an exact `name==version` pin with `--hash=sha256:` digests; a package named on the command line cannot carry a hash and fails. A `winget` or `choco` install must pin `--version` (and `choco` may not disable checksums), and an `npm install` must name exact `name@x.y.z` versions; `npm ci` installs what `package-lock.json` pins and is not an install here. |
 | `web_runtime` | `url` with an exact version (`name@1.2.3/`), and `sri` (`sha384-` or `sha512-`) | `<script src>`, import maps, and module `import` statements in tracked `.html`, `.js`, and `.mjs` files. Import-map specifiers are resolved first. |
 | `vendored_outside_thirdparty` | `paths`: tracked files, or directories ending in `/` | Tracked files outside `ThirdParty/` that contain an MIT, Apache-2.0, or BSD license grant phrase. The scan reads the index with `git grep --cached`, so binary files are included. |
 | `downloads` | `path`, `pin_path`, normalized `command`, `source_url`, resolved `url`, `sha256`, `output`, and `verification` | Artifact fetches in tracked shell/PowerShell scripts, workflow `run:` blocks, and CMake `file(DOWNLOAD)`, `FetchContent_Declare`, or `ExternalProject_Add` calls outside `ThirdParty/`. The fetching file must tie the locked URL and SHA-256 to the fetched output; CMake's `URL_HASH` and `EXPECTED_HASH` count as built-in verification. GitHub API JSON reads for publication are not third-party artifacts. |
 
 The rules:
 
+- **Third-party code outside `ThirdParty/` is unmanaged unless it is hash-pinned
+  or lock-declared.** No install or fetch may bring in code that no repository
+  hash or `supply-chain.lock` record names. The checker fails a workflow `run:`
+  script, or a top-level `tools/*.sh` helper, that runs `pip install` without
+  `--require-hashes`, a `winget`/`choco` install without `--version`, an `npm
+  install` of anything but exact versions, or any download piped into an
+  interpreter (`curl ... | sh`, `bash <(curl ...)`, `iwr ... | iex`). Code
+  that a build step, a tool page, or a script obtains from outside
+  `ThirdParty/` and that is not covered by one of the classes above is a
+  violation, not an omission: declare it or move it under `ThirdParty/`.
 - Every scanned use must match a declared identifier, URL, or path. The only
   CMake packages that need no record are first-party or build tooling:
   `SparkEngine`, `Python3`, `Git`, and `PkgConfig`.
@@ -295,6 +305,18 @@ provenance record for one release join on that value. Generation refuses a
 checkout whose lockfiles differ from their committed blobs, and `--check FILE`
 regenerates and requires byte equality, which lets a consumer holding the
 source verify an SBOM it was given.
+
+Every locked dependency must be matchable by a vulnerability scan. Its
+`license_policy` record carries an NVD `cpe` or a reviewed
+`cpe_unavailable_reason`, and a dependency without a CPE also carries a
+reviewed package-URL mapping: a version-less `purl` (for example
+`pkg:github/skypjack/entt`) with the `purl_review` that records why it names
+the shipped upstream, or a `purl_unavailable_reason` (for a repository-authored
+stub, or an upstream identity that is not yet agreed). `tools/generate-sbom.py`
+refuses a CPE-less dependency with neither, and the vulnerability gate
+(`.github/scripts/verify_vulnerability_findings.py`) fails on the same lock, so
+no dependency can silently escape scanning. A mapping is an identity claim, not
+proof that a scanner matches advisories against it.
 
 `generate-sbom.py reconcile` compares a shipped package with the lock. It takes
 a CMake `install_manifest.txt` (`--install-manifest`) or a staged package tree

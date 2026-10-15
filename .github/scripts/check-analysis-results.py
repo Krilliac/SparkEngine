@@ -4,7 +4,11 @@
 The gate blocks regressions relative to a reviewed baseline
 (``.github/codeql-baseline.json``). Each baseline entry names one finding by
 language, rule, path and CodeQL's ``primaryLocationLineHash`` fingerprint, plus
-a written review. A result that no entry matches blocks (exit 1). A baseline
+a written review, an accountable ``owner`` and an ISO ``expires`` date. An entry
+whose ``expires`` date has passed, or lies beyond the 366-day exception horizon
+that ``tools/check-supply-chain.py`` applies to dependency exceptions, is
+malformed and fails the gate (exit 2): an accepted finding must be re-reviewed
+before its date, not left in place. A result that no entry matches blocks (exit 1). A baseline
 entry that no result matches is stale and also blocks, so fixed findings leave
 the baseline in the same change and it can only shrink without review.
 
@@ -22,11 +26,15 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import datetime
 import json
 from pathlib import Path
 import sys
 
 MAX_FILE_BYTES = 64 * 1024 * 1024
+# Matches MAX_EXCEPTION_HORIZON_DAYS in tools/check-supply-chain.py.
+MAX_EXPIRY_DAYS = 366
+ENTRY_FIELDS = {"language", "ruleId", "path", "fingerprint", "review", "owner", "expires"}
 LANGUAGES = ("actions", "c-cpp", "python")
 DEFAULT_BASELINE = Path(__file__).resolve().parents[1] / "codeql-baseline.json"
 
@@ -117,8 +125,25 @@ def report_findings(report: object) -> list[tuple[str, str, str]]:
     return findings
 
 
-def load_baseline(document: object, language: str) -> list[tuple[str, str, str]]:
+def _expiry(entry: dict, today: datetime.date) -> datetime.date:
+    """Parse an entry's ``expires`` and reject an expired or over-long one."""
+    value = entry["expires"]
+    try:
+        expires = datetime.date.fromisoformat(value) if len(value) == 10 else None
+    except ValueError:
+        expires = None
+    if expires is None:
+        raise ValueError(f"baseline entry expires must be an ISO date (YYYY-MM-DD): {entry}")
+    if expires < today:
+        raise ValueError(f"baseline entry expired on {value}; re-review it or fix the finding: {entry}")
+    if expires > today + datetime.timedelta(days=MAX_EXPIRY_DAYS):
+        raise ValueError(f"baseline entry expires {value}, beyond the {MAX_EXPIRY_DAYS}-day horizon: {entry}")
+    return expires
+
+
+def load_baseline(document: object, language: str, today: datetime.date | None = None) -> list[tuple[str, str, str]]:
     """Return the reviewed baseline keys for one language, validating every entry."""
+    today = today or datetime.date.today()
     if not isinstance(document, dict) or document.get("schema") != 1:
         raise ValueError("baseline must be an object with schema 1")
     entries = document.get("findings")
@@ -127,12 +152,15 @@ def load_baseline(document: object, language: str) -> list[tuple[str, str, str]]
     keys: list[tuple[str, str, str]] = []
     seen: set[tuple[str, str, str, str]] = set()
     for entry in entries:
-        if not isinstance(entry, dict) or set(entry) != {"language", "ruleId", "path", "fingerprint", "review"}:
-            raise ValueError(f"baseline entry must have exactly language/ruleId/path/fingerprint/review: {entry}")
+        if not isinstance(entry, dict) or set(entry) != ENTRY_FIELDS:
+            raise ValueError(
+                f"baseline entry must have exactly language/ruleId/path/fingerprint/review/owner/expires: {entry}")
         if entry["language"] not in LANGUAGES:
             raise ValueError(f"baseline entry has unknown language {entry['language']!r}")
-        if not all(_nonempty_string(entry[field]) for field in ("ruleId", "path", "fingerprint", "review")):
+        if not all(_nonempty_string(entry[field])
+                   for field in ("ruleId", "path", "fingerprint", "review", "owner", "expires")):
             raise ValueError(f"baseline entry has an empty field: {entry}")
+        _expiry(entry, today)
         identity = (entry["language"], entry["ruleId"], entry["path"], entry["fingerprint"])
         if identity in seen:
             raise ValueError(f"duplicate baseline entry: {identity}")

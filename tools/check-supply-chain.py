@@ -164,10 +164,16 @@ LICENSE_POLICY_KEYS = frozenset({"dependencies"})
 LICENSE_POLICY_RECORD_FIELDS = frozenset({"declared", "spdx"})
 # Vulnerability identity for the lock-derived SBOM (tools/generate-sbom.py
 # requires it for every dependency): the upstream release a pin derives from,
-# the evidence for it, and an NVD CPE or the reason there is none.
+# the evidence for it, and an NVD CPE or the reason there is none.  A
+# dependency without a CPE also needs a reviewed package-URL mapping (``purl``
+# with its ``purl_review``) or the reason none exists (``purl_unavailable_reason``),
+# so a CPE-less dependency cannot silently escape vulnerability matching.
 LICENSE_POLICY_IDENTITY_FIELDS = frozenset({
     "upstream_version", "upstream_tag_commit", "upstream_version_source", "cpe", "cpe_unavailable_reason",
+    "purl", "purl_review", "purl_unavailable_reason",
 })
+# A version-less package URL (pkg:type/namespace/name); the version is the upstream release.
+PURL_RE = re.compile(r"^pkg:[a-z][a-z0-9.+-]*(?:/[A-Za-z0-9._%-]+){1,3}$")
 # A release version, optionally "+N": N commits past that release.
 UPSTREAM_VERSION_RE = re.compile(r"^(?P<release>[0-9]+(?:\.[0-9]+){0,3}[a-z]?)(?:\+(?P<ahead>[1-9][0-9]*))?$")
 CPE23_APPLICATION_RE = re.compile(r"^cpe:2\.3:a(?::[A-Za-z0-9._\-~*]+){10}$")
@@ -191,7 +197,7 @@ EXTERNAL_CLASS_FIELDS = {
 }
 EXTERNAL_IDENTIFIER_NAMESPACES = {
     "system_libraries": frozenset({"cmake", "pkg-config"}),
-    "ci_packages": frozenset({"apt", "brew", "pip"}),
+    "ci_packages": frozenset({"apt", "brew", "choco", "npm", "pip", "winget"}),
 }
 EXTERNAL_IDENTIFIER_RE = re.compile(r"^(?P<ns>[a-z-]+):(?P<name>[A-Za-z0-9][A-Za-z0-9._+-]*)$")
 # Build-only CI packages are not distributed, so their records may state
@@ -216,9 +222,73 @@ CMAKE_FIND_RE = re.compile(
 PKG_CONFIG_KEYWORDS = frozenset({
     "REQUIRED", "QUIET", "NO_CMAKE_PATH", "NO_CMAKE_ENVIRONMENT_PATH", "IMPORTED_TARGET", "GLOBAL",
 })
-PACKAGE_MANAGERS = {"apt-get": "apt", "apt": "apt", "brew": "brew", "pip": "pip", "pip3": "pip"}
+PACKAGE_MANAGERS = {
+    "apt-get": "apt", "apt": "apt", "brew": "brew", "pip": "pip", "pip3": "pip",
+    "choco": "choco", "npm": "npm", "winget": "winget",
+}
+# Versioned pip launchers (`pip3.12`) are the same installer as `pip`.
+VERSIONED_PIP_RE = re.compile(r"^pip[0-9]+(?:\.[0-9]+)?$")
+# Legacy Chocolatey shims that are an install with the verb built in.
+IMPLICIT_INSTALL_COMMANDS = {"cinst": "choco", "cup": "choco"}
 # pip options whose value is the next token rather than a package to install.
 PIP_VALUE_OPTIONS = frozenset({"-r", "--requirement", "-c", "--constraint"})
+# Every subcommand that installs a package, per manager, aliases included: a
+# missed alias (`npm add`, `winget add`) would install with no gate at all.
+# `npm ci` / `clean-install` install exactly what package-lock.json pins and are
+# not installs here; `choco upgrade` and `winget upgrade` install when absent.
+INSTALL_VERBS = {
+    "npm": frozenset({
+        "install", "i", "add", "in", "ins", "inst", "insta", "instal",
+        "isnt", "isnta", "isntal", "isntall", "install-test", "it",
+    }),
+    "winget": frozenset({"install", "add", "upgrade", "update"}),
+    "choco": frozenset({"install", "upgrade"}),
+    "apt": frozenset({"install", "reinstall"}),
+    "brew": frozenset({"install", "reinstall"}),
+}
+DEFAULT_INSTALL_VERBS = frozenset({"install"})
+# Options whose value is the next token, per manager, so the value is not read as a package.
+MANAGER_VALUE_OPTIONS = {
+    "pip": PIP_VALUE_OPTIONS,
+    "winget": frozenset({
+        "--query", "-q", "--version", "-v", "--source", "-s", "--scope",
+        "--architecture", "-a", "--locale", "-l", "--override", "--location", "-o", "--log", "--installer-type",
+    }),
+    "choco": frozenset({
+        "--version", "--source", "-s", "--params", "--parameters", "--install-arguments", "--installargs", "--ia",
+        "--override-arguments", "--packageparameters", "--pp",
+    }),
+}
+# winget options whose value names the package being installed.
+PACKAGE_NAME_OPTIONS = {"winget": ("--id", "--name", "--moniker")}
+# A version pin in a winget/choco command line: `--version 1.2.3` or `--version=1.2.3`.
+VERSION_OPTIONS = {"winget": ("--version", "-v"), "choco": ("--version",)}
+# choco options that switch installer checksum verification off.
+# Every spelling choco accepts; options are compared case-insensitively.
+CHOCO_CHECKSUM_BYPASS = frozenset({
+    "--ignore-checksums", "--ignorechecksums", "--ignorechecksum", "--ignore-checksum",
+    "--allow-empty-checksums", "--allowemptychecksums", "--allowemptychecksum",
+    "--allow-empty-checksums-secure", "--allowemptychecksumssecure", "--allowemptychecksumsecure",
+})
+# An npm install argument that names one exact version (no range, tag or URL).
+NPM_EXACT_SPEC_RE = re.compile(r"^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+@[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.]+)?$")
+# A fetch piped (or process-substituted) into an interpreter runs unverified remote code.
+_FETCH_TOOLS = r"(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)"
+_INTERPRETERS = r"(?:sh|bash|zsh|dash|ksh|python3?|perl|ruby|node|pwsh|powershell|iex|Invoke-Expression)"
+# A language interpreter given its program inline (`python3 -c '...'`, `node -e '...'`) reads the
+# piped response as data -- the common JSON-parsing idiom -- unless that program evals its input.
+# Shells and PowerShell get no such exemption: `bash -c "$(cat)"` runs stdin as surely as `bash`.
+_DATA_INTERPRETERS = r"(?:python3?|perl|ruby|node)"
+_SHELL_INTERPRETERS = r"(?:sh|bash|zsh|dash|ksh|pwsh|powershell|iex|Invoke-Expression)"
+_INLINE_PROGRAM = r"(?:\s+-[A-Za-z]+)*?\s+-(?:c|e|-eval)\s+(?!-(?:\s|$))(?![^\n]*\b(?:exec|eval|compile)\b)"
+_PIPE_TARGET = rf"(?:{_DATA_INTERPRETERS}\b(?!{_INLINE_PROGRAM})|{_SHELL_INTERPRETERS}\b)"
+FETCH_PIPED_INTERPRETER_RE = re.compile(
+    rf"\b{_FETCH_TOOLS}\b[^\n;&]*?(?<!\|)\|(?!\|)\s*(?:sudo\s+(?:-\S+\s+)*)?(?:/usr/bin/env\s+)?{_PIPE_TARGET}"
+    rf"|\b{_INTERPRETERS}\s+<\(\s*{_FETCH_TOOLS}\b"
+    rf"|\b(?:iex|Invoke-Expression)\b[^\n]*\b{_FETCH_TOOLS}\b"
+    r"|\.DownloadString\(",
+    re.IGNORECASE,
+)
 # The only requirement line a CI requirements file may hold: one exact version
 # and at least one wheel/sdist hash, so pip runs in hash-checking mode.
 PIP_REQUIREMENT_RE = re.compile(
@@ -1082,7 +1152,7 @@ def _validate_license_policy_schema(data: dict[str, Any]) -> None:
 
 def _validate_vulnerability_identity(label: str, record: dict[str, Any]) -> None:
     """Shape of the optional upstream-version and CPE fields of one record."""
-    for key in ("upstream_version_source", "cpe_unavailable_reason"):
+    for key in ("upstream_version_source", "cpe_unavailable_reason", "purl_review", "purl_unavailable_reason"):
         value = record.get(key)
         if value is not None and (not isinstance(value, str) or not 16 <= len(value.strip()) <= 512):
             _fatal(f"{label}.{key}: expected a reviewed explanation of 16 to 512 characters")
@@ -1098,6 +1168,16 @@ def _validate_vulnerability_identity(label: str, record: dict[str, Any]) -> None
         _fatal(f"{label}: {evidence[0]} needs an upstream_version")
     if len(evidence) > 1:
         _fatal(f"{label}: give upstream_tag_commit or upstream_version_source, not both")
+
+    purl = record.get("purl")
+    if "purl" in record and (not isinstance(purl, str) or not PURL_RE.fullmatch(purl)):
+        _fatal(f"{label}.purl: expected a version-less package URL such as pkg:github/owner/repo")
+    if "purl" in record and "purl_unavailable_reason" in record:
+        _fatal(f"{label}: give purl or purl_unavailable_reason, not both")
+    if ("purl" in record) != ("purl_review" in record):
+        _fatal(f"{label}: purl and purl_review (the evidence that the package URL names this upstream) go together")
+    if "purl" in record and match is None:
+        _fatal(f"{label}.purl: a package URL needs the upstream_version it names")
 
     has_cpe, has_reason = "cpe" in record, "cpe_unavailable_reason" in record
     if has_cpe and has_reason:
@@ -1117,6 +1197,22 @@ def _external_string_list(label: str, value: Any) -> list[str]:
             or not all(isinstance(item, str) and item for item in value)):
         _fatal(f"{label}: expected a non-empty list of strings")
     return value
+
+
+def purl_mapping_gaps(records: Any) -> list[str]:
+    """Names of license_policy dependencies with no CPE and no reviewed purl mapping or reason.
+
+    Such a dependency has no identity any vulnerability scanner could match, so a
+    gate that consumes the lock must refuse it.  ``records`` is the
+    ``license_policy.dependencies`` object; a malformed one reports every entry.
+    """
+    if not isinstance(records, dict):
+        return ["license_policy.dependencies"]
+    return sorted(
+        str(name) for name, record in records.items()
+        if not isinstance(record, dict)
+        or not ({"cpe", "purl", "purl_unavailable_reason"} & record.keys())
+    )
 
 
 def _validate_external_dependencies_schema(data: dict[str, Any]) -> None:
@@ -2840,14 +2936,19 @@ def _shell_install_commands(script: str) -> list[tuple[str, list[str]]]:
         comment = next((i for i, token in enumerate(tokens) if token.startswith("#")), len(tokens))
         tokens = tokens[:comment]
         for index, token in enumerate(tokens):
-            manager = PACKAGE_MANAGERS.get(token)
+            manager = PACKAGE_MANAGERS.get(token) or ("pip" if VERSIONED_PIP_RE.match(token) else None)
             if manager is None:
-                continue
-            position = index + 1
-            while position < len(tokens) and tokens[position].startswith("-"):
-                position += 1
-            if position >= len(tokens) or tokens[position] != "install":
-                continue
+                manager = IMPLICIT_INSTALL_COMMANDS.get(token)
+                if manager is None:
+                    continue
+                position = index  # the command is the install verb
+            else:
+                position = index + 1
+                while position < len(tokens) and tokens[position].startswith("-"):
+                    position += 1
+                verbs = INSTALL_VERBS.get(manager, DEFAULT_INSTALL_VERBS)
+                if position >= len(tokens) or tokens[position].lower() not in verbs:
+                    continue
             arguments: list[str] = []
             for argument in tokens[position + 1:]:
                 if argument in SHELL_COMMAND_BREAKS:
@@ -2867,14 +2968,63 @@ def shell_package_installs(script: str) -> list[str]:
     installs: list[str] = []
     for manager, arguments in _shell_install_commands(script):
         skip_value = False
+        take_value = False
+        name_options = PACKAGE_NAME_OPTIONS.get(manager, ())
         for argument in arguments:
             if skip_value:
                 skip_value = False
-            elif manager == "pip" and argument in PIP_VALUE_OPTIONS:
+            elif take_value:
+                take_value = False
+                installs.append(f"{manager}:{argument}")
+            elif argument in name_options:
+                take_value = True
+            elif argument.startswith(tuple(f"{option}=" for option in name_options)):
+                installs.append(f"{manager}:{argument.split('=', 1)[1]}")
+            elif argument in MANAGER_VALUE_OPTIONS.get(manager, ()):
                 skip_value = True
             elif not argument.startswith("-"):
-                installs.append(f"{manager}:{argument.split('=', 1)[0]}")
+                name = argument.rsplit("@", 1)[0] if manager == "npm" and "@" in argument[1:] else argument
+                installs.append(f"{manager}:{name.split('=', 1)[0]}")
     return installs
+
+
+def unmanaged_install_problems(script: str) -> list[str]:
+    """Why each install or fetch in a script is neither hash-pinned nor lock-declared.
+
+    ``pip install`` must run in ``--require-hashes`` mode; ``winget``/``choco`` installs must pin
+    ``--version`` (choco may not disable checksums); ``npm install`` must name exact versions (``npm ci``
+    installs what package-lock.json pins and is not an install here); and no fetch may be piped into an
+    interpreter.
+    """
+    problems: list[str] = []
+    for manager, arguments in _shell_install_commands(script):
+        if manager == "pip" and "--require-hashes" not in arguments:
+            problems.append("pip install without --require-hashes can fetch artifacts no repository hash names")
+        elif manager in VERSION_OPTIONS:
+            options = VERSION_OPTIONS[manager]
+            pinned = any(
+                (argument in options and index + 1 < len(arguments))
+                or argument.startswith(tuple(f"{option}=" for option in options))
+                for index, argument in enumerate(arguments)
+            )
+            if not pinned:
+                problems.append(f"{manager} install must pin the package with --version")
+            if manager == "choco" and any(
+                argument.split("=", 1)[0].lower() in CHOCO_CHECKSUM_BYPASS for argument in arguments
+            ):
+                problems.append("choco install must not disable installer checksum verification")
+        elif manager == "npm":
+            names = [argument for argument in arguments if not argument.startswith("-")]
+            if not names:
+                problems.append("npm install without a package installs unpinned ranges; use npm ci with a lockfile")
+            problems.extend(
+                f"npm package {name!r} is not an exact name@x.y.z version"
+                for name in names if not NPM_EXACT_SPEC_RE.match(name)
+            )
+    for line in re.sub(r"\\\r?\n\s*", " ", script).split("\n"):
+        if not line.lstrip().startswith("#") and FETCH_PIPED_INTERPRETER_RE.search(line):
+            problems.append(f"remote code is fetched and run unverified: {' '.join(line.split())[:120]!r}")
+    return problems
 
 
 def pip_requirement_files(script: str) -> list[str]:
@@ -2942,6 +3092,11 @@ def _check_pip_requirement_file(
     return packages
 
 
+def _is_tool_shell_script(path: str) -> bool:
+    """A top-level ``tools/*.sh`` helper: scanned for unmanaged installs, not for declared OS packages."""
+    return path.startswith("tools/") and path.endswith(".sh") and "/" not in path[len("tools/"):]
+
+
 def check_ci_system_packages(
     root: Path, root_resolved: Path, lockfile: dict[str, Any], result: CheckResult
 ) -> set[str]:
@@ -2962,6 +3117,8 @@ def check_ci_system_packages(
                 if not isinstance(script, str):
                     continue
                 location = f"{rel}:{trail}"
+                for problem in unmanaged_install_problems(script):
+                    result.error("external", location, problem)
                 identifiers = shell_package_installs(script)
                 for identifier in identifiers:
                     if identifier.startswith("pip:"):
@@ -2981,6 +3138,9 @@ def check_ci_system_packages(
                             f"CI system package {identifier!r} is not declared in {LOCKFILE_REL} "
                             "external_dependencies (class ci_packages)",
                         )
+    for rel, text in _git_index_texts(root, [p for p in git_tracked_paths(root) if _is_tool_shell_script(p)]).items():
+        for problem in unmanaged_install_problems(text):
+            result.error("external", rel, problem)
     return observed
 
 
