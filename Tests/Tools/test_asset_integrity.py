@@ -308,7 +308,7 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
     def test_installed_package_asset_helper_accepts_matching_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             assets = self._fixture(
-                temporary, extra={"Models/crate.obj": self.CRATE_OBJ, "Scenes/arena.scene": self.CRATE_SCENE})
+                temporary, extra={"Models/crate.obj": self.CRATE_OBJ, "Scenes/level1.scene": self.CRATE_SCENE})
             result = self._run_helper(assets)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("asset integrity passed: OK: 3 entries verified", result.stdout + result.stderr)
@@ -330,7 +330,7 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
         for model, accepted in (("Assets/Models/crate.obj", True), ("crate.obj", False)):
             with self.subTest(model=model), tempfile.TemporaryDirectory() as temporary:
                 scene = f"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel={model}\n".encode()
-                assets = self._fixture(temporary, extra={"Models/crate.obj": crate, "Scenes/arena.scene": scene})
+                assets = self._fixture(temporary, extra={"Models/crate.obj": crate, "Scenes/level1.scene": scene})
                 result = self._run_helper(assets)
                 output = result.stdout + result.stderr
                 if accepted:
@@ -341,14 +341,26 @@ class InstalledFPSPackageAssetIntegrityTests(unittest.TestCase):
                     # the reference check sees that the runtime cannot resolve them.
                     self.assertNotEqual(result.returncode, 0, output)
                     self.assertIn("Installed FPS asset reference closure failed", output)
-                    self.assertIn("Scenes/arena.scene:6: model='crate.obj' is not an Assets/-rooted path", output)
+                    self.assertIn("Scenes/level1.scene:6: model='crate.obj' is not an Assets/-rooted path", output)
+
+    def test_installed_package_asset_helper_requires_the_scene_the_package_runs(self) -> None:
+        # The package loads Scenes/level1.scene; a closure that passes over some
+        # other scene would hide a package that falls back to the procedural arena.
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = self._fixture(
+                temporary, extra={"Models/crate.obj": self.CRATE_OBJ, "Scenes/other.scene": self.CRATE_SCENE})
+            result = self._run_helper(assets)
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output)
+        self.assertIn("reference closure passed", output)
+        self.assertRegex(output, r"does not list\s+Scenes/level1\.scene")
 
     def test_installed_package_asset_helper_fails_hashes_before_references(self) -> None:
         # A tampered payload plus a broken reference must stop at the hash step:
         # closure is only meaningful over bytes already proven to be the reviewed ones.
         scene = b"[Scene]\nname=Fixture\n\n[Object]\ntype=model\nmodel=Assets/Models/absent.obj\n"
         with tempfile.TemporaryDirectory() as temporary:
-            assets = self._fixture(temporary, extra={"Scenes/arena.scene": scene})
+            assets = self._fixture(temporary, extra={"Scenes/level1.scene": scene})
             (assets / "payload.bin").write_bytes(b"tampered package payload\n")
             result = self._run_helper(assets)
         output = result.stdout + result.stderr
