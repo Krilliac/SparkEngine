@@ -119,6 +119,16 @@ class CMakeGateTests(unittest.TestCase):
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_default_toolset_with_empty_version_passes_only_on_the_locked_tools(self) -> None:
+        # CMake reports no toolset version when version= names the instance's default toolset.
+        result = self.run_gate({"CMAKE_VS_PLATFORM_TOOLSET_VERSION": ""})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        wrong_tools = {"CMAKE_VS_PLATFORM_TOOLSET_VERSION": "",
+                       "CMAKE_CXX_COMPILER": BIN.replace("35207", "35208") + "/cl.exe"}
+        result = self.run_gate(wrong_tools)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("CMAKE_CXX_COMPILER", result.stderr)
+
     def test_each_measured_component_mismatch_fails(self) -> None:
         for key, wrong in (("CMAKE_SYSTEM_NAME", "Linux"), ("CMAKE_BUILD_TYPE", "Release"),
                            ("CMAKE_GENERATOR", "Visual Studio 18 2026"), ("CMAKE_GENERATOR_PLATFORM", "Win32"),
@@ -141,7 +151,9 @@ class CMakeGateTests(unittest.TestCase):
 
     def test_missing_measured_identity_fails(self) -> None:
         for key in MEASURED:
-            if key == "CMAKE_GENERATOR_TOOLSET":
+            # CMAKE_GENERATOR_TOOLSET is checked separately; CMake omits CMAKE_VS_PLATFORM_TOOLSET_VERSION
+            # for the instance's default toolset (see the default-toolset test).
+            if key in ("CMAKE_GENERATOR_TOOLSET", "CMAKE_VS_PLATFORM_TOOLSET_VERSION"):
                 continue
             with self.subTest(key=key):
                 self.assertNotEqual(self.run_gate({key: None}).returncode, 0)

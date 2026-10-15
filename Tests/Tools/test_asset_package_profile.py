@@ -527,10 +527,15 @@ class RepositoryProfileTests(unittest.TestCase):
                          "Models/pistol.obj", "Engine/Branding/sparkengine_splash.wav", "README.md"):
             self.assertIn(required, closure)
         # The engine primitive objects FPS and SceneManager instantiate load
-        # their default OBJ models from engine headers, not module source.
-        for primitive in ("Cube", "Plane", "Sphere", "Wall", "Pyramid", "Ramp"):
+        # their default OBJ models from engine or public SDK headers, not module source.
+        for primitive, header in (("Cube", "SparkSDK/Include/Spark/CubeObject.h"),
+                                  ("Plane", "SparkSDK/Include/Spark/PlaneObject.h"),
+                                  ("Sphere", "SparkSDK/Include/Spark/SphereObject.h"),
+                                  ("Wall", "SparkSDK/Include/Spark/WallObject.h"),
+                                  ("Pyramid", "SparkEngine/Source/Game/PyramidObject.h"),
+                                  ("Ramp", "SparkEngine/Source/Game/RampObject.h")):
             reasons = closure[f"Models/{primitive}.obj"]
-            self.assertTrue(reasons[0].startswith(f"SparkEngine/Source/Game/{primitive}Object.h:"), reasons)
+            self.assertTrue(any(reason.startswith(f"{header}:") for reason in reasons), reasons)
         # Content that only other modules load does not.
         for path in closure:
             self.assertFalse(path.startswith(("MMO/", "MMOFPS/", "Scenes/MMO", "Models/MMO", "Audio/MMO")), path)
@@ -538,6 +543,7 @@ class RepositoryProfileTests(unittest.TestCase):
         self.assertNotIn(vai.NOASSERTION, {entries[path]["license"] for path in closure})
         self.assertIn(REPO_ROOT / "Assets" / "Scenes" / "level1.scene", inputs)
         self.assertIn(REPO_ROOT / "SparkEngine" / "Source", inputs)
+        self.assertIn(REPO_ROOT / "SparkSDK" / "Include", inputs)
 
     def test_every_engine_and_module_asset_literal_is_shipped_or_reviewed_as_unshipped(self) -> None:
         # The derivation itself enforces this (an unlisted literal fails it);

@@ -3754,17 +3754,6 @@
       ]
     },
     {
-      "source_file": "SparkEngine/Source/Game/Model.h",
-      "classification": "delegating-call-site",
-      "justification": "Declares Model::LoadObj, implemented in the inventoried Model.cpp.",
-      "detected_by": [
-        "load-format-entry"
-      ],
-      "delegates_to": [
-        "game-model-obj"
-      ]
-    },
-    {
       "source_file": "SparkEngine/Source/Game/PlaceholderMesh.h",
       "classification": "delegating-call-site",
       "justification": "Calls Mesh::LoadFromFile for .obj paths and otherwise builds a procedural placeholder; decoding is the inventoried mesh loader.",
@@ -3868,25 +3857,6 @@
       "source_file": "SparkEngine/Source/Graphics/BasisTranscoder.h",
       "classification": "not-a-parser",
       "justification": "No basisu backend is linked: BasisTranscoder::ParseHeader returns false and Transcode returns an empty TranscodedImage without reading a byte of their input (TestGraphicsIntegration pins both). The parse-entry hit is that stub's ParseHeader; linking a real .basis/.ktx2 decoder changes the detector hits and invalidates this exemption.",
-      "detected_by": [
-        "parse-entry"
-      ]
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/Mesh.h",
-      "classification": "delegating-call-site",
-      "justification": "Declares Mesh::LoadFromFile, implemented in the inventoried MeshLinux.cpp and MeshWindows.cpp.",
-      "detected_by": [
-        "parse-entry"
-      ],
-      "delegates_to": [
-        "mesh-obj-tinyobj"
-      ]
-    },
-    {
-      "source_file": "SparkEngine/Source/Graphics/MeshTypes.h",
-      "classification": "not-a-parser",
-      "justification": "The only match is a documentation comment about Mesh::LoadFromFile grouping faces; the header declares mesh data types only.",
       "detected_by": [
         "parse-entry"
       ]
@@ -4089,6 +4059,36 @@
       ],
       "delegates_to": [
         "launcher-template-json"
+      ]
+    },
+    {
+      "source_file": "SparkSDK/Include/Spark/Mesh.h",
+      "classification": "delegating-call-site",
+      "justification": "Installed-SDK copy of the Mesh declarations (moved from SparkEngine/Source/Graphics/Mesh.h for SDK ABI 11); declares Mesh::LoadFromFile, implemented in the inventoried MeshLinux.cpp and MeshWindows.cpp.",
+      "detected_by": [
+        "parse-entry"
+      ],
+      "delegates_to": [
+        "mesh-obj-tinyobj"
+      ]
+    },
+    {
+      "source_file": "SparkSDK/Include/Spark/MeshTypes.h",
+      "classification": "not-a-parser",
+      "justification": "Installed-SDK copy of the mesh data types; the only match is a documentation comment about Mesh::LoadFromFile grouping faces.",
+      "detected_by": [
+        "parse-entry"
+      ]
+    },
+    {
+      "source_file": "SparkSDK/Include/Spark/Model.h",
+      "classification": "delegating-call-site",
+      "justification": "Installed-SDK copy of the Model declarations; declares Model::LoadObj, implemented in the inventoried Model.cpp.",
+      "detected_by": [
+        "load-format-entry"
+      ],
+      "delegates_to": [
+        "game-model-obj"
       ]
     },
     {
