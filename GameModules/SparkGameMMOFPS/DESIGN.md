@@ -458,9 +458,15 @@ bot count is capped by `kTFMaxBots` (98), so a full run has 100 actors (98 bots
 plus two clients), the count that the W4 perf pass names. CTest
 `TerrafrontSoak_Short` runs 120 s (label `terrafront-soak`) with the 32 bots
 (34 actors) from `soak_budgets.json`. The 30-minute gate is the same command with
-`--soak-seconds 1800 --soak-bots 98` (and a `--timeout` above the soak length),
-so it carries all 100 actors. The budgets stay provisional: the 100-actor run
-has no measured hosted data yet, and no threshold changed with the actor count.
+`--soak-seconds 1800 --soak-bots 98` (and a `--timeout` above the soak length).
+That 100-actor path is not yet runnable: the `tf_bots` console command in
+`Source/Console/TFCommandsGameplay.cpp` still rejects counts above 32, so the
+soak server script's `tf_bots 98` is refused until that cap is replaced with
+`kTFMaxBots`. Only the cap constant and the harness plumbing exist; no run has
+shown that 98 bots spawn or replicate, and the per-datagram fit (about 2.6 KB)
+is static arithmetic, not a measurement. The budgets stay provisional: the
+100-actor run has no measured hosted data yet, and no threshold changed with the
+actor count.
 
 ### Cold restart (`cold_restart`, `ungraceful_restart`)
 
