@@ -10,6 +10,11 @@
 
 Baseline performance numbers from a full engine load test. These serve as regression benchmarks — future runs should compare against them to catch performance regressions before they ship. The baseline below was captured 2026-03-26 on Linux x86_64 / GCC Release. The test harness (`Tests/TestEngineLoadTest.cpp`) and all of its scenarios are confirmed present as of 2026-06-08; baseline numbers should be re-captured on a controlled machine before being treated as a hard gate.
 
+Server soak and alert budgets are a separate, versioned contract: see
+`tools/ops/server-soak-budgets.json` and the alert table in the
+[Server Operations Runbook](Server-Operations-Runbook.md). They bound a hosted
+`SparkServer`, not this in-process engine load test.
+
 ---
 
 ## How the Load Test Works

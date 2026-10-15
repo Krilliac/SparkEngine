@@ -340,7 +340,8 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
     def test_scheduled_operations_jobs_are_read_only(self) -> None:
         text = OPERATIONS.read_text(encoding="utf-8")
         self.assertEqual(_block(text, "permissions", 0).splitlines()[1:], ["  contents: read"])
-        for name in ("recovery-drill", "server-soak", "soak-scheduled"):
+        for name in ("recovery-drill", "server-soak", "soak-scheduled", "headless-windows-soak",
+                     "observability-canary", "terrafront-soak"):
             job = _block(text, name, 2)
             with self.subTest(job=name):
                 self.assertEqual(_permissions(job), {"contents": "read"})

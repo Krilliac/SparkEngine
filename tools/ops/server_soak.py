@@ -35,8 +35,11 @@ watches it from outside for ``--duration`` seconds after it first reports
   every descendant that did not detach itself is found by session id).
 
 Every budget above is PROVISIONAL: a harness guard with headroom for
-shared-runner noise, not a governed SLO. OPS-110's versioned p95/p99 budgets
-remain open. A pass here is local precursor evidence, not certification.
+shared-runner noise, not a governed SLO. The defaults come from the versioned
+file tools/ops/server-soak-budgets.json (``schemaVersion``, ``version`` and a
+rationale per budget); the harness refuses to run when that file is missing or
+unversioned, and records its version and sha256 in the summary. A pass here is
+local precursor evidence, not certification.
 
 Every health snapshot is parsed by tools/ops/validate_server_health.py; one
 that violates the ``spark-server-health/1`` contract fails the soak.
@@ -52,6 +55,7 @@ Linux only: memory and process accounting read ``/proc``.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -69,6 +73,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from ops_strict_json import StrictJsonError, loads_strict  # noqa: E402 -- sibling tool, bounded JSON policy
 from validate_server_health import (  # noqa: E402 -- sibling tool, the health contract
     MAX_HEALTH_BYTES,
     HealthContractError,
@@ -81,23 +86,76 @@ EVIDENCE_SCOPE = "local-precursor: provisional budgets on an uncertified host; n
 MAX_DURATION_S = 7 * 24 * 3600.0
 MIN_FIT_SAMPLES = 10
 MAX_STDOUT_LINE_BYTES = 64 * 1024
-# NetworkManager::kMaxQueuedMessages: Unreliable traffic past this depth is shed.
-NET_QUEUE_CAP = 4096
+MAX_BUDGET_FILE_BYTES = 64 * 1024
+BUDGETS_SCHEMA = "spark-server-soak-budgets/1"
+BUDGETS_SCHEMA_VERSION = 1
+DEFAULT_BUDGETS_PATH = Path(__file__).resolve().parent / "server-soak-budgets.json"
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
-
-# Provisional harness ceilings (not SLOs). The slope ceiling still trips on a
-# steady leak of a few KiB per tick (1 KiB/tick at 60 Hz is ~211 MiB/hour).
-DEFAULT_MAX_RSS_SLOPE_BYTES_PER_HOUR = 64 * 1024 * 1024
-DEFAULT_MAX_RSS_GROWTH_BYTES = 32 * 1024 * 1024
-# A 60 Hz tick has a 16.7 ms budget; p99 must fit inside it and p95 inside half.
-DEFAULT_MAX_TICK_P95_US = 8000
-DEFAULT_MAX_TICK_P99_US = 16000
-# One message per second of sustained growth reaches the 4096 cap in about 68 minutes.
-DEFAULT_MAX_NET_QUEUE_SLOPE_PER_HOUR = 3600.0
+_BUDGET_KEYS = ("rssSlopeBytesPerHour", "rssGrowthBytes", "tickP95Us", "tickP99Us", "netQueueSlopePerHour",
+                "netQueueCap", "minTickRateFraction")
 
 
 class SoakError(Exception):
     """Invalid harness input or an environment the harness cannot run in."""
+
+
+@dataclass(frozen=True)
+class SoakBudgets:
+    """The versioned budget file tools/ops/server-soak-budgets.json, parsed and fingerprinted.
+
+    ``sha256`` is taken over the file with CRLF normalised to LF so a Windows
+    autocrlf checkout and a Linux checkout of the same commit agree.
+    """
+
+    version: str
+    sha256: str
+    path: str
+    values: dict[str, float]
+    rationales: dict[str, str]
+
+
+def load_budgets(path: Path | None = None) -> SoakBudgets:
+    """Parse and validate the budget file; raise SoakError when it is missing, unversioned or malformed."""
+    path = path if path is not None else DEFAULT_BUDGETS_PATH
+    try:
+        with path.open("rb") as stream:
+            data = stream.read(MAX_BUDGET_FILE_BYTES + 1)
+    except OSError as exc:
+        raise SoakError(f"budget file {path} cannot be read: {exc}") from exc
+    try:
+        document = loads_strict(data, source=str(path), max_bytes=MAX_BUDGET_FILE_BYTES, max_depth=4,
+                                max_collection_entries=64, max_string_bytes=4096)
+    except StrictJsonError as exc:
+        raise SoakError(f"budget file {exc}") from exc
+    if not isinstance(document, dict):
+        raise SoakError(f"budget file {path} is not a JSON object")
+    if document.get("schema") != BUDGETS_SCHEMA or document.get("schemaVersion") != BUDGETS_SCHEMA_VERSION:
+        raise SoakError(f"budget file {path} is unversioned: schema/schemaVersion must be "
+                        f"{BUDGETS_SCHEMA!r}/{BUDGETS_SCHEMA_VERSION}")
+    version = document.get("version")
+    if not isinstance(version, str) or not version.strip():
+        raise SoakError(f"budget file {path} is unversioned: 'version' must be a non-empty string")
+    budgets = document.get("budgets")
+    if not isinstance(budgets, dict) or set(budgets) != set(_BUDGET_KEYS):
+        raise SoakError(f"budget file {path}: 'budgets' must define exactly {sorted(_BUDGET_KEYS)}")
+    values: dict[str, float] = {}
+    rationales: dict[str, str] = {}
+    for key in _BUDGET_KEYS:
+        entry = budgets[key]
+        value = entry.get("value") if isinstance(entry, dict) else None
+        rationale = entry.get("rationale") if isinstance(entry, dict) else None
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+            raise SoakError(f"budget file {path}: budgets.{key}.value must be a positive finite number")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise SoakError(f"budget file {path}: budgets.{key}.rationale must be a non-empty string")
+        values[key] = value
+        rationales[key] = rationale
+    digest = hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+    return SoakBudgets(version=version, sha256=digest, path=path.name, values=values, rationales=rationales)
+
+
+def _budget(key: str) -> float:
+    return load_budgets().values[key]
 
 
 @dataclass(frozen=True)
@@ -110,12 +168,14 @@ class SoakConfig:
     startup_timeout_s: float = 60.0
     stall_timeout_s: float = 10.0
     stop_timeout_s: float = 30.0
-    min_tick_rate_fraction: float = 0.5
-    max_rss_slope_bytes_per_hour: float = float(DEFAULT_MAX_RSS_SLOPE_BYTES_PER_HOUR)
-    max_rss_growth_bytes: int = DEFAULT_MAX_RSS_GROWTH_BYTES
-    max_tick_p95_us: int = DEFAULT_MAX_TICK_P95_US
-    max_tick_p99_us: int = DEFAULT_MAX_TICK_P99_US
-    max_net_queue_slope_per_hour: float = DEFAULT_MAX_NET_QUEUE_SLOPE_PER_HOUR
+    # Budget defaults come from the versioned tools/ops/server-soak-budgets.json (load_budgets).
+    min_tick_rate_fraction: float = field(default_factory=lambda: float(_budget("minTickRateFraction")))
+    max_rss_slope_bytes_per_hour: float = field(default_factory=lambda: float(_budget("rssSlopeBytesPerHour")))
+    max_rss_growth_bytes: int = field(default_factory=lambda: int(_budget("rssGrowthBytes")))
+    max_tick_p95_us: int = field(default_factory=lambda: int(_budget("tickP95Us")))
+    max_tick_p99_us: int = field(default_factory=lambda: int(_budget("tickP99Us")))
+    max_net_queue_slope_per_hour: float = field(default_factory=lambda: float(_budget("netQueueSlopePerHour")))
+    net_queue_cap: int = field(default_factory=lambda: int(_budget("netQueueCap")))
 
     def validate(self) -> None:
         if not math.isfinite(self.duration_s) or not 1.0 <= self.duration_s <= MAX_DURATION_S:
@@ -137,6 +197,7 @@ class SoakConfig:
         if not math.isfinite(self.min_tick_rate_fraction) or not 0.0 < self.min_tick_rate_fraction <= 1.0:
             raise SoakError("--min-tick-rate-fraction must be in (0, 1]")
         for name, value in (("--max-rss-growth-bytes", self.max_rss_growth_bytes),
+                            ("net queue cap", self.net_queue_cap),
                             ("--max-tick-p95-us", self.max_tick_p95_us),
                             ("--max-tick-p99-us", self.max_tick_p99_us)):
             if value <= 0:
@@ -441,8 +502,8 @@ def _evaluate_queues(config: SoakConfig, outcome: SoakOutcome) -> None:
     health = outcome.last_live_health or {}
     for key in ("netQueueInPeak", "netQueueOutPeak"):
         peak = health.get(key)
-        if isinstance(peak, int) and peak >= NET_QUEUE_CAP:
-            outcome.failures.append(f"queue: {key} {peak} reached the Unreliable cap {NET_QUEUE_CAP}; "
+        if isinstance(peak, int) and peak >= config.net_queue_cap:
+            outcome.failures.append(f"queue: {key} {peak} reached the Unreliable cap {config.net_queue_cap}; "
                                     "traffic was being shed")
 
 
@@ -556,7 +617,18 @@ def run_soak(server: Path, module: Path, config: SoakConfig, *, expected_sha: st
     return outcome
 
 
-def build_summary(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | None, timestamp: str) -> dict[str, Any]:
+def budget_overrides(config: SoakConfig, budgets: SoakBudgets) -> dict[str, float]:
+    """Effective budgets that differ from the versioned file (command-line overrides), keyed by budget name."""
+    effective = {"rssSlopeBytesPerHour": config.max_rss_slope_bytes_per_hour,
+                 "rssGrowthBytes": config.max_rss_growth_bytes, "tickP95Us": config.max_tick_p95_us,
+                 "tickP99Us": config.max_tick_p99_us, "netQueueSlopePerHour": config.max_net_queue_slope_per_hour,
+                 "netQueueCap": config.net_queue_cap, "minTickRateFraction": config.min_tick_rate_fraction}
+    return {key: value for key, value in effective.items() if value != budgets.values[key]}
+
+
+def build_summary(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | None, timestamp: str,
+                  budgets: SoakBudgets | None = None) -> dict[str, Any]:
+    budgets = budgets if budgets is not None else load_budgets()
     health = outcome.last_live_health or {}
     rss_values = [rss for _, rss, _ in outcome.samples]
     return {
@@ -569,11 +641,13 @@ def build_summary(outcome: SoakOutcome, config: SoakConfig, commit_sha: str | No
         "config": {"durationS": config.duration_s, "warmupS": config.warmup_s,
                    "sampleIntervalS": config.sample_interval_s, "statusIntervalMs": config.status_interval_ms,
                    "tickRateHz": config.tick_rate_hz},
+        "budgetFile": {"path": f"tools/ops/{budgets.path}", "version": budgets.version, "sha256": budgets.sha256,
+                       "overrides": budget_overrides(config, budgets)},
         "provisionalBudgets": {"maxRssSlopeBytesPerHour": config.max_rss_slope_bytes_per_hour,
                                "maxRssGrowthBytes": config.max_rss_growth_bytes,
                                "maxTickP95Us": config.max_tick_p95_us, "maxTickP99Us": config.max_tick_p99_us,
                                "maxNetQueueSlopePerHour": config.max_net_queue_slope_per_hour,
-                               "netQueuePeakCeiling": NET_QUEUE_CAP - 1,
+                               "netQueuePeakCeiling": config.net_queue_cap - 1,
                                "minTickRateFraction": config.min_tick_rate_fraction,
                                "stallTimeoutS": config.stall_timeout_s, "stopTimeoutS": config.stop_timeout_s},
         "measurements": {
@@ -642,7 +716,11 @@ def soak(server: Path, module: Path, config: SoakConfig, *, expected_sha: str | 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    defaults = SoakConfig()
+    try:
+        defaults = SoakConfig()
+    except SoakError as exc:
+        print(f"server_soak: FAIL: {exc}", file=sys.stderr)
+        return 1
     parser.add_argument("--server", type=Path, required=True, help="SparkServer executable")
     parser.add_argument("--module", type=Path, required=True, help="game module library (e.g. libSparkGame.so)")
     parser.add_argument("--duration", type=float, default=defaults.duration_s,

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""DATA-120 / OPS-110 / PERF-100: the scheduled operations workflow keeps its rehearsal contract.
+"""DATA-120 / OPS-110 / PERF-100 / HEAD-220 / TF-110: the scheduled operations workflow keeps its contract.
 
 .github/workflows/operations-scheduled.yml is the only place the recovery
-drill, the server soak and the NullRHI soak run on a schedule. These tests
+drill, the server soak, the Linux and Windows NullRHI soaks, the observability
+canary and the Terrafront 30-minute soak run on a schedule. These tests
 parse it and fail when a change would let a scheduled run pass without
 rehearsing anything: a lost cron trigger, an advisory (continue-on-error)
 job, a ctest selection that can match nothing, a soak shorter than its
@@ -30,9 +31,16 @@ from buildmatrix.workflow import parse_workflow_yaml  # noqa: E402
 
 WORKFLOW = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
 EXACT_SHA = '--expected-sha "${{ github.sha }}"'
-REQUIRED_JOBS = ("recovery-drill", "server-soak", "soak-scheduled")
+REQUIRED_JOBS = ("recovery-drill", "server-soak", "soak-scheduled", "headless-windows-soak",
+                 "observability-canary", "terrafront-soak")
 RELEASE_SMOKE_S = 1800
 NULLRHI_SCENE_S = 3600
+TERRAFRONT_MIN_TIMEOUT_MIN = 45
+TERRAFRONT_SELECT = ("ctest --test-dir build/linux-gcc-release --show-only=json-v1 --no-tests=error "
+                     "-L '^terrafront-soak-long$' > terrafront-soak-long-selection.json")
+TERRAFRONT_CHECK = ("python3 Tools/Terrafront/check_selection.py terrafront-soak-long-selection.json "
+                    "--label terrafront-soak-long")
+TERRAFRONT_RUN_PREFIX = "ctest --test-dir build/linux-gcc-release -L '^terrafront-soak-long$'"
 
 
 def _commands(step: dict[str, Any]) -> list[str]:
@@ -45,6 +53,78 @@ def _commands(step: dict[str, Any]) -> list[str]:
 
 def _durations(command: str) -> list[int]:
     return [int(value) for value in re.findall(r"--duration\s+(\d+)\b", command)]
+
+
+def _job_commands(job: dict[str, Any]) -> list[str]:
+    return [command for step in job.get("steps") or [] for command in _commands(step)]
+
+
+def _windows_soak_errors(job: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if job.get("runs-on") != "windows-2022":
+        errors.append(f"headless-windows-soak must run on windows-2022, not {job.get('runs-on')!r}")
+    commands = _job_commands(job)
+    if not any(command.startswith("cmake --preset windows-shipping") for command in commands) or \
+            not any(command.startswith("cmake --build --preset windows-shipping") for command in commands):
+        errors.append("headless-windows-soak does not configure and build the windows-shipping preset")
+    soak = [command for command in commands if "tools/perf-budget/run_nullrhi_soak.py" in command]
+    if not soak:
+        errors.append("headless-windows-soak does not run run_nullrhi_soak.py")
+    for command in soak:
+        durations = _durations(command)
+        if len(durations) != 1 or durations[0] < NULLRHI_SCENE_S:
+            errors.append(f"Windows NullRHI soak is shorter than the {NULLRHI_SCENE_S} s scene: {command}")
+        if EXACT_SHA not in command or "--report" not in command:
+            errors.append(f"Windows NullRHI soak is not bound to the exact commit or writes no --report: {command}")
+        if "--out" in command:
+            errors.append(f"Windows NullRHI soak passes --out, which the harness refuses on Windows: {command}")
+    return errors
+
+
+def _canary_errors(job: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    commands = _job_commands(job)
+    if not any("--preset linux-gcc-release" in command for command in commands):
+        errors.append("observability-canary does not use linux-gcc-release")
+    if any("linux-shipping" in command for command in commands):
+        errors.append("observability-canary must not use linux-shipping")
+    for label in ("observability", "server-soak"):
+        selected = [command for command in commands if command.startswith("ctest ") and f"-L '^{label}$'" in command]
+        if not selected:
+            errors.append(f"observability-canary does not run ctest -L '^{label}$'")
+        for command in selected:
+            if "--no-tests=error" not in command:
+                errors.append(f"observability-canary ctest can pass without running a {label} test: {command}")
+    soak_steps = [step for step in job.get("steps") or []
+                  if any(command.startswith("ctest ") and "-L '^server-soak$'" in command
+                         for command in _commands(step))]
+    if not any((step.get("env") or {}).get("SPARK_SERVER_SOAK_EXPECTED_SHA") == "${{ github.sha }}"
+               for step in soak_steps):
+        errors.append("observability-canary server soak is not bound to the exact commit")
+    return errors
+
+
+def _terrafront_errors(job: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    timeout = job.get("timeout-minutes")
+    if not isinstance(timeout, int) or timeout < TERRAFRONT_MIN_TIMEOUT_MIN:
+        errors.append(f"terrafront-soak timeout {timeout!r} cannot hold a 30-minute soak "
+                      f"(need >= {TERRAFRONT_MIN_TIMEOUT_MIN} min)")
+    commands = _job_commands(job)
+    if not any("--preset linux-gcc-release" in command and "-DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON" in command
+               for command in commands):
+        errors.append("terrafront-soak does not configure linux-gcc-release with "
+                      "-DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON")
+    runs = [index for index, command in enumerate(commands) if command.startswith(TERRAFRONT_RUN_PREFIX)]
+    if len(runs) != 1 or "--no-tests=error" not in commands[runs[0]]:
+        errors.append("terrafront-soak must run the terrafront-soak-long label once with --no-tests=error")
+    for label, command in (("selection", TERRAFRONT_SELECT), ("selection check", TERRAFRONT_CHECK)):
+        if commands.count(command) != 1:
+            errors.append(f"terrafront-soak must pin the long-soak {label} exactly once: {command}")
+    if len(runs) == 1 and commands.count(TERRAFRONT_SELECT) == 1 and commands.count(TERRAFRONT_CHECK) == 1:
+        if not commands.index(TERRAFRONT_SELECT) < commands.index(TERRAFRONT_CHECK) < runs[0]:
+            errors.append("terrafront-soak must select, check, then run the long soak, in that order")
+    return errors
 
 
 def workflow_policy_errors(text: str) -> list[str]:
@@ -120,6 +200,9 @@ def workflow_policy_errors(text: str) -> list[str]:
             errors.append(f"NullRHI soak is shorter than the {NULLRHI_SCENE_S} s headless-soak-1h scene: {command}")
         if EXACT_SHA not in command or "--out" not in command:
             errors.append(f"NullRHI soak records no exact-commit result: {command}")
+    errors.extend(_windows_soak_errors(jobs.get("headless-windows-soak") or {}))
+    errors.extend(_canary_errors(jobs.get("observability-canary") or {}))
+    errors.extend(_terrafront_errors(jobs.get("terrafront-soak") or {}))
     return errors
 
 
@@ -145,7 +228,8 @@ class OperationsScheduledWorkflowTests(unittest.TestCase):
                                       "2>&1 | tee recovery-drill.log\n\n    - name: Run the recovery drill (Windows)",
                                       "can pass without running a drill"),
             "short release smoke": ("--duration 1800", "--duration 600", "shorter than 1800"),
-            "short NullRHI soak": ("--duration 3600", "--duration 1200", "headless-soak-1h"),
+            "short NullRHI soak": ("libSparkGame.so --duration 3600", "libSparkGame.so --duration 1200",
+                                   "headless-soak-1h"),
             "unbound NullRHI soak": ("--expected-sha \"${{ github.sha }}\" --out", "--out",
                                      "no exact-commit result"),
             "moving checkout": ("        ref: ${{ github.sha }}\n        submodules: recursive\n"
@@ -169,6 +253,40 @@ class OperationsScheduledWorkflowTests(unittest.TestCase):
             "evidence not uploaded on failure": ("    - name: Upload NullRHI soak result\n      if: always()\n",
                                                  "    - name: Upload NullRHI soak result\n      if: success()\n",
                                                  "does not always upload"),
+            "Windows soak on a Linux runner": ("    runs-on: windows-2022\n    timeout-minutes: 300",
+                                               "    runs-on: ubuntu-24.04\n    timeout-minutes: 300",
+                                               "must run on windows-2022"),
+            "short Windows soak": ("--duration 3600 \\\n          --expected-sha \"${{ github.sha }}\" --report",
+                                   "--duration 600 \\\n          --expected-sha \"${{ github.sha }}\" --report",
+                                   "Windows NullRHI soak is shorter"),
+            "Windows soak writes --out": ("--expected-sha \"${{ github.sha }}\" --report",
+                                          "--expected-sha \"${{ github.sha }}\" --out x.json --report",
+                                          "refuses on Windows"),
+            "Windows soak not bound to the commit": ("--expected-sha \"${{ github.sha }}\" --report", "--report",
+                                                     "not bound to the exact commit or writes no --report"),
+            "canary can match no tests": ("-L '^observability$' --no-tests=error", "-L '^observability$'",
+                                          "without running a observability test"),
+            "canary server soak unbound": ("        SPARK_SERVER_SOAK_EXPECTED_SHA: ${{ github.sha }}\n", "",
+                                           "server soak is not bound to the exact commit"),
+            "canary on the shipping preset": ("cmake --build build/linux-gcc-release --target SparkTests SparkServer",
+                                              "cmake --build --preset linux-shipping --target SparkTests SparkServer",
+                                              "must not use linux-shipping"),
+            "Terrafront timeout too short": ("name: \"Terrafront 30-minute soak\"\n    runs-on: ubuntu-24.04\n"
+                                             "    timeout-minutes: 90",
+                                             "name: \"Terrafront 30-minute soak\"\n    runs-on: ubuntu-24.04\n"
+                                             "    timeout-minutes: 30", "cannot hold a 30-minute soak"),
+            "Terrafront selection not checked": ("python3 Tools/Terrafront/check_selection.py "
+                                                 "terrafront-soak-long-selection.json --label terrafront-soak-long",
+                                                 "true", "pin the long-soak selection check"),
+            "Terrafront run can match nothing": ("-L '^terrafront-soak-long$' \\\n          --no-tests=error "
+                                                 "--output-on-failure", "-L '^terrafront-soak-long$' \\\n          "
+                                                 "--output-on-failure", "once with --no-tests=error"),
+            "Terrafront tests not enabled": ("          -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON 2>&1 | tee "
+                                             "terrafront-soak-configure.log",
+                                             "          2>&1 | tee terrafront-soak-configure.log",
+                                             "-DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON"),
+            "Terrafront soak job removed": ("  terrafront-soak:\n    name:", "  terrafront-long:\n    name:",
+                                            "job terrafront-soak is missing"),
             "Linux-only drill": ("          - os: windows-2022\n", "          - os: ubuntu-22.04\n",
                                  "both Linux and Windows"),
         }
