@@ -23,11 +23,11 @@
 #include "Physics/PhysicsSystem.h"
 #include "Input/InputManager.h"
 #include "Camera/SparkEngineCamera.h"
-#include "Game/GameObject.h"
-#include "Game/CubeObject.h"
-#include "Game/PlaneObject.h"
-#include "Game/SphereObject.h"
-#include "Game/WallObject.h"
+#include <Spark/GameObject.h>
+#include <Spark/CubeObject.h>
+#include <Spark/PlaneObject.h>
+#include <Spark/SphereObject.h>
+#include <Spark/WallObject.h>
 #include "ModelObject.h"
 #include "FPSAssetPaths.h"
 #include "MultiplayerSystem.h"
@@ -36,7 +36,7 @@
 #include "SceneManager/SceneManager.h"
 #include "Console/AdvancedConsoleCommands.h"
 #include <Spark/IConsole.h>
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 #include "Audio/MusicManager.h"
 #include <cmath>
 #include <filesystem>

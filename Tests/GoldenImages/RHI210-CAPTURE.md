@@ -42,17 +42,26 @@ point/spot behavior, fallback/recovery and complete scene lifecycle still need
 their dedicated qualification. ShadowDepth validates caster depth output only.
 
 RHI-210[0] remains incomplete: seven planned scenes and exact-commit hosted
-evidence are still pending. The four CTest suite disabled flags remain unchanged
-until their integration requirements are satisfied.
+evidence are still pending. The Primary suite is enabled after a fresh normal
+run passed all four tests and each of its three disabled-pass controls produced
+an actual pixel mismatch. The frame, FPS-scene and world suites remain disabled
+until their separate integration requirements are satisfied.
 
 Integration on Windows (2026-10-01) found further production defects behind the
 CPU-reference checks: the basic shader receives the plain inverse instead of the
 inverse transpose for normals, Windows frustum culling builds its planes from
 matrix rows instead of columns, the Windows texture loader decodes only TGA (a
 PNG becomes the 2x2 fallback), and the reserved Plane primitive faces -y and is
-culled from above. Until those fixes land, the four suites `D3D11FrameGolden`,
-`D3D11SceneGolden`, `D3D11WorldGolden` and `D3D11PrimaryGolden` are registered
-with the CTest `DISABLED` property, so `ctest` lists them as not run. Run a suite
+culled from above. Source review on 2026-10-07 confirms corrections in the normal
+matrix upload/column-major shader contract, column-based frustum extraction,
+WIC PNG decoding, and reserved ground winding. The pending suites still need
+their runtime probes; source review does not approve their baselines. Complete
+`D3D11FrameGolden`, `D3D11SceneGolden` and `D3D11WorldGolden` capture plans. Those
+three suites retain the CTest `DISABLED` property. The separate missing-asset
+`PlaneObject` fallback now has an upward-wound quad and a baseline-independent
+WARP readback regression that preserves generic sprite-plane winding.
+The reviewed Primary captures
+and implemented deferred/shadow paths pass independently. Run a pending suite
 directly while working on it, for example:
 
 ```powershell
@@ -74,13 +83,13 @@ WARP. Install Windows Graphics Tools as the existing required
 powershell -NoProfile -File C:/Users/Nathan/.claude/scripts/fleet-preflight.ps1
 powershell -NoProfile -File C:/Users/Nathan/.claude/scripts/build.ps1 'cmake --preset windows-release'
 powershell -NoProfile -File C:/Users/Nathan/.claude/scripts/build.ps1 'cmake --build build/windows-release --config Release --target SparkTests SparkEngine --parallel 2'
-ctest --test-dir build/windows-release -C Release -R '^(D3D11_Validation|D3D11_DeviceLoss|D3D11_Resource|D3D11PassGolden)$' --output-on-failure --no-tests=error
-ctest --test-dir build/windows-release -C Release -R '^D3D11(Frame|Scene|World|Primary)Golden$' --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R '^(D3D11_Validation|D3D11_DeviceLoss|D3D11_Resource|D3D11PassGolden|D3D11PrimaryGolden)$' --output-on-failure --no-tests=error
+ctest --test-dir build/windows-release -C Release -R '^D3D11(Frame|Scene|World)Golden$' --output-on-failure --no-tests=error
 ```
 
-The second CTest command is intentionally red while baselines are pending; it
-must also expose the deferred implementation gaps. Capture from the binary's
-runtime directory, with the staged assets produced by the SparkEngine build.
+The second CTest command lists pending suites as disabled; invoke their files
+directly to investigate failures and generate review captures. Capture from the
+binary's runtime directory, with the staged assets produced by the SparkEngine build.
 Find the built executable rather than guessing its configuration subdirectory:
 
 ```powershell

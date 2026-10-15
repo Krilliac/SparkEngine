@@ -24,13 +24,13 @@
 #include "LootSystem.h"
 
 #include "Graphics/GraphicsEngine.h"
-#include "Game/CubeObject.h"
-#include "Game/PlaneObject.h"
-#include "Game/SphereObject.h"
-#include "Game/WallObject.h"
+#include <Spark/CubeObject.h>
+#include <Spark/PlaneObject.h>
+#include <Spark/SphereObject.h>
+#include <Spark/WallObject.h>
 #include "ModelObject.h"
 #include "Player.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 
 
 #include <algorithm>

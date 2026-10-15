@@ -9,7 +9,7 @@
 #include "Input/InputManager.h"
 #include "Projectiles/WeaponStats.h"
 #include "Projectiles/ProjectilePool.h"
-#include "Game/Model.h"
+#include <Spark/Model.h>
 #include "FPSAssetPaths.h"
 #include "Graphics/GraphicsEngine.h"
 #include <algorithm>

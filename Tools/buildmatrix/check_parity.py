@@ -27,6 +27,9 @@ from typing import Any, Iterable
 
 import inventory as inventory_tool
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+from windows_shipping_toolchain import ShippingToolchainError, compare_toolchain, load_policy
+
 
 EXIT_FINDINGS = 1
 EXIT_BASELINE_DRIFT = 2
@@ -1426,7 +1429,8 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
 
     # A presetless installed-package consumer still belongs to the same stable
     # toolchain row. Derive that row only when every canonical source preset
-    # agrees, rather than silently leaving generator/platform/toolset unchecked.
+    # agrees on generator/platform/toolset family. Shipping alone additionally
+    # locks an exact toolset selector; keep the installed consumer family check.
     stable_toolchains: set[tuple[str, str, str]] = set()
     for config in configs.values():
         preset_name = config.get("preset")
@@ -1437,7 +1441,8 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
         except inventory_tool.InventoryError:
             continue
         stable_toolchains.add(
-            tuple(str(resolved.get(name, "")) for name in ("generator", "architecture", "toolset"))
+            (str(resolved.get("generator", "")), str(resolved.get("architecture", "")),
+             str(resolved.get("toolset", "")).split(",", 1)[0])
         )
     inherited_toolchain = next(iter(stable_toolchains)) if len(stable_toolchains) == 1 else ("", "", "")
 
@@ -1796,6 +1801,28 @@ def check_codemodel_provenance(data: dict[str, Any]) -> list[Finding]:
                 require_compiler_provenance=preset is not None,
             )
         )
+
+        if identifier == "windows-shipping":
+            try:
+                policy = load_policy(Path(__file__).resolve().parents[2])
+                errors = compare_toolchain(
+                    policy, configuration=config.get("configuration"), generator=evidence.get("generator"),
+                    architecture=evidence.get("architecture"), toolset=evidence.get("toolset"),
+                    compilers={"CXX": {
+                        "id": observed_cache.get("SPARK_TOOLCHAIN_CXX_COMPILER_ID"),
+                        "version": observed_cache.get("SPARK_TOOLCHAIN_CXX_COMPILER_VERSION"),
+                        "architecture": observed_cache.get("SPARK_TOOLCHAIN_CXX_ARCHITECTURE"),
+                        "path": observed_cache.get("SPARK_TOOLCHAIN_CXX_COMPILER"),
+                    }}, windows_sdk=observed_cache.get("SPARK_TOOLCHAIN_WINDOWS_SDK_VERSION"),
+                    linker=observed_cache.get("CMAKE_LINKER"), archiver=observed_cache.get("CMAKE_AR"),
+                    instance=observed_cache.get("CMAKE_GENERATOR_INSTANCE"),
+                )
+            except (ShippingToolchainError, OSError) as error:
+                errors = [str(error)]
+            if errors:
+                findings.append(Finding("codemodel-shipping-toolchain-mismatch", "error",
+                                        "Windows Shipping evidence differs from the locked input policy",
+                                        "; ".join(errors)))
 
         for entry in evidence.get("targets", []):
             name = str(entry.get("target"))

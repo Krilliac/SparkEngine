@@ -247,6 +247,30 @@ function(_spark_validate_package_notice_coverage _spark_root _spark_rules_path _
                 "payloadRules[${_spark_index}] must name exactly one of 'component', 'firstParty', "
                 "'systemRuntime' or 'noticeText'")
         endif()
+        # Component applicability scopes only final-artifact presence checks.
+        # Coverage of any file actually shipped remains unconditional here.
+        string(JSON _spark_install_type ERROR_VARIABLE _spark_install_error
+            TYPE "${_spark_rules}" payloadRules ${_spark_index} installComponents)
+        if(NOT _spark_install_error)
+            if(NOT _spark_install_type STREQUAL "ARRAY")
+                _spark_notice_fail("payloadRules[${_spark_index}].installComponents must be an array")
+            endif()
+            string(JSON _spark_install_count LENGTH "${_spark_rules}" payloadRules ${_spark_index} installComponents)
+            if(_spark_install_count LESS 1)
+                _spark_notice_fail("payloadRules[${_spark_index}].installComponents is empty")
+            endif()
+            set(_spark_install_seen "")
+            math(EXPR _spark_install_last "${_spark_install_count} - 1")
+            foreach(_spark_install_index RANGE ${_spark_install_last})
+                _spark_notice_json_get(_spark_install_name "${_spark_rules}" payloadRules ${_spark_index} installComponents ${_spark_install_index})
+                list(FIND _spark_install_seen "${_spark_install_name}" _spark_install_duplicate)
+                if(NOT _spark_install_name MATCHES "^(runtime|sdk|tools|templates|samples|redist)$" OR
+                   NOT _spark_install_duplicate EQUAL -1)
+                    _spark_notice_fail("payloadRules[${_spark_index}].installComponents has unknown/duplicate component")
+                endif()
+                list(APPEND _spark_install_seen "${_spark_install_name}")
+            endforeach()
+        endif()
     endforeach()
 
     # First-party roots: every entry needs a pattern and a written justification,

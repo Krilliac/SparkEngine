@@ -207,11 +207,11 @@
 | `CVarFlags` | enum | Tests | [TestConsoleVariables.cpp:L24](../../Tests/TestConsoleVariables.cpp#L24) |  |
 | `CVarType` | enum | SparkEngine | [ConsoleVariable.h:L76](../../SparkEngine/Source/Utils/ConsoleVariable.h#L76) |  |
 | `CVarType` | enum | Tests | [TestConsoleVariables.cpp:L44](../../Tests/TestConsoleVariables.cpp#L44) |  |
-| `D3D11_BIND_FLAG` | enum | SparkEngine | [PlatformD3DStubs.h:L148](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L148) |  |
-| `D3D11_FILTER` | enum | SparkEngine | [PlatformD3DStubs.h:L193](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L193) |  |
-| `D3D11_RESOURCE_MISC_FLAG` | enum | SparkEngine | [PlatformD3DStubs.h:L172](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L172) |  |
-| `D3D11_TEXTURE_ADDRESS_MODE` | enum | SparkEngine | [PlatformD3DStubs.h:L199](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L199) |  |
-| `D3D11_USAGE` | enum | SparkEngine | [PlatformD3DStubs.h:L162](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L162) |  |
+| `D3D11_BIND_FLAG` | enum | SparkSDK | [PlatformD3DStubs.h:L148](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L148) |  |
+| `D3D11_FILTER` | enum | SparkSDK | [PlatformD3DStubs.h:L193](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L193) |  |
+| `D3D11_RESOURCE_MISC_FLAG` | enum | SparkSDK | [PlatformD3DStubs.h:L172](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L172) |  |
+| `D3D11_TEXTURE_ADDRESS_MODE` | enum | SparkSDK | [PlatformD3DStubs.h:L199](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L199) |  |
+| `D3D11_USAGE` | enum | SparkSDK | [PlatformD3DStubs.h:L162](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L162) |  |
 | `DaemonCacheScope` | enum | SparkEngine | [DaemonDiagnostics.h:L59](../../SparkEngine/Source/Utils/DaemonDiagnostics.h#L59) |  |
 | `DamageType` | enum | GameModules | [RPGEnums.h:L36](../../GameModules/SparkGameRPG/Source/Enums/RPGEnums.h#L36) | Damage types for combat calculations and resistances |
 | `DamageType` | enum | SparkSDK | [GameTypes.h:L147](../../SparkSDK/Include/Spark/GameTypes.h#L147) | Damage types for combat system |
@@ -258,7 +258,7 @@
 | `DungeonDifficulty` | enum | GameModules | [MMOEnums.h:L103](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L103) | Dungeon difficulty modes |
 | `DungeonTile` | enum | SparkEngine | [ProceduralGenerator.h:L91](../../SparkEngine/Source/Engine/Procedural/ProceduralGenerator.h#L91) | Tile types for dungeon generation |
 | `DurableCommitStage` | enum | GameModules | [TFSavePaths.h:L331](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFSavePaths.h#L331) |  |
-| `DXGI_FORMAT` | enum | SparkEngine | [PlatformD3DStubs.h:L134](../../SparkEngine/Source/Core/PlatformD3DStubs.h#L134) |  |
+| `DXGI_FORMAT` | enum | SparkSDK | [PlatformD3DStubs.h:L134](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L134) |  |
 | `Ease` | enum | SparkEngine | [Tween.h:L50](../../SparkEngine/Source/Utils/Tween.h#L50) | Available easing curve types. |
 | `Ease` | enum | Tests | [TestTween.cpp:L20](../../Tests/TestTween.cpp#L20) |  |
 | `EaseType` | enum | SparkEngine | [TweenSystem.h:L41](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L41) | Easing function type for tween interpolation. |
@@ -286,7 +286,7 @@
 | `entity` | enum | SparkEngine | [TerrainRenderer.h:L41](../../SparkEngine/Source/Graphics/TerrainRenderer.h#L41) |  |
 | `EntityEventCleanupMode` | enum | SparkEngine | [Components.h:L72](../../SparkEngine/Source/Engine/ECS/Components.h#L72) |  |
 | `EventCategory` | enum | SparkEditor | [EventMonitorPanel.h:L36](../../SparkEditor/Source/Panels/EventMonitorPanel.h#L36) |  |
-| `EventPriority` | enum | SparkEngine | [EventSystem.h:L298](../../SparkEngine/Source/Engine/Events/EventSystem.h#L298) | Dispatch priority tier for queued events. |
+| `EventPriority` | enum | SparkSDK | [EventSystem.h:L301](../../SparkSDK/Include/Spark/EventSystem.h#L301) | Dispatch priority tier for queued events. |
 | `EventState` | enum | GameModules | [OpenWorldEnums.h:L180](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L180) | Event lifecycle state |
 | `EventTriggerType` | enum | SparkEngine | [EventResponseSystem.h:L42](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L42) | Types of events that can trigger a rule |
 | `EventTriggerType` | enum | Tests | [TestEventResponseSystem.cpp:L19](../../Tests/TestEventResponseSystem.cpp#L19) |  |

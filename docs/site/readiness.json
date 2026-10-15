@@ -1734,7 +1734,7 @@
         {
           "id": "toolchain",
           "label": "Supported compiler line",
-          "value": "The MSVC v143 toolset line (Ninja Multi-Config inside the VS 2022 x64 developer environment in build-windows-vs2022; the Visual Studio 17 2022 generator, x64, v143 in the windows-shipping preset). The exact MSVC compiler build and Windows SDK version are not pinned yet, so this names the supported line, not a certified toolchain.",
+          "value": "MSVC v143 remains the supported line. Windows Shipping now selects and checks Visual Studio 17 2022 x64, tools 14.44.35207, compiler 19.44.35229.0 and SDK 10.0.26100.0 through cmake/WindowsShippingToolchain.json. Release validation remains independent. The exact Shipping pin has local fixture coverage; hosted execution and certification are pending.",
           "capabilityIds": [
             "platform.windows",
             "runtime.cpp"
@@ -2340,7 +2340,7 @@
         "No Shipping-configuration artifact is signed, checksummed, attested, installed, upgraded, or rollback-tested at a single commit.",
         "The first-party slice SparkGameFPS is in the profile but uncertified: its release state is blocked and it holds this profile at blocked (MOD-310).",
         "The installed SparkGameFPS entrypoint consumer and source-boundary contract pass, but the complete production DLL still builds against SparkEngineLib and private engine-source headers, so the public-API-only requirement remains unmet (SDK-240, MOD-310).",
-        "No exact MSVC compiler build or Windows SDK version is pinned; the hosted windows-2022 image floats, so the toolchain is neither reproducible nor certified (BLD-100, PLT-200).",
+        "Windows Shipping now pins the MSVC compiler, tools folder and Windows SDK and rejects measured drift. The hosted windows-2022 image still floats, so the new pin must execute successfully on the final source tree; supported-host certification and protected build authority remain pending (BLD-100, PLT-200, CI-120).",
         "The Windows Shipping producer records its File API capture as structural evidence and reports producer authority unavailable by design: a same-job GitHub OIDC audience proves only the mutable job identity, not CMake execution. The protected Build Matrix Verifier attests that evidence from the Working checkout, and no attested receipt exists yet for a Working commit (CI-120).",
         "The editor-to-cook-to-package-to-install-to-run loop has no same-commit end-to-end certification.",
         "MSVC v145 and Visual Studio 2026 are an advisory continue-on-error lane, not a supported compiler line in this profile.",

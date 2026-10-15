@@ -25,7 +25,7 @@
 #include "Game/Player.h"
 #include "Game/Enemy.h"
 #include "Game/FPSStateRules.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 #include <Spark/IConsole.h>
 #include <Spark/ModuleLog.h>
 #include "Audio/MusicManager.h"

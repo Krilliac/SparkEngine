@@ -43,7 +43,7 @@ to [0,1], and transitions have a0.01-second minimum. Success means accepted.
 the C++ factory is called. The host checks the magic, descriptor format, SDK
 and runtime ABI versions, compiler family and version, C++ language level,
 runtime library, iterator debug level, and pointer size. The descriptor is
-64 bytes for descriptor version 1 and `SPARK_SDK_VERSION` 10.
+64 bytes for descriptor version 1 and `SPARK_SDK_VERSION` 11.
 
 `Spark::CheckModuleCompatibility()` returns the status. For a diagnostic,
 `Spark::GetModuleCompatibilityMismatch()` identifies the sidecar field and

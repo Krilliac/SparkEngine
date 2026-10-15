@@ -697,3 +697,31 @@ computed-target guard withdrawal), `test_pe_isa_ranges` (CRT vs engine toolset
 gating), `test_isa_code_map` (ComputedTargetTests, TableMasksCodeTests,
 caller-guard toolset and computed-reference cases). Still unverified, as before:
 the below-floor refusal path, and any hosted Windows run.
+
+## 2026-10-07: exact Shipping inputs and refreshed hosted evidence
+
+`cmake/WindowsShippingToolchain.json` now locks the Windows Shipping inputs to
+Visual Studio 17 2022, x64/v143, tools 14.44.35207, compiler 19.44.35229.0 and
+Windows SDK 10.0.26100.0. The Shipping preset selects the tools and SDK before
+`project()`. `SparkWindowsShippingToolchain.cmake` then compares measured C and
+C++ compiler identities, the Visual Studio instance, SDK, linker and archiver.
+Release validation is independent; the local 19.44.35228.0 compiler is not
+silently admitted as an equivalent Shipping compiler.
+
+The provenance recorder and verifier read this policy from the declared Git
+source SHA and reject working-policy drift. Build-matrix parity reads the
+trusted checker checkout's policy. The existing provenance schema remains v2.
+Policy/CMake fixtures reject missing or malformed policy, compiler-patch, tools,
+SDK and C/C++ disagreement; Release remains accepted with enforcement disabled.
+The focused provenance, policy and parity suites pass locally. Hosted execution
+of the new exact pin is still required; this is not a certification update.
+
+Earlier hosted PR evidence now supersedes the historical statements above that
+Windows Shipping had never run. At the tree of `1a8dfbd65`, Build run
+`37503168539` completed Windows Shipping, private-symbol staging/mapping and
+provenance capture; its advisory Windows reproducibility job succeeded. The
+retained earlier `eea548479` report from run `37470843883` compares 33 installed
+outputs with zero differing or missing entries, with strict closure of all 17
+locked dependencies in both builds. These results are prior-tree PR evidence.
+Final-tree execution, protected Working producer authority, all final artifact
+mappings and release rehearsal remain open. No acceptance state is promoted.

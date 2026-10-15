@@ -7,6 +7,10 @@ if(NOT DEFINED SPARK_FUZZ_PROJECT_ROOT)
     set(SPARK_FUZZ_PROJECT_ROOT "${CMAKE_SOURCE_DIR}")
 endif()
 
+# SparkEngine/Source/Core/PlatformTypes.h forwards to the SDK header <Spark/Detail/PlatformTypes.h>,
+# so every target that compiles engine sources needs the SDK include root.
+include_directories("${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include")
+
 add_executable(SparkFuzzJsonUtils
     FuzzJsonUtils.cpp
     FuzzJsonUtilsProduction.cpp
@@ -3841,7 +3845,9 @@ set_source_files_properties(FuzzRuntimePrefabProduction.cpp FuzzAssetMigrationPr
 target_include_directories(SparkFuzzRuntimePrefab PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
 target_include_directories(SparkFuzzAssetMigration PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
 target_include_directories(SparkFuzzAchievement PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
-target_include_directories(SparkFuzzEventResponse PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
+target_include_directories(SparkFuzzEventResponse PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkSDK/Include")
 target_include_directories(SparkFuzzUILayout PRIVATE "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source")
 target_include_directories(SparkFuzzEventResponse PRIVATE
     "${SPARK_FUZZ_PROJECT_ROOT}/ThirdParty/Utils/json")

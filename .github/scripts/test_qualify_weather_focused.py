@@ -167,14 +167,20 @@ class FocusedContracts(unittest.TestCase):
             with self.subTest(scanned=scanned,violations=violations),tempfile.TemporaryDirectory() as tmp:
                 root=Path(tmp);(root/'sdk').mkdir()
                 identity=dict(source_sha='a'*40,workflow_sha='b'*40,run_id='1',run_attempt='1',host_sha256='c'*64)
-                receipt=dict(identity,module='SparkGeneratedGame',sdk_version=10,headless='unavailable',windowed='accepted',lifecycle='passed',consumer_sha256='d'*64,module_sha256='e'*64,sidecar_sha256='f'*64,boundary_scanned=scanned,boundary_violations=violations,streams={})
+                receipt=dict(identity,module='SparkGeneratedGame',sdk_version=11,headless='unavailable',windowed='accepted',lifecycle='passed',consumer_sha256='d'*64,module_sha256='e'*64,sidecar_sha256='f'*64,boundary_scanned=scanned,boundary_violations=violations,streams={})
                 for weather,available in (('',0),('-weather',1)):
                     for kind in ('stdout','stderr'):
                         name=f'runtime{weather}-{kind}.log';path=root/'sdk'/name
                         path.write_text(f'SPARK_SDK_WEATHER module=SparkGeneratedGame available={available} accepted={available} invalid_rejected={available} clear_accepted={available} callback=OnLoad\n' if kind=='stdout' else '')
                         receipt['streams'][name]=H.digest(path)
                 H.save(root/'sdk/weather-identity.json',receipt)
-                if good:H.weather_proof(root,identity)
+                if good:
+                    H.weather_proof(root,identity)
+                    for version in (10,12,True,'11'):
+                        receipt['sdk_version']=version
+                        H.save(root/'sdk/weather-identity.json',receipt)
+                        with self.subTest(version=version),self.assertRaises(ValueError):
+                            H.weather_proof(root,identity)
                 else:
                     with self.assertRaises(ValueError):H.weather_proof(root,identity)
 
@@ -189,7 +195,7 @@ class FocusedContracts(unittest.TestCase):
                 H.save(root/'identity.json',identity)
                 sdk=root/'sdk';sdk.mkdir()
                 receipt={key:identity[key] for key in ('source_sha','workflow_sha','run_id','run_attempt','host_sha256')}
-                receipt.update(module='SparkGeneratedGame',sdk_version=10,headless='unavailable',windowed='accepted',lifecycle='passed',consumer_sha256='d'*64,module_sha256='e'*64,sidecar_sha256='f'*64,boundary_scanned=2,boundary_violations=0,streams={})
+                receipt.update(module='SparkGeneratedGame',sdk_version=11,headless='unavailable',windowed='accepted',lifecycle='passed',consumer_sha256='d'*64,module_sha256='e'*64,sidecar_sha256='f'*64,boundary_scanned=2,boundary_violations=0,streams={})
                 for weather,available in (('',0),('-weather',1)):
                     for kind in ('stdout','stderr'):
                         name=f'runtime{weather}-{kind}.log';path=sdk/name

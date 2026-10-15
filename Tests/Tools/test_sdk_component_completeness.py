@@ -55,7 +55,7 @@ class SdkComponentCompletenessTests(unittest.TestCase):
                 )
             elif relative.endswith("MIGRATION.md"):
                 path.write_text(
-                    "## Current version: SDK ABI v10\nThere is no N-1 module load\n",
+                    "## Current version: SDK ABI v11\nThere is no N-1 module load\n",
                     encoding="utf-8",
                 )
             else:
@@ -157,7 +157,7 @@ class SdkComponentCompletenessTests(unittest.TestCase):
 
             for relative, token in (
                 ("share/SparkEngine/sdk/API-REFERENCE.md", "## Module lifecycle"),
-                ("share/SparkEngine/sdk/MIGRATION.md", "## Current version: SDK ABI v10"),
+                ("share/SparkEngine/sdk/MIGRATION.md", "## Current version: SDK ABI v11"),
             ):
                 with self.subTest(missing_documentation=relative):
                     path = source / relative

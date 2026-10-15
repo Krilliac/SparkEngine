@@ -16,6 +16,8 @@ This tool extracts, from the headers under SparkSDK/Include/Spark:
 * the ABI structs ModuleInfo and SparkModuleCompatibilityDescriptor: field
   order, types and their LP64 offsets/sizes;
 * the ModuleKind enumerators, the module-ABI macros and the factory typedefs;
+* the SDK 11 native actor/mesh classes: bases, ordered fields and all callable
+  declarations, without guessing platform-specific object sizes or offsets;
 
 and compares the result with the committed golden SparkSDK/ABI/sdk-abi-surface.json.
 
@@ -60,6 +62,11 @@ ABI_MACROS = (
 )
 ABI_TYPEDEFS = ("CreateModuleFn", "DestroyModuleFn", "SparkGetModuleCompatibilityFn")
 ENGINE_CONTEXT = "Spark::IEngineContext"
+NATIVE_CLASSES_VERSION = 11
+NATIVE_CLASSES = (
+    "GameObject", "Model", "CubeObject", "PlaneObject", "SphereObject", "WallObject",
+    "Mesh", "Vertex", "MeshSubmesh",
+)
 
 # LP64 (Linux/macOS x64/arm64) size and alignment of the scalar types the ABI
 # structs use. An unknown field type is a hard error: extend this table
@@ -167,7 +174,7 @@ _BLOCK_HEAD = re.compile(r"^(?:template\s*<.*>\s*)?(?:typedef\s+)?(?:class|struc
 _ACCESS_LABEL = re.compile(r"^(?:public|protected|private)\s*:(?!:)\s*")
 
 
-def split_statements(text: str) -> list[tuple[str, str | None]]:
+def split_statements(text: str, *, constructor_initializers: bool = False) -> list[tuple[str, str | None]]:
     """Split a scope into (header, braced body or None) statements at depth 0."""
     statements: list[tuple[str, str | None]] = []
     i = 0
@@ -193,6 +200,12 @@ def split_statements(text: str) -> list[tuple[str, str | None]]:
             end = match_brace(text, i)
             body = text[i + 1:end]
             stripped = _ACCESS_LABEL.sub("", header.strip())
+            if constructor_initializers and re.search(r"\)\s*:\s*", stripped) and \
+                    re.search(r"\b[A-Za-z_]\w*\s*$", stripped):
+                # In `Vertex() : Position{...}, Normal{...} {}`, the first
+                # braces initialize members; only the final braces are the body.
+                i = end + 1
+                continue
             if stripped.rstrip().endswith("=") or re.search(r"\w\s*$", stripped) and "(" not in stripped \
                     and not _BLOCK_HEAD.match(stripped) and not stripped.startswith(("namespace", "extern")):
                 # Brace initializer (`T x = {...};` / `T x{...};`): part of a plain statement.
@@ -262,6 +275,8 @@ def walk_scope(text: str, prefix: str, header_name: str, surface: Surface) -> No
             if name in surface.classes:
                 raise ParseError(f"{name} is defined twice ({header_name})")
             surface.classes[name] = parse_class(body, klass.group(3), header_name)
+            if name in NATIVE_CLASSES:
+                surface.classes[name]["native"] = parse_native_class(body, klass.group(3), header_name, name)
 
 
 def parse_class(body: str, bases: str | None, header_name: str) -> dict:
@@ -303,6 +318,79 @@ def parse_field(member: str, header_name: str) -> dict:
     if dims:
         field["count"] = "][".join(d.strip() for d in dims)
     return field
+
+
+def parse_native_class(body: str, bases: str | None, header_name: str, name: str) -> dict:
+    """Pin native declarations, rejecting unsupported members instead of dropping them.
+
+    These are declaration records, not computed layouts: STL, SIMD, COM and
+    polymorphic types retain their real compiler/platform-defined representation.
+    Static fields are recorded with their storage qualifier too.
+    """
+    fields = []
+    methods = []
+    for raw_header, member_body in split_statements(body, constructor_initializers=True):
+        member = clean_header(raw_header)
+        if not member:
+            continue
+        if "(" in member:
+            method = re.fullmatch(
+                r"(?P<prefix>.*?)(?P<name>~?[A-Za-z_]\w*|operator\s*=)\s*"
+                r"(?P<params>\([^()]*\))(?P<tail>.*)", member, re.DOTALL)
+            if not method:
+                raise ParseError(f"{name}: cannot parse callable '{member}' in {header_name}")
+            method_name = method.group("name")
+            prefix = method.group("prefix").strip()
+            tail = method.group("tail").strip()
+            if "=" in prefix or "{" in prefix or (method_name not in (name, f"~{name}") and not prefix):
+                raise ParseError(f"{name}: cannot parse callable '{member}' in {header_name}")
+            if tail.startswith(":") and method_name == name and member_body is not None:
+                # Constructor initialization affects behavior, not its declaration.
+                tail = ""
+            if not re.fullmatch(r"(?:(?:const|volatile|noexcept|override|final)\b\s*|&&?\s*)*"
+                                r"(?:=\s*(?:0|default|delete))?", tail):
+                raise ParseError(f"{name}: cannot parse callable suffix '{member}' in {header_name}")
+            signature = member[:method.end("params")]
+            methods.append(normalize_signature(f"{signature} {tail}"))
+            continue
+        if member_body is not None or re.match(r"^(?:using|friend|typedef|enum|class|struct|union|template)\b", member):
+            raise ParseError(f"{name}: cannot parse required member '{member}' in {header_name}")
+        if "{" in member:
+            initializer_end = match_brace(member, member.index("{"))
+            if member[initializer_end + 1:].strip():
+                raise ParseError(f"{name}: cannot parse field initializer '{member}' in {header_name}")
+        elif "=" in member:
+            initializer = member.split("=", 1)[1]
+            # An unbraced comma can hide a second declarator after the first
+            # field's initializer. String literals do not declare members.
+            initializer = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'', "", initializer)
+            if "," in initializer:
+                raise ParseError(f"{name}: cannot parse field initializer '{member}' in {header_name}")
+        try:
+            field = parse_field(member, header_name)
+        except ParseError as exc:
+            raise ParseError(f"{name}: {exc}") from exc
+        # parse_field's legacy ABI-struct grammar is intentionally permissive.
+        # Native records must not silently treat a multi-declarator or an
+        # unsupported bit-field/function-pointer declaration as one field.
+        type_name = field["type"]
+        depth = 0
+        if not re.fullmatch(r"[\w\s:*&,<>]+", type_name):
+            raise ParseError(f"{name}: cannot parse field type '{member}' in {header_name}")
+        for char in type_name:
+            if char == "<":
+                depth += 1
+            elif char == ">":
+                depth -= 1
+            elif char == "," and depth == 0:
+                raise ParseError(f"{name}: cannot parse multiple fields '{member}' in {header_name}")
+            if depth < 0:
+                raise ParseError(f"{name}: cannot parse field type '{member}' in {header_name}")
+        if depth:
+            raise ParseError(f"{name}: cannot parse field type '{member}' in {header_name}")
+        fields.append(field)
+    return {"header": header_name, "bases": normalize_signature(bases) if bases else "",
+            "fields": fields, "methods": methods}
 
 
 def lp64_layout(struct: dict, enums: dict[str, dict], name: str) -> dict:
@@ -402,6 +490,12 @@ def extract(include_root: Path) -> tuple[dict, dict]:
         "macros": abi_macros,
         "typedefs": typedefs,
     }
+    native = {name: surface.classes[name]["native"] for name in NATIVE_CLASSES if name in surface.classes}
+    if native or facts["sdk_version"] >= NATIVE_CLASSES_VERSION:
+        missing = sorted(set(NATIVE_CLASSES) - set(native))
+        if missing:
+            raise ParseError(f"required native SDK classes were not found: {', '.join(missing)}")
+        surface_json["native_classes"] = native
     return surface_json, facts
 
 

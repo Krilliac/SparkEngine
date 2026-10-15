@@ -244,7 +244,7 @@ update_badges() {
 
         local tmpfile
         tmpfile=$(mktemp)
-        echo "$content" | "${PYTHON[@]}" -m json.tool --indent 2 > "$tmpfile" 2>/dev/null || echo "$content" > "$tmpfile"
+        echo "$content" | "${PYTHON[@]}" -c 'import json,sys; sys.stdout.reconfigure(newline="\n"); json.dump(json.load(sys.stdin),sys.stdout,indent=2); sys.stdout.write("\n")' > "$tmpfile" 2>/dev/null || echo "$content" > "$tmpfile"
         if [ ! -f "$filepath" ] || ! cmp -s "$filepath" "$tmpfile"; then
             CHANGES_MADE=$((CHANGES_MADE + 1))
             log_info "  Updated $name"

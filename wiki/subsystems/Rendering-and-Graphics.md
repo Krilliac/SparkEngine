@@ -866,8 +866,9 @@ remain unresolved. Golden fixtures require the debug layer and zero warnings as
 well as errors, corruption and discarded messages; the counter negative control
 injects both a warning and an invalid-buffer error. `GPUTimestampQuery` brackets
 only frames that time a pass, so a frame without timers no longer abandons an
-unread disjoint query (debug-layer warning #408). The frame/FPS/world/primary
-golden suites are registered but disabled until the renderer defects they exposed
-are fixed and their captures reviewed (`Tests/GoldenImages/RHI210-CAPTURE.md`).
+unread disjoint query (debug-layer warning #408). As of 2026-10-07 the reviewed
+Primary golden suite is enabled. The frame/FPS/world suites remain registered
+but disabled pending their runtime probes and reviewed captures
+(`Tests/GoldenImages/RHI210-CAPTURE.md`).
 See [the capture handoff](../../Tests/GoldenImages/RHI210-CAPTURE.md) for exact
-commands, deferred-pass gaps, pending captures and owner review.
+commands, pending captures and owner review.

@@ -396,7 +396,7 @@ namespace Spark
      */
     inline constexpr uint32_t EngineContextVirtualCount = 92;
 
-    static_assert(EngineContextVirtualCount == 92 && SPARK_SDK_VERSION == 10,
+    static_assert(EngineContextVirtualCount == 92 && SPARK_SDK_VERSION == 11,
                   "IEngineContext's vtable layout changed: bump SPARK_SDK_VERSION and update "
                   "EngineContextVirtualCount together, or an old host will accept a module that "
                   "calls off the end of its vtable.");

@@ -66,7 +66,7 @@ set(_required_sdk_documentation
     "README.md|there is no N-1 load or migration path"
     "API-REFERENCE.md|## Module lifecycle"
     "API-REFERENCE.md|SparkModuleCompatibilityDescriptor"
-    "MIGRATION.md|## Current version: SDK ABI v10"
+    "MIGRATION.md|## Current version: SDK ABI v11"
     "MIGRATION.md|There is no N-1 module load")
 set(_missing_sdk_documentation)
 foreach(_required_documentation IN LISTS _required_sdk_documentation)

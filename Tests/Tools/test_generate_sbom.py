@@ -113,6 +113,20 @@ def notice_text(entries: dict[str, str]) -> str:
 
 GOOD_NOTICE = {"Alpha": "v1.0.0", "Beta": "b" * 40, "Gamma": "snapshot"}
 
+
+def complete_notice_text():
+    entries = {**GOOD_NOTICE, "Fixture Font (editor font)": "1"}
+    inventory, texts = [], []
+    for index, (name, version) in enumerate(entries.items()):
+        notice = f"licenses/notice-{index}.txt"
+        files = "Editor.ttf,FixtureEmbedded.ttf" if name.startswith("Fixture Font") else "fixture"
+        inventory.append(f"{name}\n  Source: fixture\n  Version: {version}\n  License: MIT\n"
+                         f"  Notice files: {notice}\n  Files: {files}\n\n")
+        texts.append(f"----- {notice} -----\nCopyright 2026 Fixture Authors\nPermission is hereby granted.\n\n")
+    return ("SparkEngine Third-Party Notices\n================================\n\n"
+            "Dependency inventory\n--------------------\n\n" + "".join(inventory) +
+            "Complete license and notice texts\n=================================\n\n" + "".join(texts))
+
 RUNTIME_RULES_TEXT = json.dumps(
     {
         **json.loads(RULES_TEXT),
@@ -220,6 +234,38 @@ class TestReconcileNoticeInventory(ReconcileCase):
         self.write_notice({k: v for k, v in GOOD_NOTICE.items() if k != "Gamma"})
         self.assert_error(self.run_reconcile(), "does not list locked dependency 'Gamma'")
 
+    def test_final_notice_text_checks_include_dependencies_without_separate_payloads(self) -> None:
+        good = complete_notice_text()
+        self.notice.write_text(good, encoding="utf-8")
+        result = sbom.reconcile(INVENTORY, self.rules, GOOD_FILES, self.notice, [], validate_notice_text=True)
+        self.assertEqual(result["errors"], [])
+        for replacement in ("", "----- licenses/notice-2.txt -----\nx\n\n"):
+            body = "----- licenses/notice-2.txt -----\nCopyright 2026 Fixture Authors\nPermission is hereby granted.\n\n"
+            self.notice.write_text(good.replace(body, replacement), encoding="utf-8")
+            result = sbom.reconcile(INVENTORY, self.rules, GOOD_FILES, self.notice, [], validate_notice_text=True)
+            self.assert_error(result, "locked dependency 'Gamma'", "license text")
+
+    def test_numeric_final_payload_mapping_preserves_font_and_notice_text_coverage(self) -> None:
+        self.notice.write_text(complete_notice_text(), encoding="utf-8")
+        raw = self.tmp / "numeric-1"
+        raw.write_bytes(b"FixtureEmbedded.ttf")
+        files = {"THIRD_PARTY_NOTICES.txt": self.notice, "bin/Engine": raw, "fonts/Editor.ttf": raw}
+        coverage = sbom.notices.check_package_coverage(self.tmp, self.rules, payload_files=files)
+        self.assertEqual(coverage.uncovered, [])
+        self.assertEqual((coverage.font_count, coverage.embedded_count), (1, 1))
+        files["fonts/Unlisted.ttf"] = raw
+        coverage = sbom.notices.check_package_coverage(self.tmp, self.rules, payload_files=files)
+        self.assertTrue(any("Unlisted.ttf: font not named" in error for error in coverage.uncovered))
+        self.notice.write_text(complete_notice_text().replace("Editor.ttf,FixtureEmbedded.ttf", "Editor.ttf"), encoding="utf-8")
+        coverage = sbom.notices.check_package_coverage(self.tmp, self.rules, payload_files=files)
+        self.assertTrue(any("embeds font FixtureEmbedded.ttf" in error for error in coverage.uncovered))
+        data = json.loads(RULES_TEXT)
+        data["payloadRules"].append({"pattern": "^licenses/", "noticeText": "shipped text"})
+        rules = sbom.notices.parse_package_rules(json.dumps(data))
+        files["licenses/unlisted.txt"] = raw
+        coverage = sbom.notices.check_package_coverage(self.tmp, rules, payload_files=files)
+        self.assertTrue(any("unlisted.txt: license text not a 'Notice files:'" in error for error in coverage.uncovered))
+
     def test_notice_listing_an_unlocked_dependency_fails(self) -> None:
         self.write_notice({**GOOD_NOTICE, "Delta": "1.0"})
         self.assert_error(self.run_reconcile(), "lists 'Delta', which dependencies.lock does not lock")
@@ -261,6 +307,34 @@ class TestReconcileNoticeInventory(ReconcileCase):
         files = GOOD_FILES + ["bin/vcruntime140.dll"]
         report = sbom.reconcile(INVENTORY, rules, sorted(files), self.notice, [])
         self.assertEqual(report["errors"], [])
+
+    def test_native_profile_keeps_runtime_presence_and_all_dependency_notices(self) -> None:
+        data = json.loads(RULES_TEXT)
+        for rule in data["payloadRules"]:
+            if rule.get("component") == "Alpha":
+                rule["installComponents"] = ["sdk"]
+            elif rule.get("component") == "Beta":
+                rule["installComponents"] = ["runtime"]
+        rules = sbom.notices.parse_package_rules(json.dumps(data))
+        files = [name for name in GOOD_FILES if not name.startswith(("include/", "lib/"))]
+        def run(paths):
+            return sbom.reconcile(INVENTORY, rules, paths, self.notice, [],
+                                  install_components=["runtime", "redist", "samples", "tools"],
+                                  file_components={name: "runtime" for name in paths})
+        report = run(files)
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["profileExcludedPayloadRequirements"], ["Alpha"])
+        self.assert_error(run([name for name in files if "Beta" not in name]), "locked dependency 'Beta'")
+        self.assert_error(run(GOOD_FILES), "component membership contradicts")
+        self.assert_error(run(files + ["include/Vendor/unknown.h"]), "no package rule maps")
+        self.write_notice({"Beta": GOOD_NOTICE["Beta"], "Gamma": GOOD_NOTICE["Gamma"]})
+        self.assert_error(run(files), "does not list locked dependency 'Alpha'")
+
+    def test_real_sdl2_rule_retains_runtime_applicability(self) -> None:
+        rules = sbom.load_rules()
+        rule = next(rule for rule in rules.payload if rule.pattern.search("bin/SDL2.dll"))
+        self.assertEqual(rule.component, "SDL2")
+        self.assertEqual(rule.install_components, frozenset({"runtime", "sdk"}))
 
     def test_runtime_notice_without_terms_remains_fail_closed(self) -> None:
         rules = sbom.notices.parse_package_rules(RUNTIME_RULES_TEXT, "runtime fixture rules")
@@ -477,6 +551,102 @@ class TestReconcileCli(unittest.TestCase):
                 code, err, _ = self.run_archive(self.make_archive(suffix, traversal=True))
                 self.assertEqual(code, 2)
                 self.assertIn("not a normalized relative path", err)
+
+    @unittest.skipUnless(os.name == "nt", "requires Windows MSI/cabinet APIs")
+    def test_final_msi_cli_and_recorder_use_all_payload_bytes(self) -> None:
+        fixture = _load("spark_sbom_native_msi_fixture", "Tests/Tools/test_release_package_reconciliation.py")
+
+        folders = {"": "INSTALL_ROOT"}
+        directories = [("INSTALL_ROOT", "TARGETDIR", "SparkEngine")]
+        files, components, bodies = [], [], []
+        for sequence, relative in enumerate(GOOD_FILES, 1):
+            path = Path(relative)
+            parent = ""
+            for part in path.parts[:-1]:
+                current = "/".join(filter(None, (parent, part)))
+                if current not in folders:
+                    folders[current] = f"Directory{len(folders)}"
+                    directories.append((folders[current], folders[parent], part))
+                parent = current
+            file_id, component = f"File{sequence}", f"Component{sequence}"
+            body = complete_notice_text().encode() if relative == "THIRD_PARTY_NOTICES.txt" else b"fixture\n"
+            components.append((component, folders[parent]))
+            files.append((file_id, component, path.name, str(len(body)), "512", str(sequence)))
+            bodies.append((file_id, body))
+        cabinets = {}
+        for name, members in (("first.cab", bodies[:3]), ("optional.cab", bodies[3:])):
+            cabinet = self.tmp / name
+            fixture.write_cabinet(cabinet, members)
+            cabinets[name] = cabinet
+        packages = self.tmp / "packages"
+        packages.mkdir()
+        artifact = packages / "SparkEngine-Runtime.msi"
+        fixture.write_msi(artifact, cabinets, {"Directory": directories, "Component": components, "File": files,
+                          "FeatureComponents": [("CM_C_runtime", component) for component, _ in components],
+                          "Media": [("1", "3", "#first.cab", ""), ("2", str(len(files)), "#optional.cab", "")]})
+        source_root = self.tmp / "committed-source"
+        (source_root / "cmake").mkdir(parents=True)
+        (source_root / "ThirdParty").mkdir()
+        (source_root / "cmake/PackageProfiles.json").write_bytes((PROJECT_ROOT / "cmake/PackageProfiles.json").read_bytes())
+        (source_root / "cmake/PackageNoticeCoverageRules.json").write_text(RULES_TEXT, encoding="utf-8")
+        (source_root / "ThirdParty/dependencies.lock").write_text("fixture committed lock\n", encoding="utf-8")
+        for command in (["init", "-q"], ["add", "--", "cmake/PackageProfiles.json",
+                       "cmake/PackageNoticeCoverageRules.json", "ThirdParty/dependencies.lock"],
+                       ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                        "-c", "commit.gpgSign=false", "commit", "-qm", "package policy fixture"]):
+            subprocess.run(["git", "-C", str(source_root), *command], check=True, capture_output=True)
+        report_path = self.tmp / "msi-report.json"
+        err = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = sbom.main(["--source-root", str(source_root), "reconcile", "--msi", str(artifact),
+                              "--json-report", str(report_path)])
+        self.assertEqual(code, 0, err.getvalue())
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["packageFiles"], len(GOOD_FILES))
+        self.assertEqual(report["artifact"]["sha256"], sbom.hashlib.sha256(artifact.read_bytes()).hexdigest())
+        self.assertEqual([item["path"] for item in report["extraction"]["files"]], sorted(GOOD_FILES))
+        with mock.patch.object(fixture.tool, "load_tool", return_value=sbom):
+            recorded = fixture.tool.create(packages, source_root, report["source"]["sha"], "Windows", "Release", [])
+        self.assertEqual(recorded["errors"], [])
+        authority = fixture.native.profile_authority(lambda path: sbom.provenance._git(
+            source_root, "show", f"{report['source']['sha']}:{path}"))
+        fixture.tool.verify_documents([recorded], {artifact.name: report["artifact"]["sha256"]}, report["source"], authority)
+        # A caller's working policy cannot weaken committed policy requirements.
+        (source_root / "cmake/PackageProfiles.json").write_text('{}', encoding="utf-8")
+        repeated = sbom.reconcile_msi(INVENTORY, None, artifact, [], source_root)
+        self.assertEqual(repeated["packageProfile"], report["packageProfile"])
+        # Gamma has no separate payload rule, but its reproduced notice text is
+        # still required in the actual final MSI, even with names/versions intact.
+        damaged_notice = complete_notice_text().replace("----- licenses/notice-2.txt -----", "missing notice marker").encode()
+        damaged_files = [*files[:-1], (*files[-1][:3], str(len(damaged_notice)), *files[-1][4:])]
+        fixture.write_cabinet(cabinets["optional.cab"], [*bodies[3:-1], (bodies[-1][0], damaged_notice)])
+        damaged = packages / "SparkEngine-Damaged.msi"
+        fixture.write_msi(damaged, cabinets, {"Directory": directories, "Component": components, "File": damaged_files,
+                          "FeatureComponents": [("CM_C_runtime", component) for component, _ in components],
+                          "Media": [("1", "3", "#first.cab", ""), ("2", str(len(files)), "#optional.cab", "")]})
+        failed = sbom.reconcile_msi(INVENTORY, None, damaged, [], source_root)
+        self.assertTrue(any("locked dependency 'Gamma'" in error and "not reproduced" in error for error in failed["errors"]))
+        (source_root / "ThirdParty/dependencies.lock").write_text("changed lock\n", encoding="utf-8")
+        with self.assertRaises(sbom.InputError):
+            sbom.reconcile_msi(INVENTORY, None, artifact, [], source_root)
+
+    def test_msi_cannot_accept_a_caller_supplied_stage(self) -> None:
+        err = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = sbom.main(["reconcile", "--msi", str(self.prefix)])
+        self.assertEqual(code, 2)
+        self.assertIn("not a regular", err.getvalue())
+
+    def test_nsis_rejects_a_stage_and_an_unsupported_executable(self) -> None:
+        unsupported = self.prefix / "unsupported.exe"
+        unsupported.write_bytes(b"MZ-not-an-NSIS-package")
+        for candidate in (self.prefix, unsupported):
+            err = io.StringIO()
+            with self.subTest(candidate=candidate), redirect_stdout(io.StringIO()), redirect_stderr(err):
+                code = sbom.main(["reconcile", "--nsis", str(candidate)])
+            self.assertEqual(code, 2, err.getvalue())
+            self.assertIn("cannot safely inventory NSIS", err.getvalue())
 
 
 class TestRealRepositoryLock(unittest.TestCase):

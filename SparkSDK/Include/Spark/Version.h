@@ -13,8 +13,8 @@
 
 #include <cstdint>
 
-// SDK ABI version — increment when IModule, IEngineContext, or any SDK
-// interface changes in a binary-incompatible way.
+// SDK ABI version — increment when the checked public interface contract
+// changes, including newly published native class interfaces.
 // v2: Added 7 subsystem getters, IModule lifecycle hooks, ILogger, math/input/event types
 // v3: Added IModule::CanUnload() as a non-destructive unload/hot-reload veto.
 // v4: Appended IEngineContext::GetInvalidStateDetector()/GetComponentSerializers()
@@ -41,7 +41,11 @@
 //      and public IWeatherService/WeatherPreset, so modules issue weather commands
 //      without including the private WeatherSystem. Rebuild every module against
 //      v10; SDK compatibility remains exact-match and old GetWeather slots remain.
-#define SPARK_SDK_VERSION 10
+// v11: Published the existing native GameObject/primitive and Mesh contracts,
+//      including engine-linked validating Vertex construction. Actor layouts
+//      and IEngineContext slots are unchanged; rebuild all modules for the
+//      expanded SDK because module compatibility remains exact-match.
+#define SPARK_SDK_VERSION 11
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

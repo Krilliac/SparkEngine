@@ -95,6 +95,7 @@ else()
     project(SparkEngine VERSION ${SPARK_ENGINE_VERSION} LANGUAGES CXX C)
 endif()
 
+include("${CMAKE_SOURCE_DIR}/cmake/SparkWindowsShippingToolchain.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/SparkWindowsVersionInfo.cmake")
 
 # Keep the public SDK's semantic version in lockstep with project()/CPack.
@@ -3776,16 +3777,34 @@ endif()
 
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
-set(CPACK_COMPONENTS_ALL
-    ${SPARK_INSTALL_COMPONENT_RUNTIME}
-    ${SPARK_INSTALL_COMPONENT_SDK}
-    ${SPARK_INSTALL_COMPONENT_TOOLS}
-    ${SPARK_INSTALL_COMPONENT_TEMPLATES}
-    ${SPARK_INSTALL_COMPONENT_SAMPLES}
-)
-if(MSVC)
-    list(APPEND CPACK_COMPONENTS_ALL ${SPARK_INSTALL_COMPONENT_REDIST})
+# Shared with final-payload reconciliation; native generators select their
+# profile in SparkCPackOptions.cmake from this same source-controlled policy.
+file(READ "${CMAKE_SOURCE_DIR}/cmake/PackageProfiles.json" _spark_package_profiles)
+string(JSON _spark_profile_schema GET "${_spark_package_profiles}" schema)
+if(NOT _spark_profile_schema EQUAL 1)
+    message(FATAL_ERROR "Unsupported package component profile schema")
 endif()
+set(CPACK_COMPONENTS_ALL "")
+set(_spark_profile_groups components)
+if(MSVC)
+    list(APPEND _spark_profile_groups msvcAdditionalComponents)
+endif()
+foreach(_spark_profile_group IN LISTS _spark_profile_groups)
+    string(JSON _spark_profile_count LENGTH "${_spark_package_profiles}" archives ${_spark_profile_group})
+    if(_spark_profile_count LESS 1)
+        message(FATAL_ERROR "Empty archive package component profile")
+    endif()
+    math(EXPR _spark_profile_last "${_spark_profile_count} - 1")
+    foreach(_spark_profile_index RANGE ${_spark_profile_last})
+        string(JSON _spark_profile_component GET "${_spark_package_profiles}" archives ${_spark_profile_group} ${_spark_profile_index})
+        if(NOT _spark_profile_component MATCHES "^(runtime|sdk|tools|templates|samples|redist)$" OR
+           _spark_profile_component IN_LIST CPACK_COMPONENTS_ALL)
+            message(FATAL_ERROR "Unknown or duplicate package profile component: ${_spark_profile_component}")
+        endif()
+        list(APPEND CPACK_COMPONENTS_ALL "${_spark_profile_component}")
+    endforeach()
+endforeach()
+unset(_spark_package_profiles)
 
 set(CPACK_COMPONENT_RUNTIME_DISPLAY_NAME "Runtime Binaries")
 set(CPACK_COMPONENT_RUNTIME_DESCRIPTION "SparkEngine runtime executable, runtime shaders, and required binaries")
