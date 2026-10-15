@@ -4790,7 +4790,7 @@ set_tests_properties(FPSSceneMaterialContract PROPERTIES
 # grids stack when narrow, scale changes wait for the next frame, runtime state is per context,
 # and the SDK theme block round-trips with fallbacks equal to Ember Dark.
 if(TARGET imgui)
-    set(_spark_ui_kit_count 20)
+    set(_spark_ui_kit_count 23)
 else()
     set(_spark_ui_kit_count 8)
 endif()
@@ -4826,6 +4826,16 @@ if(Python3_Interpreter_FOUND)
         NAME UiLiterals
         COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_ui_literals.py)
     set_tests_properties(UiLiterals PROPERTIES
+        FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+        LABELS "ui;unit;python"
+        TIMEOUT 120)
+
+    # Every ICON_* define in EditorIcons.h / SparkUI Glyphs.h names the glyph its UTF-8 bytes
+    # encode in fa-solid-900.ttf, and every icon codepoint the sources use is in the loaded ranges.
+    add_test(
+        NAME UiIconGlyphs
+        COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/Tests/Tools/test_icon_glyphs.py)
+    set_tests_properties(UiIconGlyphs PROPERTIES
         FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
         LABELS "ui;unit;python"
         TIMEOUT 120)

@@ -143,6 +143,10 @@ if(WIN32)
     )
     # Application icon (IDI_SPARK_APP) for the window class, taskbar and Explorer.
     target_sources(SparkEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources/SparkEditor.rc")
+    if(MSVC)
+        # longPathAware; the linker merges it with the manifest it generates.
+        target_sources(SparkEditor PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/resources/SparkEditor.manifest")
+    endif()
 else()
     # Linux libraries (ImGui ships its own GL loader — no GLEW needed)
     # SDL2 may come from ThirdParty submodule or system install

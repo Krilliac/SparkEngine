@@ -933,7 +933,7 @@ namespace SparkEditor
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Ui::Px2(8.0f, EditorToolbarPaddingY));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, Ui::Px2(4.0f, 4.0f));
 
-        if (ImGui::Begin("##Toolbar", nullptr, toolbarFlags))
+        if (ImGui::Begin(EditorToolbarWindowName, nullptr, toolbarFlags))
         {
             const float btnSize = Ui::Px(EditorToolbarButtonSize);
             // One row: centre every control on the play button's height.
