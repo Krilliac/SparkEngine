@@ -14,7 +14,10 @@ import and delay-import directories, so the contract runs on every CI host:
 * a DLL that only resolves through PATH fails: PATH is never consulted;
 * a DLL beside a different importer does not satisfy this one;
 * truncated, non-PE and unterminated images fail closed, and an empty
-  package fails instead of passing vacuously.
+  package fails instead of passing vacuously;
+* a content decoder the engine loads through COM (windowscodecs.dll) is required
+  in the system directory when the package ships SparkEngine.exe, although no
+  import table names it.
 """
 
 from __future__ import annotations
@@ -113,7 +116,7 @@ class ClosureTestCase(unittest.TestCase):
         self.bin.mkdir(parents=True)
         self.system = self.root / "System32"
         self.system.mkdir()
-        for name in ("kernel32.dll", "USER32.dll", "d3d11.dll", "msvcp140.dll"):
+        for name in ("kernel32.dll", "USER32.dll", "d3d11.dll", "msvcp140.dll", "WindowsCodecs.dll"):
             (self.system / name).write_bytes(b"system")
 
     def tearDown(self) -> None:
@@ -221,6 +224,42 @@ class ClosureTests(ClosureTestCase):
         _count, failures = closure.check_package(self.package, self.root / "missing-system")
         self.assertEqual(len(failures), 1)
         self.assertIn("does not exist", failures[0])
+
+
+class ContentDecoderTests(ClosureTestCase):
+    def test_runtime_loaded_decoder_missing_from_system_directory_fails(self) -> None:
+        # No import table names windowscodecs.dll, so only the decoder policy can see it.
+        (self.system / "WindowsCodecs.dll").unlink()
+        self.write("bin/SparkEngine.exe", make_pe(("kernel32.dll",)))
+        self.assert_single_failure("content decoder windowscodecs.dll", "WIC image decoder", "missing from")
+
+    def test_runtime_loaded_decoder_present_passes(self) -> None:
+        self.write("bin/SparkEngine.exe", make_pe(("kernel32.dll",)))
+        self.assertEqual(self.check(), (1, []))
+
+    def test_decoder_is_not_required_without_the_engine_image(self) -> None:
+        (self.system / "WindowsCodecs.dll").unlink()
+        self.write("bin/Helper.exe", make_pe(("kernel32.dll",)))
+        self.assertEqual(self.check(), (1, []))
+
+    def test_package_local_copy_does_not_satisfy_a_decoder(self) -> None:
+        # COM resolves WIC from the operating system, never from the package directory.
+        (self.system / "WindowsCodecs.dll").unlink()
+        self.write("bin/SparkEngine.exe", make_pe(("kernel32.dll",)))
+        self.write("bin/windowscodecs.dll", make_pe(("kernel32.dll",)))
+        self.assert_single_failure("content decoder windowscodecs.dll")
+
+    def test_command_line_reports_the_missing_decoder(self) -> None:
+        (self.system / "WindowsCodecs.dll").unlink()
+        self.write("bin/SparkEngine.exe", make_pe(("kernel32.dll",)))
+        result = subprocess.run(
+            [sys.executable, "-B", str(CHECKER), str(self.package), "--system-dir", str(self.system)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("content decoder windowscodecs.dll", result.stderr)
 
 
 class MalformedImageTests(ClosureTestCase):
