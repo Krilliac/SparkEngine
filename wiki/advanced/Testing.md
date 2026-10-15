@@ -40,6 +40,61 @@ run excludes. The preset-tree `DocumentedTestCommands_SelectBuiltTests`
 registration remains a discovery check; execution is called directly by CI to
 avoid recursively running its own CTest.
 
+## Advisory PR-lane jobs
+
+These jobs run on every pull request and push, but each carries job-level
+`continue-on-error: true` and none is a `required-ci-gate` dependency. They
+exist so a work item's exact-commit evidence can come from a hosted run; a green
+local run justifies `implemented`, never `evidenced`. All of them use a
+non-Shipping preset (`linux-gcc-release`, `windows-release`) except
+`module-FPS-package-windows`, which configures the reviewed `windows-shipping`
+preset unmodified and then re-configures the same tree with `-DBUILD_TESTS=ON`
+so the installed-package CTests register. Every `ctest` call passes
+`--no-tests=error`. `.github/scripts/test-workflow-failure-propagation.py`
+(`ADVISORY_CI_LANES`) pins each job's selector, the CTest names it relies on and,
+for the module package runs, that the job timeout exceeds the registered CTest
+`TIMEOUT`.
+
+| Job | Work item | Platform | Selection |
+|-----|-----------|----------|-----------|
+| `persistence-integration` | DATA-120 | Linux and Windows | `ctest -L '^persistence$'` over `SparkTests` |
+| `package-consumer-linux` | ASSET-220 | Linux | `-DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON`, then `PackageConsumer_`, `CLI_ClaimsMatchBehavior` (plus `SparkNewFromInstalledPrefixTests` and `GamePackager_` where registered) |
+| `package-consumer-windows` | ASSET-220 | Windows | installs the tree into a prefix, then runs `SDKConsumer_InstalledEmptyProjectTemplate` from a working directory outside the checkout |
+| `scripting-integration` | ENG-200 | Linux | `ctest -L '^scripting-integration$'` with AngelScript and Jolt; `visual-script-package` stays a separate advisory job |
+| `prototype-module-kit` | MOD-295 | Linux | `ctest -L '^prototype-module-kit$'` |
+| `module-FPS-package-windows` | MOD-310, ENG-220 | Windows (`windows-shipping`) | `FPSPackage`, `FPSHeadlessPackage`, `FPSPublicSDK`; `PEImportClosure_Contract`, `FPSPackage_InstalledRuntime` and `WindowsCertification_PackageDependencyClosure` are first pinned to exactly three registered tests, and `ENABLE_VULKAN` must stay `OFF` |
+| `module-FPS-singleplayer` | MOD-310 | Windows Release | `FPSSinglePlayerSlice_InstalledArenaLoop` (registered only in Debug, Release and RelWithDebInfo) and the other `FPSSinglePlayerSlice_` tests |
+| `module-FPS-multiplayer` | MOD-315 | Linux | `FPSLANTwoClientConvergence` (builds `SparkFPSLANLoopbackPeer`), the `FPSMultiplayerProduction_` family run directly through `SparkTests`, and the NET-100 `NetworkSecurity_Transport_` tests |
+| `module-MMO-integration` | MOD-320 | Linux | `MMOIntegratedWorld`, `MMOAccount_`, `MMOWorld_`, `MMOPersistence_`, `MMO320_NoDemoIdentityGate` (builds `SparkMMOSessionGatePeer`) |
+| `module-ARPG`, `module-Platformer`, `module-RPG`, `module-RTS`, `module-Racing` | MOD-330, MOD-340, MOD-350, MOD-370, MOD-380 | Windows Release, `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON` | one installed-package objective run each (`ARPGDungeonPackage_ClearAndRestart`, `PlatformerCompletionPackage_Level0ThreeMinutes`, `RPGQuestSlicePackage_WolfHuntRestart`, `RTSSkirmishPackage_DeterministicVictory`, `RacingCompleteRacePackage_Circuit`) |
+| `module-OpenWorld` | MOD-360 | Windows Release, `-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON` | every CTest whose name starts with `OpenWorld` |
+| `terrafront-migration` | TF-120 | Linux | `ctest -R TerrafrontMigration` |
+| `terrafront-recovery` | TF-120 | Linux | `TerrafrontMigration_`, `TF120_` and `TerrafrontRestart_` (needs `SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON`) |
+
+Each Windows module job configures `windows-release` with `SparkGameFPS` plus the
+module under test (the Windows test tree requires the `SparkGameFPS` target) and
+builds the full tree, because the objective runs install the runtime and samples
+components. The jobs do not share a build artifact: a CMake build tree embeds
+absolute paths and is not relocatable between runners, so each job builds its own.
+The 30-minute `terrafront-soak` is not here: the Build workflow has no `schedule`
+trigger, so it runs from `operations-scheduled.yml`.
+
+Additions to jobs that already exist:
+
+- `security-runtime` also runs `ctest -L '^crash-canary$'` (the OPS-100
+  symbolication canary; `CrashReporter_Consent` carries `crash-security`, which
+  the existing label loop already selects) and a separate Release tree with
+  `-DENABLE_NETWORKING=OFF` that builds and runs only
+  `SparkNetworkingDisabledCompileContract` (SEC-100).
+- `build-windows-shipping` validates the staged Shipping runtime tree with
+  `cmake/ValidateStagedPackageExecutables.cmake` from a working directory outside
+  the checkout (ASSET-220). `release.yml` runs the same validator on its own stage.
+- `fuzz-policy` builds six more production smoke targets
+  (`SparkFuzzReflectedGameplayScene`, `SparkFuzzBasicMaterialJson`,
+  `SparkFuzzMeshObjLoader`, `SparkFuzzShaderSourceLoader`,
+  `SparkFuzzFreezeBufferBlob`, `SparkFuzzBenchmarkBaselineJson`) in the same order
+  as `FUZZ_SMOKE_TARGETS` in `FuzzerTests/policy/test_fuzz_policy.py` (SEC-120).
+
 ## Network boundary tooling
 
 `SparkNetworkBoundaryStatic` runs `Tools/check_network_boundary.py` with a 30-second
