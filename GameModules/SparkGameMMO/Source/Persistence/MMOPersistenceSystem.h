@@ -11,7 +11,8 @@
  * - Achievement progress and unlocked titles
  * - Crafting skill levels and known recipes
  * - Dungeon lockouts
- * - World boss kill history
+ *
+ * World boss kill history is not persisted: MMOWorldBossSystem keeps none.
  *
  * Uses the engine's AsyncDatabasePool with prepared statements. The key
  * names and value formats in RegisterPreparedStatements are the persisted
@@ -110,7 +111,7 @@ namespace MMO
         CreateGuildTable = 1005,
         CreateGuildMemberTable = 1006,
         CreateLockoutTable = 1007,
-        CreateBossKillTable = 1008,
+        CreateBossKillTable = 1008, ///< reserved; no boss-kill records are written or read
         CreateRecipeTable = 1009,
 
         // Character CRUD
@@ -228,7 +229,7 @@ namespace MMO
 
         // === World Persistence ===
 
-        /// Save guilds, the guild ID counter and new boss kills as one
+        /// Save guilds and the guild ID counter as one
         /// transaction queued behind earlier saves (the auto-save path).
         /// The saved guild set replaces the stored one, so call it only after
         /// LoadWorld's guilds were restored.
@@ -237,7 +238,7 @@ namespace MMO
         /// SaveWorldAsync, waiting for the commit (the unload path).
         bool SaveWorldSync(const WorldSaveData& data);
 
-        /// Load every stored guild, member and boss kill (at startup). Returns
+        /// Load every stored guild and member (at startup). Stray bosskill_* records are ignored. Returns
         /// false, leaving @p outData empty, on a store error or any malformed
         /// record, so the caller can refuse to save over a store it cannot read.
         bool LoadWorld(WorldSaveData& outData);

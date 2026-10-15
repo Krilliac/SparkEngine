@@ -60,7 +60,7 @@ world mutation run when the module's update drains it on the game thread. Inside
 pumped by the `DedicatedServer` tick thread, so this keeps session and player state single-threaded.
 
 This is a bounded small-area session slice. It does not add account persistence, world collision, remote
-login UI, cross-area handoff, or server-restart recovery. It remains experimental. The
+login UI, cross-area handoff, or session recovery after a server restart. It remains experimental. The
 `MMOIntegratedWorld_TwoClientSessionGate` CTest starts one server and two client processes over secured
 loopback UDP using these production services (bad-credential and foreign-character refusals included), and
 `MMOSessionGateProtocol` pins the codec tests. Neither is exact-commit CI evidence.
@@ -77,7 +77,13 @@ land with the SEC-120 policy files.
   name a different account in the new process. `MMOPersistenceSystem::ListCharacters` is ready for that once
   accounts are durable.
 - Persistence uses the engine's key-value fallback store, and the restart tests restart it inside one process.
-  No test yet restarts a server with two connected clients.
+  `MMOIntegratedWorld_TwoClientSessionGate` is written to also kill the server process and start a new one on
+  the same store, but it has not been compiled or run yet, so this describes its design, not a result. The
+  persistence round-trip it checks is fixture-driven: the characters and the guild are written by explicit
+  test commands in `SessionGatePeer` (`save`, `saveworld`; the guild is a synthetic fixture), not by the
+  module's production save path in `Main.cpp`. The new process is expected to read back both characters (name,
+  owner, authoritative position) and that guild, and never reissue a character ID. This does not show that the
+  module's own guild state survives a restart. Accounts are not durable, so the clients do not reconnect to it.
 - Two dungeons have no authored scene. Each world area carries an exact-case `sceneFile` under
   `Assets/Scenes/MMO/` (for example `Assets/Scenes/MMO/town_square.scene`), and the Shadow Crypt dungeon uses
   `Assets/Scenes/MMO/shadow_crypt.scene`. Forgotten Mine and Void Spire have no scene yet, so they stay registered
@@ -100,6 +106,6 @@ registered scene path exists with exact case and that each scene's `areaId` head
   restart-stable character IDs, owner-filtered character lists, exact inventory slots, ordered async saves,
   crafting and lockout values, removed progression that stays removed, refused out-of-range records, complete
   character deletion, guilds and members (including disbanded guilds and invalid restores), malformed world
-  records, and the boss-kill log.
+  records, and that stray `bosskill_*` records do not refuse a load.
 - `Tests/harden/Test_gamemodules_mmochat_di.cpp` (`MMO_ChatSystem_ResolvesNetworkViaInjectedContext`) checks that
   chat uses the injected engine context's `NetworkManager`.
