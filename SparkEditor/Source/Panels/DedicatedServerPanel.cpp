@@ -19,6 +19,8 @@
 #include "../Utils/EditorProcessLaunch.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -236,85 +238,84 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderServerConfigTab()
     {
-        ImGui::Text(ICON_FA_SERVER " Server Identity");
-        ImGui::Separator();
-
-        // Server name
-        char nameBuf[256];
-        strncpy(nameBuf, m_pieConfig.serverName.c_str(), sizeof(nameBuf) - 1);
-        nameBuf[sizeof(nameBuf) - 1] = '\0';
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("Server Name", nameBuf, sizeof(nameBuf)))
+        Spark::Ui::SubHeader(ICON_FA_SERVER " Server Identity");
+        if (Spark::Ui::BeginPropertyGrid("ServerIdentity"))
         {
-            m_pieConfig.serverName = nameBuf;
+            Spark::Ui::PropertyLabel("Server Name");
+            char nameBuf[256];
+            strncpy(nameBuf, m_pieConfig.serverName.c_str(), sizeof(nameBuf) - 1);
+            nameBuf[sizeof(nameBuf) - 1] = '\0';
+            if (ImGui::InputText("##ServerName", nameBuf, sizeof(nameBuf)))
+            {
+                m_pieConfig.serverName = nameBuf;
+            }
+            Spark::Ui::EndPropertyGrid();
         }
 
-        ImGui::Spacing();
-        ImGui::Text(ICON_FA_PLUG " Network Settings");
-        ImGui::Separator();
-
-        // Port
-        int port = static_cast<int>(m_pieConfig.port);
-        if (ImGui::InputInt("Port", &port))
+        Spark::Ui::SubHeader(ICON_FA_PLUG " Network Settings");
+        if (Spark::Ui::BeginPropertyGrid("ServerNetwork"))
         {
-            m_pieConfig.port = static_cast<uint16_t>(std::clamp(port, 1024, 65535));
-        }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("UDP port for game traffic (default: 27015)");
+            Spark::Ui::PropertyLabel("Port");
+            int port = static_cast<int>(m_pieConfig.port);
+            if (ImGui::InputInt("##Port", &port))
+            {
+                m_pieConfig.port = static_cast<uint16_t>(std::clamp(port, 1024, 65535));
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("UDP port for game traffic (default: 27015)");
 
-        // Max players
-        ImGui::SliderInt("Max Players", &m_pieConfig.maxPlayers, 2, 64);
+            Spark::Ui::PropertyLabel("Max Players");
+            ImGui::SliderInt("##MaxPlayers", &m_pieConfig.maxPlayers, 2, 64);
 
-        // Tick rate
-        float tickRate = m_pieConfig.tickRate;
-        if (ImGui::SliderFloat("Tick Rate (Hz)", &tickRate, 20.0f, 128.0f, "%.0f"))
-        {
-            m_pieConfig.tickRate = tickRate;
-        }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Server simulation rate.\n60 Hz = standard\n128 Hz = competitive");
+            Spark::Ui::PropertyLabel("Tick Rate (Hz)");
+            float tickRate = m_pieConfig.tickRate;
+            if (ImGui::SliderFloat("##TickRate", &tickRate, 20.0f, 128.0f, "%.0f"))
+            {
+                m_pieConfig.tickRate = tickRate;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Server simulation rate.\n60 Hz = standard\n128 Hz = competitive");
 
-        char bindAddress[64]{};
-        std::strncpy(bindAddress, m_pieConfig.bindAddress.c_str(), sizeof(bindAddress) - 1);
-        if (ImGui::InputText("Bind Address", bindAddress, sizeof(bindAddress)))
-            m_pieConfig.bindAddress = bindAddress;
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Use 'loopback' for this machine, or canonical RFC1918 CIDR such as "
-                              "192.168.1.20/24.\nMissing/invalid prefixes and wildcard/public addresses are rejected. "
-                              "Transport is not authenticated or encrypted.");
-
-        ImGui::Spacing();
-        ImGui::Text(ICON_FA_GAMEPAD " Game Settings");
-        ImGui::Separator();
-
-        // SparkServer currently receives the map through its real CLI contract;
-        // game-mode selection remains module-owned until that contract exists.
-        ImGui::BeginDisabled();
-        ImGui::Combo("Game Mode", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES);
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Unavailable: SparkServer has no game-mode command-line/config contract yet.");
-
-        // Map
-        char mapBuf[256];
-        strncpy(mapBuf, m_pieConfig.mapName.c_str(), sizeof(mapBuf) - 1);
-        mapBuf[sizeof(mapBuf) - 1] = '\0';
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("Starting Map", mapBuf, sizeof(mapBuf)))
-        {
-            m_pieConfig.mapName = mapBuf;
+            Spark::Ui::PropertyLabel("Bind Address");
+            char bindAddress[64]{};
+            std::strncpy(bindAddress, m_pieConfig.bindAddress.c_str(), sizeof(bindAddress) - 1);
+            if (ImGui::InputText("##BindAddress", bindAddress, sizeof(bindAddress)))
+                m_pieConfig.bindAddress = bindAddress;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "Use 'loopback' for this machine, or canonical RFC1918 CIDR such as "
+                    "192.168.1.20/24.\nMissing/invalid prefixes and wildcard/public addresses are rejected. "
+                    "Transport is not authenticated or encrypted.");
+            Spark::Ui::EndPropertyGrid();
         }
 
-        ImGui::Spacing();
-        ImGui::Text(ICON_FA_TERMINAL " Administration");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_GAMEPAD " Game Settings");
+        if (Spark::Ui::BeginPropertyGrid("ServerGame"))
+        {
+            // SparkServer currently receives the map through its real CLI contract;
+            // game-mode selection remains module-owned until that contract exists.
+            Spark::Ui::PropertyLabel("Game Mode");
+            {
+                const Spark::Ui::ScopedDisabled disabled(
+                    true, "Unavailable: SparkServer has no game-mode command-line/config contract yet.");
+                ImGui::Combo("##GameMode", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES);
+            }
 
+            Spark::Ui::PropertyLabel("Starting Map");
+            char mapBuf[256];
+            strncpy(mapBuf, m_pieConfig.mapName.c_str(), sizeof(mapBuf) - 1);
+            mapBuf[sizeof(mapBuf) - 1] = '\0';
+            if (ImGui::InputText("##StartingMap", mapBuf, sizeof(mapBuf)))
+            {
+                m_pieConfig.mapName = mapBuf;
+            }
+            Spark::Ui::EndPropertyGrid();
+        }
+
+        Spark::Ui::SubHeader(ICON_FA_TERMINAL " Administration");
         m_pieConfig.enableRcon = false;
-        ImGui::BeginDisabled();
-        ImGui::Checkbox("Enable RCON", &m_pieConfig.enableRcon);
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Unavailable: SparkServer intentionally exposes no authenticated remote RCON transport.");
+        Spark::Ui::UnavailableFeature("Remote RCON",
+                                      "SparkServer intentionally exposes no authenticated remote RCON transport.");
     }
 
     // ============================================================================
@@ -323,13 +324,19 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderMapRotationTab()
     {
-        ImGui::Text(ICON_FA_MAP " Map List");
-        ImGui::TextDisabled("SparkServer runs one map per launch. This list is the pick-list for the");
-        ImGui::TextDisabled("Map field on the PIE Server tab; the server does not cycle it.");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_MAP " Map List");
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("SparkServer runs one map per launch. This list is the pick-list for the Map field "
+                                 "on the PIE Server tab; the server does not cycle it.");
+        ImGui::PopTextWrapPos();
 
         // Map list
-        ImGui::BeginChild("##MapList", ImVec2(0, ImGui::GetContentRegionAvail().y - 80), true);
+        ImGui::BeginChild("##MapList", ImVec2(0.0f, ImGui::GetContentRegionAvail().y - Spark::Ui::Px(80.0f)), true);
+        if (m_mapRotation.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_MAP, "No maps in the list",
+                                  "Type a map name below and press Add to build the PIE pick-list.");
+        }
         for (int i = 0; i < static_cast<int>(m_mapRotation.size()); ++i)
         {
             bool selected = (m_selectedMapIndex == i);
@@ -357,11 +364,11 @@ namespace SparkEditor
         ImGui::EndChild();
 
         // Controls
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 160);
-        ImGui::InputText("##NewMap", m_newMapNameBuf, sizeof(m_newMapNameBuf));
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Spark::Ui::Px(160.0f));
+        ImGui::InputTextWithHint("##NewMap", "Map name", m_newMapNameBuf, sizeof(m_newMapNameBuf));
         ImGui::SameLine();
 
-        if (ImGui::Button(ICON_FA_PLUS " Add", ImVec2(70, 0)))
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add", Spark::Ui::Px2(70, 0)))
         {
             if (m_newMapNameBuf[0] != '\0')
             {
@@ -372,18 +379,16 @@ namespace SparkEditor
         }
         ImGui::SameLine();
 
-        bool hasSelection = m_selectedMapIndex >= 0 && m_selectedMapIndex < static_cast<int>(m_mapRotation.size());
-        if (!hasSelection)
-            ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_MINUS " Remove", ImVec2(80, 0)))
+        const bool hasSelection =
+            m_selectedMapIndex >= 0 && m_selectedMapIndex < static_cast<int>(m_mapRotation.size());
+        const Spark::Ui::ScopedDisabled disabled(!hasSelection, "Select a map to remove.");
+        if (Spark::Ui::SecondaryButton(ICON_FA_MINUS " Remove", Spark::Ui::Px2(80, 0)))
         {
             m_mapRotation.erase(m_mapRotation.begin() + m_selectedMapIndex);
             if (m_selectedMapIndex >= static_cast<int>(m_mapRotation.size()))
                 m_selectedMapIndex = static_cast<int>(m_mapRotation.size()) - 1;
             SetModified(true);
         }
-        if (!hasSelection)
-            ImGui::EndDisabled();
     }
 
     // ============================================================================
@@ -392,114 +397,90 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderCookPackageTab()
     {
-        ImGui::Text(ICON_FA_HAMMER " Cook Dedicated Server");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_HAMMER " Cook Dedicated Server");
 
-        // Platform
-        ImGui::Text("Target Platform:");
         m_cookSettings.platform = NativeServerPlatform();
-        ImGui::Text("%s (native)", GetPlatformName(m_cookSettings.platform));
-        ImGui::TextDisabled("Server packages include native runtime dependencies. Cross-compilation requires an "
-                            "external matching host/toolchain and is not simulated here.");
-
-        // Build profile
-        ImGui::Text("Build Profile:");
-        float btnWidth = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
-        ImVec2 btnSize(btnWidth, 28.0f);
-
-        auto ProfileBtn = [&](const char* label, ServerBuildProfile profile, const ImVec4& color)
+        if (Spark::Ui::BeginPropertyGrid("ServerCookTarget"))
         {
-            bool active = (m_cookSettings.profile == profile);
-            if (active)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, color);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(color.x + 0.1f, color.y + 0.1f, color.z + 0.1f, 1.0f));
-            }
-            if (ImGui::Button(label, btnSize))
-            {
-                m_cookSettings.profile = profile;
-            }
-            if (active)
-                ImGui::PopStyleColor(2);
-            ImGui::SameLine();
-        };
+            Spark::Ui::PropertyLabel("Target Platform");
+            ImGui::Text("%s (native)", GetPlatformName(m_cookSettings.platform));
 
-        ProfileBtn(ICON_FA_BUG " Debug", ServerBuildProfile::Debug, ImVec4(0.7f, 0.3f, 0.3f, 1.0f));
-        ProfileBtn(ICON_FA_CODE " Dev", ServerBuildProfile::Development, ImVec4(0.3f, 0.5f, 0.7f, 1.0f));
-        ProfileBtn(ICON_FA_ROCKET " Ship", ServerBuildProfile::Shipping, ImVec4(0.8f, 0.55f, 0.1f, 1.0f));
-        ImGui::NewLine();
+            // Segment order matches the ServerBuildProfile enumerators.
+            static constexpr const char* kProfileLabels[] = {ICON_FA_BUG " Debug", ICON_FA_CODE " Dev",
+                                                             ICON_FA_ROCKET " Ship"};
+            Spark::Ui::PropertyLabel("Build Profile");
+            int profileIndex = static_cast<int>(m_cookSettings.profile);
+            if (Spark::Ui::SegmentedControl("##ServerProfile", kProfileLabels, 3, &profileIndex))
+            {
+                m_cookSettings.profile = static_cast<ServerBuildProfile>(profileIndex);
+            }
+            Spark::Ui::EndPropertyGrid();
+        }
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("Server packages include native runtime dependencies. Cross-compilation requires an "
+                                 "external matching host/toolchain and is not simulated here.");
+        ImGui::PopTextWrapPos();
 
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_COG " Server Cook Options:");
-        ImGui::Indent(8.0f);
+        Spark::Ui::SubHeader(ICON_FA_COG " Server Cook Options");
 
         m_cookSettings.stripGraphics = true;
         m_cookSettings.stripAudio = true;
         m_cookSettings.stripEditor = true;
-        ImGui::TextDisabled(
+        Spark::Ui::SecondaryText(
             "SparkServer is a dedicated headless host and never bundles editor, graphics, or audio UI.");
-        ImGui::BeginDisabled();
-        ImGui::Checkbox("Headless dedicated host", &m_cookSettings.stripGraphics);
-        ImGui::Checkbox("Audio omitted by dedicated host", &m_cookSettings.stripAudio);
-        ImGui::Checkbox("Editor omitted by dedicated host", &m_cookSettings.stripEditor);
-        ImGui::EndDisabled();
+        {
+            const Spark::Ui::ScopedDisabled disabled(true);
+            ImGui::Checkbox("Headless dedicated host", &m_cookSettings.stripGraphics);
+            ImGui::Checkbox("Audio omitted by dedicated host", &m_cookSettings.stripAudio);
+            ImGui::Checkbox("Editor omitted by dedicated host", &m_cookSettings.stripEditor);
+        }
         ImGui::Checkbox("Include Debug Symbols", &m_cookSettings.includeDebugSymbols);
         m_cookSettings.compressAssets = false;
         m_cookSettings.enableLogging = true;
         m_cookSettings.enableRcon = false;
-        ImGui::BeginDisabled();
-        ImGui::Checkbox("Compress Package", &m_cookSettings.compressAssets);
-        ImGui::Checkbox("Engine Logging", &m_cookSettings.enableLogging);
-        ImGui::Checkbox("Remote RCON", &m_cookSettings.enableRcon);
-        ImGui::EndDisabled();
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Unavailable: SparkServer has no authenticated remote RCON transport.");
-        ImGui::TextDisabled("Package archives are not implemented; SparkServer logging remains enabled.");
+        Spark::Ui::UnavailableFeature("Package archives and remote RCON",
+                                      "Package archives are not implemented, SparkServer logging remains enabled, "
+                                      "and SparkServer has no authenticated remote RCON transport.");
 
-        ImGui::Unindent(8.0f);
-
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_FOLDER " Output:");
-
-        char outDir[512];
-        strncpy(outDir, m_cookSettings.outputDirectory.c_str(), sizeof(outDir) - 1);
-        outDir[sizeof(outDir) - 1] = '\0';
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("##ServerOutDir", outDir, sizeof(outDir)))
+        Spark::Ui::SubHeader(ICON_FA_FOLDER " Output");
+        if (Spark::Ui::BeginPropertyGrid("ServerCookOutput"))
         {
-            m_cookSettings.outputDirectory = outDir;
-        }
+            Spark::Ui::PropertyLabel("Output Directory");
+            char outDir[512];
+            strncpy(outDir, m_cookSettings.outputDirectory.c_str(), sizeof(outDir) - 1);
+            outDir[sizeof(outDir) - 1] = '\0';
+            if (ImGui::InputText("##ServerOutDir", outDir, sizeof(outDir)))
+            {
+                m_cookSettings.outputDirectory = outDir;
+            }
 
-        char exeName[256];
-        strncpy(exeName, m_cookSettings.executableName.c_str(), sizeof(exeName) - 1);
-        exeName[sizeof(exeName) - 1] = '\0';
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("Server Executable Name", exeName, sizeof(exeName)))
-        {
-            m_cookSettings.executableName = exeName;
+            Spark::Ui::PropertyLabel("Server Executable Name");
+            char exeName[256];
+            strncpy(exeName, m_cookSettings.executableName.c_str(), sizeof(exeName) - 1);
+            exeName[sizeof(exeName) - 1] = '\0';
+            if (ImGui::InputText("##ServerExeName", exeName, sizeof(exeName)))
+            {
+                m_cookSettings.executableName = exeName;
+            }
+            Spark::Ui::EndPropertyGrid();
         }
 
         ImGui::Separator();
 
         // Cook actions
-        ImVec4 cookColor(0.2f, 0.55f, 0.2f, 1.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, cookColor);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.3f, 1.0f));
+        const ImVec2 actionSize(-1.0f, Spark::Ui::Px(36.0f));
         if (!m_isCooking)
         {
-            if (ImGui::Button(ICON_FA_DOWNLOAD " Build, Cook & Package Server", ImVec2(-1.0f, 36.0f)))
+            if (Spark::Ui::PrimaryButton(ICON_FA_DOWNLOAD " Build, Cook & Package Server", actionSize))
             {
                 StartCookServer();
             }
         }
         else
         {
-            ImGui::BeginDisabled();
-            ImGui::Button(ICON_FA_SPINNER " Building native server package...", ImVec2(-1.0f, 36.0f));
-            ImGui::EndDisabled();
+            const Spark::Ui::ScopedDisabled disabled(true);
+            Spark::Ui::SecondaryButton(ICON_FA_SPINNER " Building native server package...", actionSize);
         }
-        ImGui::PopStyleColor(2);
 
         // Progress
         RenderCookProgress();
@@ -517,135 +498,134 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderPIEServerTab()
     {
-        ImGui::Text(ICON_FA_PLAY " Play-In-Editor Dedicated Server");
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
-                           "Launch a local dedicated server for testing multiplayer in the editor.");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_PLAY " Play-In-Editor Dedicated Server");
+        Spark::Ui::SecondaryText("Launch a local dedicated server for testing multiplayer in the editor.");
 
         if (!m_pieServerRunning)
         {
-            // Configuration
-            ImGui::Text("Quick Setup:");
-            ImGui::Indent(8.0f);
-
-            // Server name
-            char nameBuf[128];
-            strncpy(nameBuf, m_pieConfig.serverName.c_str(), sizeof(nameBuf) - 1);
-            nameBuf[sizeof(nameBuf) - 1] = '\0';
-            if (ImGui::InputText("Name##PIE", nameBuf, sizeof(nameBuf)))
+            if (Spark::Ui::BeginPropertyGrid("PIEQuickSetup"))
             {
-                m_pieConfig.serverName = nameBuf;
-            }
-
-            // Port
-            int port = static_cast<int>(m_pieConfig.port);
-            if (ImGui::InputInt("Port##PIE", &port))
-            {
-                m_pieConfig.port = static_cast<uint16_t>(std::clamp(port, 1024, 65535));
-            }
-
-            ImGui::SliderInt("Max Players##PIE", &m_pieConfig.maxPlayers, 2, 32);
-            ImGui::BeginDisabled();
-            ImGui::Combo("Game Mode##PIE", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Unavailable: SparkServer does not accept a game-mode option yet.");
-
-            // Map selection from rotation
-            if (!m_mapRotation.empty())
-            {
-                // Build a combined string of map names for combo
-                std::string mapNames;
-                for (const auto& map : m_mapRotation)
+                Spark::Ui::PropertyLabel("Name");
+                char nameBuf[128];
+                strncpy(nameBuf, m_pieConfig.serverName.c_str(), sizeof(nameBuf) - 1);
+                nameBuf[sizeof(nameBuf) - 1] = '\0';
+                if (ImGui::InputText("##PIEName", nameBuf, sizeof(nameBuf)))
                 {
-                    mapNames += map + '\0';
+                    m_pieConfig.serverName = nameBuf;
                 }
-                mapNames += '\0';
 
-                // Find current map in rotation
-                int mapIdx = 0;
-                for (int i = 0; i < static_cast<int>(m_mapRotation.size()); ++i)
+                Spark::Ui::PropertyLabel("Port");
+                int port = static_cast<int>(m_pieConfig.port);
+                if (ImGui::InputInt("##PIEPort", &port))
                 {
-                    if (m_mapRotation[static_cast<size_t>(i)] == m_pieConfig.mapName)
+                    m_pieConfig.port = static_cast<uint16_t>(std::clamp(port, 1024, 65535));
+                }
+
+                Spark::Ui::PropertyLabel("Max Players");
+                ImGui::SliderInt("##PIEMaxPlayers", &m_pieConfig.maxPlayers, 2, 32);
+
+                Spark::Ui::PropertyLabel("Game Mode");
+                {
+                    const Spark::Ui::ScopedDisabled disabled(
+                        true, "Unavailable: SparkServer does not accept a game-mode option yet.");
+                    ImGui::Combo("##PIEGameMode", &m_pieConfig.gameMode, GAME_MODE_NAMES, NUM_GAME_MODES);
+                }
+
+                // Map selection from rotation
+                Spark::Ui::PropertyLabel("Map");
+                if (!m_mapRotation.empty())
+                {
+                    // Build a combined string of map names for combo
+                    std::string mapNames;
+                    for (const auto& map : m_mapRotation)
                     {
-                        mapIdx = i;
-                        break;
+                        mapNames += map + '\0';
+                    }
+                    mapNames += '\0';
+
+                    // Find current map in rotation
+                    int mapIdx = 0;
+                    for (int i = 0; i < static_cast<int>(m_mapRotation.size()); ++i)
+                    {
+                        if (m_mapRotation[static_cast<size_t>(i)] == m_pieConfig.mapName)
+                        {
+                            mapIdx = i;
+                            break;
+                        }
+                    }
+
+                    if (ImGui::Combo("##PIEMap", &mapIdx, mapNames.c_str()))
+                    {
+                        m_pieConfig.mapName = m_mapRotation[static_cast<size_t>(mapIdx)];
                     }
                 }
-
-                if (ImGui::Combo("Map##PIE", &mapIdx, mapNames.c_str()))
+                else
                 {
-                    m_pieConfig.mapName = m_mapRotation[static_cast<size_t>(mapIdx)];
+                    char mapBuf[256];
+                    strncpy(mapBuf, m_pieConfig.mapName.c_str(), sizeof(mapBuf) - 1);
+                    mapBuf[sizeof(mapBuf) - 1] = '\0';
+                    if (ImGui::InputText("##PIEMap", mapBuf, sizeof(mapBuf)))
+                    {
+                        m_pieConfig.mapName = mapBuf;
+                    }
                 }
-            }
-            else
-            {
-                char mapBuf[256];
-                strncpy(mapBuf, m_pieConfig.mapName.c_str(), sizeof(mapBuf) - 1);
-                mapBuf[sizeof(mapBuf) - 1] = '\0';
-                if (ImGui::InputText("Map##PIE", mapBuf, sizeof(mapBuf)))
-                {
-                    m_pieConfig.mapName = mapBuf;
-                }
+                Spark::Ui::EndPropertyGrid();
             }
 
             ImGui::Spacing();
             m_pieConfig.openConsoleWindow = false;
             m_pieConfig.autoConnect = false;
-            ImGui::BeginDisabled();
-            ImGui::Checkbox("Open Console Window", &m_pieConfig.openConsoleWindow);
-            ImGui::Checkbox("Auto-Connect Editor Client", &m_pieConfig.autoConnect);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip("Unavailable: editor client connection transport is not integrated yet.");
-            ImGui::TextDisabled("Server output is streamed here; automatic client connection is pending.");
-
-            ImGui::Unindent(8.0f);
+            Spark::Ui::UnavailableFeature("Console window and editor auto-connect",
+                                          "Server output is streamed here; the editor client connection transport "
+                                          "is not integrated yet.");
 
             ImGui::Spacing();
 
             // Launch button
-            ImVec4 launchColor(0.15f, 0.5f, 0.15f, 1.0f);
-            ImGui::PushStyleColor(ImGuiCol_Button, launchColor);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.6f, 0.2f, 1.0f));
-            float fullWidth = ImGui::GetContentRegionAvail().x;
-            if (ImGui::Button(ICON_FA_PLAY " Launch PIE Dedicated Server", ImVec2(fullWidth, 44.0f)))
+            const float fullWidth = ImGui::GetContentRegionAvail().x;
+            if (Spark::Ui::PrimaryButton(ICON_FA_PLAY " Launch PIE Dedicated Server",
+                                         ImVec2(fullWidth, Spark::Ui::Px(44.0f))))
             {
                 LaunchPIEServer();
             }
-            ImGui::PopStyleColor(2);
         }
         else
         {
             // Running state
-            ImVec4 runningColor(0.2f, 0.7f, 0.2f, 1.0f);
-            ImGui::TextColored(runningColor, ICON_FA_CHECK " PIE Server Running");
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "PIE Server Running");
             ImGui::SameLine();
-            int upMins = static_cast<int>(m_pieServerUptime) / 60;
-            int upSecs = static_cast<int>(m_pieServerUptime) % 60;
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(Uptime: %d:%02d)", upMins, upSecs);
+            const int upMins = static_cast<int>(m_pieServerUptime) / 60;
+            const int upSecs = static_cast<int>(m_pieServerUptime) % 60;
+            Spark::Ui::SecondaryText("(Uptime: %d:%02d)", upMins, upSecs);
 
-            ImGui::Text("Server: %s | Port: %d | Map: %s", m_pieConfig.serverName.c_str(), m_pieConfig.port,
-                        m_pieConfig.mapName.c_str());
-            ImGui::Text("Mode: %s | Max Players: %d", GAME_MODE_NAMES[m_pieConfig.gameMode], m_pieConfig.maxPlayers);
+            if (Spark::Ui::BeginPropertyGrid("PIERunning"))
+            {
+                Spark::Ui::PropertyLabel("Server");
+                ImGui::TextUnformatted(m_pieConfig.serverName.c_str());
+                Spark::Ui::PropertyLabel("Port");
+                Spark::Ui::MonoText("%d", m_pieConfig.port);
+                Spark::Ui::PropertyLabel("Map");
+                ImGui::TextUnformatted(m_pieConfig.mapName.c_str());
+                Spark::Ui::PropertyLabel("Mode");
+                ImGui::TextUnformatted(GAME_MODE_NAMES[m_pieConfig.gameMode]);
+                Spark::Ui::PropertyLabel("Max Players");
+                Spark::Ui::MonoText("%d", m_pieConfig.maxPlayers);
+                Spark::Ui::EndPropertyGrid();
+            }
 
             ImGui::Separator();
 
-            // RCON console
+            // Server console
             RenderPIEServerConsole();
 
             ImGui::Separator();
 
             // Stop button
-            ImVec4 stopColor(0.65f, 0.15f, 0.15f, 1.0f);
-            ImGui::PushStyleColor(ImGuiCol_Button, stopColor);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.25f, 0.25f, 1.0f));
-            float fullWidth = ImGui::GetContentRegionAvail().x;
-            if (ImGui::Button(ICON_FA_STOP " Stop PIE Server", ImVec2(fullWidth, 36.0f)))
+            const float fullWidth = ImGui::GetContentRegionAvail().x;
+            if (Spark::Ui::DangerButton(ICON_FA_STOP " Stop PIE Server", ImVec2(fullWidth, Spark::Ui::Px(36.0f))))
             {
                 StopPIEServer();
             }
-            ImGui::PopStyleColor(2);
         }
     }
 
@@ -655,35 +635,40 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderServerBrowserTab()
     {
-        ImGui::Text(ICON_FA_GLOBE " LAN Server Browser");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_GLOBE " LAN Server Browser");
 
         // Refresh button. There is no LAN discovery transport, so this only
         // re-reads the locally launched PIE server.
-        if (ImGui::Button(ICON_FA_REFRESH " Refresh", ImVec2(120, 30)))
+        if (Spark::Ui::SecondaryButton(ICON_FA_REFRESH " Refresh"))
         {
             RefreshServerBrowser();
         }
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%d server(s) listed",
-                           static_cast<int>(m_discoveredServers.size()));
-        ImGui::TextDisabled("No LAN discovery transport exists: only a server launched from this");
-        ImGui::TextDisabled("editor is listed, and joining needs a client transport that is not wired.");
+        ImGui::AlignTextToFramePadding();
+        Spark::Ui::SecondaryText("%d server(s) listed", static_cast<int>(m_discoveredServers.size()));
+        Spark::Ui::UnavailableFeature("LAN discovery",
+                                      "No LAN discovery transport exists: only a server launched from this editor "
+                                      "is listed, and joining needs a client transport that is not wired.");
 
         ImGui::Separator();
 
         // Server list
-        if (ImGui::BeginTable("##ServerList", 6,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_ScrollY,
-                              ImVec2(0, ImGui::GetContentRegionAvail().y - 40)))
+        if (m_discoveredServers.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_GLOBE, "No servers listed",
+                                  "Launch a PIE server, then press Refresh to list it here.");
+        }
+        else if (ImGui::BeginTable("##ServerList", 6,
+                                   ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+                                       ImGuiTableFlags_ScrollY,
+                                   ImVec2(0.0f, ImGui::GetContentRegionAvail().y - Spark::Ui::Px(40.0f))))
         {
             ImGui::TableSetupColumn("Server Name", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Map", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-            ImGui::TableSetupColumn("Players", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-            ImGui::TableSetupColumn("Ping", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableSetupColumn("Map", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(120.0f));
+            ImGui::TableSetupColumn("Mode", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(100.0f));
+            ImGui::TableSetupColumn("Players", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(70.0f));
+            ImGui::TableSetupColumn("Ping", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60.0f));
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60.0f));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_discoveredServers.size()); ++i)
@@ -692,37 +677,37 @@ namespace SparkEditor
                 ImGui::TableNextRow();
 
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%s", server.name.c_str());
+                ImGui::TextUnformatted(server.name.c_str());
 
                 ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%s", server.map.c_str());
+                ImGui::TextUnformatted(server.map.c_str());
 
                 ImGui::TableSetColumnIndex(2);
                 if (server.gameMode >= 0 && server.gameMode < NUM_GAME_MODES)
-                    ImGui::Text("%s", GAME_MODE_NAMES[server.gameMode]);
+                    ImGui::TextUnformatted(GAME_MODE_NAMES[server.gameMode]);
                 else
-                    ImGui::Text("Unknown");
+                    Spark::Ui::SecondaryText("Unknown");
 
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%d/%d", server.currentPlayers, server.maxPlayers);
+                Spark::Ui::TableNumber("%d/%d", server.currentPlayers, server.maxPlayers);
 
                 ImGui::TableSetColumnIndex(4);
-                ImVec4 pingColor = (server.ping < 50.0f)    ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                                   : (server.ping < 100.0f) ? ImVec4(0.8f, 0.8f, 0.2f, 1.0f)
-                                                            : ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
-                ImGui::TextColored(pingColor, "%.0f", server.ping);
+                {
+                    const Spark::Ui::Role pingRole = server.ping < 50.0f    ? Spark::Ui::Role::SuccessText
+                                                     : server.ping < 100.0f ? Spark::Ui::Role::WarningText
+                                                                            : Spark::Ui::Role::ErrorText;
+                    const Spark::Ui::ScopedRoleColor pingColor(ImGuiCol_Text, pingRole);
+                    Spark::Ui::TableNumber("%.0f ms", server.ping);
+                }
 
                 ImGui::TableSetColumnIndex(5);
                 char joinBtnId[32];
                 snprintf(joinBtnId, sizeof(joinBtnId), "Join##%d", i);
-                ImGui::BeginDisabled();
+                const Spark::Ui::ScopedDisabled disabled(true, "Unavailable: no editor client transport is wired.");
                 if (ImGui::SmallButton(joinBtnId))
                 {
                     ConnectToServer(server);
                 }
-                ImGui::EndDisabled();
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("Unavailable: no editor client transport is wired.");
             }
 
             ImGui::EndTable();
@@ -731,10 +716,10 @@ namespace SparkEditor
         // Direct connect
         ImGui::Separator();
         static char directAddr[128] = "127.0.0.1:27015";
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 80);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Spark::Ui::Px(80.0f));
         ImGui::InputText("##DirectConnect", directAddr, sizeof(directAddr));
         ImGui::SameLine();
-        if (ImGui::Button("Connect", ImVec2(72, 0)))
+        if (Spark::Ui::SecondaryButton("Connect", Spark::Ui::Px2(72, 0)))
         {
             DiscoveredServer direct;
             direct.name = "Direct";
@@ -760,7 +745,9 @@ namespace SparkEditor
 
         if (!m_connectStatus.empty())
         {
-            ImGui::TextColored(ImVec4(0.9f, 0.5f, 0.3f, 1.0f), "%s", m_connectStatus.c_str());
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "%s", m_connectStatus.c_str());
+            ImGui::PopTextWrapPos();
         }
     }
 
@@ -772,13 +759,12 @@ namespace SparkEditor
     {
         if (!m_pieServerRunning)
         {
-            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.3f, 1.0f),
-                               ICON_FA_EXCLAMATION " No server running. Launch a PIE server first.");
+            Spark::Ui::EmptyState(ICON_FA_CHART_BAR, "No server running",
+                                  "Launch a PIE server from the PIE Server tab to monitor it here.");
             return;
         }
 
-        ImGui::Text(ICON_FA_CHART_BAR " Server Monitor");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_CHART_BAR " Server Monitor");
 
         // Stats
         RenderServerStats();
@@ -786,15 +772,13 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Player list
-        if (ImGui::CollapsingHeader(ICON_FA_USERS " Connected Players", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Connected Players", ICON_FA_USERS))
         {
             RenderPlayerList();
         }
 
-        ImGui::Separator();
-
         // RCON Console
-        if (ImGui::CollapsingHeader(ICON_FA_TERMINAL " RCON Console", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("RCON Console", ICON_FA_TERMINAL))
         {
             RenderRconConsole();
         }
@@ -844,36 +828,26 @@ namespace SparkEditor
         if (m_isCooking || m_cookProgress > 0.0f)
         {
             ImGui::Spacing();
-            ImGui::ProgressBar(m_cookProgress, ImVec2(-1, 20));
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", m_cookStatus.c_str());
+            ImGui::ProgressBar(m_cookProgress, ImVec2(-1.0f, Spark::Ui::Px(20.0f)));
+            Spark::Ui::SecondaryText("%s", m_cookStatus.c_str());
         }
     }
 
     void DedicatedServerPanel::RenderCookLog()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_TERMINAL " Cook Log", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Cook Log", ICON_FA_TERMINAL))
         {
-            ImGui::BeginChild("##CookLog", ImVec2(0, 120), true);
+            ImGui::BeginChild("##CookLog", Spark::Ui::Px2(0, 120), true);
             for (const auto& entry : m_cookLog)
             {
-                ImVec4 color(0.8f, 0.8f, 0.8f, 1.0f);
-                const char* prefix = ICON_FA_INFO_CIRCLE;
                 if (entry.level == "warning")
-                {
-                    color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
-                    prefix = ICON_FA_EXCLAMATION;
-                }
+                    Spark::Ui::StatusText(Spark::Ui::Status::Warning, "%s", entry.message.c_str());
                 else if (entry.level == "error")
-                {
-                    color = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
-                    prefix = ICON_FA_TIMES;
-                }
+                    Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", entry.message.c_str());
                 else if (entry.level == "success")
-                {
-                    color = ImVec4(0.3f, 0.9f, 0.3f, 1.0f);
-                    prefix = ICON_FA_CHECK;
-                }
-                ImGui::TextColored(color, "%s %s", prefix, entry.message.c_str());
+                    Spark::Ui::StatusText(Spark::Ui::Status::Success, "%s", entry.message.c_str());
+                else
+                    Spark::Ui::MonoText("%s", entry.message.c_str());
             }
             if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
                 ImGui::SetScrollHereY(1.0f);
@@ -971,24 +945,28 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderPIEServerConsole()
     {
-        ImGui::Text(ICON_FA_TERMINAL " Server Console");
-        ImGui::BeginChild("##PIEConsole", ImVec2(0, 150), true);
+        Spark::Ui::SubHeader(ICON_FA_TERMINAL " Server Console");
+        ImGui::BeginChild("##PIEConsole", Spark::Ui::Px2(0, 150), true);
         for (const auto& line : m_pieServerLog)
         {
-            ImVec4 color(0.8f, 0.8f, 0.8f, 1.0f);
-            if (line.find("[Server]") == 0)
-                color = ImVec4(0.4f, 0.7f, 1.0f, 1.0f);
-            else if (line.find("[Client]") == 0)
-                color = ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
-            else if (line.find("[RCON]") == 0)
-                color = ImVec4(1.0f, 0.8f, 0.3f, 1.0f);
-            ImGui::TextColored(color, "%s", line.c_str());
+            // The source tag at the start of each line picks its colour; the tag itself stays visible.
+            Spark::Ui::Role role = Spark::Ui::Role::TextPrimary;
+            if (line.starts_with("[Server]"))
+                role = Spark::Ui::Role::InfoText;
+            else if (line.starts_with("[Client]"))
+                role = Spark::Ui::Role::SuccessText;
+            else if (line.starts_with("[RCON]"))
+                role = Spark::Ui::Role::WarningText;
+            const Spark::Ui::ScopedRoleColor color(ImGuiCol_Text, role);
+            Spark::Ui::MonoText("%s", line.c_str());
         }
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
             ImGui::SetScrollHereY(1.0f);
         ImGui::EndChild();
 
-        ImGui::TextDisabled("Remote console is disabled until SparkServer exposes an authenticated RCON transport.");
+        Spark::Ui::UnavailableFeature("Remote console",
+                                      "Remote console is disabled until SparkServer exposes an authenticated RCON "
+                                      "transport.");
     }
 
     // ============================================================================
@@ -1065,14 +1043,14 @@ namespace SparkEditor
 
     void DedicatedServerPanel::RenderPlayerList()
     {
-        ImGui::BeginChild("##PlayerList", ImVec2(0, 100), true);
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "SparkServer health reports aggregate player count only.");
+        ImGui::BeginChild("##PlayerList", Spark::Ui::Px2(0, 100), true);
+        Spark::Ui::SecondaryText("SparkServer health reports aggregate player count only.");
         ImGui::EndChild();
     }
 
     void DedicatedServerPanel::RenderRconConsole()
     {
-        ImGui::BeginChild("##RconConsole", ImVec2(0, 100), true);
+        ImGui::BeginChild("##RconConsole", Spark::Ui::Px2(0, 100), true);
         for (const auto& line : m_rconHistory)
         {
             ImGui::TextWrapped("%s", line.c_str());
@@ -1081,38 +1059,51 @@ namespace SparkEditor
             ImGui::SetScrollHereY(1.0f);
         ImGui::EndChild();
 
-        ImGui::TextDisabled("No authenticated RCON transport is configured.");
+        Spark::Ui::UnavailableFeature("RCON commands", "No authenticated RCON transport is configured.");
     }
 
     void DedicatedServerPanel::RenderServerStats()
     {
-        ImGui::Columns(2, "##ServerStatsCols", false);
+        if (!Spark::Ui::BeginPropertyGrid("ServerStats"))
+            return;
 
-        int upMins = static_cast<int>(m_pieServerUptime) / 60;
-        int upSecs = static_cast<int>(m_pieServerUptime) % 60;
-        ImGui::Text("Uptime: %d:%02d", upMins, upSecs);
-        ImGui::Text("Tick Rate: %.0f Hz", m_pieConfig.tickRate);
+        const int upMins = static_cast<int>(m_pieServerUptime) / 60;
+        const int upSecs = static_cast<int>(m_pieServerUptime) % 60;
+        Spark::Ui::PropertyLabel("Uptime");
+        Spark::Ui::MonoText("%d:%02d", upMins, upSecs);
+        Spark::Ui::PropertyLabel("Tick Rate");
+        Spark::Ui::MonoText("%.0f Hz", m_pieConfig.tickRate);
+        Spark::Ui::PropertyLabel("Players");
         const int reportedPlayers = GetReportedPlayerCount();
         if (reportedPlayers >= 0)
-            ImGui::Text("Players: %d/%d", reportedPlayers, m_pieConfig.maxPlayers);
+            Spark::Ui::MonoText("%d/%d", reportedPlayers, m_pieConfig.maxPlayers);
         else
-            ImGui::TextDisabled("Players: no health report yet");
+            Spark::Ui::SecondaryText("No health report yet");
 
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("Map");
+        ImGui::TextUnformatted(m_pieConfig.mapName.c_str());
+        Spark::Ui::PropertyLabel("Mode");
+        ImGui::TextUnformatted(GAME_MODE_NAMES[m_pieConfig.gameMode]);
+        Spark::Ui::PropertyLabel("Port");
+        Spark::Ui::MonoText("%d", m_pieConfig.port);
 
-        ImGui::Text("Map: %s", m_pieConfig.mapName.c_str());
-        ImGui::Text("Mode: %s", GAME_MODE_NAMES[m_pieConfig.gameMode]);
-        ImGui::Text("Port: %d", m_pieConfig.port);
-
-        ImGui::Columns(1);
         if (m_serverProcess)
         {
             const auto snapshot = m_serverProcess->GetSnapshot();
             if (!snapshot.healthJson.empty())
-                ImGui::TextWrapped("Health: %s", snapshot.healthJson.c_str());
+            {
+                Spark::Ui::PropertyLabel("Health");
+                ImGui::PushTextWrapPos(0.0f);
+                Spark::Ui::MonoText("%s", snapshot.healthJson.c_str());
+                ImGui::PopTextWrapPos();
+            }
             if (snapshot.exitCode)
-                ImGui::Text("Last exit code: %d", *snapshot.exitCode);
+            {
+                Spark::Ui::PropertyLabel("Last exit code");
+                Spark::Ui::MonoText("%d", *snapshot.exitCode);
+            }
         }
+        Spark::Ui::EndPropertyGrid();
     }
 
 } // namespace SparkEditor

@@ -13,6 +13,10 @@
 #include "EditorTheme.h"
 #include "EditorFonts.h"
 #include "EditorIcons.h"
+#include <SparkUI/Fonts.h>
+#include <SparkUI/Glyphs.h>
+#include <SparkUI/Runtime.h>
+#include <SparkUI/Widgets.h>
 #include "Core/FaultIsolation.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
@@ -70,6 +74,7 @@
 #include <ctime>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -262,11 +267,21 @@ namespace SparkEditor
                 }
             }
 
+            // Preferences back the Appearance window, the Start page and the recent-scene list. EditorApplication
+            // read them once and handed them over through AdoptPreferences(); a test-mode launch keeps the defaults
+            // in memory and never writes the user's file, whatever was adopted.
+            if (config.testMode)
+                m_persistPreferences = false;
+
             // Apply startup theme (CLI --theme override, else Ember Studio — matches hi-fi design)
             const std::string themeName = config.startupTheme.empty() ? "Ember Studio" : config.startupTheme;
             console.LogInfo("Applying theme: " + themeName);
             ApplyTheme(themeName);
             console.LogSuccess("Theme applied");
+
+            // The Start page opens on first run and while "Show at startup" stays on; never in test mode.
+            if (!config.testMode && m_preferences.showStartPage)
+                m_startPage.Open();
 
             m_isInitialized = true;
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI initialized successfully");
@@ -736,16 +751,23 @@ namespace SparkEditor
             m_pendingLayoutIniPath.clear();
         }
 
+        // The status bar reserves its strip of the viewport work area before the dockspace host sizes itself.
+        if (m_preferences.showStatusBar)
+            RenderStatusBar();
+
         // === Full-screen DockSpace ===
         ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::SetNextWindowViewport(viewport->ID);
 
-        ImGuiWindowFlags dockspaceFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking |
-                                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
-                                          ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                          ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+        // No ImGuiWindowFlags_MenuBar: the menus live in the viewport's main menu bar (BeginMainMenuBar), which
+        // already reserves its strip of the work area. A host menu bar here was an empty, scale-sized band between
+        // the menus and the toolbar.
+        const ImGuiWindowFlags dockspaceFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+                                                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+                                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                                                ImGuiWindowFlags_NoNavFocus;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -755,6 +777,8 @@ namespace SparkEditor
 
         ImGuiID dockspaceId = ImGui::GetID("SparkDockSpace");
         ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+        ImVec2 toastAreaMin(0.0f, 0.0f);
+        ImVec2 toastAreaSize(0.0f, 0.0f);
 
         // Preserve a dock tree loaded from ImGui settings. A reset remains an
         // explicit destructive action, while a new workspace is still seeded.
@@ -766,19 +790,39 @@ namespace SparkEditor
             m_defaultDockLayoutResetRequested = false;
         }
 
+        // The dock tree follows the UI scale: a tree built, saved or restored from imgui.ini at another scale
+        // (Ctrl+=, a move to a monitor with a different DPI) would otherwise clip the toolbar buttons and squeeze
+        // the side docks. The toolbar strip is refitted exactly; other docks only grow to their scaled minimum.
+        {
+            const std::string hierarchyWindow = PanelDockWindowName("Hierarchy");
+            const std::string inspectorWindow = PanelDockWindowName("Inspector");
+            const std::string consoleWindow = PanelDockWindowName("Console");
+            const auto nameOrNull = [](const std::string& name) { return name.empty() ? nullptr : name.c_str(); };
+            FitEditorDockTree({nameOrNull(hierarchyWindow), nameOrNull(inspectorWindow), nameOrNull(consoleWindow)},
+                              Spark::Ui::Scale());
+        }
+
+        // Toasts sit over the central dock (scene / Start page), not over editable side-dock fields.
+        if (const ImGuiDockNode* central = ImGui::DockBuilderGetCentralNode(dockspaceId))
+        {
+            toastAreaMin = central->Pos;
+            toastAreaSize = central->Size;
+        }
+
         // Menu bar is rendered inside the dockspace window
         RenderMainMenuBar();
 
         ImGui::End(); // End dockspace window
 
-        // Render toolbar, panels, status bar, notifications
+        // Render toolbar, panels, Start page, notifications, then the windows and modals above them
         RenderToolbar();
         RenderPanels();
-        RenderStatusBar();
-        m_notificationManager->Render();
+        RenderStartPage();
+        m_notificationManager->Render(toastAreaMin.x, toastAreaMin.y, toastAreaSize.x, toastAreaSize.y);
+        RenderNotificationHistory();
+        RenderAppearanceWindow();
         RenderModalDialogs();
         RenderRecoveryModal();
-        RenderWelcomeScreen();
 
         // Render project browser modal (on top of everything)
         SPARK_WARN_IF(Spark::LogCategory::Editor, m_projectBrowserPanel == nullptr,
@@ -805,28 +849,36 @@ namespace SparkEditor
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Setting up default dock layout");
         const auto [dockToolbar, dockLeft, dockRight, dockBottom, dockCenter] =
-            BuildEditorDockLayout(dockspaceId, ImGui::GetMainViewport()->WorkSize);
+            BuildEditorDockLayout(dockspaceId, ImGui::GetMainViewport()->WorkSize, Spark::Ui::Scale());
+        m_centreDockId = dockCenter;
 
         // Derive dock names from the live panels. Two hard-coded IDs here had
         // drifted (Hierarchy/Console), leaving those panels as tiny floating
         // windows after Reset Layout.
         auto dockPanel = [this](const char* key, ImGuiID node)
         {
-            const auto it = m_panels.find(key);
-            if (it == m_panels.end() || !it->second)
-                return;
-            const std::string dockName = "###" + it->second->GetID();
-            ImGui::DockBuilderDockWindow(dockName.c_str(), node);
+            const std::string dockName = PanelDockWindowName(key);
+            if (!dockName.empty())
+                ImGui::DockBuilderDockWindow(dockName.c_str(), node);
         };
         dockPanel("Hierarchy", dockLeft);
         dockPanel("Inspector", dockRight);
         dockPanel("SceneView", dockCenter);
         dockPanel("GameView", dockCenter);
-        ImGui::DockBuilderDockWindow("##Toolbar", dockToolbar);
+        ImGui::DockBuilderDockWindow(EditorStartPage::kWindowName, dockCenter);
+        ImGui::DockBuilderDockWindow(EditorToolbarWindowName, dockToolbar);
         dockPanel("Console", dockBottom);
         dockPanel("AssetBrowser", dockBottom);
 
         ImGui::DockBuilderFinish(dockspaceId);
+    }
+
+    std::string EditorUI::PanelDockWindowName(const char* panelKey) const
+    {
+        const auto it = m_panels.find(panelKey);
+        if (it == m_panels.end() || !it->second)
+            return {};
+        return "###" + it->second->GetID();
     }
 
     void EditorUI::Shutdown()
@@ -957,140 +1009,181 @@ namespace SparkEditor
 
 
     void EditorUI::RenderStatusBar()
-    // NOTE: Intentionally exceeds 50-line guideline — linear UI layout code
+    // NOTE: Intentionally exceeds the 60-line guideline -- one linear left-to-right layout of the bar.
     {
-        const auto& theme = EditorTheme::GetCurrentThemeData();
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        float statusBarHeight = 26.0f;
-        ImVec2 statusBarPos(viewport->WorkPos.x, viewport->WorkPos.y + viewport->WorkSize.y - statusBarHeight);
-        ImVec2 statusBarSize(viewport->WorkSize.x, statusBarHeight);
+        namespace Ui = Spark::Ui;
+        const bool previewing = m_playModeManager.IsInPlayMode();
+        const float height = Ui::Px(26.0f);
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
 
-        ImGui::SetNextWindowPos(statusBarPos);
-        ImGui::SetNextWindowSize(statusBarSize);
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings |
-                                 ImGuiWindowFlags_NoDocking;
+        // The whole bar turns ember while play preview runs, so the mode is visible from anywhere on screen.
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                            ImVec2(Ui::Px(8.0f), std::max(0.0f, (height - ImGui::GetFrameHeight()) * 0.5f)));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Ui::ColV(previewing ? Ui::Role::AccentFill : Ui::Role::SurfaceSunken));
+        const bool open =
+            ImGui::BeginViewportSideBar("##SparkStatusBar", ImGui::GetMainViewport(), ImGuiDir_Down, height, flags);
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 4));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, theme.backgroundDark.ToImVec4()); // Darker than main bg
-        if (ImGui::Begin("##StatusBar", nullptr, flags))
+        if (open)
         {
-            const ::World* world = GetWorld();
-            const ::EntityID selected = GetSelectedEntity();
-            const int liveObjectCount = world ? static_cast<int>(world->GetEntityCount()) : m_sceneObjectCount;
-            const int liveSelectedCount =
-                world && selected != entt::null && world->GetRegistry().valid(selected) ? 1 : 0;
-            const bool sceneModified = IsSceneModified();
-            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImVec2 barPos = ImGui::GetWindowPos();
+            ImGui::GetWindowDrawList()->AddLine(barPos, ImVec2(barPos.x + ImGui::GetWindowWidth(), barPos.y),
+                                                Ui::Col(Ui::Role::BorderSubtle));
 
-            // Top edge accent line (selected theme)
-            ImVec2 wp = ImGui::GetWindowPos();
-            ImVec2 ws = ImGui::GetWindowSize();
-            dl->AddLine(wp, ImVec2(wp.x + ws.x, wp.y),
-                        ImGui::ColorConvertFloat4ToU32(theme.accent.WithAlpha(0.35f).ToImVec4()), 1.0f);
-
-            const float contentLeft = ImGui::GetCursorPosX();
-            const float contentRight = contentLeft + ImGui::GetContentRegionAvail().x;
-            const float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
-            const ImVec4 fpsColor = fps >= 60.0f   ? theme.textSuccess.ToImVec4()
-                                    : fps >= 30.0f ? theme.textWarning.ToImVec4()
-                                                   : theme.textError.ToImVec4();
-
-            // Reserve the metrics column before rendering variable-length
-            // document context, so a long project or scene name cannot overlap it.
-            char fpsText[48]{};
-            char detailedMetricsText[128]{};
-            std::snprintf(fpsText, sizeof(fpsText), ICON_FA_TACHOMETER_ALT " %.0f FPS", fps);
-            std::snprintf(detailedMetricsText, sizeof(detailedMetricsText), "%.1fms  " ICON_FA_DATABASE " %d  #%llu",
-                          m_stats.frameTime, m_assetDatabaseSize, static_cast<unsigned long long>(m_frameNumber));
-            const float fpsWidth = ImGui::CalcTextSize(fpsText).x;
-            const float detailedMetricsWidth = fpsWidth + 8.0f + ImGui::CalcTextSize(detailedMetricsText).x;
-            const float minimumContextWidth = ImGui::CalcTextSize(ICON_FA_CIRCLE).x;
-            const float contentWidth = contentRight - contentLeft;
-            const bool showDetailedMetrics = contentWidth >= detailedMetricsWidth + minimumContextWidth + 24.0f;
-            const bool showCompactMetrics =
-                !showDetailedMetrics && contentWidth >= fpsWidth + minimumContextWidth + 16.0f;
-            const float metricsWidth =
-                showDetailedMetrics ? detailedMetricsWidth : (showCompactMetrics ? fpsWidth : 0.0f);
-            const float metricsStart = contentRight - metricsWidth;
-            const float contextRight = metricsWidth > 0.0f ? metricsStart - 12.0f : contentRight;
-            float contextCursor = contentLeft;
-            const float contextY = ImGui::GetCursorPosY();
-            bool hasContext = false;
-
-            auto renderContext = [&](const std::string& text, const ImVec4& color, const std::string& tooltip)
+            if (ImGui::BeginTable("##statusLayout", 2,
+                                  ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings |
+                                      ImGuiTableFlags_NoPadOuterX))
             {
-                const float separatorWidth = hasContext ? ImGui::CalcTextSize(ICON_FA_CIRCLE).x + 16.0f : 0.0f;
-                const float textWidth = ImGui::CalcTextSize(text.c_str()).x;
-                if (contextCursor + separatorWidth + textWidth > contextRight)
-                    return false;
-                if (hasContext)
+                ImGui::TableSetupColumn("context", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("metrics", ImGuiTableColumnFlags_WidthFixed);
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+
+                // Left: mode, then connection, project and scene. The cell clips them on narrow windows.
+                if (previewing)
                 {
-                    ImGui::SetCursorPos(ImVec2(contextCursor, contextY));
-                    ImGui::TextColored(theme.textDisabled.ToImVec4(), ICON_FA_CIRCLE);
-                    contextCursor += separatorWidth;
+                    ImGui::AlignTextToFramePadding();
+                    Ui::ScopedFont strong(Ui::FontRole::Strong);
+                    Ui::TextRole(Ui::Role::TextOnAccent, ICON_FA_PLAY " PREVIEW%s",
+                                 m_playModeManager.IsPaused() ? "  (paused)" : "");
                 }
-                ImGui::SetCursorPos(ImVec2(contextCursor, contextY));
-                ImGui::TextColored(color, "%s", text.c_str());
-                if (!tooltip.empty() && ImGui::IsItemHovered())
-                    ImGui::SetTooltip("%s", tooltip.c_str());
-                contextCursor += textWidth + 12.0f;
-                hasContext = true;
-                return true;
-            };
-
-            auto renderContextWithFallback =
-                [&](const std::string& text, const char* icon, const ImVec4& color, const std::string& tooltip)
-            {
-                if (renderContext(text, color, tooltip))
-                    return;
-                renderContext(icon, color, tooltip);
-            };
-
-            // Left: engine connection chip badge.
-            ImVec4 statusColor = m_engineConnected ? theme.textSuccess.ToImVec4() : theme.textError.ToImVec4();
-            const std::string connectionText =
-                std::string(ICON_FA_CIRCLE) + (m_engineConnected ? " Connected" : " Disconnected");
-            renderContextWithFallback(connectionText, ICON_FA_CIRCLE, statusColor,
-                                      m_engineConnected ? "Engine connected" : "Engine disconnected");
-
-            // Project and scene retain full-value access through their fallback
-            // icons when the status bar is too narrow to show their full labels.
-            if (m_projectManager && m_projectManager->HasOpenProject())
-            {
-                const std::string& projectName = m_projectManager->GetCurrentProject().name;
-                renderContextWithFallback(std::string(ICON_FA_FOLDER) + " " + projectName, ICON_FA_FOLDER,
-                                          theme.textSecondary.ToImVec4(), "Project: " + projectName);
-            }
-
-            const std::string sceneText =
-                std::string(ICON_FA_MAP) + " " + m_currentSceneName + (sceneModified ? " *" : "");
-            renderContextWithFallback(sceneText, ICON_FA_MAP, theme.text.ToImVec4(),
-                                      "Scene: " + m_currentSceneName + (sceneModified ? " (modified)" : ""));
-
-            // Center: tool + selection remains the first context detail to be
-            // omitted on narrow windows.
-            const char* toolNames[] = {"Move", "Rotate", "Scale"};
-            renderContext(std::string(toolNames[static_cast<int>(m_currentTool)]) + " | " +
-                              std::to_string(liveObjectCount) + " obj | " + std::to_string(liveSelectedCount) + " sel",
-                          theme.textSecondary.ToImVec4(), {});
-
-            // Right: FPS + frame info. The offset is derived from measured
-            // content rather than a fixed pixel constant.
-            if (metricsWidth > 0.0f)
-            {
-                ImGui::SetCursorPos(ImVec2(metricsStart, contextY));
-                ImGui::TextColored(fpsColor, "%s", fpsText);
-                if (showDetailedMetrics)
+                else
                 {
-                    ImGui::SameLine(0, 8);
-                    ImGui::TextColored(theme.textSecondary.ToImVec4(), "%s", detailedMetricsText);
+                    Ui::Badge("EDIT");
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+                        ImGui::SetTooltip("Editing the scene. The bar turns ember while play preview runs.");
                 }
+
+                ImGui::SameLine();
+                Ui::StatusChip(m_engineConnected ? Ui::Status::Success : Ui::Status::Error,
+                               m_engineConnected ? "Connected" : "Disconnected",
+                               m_engineConnected ? "Engine connected" : "Engine disconnected");
+
+                if (m_projectManager && m_projectManager->HasOpenProject())
+                {
+                    const std::string& projectName = m_projectManager->GetCurrentProject().name;
+                    const std::string projectTooltip = "Project: " + projectName;
+                    ImGui::SameLine();
+                    Ui::StatusChip(Ui::Status::Neutral, projectName.c_str(), projectTooltip.c_str());
+                }
+
+                const bool sceneModified = IsSceneModified();
+                const std::string sceneLabel = m_currentSceneName + (sceneModified ? " *" : "");
+                const std::string sceneTooltip =
+                    "Scene: " + (m_currentScenePath.empty() ? m_currentSceneName : m_currentScenePath) +
+                    (sceneModified ? " (unsaved changes)" : "");
+                ImGui::SameLine();
+                Ui::StatusChip(sceneModified ? Ui::Status::Warning : Ui::Status::Neutral, sceneLabel.c_str(),
+                               sceneTooltip.c_str());
+
+                ImGui::TableSetColumnIndex(1);
+                RenderStatusBarMetrics();
+                ImGui::EndTable();
             }
         }
         ImGui::End();
-        ImGui::PopStyleColor();
-        ImGui::PopStyleVar();
+    }
+
+    void EditorUI::RenderStatusBarMetrics()
+    {
+        namespace Ui = Spark::Ui;
+        // U+F0F3 bell; EditorIcons.h has no name for it and the icon font merges the whole F000-F8FF range.
+        constexpr const char* kBellGlyph = "\xef\x83\xb3";
+        const bool previewing = m_playModeManager.IsInPlayMode();
+        const Ui::Role quietRole = previewing ? Ui::Role::TextOnAccent : Ui::Role::TextSecondary;
+
+        const ::World* world = GetWorld();
+        const ::EntityID selected = GetSelectedEntity();
+        const int liveObjectCount = world ? static_cast<int>(world->GetEntityCount()) : m_sceneObjectCount;
+        const int liveSelectedCount = world && selected != entt::null && world->GetRegistry().valid(selected) ? 1 : 0;
+        static constexpr const char* kToolNames[] = {"Move", "Rotate", "Scale"};
+
+        ImGui::AlignTextToFramePadding();
+        {
+            Ui::ScopedFont mono(Ui::FontRole::Mono);
+            Ui::TextRole(quietRole, "%s  %d obj  %d sel", kToolNames[static_cast<int>(m_currentTool)], liveObjectCount,
+                         liveSelectedCount);
+        }
+
+        // FPS below 30 is a warning and below 15 an error. Glyph and word carry it as well as colour, so the signal
+        // survives colour-vision deficiencies and the ember preview bar, where every label is TextOnAccent.
+        const float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
+        Ui::Status fpsStatus = Ui::Status::Neutral;
+        if (fps < 15.0f)
+            fpsStatus = Ui::Status::Error;
+        else if (fps < 30.0f)
+            fpsStatus = Ui::Status::Warning;
+        Ui::Role fpsRole = previewing ? Ui::Role::TextOnAccent : Ui::Role::TextPrimary;
+        if (!previewing && fpsStatus != Ui::Status::Neutral)
+            fpsRole = Ui::StatusTextRole(fpsStatus);
+        ImGui::SameLine();
+        Ui::VerticalSeparator();
+        ImGui::SameLine();
+        {
+            Ui::ScopedFont mono(Ui::FontRole::Mono);
+            if (fpsStatus == Ui::Status::Neutral)
+                Ui::TextRole(fpsRole, "%3.0f FPS", fps);
+            else
+                Ui::TextRole(fpsRole, "%s %3.0f FPS %s", Ui::StatusGlyph(fpsStatus), fps,
+                             fpsStatus == Ui::Status::Error ? "very low" : "low");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+                ImGui::SetTooltip("Frame #%llu, %d assets in the database",
+                                  static_cast<unsigned long long>(m_frameNumber), m_assetDatabaseSize);
+            ImGui::SameLine();
+            Ui::TextRole(quietRole, "%5.1f ms", m_stats.frameTime);
+        }
+
+        ImGui::SameLine();
+        Ui::VerticalSeparator();
+        ImGui::SameLine();
+        const std::size_t unread = m_notificationManager->GetUnreadCount();
+        char bellLabel[32];
+        if (unread > 0)
+            std::snprintf(bellLabel, sizeof(bellLabel), "%s %zu##bell", kBellGlyph, unread);
+        else
+            std::snprintf(bellLabel, sizeof(bellLabel), "%s##bell", kBellGlyph);
+        // On the ember preview bar the theme's hover and pressed surfaces would sit under TextOnAccent ink; the accent
+        // fill states are the surfaces that ink is specified against.
+        const Ui::Role hoverRole = previewing ? Ui::Role::AccentFillHover : Ui::Role::SurfaceHover;
+        const Ui::Role activeRole = previewing ? Ui::Role::AccentFillActive : Ui::Role::SurfaceSelected;
+        {
+            Ui::ScopedRoleColor buttonColor(ImGuiCol_Button, Ui::Role::SurfaceHover, 0.0f);
+            Ui::ScopedRoleColor hoverColor(ImGuiCol_ButtonHovered, hoverRole);
+            Ui::ScopedRoleColor activeColor(ImGuiCol_ButtonActive, activeRole);
+            Ui::ScopedRoleColor textColor(ImGuiCol_Text, unread > 0 && !previewing ? Ui::Role::AccentText : quietRole);
+            if (ImGui::SmallButton(bellLabel))
+                ImGui::OpenPopup("##notificationHistory");
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
+            if (unread > 0)
+                ImGui::SetTooltip("%zu unread notifications", unread);
+            else
+                ImGui::SetTooltip("Notifications");
+        }
+        if (ImGui::BeginPopup("##notificationHistory"))
+        {
+            m_notificationManager->RenderHistory();
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
+        char scaleLabel[32];
+        std::snprintf(scaleLabel, sizeof(scaleLabel), "%.0f%%##uiScale", Ui::UserScale() * 100.0f);
+        {
+            Ui::ScopedRoleColor buttonColor(ImGuiCol_Button, Ui::Role::SurfaceHover, 0.0f);
+            Ui::ScopedRoleColor hoverColor(ImGuiCol_ButtonHovered, hoverRole);
+            Ui::ScopedRoleColor activeColor(ImGuiCol_ButtonActive, activeRole);
+            Ui::ScopedRoleColor textColor(ImGuiCol_Text, quietRole);
+            if (ImGui::SmallButton(scaleLabel))
+                StepUiScale(0);
+        }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            ImGui::SetTooltip("UI scale %.1f%% (display %.0f%%). Click to reset to 100%%; Ctrl+= and Ctrl+- step it.",
+                              Ui::UserScale() * 100.0f, Ui::DpiScale() * 100.0f);
     }
 
     void EditorUI::RenderPanels()
@@ -1139,6 +1232,7 @@ namespace SparkEditor
     void EditorUI::RenderModalDialogs()
     {
         RenderUnsavedChangesDialog();
+        RenderLayoutDialogs();
 
         if (m_currentDialog.isOpen)
         {
@@ -1176,7 +1270,7 @@ namespace SparkEditor
 
         constexpr const char* popupTitle = "Unsaved Scene Changes";
         ImGui::OpenPopup(popupTitle);
-        ImGui::SetNextWindowSize(ImVec2(460.0f, 0.0f), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSize(ImVec2(Spark::Ui::Em(34.0f), 0.0f), ImGuiCond_Appearing);
         if (!ImGui::BeginPopupModal(popupTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
             return;
 
@@ -1184,7 +1278,8 @@ namespace SparkEditor
         ImGui::TextWrapped("Save before continuing?");
         ImGui::Separator();
 
-        if (ImGui::Button("Save", ImVec2(110.0f, 0.0f)))
+        const ImVec2 decisionButtonSize(Spark::Ui::Em(8.0f), 0.0f);
+        if (ImGui::Button("Save", decisionButtonSize))
         {
             if (SaveScene())
             {
@@ -1200,7 +1295,7 @@ namespace SparkEditor
             // action intact so the user can retry, Discard, or Cancel.
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard", ImVec2(110.0f, 0.0f)))
+        if (ImGui::Button("Discard", decisionButtonSize))
         {
             const auto action = m_documentTransitionGuard.Resolve(UnsavedChangesDecision::Discard);
             SuppressRecoveryAfterExplicitDocumentDiscard();
@@ -1208,7 +1303,7 @@ namespace SparkEditor
             ExecuteDocumentTransition(action);
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(110.0f, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+        if (ImGui::Button("Cancel", decisionButtonSize) || ImGui::IsKeyPressed(ImGuiKey_Escape))
         {
             m_documentTransitionGuard.Resolve(UnsavedChangesDecision::Cancel);
             ClearPendingProjectTransition();
@@ -1218,68 +1313,223 @@ namespace SparkEditor
         ImGui::EndPopup();
     }
 
-    void EditorUI::RenderWelcomeScreen()
+    void EditorUI::RenderStartPage()
     {
-        if (!m_showWelcomeScreen)
+        if (!m_startPage.IsOpen())
             return;
 
-        // Skip welcome screen in test mode (automated testing)
-        if (m_config && m_config->testMode)
+        // Join the centre dock node. A dock tree loaded from settings never ran SetupDefaultDockLayout, so fall
+        // back to the node the Scene view lives in.
+        ImGuiID dockId = m_centreDockId;
+        if (dockId == 0)
         {
-            m_showWelcomeScreen = false;
-            return;
+            if (const auto it = m_panels.find("SceneView"); it != m_panels.end() && it->second)
+            {
+                const std::string sceneWindow = "###" + it->second->GetID();
+                if (const ImGuiWindow* window = ImGui::FindWindowByName(sceneWindow.c_str()))
+                    dockId = window->DockId;
+            }
         }
 
-        // Let project selection finish before showing workspace onboarding.
-        // Two startup overlays otherwise obscure each other and dim the editor twice.
-        if (m_projectBrowserPanel && m_projectBrowserPanel->IsModalActive())
-            return;
+        const StartPageResult result = m_startPage.Draw(m_preferences, dockId);
+        if (result.preferencesChanged)
+            SavePreferences();
 
-        ImGui::OpenPopup("Welcome to SparkEngine");
-
-        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowSize(ImVec2(560, 420), ImGuiCond_Appearing);
-
-        if (ImGui::BeginPopupModal("Welcome to SparkEngine", &m_showWelcomeScreen,
-                                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
+        switch (result.action)
         {
-            ImGui::TextWrapped("Welcome! SparkEngine is a C++23 open-source 3D game engine.");
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
+        case StartPageAction::OpenScene:
+            ShowOpenSceneDialog();
+            break;
+        case StartPageAction::NewScene:
+            NewScene();
+            break;
+        case StartPageAction::OpenProjectFolder:
+            ShowOpenProjectDialog();
+            break;
+        case StartPageAction::ResetLayout:
+            ResetToDefaultLayout();
+            break;
+        case StartPageAction::OpenRecentScene:
+            RequestOpenScenePath(result.recentScene);
+            break;
+        case StartPageAction::None:
+            break;
+        }
+    }
 
-            ImGui::Text("Getting Started");
-            ImGui::BulletText("Scene View — navigate the 3D viewport (WASD + mouse)");
-            ImGui::BulletText("Hierarchy — view and select entities in the scene");
-            ImGui::BulletText("Inspector — edit properties of the selected entity");
-            ImGui::BulletText("Asset Browser — browse and import project assets");
-            ImGui::BulletText("Console — view logs and run debug commands");
+    void EditorUI::RenderAppearanceWindow()
+    {
+        if (m_appearanceWindow.Draw(m_preferences))
+            CommitPreferenceChange();
+    }
 
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::Text("Quick Actions");
-            if (ImGui::Button("Use Default Workspace"))
+    void EditorUI::RenderNotificationHistory()
+    {
+        namespace Ui = Spark::Ui;
+        constexpr const char* kPopup = "Notifications###SparkNotificationHistory";
+        if (m_notificationHistoryRequested)
+        {
+            m_notificationHistoryRequested = false;
+            ImGui::OpenPopup(kPopup);
+        }
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (ImGui::BeginPopup(kPopup))
+        {
             {
-                ResetToDefaultLayout();
-                m_showWelcomeScreen = false;
-                ImGui::CloseCurrentPopup();
+                Ui::ScopedFont strong(Ui::FontRole::Strong);
+                ImGui::TextUnformatted("Notifications");
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Keep Minimal Layout"))
-            {
-                m_showWelcomeScreen = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("Tip: Open more panels from the Window menu at any time.");
-            ImGui::TextDisabled("Tip: Use Window > Reset Layout to restore the default.");
-
+            ImGui::Separator();
+            m_notificationManager->RenderHistory();
             ImGui::EndPopup();
         }
+    }
+
+    void EditorUI::CommitPreferenceChange()
+    {
+        EditorAppearanceWindow::ApplyPreferences(m_preferences);
+        m_currentTheme = EditorTheme::GetCurrentThemeName();
+        SavePreferences();
+    }
+
+    void EditorUI::RenderLayoutDialogs()
+    // NOTE: Intentionally exceeds the 60-line guideline -- the two layout prompts read top to bottom.
+    {
+        namespace Ui = Spark::Ui;
+
+        constexpr const char* kSaveAsPopup = "Save Layout As###SparkLayoutSaveAs";
+        if (m_saveLayoutAsRequested)
+        {
+            m_saveLayoutAsRequested = false;
+            m_layoutNameError.clear();
+            ImGui::OpenPopup(kSaveAsPopup);
+        }
+        ImGui::SetNextWindowSize(ImVec2(Ui::Em(26.0f), 0.0f), ImGuiCond_Appearing);
+        if (ImGui::BeginPopupModal(kSaveAsPopup, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::TextUnformatted("Layout name");
+            if (ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            const bool submitted = ImGui::InputText("##layoutName", m_layoutNameBuffer, sizeof(m_layoutNameBuffer),
+                                                    ImGuiInputTextFlags_EnterReturnsTrue);
+            const std::string name(m_layoutNameBuffer);
+            const bool valid = EditorLayoutManager::IsValidLayoutName(name);
+            const bool exists = valid && m_layoutManager && m_layoutManager->HasLayout(name);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + Ui::Em(24.0f));
+            if (!name.empty() && !valid)
+                Ui::StatusText(Ui::Status::Error,
+                               "Use up to %zu characters, none of \\ / : * ? \" < > |, and no leading space or "
+                               "trailing dot or space.",
+                               EditorLayoutManager::kMaxLayoutNameLength);
+            else if (exists)
+                Ui::StatusText(Ui::Status::Warning, "A layout named \"%s\" exists and will be replaced.", name.c_str());
+            if (!m_layoutNameError.empty())
+                Ui::StatusText(Ui::Status::Error, "%s", m_layoutNameError.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::Separator();
+
+            bool save = submitted && valid;
+            {
+                Ui::ScopedDisabled disabled(!valid, "Enter a layout name first");
+                save |= Ui::PrimaryButton(exists ? "Replace" : "Save");
+            }
+            ImGui::SameLine();
+            const bool cancel = Ui::SecondaryButton("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+            if (save)
+            {
+                if (SaveLayout(name, "Saved from the toolbar"))
+                {
+                    Notify(NotificationSeverity::Success, "Layout saved", name);
+                    m_layoutNameBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+                else
+                {
+                    m_layoutNameError = m_layoutManager && !m_layoutManager->GetLastError().empty()
+                                            ? m_layoutManager->GetLastError()
+                                            : "The layout could not be written to the layout folder.";
+                }
+            }
+            else if (cancel)
+            {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        constexpr const char* kDeletePopup = "##SparkLayoutDelete";
+        if (m_deleteLayoutRequested)
+        {
+            m_deleteLayoutRequested = false;
+            ImGui::OpenPopup(kDeletePopup);
+        }
+        if (m_layoutPendingDelete.empty())
+            return;
+        const std::string body =
+            "Delete the saved layout \"" + m_layoutPendingDelete + "\"? Its panel arrangement cannot be restored.";
+        if (Ui::ConfirmDestructive(kDeletePopup, "Delete layout?", body.c_str(), "Delete"))
+        {
+            if (m_layoutManager && m_layoutManager->DeleteLayout(m_layoutPendingDelete))
+            {
+                Notify(NotificationSeverity::Success, "Layout deleted", m_layoutPendingDelete);
+                if (m_preferences.lastLayout == m_layoutPendingDelete)
+                {
+                    m_preferences.lastLayout.clear();
+                    SavePreferences();
+                }
+            }
+            else
+                Notify(NotificationSeverity::Error, "Layout not deleted",
+                       m_layoutManager ? m_layoutManager->GetLastError() : std::string());
+            m_layoutPendingDelete.clear();
+        }
+        else if (!ImGui::IsPopupOpen(kDeletePopup))
+        {
+            // Cancelled or dismissed with Esc.
+            m_layoutPendingDelete.clear();
+        }
+    }
+
+    void EditorUI::AdoptPreferences(EditorPreferences prefs, bool persist)
+    {
+        m_preferences = std::move(prefs);
+        m_persistPreferences = persist;
+    }
+
+    void EditorUI::FollowSystemAppearance()
+    {
+        if (m_preferences.appearance != "system")
+            return;
+        EditorTheme::SetAppearanceOverride(EditorAppearanceWindow::AppearanceOverrideFor(m_preferences.appearance));
+        m_currentTheme = EditorTheme::GetCurrentThemeName();
+    }
+
+    void EditorUI::SavePreferences()
+    {
+        if (!m_persistPreferences)
+            return;
+        std::string error;
+        if (!SaveEditorPreferences(EditorPreferencesPath(), m_preferences, &error))
+            Spark::SimpleConsole::GetInstance().LogWarning("Editor preferences were not saved: " + error);
+    }
+
+    void EditorUI::RememberRecentScene(const std::string& scenePath)
+    {
+        if (scenePath.empty())
+            return;
+        PushRecentScene(m_preferences, scenePath);
+        SavePreferences();
+    }
+
+    void EditorUI::StepUiScale(int direction)
+    {
+        // Ctrl+0 and the status-bar reset return to Auto: the display scale with a 100 % user factor.
+        m_preferences.uiScale =
+            direction == 0 ? 0.0f : EditorAppearanceWindow::StepUserScale(m_preferences.uiScale, direction);
+        // Only the user factor: a display-scale change queued for the same frame keeps its pending value.
+        Spark::Ui::RequestUserScale(m_preferences.uiScale > 0.0f ? m_preferences.uiScale : 1.0f);
+        SavePreferences();
     }
 
     void EditorUI::UpdateStats(float deltaTime)
@@ -1370,8 +1620,13 @@ namespace SparkEditor
                 auto time_t = std::chrono::system_clock::to_time_t(now);
                 metaFile << "created=" << time_t << "\n";
             }
+            if (!metaFile.good())
+                return false;
 
-            return metaFile.good();
+            // The toolbar Layout dropdown shows the layout last saved or loaded.
+            m_preferences.lastLayout = layoutName;
+            SavePreferences();
+            return true;
         }
         catch (const std::exception&)
         {
@@ -1412,6 +1667,9 @@ namespace SparkEditor
             // the start of the next frame so no dockspace/window is active.
             m_pendingLayoutIniPath = filePath.string();
 
+            m_preferences.lastLayout = layoutName;
+            SavePreferences();
+
             return true;
         }
         catch (const std::exception&)
@@ -1432,6 +1690,12 @@ namespace SparkEditor
         // Force the destructive default rebuild on the next frame. Startup
         // initialization itself preserves any saved ImGui dock tree.
         m_defaultDockLayoutResetRequested = true;
+
+        if (!m_preferences.lastLayout.empty())
+        {
+            m_preferences.lastLayout.clear();
+            SavePreferences();
+        }
     }
 
     void EditorUI::ApplyTheme(const std::string& themeName)
@@ -1451,6 +1715,11 @@ namespace SparkEditor
     void EditorUI::ShowNotification(const std::string& message, const std::string& type, float duration)
     {
         m_notificationManager->Show(message, type, duration);
+    }
+
+    void EditorUI::Notify(NotificationSeverity severity, std::string title, std::string body, float seconds)
+    {
+        m_notificationManager->Notify(severity, std::move(title), std::move(body), seconds);
     }
 
     std::string EditorUI::ExecuteCommand(const std::string& command)
@@ -1948,7 +2217,7 @@ namespace SparkEditor
 
         const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowSize(ImVec2(540.0f, 0.0f), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSize(ImVec2(Spark::Ui::Em(40.0f), 0.0f), ImGuiCond_Appearing);
         if (!ImGui::BeginPopupModal(popupTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
             return;
 
@@ -1959,7 +2228,7 @@ namespace SparkEditor
         ImGui::Text("Captured: %s", capturedTime.c_str());
         if (m_recoveryController.UsesBackup())
         {
-            ImGui::TextColored(ImVec4(0.95f, 0.72f, 0.28f, 1.0f), "Using the last known-good backup snapshot");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Using the last known-good backup snapshot");
         }
         if (!snapshot->recentOperations.empty())
         {
@@ -1973,7 +2242,7 @@ namespace SparkEditor
             ImGui::Spacing();
             ImGui::Separator();
             const std::string error(m_recoveryController.Error());
-            ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.32f, 1.0f), "Restore failed");
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "Restore failed");
             ImGui::TextWrapped("%s", error.c_str());
         }
 
@@ -1981,13 +2250,14 @@ namespace SparkEditor
         ImGui::Separator();
         ImGui::TextDisabled("Recovery is never restored automatically.");
 
-        if (ImGui::Button("Restore", ImVec2(150.0f, 0.0f)))
+        const ImVec2 recoveryButtonSize(Spark::Ui::Em(11.0f), 0.0f);
+        if (ImGui::Button("Restore", recoveryButtonSize))
         {
             if (RestorePendingRecovery())
                 ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Discard", ImVec2(150.0f, 0.0f)))
+        if (ImGui::Button("Discard", recoveryButtonSize))
         {
             if (DiscardPendingRecovery())
                 ImGui::CloseCurrentPopup();
@@ -2149,6 +2419,17 @@ namespace SparkEditor
         case DocumentTransitionAction::OpenSceneDialog:
             ShowOpenSceneDialogNow();
             return true;
+        case DocumentTransitionAction::OpenScenePath:
+        {
+            const std::string scenePath = m_pendingScenePath;
+            m_pendingScenePath.clear();
+            if (!OpenScene(scenePath))
+            {
+                Notify(NotificationSeverity::Error, "Scene not opened", scenePath);
+                return false;
+            }
+            return true;
+        }
         case DocumentTransitionAction::OpenProject:
         {
             const std::string projectPath = m_pendingProjectPath;
@@ -2193,6 +2474,7 @@ namespace SparkEditor
 
     void EditorUI::ClearPendingProjectTransition()
     {
+        m_pendingScenePath.clear();
         m_pendingProjectPath.clear();
         m_pendingProjectName.clear();
         m_pendingProjectParentDirectory.clear();
@@ -2210,6 +2492,14 @@ namespace SparkEditor
     void EditorUI::NewScene()
     {
         RequestDocumentTransition(DocumentTransitionAction::NewScene);
+    }
+
+    void EditorUI::RequestOpenScenePath(const std::string& path)
+    {
+        if (path.empty() || m_documentTransitionGuard.HasPending())
+            return;
+        m_pendingScenePath = path;
+        RequestDocumentTransition(DocumentTransitionAction::OpenScenePath);
     }
 
     void EditorUI::NewSceneNow()
@@ -2495,6 +2785,7 @@ namespace SparkEditor
             }
             auto& console = Spark::SimpleConsole::GetInstance();
             console.LogSuccess("Scene saved to: " + resolvedPath);
+            RememberRecentScene(resolvedPath);
 
             // Notify plugins of the scene save
             if (m_pluginManager)
@@ -2549,6 +2840,7 @@ namespace SparkEditor
         }
 
         console.LogSuccess("Scene opened from: " + loadedPath);
+        RememberRecentScene(loadedPath);
 
         if (m_pluginManager)
         {
@@ -2719,6 +3011,17 @@ namespace SparkEditor
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F))
         {
             SetPanelVisible("Search", true);
+        }
+
+        // Ctrl+= / Ctrl+- / Ctrl+0: UI scale up, down, back to 100 % (keypad +/- too).
+        if (io.KeyCtrl && !io.WantTextInput)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_Equal, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd, false))
+                StepUiScale(1);
+            else if (ImGui::IsKeyPressed(ImGuiKey_Minus, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract, false))
+                StepUiScale(-1);
+            else if (ImGui::IsKeyPressed(ImGuiKey_0, false) || ImGui::IsKeyPressed(ImGuiKey_Keypad0, false))
+                StepUiScale(0);
         }
     }
 

@@ -27,10 +27,12 @@
 #include <string>
 #include <vector>
 
-// The panel renders with Dear ImGui when available, and compiles as a
-// no-op in headless / test builds where ImGui is not linked.
-#if __has_include(<imgui.h>)
+// The panel renders with Dear ImGui and the Spark UI kit when both are available, and
+// compiles as a no-op in headless / test builds where they are not linked.
+#if __has_include(<imgui.h>) && __has_include("SparkUI/Widgets.h")
 #include <imgui.h>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #define SPARK_NETDEBUG_PANEL_HAS_IMGUI 1
 #else
 #define SPARK_NETDEBUG_PANEL_HAS_IMGUI 0
@@ -329,10 +331,19 @@ namespace SparkEditor
         }
 
 #if SPARK_NETDEBUG_PANEL_HAS_IMGUI
+        /// Fixed-height (150 logical px) scrolling table: the panel stacks several sections, so the
+        /// packet log and replication tables cannot fill the remaining height like BeginDataTable.
+        static bool BeginFixedHeightTable(const char* id, int columns)
+        {
+            return ImGui::BeginTable(id, columns,
+                                     ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_Resizable |
+                                         ImGuiTableFlags_ScrollY,
+                                     Spark::Ui::Px2(0, 150));
+        }
+
         void RenderBandwidthGraph()
         {
-            ImGui::TextUnformatted("Bandwidth (bytes/sec)");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Bandwidth (bytes/sec)");
 
             std::vector<float> sent;
             std::vector<float> recv;
@@ -346,18 +357,17 @@ namespace SparkEditor
             if (!sent.empty())
             {
                 ImGui::PlotLines("Sent", sent.data(), static_cast<int>(sent.size()), 0, nullptr, 0.0f, FLT_MAX,
-                                 ImVec2(0, 60));
+                                 Spark::Ui::Px2(0, 60));
                 ImGui::PlotLines("Recv", recv.data(), static_cast<int>(recv.size()), 0, nullptr, 0.0f, FLT_MAX,
-                                 ImVec2(0, 60));
+                                 Spark::Ui::Px2(0, 60));
             }
-            ImGui::Text("Avg out: %.1f B/s", GetAverageBandwidthOut());
+            Spark::Ui::KeyValue("Avg out:", "%.1f B/s", GetAverageBandwidthOut());
             ImGui::Spacing();
         }
 
         void RenderLatencyGraph()
         {
-            ImGui::TextUnformatted("Latency (ms)");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Latency (ms)");
 
             std::vector<float> lat;
             lat.reserve(m_snapshots.size());
@@ -366,17 +376,17 @@ namespace SparkEditor
             if (!lat.empty())
             {
                 ImGui::PlotLines("Ping", lat.data(), static_cast<int>(lat.size()), 0, nullptr, 0.0f, FLT_MAX,
-                                 ImVec2(0, 60));
+                                 Spark::Ui::Px2(0, 60));
             }
-            ImGui::Text("Avg:  %.1f ms", GetAverageLatency());
-            ImGui::Text("Peak: %.1f ms", GetPeakLatency());
+            Spark::Ui::KeyValue("Avg:", "%.1f ms", GetAverageLatency());
+            ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+            Spark::Ui::KeyValue("Peak:", "%.1f ms", GetPeakLatency());
             ImGui::Spacing();
         }
 
         void RenderSimulationControls()
         {
-            ImGui::TextUnformatted("Network Simulation");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Network Simulation");
             ImGui::Checkbox("Enabled", &m_simulationSettings.enabled);
             ImGui::SliderFloat("Latency (ms)", &m_simulationSettings.artificialLatencyMs, 0.0f, 500.0f);
             ImGui::SliderFloat("Packet Loss %", &m_simulationSettings.packetLossPercent, 0.0f, 100.0f);
@@ -387,16 +397,14 @@ namespace SparkEditor
 
         void RenderPacketLog()
         {
-            ImGui::TextUnformatted("Packet Log");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Packet Log");
             ImGui::Checkbox("Show SEND", &m_showSendPackets);
             ImGui::SameLine();
             ImGui::Checkbox("Show RECV", &m_showRecvPackets);
 
-            if (ImGui::BeginTable("PacketLog", 5,
-                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
-                                  ImVec2(0, 150)))
+            if (BeginFixedHeightTable("PacketLog", 5))
             {
+                ImGui::TableSetupScrollFreeze(0, 1);
                 ImGui::TableSetupColumn("Time");
                 ImGui::TableSetupColumn("Dir");
                 ImGui::TableSetupColumn("Type");
@@ -411,13 +419,13 @@ namespace SparkEditor
                         continue;
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%.2f", entry.timestamp);
+                    Spark::Ui::TableNumber("%.2f", entry.timestamp);
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::TextUnformatted(entry.direction.c_str());
+                    Spark::Ui::MonoText("%s", entry.direction.c_str());
                     ImGui::TableSetColumnIndex(2);
                     ImGui::TextUnformatted(entry.packetType.c_str());
                     ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%u", entry.sizeBytes);
+                    Spark::Ui::TableNumber("%u", entry.sizeBytes);
                     ImGui::TableSetColumnIndex(4);
                     ImGui::TextUnformatted(entry.summary.c_str());
                 }
@@ -428,16 +436,14 @@ namespace SparkEditor
 
         void RenderReplicationViewer()
         {
-            ImGui::TextUnformatted("Replication");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Replication");
             auto sorted = m_replicationInfo;
             std::sort(sorted.begin(), sorted.end(), [](const ReplicationInfo& a, const ReplicationInfo& b)
                       { return a.snapshotSizeBytes > b.snapshotSizeBytes; });
 
-            if (ImGui::BeginTable("Replication", 6,
-                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
-                                  ImVec2(0, 150)))
+            if (BeginFixedHeightTable("Replication", 6))
             {
+                ImGui::TableSetupScrollFreeze(0, 1);
                 ImGui::TableSetupColumn("Entity");
                 ImGui::TableSetupColumn("Name");
                 ImGui::TableSetupColumn("Dirty");
@@ -449,17 +455,17 @@ namespace SparkEditor
                 {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%u", rep.entityId);
+                    Spark::Ui::TableNumber("%u", rep.entityId);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TextUnformatted(rep.entityName.c_str());
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%u", rep.dirtyProperties);
+                    Spark::Ui::TableNumber("%u", rep.dirtyProperties);
                     ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%u", rep.snapshotSizeBytes);
+                    Spark::Ui::TableNumber("%u", rep.snapshotSizeBytes);
                     ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("%.1f", rep.updateFrequency);
+                    Spark::Ui::TableNumber("%.1f", rep.updateFrequency);
                     ImGui::TableSetColumnIndex(5);
-                    ImGui::Text("%.2f", rep.priority);
+                    Spark::Ui::TableNumber("%.2f", rep.priority);
                 }
                 ImGui::EndTable();
             }
@@ -468,12 +474,11 @@ namespace SparkEditor
 
         void RenderConnectionSummary()
         {
-            ImGui::TextUnformatted("Connection");
-            ImGui::Separator();
-            ImGui::Text("Uptime:      %.1f s", m_totalTime);
-            ImGui::Text("Snapshots:   %u", static_cast<unsigned>(m_snapshots.size()));
-            ImGui::Text("Packet log:  %u", static_cast<unsigned>(m_packetLog.size()));
-            ImGui::Text("Entities:    %u", static_cast<unsigned>(m_replicationInfo.size()));
+            Spark::Ui::SubHeader("Connection");
+            Spark::Ui::KeyValue("Uptime:", "%.1f s", m_totalTime);
+            Spark::Ui::KeyValue("Snapshots:", "%u", static_cast<unsigned>(m_snapshots.size()));
+            Spark::Ui::KeyValue("Packet log:", "%u", static_cast<unsigned>(m_packetLog.size()));
+            Spark::Ui::KeyValue("Entities:", "%u", static_cast<unsigned>(m_replicationInfo.size()));
         }
 #else
         void RenderBandwidthGraph() {}

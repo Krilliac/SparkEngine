@@ -11,6 +11,8 @@
 #include "Utils/Validate.h"
 #include <algorithm>
 #include <imgui.h>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -76,12 +78,13 @@ namespace SparkEditor
 
     void SearchPanel::RenderSearchBar()
     {
-        ImGui::SetNextItemWidth(-1);
-        bool changed =
-            ImGui::InputTextWithHint("##SearchInput", ICON_FA_SEARCH " Search entities, components, assets...",
-                                     m_searchBuffer, sizeof(m_searchBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+        const bool edited = Spark::Ui::SearchField("##SearchInput", m_searchBuffer, sizeof(m_searchBuffer),
+                                                   "Search entities, components, assets...");
+        // Enter ends the edit: search immediately instead of waiting for the debounce window.
+        const bool submitted = ImGui::IsItemDeactivated() &&
+                               (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter));
 
-        if (changed || ImGui::IsItemEdited())
+        if (edited || submitted)
         {
             m_currentQuery = m_searchBuffer;
             if (m_currentQuery.empty())
@@ -90,7 +93,7 @@ namespace SparkEditor
                 m_results.clear();
                 m_selectedResult = -1;
             }
-            else if (changed)
+            else if (submitted)
             {
                 // Enter: search now.
                 m_searchCountdown = -1.0f;
@@ -115,51 +118,42 @@ namespace SparkEditor
             {
                 m_selectedResult = std::max(m_selectedResult - 1, 0);
             }
-            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && m_selectedResult >= 0 &&
-                m_selectedResult < static_cast<int>(m_results.size()))
-            {
-                NavigateToResult(m_results[static_cast<size_t>(m_selectedResult)]);
-            }
+        }
+        if (submitted && m_selectedResult >= 0 && m_selectedResult < static_cast<int>(m_results.size()))
+        {
+            NavigateToResult(m_results[static_cast<size_t>(m_selectedResult)]);
         }
     }
 
     void SearchPanel::RenderFilterButtons()
     {
-        auto FilterButton = [this](const char* label, SearchFilter filter)
+        // Label order matches the SearchFilter enumerators.
+        static constexpr const char* kFilterLabels[] = {"All", ICON_FA_CUBE " Entities", ICON_FA_COG " Components",
+                                                        ICON_FA_FOLDER " Assets"};
+        int current = static_cast<int>(m_filter);
+        if (Spark::Ui::SegmentedControl("##SearchFilter", kFilterLabels, static_cast<int>(IM_ARRAYSIZE(kFilterLabels)),
+                                        &current))
         {
-            bool isActive = (m_filter == filter);
-            if (isActive)
+            m_filter = static_cast<SearchFilter>(current);
+            if (!m_currentQuery.empty())
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+                PerformSearch();
             }
-            if (ImGui::SmallButton(label))
-            {
-                m_filter = filter;
-                if (!m_currentQuery.empty())
-                {
-                    PerformSearch();
-                }
-            }
-            if (isActive)
-            {
-                ImGui::PopStyleColor();
-            }
-        };
-
-        FilterButton("All", SearchFilter::All);
-        ImGui::SameLine();
-        FilterButton(ICON_FA_CUBE " Entities", SearchFilter::Entities);
-        ImGui::SameLine();
-        FilterButton(ICON_FA_COG " Components", SearchFilter::Components);
-        ImGui::SameLine();
-        FilterButton(ICON_FA_FOLDER " Assets", SearchFilter::Assets);
+        }
     }
 
     void SearchPanel::RenderResults()
     {
-        ImGui::Text("%zu results for \"%s\"", m_results.size(), m_currentQuery.c_str());
+        Spark::Ui::SecondaryText("%zu results for \"%s\"", m_results.size(), m_currentQuery.c_str());
         RenderSourceStatus();
         ImGui::Spacing();
+
+        if (m_results.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_SEARCH, "No matches",
+                                  "Try a different name, or switch the filter back to All.");
+            return;
+        }
 
         ImGui::BeginChild("SearchResults", ImVec2(0, 0), false);
 
@@ -170,37 +164,40 @@ namespace SparkEditor
 
             ImGui::PushID(static_cast<int>(i));
 
-            // Icon based on type
+            // The icon shape identifies the result type; the category colour only reinforces it.
             const char* icon = ICON_FA_CUBE;
-            ImVec4 iconColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+            int category = 0;
             switch (result.type)
             {
             case SearchResultType::Entity:
                 icon = ICON_FA_CUBE;
-                iconColor = ImVec4(0.3f, 0.7f, 1.0f, 1.0f);
+                category = 0;
                 break;
             case SearchResultType::Component:
                 icon = ICON_FA_COG;
-                iconColor = ImVec4(0.3f, 0.9f, 0.3f, 1.0f);
+                category = 1;
                 break;
             case SearchResultType::Asset:
                 icon = ICON_FA_FILE;
-                iconColor = ImVec4(1.0f, 0.8f, 0.3f, 1.0f);
+                category = 2;
                 break;
             }
 
-            if (ImGui::Selectable(("##Result" + std::to_string(i)).c_str(), isSelected, 0, ImVec2(0, 36)))
+            if (ImGui::Selectable(("##Result" + std::to_string(i)).c_str(), isSelected, 0,
+                                  ImVec2(0.0f, Spark::Ui::Px(36))))
             {
                 m_selectedResult = static_cast<int>(i);
                 NavigateToResult(result);
             }
 
-            ImGui::SameLine(8);
-            ImGui::TextColored(iconColor, "%s", icon);
+            ImGui::SameLine(Spark::Ui::Px(8));
+            ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::CategoryColor(category));
+            ImGui::TextUnformatted(icon);
+            ImGui::PopStyleColor();
             ImGui::SameLine();
             ImGui::BeginGroup();
-            ImGui::Text("%s", result.name.c_str());
-            ImGui::TextDisabled("%s", result.description.c_str());
+            ImGui::TextUnformatted(result.name.c_str());
+            Spark::Ui::SecondaryText("%s", result.description.c_str());
             ImGui::EndGroup();
 
             ImGui::PopID();
@@ -213,25 +210,26 @@ namespace SparkEditor
     {
         if (!m_world)
         {
-            ImGui::TextDisabled("Preview - not connected: no World is wired in, so entity and");
-            ImGui::TextDisabled("component results have no source.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Info,
+                                  "Preview - not connected: no World is wired in, so entity and");
+            Spark::Ui::SecondaryText("component results have no source.");
         }
         if (m_assetRoot.empty())
         {
-            ImGui::TextDisabled("No project asset root is set, so asset results have no source.");
+            Spark::Ui::SecondaryText("No project asset root is set, so asset results have no source.");
             return;
         }
 
         if (m_assetIndexValid)
         {
-            ImGui::TextDisabled("Asset index: %zu files", m_assetIndex.size());
+            Spark::Ui::SecondaryText("Asset index: %zu files", m_assetIndex.size());
         }
         else
         {
-            ImGui::TextDisabled("Asset index: not built yet");
+            Spark::Ui::SecondaryText("Asset index: not built yet");
         }
         ImGui::SameLine();
-        if (ImGui::SmallButton("Rescan"))
+        if (ImGui::SmallButton(ICON_FA_REFRESH " Rescan"))
         {
             RefreshAssetIndex();
             if (!m_currentQuery.empty())
@@ -242,7 +240,7 @@ namespace SparkEditor
 
         if (!m_assetScanError.empty())
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_assetScanError.c_str());
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", m_assetScanError.c_str());
         }
     }
 
@@ -251,17 +249,12 @@ namespace SparkEditor
         RenderSourceStatus();
         if (m_recentSearches.empty())
         {
-            ImGui::TextDisabled("Start typing to search across the scene and project");
-            ImGui::Spacing();
-            ImGui::TextDisabled("Tips:");
-            ImGui::BulletText("Search for entity names");
-            ImGui::BulletText("Search for component types (e.g., \"RigidBody\")");
-            ImGui::BulletText("Search for asset files");
+            Spark::Ui::EmptyState(ICON_FA_SEARCH, "Start typing to search across the scene and project",
+                                  "Search for entity names, component types (e.g., \"RigidBody\") or asset files.");
             return;
         }
 
-        ImGui::Text(ICON_FA_SEARCH " Recent Searches");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_HISTORY " Recent Searches");
 
         for (size_t i = 0; i < m_recentSearches.size(); ++i)
         {

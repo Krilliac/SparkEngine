@@ -15,6 +15,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <string>
 #include <string_view>
 
 namespace
@@ -45,6 +46,19 @@ namespace
                   << SparkLauncher::LaunchTargetName(SparkLauncher::LaunchTarget::Editor)
                   << " executable=" << SparkLauncher::PathToUtf8(request->executable) << '\n';
         return 0;
+    }
+
+    /// Tell the user why the launcher closed right after opening: it is a GUI application, so
+    /// stderr alone is invisible when it was started from Explorer or a shortcut.
+    void ReportInitializeFailure(const std::string& error)
+    {
+        std::cerr << "SparkLauncher could not start: " << error << '\n';
+        const std::string message = "Spark Launcher could not start.\n\n" + error +
+                                    "\n\nRecent projects and launcher data live in:\n" +
+                                    SparkEditor::ProjectManager::GetEditorDataDirectory() +
+                                    "\n\nThe launcher writes its diagnostics to standard error; start SparkLauncher "
+                                    "from a terminal to see them.";
+        SparkLauncher::Backend_ShowFatalError("Spark Launcher", message.c_str());
     }
 } // namespace
 
@@ -144,7 +158,7 @@ try
     }
 #endif
 
-    if (!SparkLauncher::Backend_Init(1000, 640, "Spark Launcher"))
+    if (!SparkLauncher::Backend_Init(SparkLauncher::BackendWindowSpec{}))
     {
         std::cerr << "Failed to initialize launcher backend\n";
         return 1;
@@ -154,6 +168,7 @@ try
     if (!app.Initialize())
     {
         SparkLauncher::Backend_Shutdown();
+        ReportInitializeFailure(app.StatusMessage());
         return 2;
     }
 

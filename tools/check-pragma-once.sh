@@ -46,6 +46,7 @@ done < <(find \
     "$PROJECT_ROOT/SparkShaderCompiler/src" \
     "$PROJECT_ROOT/GameModules" \
     "$PROJECT_ROOT/SparkSDK" \
+    "$PROJECT_ROOT/SparkUI" \
     -name '*.h' -o -name '*.hpp' 2>/dev/null)
 
 if [ "$VIOLATIONS" -eq 0 ]; then

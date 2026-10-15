@@ -8,6 +8,18 @@
  * and named layout save/load/delete. Works alongside EditorLayoutManager
  * for ImGui dock state serialization.
  *
+ * Contract: game thread only; the process-wide singleton is owned by the
+ * function-local static and lives until static destruction; layouts are held
+ * by value in small vectors (no per-frame allocation).
+ *
+ * Status: the editor persists this manager's current layout to the project
+ * (EditorApplication load at startup, save at shutdown), but ImGui multi-
+ * viewport support is off, so the float/monitor API (FloatPanel, DockPanel,
+ * MoveToMonitor) is recorded state only and never moves an OS window. Named
+ * user layouts — the toolbar Layout dropdown, Save Layout As and Delete — go
+ * through EditorLayoutManager, not this class. This TU stays ImGui-free so the
+ * headless test binary can link it.
+ *
  * @code
  *   auto& wm = EditorWindowManager::GetInstance();
  *   wm.Initialize();

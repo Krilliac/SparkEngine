@@ -4,6 +4,7 @@
  */
 
 #include "VisualScriptPanel.h"
+#include "../Core/EditorIcons.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
 #include "Engine/Scripting/VisualScriptGraphIO.h"
 #include "Utils/LogMacros.h"
@@ -16,6 +17,9 @@
 #include <iterator>
 #include <string>
 #include <unordered_map>
+#include "SparkUI/Fonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -52,29 +56,46 @@ namespace SparkEditor
         return categories;
     }
 
+    /// Slots of the colour-blind-safe Okabe-Ito categorical palette (Spark::Ui::CategoryColor);
+    /// each name is the hue of that slot in every appearance.
+    enum class CategorySlot : int
+    {
+        Orange = 0,
+        SkyBlue = 1,
+        BluishGreen = 2,
+        Yellow = 3,
+        Blue = 4,
+        Vermillion = 5,
+        ReddishPurple = 6,
+        Grey = 7,
+    };
+
+    static ImU32 SlotColor(CategorySlot slot)
+    {
+        return Spark::Ui::CategoryColor(static_cast<int>(slot));
+    }
+
     // Node colors by category
     static ImU32 GetNodeColor(ScriptNodeType type)
     {
         auto val = static_cast<uint32_t>(type);
         if (val <= 7)
-            return IM_COL32(180, 40, 40, 255); // Events: red
+            return SlotColor(CategorySlot::Vermillion); // Events
         if (val >= 50 && val <= 53)
-            return IM_COL32(60, 60, 160, 255); // Flow: blue
+            return SlotColor(CategorySlot::Blue); // Flow
         if (val >= 100 && val <= 108)
-            return IM_COL32(40, 140, 80, 255); // Getters: green
+            return SlotColor(CategorySlot::BluishGreen); // Getters
         if (val >= 150 && val <= 159)
-            return IM_COL32(160, 100, 40, 255); // Actions: orange
+            return SlotColor(CategorySlot::Orange); // Actions
         if (val >= 200 && val <= 216)
-            return IM_COL32(80, 80, 140, 255); // Math and text: purple
+            return SlotColor(CategorySlot::ReddishPurple); // Math and text
         if (val >= 250 && val <= 259)
-            return IM_COL32(100, 140, 100, 255); // Logic: teal
+            return SlotColor(CategorySlot::SkyBlue); // Logic
         if (val >= 300 && val <= 301)
-            return IM_COL32(140, 140, 40, 255); // Variables: yellow
-        if (val >= 350 && val <= 354)
-            return IM_COL32(100, 100, 100, 255); // Constants: gray
+            return SlotColor(CategorySlot::Yellow); // Variables
         if (val == 500)
-            return IM_COL32(60, 120, 60, 255); // Comment: dark green
-        return IM_COL32(80, 80, 80, 255);
+            return Spark::Ui::Col(Spark::Ui::Role::TextSecondary); // Comment
+        return SlotColor(CategorySlot::Grey);                      // Constants and anything uncategorised
     }
 
     static const char* GetNodeTitle(ScriptNodeType type)
@@ -88,21 +109,21 @@ namespace SparkEditor
         switch (kind)
         {
         case PinKind::Execution:
-            return IM_COL32(255, 255, 255, 255);
+            return Spark::Ui::Col(Spark::Ui::Role::TextPrimary);
         case PinKind::Bool:
-            return IM_COL32(180, 40, 40, 255);
+            return SlotColor(CategorySlot::Vermillion);
         case PinKind::Int:
-            return IM_COL32(40, 180, 120, 255);
+            return SlotColor(CategorySlot::BluishGreen);
         case PinKind::Float:
-            return IM_COL32(80, 180, 80, 255);
+            return SlotColor(CategorySlot::SkyBlue);
         case PinKind::String:
-            return IM_COL32(180, 80, 180, 255);
+            return SlotColor(CategorySlot::ReddishPurple);
         case PinKind::Vector3:
-            return IM_COL32(220, 180, 40, 255);
+            return SlotColor(CategorySlot::Yellow);
         case PinKind::Entity:
-            return IM_COL32(40, 120, 220, 255);
+            return SlotColor(CategorySlot::Blue);
         default:
-            return IM_COL32(150, 150, 150, 255);
+            return SlotColor(CategorySlot::Grey);
         }
     }
 
@@ -267,25 +288,25 @@ namespace SparkEditor
     {
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
-        canvasSize.y = std::max(canvasSize.y, 200.0f);
+        canvasSize.y = std::max(canvasSize.y, Spark::Ui::Px(200.0f));
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
         // Canvas background
         drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                                IM_COL32(30, 30, 30, 255));
+                                Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
 
         // Grid
         float gridSize = 32.0f * m_canvasZoom;
         for (float x = std::fmod(m_canvasOffsetX, gridSize); x < canvasSize.x; x += gridSize)
         {
             drawList->AddLine(ImVec2(canvasPos.x + x, canvasPos.y), ImVec2(canvasPos.x + x, canvasPos.y + canvasSize.y),
-                              IM_COL32(50, 50, 50, 255));
+                              Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
         }
         for (float y = std::fmod(m_canvasOffsetY, gridSize); y < canvasSize.y; y += gridSize)
         {
             drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + y),
-                              IM_COL32(50, 50, 50, 255));
+                              Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
         }
 
         // Clip to canvas area
@@ -331,9 +352,10 @@ namespace SparkEditor
         }
 
         // Info text
-        ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + 5, canvasPos.y + canvasSize.y - 20));
-        ImGui::TextDisabled("Nodes: %zu | Connections: %zu | Right-click to add nodes", m_nodes.size(),
-                            m_connections.size());
+        ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + Spark::Ui::Px(5.0f),
+                                         canvasPos.y + canvasSize.y - ImGui::GetTextLineHeightWithSpacing()));
+        Spark::Ui::SecondaryText("Nodes: %zu | Connections: %zu | Right-click to add nodes", m_nodes.size(),
+                                 m_connections.size());
     }
 
     void VisualScriptPanel::RenderNode(int nodeIndex)
@@ -347,30 +369,38 @@ namespace SparkEditor
         float nw = nodeUI.width * m_canvasZoom;
         float nh = nodeUI.height * m_canvasZoom;
 
-        ImU32 nodeColor = GetNodeColor(nodeUI.node.type);
-        ImU32 headerColor = nodeColor;
-        ImU32 bodyColor = IM_COL32(40, 40, 40, 230);
+        const ImU32 categoryColor = GetNodeColor(nodeUI.node.type);
+        const ImU32 headerColor = Spark::Ui::Col(Spark::Ui::Role::SurfaceRaised);
+        const ImU32 bodyColor = Spark::Ui::Col(Spark::Ui::Role::SurfaceOverlay, 0.9f);
 
         // Node body
         drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + nh), bodyColor, 4.0f);
 
-        // Header
-        drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + 24.0f * m_canvasZoom), headerColor, 4.0f);
+        // Header: a neutral bar keeps the title legible on every category; the category hue is the
+        // band along its top edge.
+        drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + 24.0f * m_canvasZoom), headerColor, 4.0f,
+                                ImDrawFlags_RoundCornersTop);
+        drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + 4.0f * m_canvasZoom), categoryColor, 4.0f,
+                                ImDrawFlags_RoundCornersTop);
 
-        // Border
-        ImU32 borderColor = nodeUI.selected ? IM_COL32(255, 200, 50, 255) : IM_COL32(80, 80, 80, 255);
-        drawList->AddRect(ImVec2(nx, ny), ImVec2(nx + nw, ny + nh), borderColor, 4.0f, 0, 2.0f);
+        // Border: the selected node gets the accent and a thicker outline, so selection is not colour-only.
+        const ImU32 borderColor = nodeUI.selected ? Spark::Ui::Col(Spark::Ui::Role::AccentFill)
+                                                  : Spark::Ui::Col(Spark::Ui::Role::BorderSubtle);
+        drawList->AddRect(ImVec2(nx, ny), ImVec2(nx + nw, ny + nh), borderColor, 4.0f, 0,
+                          nodeUI.selected ? 3.0f : 1.5f);
 
         // Title
         const char* title = GetNodeTitle(nodeUI.node.type);
-        drawList->AddText(ImVec2(nx + 8, ny + 4), IM_COL32(255, 255, 255, 255), title);
+        drawList->AddText(ImVec2(nx + 8, ny + 5.0f * m_canvasZoom), Spark::Ui::Col(Spark::Ui::Role::TextPrimary),
+                          title);
 
         // Comment nodes: render text body
         if (nodeUI.node.type == ScriptNodeType::Comment)
         {
             auto it = nodeUI.node.properties.find("text");
             const char* commentText = (it != nodeUI.node.properties.end()) ? it->second.c_str() : "Comment";
-            drawList->AddText(ImVec2(nx + 8, ny + 26.0f * m_canvasZoom), IM_COL32(200, 230, 200, 220), commentText);
+            drawList->AddText(ImVec2(nx + 8, ny + 26.0f * m_canvasZoom), Spark::Ui::Col(Spark::Ui::Role::TextSecondary),
+                              commentText);
         }
 
         // Input pins (with click detection for connection dragging)
@@ -388,7 +418,7 @@ namespace SparkEditor
             if (label[0] != '\0' && m_canvasZoom > 0.5f)
             {
                 drawList->AddText(ImVec2(pinPos.x + pinRadius + 3.0f, pinPos.y - 6.0f * m_canvasZoom),
-                                  IM_COL32(180, 180, 180, 200), label);
+                                  Spark::Ui::Col(Spark::Ui::Role::TextSecondary), label);
             }
 
             // Hover highlight
@@ -396,7 +426,8 @@ namespace SparkEditor
             float dy = pinIO.MousePos.y - pinPos.y;
             if (dx * dx + dy * dy < (pinRadius + 4.0f) * (pinRadius + 4.0f))
             {
-                drawList->AddCircle(pinPos, pinRadius + 3.0f, IM_COL32(255, 255, 255, 200), 12, 2.0f);
+                drawList->AddCircle(pinPos, pinRadius + 3.0f, Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), 12,
+                                    2.0f);
                 if (ImGui::IsMouseClicked(0))
                 {
                     if (m_isDrawingConnection)
@@ -423,14 +454,15 @@ namespace SparkEditor
             {
                 float textWidth = ImGui::CalcTextSize(outLabel).x;
                 drawList->AddText(ImVec2(pinPos.x - pinRadius - 3.0f - textWidth, pinPos.y - 6.0f * m_canvasZoom),
-                                  IM_COL32(180, 180, 180, 200), outLabel);
+                                  Spark::Ui::Col(Spark::Ui::Role::TextSecondary), outLabel);
             }
 
             float dx = pinIO.MousePos.x - pinPos.x;
             float dy = pinIO.MousePos.y - pinPos.y;
             if (dx * dx + dy * dy < (pinRadius + 4.0f) * (pinRadius + 4.0f))
             {
-                drawList->AddCircle(pinPos, pinRadius + 3.0f, IM_COL32(255, 255, 255, 200), 12, 2.0f);
+                drawList->AddCircle(pinPos, pinRadius + 3.0f, Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), 12,
+                                    2.0f);
                 if (ImGui::IsMouseClicked(0))
                 {
                     if (m_isDrawingConnection)
@@ -508,7 +540,7 @@ namespace SparkEditor
             float toY = canvasPos.y + (toNode->posY + 30.0f + conn.toPin * 18.0f + m_canvasOffsetY) * m_canvasZoom;
 
             // Determine wire color from source pin
-            ImU32 wireColor = IM_COL32(180, 180, 180, 200);
+            ImU32 wireColor = Spark::Ui::Col(Spark::Ui::Role::TextSecondary, 0.78f);
             if (conn.fromPin < fromNode->node.outputs.size())
             {
                 wireColor = GetPinColor(fromNode->node.outputs[conn.fromPin].kind);
@@ -926,10 +958,10 @@ namespace SparkEditor
             ImGui::PushID(i);
             auto& var = m_variables[i];
 
-            ImGui::SetNextItemWidth(80.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80.0f));
             ImGui::InputText("##name", var.name, sizeof(var.name));
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(60.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(60.0f));
             ImGui::Combo("##type", &var.typeIndex, kVariableKindNames, static_cast<int>(std::size(kVariableKindNames)));
             ImGui::SameLine();
             if (ImGui::SmallButton("X"))
@@ -965,17 +997,16 @@ namespace SparkEditor
 
     void VisualScriptPanel::RenderNodeProperties()
     {
-        ImGui::Text("Properties");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Properties");
 
         if (m_selectedNode < 0 || m_selectedNode >= static_cast<int>(m_nodes.size()))
         {
-            ImGui::TextDisabled("Select a node");
+            Spark::Ui::EmptyState(ICON_FA_PROJECT_DIAGRAM, "No node selected", "Select a node on the canvas");
             return;
         }
 
         auto& nodeUI = m_nodes[m_selectedNode];
-        ImGui::Text("Type: %s", GetNodeTitle(nodeUI.node.type));
+        Spark::Ui::KeyValue("Type", "%s", GetNodeTitle(nodeUI.node.type));
         ImGui::Text("ID: %u", nodeUI.node.id);
 
         // Edit default values for input pins
@@ -1153,7 +1184,7 @@ namespace SparkEditor
 
     void VisualScriptPanel::RenderCompileBar()
     {
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         ImGui::InputText("Script Name", m_scriptName, sizeof(m_scriptName));
         ImGui::SameLine();
 
@@ -1188,11 +1219,11 @@ namespace SparkEditor
         ImGui::SameLine();
         if (m_compileSuccess)
         {
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Compiled OK");
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "Compiled OK");
         }
         else if (!m_compileErrors.empty())
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "Errors: %zu", m_compileErrors.size());
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "Errors: %zu", m_compileErrors.size());
         }
 
         // Show errors if any
@@ -1200,17 +1231,20 @@ namespace SparkEditor
         {
             for (const auto& err : m_compileErrors)
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "  %s", err.c_str());
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", err.c_str());
             }
         }
 
         // Generated code preview (collapsible)
         if (!m_lastCompiledSource.empty())
         {
-            if (ImGui::CollapsingHeader("Generated AngelScript"))
+            if (Spark::Ui::SectionHeader("Generated AngelScript", nullptr, false))
             {
-                ImGui::BeginChild("CodePreview", ImVec2(0, 200), true);
-                ImGui::TextUnformatted(m_lastCompiledSource.c_str());
+                ImGui::BeginChild("CodePreview", Spark::Ui::Px2(0, 200), true);
+                {
+                    Spark::Ui::ScopedFont mono(Spark::Ui::FontRole::Mono);
+                    ImGui::TextUnformatted(m_lastCompiledSource.c_str());
+                }
                 ImGui::EndChild();
             }
         }
@@ -1495,7 +1529,7 @@ namespace SparkEditor
         ImVec2 endPos = ImGui::GetIO().MousePos;
 
         // Determine wire color from source pin
-        ImU32 wireColor = IM_COL32(200, 200, 200, 150);
+        ImU32 wireColor = Spark::Ui::Col(Spark::Ui::Role::TextSecondary, 0.6f);
         if (m_connectionSourceNode < static_cast<int>(m_nodes.size()))
         {
             const auto& srcNode = m_nodes[m_connectionSourceNode];

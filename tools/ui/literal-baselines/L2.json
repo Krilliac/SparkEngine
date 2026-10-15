@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "lane": "L2",
+  "description": "Editor shell: UI frame, menu bar, notifications, layouts, windows, appearance window, start page, command palette.",
+  "allowlisted_tables": {},
+  "total": 0,
+  "files": {
+    "SparkEditor/Source/Core/EditorAppearanceWindow.cpp": 0,
+    "SparkEditor/Source/Core/EditorAppearanceWindow.h": 0,
+    "SparkEditor/Source/Core/EditorCommandRegistry.cpp": 0,
+    "SparkEditor/Source/Core/EditorLayoutManager.cpp": 0,
+    "SparkEditor/Source/Core/EditorLayoutManager.h": 0,
+    "SparkEditor/Source/Core/EditorMenuBar.cpp": 0,
+    "SparkEditor/Source/Core/EditorNotificationManager.cpp": 0,
+    "SparkEditor/Source/Core/EditorNotificationManager.h": 0,
+    "SparkEditor/Source/Core/EditorPanel.cpp": 0,
+    "SparkEditor/Source/Core/EditorPanel.h": 0,
+    "SparkEditor/Source/Core/EditorStartPage.cpp": 0,
+    "SparkEditor/Source/Core/EditorStartPage.h": 0,
+    "SparkEditor/Source/Core/EditorUI.cpp": 0,
+    "SparkEditor/Source/Core/EditorUI.h": 0,
+    "SparkEditor/Source/Core/EditorWindowManager.cpp": 0,
+    "SparkEditor/Source/Core/EditorWindowManager.h": 0,
+    "SparkEditor/Source/Search/CommandPalette.cpp": 0,
+    "SparkEditor/Source/Search/CommandPalette.h": 0
+  }
+}

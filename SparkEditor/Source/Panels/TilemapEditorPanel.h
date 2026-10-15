@@ -59,8 +59,10 @@ namespace SparkEditor
         void RenderTilePalette();
         void RenderMapCanvas();
         void RenderMapProperties();
-        void RenderCollisionOverlay();
         void RenderAutoTileSettings();
+
+        /// @brief Resize the map to @p width x @p height tiles, keeping the overlapping region; undoable.
+        void ResizeMap(int width, int height);
 
         // Flood fill algorithm
         void FloodFill(std::vector<int32_t>& tiles, int mapW, int mapH, int startX, int startY, int32_t newTile);

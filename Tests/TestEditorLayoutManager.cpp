@@ -614,3 +614,144 @@ TEST(EditorLayoutMgr_ConsoleStatusContainsName)
     EXPECT_TRUE(s.find("panels=1") != std::string::npos);
     mgr.Shutdown();
 }
+
+// ============================================================================
+// Save Layout As / Delete (toolbar Layout dropdown)
+// ============================================================================
+
+namespace
+{
+    void WriteCompanion(const std::filesystem::path& path)
+    {
+        std::ofstream out(path, std::ios::binary);
+        out << "[Docking][Data]\n";
+    }
+} // namespace
+
+TEST(EditorLayoutManager_SaveAsCreatesNamedLayoutAndListsIt)
+{
+    const std::string dir = MakeLayoutDir("save_as");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    EXPECT_FALSE(mgr.HasLayout("Level Design"));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Level Design", "wide viewport"));
+    EXPECT_TRUE(mgr.HasLayout("Level Design"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Level Design"));
+    EXPECT_TRUE(mgr.GetLastError().empty());
+
+    const auto layouts = mgr.GetSavedLayouts();
+    ASSERT_EQ(layouts.size(), static_cast<size_t>(1));
+    EXPECT_EQ(layouts[0].name, std::string("Level Design"));
+    EXPECT_EQ(layouts[0].description, std::string("wide viewport"));
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutManager_SaveAsRejectsInvalidNamesWithReason)
+{
+    const std::string dir = MakeLayoutDir("save_as_invalid");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    const std::vector<std::string> invalid = {
+        "",
+        ".",
+        "..",
+        "a/b",
+        "a\b",
+        "c:",
+        "what?",
+        "star*",
+        "pipe|",
+        "<tag>",
+        "quote\"",
+        "trailing.",
+        "trailing ",
+        " lead",
+        "CON",
+        "com1.json",
+        std::string(SparkEditor::EditorLayoutManager::kMaxLayoutNameLength + 1, 'x')};
+    for (const std::string& name : invalid)
+    {
+        EXPECT_FALSE(SparkEditor::EditorLayoutManager::IsValidLayoutName(name));
+        EXPECT_FALSE(mgr.SaveCurrentLayout(name));
+        EXPECT_FALSE(mgr.GetLastError().empty());
+    }
+
+    EXPECT_TRUE(SparkEditor::EditorLayoutManager::IsValidLayoutName("Level Design"));
+    EXPECT_TRUE(SparkEditor::EditorLayoutManager::IsValidLayoutName("v2-layout.wide"));
+    EXPECT_TRUE(SparkEditor::EditorLayoutManager::IsValidLayoutName("Console"));
+    EXPECT_TRUE(mgr.GetSavedLayouts().empty());
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutManager_DeleteRemovesDockTreeCompanions)
+{
+    const std::string dir = MakeLayoutDir("delete_companions");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Gone"));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Kept"));
+    const std::filesystem::path root(dir);
+    WriteCompanion(root / "Gone.ini");
+    WriteCompanion(root / "Gone.ini.meta");
+    WriteCompanion(root / "Kept.ini");
+
+    EXPECT_TRUE(mgr.DeleteLayout("Gone"));
+    EXPECT_TRUE(mgr.GetLastError().empty());
+    EXPECT_FALSE(std::filesystem::exists(root / "Gone.json"));
+    EXPECT_FALSE(std::filesystem::exists(root / "Gone.ini"));
+    EXPECT_FALSE(std::filesystem::exists(root / "Gone.ini.meta"));
+    EXPECT_FALSE(mgr.HasLayout("Gone"));
+
+    // The other layout and its dock tree are untouched.
+    EXPECT_TRUE(mgr.HasLayout("Kept"));
+    EXPECT_TRUE(std::filesystem::exists(root / "Kept.ini"));
+
+    // A second delete fails and says why.
+    EXPECT_FALSE(mgr.DeleteLayout("Gone"));
+    EXPECT_STR_CONTAINS(mgr.GetLastError(), "does not exist");
+
+    // An unsafe name never reaches the file system.
+    EXPECT_FALSE(mgr.DeleteLayout("../Kept"));
+    EXPECT_FALSE(mgr.GetLastError().empty());
+    EXPECT_TRUE(mgr.HasLayout("Kept"));
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutManager_DeleteCurrentLayoutResetsCurrentName)
+{
+    const std::string dir = MakeLayoutDir("delete_current");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Other"));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Active"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Active"));
+
+    // Deleting a layout that is not current leaves the current name alone.
+    EXPECT_TRUE(mgr.DeleteLayout("Other"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Active"));
+
+    EXPECT_TRUE(mgr.DeleteLayout("Active"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Default"));
+    EXPECT_TRUE(mgr.GetSavedLayouts().empty());
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}

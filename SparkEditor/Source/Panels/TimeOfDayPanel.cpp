@@ -8,7 +8,8 @@
 #include "Core/EngineContext.h"
 #include "Engine/World/TimeOfDaySystem.h"
 #include "Utils/LogMacros.h"
-#include <cstdio>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 
 namespace SparkEditor
@@ -122,25 +123,26 @@ namespace SparkEditor
         const float hour = GetHour();
         const int hours = static_cast<int>(hour);
         const int minutes = static_cast<int>((hour - static_cast<float>(hours)) * 60.0f);
-        char timeStr[16];
-        snprintf(timeStr, sizeof(timeStr), "%02d:%02d", hours, minutes);
 
-        ImGui::Text(ICON_FA_CLOCK " Time: %s", timeStr);
+        if (!Spark::Ui::BeginPropertyGrid("TimeOfDayClock"))
+            return;
 
+        Spark::Ui::PropertyLabel(ICON_FA_CLOCK " Time");
+        Spark::Ui::MonoText("%02d:%02d", hours, minutes);
+
+        Spark::Ui::PropertyLabel("Hour");
         if (ImGui::SliderFloat("##TimeSlider", &m_hourSlider, 0.0f, 23.99f, "%.2f h"))
         {
             SetHour(m_hourSlider);
         }
 
-        ImGui::Text(ICON_FA_TACHOMETER_ALT " Time Scale:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(150);
+        Spark::Ui::PropertyLabel(ICON_FA_TACHOMETER_ALT " Time Scale");
         if (ImGui::DragFloat("##TimeScale", &m_timeScaleSlider, 1.0f, 0.0f, 3600.0f, "%.0f x"))
         {
             SetTimeScale(m_timeScaleSlider);
         }
 
-        ImGui::SameLine();
+        Spark::Ui::PropertyLabel("Quick Scale");
         if (ImGui::SmallButton("1x"))
             SetTimeScale(1.0f);
         ImGui::SameLine();
@@ -153,33 +155,35 @@ namespace SparkEditor
         if (ImGui::SmallButton("600x"))
             SetTimeScale(600.0f);
 
+        Spark::Ui::PropertyLabel("Clock");
         const bool paused = IsPaused();
-        if (ImGui::Button(paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause"))
+        if (Spark::Ui::SecondaryButton(paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause"))
             SetPaused(!paused);
+        Spark::Ui::EndPropertyGrid();
 
         if (!IsDrivingClock())
         {
-            ImGui::TextDisabled("Clock advanced by the running engine lifecycle");
+            Spark::Ui::SecondaryText("Clock advanced by the running engine lifecycle");
         }
     }
 
     void TimeOfDayPanel::RenderPresets()
     {
-        ImGui::Text(ICON_FA_SUN " Presets:");
+        Spark::Ui::SubHeader(ICON_FA_SUN " Presets");
 
-        if (ImGui::Button("Dawn (6:00)"))
+        if (Spark::Ui::SecondaryButton("Dawn (6:00)"))
             SetHour(6.0f);
         ImGui::SameLine();
-        if (ImGui::Button("Morning (9:00)"))
+        if (Spark::Ui::SecondaryButton("Morning (9:00)"))
             SetHour(9.0f);
         ImGui::SameLine();
-        if (ImGui::Button("Noon (12:00)"))
+        if (Spark::Ui::SecondaryButton("Noon (12:00)"))
             SetHour(12.0f);
         ImGui::SameLine();
-        if (ImGui::Button("Dusk (18:00)"))
+        if (Spark::Ui::SecondaryButton("Dusk (18:00)"))
             SetHour(18.0f);
         ImGui::SameLine();
-        if (ImGui::Button("Midnight (0:00)"))
+        if (Spark::Ui::SecondaryButton("Midnight (0:00)"))
             SetHour(0.0f);
     }
 
@@ -190,26 +194,34 @@ namespace SparkEditor
         const auto sunColor = timeOfDay.GetSunColor();
         const auto ambientColor = timeOfDay.GetAmbientColor();
 
-        ImGui::Text(ICON_FA_LIGHTBULB " Lighting State");
-        ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", sunDirection.x, sunDirection.y, sunDirection.z);
+        Spark::Ui::SubHeader(ICON_FA_LIGHTBULB " Lighting State");
+        if (!Spark::Ui::BeginPropertyGrid("TimeOfDayLighting"))
+            return;
 
-        ImGui::Text("Sun Color:");
-        ImGui::SameLine();
+        Spark::Ui::PropertyLabel("Sun Direction");
+        Spark::Ui::MonoText("(%.2f, %.2f, %.2f)", sunDirection.x, sunDirection.y, sunDirection.z);
+
+        Spark::Ui::PropertyLabel("Sun Color");
         ImGui::ColorButton("##SunColor", ImVec4(sunColor.x, sunColor.y, sunColor.z, 1.0f),
-                           ImGuiColorEditFlags_NoTooltip, ImVec2(40, 20));
+                           ImGuiColorEditFlags_NoTooltip, Spark::Ui::Px2(40, 20));
         ImGui::SameLine();
-        ImGui::Text("Intensity: %.2f", timeOfDay.GetSunIntensity());
+        Spark::Ui::MonoText("Intensity %.2f", timeOfDay.GetSunIntensity());
 
-        ImGui::Text("Ambient:");
-        ImGui::SameLine();
+        Spark::Ui::PropertyLabel("Ambient");
         ImGui::ColorButton("##AmbientColor", ImVec4(ambientColor.x, ambientColor.y, ambientColor.z, 1.0f),
-                           ImGuiColorEditFlags_NoTooltip, ImVec2(40, 20));
+                           ImGuiColorEditFlags_NoTooltip, Spark::Ui::Px2(40, 20));
         ImGui::SameLine();
-        ImGui::Text("Intensity: %.2f", timeOfDay.GetAmbientIntensity());
+        Spark::Ui::MonoText("Intensity %.2f", timeOfDay.GetAmbientIntensity());
 
+        // Day/night is shown as an icon and a word; the colour only reinforces it.
+        Spark::Ui::PropertyLabel("Phase");
         const bool isNight = timeOfDay.IsNight();
-        ImGui::TextColored(isNight ? ImVec4(0.4f, 0.4f, 0.8f, 1.0f) : ImVec4(1.0f, 0.9f, 0.3f, 1.0f),
-                           isNight ? ICON_FA_ADJUST " Night" : ICON_FA_SUN " Day");
+        {
+            const Spark::Ui::ScopedRoleColor phaseColor(ImGuiCol_Text, isNight ? Spark::Ui::Role::InfoText
+                                                                               : Spark::Ui::Role::WarningText);
+            ImGui::TextUnformatted(isNight ? ICON_FA_ADJUST " Night" : ICON_FA_SUN " Day");
+        }
+        Spark::Ui::EndPropertyGrid();
     }
 
     void TimeOfDayPanel::RenderDayInfo()
@@ -245,8 +257,14 @@ namespace SparkEditor
             break;
         }
 
-        ImGui::Text("Period: %s", period);
-        ImGui::Text("Day: %d", timeOfDay.GetDayCount() + 1);
+        if (Spark::Ui::BeginPropertyGrid("TimeOfDayDay"))
+        {
+            Spark::Ui::PropertyLabel("Period");
+            ImGui::TextUnformatted(period);
+            Spark::Ui::PropertyLabel("Day");
+            Spark::Ui::MonoText("%d", timeOfDay.GetDayCount() + 1);
+            Spark::Ui::EndPropertyGrid();
+        }
 
         ImGui::ProgressBar(GetHour() / 24.0f, ImVec2(-1, 0), "Day Cycle");
     }

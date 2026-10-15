@@ -35,7 +35,42 @@ borrowed and does not transfer ownership to the module.
 Presets are Clear=0, Rain=1, Snow=2, Fog=3 and Storm=4. Invalid presets,
 nonfinite arguments or unavailable weather return false without mutation.
 Finite negative intensity selects the preset default; other intensities clamp
-to [0,1], and transitions have a0.01-second minimum. Success means accepted.
+to [0,1], and transitions have a 0.01-second minimum. Success means accepted.
+
+## UI theme (`Spark/UiTheme.h`)
+
+A header-only accessor for module ImGui code (HUDs, menus, overlays) that
+should match the host's Ember Signal look. It is not part of `SparkSDK.h`:
+include `<Spark/UiTheme.h>` directly, and define `SPARK_HAS_IMGUI` for the
+module target, because the whole header compiles to nothing without it. Every
+function runs on the thread that owns the current ImGui context.
+
+The engine's game overlay publishes a 64-byte `Spark::Ui::Sdk::SparkUiRuntimeBlock`
+through `ImGui::GetIO().UserData` before it injects the ImGui context into
+modules. The block carries a colour for each `UiRole` (`Text`, `TextSecondary`,
+`Accent`, `TextOnAccent`, `Success`, `Warning`, `Error`, `Info`,
+`SurfaceOverlay`), the effective UI `scale`, the logical body, small and H1
+font sizes, and the `reduceMotion` and `highContrast` flags. The host owns
+the block; a module only reads it and never stores the pointer across frames.
+
+- `Runtime()` returns the block, or `nullptr` when there is no current ImGui
+  context, `UserData` is null, or the magic (`kRuntimeBlockMagic`), version
+  (`kRuntimeBlockVersion`, 1) or size does not match.
+- `Color(role, fallback)` returns the host colour for `role`, or `fallback`
+  when there is no valid block. `kFallbackSuccess`, `kFallbackWarning`,
+  `kFallbackError` and `kFallbackTextOnAccent` are the Ember Dark values.
+- `FindFont(name)` returns the atlas font whose config name is `name`
+  (`"Spark.Body"`, `"Spark.Strong"`, `"Spark.Bold"` or `"Spark.Mono"`), or
+  the current font when none matches; `HudFont()` and `HudFontBold()` are
+  shorthands. It returns `nullptr` only without a context.
+- `PushSuccessButton()` pushes four success-tinted button colours with
+  `TextOnAccent` text; pair it with `PopSuccessButton()`.
+
+Read `Runtime()` and the colours each frame rather than caching them, so a
+module follows the host's scale and High Contrast changes. Animate only when
+`reduceMotion` is 0. The header exports no symbols and is not part of the
+module binary ABI: the block has its own magic, version and size check, and
+`SPARK_SDK_VERSION` did not change when it was added.
 
 ## Compatibility descriptor (`Spark/ModuleABI.h`)
 

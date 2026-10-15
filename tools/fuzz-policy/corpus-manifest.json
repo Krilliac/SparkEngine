@@ -1583,8 +1583,8 @@
       "id": "editor-theme-import-corpus",
       "parser_id": "editor-theme-import",
       "corpus_dir": "FuzzerTests/corpora/editor-theme-import",
-      "last_verified": "2026-10-01",
-      "content_digest": "d0da7bbe63dbf1199a14f8c3b2d75406bbf648c892aad191e7be2302b81d2f1a",
+      "last_verified": "2026-10-14",
+      "content_digest": "da85aaf092944dd1cc0b8fcca24fb296a0ae9e7a964aaa0717ff8fc47314c9a7",
       "budget": {
         "max_input_bytes": 65536,
         "max_parse_time_ms": 1000,
@@ -1603,6 +1603,23 @@
           "fixed_commit": "991b4aca5253729ae4af7e9d523a00a585da431f"
         }
       ]
+    },
+    {
+      "id": "editor-preferences-corpus",
+      "parser_id": "editor-preferences",
+      "corpus_dir": "FuzzerTests/corpora/editor-preferences",
+      "last_verified": "2026-10-14",
+      "content_digest": "4e686572a6005ddc0df8afda597dc3136288a52c8bbeb033865c1587b3ae3e8d",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 32,
+        "max_corpus_bytes": 4194304,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     },
     {
       "id": "editor-window-layout-corpus",

@@ -169,7 +169,7 @@ FORMAT_ROOTS = (
     "SparkEngine/Source", "GameModules", "SparkEditor/Source", "SparkConsole/src",
     "SparkShaderCompiler/src", "SparkBuild/src", "SparkInstaller/src", "SparkDaemon/src",
     "SparkServer/src", "SparkGateway/src", "SparkCooker/src", "SparkWorker/src",
-    "SparkAutomation/src", "SparkLauncher/src", "Tests", "FuzzerTests",
+    "SparkAutomation/src", "SparkLauncher/src", "SparkUI", "Tests", "FuzzerTests",
 )
 CXX_SOURCE_SUFFIXES = frozenset({".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".c", ".cc", ".cpp", ".cxx"})
 

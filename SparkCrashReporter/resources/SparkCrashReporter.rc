@@ -1,0 +1,12 @@
+// SparkCrashReporter resources: the brand application icon, and (only for toolchains whose linker does not merge a
+// .manifest source itself) the comctl32 v6 / PerMonitorV2 manifest. VERSIONINFO is generated from
+// SPARK_ENGINE_VERSION by cmake/SparkWindowsVersionInfo.cmake.
+#include <winuser.h>
+
+#define IDI_SPARK_APP 1
+
+IDI_SPARK_APP ICON "../../Assets/Engine/Branding/sparkengine.ico"
+
+#ifdef SPARK_EMBED_MANIFEST_IN_RC
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "SparkCrashReporter.manifest"
+#endif

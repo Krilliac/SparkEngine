@@ -24,8 +24,11 @@
 
 #include "EditorDocument.h"
 #include "EditorLogger.h"
+#include "EditorAppearanceWindow.h"
 #include "EditorLayoutManager.h"
 #include "EditorNotificationManager.h"
+#include "EditorPreferences.h"
+#include "EditorStartPage.h"
 #include "EditorCrashHandler.h"
 #include "EditorRecovery.h"
 #include "ProjectManager.h"
@@ -53,6 +56,7 @@ namespace SparkEditor
         None,
         NewScene,
         OpenSceneDialog,
+        OpenScenePath, ///< Open a known scene file (Start page recent scenes)
         OpenProject,
         CreateProject,
         Exit
@@ -209,6 +213,8 @@ namespace SparkEditor
         /// to EditorDocument, which records them on CommandHistory.
         void NewScene();
         void ShowOpenSceneDialog();
+        /// @brief Open @p path after the unsaved-changes check (Start page recent scenes).
+        void RequestOpenScenePath(const std::string& path);
         bool SaveScene();
         bool CreateDocumentEntity(const std::string& name) { return m_document.CreateEntity(name); }
         bool DeleteSelectedDocumentEntity() { return m_document.DeleteSelected(); }
@@ -227,8 +233,30 @@ namespace SparkEditor
         void ApplyTheme(const std::string& themeName);
         const std::string& GetCurrentTheme() const { return m_currentTheme; }
 
-        // Simple notifications
-        void ShowNotification(const std::string& message, const std::string& type = "info", float duration = 3.0f);
+        // Notifications. duration / seconds <= 0 use the severity default (Info/Success 4 s, Warning 8 s);
+        // errors stay until dismissed.
+        void ShowNotification(const std::string& message, const std::string& type = "info", float duration = 0.0f);
+        void Notify(NotificationSeverity severity, std::string title, std::string body = {}, float seconds = 0.0f);
+        /// @brief Open the notification history (View > Notifications, the command palette); it does not need the
+        ///        status bar, so toasts pushed off screen stay reachable while the bar is hidden.
+        void OpenNotificationHistory() { m_notificationHistoryRequested = true; }
+
+        // View > Appearance, Help > Welcome and the UI-scale shortcuts.
+        void OpenAppearanceWindow() { m_appearanceWindow.Open(); }
+        void OpenStartPage() { m_startPage.Open(); }
+        /// @brief Grow (+1) or shrink (-1) the user UI scale one 12.5 % step; 0 resets it to 100 %.
+        void StepUiScale(int direction);
+
+        /// @brief Take the preferences EditorApplication read at startup (the only read of the file).
+        /// @param prefs    Normalized preferences; EditorUI owns, edits and saves them from now on.
+        /// @param persist  False in test mode, or when the file could not be read and must not be overwritten.
+        /// @details Call before Initialize(), which applies them. Without this call the defaults apply and nothing
+        ///          is saved.
+        void AdoptPreferences(EditorPreferences prefs, bool persist);
+
+        /// @brief Re-read the operating system appearance when the stored appearance is "system" (Match
+        ///        Windows) and re-apply the palette. Called before NewFrame after Windows reports a change.
+        void FollowSystemAppearance();
 
         // Simple command system
         std::string ExecuteCommand(const std::string& command);
@@ -326,7 +354,23 @@ namespace SparkEditor
         bool m_showDemoWindow = false;
         bool m_firstFrame = true;
         bool m_defaultDockLayoutResetRequested = false;
-        bool m_showWelcomeScreen = true;
+
+        // Appearance, Start page and the persisted preferences behind them, adopted from EditorApplication's single
+        // startup read. Test-mode launches never write the preferences file (m_persistPreferences stays false), so
+        // smoke runs cannot change user settings; neither does a session whose file could not be read.
+        EditorPreferences m_preferences;
+        bool m_persistPreferences = false;
+        bool m_notificationHistoryRequested = false; ///< OpenNotificationHistory() was called; opens next Render()
+        EditorAppearanceWindow m_appearanceWindow;
+        EditorStartPage m_startPage;
+        ImGuiID m_centreDockId = 0; ///< Centre dock node of the default layout; the Start page joins it
+
+        // Toolbar Layout dropdown: Save Layout As and Delete run as top-level popups opened by these requests.
+        bool m_saveLayoutAsRequested = false;
+        bool m_deleteLayoutRequested = false;
+        std::string m_layoutPendingDelete;
+        char m_layoutNameBuffer[EditorLayoutManager::kMaxLayoutNameLength + 1] = {};
+        std::string m_layoutNameError;
         // Dear ImGui docking settings must be loaded before any window is
         // begun for the frame.  Menu actions run while the dockspace window
         // is already active, so LoadLayout queues the ini file here and
@@ -432,6 +476,7 @@ namespace SparkEditor
         bool m_sceneModifiedBeforePlay = false;
         DocumentTransitionGuard m_documentTransitionGuard;
         std::string m_pendingProjectPath;
+        std::string m_pendingScenePath; ///< Scene for DocumentTransitionAction::OpenScenePath
         std::string m_pendingProjectName;
         std::string m_pendingProjectParentDirectory;
         std::string m_pendingProjectDescription;
@@ -486,21 +531,29 @@ namespace SparkEditor
         // Window menu panels are now rendered dynamically by PanelCategory
         // in RenderWindowMenu() — no per-category submenu functions needed.
         void RenderWindowMenu();
+        void RenderViewMenu();
         void RenderFPSToolsMenu();
         void RenderBuildMenu();
         void RenderHelpMenu();
         void RenderToolbar();
-        void RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal, const ImVec4& pillBg,
-                                         const ImVec4& passiveHover);
-        void RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
-                                       const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg,
-                                       const ImVec4& passiveHover);
-        void RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg);
+        void RenderToolbarTransformTools();
+        void RenderToolbarPlayControls(float btnSize);
+        void RenderToolbarSnapControls();
+        void RenderToolbarLayoutMenu();
         void RenderStatusBar();
+        void RenderStatusBarMetrics();
+        void RenderLayoutDialogs();
+        void RenderStartPage();
+        void RenderAppearanceWindow();
+        void RenderNotificationHistory();
+        void SavePreferences();
+        void CommitPreferenceChange();
+        void RememberRecentScene(const std::string& scenePath);
         void RenderPanels();
         void RenderModalDialogs();
-        void RenderWelcomeScreen();
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
+        /// "###<panel id>" dock window name of the panel registered under @p panelKey; empty when there is none.
+        std::string PanelDockWindowName(const char* panelKey) const;
         void UpdateStats(float deltaTime);
         void CreatePanels();
         void CreateCorePanels(

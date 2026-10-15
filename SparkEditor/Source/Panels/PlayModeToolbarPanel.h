@@ -70,8 +70,7 @@ namespace SparkEditor
         bool m_showSubsystemToggles = false;
         bool m_showAdvancedControls = false;
 
-        // Animation
-        float m_playButtonPulse = 0.0f;
+        // Animation: blink phase of the paused-state indicator.
         float m_statusBlinkTimer = 0.0f;
 
         // Presets

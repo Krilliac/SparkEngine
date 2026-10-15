@@ -641,6 +641,7 @@ void Added() {
             "SparkConsole/src", "SparkCooker/src", "SparkCrashReporter/src", "SparkDaemon/src",
             "SparkEditor/Source", "SparkEngine/Source", "SparkGateway/src", "SparkInstaller/src",
             "SparkLauncher/src", "SparkSDK/Include", "SparkServer/src", "SparkShaderCompiler/src", "SparkWorker/src",
+            "SparkUI/Include", "SparkUI/Source",
             "GameModules", "Templates", "Tools",
         }
         self.assertEqual(observed, expected)

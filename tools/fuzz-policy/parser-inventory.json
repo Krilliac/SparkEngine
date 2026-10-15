@@ -17,6 +17,8 @@
       "SparkServer/src",
       "SparkGateway/src",
       "SparkAutomation/src",
+      "SparkUI/Source",
+      "SparkUI/Include",
       "SparkSDK/Include",
       "GameModules"
     ],
@@ -2033,6 +2035,29 @@
         "entry_symbol": "SparkEditor::ParseThemeDocument",
         "binding_source": "FuzzerTests/FuzzEditorThemeImportProduction.cpp",
         "harness_entry_symbol": "SparkFuzzParseEditorTheme"
+      }
+    },
+    {
+      "id": "editor-preferences",
+      "description": "Editor preferences: line-based key=value text with a locale-free decimal reader.",
+      "trust_boundary": "untrusted-file",
+      "source_files": [
+        "SparkEditor/Source/Core/EditorPreferences.cpp",
+        "SparkEditor/Source/Core/EditorPreferences.h"
+      ],
+      "formats": [
+        ".ini"
+      ],
+      "status": "fuzzed",
+      "target": {
+        "harness": "FuzzerTests/FuzzEditorPreferences.cpp",
+        "cmake_file": "FuzzerTests/CMakeLists.txt",
+        "cmake_target": "SparkFuzzEditorPreferences",
+        "test_selector": "FuzzEditorPreferencesSmoke",
+        "corpus_id": "editor-preferences-corpus",
+        "entry_symbol": "SparkEditor::ParseEditorPreferences",
+        "binding_source": "FuzzerTests/FuzzEditorPreferencesProduction.cpp",
+        "harness_entry_symbol": "SparkFuzzParseEditorPreferences"
       }
     },
     {
@@ -4100,11 +4125,27 @@
       ]
     },
     {
+      "source_file": "SparkSDK/Include/Spark/UiTheme.h",
+      "classification": "same-process-data",
+      "justification": "Spark::Sdk::Ui::Runtime() checks the magic, version and size of the SparkUiRuntimeBlock the host's SparkUIKit wrote into ImGuiIO::UserData in the same process; no file or network bytes are decoded.",
+      "detected_by": [
+        "binary-magic-compare"
+      ]
+    },
+    {
       "source_file": "SparkServer/src/ServerHealth.cpp",
       "classification": "not-a-parser",
       "justification": "The Linux-only fscanf reads kernel-owned /proc/self/statm counters for the server health RSS figure; no user, mod, package, or network bytes are decoded.",
       "detected_by": [
         "scanf-parse"
+      ]
+    },
+    {
+      "source_file": "SparkUI/Source/Runtime.cpp",
+      "classification": "same-process-data",
+      "justification": "FillSdkRuntimeBlock writes the magic of the in-memory SparkUiRuntimeBlock that game modules read back through Spark/UiTheme.h in the same process; nothing is decoded.",
+      "detected_by": [
+        "binary-magic-compare"
       ]
     }
   ]

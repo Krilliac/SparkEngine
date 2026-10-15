@@ -14,9 +14,21 @@
 #include <imgui.h>
 #include <iostream>
 #include <cmath>
+#include <optional>
+#include "SparkUI/Color.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+#include <algorithm>
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// Alpha of the Paused line's dim blink phase, raised when the palette needs more for 3:1.
+        constexpr float kPausedBlinkDimAlpha = 0.4f;
+        /// Smallest contrast the dim phase may reach (WCAG non-text minimum; the bright phase is 4.5:1+).
+        constexpr float kPausedBlinkMinContrast = 3.0f;
+    } // namespace
 
     // ============================================================================
     // Construction / Lifecycle
@@ -34,7 +46,6 @@ namespace SparkEditor
         m_multiStepCount = 10;
         m_showSubsystemToggles = false;
         m_showAdvancedControls = false;
-        m_playButtonPulse = 0.0f;
         m_statusBlinkTimer = 0.0f;
 
         m_isInitialized = true;
@@ -43,20 +54,6 @@ namespace SparkEditor
 
     void PlayModeToolbarPanel::Update(float deltaTime)
     {
-        // Animate the play-button pulse when playing or simulating
-        if (m_playModeManager && (m_playModeManager->IsPlaying() || m_playModeManager->IsSimulating()))
-        {
-            m_playButtonPulse += deltaTime * 3.0f;
-            if (m_playButtonPulse > 6.2831853f) // 2 * PI
-            {
-                m_playButtonPulse -= 6.2831853f;
-            }
-        }
-        else
-        {
-            m_playButtonPulse = 0.0f;
-        }
-
         // Blink timer for paused-state indicator
         if (m_playModeManager && m_playModeManager->IsPaused())
         {
@@ -88,8 +85,8 @@ namespace SparkEditor
 
         if (!m_playModeManager)
         {
-            ImGui::TextDisabled(ICON_FA_INFO_CIRCLE " State preview controls are unavailable.");
-            ImGui::TextDisabled("Connect a PlayModeManager to enable controls.");
+            Spark::Ui::EmptyState(ICON_FA_INFO_CIRCLE, "State preview controls are unavailable",
+                                  "Connect a PlayModeManager to enable controls.");
             EndPanel();
             return;
         }
@@ -175,24 +172,10 @@ namespace SparkEditor
         bool isStopped = m_playModeManager->IsStopped();
         bool isInPlayMode = m_playModeManager->IsInPlayMode();
 
-        // --- Play Button ---
-        if (isPlaying || isSimulating)
-        {
-            // Pulsing green when playing
-            float pulse = 0.5f + 0.5f * std::sin(m_playButtonPulse);
-            ImVec4 playColor(0.1f, 0.5f + 0.3f * pulse, 0.1f, 1.0f);
-            ImGui::PushStyleColor(ImGuiCol_Button, playColor);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.1f, 0.6f, 0.1f, 1.0f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.7f, 0.3f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.4f, 0.15f, 1.0f));
-        }
-
-        if (ImGui::Button(ICON_FA_PLAY "##PlayBtn", ImVec2(32, 24)))
+        // --- Play Button --- (shown selected while the preview runs; the status text says so too)
+        const char* playTooltip = isStopped ? "Start state preview (no gameplay tick)"
+                                            : (isPaused ? "Resume state preview" : "State preview active");
+        if (Spark::Ui::IconButton("PlayBtn", ICON_FA_PLAY, playTooltip, isPlaying || isSimulating))
         {
             if (isStopped)
             {
@@ -205,103 +188,40 @@ namespace SparkEditor
                 m_playModeManager->ResumePlayMode();
             }
         }
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip(isStopped ? "Start state preview (no gameplay tick)"
-                                        : (isPaused ? "Resume state preview" : "State preview active"));
-        }
-        ImGui::PopStyleColor(3);
 
         ImGui::SameLine();
 
         // --- Pause Button ---
-        if (isPaused)
-        {
-            float blink = m_statusBlinkTimer < 0.5f ? 1.0f : 0.6f;
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f * blink, 0.6f * blink, 0.1f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.8f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.6f, 0.5f, 0.1f, 1.0f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-        }
-
-        bool pauseDisabled = (!isPlaying && !isSimulating) && !isPaused;
-        if (pauseDisabled)
-        {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::Button(ICON_FA_PAUSE "##PauseBtn", ImVec2(32, 24)))
+        const bool pauseDisabled = (!isPlaying && !isSimulating) && !isPaused;
+        if (Spark::Ui::IconButton("PauseBtn", ICON_FA_PAUSE, isPaused ? "Resume" : "Pause", isPaused, !pauseDisabled))
         {
             m_playModeManager->TogglePause();
         }
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip(isPaused ? "Resume" : "Pause");
-        }
-        if (pauseDisabled)
-        {
-            ImGui::EndDisabled();
-        }
-        ImGui::PopStyleColor(3);
 
         ImGui::SameLine();
 
-        // --- Stop Button ---
-        if (isInPlayMode)
+        // --- Stop Button --- (error-tinted glyph while a preview can be stopped)
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.1f, 0.1f, 1.0f));
+            std::optional<Spark::Ui::ScopedRoleColor> stopTint;
+            if (isInPlayMode)
+            {
+                stopTint.emplace(ImGuiCol_Text, Spark::Ui::Role::ErrorText);
+            }
+            if (Spark::Ui::IconButton("StopBtn", ICON_FA_STOP, "Stop state preview", false, !isStopped))
+            {
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbar: exiting play mode");
+                m_playModeManager->ExitPlayMode();
+            }
         }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyle().Colors[ImGuiCol_Button]);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
-        }
-
-        if (isStopped)
-        {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::Button(ICON_FA_STOP "##StopBtn", ImVec2(32, 24)))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayModeToolbar: exiting play mode");
-            m_playModeManager->ExitPlayMode();
-        }
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Stop state preview");
-        }
-        if (isStopped)
-        {
-            ImGui::EndDisabled();
-        }
-        ImGui::PopStyleColor(3);
 
         ImGui::SameLine();
 
         // --- Step Button ---
         bool stepDisabled = !isPaused;
-        if (stepDisabled)
-        {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::Button(ICON_FA_STEP_FORWARD "##StepBtn", ImVec2(32, 24)))
+        if (Spark::Ui::IconButton("StepBtn", ICON_FA_STEP_FORWARD, "Step one preview state frame", false,
+                                  !stepDisabled))
         {
             m_playModeManager->StepFrame();
-        }
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        {
-            ImGui::SetTooltip("Step one preview state frame");
-        }
-        if (stepDisabled)
-        {
-            ImGui::EndDisabled();
         }
 
         ImGui::SameLine();
@@ -313,7 +233,7 @@ namespace SparkEditor
         }
         char multiStepLabel[64];
         snprintf(multiStepLabel, sizeof(multiStepLabel), ICON_FA_FORWARD " %d##MultiStep", m_multiStepCount);
-        if (ImGui::Button(multiStepLabel, ImVec2(56, 24)))
+        if (ImGui::Button(multiStepLabel))
         {
             m_playModeManager->StepFrames(static_cast<uint32_t>(m_multiStepCount));
         }
@@ -335,8 +255,7 @@ namespace SparkEditor
         }
         if (ImGui::BeginPopup("MultiStepCountPopup"))
         {
-            ImGui::Text("Multi-Step Count");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Multi-Step Count");
             ImGui::SliderInt("##MultiStepSlider", &m_multiStepCount, 1, 120);
             ImGui::EndPopup();
         }
@@ -351,7 +270,7 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_CLOCK);
         ImGui::SameLine();
 
-        ImGui::SetNextItemWidth(100.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(6.0f));
         if (ImGui::SliderFloat("##TimeScale", &m_timeScaleSlider, 0.0f, 10.0f, "%.2fx"))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "PlayModeToolbar: time scale set to %.2f", m_timeScaleSlider);
@@ -370,11 +289,11 @@ namespace SparkEditor
             float preset = TIME_SCALE_PRESETS[i];
             bool isActive = std::fabs(m_timeScaleSlider - preset) < 0.01f;
 
+            // The active preset uses the accent button colours.
+            std::optional<Spark::Ui::ScopedPrimaryButtonColors> activeColors;
             if (isActive)
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.5f, 0.8f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.4f, 0.6f, 0.9f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.4f, 0.7f, 1.0f));
+                activeColors.emplace();
             }
 
             char label[32];
@@ -391,11 +310,6 @@ namespace SparkEditor
             {
                 m_timeScaleSlider = preset;
                 m_playModeManager->SetTimeScale(preset);
-            }
-
-            if (isActive)
-            {
-                ImGui::PopStyleColor(3);
             }
         }
     }
@@ -446,35 +360,17 @@ namespace SparkEditor
 
             bool enabled = m_playModeManager->IsSubsystemEnabled(subsys.flag);
 
-            if (enabled)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.4f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.15f, 0.4f, 0.25f, 1.0f));
-            }
-            else
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.4f, 0.2f, 0.2f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.5f, 0.3f, 0.3f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.15f, 0.15f, 1.0f));
-            }
+            // Enabled counters show as selected toggles; the tooltip spells the state out.
+            char tooltip[128];
+            snprintf(tooltip, sizeof(tooltip), "%s preview counter: %s (not a gameplay toggle)", subsys.label,
+                     enabled ? "Enabled" : "Disabled");
+            char buttonId[64];
+            snprintf(buttonId, sizeof(buttonId), "Sub_%s", subsys.label);
 
-            char btnLabel[64];
-            snprintf(btnLabel, sizeof(btnLabel), "%s##Sub_%s", subsys.icon, subsys.label);
-
-            if (ImGui::SmallButton(btnLabel))
+            if (Spark::Ui::IconButton(buttonId, subsys.icon, tooltip, enabled))
             {
                 m_playModeManager->SetSubsystemEnabled(subsys.flag, !enabled);
             }
-            if (ImGui::IsItemHovered())
-            {
-                char tooltip[128];
-                snprintf(tooltip, sizeof(tooltip), "%s preview counter: %s (not a gameplay toggle)", subsys.label,
-                         enabled ? "Enabled" : "Disabled");
-                ImGui::SetTooltip("%s", tooltip);
-            }
-
-            ImGui::PopStyleColor(3);
         }
     }
 
@@ -495,7 +391,9 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_CAMERA);
         ImGui::SameLine();
 
-        ImGui::SetNextItemWidth(110.0f);
+        // Wide enough for the longest mode label plus the combo arrow.
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("Follow Player").x + ImGui::GetFrameHeight() +
+                                ImGui::GetStyle().FramePadding.x * 2.0f);
         if (ImGui::Combo("##CameraMode", &currentIndex, cameraModeLabels, 3))
         {
             m_playModeManager->SetCameraMode(static_cast<EditorCameraMode>(currentIndex));
@@ -516,58 +414,48 @@ namespace SparkEditor
         bool liveEditing = m_playModeManager->IsLiveEditingEnabled();
         bool keepChanges = m_playModeManager->GetKeepChangesOnStop();
 
-        // Live-edit toggle
-        if (liveEditing)
+        // Live-edit toggle: warning-filled while on, because edits now touch the previewed scene.
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.4f, 0.1f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.5f, 0.2f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.35f, 0.1f, 1.0f));
-        }
-
-        if (ImGui::SmallButton(liveEditing ? (ICON_FA_EDIT " Live##LiveEdit") : (ICON_FA_LOCK " Live##LiveEdit")))
-        {
-            m_playModeManager->SetLiveEditingEnabled(!liveEditing);
+            std::optional<Spark::Ui::ScopedRoleColor> liveFill;
+            if (liveEditing)
+            {
+                liveFill.emplace(ImGuiCol_Button, Spark::Ui::Role::WarningFill);
+            }
+            if (ImGui::SmallButton(liveEditing ? (ICON_FA_EDIT " Live##LiveEdit") : (ICON_FA_LOCK " Live##LiveEdit")))
+            {
+                m_playModeManager->SetLiveEditingEnabled(!liveEditing);
+            }
         }
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("Live Editing: %s\nEdit the scene during state preview", liveEditing ? "ON" : "OFF");
         }
 
-        if (liveEditing)
-        {
-            ImGui::PopStyleColor(3);
-        }
-
         ImGui::SameLine();
 
-        // Keep-changes-on-stop toggle
-        if (keepChanges)
+        // Keep-changes-on-stop toggle: accent-filled while Stop will keep the edits.
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.3f, 0.5f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.4f, 0.6f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.25f, 0.4f, 1.0f));
-        }
-
-        if (ImGui::SmallButton(keepChanges ? (ICON_FA_SAVE " Keep##KeepChanges")
-                                           : (ICON_FA_UNDO " Revert##KeepChanges")))
-        {
-            m_playModeManager->SetKeepChangesOnStop(!keepChanges);
+            std::optional<Spark::Ui::ScopedPrimaryButtonColors> keepFill;
+            if (keepChanges)
+            {
+                keepFill.emplace();
+            }
+            if (ImGui::SmallButton(keepChanges ? (ICON_FA_SAVE " Keep##KeepChanges")
+                                               : (ICON_FA_UNDO " Revert##KeepChanges")))
+            {
+                m_playModeManager->SetKeepChangesOnStop(!keepChanges);
+            }
         }
         if (ImGui::IsItemHovered())
         {
             ImGui::SetTooltip("On Stop: %s", keepChanges ? "Keep Changes" : "Revert to Snapshot");
         }
 
-        if (keepChanges)
-        {
-            ImGui::PopStyleColor(3);
-        }
-
         // Show live-edit count if any
         if (liveEditing && m_playModeManager->GetLiveEditCount() > 0)
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "(%zu edits)", m_playModeManager->GetLiveEditCount());
+            Spark::Ui::TextRole(Spark::Ui::Role::WarningText, "(%zu edits)", m_playModeManager->GetLiveEditCount());
         }
     }
 
@@ -585,30 +473,40 @@ namespace SparkEditor
         switch (state)
         {
         case PlayModeState::Stopped:
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), ICON_FA_STOP " Stopped");
+            Spark::Ui::StatusText(Spark::Ui::Status::Neutral, ICON_FA_STOP " Stopped");
             break;
 
         case PlayModeState::Starting:
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), ICON_FA_SPINNER " Starting...");
+            Spark::Ui::StatusText(Spark::Ui::Status::Info, ICON_FA_SPINNER " Starting...");
             break;
 
         case PlayModeState::Playing:
-            ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), ICON_FA_PLAY " State preview");
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, ICON_FA_PLAY " State preview");
             break;
 
         case PlayModeState::Simulating:
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 1.0f, 1.0f), ICON_FA_CUBE " Simulation preview");
+            Spark::Ui::StatusText(Spark::Ui::Status::Info, ICON_FA_CUBE " Simulation preview");
             break;
 
         case PlayModeState::Paused:
         {
-            float blinkAlpha = m_statusBlinkTimer < 0.5f ? 1.0f : 0.4f;
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, blinkAlpha), ICON_FA_PAUSE " Paused");
+            // Blink by fading the whole status line at 1 Hz; Reduce Motion keeps it steady. The dim
+            // phase never drops the word below 3:1 on the panel background (alpha measured, not fixed).
+            namespace Ui = Spark::Ui;
+            const Ui::Tokens& tokens = Ui::ActiveTokens();
+            const float dimAlpha =
+                std::max(kPausedBlinkDimAlpha,
+                         Ui::MinimumAlphaForContrast(Ui::Get(tokens, Ui::Role::WarningText),
+                                                     Ui::Get(tokens, Ui::Role::SurfaceBase), kPausedBlinkMinContrast));
+            const float blinkAlpha = Ui::ReduceMotion() || m_statusBlinkTimer < 0.5f ? 1.0f : dimAlpha;
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * blinkAlpha);
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, ICON_FA_PAUSE " Paused");
+            ImGui::PopStyleVar();
             break;
         }
 
         case PlayModeState::Stopping:
-            ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.3f, 1.0f), ICON_FA_SPINNER " Stopping...");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, ICON_FA_SPINNER " Stopping...");
             break;
         }
 
@@ -640,7 +538,7 @@ namespace SparkEditor
             if (stepsRemaining > 0)
             {
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), ICON_FA_FORWARD " %u steps left", stepsRemaining);
+                Spark::Ui::TextRole(Spark::Ui::Role::InfoText, ICON_FA_FORWARD " %u steps left", stepsRemaining);
             }
         }
     }

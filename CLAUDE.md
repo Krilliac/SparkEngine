@@ -163,7 +163,7 @@ SparkConsole/src/                        — Standalone console application
 SparkShaderCompiler/src/                 — Shader compilation tool
 SparkSDK/                                — Public SDK/interface headers
 FuzzerTests/                             — libFuzzer harnesses, corpora, fuzz policy (separate from Tests/)
-Tests/                                   — 8566 test definitions across 742 files, CTest
+Tests/                                   — 8639 test definitions across 744 files, CTest
 ```
 
 NullRHIDevice automatically activates when no GPU backend is available — engine continues in headless mode. GLAD (OpenGL loader) and SDL2 are bundled in `ThirdParty/`. SDL2 requires `libgl-dev` before CMake configure on Linux.
@@ -258,7 +258,7 @@ docs/update-context.sh update          # Update CLAUDE.md counts
 git diff --name-only --diff-filter=ACMR origin/Working -- \
     SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src SparkUI Tests FuzzerTests \
   | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
   | xargs -r clang-format --dry-run --Werror
 
@@ -266,7 +266,7 @@ git diff --name-only --diff-filter=ACMR origin/Working -- \
 git diff --name-only --diff-filter=ACMR origin/Working -- \
     SparkEngine/Source GameModules SparkEditor/Source SparkConsole/src SparkShaderCompiler/src \
     SparkBuild/src SparkInstaller/src SparkDaemon/src SparkServer/src SparkGateway/src \
-    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src Tests FuzzerTests \
+    SparkCooker/src SparkWorker/src SparkAutomation/src SparkLauncher/src SparkUI Tests FuzzerTests \
   | grep -E '\.(h|hpp|cpp)$' | grep -v '/Metal/' \
   | xargs -r clang-format -i
 

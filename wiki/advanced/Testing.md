@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*743 test-bearing `.cpp`/`.mm` files, 8566 source-level test definitions*
+*745 test-bearing `.cpp`/`.mm` files, 8639 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1247,12 +1247,13 @@ extents; this does not change plane order or clip-space calculations.
 | `TestEditorDocumentReal` | 5 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorGizmoTransformReal` | 6 |
-| `TestEditorLayoutManager` | 16 |
-| `TestEditorPanelsRealBackends` | 12 |
-| `TestEditorProjectMaterializationReal` | 5 |
+| `TestEditorLayoutManager` | 20 |
+| `TestEditorPanelsRealBackends` | 13 |
+| `TestEditorPreferences` | 14 |
+| `TestEditorProjectMaterializationReal` | 7 |
 | `TestEditorRecovery` | 18 |
 | `TestEditorStateCompatibility` | 8 |
-| `TestEditorSubsystems` | 138 |
+| `TestEditorSubsystems` | 160 |
 | `TestEditorSubsystemsReal` | 26 |
 | `TestEditorUndoHierarchyReal` | 9 |
 | `TestEditorUndoWorldMatrixReal` | 2 |
@@ -1379,7 +1380,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestLODGeneratorPhaseGG` | 9 |
 | `TestLagCompensation` | 12 |
 | `TestLagCompensationIntegration` | 4 |
-| `TestLauncherPaths` | 4 |
+| `TestLauncherPaths` | 7 |
 | `TestLauncherProcess` | 13 |
 | `TestLegacyGameObjectMaterial` | 5 |
 | `TestLevelStreamingSystemPhaseAA` | 11 |
@@ -1664,6 +1665,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestSparkServerApplication` | 28 |
 | `TestSparkServerHealth` | 8 |
 | `TestSparkTerrainFormatReal` | 2 |
+| `TestSparkUIKit` | 23 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |
@@ -1699,7 +1701,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestTFLoadoutWire` | 3 |
 | `TestTFNetProtocolLayout` | 9 |
 | `TestTFObservation` | 4 |
-| `TestTFOnboarding` | 46 |
+| `TestTFOnboarding` | 50 |
 | `TestTFOutfitStore` | 18 |
 | `TestTFRedeployRules` | 7 |
 | `TestTFRegionLattice` | 11 |

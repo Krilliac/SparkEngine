@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "lane": "P1",
+  "description": "Panels: viewport and scene core (inspector, hierarchy, scene/game view, asset browser, console, play control).",
+  "allowlisted_tables": {
+    "SparkEditor/Source/Panels/GameViewPanel.cpp": [
+      "GameHudPreviewPalette"
+    ]
+  },
+  "total": 0,
+  "files": {
+    "SparkEditor/Source/Gizmos/SceneEditTools.cpp": 0,
+    "SparkEditor/Source/Gizmos/SceneEditTools.h": 0,
+    "SparkEditor/Source/Gizmos/SceneEditToolsDuplicate.cpp": 0,
+    "SparkEditor/Source/Panels/AssetBrowserGrid.cpp": 0,
+    "SparkEditor/Source/Panels/AssetBrowserPanel.cpp": 0,
+    "SparkEditor/Source/Panels/AssetBrowserPanel.h": 0,
+    "SparkEditor/Source/Panels/ConsolePanel.cpp": 0,
+    "SparkEditor/Source/Panels/ConsolePanel.h": 0,
+    "SparkEditor/Source/Panels/GameViewPanel.cpp": 0,
+    "SparkEditor/Source/Panels/GameViewPanel.h": 0,
+    "SparkEditor/Source/Panels/HierarchyPanel.cpp": 0,
+    "SparkEditor/Source/Panels/HierarchyPanel.h": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_2D.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_Core3D.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_Gameplay.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_Reflected2D.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedConditional.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedGameplay.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedInternal.h": 0,
+    "SparkEditor/Source/Panels/InspectorComponentRenderers_ReflectedVolumes.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorPanel.h": 0,
+    "SparkEditor/Source/Panels/InspectorVectorControl.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorWorldAssetDrop.cpp": 0,
+    "SparkEditor/Source/Panels/InspectorWorldAssetDrop.h": 0,
+    "SparkEditor/Source/Panels/PlayControlLaunch.cpp": 0,
+    "SparkEditor/Source/Panels/PlayControlPanel.cpp": 0,
+    "SparkEditor/Source/Panels/PlayControlPanel.h": 0,
+    "SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp": 0,
+    "SparkEditor/Source/Panels/PlayModeToolbarPanel.h": 0,
+    "SparkEditor/Source/Panels/ProjectBrowserPanel.cpp": 0,
+    "SparkEditor/Source/Panels/ProjectBrowserPanel.h": 0,
+    "SparkEditor/Source/Panels/SceneViewPanel.cpp": 0,
+    "SparkEditor/Source/Panels/SceneViewPanel.h": 0
+  }
+}

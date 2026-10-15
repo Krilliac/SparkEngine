@@ -16,6 +16,15 @@ if(NOT IMGUI_FOUND)
     message(WARNING "SparkLauncher: Dear ImGui not found — skipping build")
     return()
 endif()
+# The launcher is styled by the Spark UI kit, which the root CMakeLists creates (add_subdirectory(SparkUI))
+# whenever the imgui target exists.
+if(NOT TARGET SparkUIKit)
+    message(WARNING "SparkLauncher: SparkUIKit not found — skipping build")
+    return()
+endif()
+if(NOT COMMAND spark_stage_ui_fonts)
+    include("${CMAKE_SOURCE_DIR}/cmake/SparkUIFonts.cmake")
+endif()
 
 set(LAUNCHER_SOURCES
     src/main.cpp
@@ -28,11 +37,17 @@ set(LAUNCHER_SOURCES
     src/LauncherTemplates.cpp
     src/LauncherTemplates.h
     src/LauncherBackend.h
+    src/LauncherViews.cpp
+    src/LauncherViews.h
 )
 if(WIN32)
-    list(APPEND LAUNCHER_SOURCES src/LauncherBackendWindows.cpp)
+    list(APPEND LAUNCHER_SOURCES src/LauncherBackendWindows.cpp resources/SparkLauncher.rc)
     add_executable(SparkLauncher WIN32 ${LAUNCHER_SOURCES})
-    target_link_libraries(SparkLauncher PRIVATE d3d11 dxgi user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32)
+    target_link_libraries(SparkLauncher PRIVATE
+        d3d11 dxgi user32 gdi32 shell32 ole32 oleaut32 uuid comdlg32 advapi32 dwmapi)
+    # resources/SparkLauncher.rc names the logomark icon by file name only.
+    target_include_directories(SparkLauncher PRIVATE
+        "$<$<COMPILE_LANGUAGE:RC>:${CMAKE_SOURCE_DIR}/Assets/Engine/Branding>")
 else()
     list(APPEND LAUNCHER_SOURCES src/LauncherBackendLinux.cpp)
     add_executable(SparkLauncher ${LAUNCHER_SOURCES})
@@ -53,7 +68,10 @@ target_include_directories(SparkLauncher PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
 )
 
-target_link_libraries(SparkLauncher PRIVATE imgui)
+target_link_libraries(SparkLauncher PRIVATE imgui SparkUIKit)
+# Spark::Ui::FindFontDirectory looks in <exe dir>/EditorAssets/Fonts; stage them there so a
+# launcher-only build tree gets the Ember Signal faces instead of the embedded fallback font.
+spark_stage_ui_fonts(SparkLauncher)
 if(TARGET SparkEngineLib)
     target_link_libraries(SparkLauncher PRIVATE SparkEngineLib)
 endif()
@@ -76,6 +94,9 @@ if(MSVC)
 endif()
 
 install(TARGETS SparkLauncher RUNTIME DESTINATION bin COMPONENT runtime)
+# The launcher loads the Spark UI fonts from bin/EditorAssets/Fonts; install them with it so a
+# package configured without the editor still ships them.
+spark_install_ui_fonts(runtime)
 
 if(BUILD_TESTS)
     enable_testing()
@@ -120,4 +141,38 @@ endif()
         TIMEOUT 10
         LABELS "launcher;cli;integration;process")
     unset(_sparklauncher_version_test_script)
+
+    # The faces Spark::Ui::LoadFontSet loads must sit in EditorAssets/Fonts next to the launcher
+    # (staged by spark_stage_ui_fonts above). Without them the launcher silently falls back to the
+    # embedded default font and drops every icon, so a missing file fails this test.
+    if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/SparkEditor/Fonts")
+        set(_sparklauncher_fonts_test_script
+            "${CMAKE_CURRENT_BINARY_DIR}/VerifySparkLauncherStagedFonts.cmake")
+        file(GENERATE OUTPUT "${_sparklauncher_fonts_test_script}" CONTENT [=[
+if(NOT DEFINED SPARK_FONT_DIRECTORY OR "${SPARK_FONT_DIRECTORY}" STREQUAL "")
+    message(FATAL_ERROR "SPARK_FONT_DIRECTORY is required")
+endif()
+set(_spark_missing_fonts "")
+foreach(_spark_font IN ITEMS
+        IBMPlexSans-Regular.ttf IBMPlexSans-SemiBold.ttf IBMPlexSans-Bold.ttf
+        JetBrainsMono-Regular.ttf fa-solid-900.ttf)
+    if(NOT EXISTS "${SPARK_FONT_DIRECTORY}/${_spark_font}")
+        list(APPEND _spark_missing_fonts "${_spark_font}")
+    endif()
+endforeach()
+if(_spark_missing_fonts)
+    message(FATAL_ERROR
+        "Fonts missing from ${SPARK_FONT_DIRECTORY}: ${_spark_missing_fonts}")
+endif()
+message(STATUS "SparkLauncher fonts staged in ${SPARK_FONT_DIRECTORY}")
+]=])
+        add_test(NAME SparkLauncherStagedFonts
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSPARK_FONT_DIRECTORY=$<TARGET_FILE_DIR:SparkLauncher>/EditorAssets/Fonts"
+                -P "${_sparklauncher_fonts_test_script}")
+        set_tests_properties(SparkLauncherStagedFonts PROPERTIES
+            TIMEOUT 10
+            LABELS "launcher;integration")
+        unset(_sparklauncher_fonts_test_script)
+    endif()
 endif()

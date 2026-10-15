@@ -6,7 +6,13 @@
 #include "UIDesignerPanel.h"
 
 #include <imgui.h>
+
+#include <algorithm>
+#include <cstring>
 #include <string>
+
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -76,7 +82,7 @@ namespace SparkEditor
 
     void UIDesignerPanel::RenderScreenList()
     {
-        ImGui::Text("Screens");
+        Spark::Ui::SubHeader("Screens");
 
         const auto& screens = m_system->GetScreens();
         for (const auto& s : screens)
@@ -108,12 +114,12 @@ namespace SparkEditor
 
     void UIDesignerPanel::RenderWidgetTree()
     {
-        ImGui::Text("Widget Tree");
+        Spark::Ui::SubHeader("Widget Tree");
 
         const auto* screen = m_system->GetScreen(m_selectedScreenId);
         if (!screen)
         {
-            ImGui::TextDisabled("No screen selected");
+            Spark::Ui::SecondaryText("No screen selected");
             return;
         }
 
@@ -151,7 +157,7 @@ namespace SparkEditor
         if (m_selectedWidgetId > 0)
         {
             ImGui::SameLine();
-            if (ImGui::Button("Remove"))
+            if (Spark::Ui::DangerButton("Remove"))
             {
                 m_system->RemoveWidget(m_selectedScreenId, m_selectedWidgetId);
                 m_selectedWidgetId = 0;
@@ -162,12 +168,12 @@ namespace SparkEditor
 
     void UIDesignerPanel::RenderWidgetInspector()
     {
-        ImGui::Text("Inspector");
+        Spark::Ui::SubHeader("Inspector");
 
         auto* screen = m_system->GetScreen(m_selectedScreenId);
         if (!screen || m_selectedWidgetId == 0)
         {
-            ImGui::TextDisabled("Select a widget");
+            Spark::Ui::SecondaryText("Select a widget");
             return;
         }
 
@@ -184,7 +190,9 @@ namespace SparkEditor
         if (!widget)
             return;
 
-        ImGui::Text("ID: %u  Type: %s", widget->widgetId, kWidgetTypeNames[static_cast<int>(widget->type)]);
+        Spark::Ui::KeyValue("ID:", "%u", widget->widgetId);
+        ImGui::SameLine();
+        Spark::Ui::KeyValue("Type:", "%s", kWidgetTypeNames[static_cast<int>(widget->type)]);
 
         // Position
         float pos[2] = {widget->posX, widget->posY};
@@ -241,27 +249,36 @@ namespace SparkEditor
 
     void UIDesignerPanel::RenderCanvasPreview()
     {
-        ImGui::Text("Canvas Preview");
+        Spark::Ui::SubHeader("Canvas Preview");
 
         const auto* screen = m_system->GetScreen(m_selectedScreenId);
         if (!screen)
         {
-            ImGui::TextDisabled("No screen selected");
+            Spark::Ui::EmptyState(nullptr, "No screen selected", "Create a screen or pick one from the list.");
             return;
         }
 
         ImVec2 avail = ImGui::GetContentRegionAvail();
         float scale = std::min(avail.x / screen->designWidth, avail.y / screen->designHeight);
-        scale = std::min(scale, 0.3f);
+        // Cap at 30 % of design size in logical pixels, so the preview keeps its proportion at any UI scale.
+        scale = std::min(scale, 0.3f * Spark::Ui::Scale());
 
         ImVec2 canvasSize(screen->designWidth * scale, screen->designHeight * scale);
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                                IM_COL32(30, 30, 30, 255));
+                                Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
         drawList->AddRect(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                          IM_COL32(100, 100, 100, 255));
+                          Spark::Ui::Col(Spark::Ui::Role::BorderStrong));
+
+        const ImU32 selectedFill = Spark::Ui::Col(Spark::Ui::Role::AccentFill, 0.4f);
+        const ImU32 widgetFill = Spark::Ui::Col(Spark::Ui::Role::SurfaceRaised, 0.4f);
+        const ImU32 selectedBorder = Spark::Ui::Col(Spark::Ui::Role::AccentText);
+        const ImU32 widgetBorder = Spark::Ui::Col(Spark::Ui::Role::BorderStrong, 0.8f);
+        const ImU32 labelCol = Spark::Ui::Col(Spark::Ui::Role::TextSecondary);
+        const float minLabelWidth = Spark::Ui::Px(20.0f);
+        const float minLabelHeight = Spark::Ui::Px(10.0f);
 
         // Draw widgets
         for (const auto& w : screen->widgets)
@@ -274,25 +291,24 @@ namespace SparkEditor
             float ww = w.width * scale;
             float wh = w.height * scale;
 
-            ImU32 fillCol =
-                (w.widgetId == m_selectedWidgetId) ? IM_COL32(80, 120, 200, 100) : IM_COL32(60, 60, 60, 100);
-            ImU32 borderCol =
-                (w.widgetId == m_selectedWidgetId) ? IM_COL32(100, 150, 255, 255) : IM_COL32(120, 120, 120, 200);
+            const bool isSelected = (w.widgetId == m_selectedWidgetId);
+            ImU32 fillCol = isSelected ? selectedFill : widgetFill;
+            ImU32 borderCol = isSelected ? selectedBorder : widgetBorder;
 
             drawList->AddRectFilled(ImVec2(wx, wy), ImVec2(wx + ww, wy + wh), fillCol);
             drawList->AddRect(ImVec2(wx, wy), ImVec2(wx + ww, wy + wh), borderCol);
 
-            if (ww > 20.0f && wh > 10.0f)
+            if (ww > minLabelWidth && wh > minLabelHeight)
             {
                 std::string label = w.name;
                 if (label.size() > 10)
                     label = label.substr(0, 10) + "..";
-                drawList->AddText(ImVec2(wx + 2.0f, wy + 1.0f), IM_COL32(200, 200, 200, 255), label.c_str());
+                drawList->AddText(ImVec2(wx + Spark::Ui::Px(2.0f), wy + Spark::Ui::Px(1.0f)), labelCol, label.c_str());
             }
         }
 
         ImGui::Dummy(canvasSize);
-        ImGui::Text("%.0fx%.0f (%.0f%%)", screen->designWidth, screen->designHeight, scale * 100.0f);
+        Spark::Ui::SecondaryText("%.0fx%.0f (%.0f%%)", screen->designWidth, screen->designHeight, scale * 100.0f);
     }
 
     void UIDesignerPanel::RenderPresetButtons()

@@ -6,6 +6,8 @@
 #include "WorkflowPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 #include <imgui.h>
 
@@ -55,18 +57,16 @@ namespace SparkEditor
 
     void WorkflowPanel::RenderWorkflowList()
     {
-        ImGui::Text(ICON_FA_COGS " Available Workflows");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_COGS " Available Workflows");
 
         const auto& reg = WorkflowRegistry::Instance();
         auto categories = reg.GetCategories();
 
         for (const auto& category : categories)
         {
-            std::string headerLabel = ICON_FA_FOLDER " " + category;
-            if (ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader(category.c_str(), ICON_FA_FOLDER, true))
             {
-                ImGui::Indent(8.0f);
+                ImGui::Indent(Spark::Ui::Px(8.0f));
 
                 auto workflows = reg.GetByCategory(category);
                 for (const auto* wf : workflows)
@@ -75,11 +75,8 @@ namespace SparkEditor
 
                     bool isRunning = (m_status == WorkflowStatus::Running && m_activeWorkflowName == wf->GetName());
 
-                    // Run button
-                    if (isRunning)
-                        ImGui::BeginDisabled();
-
-                    if (ImGui::Button(ICON_FA_PLAY, ImVec2(28, 24)))
+                    // Run button (disabled while this workflow is the one running)
+                    if (Spark::Ui::IconButton("run", ICON_FA_PLAY, "Run workflow", false, !isRunning))
                     {
                         // Destructive workflows (Clean & Rebuild deletes a build tree) must
                         // never run straight off a single click.
@@ -89,13 +86,11 @@ namespace SparkEditor
                             RunWorkflow(*wf);
                     }
 
-                    if (isRunning)
-                        ImGui::EndDisabled();
-
                     ImGui::SameLine();
 
                     // Name and description
-                    ImGui::Text("%s", wf->GetName().c_str());
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted(wf->GetName().c_str());
                     if (ImGui::IsItemHovered() && !wf->GetDescription().empty())
                     {
                         ImGui::SetTooltip("%s\n(%u steps)", wf->GetDescription().c_str(), wf->GetStepCount());
@@ -104,13 +99,13 @@ namespace SparkEditor
                     ImGui::PopID();
                 }
 
-                ImGui::Unindent(8.0f);
+                ImGui::Unindent(Spark::Ui::Px(8.0f));
             }
         }
 
         if (categories.empty())
         {
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "No workflows registered");
+            Spark::Ui::EmptyState(ICON_FA_COGS, "No workflows registered");
         }
 
         RenderConfirmationModal();
@@ -161,7 +156,7 @@ namespace SparkEditor
         ImGui::TextWrapped("The editor is unresponsive while a workflow runs.");
         ImGui::Separator();
 
-        if (ImGui::Button("Run", ImVec2(110, 0)))
+        if (Spark::Ui::DangerButton("Run", Spark::Ui::Px2(110, 0)))
         {
             const std::string name = m_pendingConfirmWorkflow;
             m_pendingConfirmWorkflow.clear();
@@ -173,7 +168,7 @@ namespace SparkEditor
             return;
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(110, 0)))
+        if (Spark::Ui::SecondaryButton("Cancel", Spark::Ui::Px2(110, 0)))
         {
             m_pendingConfirmWorkflow.clear();
             m_confirmModalOpen = false;
@@ -184,57 +179,59 @@ namespace SparkEditor
 
     void WorkflowPanel::RenderActiveWorkflow()
     {
-        ImGui::Text(ICON_FA_SPINNER " %s", m_activeWorkflowName.c_str());
+        Spark::Ui::SubHeader(m_activeWorkflowName.c_str());
 
         float progress =
             (m_totalSteps > 0) ? static_cast<float>(m_currentStep) / static_cast<float>(m_totalSteps) : 0.0f;
 
-        // Status color
-        ImVec4 statusColor(0.8f, 0.8f, 0.8f, 1.0f);
+        // Status: glyph + word + colour
+        Spark::Ui::Status status = Spark::Ui::Status::Neutral;
         const char* statusText = "Idle";
         switch (m_status)
         {
         case WorkflowStatus::Running:
-            statusColor = ImVec4(0.3f, 0.7f, 1.0f, 1.0f);
+            status = Spark::Ui::Status::Info;
             statusText = "Running";
             break;
         case WorkflowStatus::Completed:
-            statusColor = ImVec4(0.3f, 0.8f, 0.3f, 1.0f);
+            status = Spark::Ui::Status::Success;
             statusText = "Completed";
             progress = 1.0f;
             break;
         case WorkflowStatus::Failed:
-            statusColor = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+            status = Spark::Ui::Status::Error;
             statusText = "Failed";
             break;
         case WorkflowStatus::Cancelled:
-            statusColor = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
+            status = Spark::Ui::Status::Warning;
             statusText = "Cancelled";
             break;
         default:
             break;
         }
 
-        ImGui::ProgressBar(progress, ImVec2(-1, 18));
-        ImGui::TextColored(statusColor, "%s (%u/%u steps)", statusText, m_currentStep, m_totalSteps);
+        ImGui::ProgressBar(progress, ImVec2(-1, Spark::Ui::Px(18)));
+        Spark::Ui::StatusText(status, "%s (%u/%u steps)", statusText, m_currentStep, m_totalSteps);
     }
 
     void WorkflowPanel::RenderLogOutput()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_TERMINAL " Log", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Log", ICON_FA_TERMINAL, true))
         {
-            ImGui::BeginChild("##WorkflowLog", ImVec2(0, 150), true);
+            ImGui::BeginChild("##WorkflowLog", Spark::Ui::Px2(0, 150), true);
             for (const auto& line : m_log)
             {
-                ImVec4 color(0.8f, 0.8f, 0.8f, 1.0f);
+                // Each line already carries its tag ([FAILED], [Skip], [Workflow]); the colour echoes it.
+                Spark::Ui::Role role = Spark::Ui::Role::TextSecondary;
                 if (line.find("[FAILED]") != std::string::npos)
-                    color = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
+                    role = Spark::Ui::Role::ErrorText;
                 else if (line.find("[Skip]") != std::string::npos)
-                    color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
+                    role = Spark::Ui::Role::WarningText;
                 else if (line.find("[Workflow]") != std::string::npos)
-                    color = ImVec4(0.5f, 0.8f, 1.0f, 1.0f);
+                    role = Spark::Ui::Role::InfoText;
 
-                ImGui::TextColored(color, "%s", line.c_str());
+                Spark::Ui::ScopedRoleColor lineColor(ImGuiCol_Text, role);
+                Spark::Ui::MonoText("%s", line.c_str());
             }
             if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
                 ImGui::SetScrollHereY(1.0f);

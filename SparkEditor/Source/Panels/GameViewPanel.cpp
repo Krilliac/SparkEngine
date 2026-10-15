@@ -16,9 +16,163 @@
 #include <iostream>
 #include <cmath>
 #include <cstdio>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /**
+         * @brief Fixed colours of the simulated scene backdrop and FPS HUD drawn inside the Game View.
+         *
+         * These stand in for a game's own art, which does not follow the editor theme: the HUD must
+         * read the same over a Dark, Light or high-contrast editor. They are therefore one named
+         * table (Ember Signal spec section 4.2 step 3) rather than theme roles. Faded entries hold
+         * their full-strength alpha and are scaled at the draw site with FadeHud().
+         */
+        struct GameHudColors
+        {
+            // Scene backdrop shown when no camera image is available.
+            ImU32 letterbox;
+            ImU32 backdrop;
+            ImU32 ground;
+            ImU32 groundGrid;
+            ImU32 structure;
+            ImU32 previewLabel;
+            ImU32 previewHint;
+            ImU32 releaseHint;
+
+            // Shared HUD panels.
+            ImU32 panelBg;
+            ImU32 panelBgSoft;
+            ImU32 panelBorder;
+            ImU32 shadow;
+            ImU32 textBright;
+            ImU32 good;
+            ImU32 warn;
+            ImU32 bad;
+            ImU32 accent;
+
+            // Crosshair and hit marker.
+            ImU32 crosshair;
+            ImU32 hitMarker;
+
+            // Health, armor and stamina.
+            ImU32 armorBorder;
+            ImU32 armorFill;
+            ImU32 armorText;
+            ImU32 healthBorder;
+            ImU32 healthHighlight;
+            ImU32 staminaTrack;
+            ImU32 staminaFill;
+
+            // Ammo and weapon.
+            ImU32 ammoIcon;
+            ImU32 ammoSeparator;
+            ImU32 ammoMax;
+            ImU32 ammoReserve;
+            ImU32 reloadTrack;
+            ImU32 fireMode;
+            ImU32 weaponText;
+            ImU32 weaponSlotIdle;
+
+            // Minimap.
+            ImU32 mapBg;
+            ImU32 mapRim;
+            ImU32 mapRing;
+            ImU32 mapGrid;
+            ImU32 mapNorth;
+            ImU32 mapSouth;
+            ImU32 mapPlayerOutline;
+            ImU32 mapObjective;
+            ImU32 mapBearing;
+
+            // Kill feed, objective, scoreboard, vignette and prompts.
+            ImU32 feedBg;
+            ImU32 feedText;
+            ImU32 objectiveFill;
+            ImU32 scoreboardBg;
+            ImU32 scoreboardHeader;
+            ImU32 scoreboardLocalRow;
+            ImU32 scoreboardLocalText;
+            ImU32 scoreboardText;
+            ImU32 vignette;
+            ImU32 promptBorder;
+            ImU32 statsText;
+        };
+
+        constexpr GameHudColors GameHudPreviewPalette{
+            .letterbox = IM_COL32(0, 0, 0, 255),
+            .backdrop = IM_COL32(20, 22, 28, 255),
+            .ground = IM_COL32(32, 38, 28, 255),
+            .groundGrid = IM_COL32(45, 52, 38, 180),
+            .structure = IM_COL32(40, 45, 50, 150),
+            .previewLabel = IM_COL32(80, 100, 120, 140),
+            .previewHint = IM_COL32(80, 100, 120, 80),
+            .releaseHint = IM_COL32(170, 190, 210, 170),
+            .panelBg = IM_COL32(0, 0, 0, 160),
+            .panelBgSoft = IM_COL32(0, 0, 0, 100),
+            .panelBorder = IM_COL32(60, 70, 80, 150),
+            .shadow = IM_COL32(0, 0, 0, 80),
+            .textBright = IM_COL32(255, 255, 255, 240),
+            .good = IM_COL32(76, 175, 80, 230),
+            .warn = IM_COL32(245, 166, 35, 230),
+            .bad = IM_COL32(229, 57, 53, 230),
+            .accent = IM_COL32(45, 140, 240, 220),
+            .crosshair = IM_COL32(255, 255, 255, 200),
+            .hitMarker = IM_COL32(255, 255, 255, 255),
+            .armorBorder = IM_COL32(60, 70, 90, 200),
+            .armorFill = IM_COL32(45, 140, 240, 220),
+            .armorText = IM_COL32(100, 170, 255, 240),
+            .healthBorder = IM_COL32(60, 70, 60, 200),
+            .healthHighlight = IM_COL32(255, 255, 255, 30),
+            .staminaTrack = IM_COL32(0, 0, 0, 100),
+            .staminaFill = IM_COL32(255, 200, 50, 180),
+            .ammoIcon = IM_COL32(200, 200, 200, 200),
+            .ammoSeparator = IM_COL32(120, 120, 120, 200),
+            .ammoMax = IM_COL32(180, 180, 180, 200),
+            .ammoReserve = IM_COL32(140, 140, 140, 180),
+            .reloadTrack = IM_COL32(0, 0, 0, 150),
+            .fireMode = IM_COL32(100, 100, 100, 150),
+            .weaponText = IM_COL32(180, 190, 200, 200),
+            .weaponSlotIdle = IM_COL32(80, 80, 80, 150),
+            .mapBg = IM_COL32(15, 20, 25, 200),
+            .mapRim = IM_COL32(60, 70, 80, 220),
+            .mapRing = IM_COL32(40, 50, 60, 100),
+            .mapGrid = IM_COL32(40, 50, 60, 80),
+            .mapNorth = IM_COL32(200, 200, 200, 150),
+            .mapSouth = IM_COL32(150, 150, 150, 100),
+            .mapPlayerOutline = IM_COL32(100, 180, 255, 255),
+            .mapObjective = IM_COL32(245, 200, 35, 200),
+            .mapBearing = IM_COL32(180, 190, 200, 180),
+            .feedBg = IM_COL32(0, 0, 0, 140),
+            .feedText = IM_COL32(220, 220, 220, 220),
+            .objectiveFill = IM_COL32(45, 140, 240, 160),
+            .scoreboardBg = IM_COL32(10, 12, 18, 230),
+            .scoreboardHeader = IM_COL32(150, 160, 170, 200),
+            .scoreboardLocalRow = IM_COL32(45, 140, 240, 40),
+            .scoreboardLocalText = IM_COL32(45, 180, 240, 255),
+            .scoreboardText = IM_COL32(200, 210, 220, 220),
+            .vignette = IM_COL32(229, 57, 53, 80),
+            .promptBorder = IM_COL32(200, 200, 200, 100),
+            .statsText = IM_COL32(200, 220, 200, 220),
+        };
+
+        /// @brief Scale a palette colour's alpha by @p fade (clamped to [0, 1]); used for fading HUD elements.
+        ImU32 FadeHud(ImU32 color, float fade)
+        {
+            const float clamped = fade < 0.0f ? 0.0f : (fade > 1.0f ? 1.0f : fade);
+            const auto alpha = static_cast<ImU32>(static_cast<float>((color >> IM_COL32_A_SHIFT) & 0xFFu) * clamped);
+            return (color & ~IM_COL32_A_MASK) | (alpha << IM_COL32_A_SHIFT);
+        }
+
+        /// @brief Replace a palette colour's alpha; used where the original art sets an exact opacity.
+        ImU32 WithHudAlpha(ImU32 color, ImU32 alpha)
+        {
+            return (color & ~IM_COL32_A_MASK) | ((alpha & 0xFFu) << IM_COL32_A_SHIFT);
+        }
+    } // namespace
 
     // Helper: clamp
     static float Clamp01(float v)
@@ -431,8 +585,13 @@ namespace SparkEditor
 
     void GameViewPanel::RenderToolbar()
     {
+        if (!Spark::Ui::BeginPanelToolbar("##GameViewToolbar"))
+            return;
+
         const char* resLabels[] = {"Free", "1920x1080", "1280x720", "2560x1440", "3840x2160"};
-        ImGui::SetNextItemWidth(100);
+        // Wide enough for the longest resolution label plus the combo arrow.
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("3840x2160").x + ImGui::GetFrameHeight() +
+                                ImGui::GetStyle().FramePadding.x * 2.0f);
         int resIdx = (int)m_resolution;
         if (ImGui::Combo("##Resolution", &resIdx, resLabels, IM_ARRAYSIZE(resLabels)))
         {
@@ -449,9 +608,7 @@ namespace SparkEditor
 
         if (m_fpsHUDPreviewAvailable)
         {
-            ImGui::SameLine();
-            ImGui::Text("|");
-            ImGui::SameLine();
+            Spark::Ui::ToolbarSeparator();
 
             bool showHUD = m_showHUD;
             if (ImGui::Checkbox(ICON_FA_CROSSHAIRS " FPS HUD", &showHUD))
@@ -463,12 +620,10 @@ namespace SparkEditor
             ImGui::SameLine();
             ImGui::Checkbox(ICON_FA_SHIELD " Score", &m_showScoreboard);
 
-            ImGui::SameLine();
-            ImGui::Text("|");
-            ImGui::SameLine();
+            Spark::Ui::ToolbarSeparator();
 
             // Simulate actions
-            if (ImGui::Button(ICON_FA_BOLT " Damage"))
+            if (Spark::Ui::IconButton("SimDamage", ICON_FA_BOLT, "Simulate taking damage"))
             {
                 m_health = std::max(5.0f, m_health - 25.0f);
                 SimDamageIndicator dmg;
@@ -478,31 +633,24 @@ namespace SparkEditor
                 dmg.maxTime = 1.5f;
                 m_damageIndicators.push_back(dmg);
             }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Simulate taking damage");
             ImGui::SameLine();
 
-            if (ImGui::Button(ICON_FA_CROSSHAIRS " Hit"))
+            if (Spark::Ui::IconButton("SimHit", ICON_FA_CROSSHAIRS, "Simulate hit marker"))
             {
                 m_hitMarkerTimer = 0.3f;
                 m_hitMarkerHeadshot = (((int)(m_totalTime * 10)) % 3 == 0);
             }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Simulate hit marker");
         }
 
-        ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
 
-        if (ImGui::Button(m_maximized ? ICON_FA_COMPRESS : ICON_FA_EXPAND))
+        if (Spark::Ui::IconButton("Maximize", m_maximized ? ICON_FA_COMPRESS : ICON_FA_EXPAND,
+                                  m_maximized ? "Restore" : "Maximize", m_maximized))
         {
             m_maximized = !m_maximized;
         }
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(m_maximized ? "Restore" : "Maximize");
 
-        ImGui::Separator();
+        Spark::Ui::EndPanelToolbar();
     }
 
     ImVec2 GameViewPanel::GetConstrainedViewportSize(const ImVec2& available) const
@@ -741,7 +889,7 @@ namespace SparkEditor
         if (offsetX > 0 || offsetY > 0)
         {
             drawList->AddRectFilled(cursorPos, ImVec2(cursorPos.x + available.x, cursorPos.y + available.y),
-                                    IM_COL32(0, 0, 0, 255));
+                                    GameHudPreviewPalette.letterbox);
         }
 
         bool renderedWorld = false;
@@ -759,7 +907,7 @@ namespace SparkEditor
         if (!renderedWorld)
         {
             drawList->AddRectFilled(pos, ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
-                                    IM_COL32(20, 22, 28, 255));
+                                    GameHudPreviewPalette.backdrop);
 
             // Simulated sky gradient
             float horizonY = viewportSize.y * 0.55f;
@@ -776,7 +924,7 @@ namespace SparkEditor
             // Ground
             float groundY = pos.y + horizonY;
             drawList->AddRectFilled(ImVec2(pos.x, groundY), ImVec2(pos.x + viewportSize.x, pos.y + viewportSize.y),
-                                    IM_COL32(32, 38, 28, 255));
+                                    GameHudPreviewPalette.ground);
 
             // Perspective grid on ground
             float cx = pos.x + viewportSize.x * 0.5f;
@@ -786,15 +934,14 @@ namespace SparkEditor
                 float topX = cx + spread * 0.1f;
                 float bottomX = cx + spread;
                 drawList->AddLine(ImVec2(topX, groundY), ImVec2(bottomX, pos.y + viewportSize.y),
-                                  IM_COL32(45, 52, 38, 180));
+                                  GameHudPreviewPalette.groundGrid);
             }
             for (int i = 1; i <= 8; i++)
             {
                 float t = (float)i / 8.0f;
                 float y = groundY + t * (viewportSize.y - horizonY);
-                float alpha = 180.0f * (1.0f - t * 0.5f);
                 drawList->AddLine(ImVec2(pos.x, y), ImVec2(pos.x + viewportSize.x, y),
-                                  IM_COL32(45, 52, 38, (int)alpha));
+                                  FadeHud(GameHudPreviewPalette.groundGrid, 1.0f - t * 0.5f));
             }
 
             // Some distant structures for atmosphere
@@ -804,7 +951,8 @@ namespace SparkEditor
                 float sx = pos.x + viewportSize.x * (0.1f + i * 0.2f);
                 float sw = 30.0f + (float)((i * 17) % 40);
                 float sh = 15.0f + (float)((i * 23) % 30);
-                drawList->AddRectFilled(ImVec2(sx, structY - sh), ImVec2(sx + sw, structY), IM_COL32(40, 45, 50, 150));
+                drawList->AddRectFilled(ImVec2(sx, structY - sh), ImVec2(sx + sw, structY),
+                                        GameHudPreviewPalette.structure);
             }
         }
 
@@ -816,28 +964,29 @@ namespace SparkEditor
                                                            : ICON_FA_GAMEPAD " Scene preview active";
             ImVec2 textSize = ImGui::CalcTextSize(label);
             ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f);
-            drawList->AddText(textPos, IM_COL32(80, 100, 120, 140), label);
+            drawList->AddText(textPos, GameHudPreviewPalette.previewLabel, label);
 
             if (ShouldShowInputCaptureHint())
             {
                 const char* hint = "Click the viewport to capture input";
                 ImVec2 hintSize = ImGui::CalcTextSize(hint);
-                ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + viewportSize.y * 0.45f + 20.0f);
-                drawList->AddText(hintPos, IM_COL32(80, 100, 120, 80), hint);
+                ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f,
+                               pos.y + viewportSize.y * 0.45f + ImGui::GetTextLineHeightWithSpacing());
+                drawList->AddText(hintPos, GameHudPreviewPalette.previewHint, hint);
             }
         }
         else if (ShouldShowInputReleaseHint())
         {
             const char* hint = "Press ESC to release cursor";
             ImVec2 hintSize = ImGui::CalcTextSize(hint);
-            ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + 18.0f);
-            drawList->AddText(hintPos, IM_COL32(170, 190, 210, 170), hint);
+            ImVec2 hintPos(pos.x + (viewportSize.x - hintSize.x) * 0.5f, pos.y + ImGui::GetTextLineHeightWithSpacing());
+            drawList->AddText(hintPos, GameHudPreviewPalette.releaseHint, hint);
         }
 
         // FPS HUD overlay
         if (IsFPSHUDPreviewEnabled())
         {
-            RenderFPSHUD();
+            RenderFPSHUD(cursorPos, available);
         }
 
         // Advance cursor — use full available area so the panel occupies space properly
@@ -845,15 +994,16 @@ namespace SparkEditor
         ImGui::Dummy(ImVec2(available.x, 0));
     }
 
-    void GameViewPanel::RenderFPSHUD()
+    void GameViewPanel::RenderFPSHUD(const ImVec2& areaMin, const ImVec2& areaSize)
     {
-        ImVec2 winPos = ImGui::GetWindowPos();
-        ImVec2 winSize = ImGui::GetWindowSize();
+        // The HUD lays out over the panel's content area (below the toolbar), so it no longer
+        // guesses a fixed toolbar height that would be wrong at other fonts or UI scales.
+        const ImVec2 winPos = areaMin;
+        const ImVec2 winSize = areaSize;
         float pad = 14.0f;
-        float toolbarH = 40.0f;
 
-        float contentTop = winPos.y + toolbarH;
-        float contentH = winSize.y - toolbarH;
+        float contentTop = winPos.y;
+        float contentH = winSize.y;
         float contentCX = winPos.x + winSize.x * 0.5f;
         float contentCY = contentTop + contentH * 0.5f;
 
@@ -861,14 +1011,19 @@ namespace SparkEditor
         // Every readout below is generated by this panel, not by a running game
         // module. Say so on screen so the HUD is never read as live game state.
         {
+            // The banner is editor chrome, not HUD art: it uses the theme's warning status
+            // (glyph + text, never colour alone).
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const char* banner = "SIMULATED HUD - not game data";
-            const ImVec2 bannerSize = ImGui::CalcTextSize(banner);
-            const ImVec2 bannerPos(contentCX - bannerSize.x * 0.5f, contentTop + 2.0f);
-            dl->AddRectFilled(ImVec2(bannerPos.x - 6.0f, bannerPos.y - 2.0f),
-                              ImVec2(bannerPos.x + bannerSize.x + 6.0f, bannerPos.y + bannerSize.y + 2.0f),
-                              IM_COL32(60, 30, 0, 190), 3.0f);
-            dl->AddText(bannerPos, IM_COL32(255, 200, 120, 235), banner);
+            const std::string banner =
+                std::string(Spark::Ui::StatusGlyph(Spark::Ui::Status::Warning)) + "  SIMULATED HUD - not game data";
+            const ImVec2 bannerSize = ImGui::CalcTextSize(banner.c_str());
+            const ImVec2 bannerPad = Spark::Ui::Px2(6.0f, 2.0f);
+            const ImVec2 bannerPos(contentCX - bannerSize.x * 0.5f, contentTop + bannerPad.y);
+            dl->AddRectFilled(
+                ImVec2(bannerPos.x - bannerPad.x, bannerPos.y - bannerPad.y),
+                ImVec2(bannerPos.x + bannerSize.x + bannerPad.x, bannerPos.y + bannerSize.y + bannerPad.y),
+                Spark::Ui::Col(Spark::Ui::Role::SurfaceOverlay, 0.9f), Spark::Ui::Px(3.0f));
+            dl->AddText(bannerPos, Spark::Ui::Col(Spark::Ui::Role::WarningText), banner.c_str());
         }
 
         // === Crosshair ===
@@ -951,8 +1106,10 @@ namespace SparkEditor
                      m_maxHealth, m_armor, m_stamina, m_ammo, m_maxAmmo, m_reserveAmmo, m_cameraPosX, m_cameraPosY,
                      m_cameraPosZ);
             ImVec2 statPos(winPos.x + pad, contentTop + pad);
-            dl->AddRectFilled(statPos, ImVec2(statPos.x + 220, statPos.y + 54), IM_COL32(0, 0, 0, 160), 4.0f);
-            dl->AddText(ImVec2(statPos.x + 6, statPos.y + 4), IM_COL32(200, 220, 200, 220), stats);
+            const ImVec2 statsSize = ImGui::CalcTextSize(stats);
+            dl->AddRectFilled(statPos, ImVec2(statPos.x + statsSize.x + 12, statPos.y + statsSize.y + 8),
+                              GameHudPreviewPalette.panelBg, 4.0f);
+            dl->AddText(ImVec2(statPos.x + 6, statPos.y + 4), GameHudPreviewPalette.statsText, stats);
         }
     }
 
@@ -963,8 +1120,8 @@ namespace SparkEditor
         float size = 14.0f;
         float gap = 4.0f;
         float thick = 2.0f;
-        ImU32 col = IM_COL32(255, 255, 255, 200);
-        ImU32 colShadow = IM_COL32(0, 0, 0, 80);
+        ImU32 col = GameHudPreviewPalette.crosshair;
+        ImU32 colShadow = GameHudPreviewPalette.shadow;
 
         // Dynamic spread from movement simulation
         float spread = 2.0f * sinf(m_totalTime * 1.5f);
@@ -1001,51 +1158,55 @@ namespace SparkEditor
         if (m_armor > 0)
         {
             // Background
-            dl->AddRectFilled(ImVec2(baseX, armorY), ImVec2(baseX + width, armorY + barH), IM_COL32(0, 0, 0, 160),
-                              3.0f);
+            dl->AddRectFilled(ImVec2(baseX, armorY), ImVec2(baseX + width, armorY + barH),
+                              GameHudPreviewPalette.panelBg, 3.0f);
             // Border
-            dl->AddRect(ImVec2(baseX, armorY), ImVec2(baseX + width, armorY + barH), IM_COL32(60, 70, 90, 200), 3.0f);
+            dl->AddRect(ImVec2(baseX, armorY), ImVec2(baseX + width, armorY + barH), GameHudPreviewPalette.armorBorder,
+                        3.0f);
             // Fill
             dl->AddRectFilled(ImVec2(baseX + 2, armorY + 2),
                               ImVec2(baseX + 2 + (width - 4) * armorPct, armorY + barH - 2),
-                              IM_COL32(45, 140, 240, 220), 2.0f);
+                              GameHudPreviewPalette.armorFill, 2.0f);
             // Icon + text
             char armorTxt[32];
             snprintf(armorTxt, sizeof(armorTxt), ICON_FA_SHIELD " %.0f", m_armor);
-            dl->AddText(ImVec2(baseX + 4, armorY - 1), IM_COL32(100, 170, 255, 240), armorTxt);
+            dl->AddText(ImVec2(baseX + 4, armorY - 1), GameHudPreviewPalette.armorText, armorTxt);
         }
 
         // === Health bar ===
         float healthY = armorY + barH + spacing;
         float healthPct = Clamp01(m_health / m_maxHealth);
 
-        ImU32 healthCol = healthPct > 0.5f    ? IM_COL32(76, 175, 80, 230)
-                          : healthPct > 0.25f ? IM_COL32(245, 166, 35, 230)
-                                              : IM_COL32(229, 57, 53, 230);
+        ImU32 healthCol = healthPct > 0.5f    ? GameHudPreviewPalette.good
+                          : healthPct > 0.25f ? GameHudPreviewPalette.warn
+                                              : GameHudPreviewPalette.bad;
 
         // Background
-        dl->AddRectFilled(ImVec2(baseX, healthY), ImVec2(baseX + width, healthY + barH), IM_COL32(0, 0, 0, 160), 3.0f);
+        dl->AddRectFilled(ImVec2(baseX, healthY), ImVec2(baseX + width, healthY + barH), GameHudPreviewPalette.panelBg,
+                          3.0f);
         // Border
-        dl->AddRect(ImVec2(baseX, healthY), ImVec2(baseX + width, healthY + barH), IM_COL32(60, 70, 60, 200), 3.0f);
+        dl->AddRect(ImVec2(baseX, healthY), ImVec2(baseX + width, healthY + barH), GameHudPreviewPalette.healthBorder,
+                    3.0f);
         // Fill with gradient effect
         dl->AddRectFilled(ImVec2(baseX + 2, healthY + 2),
                           ImVec2(baseX + 2 + (width - 4) * healthPct, healthY + barH - 2), healthCol, 2.0f);
         // Highlight stripe
         dl->AddRectFilled(ImVec2(baseX + 2, healthY + 2), ImVec2(baseX + 2 + (width - 4) * healthPct, healthY + 5),
-                          IM_COL32(255, 255, 255, 30), 2.0f);
+                          GameHudPreviewPalette.healthHighlight, 2.0f);
 
         // Health text
         char healthTxt[32];
         snprintf(healthTxt, sizeof(healthTxt), ICON_FA_HEART " %.0f / %.0f", m_health, m_maxHealth);
-        dl->AddText(ImVec2(baseX + 4, healthY - 1), IM_COL32(255, 255, 255, 240), healthTxt);
+        dl->AddText(ImVec2(baseX + 4, healthY - 1), GameHudPreviewPalette.textBright, healthTxt);
 
         // === Stamina bar (thin, below health) ===
         float stamY = healthY + barH + spacing;
         float stamPct = Clamp01(m_stamina / 100.0f);
         float stamH = 4.0f;
-        dl->AddRectFilled(ImVec2(baseX, stamY), ImVec2(baseX + width, stamY + stamH), IM_COL32(0, 0, 0, 100), 2.0f);
+        dl->AddRectFilled(ImVec2(baseX, stamY), ImVec2(baseX + width, stamY + stamH),
+                          GameHudPreviewPalette.staminaTrack, 2.0f);
         dl->AddRectFilled(ImVec2(baseX + 1, stamY + 1), ImVec2(baseX + 1 + (width - 2) * stamPct, stamY + stamH - 1),
-                          IM_COL32(255, 200, 50, 180), 1.0f);
+                          GameHudPreviewPalette.staminaFill, 1.0f);
     }
 
     void GameViewPanel::RenderAmmoDisplay(float baseX, float baseY)
@@ -1058,49 +1219,49 @@ namespace SparkEditor
         float px = baseX - panelW;
         float py = baseY - panelH;
 
-        dl->AddRectFilled(ImVec2(px, py), ImVec2(px + panelW, py + panelH), IM_COL32(0, 0, 0, 160), 4.0f);
-        dl->AddRect(ImVec2(px, py), ImVec2(px + panelW, py + panelH), IM_COL32(80, 85, 90, 150), 4.0f);
+        dl->AddRectFilled(ImVec2(px, py), ImVec2(px + panelW, py + panelH), GameHudPreviewPalette.panelBg, 4.0f);
+        dl->AddRect(ImVec2(px, py), ImVec2(px + panelW, py + panelH), GameHudPreviewPalette.panelBorder, 4.0f);
 
         // Ammo icon
-        dl->AddText(ImVec2(px + 8, py + 6), IM_COL32(200, 200, 200, 200), ICON_FA_CROSSHAIRS);
+        dl->AddText(ImVec2(px + 8, py + 6), GameHudPreviewPalette.ammoIcon, ICON_FA_CROSSHAIRS);
 
         // Current ammo
         char ammoMain[16];
         snprintf(ammoMain, sizeof(ammoMain), "%d", m_ammo);
-        ImU32 ammoCol = m_ammo <= 5    ? IM_COL32(229, 57, 53, 255)
-                        : m_ammo <= 10 ? IM_COL32(245, 166, 35, 255)
-                                       : IM_COL32(255, 255, 255, 255);
+        ImU32 ammoCol = m_ammo <= 5    ? WithHudAlpha(GameHudPreviewPalette.bad, 255)
+                        : m_ammo <= 10 ? WithHudAlpha(GameHudPreviewPalette.warn, 255)
+                                       : WithHudAlpha(GameHudPreviewPalette.textBright, 255);
         dl->AddText(ImVec2(px + 28, py + 4), ammoCol, ammoMain);
 
         // Separator
-        dl->AddText(ImVec2(px + 62, py + 4), IM_COL32(120, 120, 120, 200), "/");
+        dl->AddText(ImVec2(px + 62, py + 4), GameHudPreviewPalette.ammoSeparator, "/");
 
         // Max ammo
         char ammoMax[16];
         snprintf(ammoMax, sizeof(ammoMax), "%d", m_maxAmmo);
-        dl->AddText(ImVec2(px + 72, py + 4), IM_COL32(180, 180, 180, 200), ammoMax);
+        dl->AddText(ImVec2(px + 72, py + 4), GameHudPreviewPalette.ammoMax, ammoMax);
 
         // Reserve ammo
         char reserveTxt[32];
         snprintf(reserveTxt, sizeof(reserveTxt), "+%d reserve", m_reserveAmmo);
-        dl->AddText(ImVec2(px + 8, py + 22), IM_COL32(140, 140, 140, 180), reserveTxt);
+        dl->AddText(ImVec2(px + 8, py + 22), GameHudPreviewPalette.ammoReserve, reserveTxt);
 
         // Reload progress bar
         if (m_isReloading)
         {
             float reloadY = py + panelH - 6;
-            dl->AddRectFilled(ImVec2(px + 4, reloadY), ImVec2(px + panelW - 4, reloadY + 4), IM_COL32(0, 0, 0, 150),
-                              2.0f);
+            dl->AddRectFilled(ImVec2(px + 4, reloadY), ImVec2(px + panelW - 4, reloadY + 4),
+                              GameHudPreviewPalette.reloadTrack, 2.0f);
             dl->AddRectFilled(ImVec2(px + 5, reloadY + 1),
                               ImVec2(px + 5 + (panelW - 10) * m_reloadProgress, reloadY + 3),
-                              IM_COL32(245, 166, 35, 230), 1.0f);
-            dl->AddText(ImVec2(px + 8, py + 34), IM_COL32(245, 166, 35, 220), "RELOADING...");
+                              GameHudPreviewPalette.warn, 1.0f);
+            dl->AddText(ImVec2(px + 8, py + 34), GameHudPreviewPalette.warn, "RELOADING...");
         }
 
         // Firing mode indicator
         if (!m_isReloading)
         {
-            dl->AddText(ImVec2(px + 100, py + 22), IM_COL32(100, 100, 100, 150), "AUTO");
+            dl->AddText(ImVec2(px + 100, py + 22), GameHudPreviewPalette.fireMode, "AUTO");
         }
     }
 
@@ -1113,17 +1274,17 @@ namespace SparkEditor
         float cy = y + size * 0.5f;
         float radius = size * 0.5f;
 
-        dl->AddCircleFilled(ImVec2(cx, cy), radius, IM_COL32(15, 20, 25, 200), 32);
-        dl->AddCircle(ImVec2(cx, cy), radius, IM_COL32(60, 70, 80, 220), 32, 2.0f);
-        dl->AddCircle(ImVec2(cx, cy), radius * 0.5f, IM_COL32(40, 50, 60, 100), 32, 1.0f);
+        dl->AddCircleFilled(ImVec2(cx, cy), radius, GameHudPreviewPalette.mapBg, 32);
+        dl->AddCircle(ImVec2(cx, cy), radius, GameHudPreviewPalette.mapRim, 32, 2.0f);
+        dl->AddCircle(ImVec2(cx, cy), radius * 0.5f, GameHudPreviewPalette.mapRing, 32, 1.0f);
 
         // Grid lines
-        dl->AddLine(ImVec2(cx - radius, cy), ImVec2(cx + radius, cy), IM_COL32(40, 50, 60, 80));
-        dl->AddLine(ImVec2(cx, cy - radius), ImVec2(cx, cy + radius), IM_COL32(40, 50, 60, 80));
+        dl->AddLine(ImVec2(cx - radius, cy), ImVec2(cx + radius, cy), GameHudPreviewPalette.mapGrid);
+        dl->AddLine(ImVec2(cx, cy - radius), ImVec2(cx, cy + radius), GameHudPreviewPalette.mapGrid);
 
         // Cardinal directions
-        dl->AddText(ImVec2(cx - 3, y + 2), IM_COL32(200, 200, 200, 150), "N");
-        dl->AddText(ImVec2(cx - 3, y + size - 14), IM_COL32(150, 150, 150, 100), "S");
+        dl->AddText(ImVec2(cx - 3, y + 2), GameHudPreviewPalette.mapNorth, "N");
+        dl->AddText(ImVec2(cx - 3, y + size - 14), GameHudPreviewPalette.mapSouth, "S");
 
         // Player triangle (center, rotates)
         float pAngle = m_playerAngle;
@@ -1131,8 +1292,8 @@ namespace SparkEditor
         ImVec2 p1(cx + sinf(pAngle) * triSize, cy - cosf(pAngle) * triSize);
         ImVec2 p2(cx + sinf(pAngle + 2.4f) * triSize * 0.6f, cy - cosf(pAngle + 2.4f) * triSize * 0.6f);
         ImVec2 p3(cx + sinf(pAngle - 2.4f) * triSize * 0.6f, cy - cosf(pAngle - 2.4f) * triSize * 0.6f);
-        dl->AddTriangleFilled(p1, p2, p3, IM_COL32(45, 140, 240, 240));
-        dl->AddTriangle(p1, p2, p3, IM_COL32(100, 180, 255, 255), 1.5f);
+        dl->AddTriangleFilled(p1, p2, p3, WithHudAlpha(GameHudPreviewPalette.accent, 240));
+        dl->AddTriangle(p1, p2, p3, GameHudPreviewPalette.mapPlayerOutline, 1.5f);
 
         // Simulated blips
         float blipData[][3] = {
@@ -1141,11 +1302,11 @@ namespace SparkEditor
             {0.1f, -0.3f, 2.0f},
             {-0.4f, -0.1f, 3.0f},
         };
-        ImU32 blipColors[] = {
-            IM_COL32(229, 57, 53, 200),
-            IM_COL32(229, 57, 53, 200),
-            IM_COL32(76, 175, 80, 200),
-            IM_COL32(245, 200, 35, 200),
+        const ImU32 blipColors[] = {
+            WithHudAlpha(GameHudPreviewPalette.bad, 200),
+            WithHudAlpha(GameHudPreviewPalette.bad, 200),
+            WithHudAlpha(GameHudPreviewPalette.good, 200),
+            GameHudPreviewPalette.mapObjective,
         };
 
         for (int i = 0; i < 4; i++)
@@ -1159,8 +1320,8 @@ namespace SparkEditor
                 if (i == 3)
                 {
                     float pulse = 0.5f + 0.5f * sinf(m_totalTime * 3.0f);
-                    dl->AddCircle(ImVec2(bx, by), 5.0f + pulse * 3.0f, IM_COL32(245, 200, 35, (int)(100 * pulse)), 12,
-                                  1.0f);
+                    dl->AddCircle(ImVec2(bx, by), 5.0f + pulse * 3.0f,
+                                  FadeHud(WithHudAlpha(GameHudPreviewPalette.mapObjective, 100), pulse), 12, 1.0f);
                 }
             }
         }
@@ -1173,7 +1334,7 @@ namespace SparkEditor
                  "\xc2\xb0",
                  degrees);
         ImVec2 bearingSize = ImGui::CalcTextSize(bearing);
-        dl->AddText(ImVec2(cx - bearingSize.x * 0.5f, y - 14), IM_COL32(180, 190, 200, 180), bearing);
+        dl->AddText(ImVec2(cx - bearingSize.x * 0.5f, y - 14), GameHudPreviewPalette.mapBearing, bearing);
     }
 
     void GameViewPanel::RenderDamageIndicators(float cx, float cy, float radius)
@@ -1187,7 +1348,7 @@ namespace SparkEditor
 
             float arcLen = 0.4f;
             int segments = 8;
-            ImU32 col = IM_COL32(229, 57, 53, (int)(alpha * dmg.intensity * 200));
+            ImU32 col = FadeHud(WithHudAlpha(GameHudPreviewPalette.bad, 200), alpha * dmg.intensity);
 
             float innerR = radius * 0.7f;
             float outerR = radius;
@@ -1229,15 +1390,15 @@ namespace SparkEditor
             float bgY = y + yOff;
 
             dl->AddRectFilled(ImVec2(bgX, bgY), ImVec2(bgX + textSize.x + 12, bgY + entryH),
-                              IM_COL32(0, 0, 0, (int)(140 * alpha)), 3.0f);
+                              FadeHud(GameHudPreviewPalette.feedBg, alpha), 3.0f);
 
             if (entry.headshot)
             {
                 dl->AddRectFilled(ImVec2(bgX, bgY), ImVec2(bgX + 3, bgY + entryH),
-                                  IM_COL32(229, 57, 53, (int)(200 * alpha)), 3.0f);
+                                  FadeHud(WithHudAlpha(GameHudPreviewPalette.bad, 200), alpha), 3.0f);
             }
 
-            ImU32 textCol = IM_COL32(220, 220, 220, (int)(220 * alpha));
+            ImU32 textCol = FadeHud(GameHudPreviewPalette.feedText, alpha);
             dl->AddText(ImVec2(bgX + 6, bgY + 2), textCol, feedText);
 
             yOff += entryH + 2.0f;
@@ -1252,8 +1413,9 @@ namespace SparkEditor
         float size = 10.0f + (1.0f - alpha) * 4.0f;
         float thick = 2.0f;
 
-        ImU32 col = m_hitMarkerHeadshot ? IM_COL32(229, 57, 53, (int)(255 * alpha))
-                                        : IM_COL32(255, 255, 255, (int)(255 * alpha));
+        ImU32 col = FadeHud(m_hitMarkerHeadshot ? WithHudAlpha(GameHudPreviewPalette.bad, 255)
+                                                : GameHudPreviewPalette.hitMarker,
+                            alpha);
 
         float inner = 3.0f;
 
@@ -1267,8 +1429,8 @@ namespace SparkEditor
         {
             const char* hsText = "HEADSHOT";
             ImVec2 hsSize = ImGui::CalcTextSize(hsText);
-            dl->AddText(ImVec2(cx - hsSize.x * 0.5f, cy - size - 18), IM_COL32(229, 57, 53, (int)(255 * alpha)),
-                        hsText);
+            dl->AddText(ImVec2(cx - hsSize.x * 0.5f, cy - size - 18),
+                        FadeHud(WithHudAlpha(GameHudPreviewPalette.bad, 255), alpha), hsText);
         }
     }
 
@@ -1280,11 +1442,11 @@ namespace SparkEditor
         float panelH = 24.0f;
         float px = x - panelW;
 
-        dl->AddRectFilled(ImVec2(px, y), ImVec2(px + panelW, y + panelH), IM_COL32(0, 0, 0, 100), 3.0f);
+        dl->AddRectFilled(ImVec2(px, y), ImVec2(px + panelW, y + panelH), GameHudPreviewPalette.panelBgSoft, 3.0f);
 
         char slotTxt[32];
         snprintf(slotTxt, sizeof(slotTxt), "[%d] %s", m_currentWeaponSlot, m_currentWeaponName.c_str());
-        dl->AddText(ImVec2(px + 6, y + 4), IM_COL32(180, 190, 200, 200), slotTxt);
+        dl->AddText(ImVec2(px + 6, y + 4), GameHudPreviewPalette.weaponText, slotTxt);
 
         // Weapon slot dots (5 slots)
         float dotStartX = px + panelW - 60;
@@ -1292,7 +1454,8 @@ namespace SparkEditor
         {
             float dx = dotStartX + (float)(i - 1) * 12.0f;
             float dy = y + panelH * 0.5f;
-            ImU32 dotCol = (i == m_currentWeaponSlot) ? IM_COL32(45, 140, 240, 220) : IM_COL32(80, 80, 80, 150);
+            ImU32 dotCol =
+                (i == m_currentWeaponSlot) ? GameHudPreviewPalette.accent : GameHudPreviewPalette.weaponSlotIdle;
             dl->AddCircleFilled(ImVec2(dx, dy), 3.0f, dotCol, 8);
         }
     }
@@ -1303,17 +1466,19 @@ namespace SparkEditor
 
         float barH = 22.0f;
 
-        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + barH), IM_COL32(0, 0, 0, 140), 4.0f);
-        dl->AddRect(ImVec2(x, y), ImVec2(x + width, y + barH), IM_COL32(60, 70, 80, 150), 4.0f);
+        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + barH), GameHudPreviewPalette.feedBg, 4.0f);
+        dl->AddRect(ImVec2(x, y), ImVec2(x + width, y + barH), GameHudPreviewPalette.panelBorder, 4.0f);
 
         float fillW = (width - 4) * Clamp01(m_objectiveProgress);
-        dl->AddRectFilled(ImVec2(x + 2, y + 2), ImVec2(x + 2 + fillW, y + barH - 2), IM_COL32(45, 140, 240, 160), 2.0f);
+        dl->AddRectFilled(ImVec2(x + 2, y + 2), ImVec2(x + 2 + fillW, y + barH - 2),
+                          GameHudPreviewPalette.objectiveFill, 2.0f);
 
         char objText[64];
         snprintf(objText, sizeof(objText), ICON_FA_BULLSEYE " %s — %.0f%%", m_objectiveText.c_str(),
                  m_objectiveProgress * 100.0f);
         ImVec2 textSize = ImGui::CalcTextSize(objText);
-        dl->AddText(ImVec2(x + (width - textSize.x) * 0.5f, y + 3), IM_COL32(255, 255, 255, 220), objText);
+        dl->AddText(ImVec2(x + (width - textSize.x) * 0.5f, y + 3), WithHudAlpha(GameHudPreviewPalette.textBright, 220),
+                    objText);
     }
 
     void GameViewPanel::RenderScoreboard(float cx, float cy, float width, float height)
@@ -1323,12 +1488,13 @@ namespace SparkEditor
         float x = cx - width * 0.5f;
         float y = cy - height * 0.5f;
 
-        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + height), IM_COL32(10, 12, 18, 230), 6.0f);
-        dl->AddRect(ImVec2(x, y), ImVec2(x + width, y + height), IM_COL32(45, 140, 240, 150), 6.0f, 0, 2.0f);
+        dl->AddRectFilled(ImVec2(x, y), ImVec2(x + width, y + height), GameHudPreviewPalette.scoreboardBg, 6.0f);
+        dl->AddRect(ImVec2(x, y), ImVec2(x + width, y + height), WithHudAlpha(GameHudPreviewPalette.accent, 150), 6.0f,
+                    0, 2.0f);
 
         const char* title = "SCOREBOARD";
         ImVec2 titleSize = ImGui::CalcTextSize(title);
-        dl->AddText(ImVec2(cx - titleSize.x * 0.5f, y + 8), IM_COL32(45, 140, 240, 255), title);
+        dl->AddText(ImVec2(cx - titleSize.x * 0.5f, y + 8), WithHudAlpha(GameHudPreviewPalette.accent, 255), title);
 
         float headerY = y + 30;
         float colName = x + 12;
@@ -1337,13 +1503,14 @@ namespace SparkEditor
         float colScore = x + width * 0.72f;
         float colPing = x + width * 0.87f;
 
-        dl->AddText(ImVec2(colName, headerY), IM_COL32(150, 160, 170, 200), "Player");
-        dl->AddText(ImVec2(colK, headerY), IM_COL32(150, 160, 170, 200), "K");
-        dl->AddText(ImVec2(colD, headerY), IM_COL32(150, 160, 170, 200), "D");
-        dl->AddText(ImVec2(colScore, headerY), IM_COL32(150, 160, 170, 200), "Score");
-        dl->AddText(ImVec2(colPing, headerY), IM_COL32(150, 160, 170, 200), "Ping");
+        dl->AddText(ImVec2(colName, headerY), GameHudPreviewPalette.scoreboardHeader, "Player");
+        dl->AddText(ImVec2(colK, headerY), GameHudPreviewPalette.scoreboardHeader, "K");
+        dl->AddText(ImVec2(colD, headerY), GameHudPreviewPalette.scoreboardHeader, "D");
+        dl->AddText(ImVec2(colScore, headerY), GameHudPreviewPalette.scoreboardHeader, "Score");
+        dl->AddText(ImVec2(colPing, headerY), GameHudPreviewPalette.scoreboardHeader, "Ping");
 
-        dl->AddLine(ImVec2(x + 8, headerY + 16), ImVec2(x + width - 8, headerY + 16), IM_COL32(60, 70, 80, 150));
+        dl->AddLine(ImVec2(x + 8, headerY + 16), ImVec2(x + width - 8, headerY + 16),
+                    GameHudPreviewPalette.panelBorder);
 
         float rowY = headerY + 22;
         float rowH = 20.0f;
@@ -1355,10 +1522,11 @@ namespace SparkEditor
             if (e.isLocal)
             {
                 dl->AddRectFilled(ImVec2(x + 4, rowY - 2), ImVec2(x + width - 4, rowY + rowH - 2),
-                                  IM_COL32(45, 140, 240, 40), 2.0f);
+                                  GameHudPreviewPalette.scoreboardLocalRow, 2.0f);
             }
 
-            ImU32 textCol = e.isLocal ? IM_COL32(45, 180, 240, 255) : IM_COL32(200, 210, 220, 220);
+            ImU32 textCol =
+                e.isLocal ? GameHudPreviewPalette.scoreboardLocalText : GameHudPreviewPalette.scoreboardText;
 
             dl->AddText(ImVec2(colName, rowY), textCol, e.name.c_str());
 
@@ -1372,9 +1540,9 @@ namespace SparkEditor
             snprintf(buf, sizeof(buf), "%d", e.score);
             dl->AddText(ImVec2(colScore, rowY), textCol, buf);
 
-            ImU32 pingCol = e.ping < 50    ? IM_COL32(76, 175, 80, 200)
-                            : e.ping < 100 ? IM_COL32(245, 166, 35, 200)
-                                           : IM_COL32(229, 57, 53, 200);
+            ImU32 pingCol = e.ping < 50    ? WithHudAlpha(GameHudPreviewPalette.good, 200)
+                            : e.ping < 100 ? WithHudAlpha(GameHudPreviewPalette.warn, 200)
+                                           : WithHudAlpha(GameHudPreviewPalette.bad, 200);
             snprintf(buf, sizeof(buf), "%dms", e.ping);
             dl->AddText(ImVec2(colPing, rowY), pingCol, buf);
 
@@ -1388,7 +1556,6 @@ namespace SparkEditor
 
         float pulse = 0.7f + 0.3f * sinf(m_vignettePulse);
         float intensity = m_vignetteIntensity * pulse;
-        int alpha = (int)(intensity * 80);
 
         float edgeW = w * 0.15f;
 
@@ -1396,26 +1563,30 @@ namespace SparkEditor
         for (int i = 0; i < (int)edgeW; i++)
         {
             float t = 1.0f - (float)i / edgeW;
-            dl->AddLine(ImVec2(x + i, y), ImVec2(x + i, y + h), IM_COL32(229, 57, 53, (int)(alpha * t * t)));
+            dl->AddLine(ImVec2(x + i, y), ImVec2(x + i, y + h),
+                        FadeHud(GameHudPreviewPalette.vignette, intensity * t * t));
         }
         // Right edge
         for (int i = 0; i < (int)edgeW; i++)
         {
             float t = 1.0f - (float)i / edgeW;
-            dl->AddLine(ImVec2(x + w - i, y), ImVec2(x + w - i, y + h), IM_COL32(229, 57, 53, (int)(alpha * t * t)));
+            dl->AddLine(ImVec2(x + w - i, y), ImVec2(x + w - i, y + h),
+                        FadeHud(GameHudPreviewPalette.vignette, intensity * t * t));
         }
         // Top edge
         float edgeH = h * 0.1f;
         for (int i = 0; i < (int)edgeH; i++)
         {
             float t = 1.0f - (float)i / edgeH;
-            dl->AddLine(ImVec2(x, y + i), ImVec2(x + w, y + i), IM_COL32(229, 57, 53, (int)(alpha * t * t)));
+            dl->AddLine(ImVec2(x, y + i), ImVec2(x + w, y + i),
+                        FadeHud(GameHudPreviewPalette.vignette, intensity * t * t));
         }
         // Bottom edge
         for (int i = 0; i < (int)edgeH; i++)
         {
             float t = 1.0f - (float)i / edgeH;
-            dl->AddLine(ImVec2(x, y + h - i), ImVec2(x + w, y + h - i), IM_COL32(229, 57, 53, (int)(alpha * t * t)));
+            dl->AddLine(ImVec2(x, y + h - i), ImVec2(x + w, y + h - i),
+                        FadeHud(GameHudPreviewPalette.vignette, intensity * t * t));
         }
     }
 
@@ -1424,7 +1595,6 @@ namespace SparkEditor
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
         float pulse = 0.7f + 0.3f * sinf(m_interactionPulse);
-        int alpha = (int)(220 * pulse);
 
         const char* promptText = "[E] Pick up Shotgun";
         ImVec2 textSize = ImGui::CalcTextSize(promptText);
@@ -1434,10 +1604,13 @@ namespace SparkEditor
         float bgX = cx - bgW * 0.5f;
         float bgY = cy - bgH * 0.5f;
 
-        dl->AddRectFilled(ImVec2(bgX, bgY), ImVec2(bgX + bgW, bgY + bgH), IM_COL32(0, 0, 0, (int)(140 * pulse)), 4.0f);
-        dl->AddRect(ImVec2(bgX, bgY), ImVec2(bgX + bgW, bgY + bgH), IM_COL32(200, 200, 200, (int)(100 * pulse)), 4.0f);
+        dl->AddRectFilled(ImVec2(bgX, bgY), ImVec2(bgX + bgW, bgY + bgH), FadeHud(GameHudPreviewPalette.feedBg, pulse),
+                          4.0f);
+        dl->AddRect(ImVec2(bgX, bgY), ImVec2(bgX + bgW, bgY + bgH), FadeHud(GameHudPreviewPalette.promptBorder, pulse),
+                    4.0f);
 
-        dl->AddText(ImVec2(cx - textSize.x * 0.5f, bgY + 6), IM_COL32(255, 255, 255, alpha), promptText);
+        dl->AddText(ImVec2(cx - textSize.x * 0.5f, bgY + 6),
+                    FadeHud(WithHudAlpha(GameHudPreviewPalette.textBright, 220), pulse), promptText);
     }
 
 } // namespace SparkEditor

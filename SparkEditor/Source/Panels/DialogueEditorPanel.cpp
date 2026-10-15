@@ -6,6 +6,8 @@
 #include "DialogueEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -70,7 +72,7 @@ namespace SparkEditor
         if (m_selectedNode >= 0 && m_selectedNode < static_cast<int>(m_nodes.size()))
         {
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_TRASH " Delete Node"))
+            if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete Node"))
             {
                 SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "DialogueEditorPanel: deleted node at index %d",
                                 m_selectedNode);
@@ -103,7 +105,7 @@ namespace SparkEditor
     {
         if (m_selectedNode < 0 || m_selectedNode >= static_cast<int>(m_nodes.size()))
         {
-            ImGui::TextDisabled("Select a node to edit");
+            Spark::Ui::EmptyState(ICON_FA_COMMENT, "No node selected", "Select a node to edit");
             return;
         }
 
@@ -122,17 +124,16 @@ namespace SparkEditor
         {
         case NodeType::Text:
             ImGui::InputText("Speaker", node.speakerName, sizeof(node.speakerName));
-            ImGui::InputTextMultiline("Text", node.text, sizeof(node.text), ImVec2(-1, 80));
+            ImGui::InputTextMultiline("Text", node.text, sizeof(node.text), ImVec2(-1.0f, Spark::Ui::Em(5.0f)));
             ImGui::DragFloat("Duration", &node.displayDuration, 0.1f, 0.0f, 30.0f, "%.1f s (0=wait)");
             ImGui::InputText("Next Node", node.nextNodeId, sizeof(node.nextNodeId));
             break;
 
         case NodeType::Choice:
             ImGui::InputText("Speaker", node.speakerName, sizeof(node.speakerName));
-            ImGui::InputTextMultiline("Prompt", node.text, sizeof(node.text), ImVec2(-1, 60));
+            ImGui::InputTextMultiline("Prompt", node.text, sizeof(node.text), ImVec2(-1.0f, Spark::Ui::Em(4.0f)));
 
-            ImGui::Separator();
-            ImGui::TextDisabled("Choices");
+            Spark::Ui::SubHeader("Choices");
             for (int c = 0; c < static_cast<int>(node.choices.size()); ++c)
             {
                 ImGui::PushID(c);
@@ -166,12 +167,11 @@ namespace SparkEditor
             break;
 
         case NodeType::End:
-            ImGui::TextDisabled("End of conversation");
+            Spark::Ui::SecondaryText("End of conversation");
             break;
         }
 
-        ImGui::Separator();
-        ImGui::TextDisabled("Presentation");
+        Spark::Ui::SubHeader("Presentation");
         ImGui::InputText("Animation", node.animation, sizeof(node.animation));
         ImGui::InputText("Voice Clip", node.voiceClip, sizeof(node.voiceClip));
     }

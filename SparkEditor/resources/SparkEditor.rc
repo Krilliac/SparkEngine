@@ -1,0 +1,8 @@
+// SparkEditor resources: the brand application icon used by the window class, the taskbar and
+// Explorer. VERSIONINFO is generated from SPARK_ENGINE_VERSION by
+// cmake/SparkWindowsVersionInfo.cmake. IDI_SPARK_APP must match kAppIconResourceId in
+// Source/Core/EditorApplicationWindows.cpp.
+
+#define IDI_SPARK_APP 1
+
+IDI_SPARK_APP ICON "../../Assets/Engine/Branding/sparkengine.ico"

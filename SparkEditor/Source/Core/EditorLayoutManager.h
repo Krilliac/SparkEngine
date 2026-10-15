@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -189,7 +190,8 @@ namespace SparkEditor
         bool LoadLayout(const std::string& name);
 
         /**
-         * @brief Actionable reason the last SaveCurrentLayout or LoadLayout failed; empty after a success.
+         * @brief Actionable reason the last SaveCurrentLayout, LoadLayout or DeleteLayout failed; empty after a
+         *        success.
          */
         const std::string& GetLastError() const { return m_lastError; }
 
@@ -199,10 +201,31 @@ namespace SparkEditor
         bool ApplyLayout(const std::string& name) { return LoadLayout(name); }
 
         /**
-         * @brief Delete a saved layout file.
-         * @return true if the file existed and was removed.
+         * @brief Delete a saved layout and its editor companions.
+         *
+         * Removes `<name>.json`, and the `<name>.ini` / `<name>.ini.meta` dock-tree files the editor
+         * writes beside it. Deleting the current layout resets GetCurrentLayoutName() to "Default".
+         *
+         * @return true if the layout existed and was removed; on failure GetLastError() says why.
          */
         bool DeleteLayout(const std::string& name);
+
+        /**
+         * @brief True when a saved layout named @p name exists on disk.
+         */
+        bool HasLayout(const std::string& name) const;
+
+        /// Longest layout name accepted; keeps `<dir>/<name>.ini.meta` well inside MAX_PATH.
+        static constexpr std::size_t kMaxLayoutNameLength = 64;
+
+        /**
+         * @brief Whether @p name can be used as a layout file name on every supported platform.
+         *
+         * Rejects empty names, "." and "..", names longer than kMaxLayoutNameLength, control
+         * characters, path separators, the Windows-forbidden characters `<>:"|?*`, a leading
+         * space, a trailing dot or space, and reserved device names such as CON or COM1.
+         */
+        static bool IsValidLayoutName(const std::string& name);
 
         /**
          * @brief Restore all panels to the configuration they had when first

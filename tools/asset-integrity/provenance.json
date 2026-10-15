@@ -493,6 +493,21 @@
       ]
     },
     {
+      "id": "engine-logomark",
+      "license": "LicenseRef-SparkOpenLicense-1.0",
+      "provenance": "Repository-original four-point spark logomark (SVG outlines and multi-size ICO) emitted by Assets/Engine/Branding/generate_logomark.py from the geometry constants shared with Spark::Ui::DrawLogomark; generated, stdlib-only, bytes reproduce exactly and are hash-bound",
+      "evidence": [
+        "Assets/Engine/Branding/README.md",
+        "Assets/Engine/Branding/generate_logomark.py",
+        "LICENSE"
+      ],
+      "files": {
+        "Engine/Branding/generate_logomark.py": "d55126f2d870af36b1697e3506573d5edb4ddc8b6f9a2d8a65df24c6cb20de59",
+        "Engine/Branding/sparkengine.ico": "fe38e2021b643c0254ef609a04e1d56c7a4b1345dd6e364ec65e44a6e4c1a9a9",
+        "Engine/Branding/sparkengine_logomark.svg": "24efbe903be2de8f5617a603728de53375b584dd0d6c94995dd1f8cd432d22ee"
+      }
+    },
+    {
       "id": "terrafront-cc0-import",
       "license": "CC0-1.0",
       "provenance": "Third-party CC0 import recorded per file in Assets/MMOFPS/asset_manifest.json",

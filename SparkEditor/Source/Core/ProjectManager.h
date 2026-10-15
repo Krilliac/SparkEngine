@@ -140,6 +140,11 @@ namespace SparkEditor
         ///        `<file>.sparkproject.bak`, why the primary was rejected; otherwise cleared.
         /// @return true when the project is open; false leaves the previous project open.
         bool OpenProject(const std::string& sparkprojectPath, std::string* error = nullptr);
+        /// @brief Why the most recent OpenProject() failed; empty after a successful open.
+        /// @details Callers that did not pass an error string (or that run later, such as the
+        ///          startup notification for --project) read the reason here. Each failure is also
+        ///          logged as an error. [editor thread]
+        const std::string& GetLastOpenError() const noexcept { return m_lastOpenError; }
         bool SaveProject();
         /// @brief Resolve an existing scene only when it remains inside the open project root.
         bool ResolveProjectScenePath(const std::string& scenePath, std::string& resolvedPath) const;
@@ -225,7 +230,12 @@ namespace SparkEditor
         bool CreateProjectStructure(const std::string& projectPath, const std::string& projectName,
                                     ProjectTemplate templateType);
         bool CreateDefaultScene(const std::string& scenePath, ProjectTemplate templateType);
-        bool EnsureBuildScaffold(const std::string& projectPath, const std::string& projectName);
+        /// OpenProject() without the bookkeeping of m_lastOpenError and the failure log.
+        bool TryOpenProject(const std::string& sparkprojectPath, std::string* error);
+        /// Adds missing generated build files (never overwrites). Works past MAX_PATH on Windows;
+        /// @p error receives the filesystem reason on failure.
+        bool EnsureBuildScaffold(const std::string& projectPath, const std::string& projectName,
+                                 std::string* error = nullptr);
         void CreateDefaultEditorSettings(const std::string& configPath);
         bool CopyTemplate(const std::string& templatePath, const std::string& destPath, const std::string& projectName);
 
@@ -246,6 +256,8 @@ namespace SparkEditor
         /// survive the project rollbacks in Open/Create. Cleared by a clean load or a successful
         /// save of that path.
         std::string m_recoveredProjectFilePath;
+        /// Reason the last OpenProject() failed; cleared by a successful open.
+        std::string m_lastOpenError;
         std::vector<RecentProject> m_recentProjects;
         mutable std::mutex m_recentProjectsMutex; ///< Protects m_recentProjects from concurrent access
         std::string m_engineRoot;

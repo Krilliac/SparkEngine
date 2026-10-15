@@ -8,6 +8,8 @@
 #include "Core/EngineContext.h"
 #include "Utils/LogMacros.h"
 #include <algorithm>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 
 namespace SparkEditor
@@ -124,29 +126,35 @@ namespace SparkEditor
 
     void ModdingPanel::RenderModList()
     {
-        ImGui::InputText("Mods Directory", m_modsDirectory, sizeof(m_modsDirectory));
-
-        if (ImGui::Button(ICON_FA_SEARCH " Scan for Mods"))
+        if (Spark::Ui::BeginPanelToolbar("##ModdingToolbar"))
         {
-            const size_t found = ScanForMods(m_modsDirectory);
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "ModdingPanel: scan of '%s' found %zu mod(s)", m_modsDirectory,
-                           found);
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_REFRESH " Reload All"))
-        {
-            if (!ReloadAll())
+            ImGui::SetNextItemWidth(Spark::Ui::Em(18));
+            ImGui::InputTextWithHint("##ModsDirectory", "Mods directory", m_modsDirectory, sizeof(m_modsDirectory));
+            ImGui::SameLine();
+            if (Spark::Ui::SecondaryButton(ICON_FA_SEARCH " Scan for Mods"))
             {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor, "ModdingPanel: one or more enabled mods failed to load");
+                const size_t found = ScanForMods(m_modsDirectory);
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "ModdingPanel: scan of '%s' found %zu mod(s)",
+                               m_modsDirectory, found);
             }
+            ImGui::SameLine();
+            if (Spark::Ui::SecondaryButton(ICON_FA_REFRESH " Reload All"))
+            {
+                if (!ReloadAll())
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Editor, "ModdingPanel: one or more enabled mods failed to load");
+                }
+            }
+            Spark::Ui::EndPanelToolbar();
         }
-
-        ImGui::Separator();
 
         if (m_mods.empty())
         {
-            ImGui::TextDisabled("No mods found.");
-            ImGui::TextDisabled("Place mods in the Mods/ directory with a mod.json manifest.");
+            if (Spark::Ui::EmptyState(ICON_FA_PUZZLE_PIECE, "No mods found.",
+                                      "Place mods in the Mods/ directory with a mod.json manifest.", "Scan for Mods"))
+            {
+                ScanForMods(m_modsDirectory);
+            }
             return;
         }
 
@@ -184,7 +192,7 @@ namespace SparkEditor
             if (!dependenciesMet)
             {
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "(missing deps)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "(missing deps)");
             }
 
             ImGui::PopID();
@@ -200,28 +208,49 @@ namespace SparkEditor
     {
         if (m_selectedMod < 0 || m_selectedMod >= static_cast<int>(m_mods.size()))
         {
-            ImGui::TextDisabled("Select a mod from the Mods tab.");
+            Spark::Ui::EmptyState(ICON_FA_PUZZLE_PIECE, "No mod selected", "Select a mod from the Mods tab.");
             return;
         }
 
         const Spark::ModInfo& mod = m_mods[m_selectedMod];
+        const bool dependenciesMet = System().AreDependenciesMet(mod.id);
 
-        ImGui::Text("Name: %s", mod.name.c_str());
-        ImGui::Text("ID: %s", mod.id.c_str());
-        ImGui::Text("Author: %s", mod.author.c_str());
-        ImGui::Text("Version: %s", mod.version.c_str());
-        ImGui::Separator();
-        ImGui::TextWrapped("Description: %s", mod.description.c_str());
-        ImGui::Separator();
+        if (Spark::Ui::BeginPropertyGrid("ModDetails"))
+        {
+            Spark::Ui::PropertyLabel("Name");
+            ImGui::TextUnformatted(mod.name.c_str());
+            Spark::Ui::PropertyLabel("ID");
+            Spark::Ui::MonoText("%s", mod.id.c_str());
+            Spark::Ui::PropertyLabel("Author");
+            ImGui::TextUnformatted(mod.author.c_str());
+            Spark::Ui::PropertyLabel("Version");
+            Spark::Ui::MonoText("%s", mod.version.c_str());
+            Spark::Ui::PropertyLabel("Status");
+            if (mod.loaded)
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Active");
+            else if (mod.enabled)
+                Spark::Ui::StatusText(Spark::Ui::Status::Info, "Enabled");
+            else
+                Spark::Ui::StatusText(Spark::Ui::Status::Neutral, "Disabled");
+            Spark::Ui::PropertyLabel("Load Order");
+            Spark::Ui::MonoText("%d", mod.loadOrder);
+            Spark::Ui::PropertyLabel("Dependencies");
+            if (dependenciesMet)
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Met");
+            else
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "Missing");
+            Spark::Ui::EndPropertyGrid();
+        }
 
-        ImGui::Text("Status: %s", mod.loaded ? "Active" : (mod.enabled ? "Enabled" : "Disabled"));
-        ImGui::Text("Load Order: %d", mod.loadOrder);
-        ImGui::Text("Dependencies Met: %s", System().AreDependenciesMet(mod.id) ? "Yes" : "No");
+        Spark::Ui::SubHeader("Description");
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(mod.description.c_str());
+        ImGui::PopTextWrapPos();
     }
 
     void ModdingPanel::RenderLoadOrder()
     {
-        ImGui::TextDisabled("Lower numbers load first. Arrows write the order back to the mod system.");
+        Spark::Ui::SecondaryText("Lower numbers load first. Arrows write the order back to the mod system.");
         ImGui::Separator();
 
         for (int i = 0; i < static_cast<int>(m_mods.size()); ++i)
@@ -230,14 +259,15 @@ namespace SparkEditor
                 continue;
 
             ImGui::PushID(i);
-            ImGui::Text("%d.", m_mods[i].loadOrder);
+            Spark::Ui::MonoText("%d.", m_mods[i].loadOrder);
             ImGui::SameLine();
 
             int swapWith = -1;
-            if (ImGui::Button(ICON_FA_ARROW_UP "##up") && i > 0)
+            if (Spark::Ui::IconButton("up", ICON_FA_ARROW_UP, "Load earlier", false, i > 0))
                 swapWith = i - 1;
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_ARROW_DOWN "##down") && i < static_cast<int>(m_mods.size()) - 1)
+            if (Spark::Ui::IconButton("down", ICON_FA_ARROW_DOWN, "Load later", false,
+                                      i < static_cast<int>(m_mods.size()) - 1))
                 swapWith = i + 1;
             ImGui::SameLine();
             ImGui::TextUnformatted(m_mods[i].name.c_str());

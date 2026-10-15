@@ -11,6 +11,9 @@
 #include <cstring>
 #include <cstdio>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -46,7 +49,7 @@ namespace SparkEditor
                         m_activeDecalCount, m_maxDecals);
 
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_TRASH " Clear All Decals"))
+            if (Spark::Ui::DangerButton(ICON_FA_TRASH " Clear All Decals"))
                 m_activeDecalCount = 0;
 
             ImGui::Separator();
@@ -109,7 +112,7 @@ namespace SparkEditor
     {
         if (m_selectedMaterial < 0 || m_selectedMaterial >= static_cast<int>(m_materials.size()))
         {
-            ImGui::TextDisabled("Select a decal material to edit");
+            Spark::Ui::EmptyState(ICON_FA_PALETTE, "Select a decal material to edit");
             return;
         }
 
@@ -118,14 +121,14 @@ namespace SparkEditor
         ImGui::InputText("Name", mat.name, sizeof(mat.name));
         ImGui::Separator();
 
-        if (ImGui::CollapsingHeader("Textures", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Textures"))
         {
             ImGui::InputText("Albedo", mat.albedoPath, sizeof(mat.albedoPath));
             ImGui::InputText("Normal", mat.normalPath, sizeof(mat.normalPath));
             ImGui::InputText("Roughness", mat.roughnessPath, sizeof(mat.roughnessPath));
         }
 
-        if (ImGui::CollapsingHeader("Properties", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Properties"))
         {
             ImGui::SliderFloat("Opacity", &mat.opacity, 0.0f, 1.0f, "%.2f");
             ImGui::DragFloat("Fade Time", &mat.fadeTime, 0.5f, 0.0f, 120.0f, "%.1f s");
@@ -134,7 +137,7 @@ namespace SparkEditor
         }
 
         ImGui::Separator();
-        if (ImGui::Button(ICON_FA_TRASH " Delete Material"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete Material"))
         {
             // Remove any surface mappings pointing to this material
             for (auto& mapping : m_mappings)
@@ -152,17 +155,16 @@ namespace SparkEditor
 
     void DecalEditorPanel::RenderSurfaceMappings()
     {
-        ImGui::TextDisabled("Assign a decal material to each surface type.");
+        Spark::Ui::SecondaryText("Assign a decal material to each surface type.");
         ImGui::DragInt("Max Decals", &m_maxDecals, 1.0f, 16, 4096);
         ImGui::Separator();
 
         const char* surfaceNames[] = {"Default", "Concrete", "Metal", "Wood",   "Glass",
                                       "Dirt",    "Flesh",    "Water", "Foliage"};
 
-        if (ImGui::BeginTable("SurfaceMapTable", 2,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+        if (Spark::Ui::BeginDataTable("SurfaceMapTable", 2, ImGuiTableFlags_BordersOuter))
         {
-            ImGui::TableSetupColumn("Surface Type", ImGuiTableColumnFlags_WidthFixed, 120);
+            ImGui::TableSetupColumn("Surface Type", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(120));
             ImGui::TableSetupColumn("Decal Material");
             ImGui::TableHeadersRow();
 

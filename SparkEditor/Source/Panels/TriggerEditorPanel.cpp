@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <cstring>
 #include "Utils/LogMacros.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -72,10 +74,10 @@ namespace SparkEditor
         if (ImGui::BeginTable("TriggerTable", 4,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
         {
-            ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 40);
+            ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(40));
             ImGui::TableSetupColumn("Label");
-            ImGui::TableSetupColumn("Shape", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("On", ImGuiTableColumnFlags_WidthFixed, 30);
+            ImGui::TableSetupColumn("Shape", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("On", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(30));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_triggers.size()); ++i)
@@ -110,7 +112,7 @@ namespace SparkEditor
     {
         if (m_selectedTrigger < 0 || m_selectedTrigger >= static_cast<int>(m_triggers.size()))
         {
-            ImGui::TextDisabled("Select a trigger to view details");
+            Spark::Ui::EmptyState(ICON_FA_CROSSHAIRS, "No trigger selected", "Select a trigger to view details");
             return;
         }
 
@@ -139,7 +141,7 @@ namespace SparkEditor
         ImGui::Text("Occupants: %d", trigger.occupantCount);
 
         ImGui::Separator();
-        if (ImGui::Button(ICON_FA_TRASH " Delete Trigger"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete Trigger"))
         {
             m_triggers.erase(m_triggers.begin() + m_selectedTrigger);
             m_selectedTrigger = -1;
@@ -148,7 +150,7 @@ namespace SparkEditor
 
     void TriggerEditorPanel::RenderCreateDialog()
     {
-        ImGui::SetNextWindowSize(ImVec2(350, 280), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(Spark::Ui::Px2(350, 280), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Create Trigger", &m_showCreateDialog))
         {
             ImGui::InputText("Label", m_newLabel, sizeof(m_newLabel));

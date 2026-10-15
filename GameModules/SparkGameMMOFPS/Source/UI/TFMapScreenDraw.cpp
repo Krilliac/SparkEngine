@@ -82,6 +82,8 @@ namespace Terrafront
         TFRegionSystem* rs = m_ctx->regions;
         const FactionId myFaction = m_ctx->localFaction;
         const bool dead = !LocalPawnAlive();
+        // Text, badges and the legend scale with the UI; the hex grid itself is fitted to the viewport.
+        const float scale = UiScale();
 
         // Backdrop
         dl->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(8, 10, 14, 235));
@@ -98,7 +100,7 @@ namespace Terrafront
         }
         if (regions.empty())
         {
-            AddTextCentered(dl, 24.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f),
+            AddTextCentered(dl, 24.0f * scale, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f),
                             IM_COL32(220, 220, 220, 220), "NO REGION DATA");
             return;
         }
@@ -279,11 +281,12 @@ namespace Terrafront
             }
 
             // Tier glyph inside, name (truncated) below.
-            AddTextCentered(dl, 12.0f, ImVec2(c.x, c.y + m_hexSize * 0.38f), IM_COL32(235, 235, 235, 190),
+            const float hexTextSize = 12.0f * scale;
+            AddTextCentered(dl, hexTextSize, ImVec2(c.x, c.y + m_hexSize * 0.38f), IM_COL32(235, 235, 235, 190),
                             TierTag(rd.tier));
             char name[20];
             std::snprintf(name, sizeof(name), "%.16s%s", rd.name.c_str(), rd.name.size() > 16 ? ".." : "");
-            AddTextCentered(dl, 12.0f, ImVec2(c.x, c.y + m_hexSize * 1.06f), IM_COL32(210, 210, 214, 200), name);
+            AddTextCentered(dl, hexTextSize, ImVec2(c.x, c.y + m_hexSize * 1.06f), IM_COL32(210, 210, 214, 200), name);
 
             // W6: friendly presence badge (top-left of the hex) + you-are-here.
             if (auto it = friendlyCount.find(rd.id); it != friendlyCount.end())
@@ -291,9 +294,10 @@ namespace Terrafront
                 char cnt[16];
                 std::snprintf(cnt, sizeof(cnt), "%u", it->second);
                 const ImVec2 bp(c.x - m_hexSize * 0.52f, c.y - m_hexSize * 0.52f);
-                dl->AddCircleFilled(bp, 8.0f, FactionCol(myFaction, 0.85f));
-                dl->AddCircle(bp, 8.0f, IM_COL32(15, 17, 22, 200), 0, 1.5f);
-                AddTextCentered(dl, 12.0f, bp, IM_COL32(250, 250, 250, 240), cnt);
+                const float badgeRadius = 8.0f * scale;
+                dl->AddCircleFilled(bp, badgeRadius, FactionCol(myFaction, 0.85f));
+                dl->AddCircle(bp, badgeRadius, IM_COL32(15, 17, 22, 200), 0, 1.5f * scale);
+                AddTextCentered(dl, hexTextSize, bp, IM_COL32(250, 250, 250, 240), cnt);
             }
             // W7: squad-member badge (top-right, green diamond) — replicated
             // pawn data filtered through TFSquadSystem::IsLocalSquadMember.
@@ -302,17 +306,18 @@ namespace Terrafront
                 char cnt[16];
                 std::snprintf(cnt, sizeof(cnt), "%u", it->second);
                 const ImVec2 bp(c.x + m_hexSize * 0.52f, c.y - m_hexSize * 0.52f);
-                const float s = 9.0f;
+                const float s = 9.0f * scale;
                 dl->AddQuadFilled(ImVec2(bp.x, bp.y - s), ImVec2(bp.x + s, bp.y), ImVec2(bp.x, bp.y + s),
                                   ImVec2(bp.x - s, bp.y), IM_COL32(96, 220, 140, 220));
                 dl->AddQuad(ImVec2(bp.x, bp.y - s), ImVec2(bp.x + s, bp.y), ImVec2(bp.x, bp.y + s),
-                            ImVec2(bp.x - s, bp.y), IM_COL32(15, 17, 22, 200), 1.5f);
-                AddTextCentered(dl, 12.0f, bp, IM_COL32(12, 24, 16, 255), cnt);
+                            ImVec2(bp.x - s, bp.y), IM_COL32(15, 17, 22, 200), 1.5f * scale);
+                AddTextCentered(dl, hexTextSize, bp, IM_COL32(12, 24, 16, 255), cnt);
             }
             if (rd.id == myRegion)
             {
                 dl->AddCircle(c, m_hexSize * 0.30f, IM_COL32(255, 255, 255, 220), 0, 2.5f);
-                AddTextCentered(dl, 11.0f, ImVec2(c.x, c.y - m_hexSize * 0.12f), IM_COL32(255, 255, 255, 230), "YOU");
+                AddTextCentered(dl, 11.0f * scale, ImVec2(c.x, c.y - m_hexSize * 0.12f), IM_COL32(255, 255, 255, 230),
+                                "YOU");
             }
 
             // Deployable highlight while dead.
@@ -362,9 +367,9 @@ namespace Terrafront
         }
 
         // ---- title + legend -------------------------------------------------------
-        AddTextCentered(dl, 30.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + 34.0f),
+        AddTextCentered(dl, 30.0f * scale, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + 34.0f * scale),
                         IM_COL32(235, 235, 235, 235), "CINDRAL WASTES  -  TERRITORY");
-        AddTextCentered(dl, 14.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + 60.0f),
+        AddTextCentered(dl, 14.0f * scale, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + 60.0f * scale),
                         IM_COL32(170, 174, 180, 200),
                         dead ? "Click a highlighted region to deploy  |  M / Esc closes"
                              : "Click a region to inspect / redeploy  |  M / Esc closes");
@@ -376,43 +381,52 @@ namespace Terrafront
             char line[96];
             std::snprintf(line, sizeof(line), "REDEPLOYING TO %s IN %.1f s", td ? td->name.c_str() : "?",
                           std::max(0.0f, m_redeployCountdown));
-            AddTextCentered(dl, 22.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
+            AddTextCentered(dl, 22.0f * scale, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
                             IM_COL32(255, 200, 60, 235), line);
         }
         else if (m_statusTTL > 0.0f && m_status[0] != '\0')
         {
-            AddTextCentered(dl, 16.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
+            AddTextCentered(dl, 16.0f * scale, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
                             m_statusIsError ? IM_COL32(255, 120, 110, 230) : IM_COL32(140, 235, 160, 230), m_status);
         }
         else if (m_cooldownLeft > 0.0f && !dead)
         {
             char line[64];
             std::snprintf(line, sizeof(line), "Redeploy ready in %.0f s", std::ceil(m_cooldownLeft));
-            AddTextCentered(dl, 14.0f, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
+            AddTextCentered(dl, 14.0f * scale, ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.88f),
                             IM_COL32(180, 184, 190, 200), line);
         }
 
         {
-            const ImVec2 base(vp->Pos.x + 28.0f, vp->Pos.y + vp->Size.y - 118.0f);
-            dl->AddRectFilled(ImVec2(base.x - 10.0f, base.y - 10.0f), ImVec2(base.x + 250.0f, base.y + 96.0f),
-                              IM_COL32(14, 16, 20, 200), 4.0f);
+            // Legend: three faction rows and the rally-hint row, stacked from the font's line height so the
+            // rows never overlap, in a plate sized to them and anchored to the bottom-left corner.
+            const float rowStep = std::max(22.0f * scale, ImGui::GetTextLineHeight() + 6.0f * scale);
+            const float platePad = 10.0f * scale;
+            const float plateW = 260.0f * scale;
+            const float plateH = rowStep * 4.0f + 4.0f * scale + platePad;
+            const ImVec2 base(vp->Pos.x + 28.0f * scale, vp->Pos.y + vp->Size.y - 22.0f * scale - plateH);
+            dl->AddRectFilled(ImVec2(base.x - platePad, base.y - platePad),
+                              ImVec2(base.x - platePad + plateW, base.y + plateH), IM_COL32(14, 16, 20, 200),
+                              4.0f * scale);
+            const float swatch = 12.0f * scale;
+            const float swatchY = (ImGui::GetTextLineHeight() - swatch) * 0.5f;
             float y = base.y;
             for (FactionId f : {FactionId::MRA, FactionId::AUC, FactionId::HLX})
             {
-                dl->AddRectFilled(ImVec2(base.x, y + 2.0f), ImVec2(base.x + 14.0f, y + 14.0f), FactionCol(f, 0.95f),
-                                  2.0f);
+                dl->AddRectFilled(ImVec2(base.x, y + swatchY), ImVec2(base.x + 14.0f * scale, y + swatchY + swatch),
+                                  FactionCol(f, 0.95f), 2.0f * scale);
                 char line[80];
                 std::snprintf(line, sizeof(line), "%s  %s  -  %u regions", FactionTag(f), FactionName(f),
                               rs ? rs->RegionsHeld(f) : 0u);
-                dl->AddText(ImVec2(base.x + 22.0f, y), IM_COL32(225, 225, 228, 220), line);
-                y += 22.0f;
+                dl->AddText(ImVec2(base.x + 22.0f * scale, y), IM_COL32(225, 225, 228, 220), line);
+                y += rowStep;
             }
             if (m_deployHint != kInvalidRegion)
             {
                 const RegionDef* hd = m_ctx->data->GetRegion(m_deployHint);
                 char line[80];
                 std::snprintf(line, sizeof(line), "Rally hint: %s", hd ? hd->name.c_str() : "?");
-                dl->AddText(ImVec2(base.x, y + 4.0f), IM_COL32(255, 200, 60, 220), line);
+                dl->AddText(ImVec2(base.x, y + 4.0f * scale), IM_COL32(255, 200, 60, 220), line);
             }
         }
 

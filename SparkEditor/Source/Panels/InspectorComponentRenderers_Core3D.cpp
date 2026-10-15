@@ -12,6 +12,8 @@
 #include "../CommandHistory.h"
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cstring>
@@ -26,9 +28,9 @@ namespace SparkEditor
 
     void InspectorPanel::RenderTransformComponent()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_ARROWS_ALT " Transform", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Transform", ICON_FA_ARROWS_ALT, true))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             SceneObject* obj = nullptr;
             if (m_scene && m_inspectedObjectID != INVALID_OBJECT_ID)
@@ -51,9 +53,16 @@ namespace SparkEditor
                 float oldRot[3] = {rotation[0], rotation[1], rotation[2]};
                 float oldScale[3] = {scale[0], scale[1], scale[2]};
 
-                DrawVec3Control("Position", position, 0.0f, 0.1f);
-                DrawVec3Control("Rotation", rotation, 0.0f, 1.0f);
-                DrawVec3Control("Scale", scale, 1.0f, 0.1f);
+                if (Spark::Ui::BeginPropertyGrid("##Transform"))
+                {
+                    Spark::Ui::PropertyLabel("Position");
+                    DrawVec3Control("##Position", position, 0.0f, 0.1f);
+                    Spark::Ui::PropertyLabel("Rotation");
+                    DrawVec3Control("##Rotation", rotation, 0.0f, 1.0f);
+                    Spark::Ui::PropertyLabel("Scale");
+                    DrawVec3Control("##Scale", scale, 1.0f, 0.1f);
+                    Spark::Ui::EndPropertyGrid();
+                }
 
                 // Write back if changed
                 bool posChanged = (position[0] != oldPos[0] || position[1] != oldPos[1] || position[2] != oldPos[2]);
@@ -107,12 +116,19 @@ namespace SparkEditor
                 static float position[3] = {0.0f, 0.0f, 0.0f};
                 static float rotation[3] = {0.0f, 0.0f, 0.0f};
                 static float scale[3] = {1.0f, 1.0f, 1.0f};
-                DrawVec3Control("Position", position, 0.0f, 0.1f);
-                DrawVec3Control("Rotation", rotation, 0.0f, 1.0f);
-                DrawVec3Control("Scale", scale, 1.0f, 0.1f);
+                if (Spark::Ui::BeginPropertyGrid("##Transform"))
+                {
+                    Spark::Ui::PropertyLabel("Position");
+                    DrawVec3Control("##Position", position, 0.0f, 0.1f);
+                    Spark::Ui::PropertyLabel("Rotation");
+                    DrawVec3Control("##Rotation", rotation, 0.0f, 1.0f);
+                    Spark::Ui::PropertyLabel("Scale");
+                    DrawVec3Control("##Scale", scale, 1.0f, 0.1f);
+                    Spark::Ui::EndPropertyGrid();
+                }
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -122,7 +138,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderMeshRendererComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_SHAPES " Mesh Renderer");
+        bool headerOpen = Spark::Ui::SectionHeader("Mesh Renderer", ICON_FA_SHAPES, false);
 
         // Right-click context menu for removal
         if (ImGui::BeginPopupContextItem("##MeshRendererCtx"))
@@ -138,168 +154,181 @@ namespace SparkEditor
 
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::MESH_RENDERER);
             MeshRenderer* mr = comp ? comp->GetData<MeshRenderer>() : nullptr;
 
             if (mr)
             {
-                // Mesh path
-                char meshBuf[256];
-                strncpy(meshBuf, mr->meshAssetPath.c_str(), sizeof(meshBuf) - 1);
-                meshBuf[sizeof(meshBuf) - 1] = '\0';
-                ImGui::SetNextItemWidth(-1);
-                if (ImGui::InputText("Mesh", meshBuf, sizeof(meshBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                if (Spark::Ui::BeginPropertyGrid("##MeshRendererProps"))
                 {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: mesh asset changed to '%s'", meshBuf);
-                    const std::string oldPath = mr->meshAssetPath;
-                    const std::string newPath = meshBuf;
-                    SceneFile* capturedScene = m_scene;
-                    ObjectID capturedID = m_inspectedObjectID;
-                    auto& history = Spark::Editor::CommandHistory::GetInstance();
-                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                        [capturedScene, capturedID, newPath]()
-                        {
-                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                            {
-                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                {
-                                    data->meshAssetPath = newPath;
-                                }
-                            }
-                        },
-                        [capturedScene, capturedID, oldPath]()
-                        {
-                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                            {
-                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                {
-                                    data->meshAssetPath = oldPath;
-                                }
-                            }
-                        },
-                        "Assign Mesh Asset"));
-                }
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                    // Mesh path
+                    char meshBuf[256];
+                    strncpy(meshBuf, mr->meshAssetPath.c_str(), sizeof(meshBuf) - 1);
+                    meshBuf[sizeof(meshBuf) - 1] = '\0';
+                    Spark::Ui::PropertyLabel("Mesh");
+                    if (ImGui::InputText("##Mesh", meshBuf, sizeof(meshBuf), ImGuiInputTextFlags_EnterReturnsTrue))
                     {
-                        std::string newPath;
-                        if (DecodeAssetDragPayload(payload->Data, payload->DataSize, EditorAssetKind::Mesh, newPath))
-                        {
-                            const std::string oldPath = mr->meshAssetPath;
-                            SceneFile* capturedScene = m_scene;
-                            ObjectID capturedID = m_inspectedObjectID;
-                            auto& history = Spark::Editor::CommandHistory::GetInstance();
-                            history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                                [capturedScene, capturedID, newPath]()
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: mesh asset changed to '%s'", meshBuf);
+                        const std::string oldPath = mr->meshAssetPath;
+                        const std::string newPath = meshBuf;
+                        SceneFile* capturedScene = m_scene;
+                        ObjectID capturedID = m_inspectedObjectID;
+                        auto& history = Spark::Editor::CommandHistory::GetInstance();
+                        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                            [capturedScene, capturedID, newPath]()
+                            {
+                                if (Component* c =
+                                        FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
                                 {
-                                    if (Component* c =
-                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                            data->meshAssetPath = newPath;
-                                },
-                                [capturedScene, capturedID, oldPath]()
+                                    if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                    {
+                                        data->meshAssetPath = newPath;
+                                    }
+                                }
+                            },
+                            [capturedScene, capturedID, oldPath]()
+                            {
+                                if (Component* c =
+                                        FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
                                 {
-                                    if (Component* c =
-                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                            data->meshAssetPath = oldPath;
-                                },
-                                "Assign Mesh Asset"));
-                        }
+                                    if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                    {
+                                        data->meshAssetPath = oldPath;
+                                    }
+                                }
+                            },
+                            "Assign Mesh Asset"));
                     }
-                    ImGui::EndDragDropTarget();
-                }
-
-                // Material path
-                char matBuf[256];
-                strncpy(matBuf, mr->materialAssetPath.c_str(), sizeof(matBuf) - 1);
-                matBuf[sizeof(matBuf) - 1] = '\0';
-                ImGui::SetNextItemWidth(-1);
-                if (ImGui::InputText("Material", matBuf, sizeof(matBuf), ImGuiInputTextFlags_EnterReturnsTrue))
-                {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: material asset changed to '%s'", matBuf);
-                    const std::string oldPath = mr->materialAssetPath;
-                    const std::string newPath = matBuf;
-                    SceneFile* capturedScene = m_scene;
-                    ObjectID capturedID = m_inspectedObjectID;
-                    auto& history = Spark::Editor::CommandHistory::GetInstance();
-                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                        [capturedScene, capturedID, newPath]()
-                        {
-                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                            {
-                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                {
-                                    data->materialAssetPath = newPath;
-                                }
-                            }
-                        },
-                        [capturedScene, capturedID, oldPath]()
-                        {
-                            if (Component* c = FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                            {
-                                if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                {
-                                    data->materialAssetPath = oldPath;
-                                }
-                            }
-                        },
-                        "Assign Material Asset"));
-                }
-                if (ImGui::BeginDragDropTarget())
-                {
-                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                    if (ImGui::BeginDragDropTarget())
                     {
-                        std::string newPath;
-                        if (DecodeAssetDragPayload(payload->Data, payload->DataSize, EditorAssetKind::Material,
-                                                   newPath))
+                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
                         {
-                            const std::string oldPath = mr->materialAssetPath;
-                            SceneFile* capturedScene = m_scene;
-                            ObjectID capturedID = m_inspectedObjectID;
-                            auto& history = Spark::Editor::CommandHistory::GetInstance();
-                            history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                                [capturedScene, capturedID, newPath]()
-                                {
-                                    if (Component* c =
-                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                            data->materialAssetPath = newPath;
-                                },
-                                [capturedScene, capturedID, oldPath]()
-                                {
-                                    if (Component* c =
-                                            FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
-                                        if (MeshRenderer* data = c->GetData<MeshRenderer>())
-                                            data->materialAssetPath = oldPath;
-                                },
-                                "Assign Material Asset"));
+                            std::string newPath;
+                            if (DecodeAssetDragPayload(payload->Data, payload->DataSize, EditorAssetKind::Mesh,
+                                                       newPath))
+                            {
+                                const std::string oldPath = mr->meshAssetPath;
+                                SceneFile* capturedScene = m_scene;
+                                ObjectID capturedID = m_inspectedObjectID;
+                                auto& history = Spark::Editor::CommandHistory::GetInstance();
+                                history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                                    [capturedScene, capturedID, newPath]()
+                                    {
+                                        if (Component* c =
+                                                FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                            if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                                data->meshAssetPath = newPath;
+                                    },
+                                    [capturedScene, capturedID, oldPath]()
+                                    {
+                                        if (Component* c =
+                                                FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                            if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                                data->meshAssetPath = oldPath;
+                                    },
+                                    "Assign Mesh Asset"));
+                            }
                         }
+                        ImGui::EndDragDropTarget();
                     }
-                    ImGui::EndDragDropTarget();
-                }
 
-                ImGui::Checkbox("Cast Shadows", &mr->castShadows);
-                ImGui::SameLine();
-                ImGui::Checkbox("Receive Shadows", &mr->receiveShadows);
+                    // Material path
+                    char matBuf[256];
+                    strncpy(matBuf, mr->materialAssetPath.c_str(), sizeof(matBuf) - 1);
+                    matBuf[sizeof(matBuf) - 1] = '\0';
+                    Spark::Ui::PropertyLabel("Material");
+                    if (ImGui::InputText("##Material", matBuf, sizeof(matBuf), ImGuiInputTextFlags_EnterReturnsTrue))
+                    {
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: material asset changed to '%s'",
+                                        matBuf);
+                        const std::string oldPath = mr->materialAssetPath;
+                        const std::string newPath = matBuf;
+                        SceneFile* capturedScene = m_scene;
+                        ObjectID capturedID = m_inspectedObjectID;
+                        auto& history = Spark::Editor::CommandHistory::GetInstance();
+                        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                            [capturedScene, capturedID, newPath]()
+                            {
+                                if (Component* c =
+                                        FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                {
+                                    if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                    {
+                                        data->materialAssetPath = newPath;
+                                    }
+                                }
+                            },
+                            [capturedScene, capturedID, oldPath]()
+                            {
+                                if (Component* c =
+                                        FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                {
+                                    if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                    {
+                                        data->materialAssetPath = oldPath;
+                                    }
+                                }
+                            },
+                            "Assign Material Asset"));
+                    }
+                    if (ImGui::BeginDragDropTarget())
+                    {
+                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                        {
+                            std::string newPath;
+                            if (DecodeAssetDragPayload(payload->Data, payload->DataSize, EditorAssetKind::Material,
+                                                       newPath))
+                            {
+                                const std::string oldPath = mr->materialAssetPath;
+                                SceneFile* capturedScene = m_scene;
+                                ObjectID capturedID = m_inspectedObjectID;
+                                auto& history = Spark::Editor::CommandHistory::GetInstance();
+                                history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                                    [capturedScene, capturedID, newPath]()
+                                    {
+                                        if (Component* c =
+                                                FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                            if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                                data->materialAssetPath = newPath;
+                                    },
+                                    [capturedScene, capturedID, oldPath]()
+                                    {
+                                        if (Component* c =
+                                                FindComponent(capturedScene, capturedID, ComponentType::MESH_RENDERER))
+                                            if (MeshRenderer* data = c->GetData<MeshRenderer>())
+                                                data->materialAssetPath = oldPath;
+                                    },
+                                    "Assign Material Asset"));
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
 
-                ImGui::DragInt("Render Layer", &mr->renderLayer, 1, 0, 31);
+                    Spark::Ui::PropertyLabel("Cast Shadows");
+                    ImGui::Checkbox("##CastShadows", &mr->castShadows);
+                    Spark::Ui::PropertyLabel("Receive Shadows");
+                    ImGui::Checkbox("##ReceiveShadows", &mr->receiveShadows);
 
-                float tint[4] = {mr->tintColor.x, mr->tintColor.y, mr->tintColor.z, mr->tintColor.w};
-                if (ImGui::ColorEdit4("Tint Color", tint))
-                {
-                    mr->tintColor = {tint[0], tint[1], tint[2], tint[3]};
+                    Spark::Ui::PropertyLabel("Render Layer");
+                    ImGui::DragInt("##RenderLayer", &mr->renderLayer, 1, 0, 31);
+
+                    float tint[4] = {mr->tintColor.x, mr->tintColor.y, mr->tintColor.z, mr->tintColor.w};
+                    Spark::Ui::PropertyLabel("Tint Color");
+                    if (ImGui::ColorEdit4("##TintColor", tint))
+                    {
+                        mr->tintColor = {tint[0], tint[1], tint[2], tint[3]};
+                    }
+                    Spark::Ui::EndPropertyGrid();
                 }
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -309,7 +338,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderLightComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_LIGHTBULB " Light");
+        bool headerOpen = Spark::Ui::SectionHeader("Light", ICON_FA_LIGHTBULB, false);
 
         if (ImGui::BeginPopupContextItem("##LightCtx"))
         {
@@ -324,68 +353,80 @@ namespace SparkEditor
 
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::LIGHT);
             SparkEditor::Light* light = comp ? comp->GetData<SparkEditor::Light>() : nullptr;
 
             if (light)
             {
-                const char* lightTypes[] = {"Directional", "Point", "Spot", "Area"};
-                int lightType = static_cast<int>(light->type);
-                if (ImGui::Combo("Type", &lightType, lightTypes, IM_ARRAYSIZE(lightTypes)))
+                if (Spark::Ui::BeginPropertyGrid("##LightProps"))
                 {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: light type changed to '%s'",
-                                    lightTypes[lightType]);
-                    light->type = static_cast<SparkEditor::Light::Type>(lightType);
-                }
-
-                float color[3] = {light->color.x, light->color.y, light->color.z};
-                if (ImGui::ColorEdit3("Color", color))
-                {
-                    light->color = {color[0], color[1], color[2]};
-                }
-
-                ImGui::DragFloat("Intensity", &light->intensity, 0.1f, 0.0f, 100.0f);
-
-                if (light->type == SparkEditor::Light::POINT || light->type == SparkEditor::Light::SPOT)
-                {
-                    ImGui::DragFloat("Range", &light->range, 0.5f, 0.0f, 1000.0f);
-                }
-
-                if (light->type == SparkEditor::Light::SPOT)
-                {
-                    ImGui::DragFloat("Spot Angle", &light->spotAngle, 1.0f, 1.0f, 179.0f);
-                    ImGui::DragFloat("Inner Angle", &light->spotInnerAngle, 1.0f, 1.0f, light->spotAngle);
-                }
-
-                ImGui::Checkbox("Cast Shadows", &light->castShadows);
-
-                if (light->castShadows)
-                {
-                    const char* shadowSizes[] = {"256", "512", "1024", "2048", "4096"};
-                    int shadowSizeValues[] = {256, 512, 1024, 2048, 4096};
-                    int currentShadowIdx = 2; // Default to 1024
-                    for (int i = 0; i < 5; ++i)
+                    const char* lightTypes[] = {"Directional", "Point", "Spot", "Area"};
+                    int lightType = static_cast<int>(light->type);
+                    Spark::Ui::PropertyLabel("Type");
+                    if (ImGui::Combo("##Type", &lightType, lightTypes, IM_ARRAYSIZE(lightTypes)))
                     {
-                        if (light->shadowMapSize == shadowSizeValues[i])
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: light type changed to '%s'",
+                                        lightTypes[lightType]);
+                        light->type = static_cast<SparkEditor::Light::Type>(lightType);
+                    }
+
+                    float color[3] = {light->color.x, light->color.y, light->color.z};
+                    Spark::Ui::PropertyLabel("Color");
+                    if (ImGui::ColorEdit3("##Color", color))
+                    {
+                        light->color = {color[0], color[1], color[2]};
+                    }
+
+                    Spark::Ui::PropertyLabel("Intensity");
+                    ImGui::DragFloat("##Intensity", &light->intensity, 0.1f, 0.0f, 100.0f);
+
+                    if (light->type == SparkEditor::Light::POINT || light->type == SparkEditor::Light::SPOT)
+                    {
+                        Spark::Ui::PropertyLabel("Range");
+                        ImGui::DragFloat("##Range", &light->range, 0.5f, 0.0f, 1000.0f);
+                    }
+
+                    if (light->type == SparkEditor::Light::SPOT)
+                    {
+                        Spark::Ui::PropertyLabel("Spot Angle");
+                        ImGui::DragFloat("##SpotAngle", &light->spotAngle, 1.0f, 1.0f, 179.0f);
+                        Spark::Ui::PropertyLabel("Inner Angle");
+                        ImGui::DragFloat("##InnerAngle", &light->spotInnerAngle, 1.0f, 1.0f, light->spotAngle);
+                    }
+
+                    Spark::Ui::PropertyLabel("Cast Shadows");
+                    ImGui::Checkbox("##CastShadows", &light->castShadows);
+
+                    if (light->castShadows)
+                    {
+                        const char* shadowSizes[] = {"256", "512", "1024", "2048", "4096"};
+                        int shadowSizeValues[] = {256, 512, 1024, 2048, 4096};
+                        int currentShadowIdx = 2; // Default to 1024
+                        for (int i = 0; i < 5; ++i)
                         {
-                            currentShadowIdx = i;
-                            break;
+                            if (light->shadowMapSize == shadowSizeValues[i])
+                            {
+                                currentShadowIdx = i;
+                                break;
+                            }
+                        }
+                        Spark::Ui::PropertyLabel("Shadow Map Size");
+                        if (ImGui::Combo("##ShadowMapSize", &currentShadowIdx, shadowSizes, IM_ARRAYSIZE(shadowSizes)))
+                        {
+                            light->shadowMapSize = shadowSizeValues[currentShadowIdx];
                         }
                     }
-                    if (ImGui::Combo("Shadow Map Size", &currentShadowIdx, shadowSizes, IM_ARRAYSIZE(shadowSizes)))
-                    {
-                        light->shadowMapSize = shadowSizeValues[currentShadowIdx];
-                    }
+                    Spark::Ui::EndPropertyGrid();
                 }
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -395,7 +436,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderCameraComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CAMERA " Camera");
+        bool headerOpen = Spark::Ui::SectionHeader("Camera", ICON_FA_CAMERA, false);
 
         if (ImGui::BeginPopupContextItem("##CameraCtx"))
         {
@@ -408,46 +449,57 @@ namespace SparkEditor
 
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::CAMERA);
             SparkEditor::Camera* cam = comp ? comp->GetData<SparkEditor::Camera>() : nullptr;
 
             if (cam)
             {
-                const char* projTypes[] = {"Perspective", "Orthographic"};
-                int projType = static_cast<int>(cam->projectionType);
-                if (ImGui::Combo("Projection", &projType, projTypes, IM_ARRAYSIZE(projTypes)))
+                if (Spark::Ui::BeginPropertyGrid("##CameraProps"))
                 {
-                    cam->projectionType = static_cast<SparkEditor::Camera::ProjectionType>(projType);
-                }
+                    const char* projTypes[] = {"Perspective", "Orthographic"};
+                    int projType = static_cast<int>(cam->projectionType);
+                    Spark::Ui::PropertyLabel("Projection");
+                    if (ImGui::Combo("##Projection", &projType, projTypes, IM_ARRAYSIZE(projTypes)))
+                    {
+                        cam->projectionType = static_cast<SparkEditor::Camera::ProjectionType>(projType);
+                    }
 
-                if (cam->projectionType == SparkEditor::Camera::PERSPECTIVE)
-                {
-                    ImGui::DragFloat("Field of View", &cam->fieldOfView, 1.0f, 1.0f, 179.0f);
-                }
-                else
-                {
-                    ImGui::DragFloat("Ortho Size", &cam->orthographicSize, 0.1f, 0.01f, 1000.0f);
-                }
+                    if (cam->projectionType == SparkEditor::Camera::PERSPECTIVE)
+                    {
+                        Spark::Ui::PropertyLabel("Field of View");
+                        ImGui::DragFloat("##FieldofView", &cam->fieldOfView, 1.0f, 1.0f, 179.0f);
+                    }
+                    else
+                    {
+                        Spark::Ui::PropertyLabel("Ortho Size");
+                        ImGui::DragFloat("##OrthoSize", &cam->orthographicSize, 0.1f, 0.01f, 1000.0f);
+                    }
 
-                ImGui::DragFloat("Near Plane", &cam->nearPlane, 0.01f, 0.001f, cam->farPlane);
-                ImGui::DragFloat("Far Plane", &cam->farPlane, 1.0f, cam->nearPlane, 100000.0f);
+                    Spark::Ui::PropertyLabel("Near Plane");
+                    ImGui::DragFloat("##NearPlane", &cam->nearPlane, 0.01f, 0.001f, cam->farPlane);
+                    Spark::Ui::PropertyLabel("Far Plane");
+                    ImGui::DragFloat("##FarPlane", &cam->farPlane, 1.0f, cam->nearPlane, 100000.0f);
 
-                float clearCol[4] = {cam->clearColor.x, cam->clearColor.y, cam->clearColor.z, cam->clearColor.w};
-                if (ImGui::ColorEdit4("Clear Color", clearCol))
-                {
-                    cam->clearColor = {clearCol[0], clearCol[1], clearCol[2], clearCol[3]};
+                    float clearCol[4] = {cam->clearColor.x, cam->clearColor.y, cam->clearColor.z, cam->clearColor.w};
+                    Spark::Ui::PropertyLabel("Clear Color");
+                    if (ImGui::ColorEdit4("##ClearColor", clearCol))
+                    {
+                        cam->clearColor = {clearCol[0], clearCol[1], clearCol[2], clearCol[3]};
+                    }
+
+                    Spark::Ui::PropertyLabel("Main Camera");
+                    ImGui::Checkbox("##MainCamera", &cam->isMainCamera);
+                    Spark::Ui::EndPropertyGrid();
                 }
-
-                ImGui::Checkbox("Main Camera", &cam->isMainCamera);
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -457,7 +509,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderRigidBodyComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_GLOBE " Rigidbody");
+        bool headerOpen = Spark::Ui::SectionHeader("Rigidbody", ICON_FA_GLOBE, false);
 
         if (ImGui::BeginPopupContextItem("##RigidBodyCtx"))
         {
@@ -472,59 +524,63 @@ namespace SparkEditor
 
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::RIGID_BODY);
             RigidBody* rb = comp ? comp->GetData<RigidBody>() : nullptr;
 
             if (rb)
             {
-                const char* bodyTypes[] = {"Static", "Kinematic", "Dynamic"};
-                int bodyType = static_cast<int>(rb->bodyType);
-                if (ImGui::Combo("Body Type", &bodyType, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+                if (Spark::Ui::BeginPropertyGrid("##RigidBodyProps"))
                 {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: rigid body type changed to '%s'",
-                                    bodyTypes[bodyType]);
-                    rb->bodyType = static_cast<RigidBody::BodyType>(bodyType);
-                }
+                    const char* bodyTypes[] = {"Static", "Kinematic", "Dynamic"};
+                    int bodyType = static_cast<int>(rb->bodyType);
+                    Spark::Ui::PropertyLabel("Body Type");
+                    if (ImGui::Combo("##BodyType", &bodyType, bodyTypes, IM_ARRAYSIZE(bodyTypes)))
+                    {
+                        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "Inspector: rigid body type changed to '%s'",
+                                        bodyTypes[bodyType]);
+                        rb->bodyType = static_cast<RigidBody::BodyType>(bodyType);
+                    }
 
-                if (rb->bodyType == RigidBody::DYNAMIC)
-                {
-                    ImGui::DragFloat("Mass", &rb->mass, 0.1f, 0.01f, 10000.0f);
-                }
+                    if (rb->bodyType == RigidBody::DYNAMIC)
+                    {
+                        Spark::Ui::PropertyLabel("Mass");
+                        ImGui::DragFloat("##Mass", &rb->mass, 0.1f, 0.01f, 10000.0f);
+                    }
 
-                ImGui::DragFloat("Drag", &rb->drag, 0.01f, 0.0f, 100.0f);
-                ImGui::DragFloat("Angular Drag", &rb->angularDrag, 0.01f, 0.0f, 100.0f);
-                ImGui::Checkbox("Use Gravity", &rb->useGravity);
-                ImGui::Checkbox("Is Kinematic", &rb->isKinematic);
+                    Spark::Ui::PropertyLabel("Drag");
+                    ImGui::DragFloat("##Drag", &rb->drag, 0.01f, 0.0f, 100.0f);
+                    Spark::Ui::PropertyLabel("Angular Drag");
+                    ImGui::DragFloat("##AngularDrag", &rb->angularDrag, 0.01f, 0.0f, 100.0f);
+                    Spark::Ui::PropertyLabel("Use Gravity");
+                    ImGui::Checkbox("##UseGravity", &rb->useGravity);
+                    Spark::Ui::PropertyLabel("Is Kinematic");
+                    ImGui::Checkbox("##IsKinematic", &rb->isKinematic);
 
-                if (ImGui::TreeNode("Freeze Constraints"))
-                {
-                    ImGui::Text("Position:");
-                    ImGui::SameLine();
+                    // Freeze flags: one row per kind; the axis letters label the checkboxes.
+                    Spark::Ui::PropertyLabel("Freeze Position");
                     ImGui::Checkbox("X##FPX", &rb->freezePositionX);
                     ImGui::SameLine();
                     ImGui::Checkbox("Y##FPY", &rb->freezePositionY);
                     ImGui::SameLine();
                     ImGui::Checkbox("Z##FPZ", &rb->freezePositionZ);
 
-                    ImGui::Text("Rotation:");
-                    ImGui::SameLine();
+                    Spark::Ui::PropertyLabel("Freeze Rotation");
                     ImGui::Checkbox("X##FRX", &rb->freezeRotationX);
                     ImGui::SameLine();
                     ImGui::Checkbox("Y##FRY", &rb->freezeRotationY);
                     ImGui::SameLine();
                     ImGui::Checkbox("Z##FRZ", &rb->freezeRotationZ);
-
-                    ImGui::TreePop();
+                    Spark::Ui::EndPropertyGrid();
                 }
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -534,7 +590,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderColliderComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_VECTOR_SQUARE " Collider");
+        bool headerOpen = Spark::Ui::SectionHeader("Collider", ICON_FA_VECTOR_SQUARE, false);
 
         if (ImGui::BeginPopupContextItem("##ColliderCtx"))
         {
@@ -547,77 +603,93 @@ namespace SparkEditor
 
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::COLLIDER);
             SparkEditor::Collider* col = comp ? comp->GetData<SparkEditor::Collider>() : nullptr;
 
             if (col)
             {
-                const char* colliderTypes[] = {"Box", "Sphere", "Capsule", "Mesh", "Terrain"};
-                int colType = static_cast<int>(col->type);
-                if (ImGui::Combo("Shape", &colType, colliderTypes, IM_ARRAYSIZE(colliderTypes)))
+                if (Spark::Ui::BeginPropertyGrid("##ColliderProps"))
                 {
-                    col->type = static_cast<SparkEditor::Collider::ColliderType>(colType);
-                }
-
-                ImGui::Checkbox("Is Trigger", &col->isTrigger);
-
-                float center[3] = {col->center.x, col->center.y, col->center.z};
-                if (ImGui::DragFloat3("Center", center, 0.1f))
-                {
-                    col->center = {center[0], center[1], center[2]};
-                }
-
-                switch (col->type)
-                {
-                case SparkEditor::Collider::BOX:
-                {
-                    float size[3] = {col->size.x, col->size.y, col->size.z};
-                    if (ImGui::DragFloat3("Size", size, 0.1f, 0.001f))
+                    const char* colliderTypes[] = {"Box", "Sphere", "Capsule", "Mesh", "Terrain"};
+                    int colType = static_cast<int>(col->type);
+                    Spark::Ui::PropertyLabel("Shape");
+                    if (ImGui::Combo("##Shape", &colType, colliderTypes, IM_ARRAYSIZE(colliderTypes)))
                     {
-                        col->size = {size[0], size[1], size[2]};
+                        col->type = static_cast<SparkEditor::Collider::ColliderType>(colType);
                     }
-                    break;
-                }
-                case SparkEditor::Collider::SPHERE:
-                {
-                    ImGui::DragFloat("Radius", &col->radius, 0.01f, 0.001f, 1000.0f);
-                    break;
-                }
-                case SparkEditor::Collider::CAPSULE:
-                {
-                    ImGui::DragFloat("Radius", &col->radius, 0.01f, 0.001f, 1000.0f);
-                    ImGui::DragFloat("Height", &col->height, 0.1f, 0.001f, 1000.0f);
-                    break;
-                }
-                case SparkEditor::Collider::MESH:
-                {
-                    char meshBuf[256];
-                    strncpy(meshBuf, col->meshAssetPath.c_str(), sizeof(meshBuf) - 1);
-                    meshBuf[sizeof(meshBuf) - 1] = '\0';
-                    ImGui::SetNextItemWidth(-1);
-                    if (ImGui::InputText("Mesh##ColMesh", meshBuf, sizeof(meshBuf),
-                                         ImGuiInputTextFlags_EnterReturnsTrue))
-                    {
-                        col->meshAssetPath = meshBuf;
-                    }
-                    break;
-                }
-                default:
-                    break;
-                }
 
-                ImGui::Separator();
-                ImGui::DragFloat("Friction", &col->friction, 0.01f, 0.0f, 1.0f);
-                ImGui::DragFloat("Bounciness", &col->bounciness, 0.01f, 0.0f, 1.0f);
+                    Spark::Ui::PropertyLabel("Is Trigger");
+                    ImGui::Checkbox("##IsTrigger", &col->isTrigger);
+
+                    float center[3] = {col->center.x, col->center.y, col->center.z};
+                    Spark::Ui::PropertyLabel("Center");
+                    DrawVec3Control("##Center", center, 0.0f, 0.1f);
+                    if (center[0] != col->center.x || center[1] != col->center.y || center[2] != col->center.z)
+                    {
+                        col->center = {center[0], center[1], center[2]};
+                    }
+
+                    switch (col->type)
+                    {
+                    case SparkEditor::Collider::BOX:
+                    {
+                        float size[3] = {col->size.x, col->size.y, col->size.z};
+                        Spark::Ui::PropertyLabel("Size");
+                        DrawVec3Control("##Size", size, 1.0f, 0.1f);
+                        if (size[0] != col->size.x || size[1] != col->size.y || size[2] != col->size.z)
+                        {
+                            // An edited box extent stays positive, as the old drag range enforced.
+                            col->size = {(std::max)(size[0], 0.001f), (std::max)(size[1], 0.001f),
+                                         (std::max)(size[2], 0.001f)};
+                        }
+                        break;
+                    }
+                    case SparkEditor::Collider::SPHERE:
+                    {
+                        Spark::Ui::PropertyLabel("Radius");
+                        ImGui::DragFloat("##Radius", &col->radius, 0.01f, 0.001f, 1000.0f);
+                        break;
+                    }
+                    case SparkEditor::Collider::CAPSULE:
+                    {
+                        Spark::Ui::PropertyLabel("Radius");
+                        ImGui::DragFloat("##Radius", &col->radius, 0.01f, 0.001f, 1000.0f);
+                        Spark::Ui::PropertyLabel("Height");
+                        ImGui::DragFloat("##Height", &col->height, 0.1f, 0.001f, 1000.0f);
+                        break;
+                    }
+                    case SparkEditor::Collider::MESH:
+                    {
+                        char meshBuf[256];
+                        strncpy(meshBuf, col->meshAssetPath.c_str(), sizeof(meshBuf) - 1);
+                        meshBuf[sizeof(meshBuf) - 1] = '\0';
+                        Spark::Ui::PropertyLabel("Mesh");
+                        if (ImGui::InputText("##ColMesh", meshBuf, sizeof(meshBuf),
+                                             ImGuiInputTextFlags_EnterReturnsTrue))
+                        {
+                            col->meshAssetPath = meshBuf;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+
+                    Spark::Ui::PropertyLabel("Friction");
+                    ImGui::DragFloat("##Friction", &col->friction, 0.01f, 0.0f, 1.0f);
+                    Spark::Ui::PropertyLabel("Bounciness");
+                    ImGui::DragFloat("##Bounciness", &col->bounciness, 0.01f, 0.0f, 1.0f);
+                    Spark::Ui::EndPropertyGrid();
+                }
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 

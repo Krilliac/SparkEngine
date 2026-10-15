@@ -48,6 +48,7 @@ FuzzerTests/corpora/sparkpak-reader/*.spk -text
 # CRLF, lone CR or NUL on purpose), so no checkout may normalize them.
 FuzzerTests/corpora/shader-daemon-blob/** -text
 FuzzerTests/corpora/shader-service-protocol/** -text
+FuzzerTests/corpora/editor-preferences/** -text
 FuzzerTests/corpora/config-parser/** -text
 FuzzerTests/corpora/telemetry-spool-format/** -text
 FuzzerTests/corpora/save-system/** -text

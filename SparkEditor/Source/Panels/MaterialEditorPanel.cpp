@@ -27,6 +27,9 @@
 #include <fstream>
 #include <optional>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -136,7 +139,7 @@ namespace SparkEditor
             ImGui::Separator();
 
             // Two-column layout: material list on the left, editor on the right
-            float listWidth = 200.0f;
+            const float listWidth = Spark::Ui::Px(200.0f);
             float availableHeight = ImGui::GetContentRegionAvail().y;
 
             ImGui::BeginChild("MaterialListRegion", ImVec2(listWidth, availableHeight), true);
@@ -150,16 +153,19 @@ namespace SparkEditor
             if (selected != nullptr)
             {
                 // Material name header
-                ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.3f, 1.0f), "%s %s", ICON_FA_PALETTE, selected->name.c_str());
+                {
+                    Spark::Ui::ScopedRoleColor nameColour(ImGuiCol_Text, Spark::Ui::Role::AccentText);
+                    ImGui::Text("%s %s", ICON_FA_PALETTE, selected->name.c_str());
+                }
                 if (selected->isModified)
                 {
                     ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "(unsaved)");
+                    Spark::Ui::TextRole(Spark::Ui::Role::WarningText, "(unsaved)");
                 }
                 if (selected->isBuiltIn)
                 {
                     ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "[built-in]");
+                    Spark::Ui::Badge("built-in");
                 }
                 ImGui::Separator();
 
@@ -194,8 +200,8 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
-                                   "Select a material from the list or create a new one.");
+                Spark::Ui::EmptyState(ICON_FA_PALETTE, "No material selected",
+                                      "Select a material from the list or create a new one.");
             }
             ImGui::EndChild();
         }
@@ -351,14 +357,14 @@ namespace SparkEditor
             }
 
             ImGui::BeginDisabled(m_availableShaders.empty());
-            if (ImGui::Button("Create", ImVec2(120, 0)))
+            if (Spark::Ui::PrimaryButton("Create", Spark::Ui::Px2(120, 0)))
             {
                 CreateMaterial(newMaterialName, m_availableShaders[selectedShaderIndex].path);
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndDisabled();
             ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(120, 0)))
+            if (ImGui::Button("Cancel", Spark::Ui::Px2(120, 0)))
             {
                 ImGui::CloseCurrentPopup();
             }
@@ -372,7 +378,7 @@ namespace SparkEditor
         ImGui::SameLine();
         const char* shapeNames[] = {"Sphere", "Cube", "Plane", "Cylinder", "Custom"};
         int currentShape = static_cast<int>(m_previewShape);
-        ImGui::SetNextItemWidth(90.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(90.0f));
         if (ImGui::Combo("##PreviewShape", &currentShape, shapeNames, 5))
         {
             m_previewShape = static_cast<PreviewShape>(currentShape);
@@ -385,7 +391,7 @@ namespace SparkEditor
         ImGui::SameLine();
         const char* lightingNames[] = {"Default", "Scene", "IBL Only", "Unlit"};
         int currentLighting = static_cast<int>(m_previewLighting);
-        ImGui::SetNextItemWidth(90.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(90.0f));
         if (ImGui::Combo("##PreviewLighting", &currentLighting, lightingNames, 4))
         {
             m_previewLighting = static_cast<PreviewLighting>(currentLighting);

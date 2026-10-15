@@ -294,6 +294,12 @@ namespace SparkEditor
         /** @brief Get icon string */
         const std::string& GetIcon() const { return m_icon; }
 
+        /**
+         * @brief Tab glyph for panels that set no icon of their own, so every tab carries its category.
+         * @return A Font Awesome UTF-8 glyph; never null.
+         */
+        static const char* CategoryIcon(PanelCategory category);
+
         /** @brief Set panel category (called by EditorPanelFactory at creation) */
         void SetPanelCategory(PanelCategory cat) { m_category = cat; }
     };

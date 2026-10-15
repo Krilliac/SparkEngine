@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "lane": "IN",
+  "description": "SparkInstaller wizard GUI.",
+  "allowlisted_tables": {},
+  "total": 0,
+  "files": {
+    "SparkInstaller/src/gui/BackendLinux.cpp": 0,
+    "SparkInstaller/src/gui/BackendWindows.cpp": 0,
+    "SparkInstaller/src/gui/WizardGui.cpp": 0,
+    "SparkInstaller/src/gui/WizardGui.h": 0,
+    "SparkInstaller/src/main.cpp": 0
+  }
+}

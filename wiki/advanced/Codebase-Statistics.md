@@ -11,31 +11,31 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 347663 |
-| **SparkEditor/Source** | 106742 |
-| **GameModules** | 163990 |
+| **SparkEngine/Source** | 352099 |
+| **SparkEditor/Source** | 110961 |
+| **GameModules** | 164289 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3231 |
-| **Tests** | 278877 |
+| **Tests** | 281861 |
 | **SparkConsole/src** | 1866 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~937425** |
+| **Total C++ (excl. ThirdParty)** | **~952637** |
 
 ### File Counts
 
 | Category | Count |
 |----------|------:|
-| Header files (.h/.hh/.hpp/.hxx/.inl) | 1269 |
-| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 2007 |
+| Header files (.h/.hh/.hpp/.hxx/.inl) | 1288 |
+| Implementation files (.c/.cc/.cpp/.cxx/.mm) | 2026 |
 | HLSL shader files | 44 |
 | GLSL shader files | 14 |
 | AngelScript files (.as) | 1 |
-| Test-bearing implementation files (.cpp/.mm) | 742 |
+| Test-bearing implementation files (.cpp/.mm) | 744 |
 | Wiki pages (.md) | 206 |
 
 ### Largest Top-Level Source Section
 
-Graphics contains 125771 lines, or 36% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 125771 lines, or 35% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,12 +43,12 @@ Graphics contains 125771 lines, or 36% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 125771 | 36.1% |
-| Engine (all subsystems) | 100266 | 28.8% |
-| Utils | 49037 | 14.1% |
-| Core | 32070 | 9.2% |
-| Physics | 11142 | 3.2% |
-| Audio | 6961 | 2.0% |
+| Graphics | 125771 | 35.7% |
+| Engine (all subsystems) | 100266 | 28.4% |
+| Utils | 49037 | 13.9% |
+| Core | 32251 | 9.1% |
+| Physics | 11142 | 3.1% |
+| Audio | 6961 | 1.9% |
 | Input | 3968 | 1.1% |
 | SceneManager | 4842 | 1.3% |
 | Enums | 1025 | 0.2% |
@@ -104,14 +104,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 106742 |
+| Total editor lines | 110961 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
-| Test files | 742 |
-| TEST() definitions | 8566 |
+| Test files | 744 |
+| TEST() definitions | 8639 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -121,7 +121,7 @@ It does not measure registration, runtime use, support, or readiness.
 | CMake option() declarations | 35 |
 | ENABLE_* feature toggles | 24 |
 | Game modules | 11 |
-| SDK public headers | 38 |
+| SDK public headers | 39 |
 | Documented build compiler paths | MSVC v143/v145, GCC 13+, Clang 17+, Apple Clang, MinGW-w64 |
 | Platforms | Windows, Linux, macOS (experimental) |
 
@@ -187,16 +187,16 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2725 |
-| `ProjectManager.cpp` | 2362 |
+| `EditorUI.cpp` | 3028 |
+| `ProjectManager.cpp` | 2490 |
 | `BuildPipeline.cpp` | 1881 |
 | `CollaborativeEditSession.cpp` | 1773 |
-| `VisualScriptPanel.cpp` | 1668 |
-| `PerformanceProfiler.cpp` | 1606 |
-| `HierarchyPanel.cpp` | 1583 |
-| `EditorTheme.cpp` | 1539 |
-| `ProjectSettingsPanel.cpp` | 1517 |
-| `SceneViewPanel.cpp` | 1479 |
+| `ProjectSettingsPanel.cpp` | 1726 |
+| `VisualScriptPanel.cpp` | 1702 |
+| `PerformanceProfiler.cpp` | 1688 |
+| `GameViewPanel.cpp` | 1616 |
+| `HierarchyPanel.cpp` | 1567 |
+| `InspectorPanel.cpp` | 1481 |
 
 ## Shader Inventory
 

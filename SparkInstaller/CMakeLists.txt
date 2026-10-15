@@ -39,18 +39,18 @@ set(INSTALLER_SOURCES
 )
 
 # ---------------------------------------------------------------------------
-# Optional GUI frontend (ImGui + platform backend)
+# Optional GUI frontend (ImGui + platform backend + the shared Spark UI kit)
 # ---------------------------------------------------------------------------
+# The wizard is styled, laid out and DPI-scaled by SparkUIKit, so the GUI needs both the shared
+# `imgui` target and SparkUIKit. The engine superproject creates them (cmake/BuildImGui.cmake and
+# SparkUI/) before it adds this directory; a standalone configure has neither and builds the
+# TUI/headless installer only, with no ImGui or SparkUIKit anywhere in the link line.
 set(INSTALLER_GUI_AVAILABLE OFF)
 if(SPARKINSTALLER_ENABLE_GUI)
-    # If the engine superproject already built ImGui via BuildImGui.cmake, reuse that target.
-    if(TARGET imgui)
+    if(TARGET imgui AND TARGET SparkUIKit)
         set(INSTALLER_GUI_AVAILABLE ON)
-    elseif(EXISTS "${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
-        include("${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
-        if(IMGUI_FOUND AND TARGET imgui)
-            set(INSTALLER_GUI_AVAILABLE ON)
-        endif()
+    else()
+        message(STATUS "SparkInstaller: GUI disabled (needs the imgui and SparkUIKit targets from the engine superproject)")
     endif()
 endif()
 
@@ -66,6 +66,16 @@ if(INSTALLER_GUI_AVAILABLE)
     endif()
 endif()
 
+# The application icon (the Spark logomark) is a resource of the executable itself, so it is
+# attached whether or not the GUI is built. The .rc names the icon by file name and the include
+# path below resolves it, which works for rc.exe and for MinGW windres alike.
+set(_sparkinstaller_branding_dir "${CMAKE_CURRENT_SOURCE_DIR}/../Assets/Engine/Branding")
+if(WIN32 AND EXISTS "${_sparkinstaller_branding_dir}/sparkengine.ico")
+    list(APPEND INSTALLER_SOURCES resources/SparkInstaller.rc)
+    set_source_files_properties(resources/SparkInstaller.rc PROPERTIES
+        OBJECT_DEPENDS "${_sparkinstaller_branding_dir}/sparkengine.ico")
+endif()
+
 add_executable(SparkInstaller ${INSTALLER_SOURCES})
 target_compile_definitions(SparkInstaller PRIVATE
     SPARK_INSTALLER_VERSION=\"${PROJECT_VERSION}\"
@@ -76,12 +86,20 @@ spark_target_windows_version_info(SparkInstaller)
 target_include_directories(SparkInstaller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+if(WIN32 AND EXISTS "${_sparkinstaller_branding_dir}/sparkengine.ico")
+    target_include_directories(SparkInstaller PRIVATE "${_sparkinstaller_branding_dir}")
+endif()
 
 target_link_libraries(SparkInstaller PRIVATE SparkBuildCore)
 
 if(INSTALLER_GUI_AVAILABLE)
     target_compile_definitions(SparkInstaller PRIVATE SPARKINSTALLER_ENABLE_GUI=1)
-    target_link_libraries(SparkInstaller PRIVATE imgui)
+    target_link_libraries(SparkInstaller PRIVATE imgui SparkUIKit)
+    # The superproject stages the Spark UI fonts next to the executable; without them (a bare
+    # install tree) the wizard falls back to ImGui's embedded vector font.
+    if(COMMAND spark_stage_ui_fonts)
+        spark_stage_ui_fonts(SparkInstaller)
+    endif()
     if(WIN32)
         # d3dcompiler: imgui_impl_dx11 calls D3DCompile and relies on MSVC's
         # #pragma comment(lib) auto-link, which MinGW ignores — link explicitly.
@@ -118,6 +136,11 @@ if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
 endif()
 
 install(TARGETS SparkInstaller RUNTIME DESTINATION bin COMPONENT tools)
+# The wizard GUI loads the Spark UI fonts from bin/EditorAssets/Fonts. Install them in the tools
+# component, so a tools-only package carries them too (superproject builds only, as for staging).
+if(INSTALLER_GUI_AVAILABLE AND COMMAND spark_install_ui_fonts)
+    spark_install_ui_fonts(tools)
+endif()
 
 set(_sparkinstaller_tests_default ON)
 if(DEFINED BUILD_TESTS)

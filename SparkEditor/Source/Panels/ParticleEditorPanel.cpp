@@ -10,6 +10,9 @@
 #include <iostream>
 #include <cstring>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -74,7 +77,7 @@ namespace SparkEditor
 
     void ParticleEditorPanel::RenderPresetSelector()
     {
-        ImGui::Text(ICON_FA_BOOKMARK " Presets:");
+        Spark::Ui::SecondaryText(ICON_FA_BOOKMARK " Presets:");
         ImGui::SameLine();
 
         if (ImGui::SmallButton("Fire"))
@@ -168,9 +171,9 @@ namespace SparkEditor
 
     void ParticleEditorPanel::RenderEmissionSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_FIRE " Emission", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Emission", ICON_FA_FIRE))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
             ImGui::DragFloat("Rate", &m_emissionRate, 1.0f, 0.0f, 10000.0f, "%.0f/s");
             ImGui::DragInt("Max Particles", &m_maxParticles, 10.0f, 1, 100000);
             ImGui::DragInt("Burst Count", &m_burstCount, 1.0f, 0, 1000);
@@ -179,15 +182,15 @@ namespace SparkEditor
             ImGui::Checkbox("Play On Awake", &m_playOnAwake);
             ImGui::SameLine();
             ImGui::Checkbox("Prewarm", &m_prewarm);
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderShapeSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_SHAPES " Shape", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Shape", ICON_FA_SHAPES))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
             const char* shapes[] = {"Point", "Sphere", "Cone", "Box", "Circle"};
             ImGui::Combo("Shape", &m_shape, shapes, IM_ARRAYSIZE(shapes));
 
@@ -206,26 +209,21 @@ namespace SparkEditor
                 if (ImGui::DragFloat3("Extents", ext, 0.1f, 0.0f))
                     m_shapeExtents = {ext[0], ext[1], ext[2]};
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderAppearanceSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_PALETTE " Appearance", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Appearance", ICON_FA_PALETTE))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
 
-            ImGui::TextDisabled("Lifetime");
             ImGui::DragFloatRange2("Lifetime", &m_lifetimeMin, &m_lifetimeMax, 0.01f, 0.01f, 60.0f, "%.2f s", "%.2f s");
-
-            ImGui::TextDisabled("Speed");
             ImGui::DragFloatRange2("Speed", &m_speedMin, &m_speedMax, 0.1f, 0.0f, 200.0f);
-
-            ImGui::TextDisabled("Size");
             ImGui::DragFloatRange2("Size", &m_sizeMin, &m_sizeMax, 0.01f, 0.001f, 10.0f);
 
-            ImGui::TextDisabled("Color Over Lifetime");
+            Spark::Ui::SubHeader("Color Over Lifetime");
             float startCol[4] = {m_startColor.x, m_startColor.y, m_startColor.z, m_startColor.w};
             if (ImGui::ColorEdit4("Start Color", startCol))
                 m_startColor = {startCol[0], startCol[1], startCol[2], startCol[3]};
@@ -234,26 +232,26 @@ namespace SparkEditor
             if (ImGui::ColorEdit4("End Color", endCol))
                 m_endColor = {endCol[0], endCol[1], endCol[2], endCol[3]};
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderPhysicsSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_GLOBE " Physics"))
+        if (Spark::Ui::SectionHeader("Physics", ICON_FA_GLOBE, false))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
             ImGui::DragFloat("Gravity", &m_gravityMultiplier, 0.01f, -5.0f, 5.0f);
             ImGui::DragFloat("Drag", &m_drag, 0.01f, 0.0f, 10.0f);
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderSubEmitterSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_LAYER_GROUP " Sub-Emitters"))
+        if (Spark::Ui::SectionHeader("Sub-Emitters", ICON_FA_LAYER_GROUP, false))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
 
             ImGui::Checkbox("Emit on Birth", &m_subEmitOnBirth);
             ImGui::SameLine();
@@ -264,18 +262,18 @@ namespace SparkEditor
             if (m_subEmitOnBirth || m_subEmitOnDeath || m_subEmitOnCollision)
             {
                 ImGui::DragInt("Sub-emit Count", &m_subEmitCount, 1.0f, 1, 100);
-                ImGui::TextDisabled("Sub-emitters inherit parent effect settings by default.");
+                Spark::Ui::SecondaryText("Sub-emitters inherit parent effect settings by default.");
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderTextureAnimSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_TH " Texture Sheet Animation"))
+        if (Spark::Ui::SectionHeader("Texture Sheet Animation", ICON_FA_TH, false))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
 
             ImGui::Checkbox("Enable Texture Animation", &m_useTextureAnim);
             if (m_useTextureAnim)
@@ -283,18 +281,18 @@ namespace SparkEditor
                 ImGui::DragInt("Rows", &m_texAnimRows, 1.0f, 1, 16);
                 ImGui::DragInt("Columns", &m_texAnimCols, 1.0f, 1, 16);
                 ImGui::DragFloat("Frame Rate", &m_texAnimFrameRate, 0.5f, 0.1f, 120.0f, "%.1f fps");
-                ImGui::Text("Total Frames: %d", m_texAnimRows * m_texAnimCols);
+                Spark::Ui::KeyValue("Total Frames:", "%d", m_texAnimRows * m_texAnimCols);
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderNoiseSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_WAVE_SQUARE " Noise"))
+        if (Spark::Ui::SectionHeader("Noise", ICON_FA_WAVE_SQUARE, false))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
 
             ImGui::Checkbox("Enable Noise", &m_useNoise);
             if (m_useNoise)
@@ -304,33 +302,34 @@ namespace SparkEditor
                 ImGui::DragFloat("Scroll Speed", &m_noiseScrollSpeed, 0.1f, 0.0f, 10.0f);
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderTrailSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_ROUTE " Trails"))
+        if (Spark::Ui::SectionHeader("Trails", ICON_FA_ROUTE, false))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
 
             ImGui::Checkbox("Enable Trails", &m_useTrails);
             if (m_useTrails)
             {
                 ImGui::DragFloat("Width", &m_trailWidth, 0.01f, 0.001f, 5.0f, "%.3f");
-                ImGui::DragFloat("Lifetime", &m_trailLifetime, 0.1f, 0.01f, 10.0f, "%.2f s");
+                // "##Trail" keeps the ID distinct from the particle Lifetime range in Appearance.
+                ImGui::DragFloat("Lifetime##Trail", &m_trailLifetime, 0.1f, 0.01f, 10.0f, "%.2f s");
                 ImGui::DragInt("Min Vertex Distance", &m_trailMinVertexDistance, 1.0f, 1, 100);
             }
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 
     void ParticleEditorPanel::RenderRenderingSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_EYE " Rendering"))
+        if (Spark::Ui::SectionHeader("Rendering", ICON_FA_EYE, false))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4));
 
             const char* blendModes[] = {"Additive", "Alpha Blend", "Multiply"};
             ImGui::Combo("Blend Mode", &m_blendMode, blendModes, IM_ARRAYSIZE(blendModes));
@@ -338,7 +337,7 @@ namespace SparkEditor
             const char* spaces[] = {"World", "Local"};
             ImGui::Combo("Space", &m_space, spaces, IM_ARRAYSIZE(spaces));
 
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4));
         }
     }
 

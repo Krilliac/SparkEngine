@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <cstring>
 #include <cstdio>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -57,7 +59,7 @@ namespace SparkEditor
 
             if (m_sequences.empty())
             {
-                ImGui::TextDisabled("No sequences. Click 'New Sequence' to begin.");
+                Spark::Ui::EmptyState(ICON_FA_FILM, "No sequences", "Click 'New Sequence' to begin.");
             }
             else if (m_selectedSequence >= 0 && m_selectedSequence < static_cast<int>(m_sequences.size()))
             {
@@ -106,7 +108,7 @@ namespace SparkEditor
 
         if (!m_sequences.empty())
         {
-            ImGui::SetNextItemWidth(200);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(200));
             if (ImGui::BeginCombo("##SeqSelect",
                                   m_selectedSequence >= 0 ? m_sequences[m_selectedSequence].name : "Select..."))
             {
@@ -145,7 +147,7 @@ namespace SparkEditor
             ImGui::Checkbox(ICON_FA_REDO " Loop", &m_isLooping);
 
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80));
             if (m_selectedSequence >= 0)
             {
                 auto& seq = m_sequences[m_selectedSequence];
@@ -153,7 +155,7 @@ namespace SparkEditor
             }
 
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(60);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(60));
             ImGui::DragFloat("Zoom", &m_zoom, 0.05f, 0.1f, 10.0f, "%.1fx");
         }
     }
@@ -241,29 +243,32 @@ namespace SparkEditor
             return;
 
         auto& seq = m_sequences[m_selectedSequence];
-        float timelineWidth = seq.duration * 60.0f * m_zoom;
-        float rowHeight = 24.0f;
+        // One second of timeline spans 60 logical pixels at zoom 1; rows are 24 logical pixels.
+        const float pixelsPerSecond = Spark::Ui::Px(60.0f) * m_zoom;
+        float timelineWidth = seq.duration * pixelsPerSecond;
+        const float rowHeight = Spark::Ui::Px(24.0f);
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-        float canvasHeight = std::max(rowHeight * static_cast<float>(seq.tracks.size() + 1), 100.0f);
+        float canvasHeight = std::max(rowHeight * static_cast<float>(seq.tracks.size() + 1), Spark::Ui::Px(100.0f));
 
         // Time ruler
         for (float t = 0.0f; t <= seq.duration; t += 1.0f)
         {
-            float x = canvasPos.x + t * 60.0f * m_zoom;
+            float x = canvasPos.x + t * pixelsPerSecond;
             drawList->AddLine(ImVec2(x, canvasPos.y), ImVec2(x, canvasPos.y + canvasHeight),
-                              IM_COL32(100, 100, 100, 200));
+                              Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
 
             char timeBuf[16];
             snprintf(timeBuf, sizeof(timeBuf), "%.0fs", t);
-            drawList->AddText(ImVec2(x + 2, canvasPos.y), IM_COL32(200, 200, 200, 255), timeBuf);
+            drawList->AddText(ImVec2(x + Spark::Ui::Px(2.0f), canvasPos.y),
+                              Spark::Ui::Col(Spark::Ui::Role::TextSecondary), timeBuf);
         }
 
         // Playhead
-        float playX = canvasPos.x + m_playheadTime * 60.0f * m_zoom;
+        float playX = canvasPos.x + m_playheadTime * pixelsPerSecond;
         drawList->AddLine(ImVec2(playX, canvasPos.y), ImVec2(playX, canvasPos.y + canvasHeight),
-                          IM_COL32(255, 80, 80, 255), 2.0f);
+                          Spark::Ui::Col(Spark::Ui::Role::AccentFill), Spark::Ui::Px(2.0f));
 
         // Track rows + keyframes
         for (int i = 0; i < static_cast<int>(seq.tracks.size()); ++i)
@@ -272,19 +277,22 @@ namespace SparkEditor
             float rowY = canvasPos.y + rowHeight * static_cast<float>(i + 1);
 
             // Row background
-            ImU32 rowColor = (i == m_selectedTrack) ? IM_COL32(60, 80, 120, 100) : IM_COL32(40, 40, 40, 80);
+            ImU32 rowColor = (i == m_selectedTrack) ? Spark::Ui::Col(Spark::Ui::Role::SurfaceSelected)
+                                                    : Spark::Ui::Col(Spark::Ui::Role::SurfaceRaised);
             drawList->AddRectFilled(ImVec2(canvasPos.x, rowY), ImVec2(canvasPos.x + timelineWidth, rowY + rowHeight),
                                     rowColor);
 
             // Keyframes
             for (int k = 0; k < static_cast<int>(track.keyframes.size()); ++k)
             {
-                float kx = canvasPos.x + track.keyframes[k].time * 60.0f * m_zoom;
+                float kx = canvasPos.x + track.keyframes[k].time * pixelsPerSecond;
                 float ky = rowY + rowHeight * 0.5f;
-                float size = 5.0f;
 
+                // The selected keyframe is drawn larger and brighter so selection is not colour-only.
                 bool isSelected = (i == m_selectedTrack && k == m_selectedKeyframe);
-                ImU32 kfColor = isSelected ? IM_COL32(255, 200, 50, 255) : IM_COL32(100, 200, 255, 255);
+                const float size = Spark::Ui::Px(isSelected ? 7.0f : 5.0f);
+                ImU32 kfColor = isSelected ? Spark::Ui::Col(Spark::Ui::Role::TextPrimary)
+                                           : Spark::Ui::Col(Spark::Ui::Role::Secondary);
 
                 // Diamond shape
                 drawList->AddQuadFilled(ImVec2(kx, ky - size), ImVec2(kx + size, ky), ImVec2(kx, ky + size),
@@ -297,7 +305,7 @@ namespace SparkEditor
         if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
         {
             float mouseX = ImGui::GetMousePos().x - canvasPos.x;
-            m_playheadTime = std::clamp(mouseX / (60.0f * m_zoom), 0.0f, seq.duration);
+            m_playheadTime = std::clamp(mouseX / pixelsPerSecond, 0.0f, seq.duration);
         }
 
         // Right-click to add keyframe
@@ -305,7 +313,7 @@ namespace SparkEditor
         {
             float mouseX = ImGui::GetMousePos().x - canvasPos.x;
             float mouseY = ImGui::GetMousePos().y - canvasPos.y;
-            float clickTime = mouseX / (60.0f * m_zoom);
+            float clickTime = mouseX / pixelsPerSecond;
             int clickTrack = static_cast<int>((mouseY / rowHeight) - 1.0f);
 
             if (clickTrack >= 0 && clickTrack < static_cast<int>(seq.tracks.size()) && clickTime >= 0.0f &&
@@ -340,13 +348,13 @@ namespace SparkEditor
 
         auto& track = seq.tracks[m_selectedTrack];
 
-        ImGui::Text(ICON_FA_EDIT " Track Properties");
+        Spark::Ui::SubHeader(ICON_FA_EDIT " Track Properties");
         ImGui::InputText("Name", track.name, sizeof(track.name));
         ImGui::InputText("Actor", track.actorName, sizeof(track.actorName));
         ImGui::InputText("Property", track.propertyName, sizeof(track.propertyName));
         ImGui::Checkbox("Locked", &track.locked);
 
-        ImGui::Text("Keyframes: %d", static_cast<int>(track.keyframes.size()));
+        Spark::Ui::KeyValue("Keyframes", "%d", static_cast<int>(track.keyframes.size()));
 
         // List keyframes
         for (int k = 0; k < static_cast<int>(track.keyframes.size()); ++k)

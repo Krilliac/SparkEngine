@@ -16,6 +16,9 @@
 #include "../UndoRedo/UndoRedoManager.h"
 #include "../Prefabs/PrefabManager.h"
 
+#include <string>
+#include <string_view>
+
 namespace SparkEditor
 {
 
@@ -111,6 +114,7 @@ namespace SparkEditor
         // Layout commands
         m_commandPalette->RegisterAction("Reset Layout", "Layout", [this]() { ResetToDefaultLayout(); });
         m_commandPalette->RegisterAction("Save Layout", "Layout", [this]() { SaveLayout("Quick Save"); });
+        m_commandPalette->RegisterAction("Save Layout As...", "Layout", [this]() { m_saveLayoutAsRequested = true; });
 
         // Prefab commands
         m_commandPalette->RegisterAction("Create Empty Prefab", "Command",
@@ -154,13 +158,48 @@ namespace SparkEditor
 
     void EditorUI::RegisterToolCommands()
     {
-        // Theme commands
-        m_commandPalette->RegisterAction("Theme: Spark Fusion", "Command", [this]() { ApplyTheme("Spark Fusion"); });
-        m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
-                                         [this]() { ApplyTheme("Spark Professional"); });
-        m_commandPalette->RegisterAction("Theme: Spark Ember", "Command", [this]() { ApplyTheme("Spark Ember"); });
-        m_commandPalette->RegisterAction("Theme: Professional Light", "Command",
-                                         [this]() { ApplyTheme("Professional Light"); });
+        // Appearance commands edit the same preferences as View > Appearance, so a choice made here persists.
+        for (const std::string_view family : EditorAppearanceWindow::kPaletteFamilies)
+        {
+            const std::string palette(family);
+            m_commandPalette->RegisterAction("Theme: " + palette, "Command",
+                                             [this, palette]()
+                                             {
+                                                 m_preferences.palette = palette;
+                                                 CommitPreferenceChange();
+                                             });
+        }
+        struct AppearanceCommand
+        {
+            const char* label;
+            const char* value;
+        };
+        static constexpr AppearanceCommand kAppearanceCommands[] = {{"Appearance: Dark", "dark"},
+                                                                    {"Appearance: Light", "light"},
+                                                                    {"Appearance: High Contrast", "hc"},
+                                                                    {"Appearance: Match System", "system"}};
+        for (const AppearanceCommand& command : kAppearanceCommands)
+        {
+            const std::string value = command.value;
+            m_commandPalette->RegisterAction(command.label, "Command",
+                                             [this, value]()
+                                             {
+                                                 m_preferences.appearance = value;
+                                                 CommitPreferenceChange();
+                                             });
+        }
+        m_commandPalette->RegisterAction("Appearance...", "Command", [this]() { OpenAppearanceWindow(); });
+        m_commandPalette->RegisterAction("UI Scale: Increase", "Command", [this]() { StepUiScale(1); }, "Ctrl+=");
+        m_commandPalette->RegisterAction("UI Scale: Decrease", "Command", [this]() { StepUiScale(-1); }, "Ctrl+-");
+        m_commandPalette->RegisterAction("UI Scale: Reset to 100%", "Command", [this]() { StepUiScale(0); }, "Ctrl+0");
+        m_commandPalette->RegisterAction("Toggle Status Bar", "Command",
+                                         [this]()
+                                         {
+                                             m_preferences.showStatusBar = !m_preferences.showStatusBar;
+                                             SavePreferences();
+                                         });
+        m_commandPalette->RegisterAction("Show Notifications", "Command", [this]() { OpenNotificationHistory(); });
+        m_commandPalette->RegisterAction("Show Start Page", "Command", [this]() { OpenStartPage(); });
 
         // Transform tool commands
         m_commandPalette->RegisterAction(

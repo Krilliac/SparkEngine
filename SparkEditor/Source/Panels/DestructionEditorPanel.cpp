@@ -10,6 +10,9 @@
 #include <iostream>
 #include <cstdio>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -101,7 +104,7 @@ namespace SparkEditor
     {
         if (m_selectedPattern < 0 || m_selectedPattern >= static_cast<int>(m_patterns.size()))
         {
-            ImGui::TextDisabled("Select a pattern from the Patterns tab.");
+            Spark::Ui::EmptyState(ICON_FA_BOMB, "No pattern selected", "Select a pattern from the Patterns tab.");
             return;
         }
 
@@ -111,8 +114,9 @@ namespace SparkEditor
         ImGui::InputText("Sound", pattern.destructionSound, sizeof(pattern.destructionSound));
         ImGui::InputText("Particle", pattern.particleEffect, sizeof(pattern.particleEffect));
 
-        ImGui::Separator();
-        ImGui::Text("Pieces (%d)", static_cast<int>(pattern.pieces.size()));
+        char piecesLabel[48];
+        std::snprintf(piecesLabel, sizeof(piecesLabel), "Pieces (%d)", static_cast<int>(pattern.pieces.size()));
+        Spark::Ui::SubHeader(piecesLabel);
 
         if (ImGui::Button(ICON_FA_PLUS " Add Piece"))
         {
@@ -121,13 +125,12 @@ namespace SparkEditor
             pattern.pieces.push_back(piece);
         }
 
-        if (ImGui::BeginTable("PieceTable", 4,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+        if (Spark::Ui::BeginDataTable("PieceTable", 4, ImGuiTableFlags_BordersOuter))
         {
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Mesh");
-            ImGui::TableSetupColumn("Mass", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Lifetime", ImGuiTableColumnFlags_WidthFixed, 80);
+            ImGui::TableSetupColumn("Mass", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Lifetime", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(pattern.pieces.size()); ++i)
@@ -171,7 +174,7 @@ namespace SparkEditor
         ImGui::DragFloat("Lifetime Multiplier", &m_debrisLifetimeMultiplier, 0.1f, 0.1f, 5.0f, "%.1fx");
 
         ImGui::Separator();
-        if (ImGui::Button(ICON_FA_TRASH " Clear All Debris"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Clear All Debris"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "DestructionEditorPanel: cleared all debris");
             m_activeDebrisCount = 0;

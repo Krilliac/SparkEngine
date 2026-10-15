@@ -14,6 +14,7 @@
  *  - CSGEditorPanel drives the real CSG brush registry and mesh builder
  *  - WeaponEditorPanel Reset restores the starting values
  *  - ObjectPlacementPanel placement routes to the document entity creator
+ *  - InspectorPanel::DrawVec3Control keeps its X/Y/Z fields inside narrow and wide panels
  *
  * These panels are EditorPanel subclasses whose .cpp files require ImGui to link,
  * so this file belongs in the ImGui-gated test block.
@@ -31,6 +32,7 @@
 
 #include "Panels/ModdingPanel.h"
 #include "Panels/CSGEditorPanel.h"
+#include "Panels/InspectorPanel.h"
 #include "Panels/ObjectPlacementPanel.h"
 #include "Panels/ReplayPanel.h"
 #include "Panels/SaveSystemPanel.h"
@@ -39,6 +41,12 @@
 #include "Panels/TimeOfDayPanel.h"
 #include "Panels/WeaponEditorPanel.h"
 #include "Panels/WeatherFogPanel.h"
+
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Tokens.h"
+
+#include <imgui.h>
+#include <imgui_internal.h> // ImGuiWindow::DC.CursorMaxPos: the right edge actually laid out
 
 #include <filesystem>
 #include <fstream>
@@ -477,4 +485,62 @@ TEST(EditorPanels_ObjectPlacementRoutesToDocumentCreator)
 
     // A template the document rejects must be reported as a failure.
     EXPECT_FALSE(panel.PlaceTemplate("Unsupported"));
+}
+
+TEST(EditorPanels_InspectorVec3ControlFitsNarrowAndWidePanels)
+{
+    // A private ImGui context with the Ember theme; the caller's context (if any) is restored.
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1280.0f, 720.0f);
+    unsigned char* pixels = nullptr;
+    int atlasWidth = 0;
+    int atlasHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &atlasWidth, &atlasHeight);
+    Spark::Ui::Install(
+        context,
+        Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember), Spark::Ui::Appearance::Dark),
+        1.0f, 1.0f, false);
+
+    struct Layout
+    {
+        float contentRight = 0.0f;
+        float laidOutRight = 0.0f;
+        float height = 0.0f;
+    };
+    const auto layout = [](const char* window, const char* label, float width)
+    {
+        Layout result;
+        ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(width, 400.0f));
+        ImGui::Begin(window, nullptr, ImGuiWindowFlags_NoSavedSettings);
+        const ImVec2 start = ImGui::GetCursorScreenPos();
+        result.contentRight = start.x + ImGui::GetContentRegionAvail().x;
+        float values[3] = {1.0f, 2.0f, 3.0f};
+        SparkEditor::InspectorPanel::DrawVec3Control(label, values, 0.0f, 0.1f);
+        result.laidOutRight = ImGui::GetCurrentWindow()->DC.CursorMaxPos.x;
+        result.height = ImGui::GetCursorScreenPos().y - start.y;
+        ImGui::End();
+        return result;
+    };
+
+    ImGui::NewFrame();
+    const float frameHeight = ImGui::GetFrameHeight();
+    // A grid row ("##" label, no caption) in a wide inspector, and a captioned control in a
+    // panel too narrow for three side-by-side fields.
+    const Layout wide = layout("Wide inspector", "##Position", 600.0f);
+    const Layout narrow = layout("Narrow inspector", "Rotation", 120.0f);
+    ImGui::EndFrame();
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+
+    // Neither layout may spill past the panel's right edge (the old Z field clipped).
+    EXPECT_LE(wide.laidOutRight, wide.contentRight + 0.5f);
+    EXPECT_LE(narrow.laidOutRight, narrow.contentRight + 0.5f);
+    // Wide: one row and no caption line. Narrow: the caption plus three stacked axis rows.
+    EXPECT_LT(wide.height, frameHeight * 2.0f);
+    EXPECT_GE(narrow.height, frameHeight * 3.0f);
 }

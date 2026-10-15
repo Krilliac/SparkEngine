@@ -19,6 +19,8 @@
 
 #include <cstddef>
 #include <string>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -32,10 +34,9 @@ namespace SparkEditor
     {
         if (!m_statusMsg.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Text,
-                                  m_statusIsError ? IM_COL32(255, 110, 110, 255) : IM_COL32(150, 210, 150, 255));
-            ImGui::TextWrapped("%s", m_statusMsg.c_str());
-            ImGui::PopStyleColor();
+            const Spark::Ui::Status status = m_statusIsError ? Spark::Ui::Status::Error : Spark::Ui::Status::Success;
+            if (Spark::Ui::Banner(status, m_statusMsg.c_str(), true))
+                m_statusMsg.clear();
             ImGui::Separator();
         }
         if (!m_loaded)
@@ -311,14 +312,13 @@ namespace SparkEditor
         {
             if (m_violations.empty())
             {
-                ImGui::TextColored(ImVec4(0.55f, 0.85f, 0.55f, 1.0f),
-                                   "Validation OK - the game will accept this file.");
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Validation OK - the game will accept this file.");
             }
             else
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f),
-                                   "%d violation(s):", static_cast<int>(m_violations.size()));
-                ImGui::BeginChild("violation_list", ImVec2(0.0f, 140.0f), true);
+                Spark::Ui::StatusText(Spark::Ui::Status::Error,
+                                      "%d violation(s):", static_cast<int>(m_violations.size()));
+                ImGui::BeginChild("violation_list", Spark::Ui::Px2(0.0f, 140.0f), true);
                 for (const std::string& v : m_violations)
                     ImGui::TextWrapped("- %s", v.c_str());
                 ImGui::EndChild();

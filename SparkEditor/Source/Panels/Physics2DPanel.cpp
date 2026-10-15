@@ -8,6 +8,8 @@
 #include "Physics2DPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
@@ -71,7 +73,7 @@ namespace SparkEditor
 
     void Physics2DPanel::RenderWorldSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_GLOBE " World Settings", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("World Settings", ICON_FA_GLOBE, true))
         {
             ImGui::DragFloat2("Gravity", m_gravity, 0.1f, -100.0f, 100.0f);
 
@@ -100,13 +102,13 @@ namespace SparkEditor
 
             static float fixedTimestep = 1.0f / 60.0f;
             ImGui::DragFloat("Fixed Timestep", &fixedTimestep, 0.001f, 0.001f, 0.1f, "%.3f s");
-            ImGui::Text("%.0f Hz", 1.0f / fixedTimestep);
+            Spark::Ui::MonoText("%.0f Hz", 1.0f / fixedTimestep);
         }
     }
 
     void Physics2DPanel::RenderDebugVisualization()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_EYE " Debug Visualization", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Debug Visualization", ICON_FA_EYE, true))
         {
             ImGui::Checkbox("Show AABBs", &m_showAABBs);
             ImGui::Checkbox("Show Velocities", &m_showVelocities);
@@ -132,32 +134,35 @@ namespace SparkEditor
 
     void Physics2DPanel::RenderPhysicsStats()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CHART_BAR " Physics Stats", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Physics Stats", ICON_FA_CHART_BAR, true))
         {
-            ImGui::Text("Bodies:     %d", m_bodyCount);
-            ImGui::Text("  Static:   %d", 0);
-            ImGui::Text("  Kinematic: %d", 0);
-            ImGui::Text("  Dynamic:  %d", 0);
-            ImGui::Text("Contacts:   %d", m_contactCount);
-            ImGui::Text("Step Time:  %.2f ms", m_stepTime);
+            Spark::Ui::KeyValue("Bodies:", "%d", m_bodyCount);
+            ImGui::Indent();
+            Spark::Ui::KeyValue("Static:", "%d", 0);
+            Spark::Ui::KeyValue("Kinematic:", "%d", 0);
+            Spark::Ui::KeyValue("Dynamic:", "%d", 0);
+            ImGui::Unindent();
+            Spark::Ui::KeyValue("Contacts:", "%d", m_contactCount);
+            Spark::Ui::KeyValue("Step Time:", "%.2f ms", m_stepTime);
 
-            // Performance bar
+            // Performance bar: the overlay text states the budget share, the colour only reinforces it.
             float maxStepTime = 16.67f; // 60 FPS budget
             float ratio = m_stepTime / maxStepTime;
-            ImVec4 barColor = (ratio < 0.5f)   ? ImVec4(0, 1, 0, 1)
-                              : (ratio < 0.8f) ? ImVec4(1, 1, 0, 1)
-                                               : ImVec4(1, 0, 0, 1);
-            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barColor);
-            ImGui::ProgressBar(ratio, ImVec2(-1, 0), "Physics Budget");
-            ImGui::PopStyleColor();
+            const Spark::Ui::Role barRole = (ratio < 0.5f)   ? Spark::Ui::Role::SuccessText
+                                            : (ratio < 0.8f) ? Spark::Ui::Role::WarningText
+                                                             : Spark::Ui::Role::ErrorText;
+            char overlay[48];
+            std::snprintf(overlay, sizeof(overlay), "Physics Budget %.0f%%", ratio * 100.0f);
+            Spark::Ui::ScopedRoleColor barColor(ImGuiCol_PlotHistogram, barRole);
+            ImGui::ProgressBar(ratio, ImVec2(-1, 0), overlay);
         }
     }
 
     void Physics2DPanel::RenderCollisionLayers()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_LAYER_GROUP " Collision Layer Matrix"))
+        if (Spark::Ui::SectionHeader("Collision Layer Matrix", ICON_FA_LAYER_GROUP, false))
         {
-            ImGui::Text("Configure which layers collide with each other:");
+            Spark::Ui::SecondaryText("Configure which layers collide with each other:");
             ImGui::Spacing();
 
             // Layer name editor
@@ -180,10 +185,10 @@ namespace SparkEditor
 
             // Draw collision matrix (show 8x8 for usability)
             int visibleLayers = 8;
-            float cellSize = 24.0f;
+            float cellSize = Spark::Ui::Px(24.0f);
 
             // Column headers
-            ImGui::Dummy(ImVec2(80, 0));
+            ImGui::Dummy(Spark::Ui::Px2(80, 0));
             for (int j = 0; j < visibleLayers; ++j)
             {
                 ImGui::SameLine();
@@ -210,12 +215,11 @@ namespace SparkEditor
 
     void Physics2DPanel::RenderBodyInspector()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CUBE " Body Inspector"))
+        if (Spark::Ui::SectionHeader("Body Inspector", ICON_FA_CUBE, false))
         {
             if (!m_scene)
             {
-                ImGui::TextColored(ImVec4(0.55f, 0.58f, 0.62f, 1.0f),
-                                   ICON_FA_INFO_CIRCLE " No scene loaded. Load a scene to inspect physics bodies.");
+                Spark::Ui::EmptyState(ICON_FA_CUBE, "No scene loaded", "Load a scene to inspect physics bodies.");
                 return;
             }
 
@@ -250,10 +254,8 @@ namespace SparkEditor
             static bool isBullet = false;
             ImGui::Checkbox("Bullet (CCD)", &isBullet);
 
-            ImGui::Separator();
-
             // Collider2D properties
-            ImGui::Text(ICON_FA_SHAPES " Collider 2D");
+            Spark::Ui::SubHeader(ICON_FA_SHAPES " Collider 2D");
             static int shape = 0;
             const char* shapes[] = {"Box", "Circle", "Capsule", "Polygon", "Edge"};
             ImGui::Combo("Shape", &shape, shapes, 5);
@@ -286,7 +288,7 @@ namespace SparkEditor
 
     void Physics2DPanel::RenderRaycastTool()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CROSSHAIRS " Raycast Tool"))
+        if (Spark::Ui::SectionHeader("Raycast Tool", ICON_FA_CROSSHAIRS, false))
         {
             ImGui::DragFloat2("Origin", m_rayOrigin, 0.1f);
             ImGui::DragFloat2("Direction", m_rayDirection, 0.1f);

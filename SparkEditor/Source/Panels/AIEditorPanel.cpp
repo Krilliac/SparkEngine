@@ -6,6 +6,8 @@
 #include "AIEditorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <iostream>
 #include <cstring>
@@ -116,7 +118,7 @@ namespace SparkEditor
 
             // Indent by depth
             if (node.depth > 0)
-                ImGui::Indent(static_cast<float>(node.depth) * 16.0f);
+                ImGui::Indent(static_cast<float>(node.depth) * Spark::Ui::Px(16.0f));
 
             char label[256];
             snprintf(label, sizeof(label), "%s %s [%s]##%d", typeIcons[typeIdx], node.name, typeNames[typeIdx], i);
@@ -125,7 +127,7 @@ namespace SparkEditor
                 m_selectedNode = i;
 
             if (node.depth > 0)
-                ImGui::Unindent(static_cast<float>(node.depth) * 16.0f);
+                ImGui::Unindent(static_cast<float>(node.depth) * Spark::Ui::Px(16.0f));
         }
         ImGui::EndChild();
 
@@ -165,7 +167,7 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::TextDisabled("Select a node to edit properties");
+            Spark::Ui::EmptyState(ICON_FA_PROJECT_DIAGRAM, "No node selected", "Select a node to edit properties");
         }
         ImGui::EndChild();
     }
@@ -184,8 +186,8 @@ namespace SparkEditor
             ImGui::TableHeadersRow();
 
             // This panel currently has no live agent-data source. Keep the
-            // Keep the empty table explicit rather than implying state preview
-            // will populate it.
+            // empty table explicit rather than implying state preview will
+            // populate it.
 
             ImGui::EndTable();
         }

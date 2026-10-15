@@ -53,6 +53,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <locale>
 #include <optional>
@@ -66,16 +67,36 @@ namespace SparkEditor
 
     namespace fs = std::filesystem;
 
-    namespace
+    bool EditorLayoutManager::IsValidLayoutName(const std::string& name)
     {
-        bool IsSafeLayoutName(const std::string& name)
-        {
-            if (name.empty() || name == "." || name == "..")
-                return false;
-            return std::none_of(name.begin(), name.end(),
-                                [](unsigned char c) { return c < 0x20 || c == '/' || c == '\\' || c == ':'; });
-        }
-    } // namespace
+        if (name.empty() || name.size() > kMaxLayoutNameLength || name == "." || name == "..")
+            return false;
+
+        // Characters no Windows file name may hold, plus the path separators every platform rejects.
+        const bool hasForbiddenChar = std::any_of(name.begin(), name.end(),
+                                                  [](unsigned char c)
+                                                  {
+                                                      return c < 0x20 || c == '/' || c == '\\' || c == ':' ||
+                                                             c == '<' || c == '>' || c == '"' || c == '|' || c == '?' ||
+                                                             c == '*';
+                                                  });
+        if (hasForbiddenChar)
+            return false;
+
+        // Windows silently strips a trailing dot or space, so "A." would overwrite "A".
+        if (name.back() == '.' || name.back() == ' ' || name.front() == ' ')
+            return false;
+
+        // Reserved DOS device names are invalid as file stems on Windows whatever the extension.
+        std::string stem = name.substr(0, name.find('.'));
+        std::transform(stem.begin(), stem.end(), stem.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+        static constexpr const char* kReservedNames[] = {"CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
+                                                         "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+                                                         "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
+        return std::none_of(std::begin(kReservedNames), std::end(kReservedNames),
+                            [&stem](const char* reserved) { return stem == reserved; });
+    }
 
     EditorLayoutManager::EditorLayoutManager() = default;
     EditorLayoutManager::~EditorLayoutManager() = default;
@@ -291,7 +312,7 @@ namespace SparkEditor
     bool EditorLayoutManager::SaveCurrentLayout(const std::string& name, const std::string& description)
     {
         m_lastError.clear();
-        if (!m_initialized || !IsSafeLayoutName(name))
+        if (!m_initialized || !IsValidLayoutName(name))
         {
             m_lastError =
                 "Layout name '" + name + "' is not a valid file name, or the layout manager is not initialized";
@@ -696,7 +717,7 @@ namespace SparkEditor
     bool EditorLayoutManager::LoadLayout(const std::string& name)
     {
         m_lastError.clear();
-        if (!m_initialized || !IsSafeLayoutName(name))
+        if (!m_initialized || !IsValidLayoutName(name))
         {
             m_lastError =
                 "Layout name '" + name + "' is not a valid file name, or the layout manager is not initialized";
@@ -713,18 +734,48 @@ namespace SparkEditor
         return true;
     }
 
+    bool EditorLayoutManager::HasLayout(const std::string& name) const
+    {
+        if (!m_initialized || !IsValidLayoutName(name))
+            return false;
+        std::error_code ec;
+        return fs::is_regular_file(LayoutFilePath(name), ec);
+    }
+
     bool EditorLayoutManager::DeleteLayout(const std::string& name)
     {
-        if (!m_initialized || !IsSafeLayoutName(name))
+        m_lastError.clear();
+        if (!m_initialized || !IsValidLayoutName(name))
+        {
+            m_lastError =
+                "Layout name '" + name + "' is not a valid file name, or the layout manager is not initialized";
             return false;
+        }
 
         const std::string path = LayoutFilePath(name);
         std::error_code ec;
         if (!fs::exists(path, ec))
+        {
+            m_lastError = "Layout '" + name + "' does not exist";
             return false;
+        }
 
-        fs::remove(path, ec);
-        return !ec;
+        if (!fs::remove(path, ec) || ec)
+        {
+            m_lastError = "Layout '" + path + "' could not be deleted: " + ec.message();
+            return false;
+        }
+
+        // The editor keeps the ImGui dock tree beside the panel JSON as <name>.ini (+ .meta). Remove the
+        // companions too, so a later save under the same name never mixes with an orphaned dock tree.
+        const fs::path dockIni = fs::path(m_layoutDirectory) / (name + ".ini");
+        std::error_code companionEc;
+        fs::remove(dockIni, companionEc);
+        fs::remove(fs::path(dockIni.string() + ".meta"), companionEc);
+
+        if (m_currentLayoutName == name)
+            m_currentLayoutName = "Default";
+        return true;
     }
 
     std::vector<LayoutInfo> EditorLayoutManager::GetSavedLayouts()

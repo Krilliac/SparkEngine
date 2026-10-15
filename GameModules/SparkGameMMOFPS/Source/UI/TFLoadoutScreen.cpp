@@ -45,8 +45,8 @@ namespace Terrafront
             switch (slotIdx)
             {
             case 0: // primary
-                return slot == "rifle" || slot == "carbine" || slot == "lmg" || slot == "sniper" ||
-                       slot == "shotgun" || slot == "launcher";
+                return slot == "rifle" || slot == "carbine" || slot == "lmg" || slot == "sniper" || slot == "shotgun" ||
+                       slot == "launcher";
             case 1: // secondary
                 return slot == "pistol";
             default: // tool
@@ -70,7 +70,8 @@ namespace Terrafront
             if (list.empty())
                 return;
             const int n = static_cast<int>(list.size());
-            const bool anyUnlocked = std::any_of(list.begin(), list.end(), [](const Candidate& c) { return !c.locked; });
+            const bool anyUnlocked =
+                std::any_of(list.begin(), list.end(), [](const Candidate& c) { return !c.locked; });
             for (int tries = 0; tries < n; ++tries)
             {
                 idx = ((idx + dir) % n + n) % n;
@@ -267,12 +268,10 @@ namespace Terrafront
         if (ImGui::Button("CLOSE", ImVec2(130.0f, 40.0f)))
             Close();
         ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 160.0f, footY - 4.0f));
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.42f, 0.20f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.20f, 0.56f, 0.26f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.24f, 0.68f, 0.30f, 1.0f));
+        Spark::Ui::Sdk::PushSuccessButton();
         if (ImGui::Button("SAVE", ImVec2(130.0f, 40.0f)))
             SendSave();
-        ImGui::PopStyleColor(3);
+        Spark::Ui::Sdk::PopSuccessButton();
     }
 
     void TFLoadoutScreen::DrawWeaponRow(const char* label, int slotIdx, float x, float y, float w, float rowH)

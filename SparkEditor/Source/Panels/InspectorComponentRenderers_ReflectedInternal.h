@@ -22,6 +22,8 @@
 #include "InspectorPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../CommandHistory.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <cstddef>
 #include <cstring>
@@ -39,7 +41,7 @@ namespace SparkEditor
 
 #define RENDER_REFLECTED_COMPONENT(compType, icon, displayName, dataType, ...)                                         \
     {                                                                                                                  \
-        bool headerOpen = ImGui::CollapsingHeader(icon " " displayName);                                               \
+        bool headerOpen = Spark::Ui::SectionHeader(displayName, icon, false);                                          \
         if (ImGui::BeginPopupContextItem("##" displayName "Ctx"))                                                      \
         {                                                                                                              \
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))                                                    \
@@ -48,7 +50,7 @@ namespace SparkEditor
         }                                                                                                              \
         if (headerOpen)                                                                                                \
         {                                                                                                              \
-            ImGui::Indent(4);                                                                                          \
+            ImGui::Indent(Spark::Ui::Px(4.0f));                                                                        \
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, compType);                                   \
             auto* d = comp ? comp->GetData<dataType>() : nullptr;                                                      \
             if (d)                                                                                                     \
@@ -81,9 +83,9 @@ namespace SparkEditor
             }                                                                                                          \
             else                                                                                                       \
             {                                                                                                          \
-                ImGui::TextDisabled("(Component data unavailable)");                                                   \
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");                       \
             }                                                                                                          \
-            ImGui::Unindent(4);                                                                                        \
+            ImGui::Unindent(Spark::Ui::Px(4.0f));                                                                      \
         }                                                                                                              \
     }
 
