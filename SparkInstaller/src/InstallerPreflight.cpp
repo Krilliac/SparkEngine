@@ -2,6 +2,7 @@
 
 #include "GitRunner.h"
 #include "InstallState.h"
+#include "PathUtf8.h"
 #include "ProcessRunner.h"
 
 #include <filesystem>
@@ -132,21 +133,21 @@ namespace SparkInstaller::Preflight
             const fs::path probe = directory / (".sparkinstaller-preflight-" + std::to_string(CurrentProcessId()));
             if (PathEntryExists(probe))
             {
-                detail = "probe path already exists: " + probe.string();
+                detail = "probe path already exists: " + PathToUtf8(probe);
                 return false;
             }
             {
                 std::ofstream out(probe, std::ios::binary | std::ios::trunc);
                 if (!out)
                 {
-                    detail = "cannot create files in " + directory.string();
+                    detail = "cannot create files in " + PathToUtf8(directory);
                     return false;
                 }
             }
             std::error_code error;
             if (!fs::remove(probe, error) || error)
             {
-                detail = "cannot remove preflight probe " + probe.string();
+                detail = "cannot remove preflight probe " + PathToUtf8(probe);
                 return false;
             }
             return true;
@@ -167,7 +168,7 @@ namespace SparkInstaller::Preflight
     static std::vector<PreflightFailure> RunChecks(const InstallerContext& ctx, bool recoveryOnly)
     {
         std::vector<PreflightFailure> failures;
-        const fs::path destination = fs::path(ctx.destination);
+        const fs::path destination = PathFromUtf8(ctx.destination);
         const fs::path ancestor = NearestExistingAncestor(destination);
 
         const fs::path linkedComponent = FirstLinkedComponent(destination);
@@ -176,7 +177,7 @@ namespace SparkInstaller::Preflight
         {
             failures.push_back(
                 {"destination-link", (linkedComponent == destination ? "destination " : "destination path component ") +
-                                         linkedComponent.string() +
+                                         PathToUtf8(linkedComponent) +
                                          " is a symlink or junction; choose the real directory path"});
         }
 
@@ -184,7 +185,7 @@ namespace SparkInstaller::Preflight
         const bool isDirectory = fs::is_directory(fs::symlink_status(ancestor, error));
         if (!linked && !isDirectory)
         {
-            failures.push_back({"destination-not-directory", ancestor.string() + " exists and is not a directory"});
+            failures.push_back({"destination-not-directory", PathToUtf8(ancestor) + " exists and is not a directory"});
         }
 
         if (!linked && isDirectory)
@@ -202,23 +203,33 @@ namespace SparkInstaller::Preflight
                 if (error)
                 {
                     failures.push_back({"free-space-unknown",
-                                        "cannot query free space on " + ancestor.string() + ": " + error.message()});
+                                        "cannot query free space on " + PathToUtf8(ancestor) + ": " + error.message()});
                 }
                 else if (space.available < required)
                 {
                     failures.push_back({"insufficient-free-space", FormatGiB(space.available) + " free on " +
-                                                                       ancestor.string() + ", " + FormatGiB(required) +
-                                                                       " required"});
+                                                                       PathToUtf8(ancestor) + ", " +
+                                                                       FormatGiB(required) + " required"});
                 }
             }
         }
         if (!recoveryOnly && !ctx.skipBuild)
         {
             const std::string& cmakePath = ctx.configManager.config.cmakePath;
-            const std::string cmake = cmakePath.empty() ? "cmake" : GitRunner::EncodeProcessRunnerArgument(cmakePath);
+            // cmakePath is UTF-8; ProcessRunner needs the process code page.
+            std::string processCmakePath;
+            const bool encodable = ProcessArgFromUtf8(cmakePath, processCmakePath);
+            const std::string cmake =
+                processCmakePath.empty() ? "cmake" : GitRunner::EncodeProcessRunnerArgument(processCmakePath);
             SparkBuild::ProcessRunner runner;
             std::string output;
-            if (runner.RunSync(cmake + " --version", {}, output) != 0)
+            if (!encodable)
+            {
+                failures.push_back(
+                    {"cmake-path-encoding", cmakePath + " cannot be passed to a process in this system's code page; "
+                                                        "use a CMake path without those characters"});
+            }
+            else if (runner.RunSync(cmake + " --version", {}, output) != 0)
             {
                 failures.push_back(
                     {"cmake-unavailable", (cmakePath.empty() ? std::string("cmake on PATH") : cmakePath) +
@@ -231,12 +242,11 @@ namespace SparkInstaller::Preflight
         {
             const fs::path marker = destination / InstallState::FileName();
             InstallState ignored;
-            if (fs::is_regular_file(fs::symlink_status(marker, error)) &&
-                !InstallState::Load(destination.string(), ignored))
+            if (fs::is_regular_file(fs::symlink_status(marker, error)) && !InstallState::Load(ctx.destination, ignored))
             {
                 failures.push_back({"corrupt-install-marker",
-                                    marker.string() + " exists but cannot be parsed; repair or remove it before "
-                                                      "updating"});
+                                    PathToUtf8(marker) + " exists but cannot be parsed; repair or remove it before "
+                                                         "updating"});
             }
         }
 

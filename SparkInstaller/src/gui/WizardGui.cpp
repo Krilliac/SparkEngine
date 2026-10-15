@@ -2,6 +2,7 @@
 
 #include "InstallState.h"
 #include "Installer.h"
+#include "PathUtf8.h"
 
 #include <imgui.h>
 
@@ -88,7 +89,7 @@ namespace SparkInstaller
 
         GuiState s;
         std::string initialDest =
-            ctx.destination.empty() ? (fs::current_path() / "SparkEngine").string() : ctx.destination;
+            ctx.destination.empty() ? PathToUtf8(fs::current_path() / "SparkEngine") : ctx.destination;
         std::snprintf(s.destBuf, sizeof(s.destBuf), "%s", initialDest.c_str());
         if (!ctx.ref.empty())
             std::snprintf(s.refBuf, sizeof(s.refBuf), "%s", ctx.ref.c_str());

@@ -15,7 +15,8 @@ namespace SparkInstaller
     // strings containing controls it cannot encode. ReadPendingMarker reads
     // the ref and commit values WritePendingMarker writes (at most 4 KiB),
     // rejecting duplicate or unknown nonempty lines. A rejected read leaves
-    // its outputs unchanged. The functions keep no shared state; the installer
+    // its outputs unchanged. Destination and tree arguments, and the recorded
+    // destination, are UTF-8 (PathUtf8.h). The functions keep no shared state; the installer
     // calls them from the one thread that runs Installer::Run.
     struct InstallState
     {

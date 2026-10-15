@@ -1,5 +1,7 @@
 #include "InstallState.h"
 
+#include "PathUtf8.h"
+
 #include <array>
 #include <charconv>
 #include <chrono>
@@ -54,7 +56,7 @@ namespace SparkInstaller
         }
 
         // Reads the whole install-state file, refusing one above kMaxInstallStateBytes.
-        bool ReadFile(const std::string& path, std::string& contents)
+        bool ReadFile(const fs::path& path, std::string& contents)
         {
             std::error_code error;
             const std::uintmax_t fileSize = fs::file_size(path, error);
@@ -425,9 +427,9 @@ namespace SparkInstaller
 
     bool InstallState::Load(const std::string& destination, InstallState& out)
     {
-        fs::path path = fs::path(destination) / FileName();
+        const fs::path path = PathFromUtf8(destination) / FileName();
         std::string json;
-        if (!ReadFile(path.string(), json))
+        if (!ReadFile(path, json))
         {
             return false;
         }
@@ -453,7 +455,7 @@ namespace SparkInstaller
         {
             return false;
         }
-        std::ofstream out(fs::path(tree) / PendingFileName(), std::ios::binary | std::ios::trunc);
+        std::ofstream out(PathFromUtf8(tree) / PendingFileName(), std::ios::binary | std::ios::trunc);
         out << "ref=" << ref << '\n' << "commit=" << commit << '\n';
         out.close();
         return static_cast<bool>(out);
@@ -461,7 +463,7 @@ namespace SparkInstaller
 
     bool InstallState::ReadPendingMarker(const std::string& tree, std::string& ref, std::string& commit)
     {
-        const fs::path marker = fs::path(tree) / PendingFileName();
+        const fs::path marker = PathFromUtf8(tree) / PendingFileName();
         std::error_code error;
         if (!fs::is_regular_file(fs::symlink_status(marker, error)) || error)
         {
@@ -539,7 +541,7 @@ namespace SparkInstaller
             return false;
         }
 
-        fs::path path = fs::path(destination) / FileName();
+        const fs::path path = PathFromUtf8(destination) / FileName();
         fs::path temporaryPath = path;
         temporaryPath += ".tmp";
         const auto removeTemporary = [&temporaryPath]

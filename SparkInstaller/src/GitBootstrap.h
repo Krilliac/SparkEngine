@@ -7,6 +7,10 @@
 
 namespace SparkInstaller
 {
+    // gitExe, cacheDir and stagingDir are in the process encoding (the ANSI
+    // code page on Windows; see PathUtf8.h), not UTF-8: they come from getenv
+    // and PATH resolution and are consumed by SparkBuildCore's ProcessRunner
+    // and Downloader. Log lines are UTF-8.
     struct GitBootstrapResult
     {
         bool ok = false;

@@ -1,10 +1,21 @@
 #include "InstallState.h"
+#include "PathUtf8.h"
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace
 {
@@ -32,6 +43,185 @@ namespace
         state.installerVersion = "1.0.0";
         state.options["BUILD_TESTS"] = true;
         return state;
+    }
+
+    // A destination string is UTF-8 (TUI, GUI and command line all hand the
+    // installer UTF-8). On Windows a narrow fs::path would read it in the ANSI
+    // code page and write the markers into a mojibake sibling directory.
+    std::filesystem::path NonAsciiLeaf()
+    {
+#ifdef _WIN32
+        return std::filesystem::path(L"Zo\u00EB-install");
+#else
+        return std::filesystem::path("Zo\xC3\xAB-install");
+#endif
+    }
+
+    int RunUtf8DestinationTest()
+    {
+        const auto root = MakeTestRoot();
+        const auto wideDestination = root / NonAsciiLeaf();
+        const std::string utf8Destination = SparkInstaller::PathToUtf8(root) + "/Zo\xC3\xAB-install";
+        std::error_code error;
+        std::filesystem::create_directories(wideDestination, error);
+        int failures = Check(!error, "could not create the non-ASCII install-state test root");
+        if (failures != 0)
+            return failures;
+
+        const auto state = StateWithCommit("utf8-commit");
+        failures += Check(state.Save(utf8Destination), "install state save to a UTF-8 destination failed");
+        failures += Check(std::filesystem::is_regular_file(wideDestination / SparkInstaller::InstallState::FileName()),
+                          "install state for a UTF-8 destination was not written inside that destination");
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(utf8Destination, loaded) &&
+                              loaded.commit == "utf8-commit" && loaded.destination == utf8Destination,
+                          "install state for a UTF-8 destination did not round-trip");
+
+        failures += Check(SparkInstaller::InstallState::WritePendingMarker(utf8Destination, "Working", "utf8-commit"),
+                          "pending marker write to a UTF-8 destination failed");
+        failures +=
+            Check(std::filesystem::is_regular_file(wideDestination / SparkInstaller::InstallState::PendingFileName()),
+                  "pending marker for a UTF-8 destination was not written inside that destination");
+        std::string ref;
+        std::string commit;
+        failures += Check(SparkInstaller::InstallState::ReadPendingMarker(utf8Destination, ref, commit) &&
+                              ref == "Working" && commit == "utf8-commit",
+                          "pending marker for a UTF-8 destination did not round-trip");
+
+        std::filesystem::remove_all(root, error);
+        return failures;
+    }
+
+    // The conversion helpers themselves: UTF-8 maps to the intended path and
+    // back, and ill-formed UTF-8 is recognised instead of silently remapped.
+    int RunPathUtf8HelperTest()
+    {
+        const std::string utf8 = "Zo\xC3\xAB-install";
+        int failures = Check(SparkInstaller::PathFromUtf8(utf8) == NonAsciiLeaf(),
+                             "PathFromUtf8 did not map UTF-8 to the intended path");
+        failures += Check(SparkInstaller::PathToUtf8(NonAsciiLeaf()) == utf8, "PathToUtf8 did not produce UTF-8");
+        failures += Check(SparkInstaller::IsValidUtf8(utf8) && SparkInstaller::IsValidUtf8(""),
+                          "IsValidUtf8 rejected well-formed UTF-8");
+        failures += Check(!SparkInstaller::IsValidUtf8("Zo\xEB") && !SparkInstaller::IsValidUtf8("\xC0\xAF") &&
+                              !SparkInstaller::IsValidUtf8("\xED\xA0\x80") && !SparkInstaller::IsValidUtf8("\xC3"),
+                          "IsValidUtf8 accepted ill-formed UTF-8");
+        std::string narrow = "unchanged";
+        failures += Check(SparkInstaller::ProcessArgFromUtf8("ascii", narrow) && narrow == "ascii",
+                          "ProcessArgFromUtf8 changed an ASCII path");
+#ifdef _WIN32
+        narrow = "unchanged";
+        failures += Check(!SparkInstaller::ProcessArgFromUtf8("Zo\xEB", narrow) && narrow == "unchanged",
+                          "ProcessArgFromUtf8 accepted ill-formed UTF-8");
+#endif
+        return failures;
+    }
+
+    // A non-ASCII character with its UTF-8 bytes, for picking one the active
+    // code page can (or cannot) represent. The probe calls the Win32 API
+    // directly so it does not depend on the helper under test.
+    struct NonAsciiCandidate
+    {
+        wchar_t wide;
+        const char* utf8;
+    };
+
+    [[maybe_unused]] constexpr NonAsciiCandidate kNonAsciiCandidates[] = {
+        {L'\u00EB', "\xC3\xAB"},     // Latin small e with diaeresis (cp1252 and most Western pages)
+        {L'\u0416', "\xD0\x96"},     // Cyrillic Zhe (cp1251, cp932, cp936)
+        {L'\u65E5', "\xE6\x97\xA5"}, // CJK "sun" (cp932, cp936, cp949, cp950)
+        {L'\u05D0', "\xD7\x90"},     // Hebrew Alef (cp1255)
+        {L'\u0E01', "\xE0\xB8\x81"}, // Thai Ko Kai (cp874)
+    };
+
+#ifdef _WIN32
+    [[maybe_unused]] bool ActiveCodePageRepresents(wchar_t character)
+    {
+        if (::GetACP() == CP_UTF8)
+        {
+            return true;
+        }
+        char buffer[8] = {};
+        BOOL usedDefault = FALSE;
+        const int size = ::WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, &character, 1, buffer, sizeof(buffer),
+                                               nullptr, &usedDefault);
+        return size > 0 && !usedDefault;
+    }
+#endif
+
+    // Returns nullptr when every candidate is (or none is) representable.
+    [[maybe_unused]] const NonAsciiCandidate* FindCandidate(bool representable)
+    {
+        for (const NonAsciiCandidate& candidate : kNonAsciiCandidates)
+        {
+#ifdef _WIN32
+            if (ActiveCodePageRepresents(candidate.wide) == representable)
+            {
+                return &candidate;
+            }
+#else
+            // POSIX paths are bytes: everything is representable.
+            if (representable)
+            {
+                return &candidate;
+            }
+#endif
+        }
+        return nullptr;
+    }
+
+    [[maybe_unused]] std::filesystem::path CandidateLeaf(const NonAsciiCandidate& candidate)
+    {
+#ifdef _WIN32
+        return std::filesystem::path(std::wstring(L"Zo") + candidate.wide + L"-install");
+#else
+        return std::filesystem::path(std::string("Zo") + candidate.utf8 + "-install");
+#endif
+    }
+
+    // "Refused, not mangled": a well-formed character the active code page
+    // lacks must fail the conversion and leave the output untouched, because a
+    // best-fit or '?' substitute would name a different directory.
+    int RunUnrepresentableProcessArgTest()
+    {
+#ifdef _WIN32
+        const NonAsciiCandidate* missing = FindCandidate(false);
+        if (missing == nullptr)
+        {
+            std::cout << "SKIP: active code page " << ::GetACP()
+                      << " represents every candidate; no unrepresentable-character case to test\n";
+            return 0;
+        }
+        const std::string utf8 = std::string("C:/Zo") + missing->utf8 + "-install";
+        std::string narrow = "unchanged";
+        int failures = Check(SparkInstaller::IsValidUtf8(utf8), "unrepresentable candidate is not valid UTF-8");
+        failures += Check(!SparkInstaller::ProcessArgFromUtf8(utf8, narrow) && narrow == "unchanged",
+                          "ProcessArgFromUtf8 mangled a character the active code page cannot represent");
+        return failures;
+#else
+        return 0;
+#endif
+    }
+
+    // cp932/936/950 put 0x5C in the trail byte of many characters; SparkBuild
+    // quoting would double it, so the check must find it whatever the
+    // machine's own code page is.
+    int RunDbcsBackslashTrailTest()
+    {
+#ifdef _WIN32
+        // U+8868 in cp932 is 0x95 0x5C; U+30BD is 0x83 0x5C.
+        int failures = Check(SparkInstaller::ContainsDbcsBackslashTrail("C:\\My Games\\\x95\x5C", 932),
+                             "cp932 trail byte 0x5C was not detected (U+8868)");
+        failures += Check(SparkInstaller::ContainsDbcsBackslashTrail("\x83\x5C", 932),
+                          "cp932 trail byte 0x5C was not detected (U+30BD)");
+        // A plain separator after a complete double-byte character is not a trail byte.
+        failures += Check(!SparkInstaller::ContainsDbcsBackslashTrail("C:\\\x93\xFA\\x", 932),
+                          "a separator after a complete cp932 character was reported as a trail byte");
+        failures += Check(!SparkInstaller::ContainsDbcsBackslashTrail("C:\\My Games\\Zo\xEB", 1252),
+                          "a single-byte code page reported a double-byte trail");
+        return failures;
+#else
+        return 0;
+#endif
     }
 
     int RunAtomicReplacementTest()
@@ -389,6 +579,10 @@ int main()
         RunStateSizeAndEncodingBoundTest(),
         RunDuplicateKeyRejectedTest(),
         RunPendingMarkerRoundTripAndBoundTest(),
+        RunUtf8DestinationTest(),
+        RunPathUtf8HelperTest(),
+        RunUnrepresentableProcessArgTest(),
+        RunDbcsBackslashTrailTest(),
     };
     for (const int failures : results)
     {

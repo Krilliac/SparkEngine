@@ -1,5 +1,6 @@
 #include "GitBootstrap.h"
 #include "GitRunner.h"
+#include "PathUtf8.h"
 
 #include "Downloader.h"
 #include "PathSecurity.h"
@@ -221,7 +222,7 @@ namespace SparkInstaller
             result.ok = true;
             result.gitExe = pathGit;
             if (log)
-                log("Git found on PATH: " + pathGit);
+                log("Git found on PATH: " + PathToUtf8(fs::path(pathGit)));
             return result;
         }
 
@@ -283,7 +284,7 @@ namespace SparkInstaller
         if (IsVerifiedPortableGitTree(active, exeRelative, sha256))
         {
             if (log)
-                log("Using verified portable Git cache: " + active.string());
+                log("Using verified portable Git cache: " + PathToUtf8(active));
             result.ok = true;
             result.gitExe = (active / exeRelative).string();
             return result;
@@ -341,7 +342,7 @@ namespace SparkInstaller
                 return fail("Could not retire the unverified portable Git cache.");
             }
             if (log)
-                log("Retired unverified portable Git cache to: " + quarantine.string());
+                log("Retired unverified portable Git cache to: " + PathToUtf8(quarantine));
         }
 
         fs::rename(staging, active, error);
@@ -354,7 +355,7 @@ namespace SparkInstaller
             return fail("Activated portable Git cache failed verification.");
 
         if (log)
-            log("Activated verified portable Git cache: " + active.string());
+            log("Activated verified portable Git cache: " + PathToUtf8(active));
         result.ok = true;
         result.gitExe = (active / exeRelative).string();
         result.diagnosticMessage.clear();
