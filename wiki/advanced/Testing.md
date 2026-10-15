@@ -1051,7 +1051,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*743 test-bearing `.cpp`/`.mm` files, 8566 source-level test definitions*
+*745 test-bearing `.cpp`/`.mm` files, 8604 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1247,12 +1247,13 @@ extents; this does not change plane order or clip-space calculations.
 | `TestEditorDocumentReal` | 5 |
 | `TestEditorDocumentTransition` | 7 |
 | `TestEditorGizmoTransformReal` | 6 |
-| `TestEditorLayoutManager` | 16 |
-| `TestEditorPanelsRealBackends` | 12 |
+| `TestEditorLayoutManager` | 20 |
+| `TestEditorPanelsRealBackends` | 13 |
+| `TestEditorPreferences` | 10 |
 | `TestEditorProjectMaterializationReal` | 5 |
 | `TestEditorRecovery` | 18 |
 | `TestEditorStateCompatibility` | 8 |
-| `TestEditorSubsystems` | 138 |
+| `TestEditorSubsystems` | 149 |
 | `TestEditorSubsystemsReal` | 26 |
 | `TestEditorUndoHierarchyReal` | 9 |
 | `TestEditorUndoWorldMatrixReal` | 2 |
@@ -1664,6 +1665,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestSparkServerApplication` | 28 |
 | `TestSparkServerHealth` | 8 |
 | `TestSparkTerrainFormatReal` | 2 |
+| `TestSparkUIKit` | 12 |
 | `TestSpatialGrid` | 16 |
 | `TestSpatialGridReal` | 7 |
 | `TestSplineMath` | 24 |

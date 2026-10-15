@@ -61,6 +61,16 @@ owns the header-only definitions and the engine's `Utils/StateMachine.h` and
 `Utils/AngleUtils.h` only include them. Neither has virtual functions or crosses
 the module boundary, so they are outside the pinned ABI surface.
 
+`Spark/UiTheme.h` is a header-only reader for the host's UI theme (colours,
+UI scale, Reduce motion and High Contrast state, and the Spark fonts), which
+the engine publishes through the injected ImGui context's `ImGuiIO::UserData`.
+It is not included by `SparkSDK.h` and compiles only when the module defines
+`SPARK_HAS_IMGUI`. When the host published no block or a block of another
+layout, colours fall back to the caller's value and fonts to the current ImGui
+font. The header exports
+no symbols, so it is outside the pinned ABI surface and adding it did not bump
+`SPARK_SDK_VERSION`. See `API-REFERENCE.md` for the accessors.
+
 Use `IEngineContext::GetConsole()` for module command registration and
 in-game console output (`IConsole::Print`, SDK v8), and `Spark/ModuleLog.h` for
 logging. Track only successful registrations and remove them in `OnUnload()`

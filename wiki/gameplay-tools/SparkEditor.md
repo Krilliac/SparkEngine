@@ -6,11 +6,43 @@ SparkEditor is a required Windows build product and authoring surface in the blo
 
 *SparkEditor layout preview — Hierarchy, Scene View, Inspector, Asset Browser, and Console panels shown with the legacy Spark Professional palette.*
 
-### Welcome Screen
+### Start Page
 
-On first launch, a welcome screen introduces the core panels and offers quick actions:
+On first launch the editor opens a **Start** tab in the centre dock node (it is
+never shown in test mode). It replaces the old modal welcome screen and offers:
 
-![Welcome screen](../../docs/screenshots/editor-welcome.png)
+- **Open Scene...** (the default action), **New Scene**, **Open Project Folder**
+  and **Reset workspace layout** (an explicit reset; the editor no longer resets
+  the layout silently);
+- **Recent scenes**, the last ten scenes you opened or saved, newest first;
+- a keyboard-shortcut sheet;
+- **Show at startup**, saved with your preferences.
+
+Esc closes the tab; **Help > Welcome...** or **View > Start Page** reopens it.
+
+![Start page](../../docs/screenshots/editor-welcome.png)
+
+### Shell at a Glance
+
+- **Menu bar:** File, Edit, View, GameObject, Window, FPS Tools, Build and Help
+  (plus plugin menus).
+- **View menu:** **Appearance...**, **UI Scale** (Increase, Decrease, Reset to
+  100%), **Status Bar**, **Start Page** and **Command Palette** (Ctrl+P).
+- **Toolbar:** Move/Rotate/Scale and World/Local are segmented controls (W, E, R
+  switch tools), the play controls sit in the centre, then snapping and the
+  layout menu.
+- **Status bar:** a bar along the bottom of the window. It shows EDIT, or
+  PREVIEW with the whole bar in the ember accent while a play preview or a
+  launched game runs; connection, project and scene (the scene name gains a
+  `*` and a warning tint while it has unsaved changes); tool, object and selection
+  counts; FPS and frame time (amber below 30 FPS, red below 15); the
+  notification bell; and the UI scale (click it to reset). Hide it from
+  **View > Status Bar**.
+- **Notifications:** toasts stack upward from the bottom-right corner, above the
+  status bar. Each has a severity icon and word: Info and Success stay 4 seconds,
+  Warning 8 seconds, and Error until you dismiss it. Hovering a toast or giving
+  it keyboard focus pauses it; at most four are on screen, and the bell keeps
+  the last 50 for review.
 
 ### Window Menu — All Available Panels
 
@@ -652,11 +684,42 @@ Operations use `ExecuteCommand()` and implement `EditorCommand::Execute()` / `Un
 
 ## Theme System
 
-Select a palette from **Help > Themes**; it applies immediately to ImGui widgets,
-the toolbar, the status bar, and notification toasts. **Ember Studio** is the startup default.
+The editor's look comes from the shared `SparkUI` token library (the "Ember
+Signal" design), which also styles SparkLauncher, the SparkInstaller GUI and the
+in-game overlay. `EditorTheme` is the editor's adapter over those tokens.
+
+### Appearance Window
+
+Open **View > Appearance...** (or **Help > Themes...**). Changes apply
+immediately and are saved per user:
+
+| Setting | Choices |
+|---------|---------|
+| Palette | Ember Studio (default), Cobalt Forge, Graphite Signal, plus registered or imported custom themes |
+| Appearance | Dark, Light, High Contrast, or Match Windows (follows the Windows app theme and high-contrast setting) |
+| Density | Standard (25 px controls at 100 %) or Compact (21 px) |
+| UI scale | Auto (the monitor's display scale) or 75-200 % in 12.5 % steps |
+| Accessibility and workspace | Always show keyboard focus, Reduce motion (turns off every fade and pulse), Show status bar, Show Start page at startup |
+
+Custom and imported palettes are applied exactly as written and show a live
+contrast-audit badge; the built-in palettes pass that audit by construction.
+**Reset to defaults** restores every setting.
+
+**UI scale shortcuts:** Ctrl+= (or keypad +) and Ctrl+- (or keypad -) step
+the scale by 12.5 %; Ctrl+0 returns to Auto. They do nothing while a text
+field has focus. The scale is also in **View > UI Scale** and on the status bar.
+On Windows the editor is Per-Monitor-V2 DPI aware, so it rescales when you move
+it to a monitor with another scale; neither scaling nor a palette change
+rebuilds the font atlas.
+
+Preferences are stored in `editor-preferences.ini` in the per-user editor data
+directory: palette, appearance, UI scale, density, the accessibility toggles,
+the last layout and the recent scenes. The reader is bounded (64 KiB, a required
+version header, known keys only, clamped numbers), so a damaged file is
+ignored with a console warning and the defaults are used.
+
 Use `SparkEditor.exe --theme "Cobalt Forge"` (or another exact name below) to
-override the startup palette. Menu selections currently apply for the running
-session; they are not saved as a startup preference.
+override the palette for one session; the saved preference is left alone.
 
 The `EditorTheme` class (`Core/EditorTheme.h`) registers these built-in themes:
 
@@ -665,8 +728,11 @@ The `EditorTheme` class (`Core/EditorTheme.h`) registers these built-in themes:
 | Ember Studio | Warm charcoal, ember accent, cyan data highlights (default) |
 | Cobalt Forge | Cool slate, cyan accent, violet data highlights |
 | Graphite Signal | Neutral graphite, silver accent, mint data highlights |
-| Professional Light | Light theme for well-lit environments |
-| High Contrast | Accessibility-focused high-contrast theme |
+| Professional Light | Ember Studio on light surfaces (the Light appearance) |
+| High Contrast | Ember Studio at 7:1 text contrast with a yellow focus ring (the High Contrast appearance) |
+
+Choosing Professional Light or High Contrast as a palette is saved as Ember
+Studio with the Light or High Contrast appearance.
 
 Retired built-in names remain accepted as compatibility aliases without extra
 picker entries: Spark Professional, Spark Ember, and Orange Accent resolve to
@@ -700,9 +766,13 @@ EditorTheme::CreateBlendedTheme("Unity Pro", "Unreal Pro", 0.5f, "HybridTheme");
 ThemeCustomizer::ExportTheme(theme, "MyTheme.json");
 ThemeCustomizer::ImportTheme("MyTheme.json", theme);
 
-// Live editing
+// Open View > Appearance
 ThemeCustomizer::ShowThemeEditor();
 ```
+
+`ExportTheme` writes a versioned theme document that keeps every colour, metric
+and flag, and `ImportTheme` reads it back through the bounded
+`EditorThemeDocument` parser (fuzzed as `SparkFuzzEditorThemeImport`).
 
 ## Layout Management
 
@@ -733,6 +803,24 @@ The editor uses ImGui's docking branch for a fully customizable workspace:
 - Create floating windows
 - Save and load layout configurations
 - Reset to default layout
+
+Layouts are managed from two places:
+
+- **Window menu:** **Reset Layout**, **Save Layout** (saves "Custom Layout"),
+  **Save Layout As...** (prompts for a name), **Load Layout** and **Delete Layout**
+  (each lists the saved layouts).
+- **Toolbar layout menu** (right end of the toolbar): Default, the saved layouts,
+  **Save Layout As...**, **Delete...** (asks for confirmation) and **Reset**.
+
+Layout names are validated before they become file names. The Start page's
+**Reset workspace layout** rebuilds the default dock tree.
+
+> **One-time layout shift (Ember Signal):** the status bar is now a viewport side
+> bar, so the dock area ends above it instead of running underneath it. Layouts
+> saved by an earlier editor load with the bottom dock node about 26 px shorter
+> at 100 % UI scale; nothing is hidden behind the status bar any more. Save the
+> layout again to keep the new geometry, or hide the status bar from
+> **View > Status Bar** to get the space back.
 
 ## Plugin System
 
@@ -825,11 +913,16 @@ leaves a dump but does not offer scene recovery.
 
 ### Theme colors look wrong
 
-1. Re-select the palette from **Help > Themes** and check the selected menu item.
+1. Open **View > Appearance...**, check the palette and appearance, or use
+   **Reset to defaults**. A custom or imported palette that fails the contrast
+   audit shows a warning badge there.
 2. For missing fonts or icons, check the startup log from `EditorFonts::LoadFonts()`
    and the packaged `EditorAssets/Fonts` directory beside the executable.
-   Fonts are loaded at startup; changing the palette does not reload the font atlas.
-3. Report any panel that retains a fixed color across palettes; custom drawing
+   Fonts are loaded at startup; changing the palette or the UI scale does not
+   reload the font atlas.
+3. If text is too small or too large, press Ctrl+0 to return to Auto scale, or
+   pick a fixed scale in **View > Appearance...**.
+4. Report any panel that retains a fixed color across palettes; custom drawing
    should use the active theme's semantic colors or ImGui style colors.
 
 ### Time of Day

@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "total": 937425,
-  "files": 3276,
-  "engine": 347663,
-  "editor": 106742,
-  "game": 163990,
+  "total": 949435,
+  "files": 3313,
+  "engine": 351451,
+  "editor": 110214,
+  "game": 163994,
   "services": 12922,
   "pipeline": 3231,
-  "tests": 278877,
-  "tools": 24000
+  "tests": 280545,
+  "tools": 27078
 }

@@ -15,6 +15,26 @@ A practical, hands-on guide to the SparkEditor. This page covers day-to-day work
 Build with `ENABLE_EDITOR=ON` and launch the separate `SparkEditor` executable.
 The runtime hosts do not currently define an F1 editor-overlay toggle.
 
+### The Start Page
+
+The first time the editor opens, a **Start** tab sits in the centre of the
+workspace. From it you can **Open Scene...**, start a **New Scene**, **Open
+Project Folder**, **Reset workspace layout**, reopen one of your recent scenes,
+or read the keyboard-shortcut sheet. Clear **Show at startup** to stop it
+appearing; **Help > Welcome...** (or **View > Start Page**) brings it back, and
+Esc closes it.
+
+### The Status Bar and Notifications
+
+The bar along the bottom of the window shows the editor mode (EDIT, or PREVIEW
+with the whole bar in the ember accent while a play preview or launched game
+runs), the engine connection, the project and the scene (marked `*` with
+unsaved changes), selection counts, FPS and frame time, a notification bell and
+the UI scale. Messages from the editor appear as toasts in the bottom-right
+corner: Info and Success disappear after 4 seconds, Warning after 8, and Error
+stays until you close it. Point at a toast to pause it, and click the bell to see
+the last 50 messages.
+
 ---
 
 ## Default Layout
@@ -349,16 +369,48 @@ See [Collaborative Editing](../subsystems/Collaborative-Editing.md) for details.
 
 ## Customization
 
-### Themes
+### Appearance and Themes
 
-The editor uses a customizable theme system. Default themes are applied via `EditorTheme.cpp`. Custom themes can override colors, spacing, and font sizes.
+Open **View > Appearance...** (Help > Themes... opens the same window). There you
+choose:
 
-### Panel Visibility
+- the **palette**: Ember Studio (default), Cobalt Forge or Graphite Signal, or a
+  custom theme you imported;
+- the **appearance**: Dark, Light, High Contrast, or Match Windows;
+- the **density**: Standard, or Compact for smaller controls (text never shrinks);
+- the **UI scale**: Auto (your monitor's display scale) or a fixed 75-200 %;
+- **Always show keyboard focus**, **Reduce motion**, **Show status bar** and
+  **Show Start page at startup**.
+
+Your choices apply immediately and are remembered the next time you start the
+editor. To try a palette for one session only, start the editor with
+`--theme "Cobalt Forge"`.
+
+### UI Scale
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl+= (or keypad +) | Make the UI larger by 12.5 % |
+| Ctrl+- (or keypad -) | Make the UI smaller by 12.5 % |
+| Ctrl+0 | Back to Auto (the display scale) |
+
+The same commands are in **View > UI Scale**, and clicking the percentage on the
+status bar resets it. On Windows the editor follows each monitor's scale when you
+drag it between monitors.
+
+### Panel Visibility and Layouts
 
 - Registered panels are accessible from the **Window** menu; the repository's
   64 `*Panel.h` classes are a source inventory, not a visibility guarantee
 - Drag panels to rearrange the layout
 - Layouts persist between sessions
+- Save, load, delete and reset named layouts from the **Window** menu or from
+  the layout menu at the right end of the toolbar; **Save Layout As...** asks for
+  a name, and deleting a layout asks for confirmation
+
+Layouts saved by an earlier editor open with the bottom panels about 26 px
+shorter the first time, because the status bar no longer covers the dock area.
+Save the layout again to keep the new size.
 
 ---
 
@@ -374,6 +426,11 @@ The editor uses a customizable theme system. Default themes are applied via `Edi
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
 | Ctrl+S | Save scene |
+| Ctrl+P | Command palette |
+| Ctrl+F | Search panel |
+| Ctrl+= / Ctrl+- | UI scale up / down |
+| Ctrl+0 | UI scale back to Auto |
+| Esc | Close the Start page |
 | Delete | Delete selected entity |
 
 ---
