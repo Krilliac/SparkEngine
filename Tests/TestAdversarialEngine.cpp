@@ -208,7 +208,7 @@ TEST(Adversarial_EventBus_DoubleUnsubscribe)
 TEST(Adversarial_EventBus_RecursivePublish)
 {
     // Handlers that re-publish the same event type must not cause infinite recursion.
-    // The EventBus guards against recursive publish for the same type via thread_local depth.
+    // The EventBus guards against recursive publish of the same type on the same bus and thread.
     EventBus bus;
     struct RecursiveEvent
     {
