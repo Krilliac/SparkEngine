@@ -6567,6 +6567,16 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(ServerRecoveryDrill_Harness PROPERTIES
         LABELS "ops;server;unit;python"
         TIMEOUT 120)
+    # OPS-110 runbook alerts (tools/ops/evaluate_server_alerts.py): each alert
+    # fires on its own condition from one health snapshot and pins the CLI's
+    # exit-status contract. Pure parsing, so it runs on every platform.
+    add_test(
+        NAME OpsAlerts_Evaluator
+        COMMAND ${Python3_EXECUTABLE} -B
+            ${CMAKE_SOURCE_DIR}/Tests/Tools/test_evaluate_server_alerts.py)
+    set_tests_properties(OpsAlerts_Evaluator PROPERTIES
+        LABELS "ops;server;unit;python"
+        TIMEOUT 120)
     # DATA-120 / OPS-110 / PERF-100: the scheduled operations workflow keeps its
     # rehearsal contract (cron, exact SHA, blocking jobs, soak lengths, evidence).
     add_test(
