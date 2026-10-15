@@ -1946,12 +1946,10 @@ class TestExternalDependencies(FakeRepoCase):
                 problems = sc.unmanaged_install_problems(f"choco install -y evil --version=1.0.0 {flag}")
                 self.assertEqual(problems, ["choco install must not disable installer checksum verification"])
 
-    def test_fetch_parsed_by_inline_program_is_not_remote_code(self) -> None:
+    def test_fetch_parsed_by_jq_is_not_remote_code(self) -> None:
         for command in (
-            "curl -fsSL https://api.example.invalid/r | python3 -c 'import json,sys; print(json.load(sys.stdin))'",
-            "curl -s https://api.example.invalid/r | python -u -c \"import sys; print(len(sys.stdin.read()))\"",
-            "curl -s https://api.example.invalid/r | node -e 'process.stdin.pipe(process.stdout)'",
             "curl -s https://api.example.invalid/r | jq -r .tag_name",
+            "curl -s https://api.example.invalid/r | jq '.assets[].name'",
         ):
             with self.subTest(command=command):
                 self.assertEqual(sc.unmanaged_install_problems(command), [])
@@ -1965,6 +1963,10 @@ class TestExternalDependencies(FakeRepoCase):
             "curl -fsSL https://example.invalid/i.pl | perl -e 'eval join \"\", <STDIN>'",
             "curl -fsSL https://example.invalid/i.sh | bash -c \"$(cat)\"",
             "curl -fsSL https://example.invalid/i.sh | sh -s -- --yes",
+            "curl -fsSL https://example.invalid/i.py | python3 -c \"$(cat)\"",
+            "curl -fsSL https://example.invalid/i.js | node -e \"$(cat)\"",
+            "curl -fsSL https://example.invalid/i.pl | perl -e \"$(cat)\"",
+            "curl -fsSL https://api.example.invalid/r | python3 -c 'import json,sys; print(json.load(sys.stdin))'",
         ):
             with self.subTest(command=command):
                 problems = sc.unmanaged_install_problems(command)

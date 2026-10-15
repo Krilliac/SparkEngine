@@ -275,13 +275,10 @@ NPM_EXACT_SPEC_RE = re.compile(r"^(?:@[A-Za-z0-9._-]+/)?[A-Za-z0-9._-]+@[0-9]+\.
 # A fetch piped (or process-substituted) into an interpreter runs unverified remote code.
 _FETCH_TOOLS = r"(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)"
 _INTERPRETERS = r"(?:sh|bash|zsh|dash|ksh|python3?|perl|ruby|node|pwsh|powershell|iex|Invoke-Expression)"
-# A language interpreter given its program inline (`python3 -c '...'`, `node -e '...'`) reads the
-# piped response as data -- the common JSON-parsing idiom -- unless that program evals its input.
-# Shells and PowerShell get no such exemption: `bash -c "$(cat)"` runs stdin as surely as `bash`.
-_DATA_INTERPRETERS = r"(?:python3?|perl|ruby|node)"
-_SHELL_INTERPRETERS = r"(?:sh|bash|zsh|dash|ksh|pwsh|powershell|iex|Invoke-Expression)"
-_INLINE_PROGRAM = r"(?:\s+-[A-Za-z]+)*?\s+-(?:c|e|-eval)\s+(?!-(?:\s|$))(?![^\n]*\b(?:exec|eval|compile)\b)"
-_PIPE_TARGET = rf"(?:{_DATA_INTERPRETERS}\b(?!{_INLINE_PROGRAM})|{_SHELL_INTERPRETERS}\b)"
+# Every interpreter counts, inline program or not: `python3 -c "$(cat)"` or `node -e` reading stdin
+# runs the response as code, and no pattern can tell a parsing program from an evaluating one.
+# Parse fetched JSON with jq, or save the response to a file and parse that.
+_PIPE_TARGET = rf"{_INTERPRETERS}\b"
 FETCH_PIPED_INTERPRETER_RE = re.compile(
     rf"\b{_FETCH_TOOLS}\b[^\n;&]*?(?<!\|)\|(?!\|)\s*(?:sudo\s+(?:-\S+\s+)*)?(?:/usr/bin/env\s+)?{_PIPE_TARGET}"
     rf"|\b{_INTERPRETERS}\s+<\(\s*{_FETCH_TOOLS}\b"

@@ -5289,11 +5289,11 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
         TIMEOUT 300)
     # TF-110: the same driver and budgets for 30 minutes. The label is not terrafront-soak, so the
     # PR-lane selection (-L '^terrafront-soak$') never runs it; only an explicit
-    # -L '^terrafront-soak-long$' run does. It uses the budget file's bot count (32 bots, 34 actors):
-    # the 100-actor run needs --soak-bots and a tf_bots cap above 32, neither of which exists yet.
+    # -L '^terrafront-soak-long$' run does. 98 bots plus the two harness clients make the 100-actor
+    # TF-110 target; tf_bots accepts up to kTFMaxBots (98).
     add_test(
         NAME TerrafrontSoak_30Min
-        COMMAND ${_tf_harness} --soak-seconds 1800 --timeout 2000 --workdir ${_tf_runs}/soak-30min)
+        COMMAND ${_tf_harness} --soak-seconds 1800 --soak-bots 98 --timeout 2000 --workdir ${_tf_runs}/soak-30min)
     set_tests_properties(TerrafrontSoak_30Min PROPERTIES
         LABELS "terrafront-soak-long"
         RUN_SERIAL TRUE
