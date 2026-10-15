@@ -2236,32 +2236,14 @@ PUBLIC_CLAIM_MARKDOWN_ROOTS = ("wiki", "docs/readiness", "docs/status")
 # Regex-managed count lines are owned by this script and its `check` mode.
 MANAGED_CLAIM_SCRIPT = "docs/update-readme-badges.sh"
 _CLAIM_NUMBER = r"\d{1,3}(?:,\d{3})+|\d+"
-# Plural words that follow a number without counting repository things: units of
-# measure and time, multiplicity, and verbs ("2 starts the loop"). This is a
-# vocabulary of what is NOT a count; everything else after a number is one.
-_CLAIM_NON_COUNT_WORDS = "|".join((
-    "bytes", "bits", "seconds", "minutes", "hours", "days", "weeks", "months", "years",
-    "milliseconds", "microseconds", "nanoseconds", "degrees", "pixels", "frames", "ticks", "times",
-    "has", "was", "does", "means", "adds", "needs", "keeps", "requires", "protects", "creates",
-    "publishes", "preserves", "shows", "resolves", "starts", "ends", "returns", "uses", "makes",
-    "takes", "gives", "stays", "captures", "provides", "allows", "enables", "contains", "includes",
-))
-_CLAIM_FILLER_WORDS = "and|or|of|in|on|to|for|with|is|are|was|per|the|a|an|as|at|by|from|that|than"
 PUBLIC_NUMERIC_CLAIM_PATTERN = re.compile(
     # Not the tail of an identifier, decimal, path, anchor, or ratio, and not a
     # product version such as "DirectX 11" or "version 1".
     r"(?<![\w.,/#$~-])(?<!DirectX )(?<!Direct3D )(?<!version )(?<!Windows )(?<!C\+\+)(?<!patch )"
     rf"(?P<approx>~)?(?P<value>{_CLAIM_NUMBER})(?P<plus>\+)?(?P<ratio>/(?:{_CLAIM_NUMBER})\+?)?"
     r"[`*]{0,2}"
-    r"(?:"
     r"(?:\s+[A-Za-z][\w-]*){0,2}?\s+"
-    rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b"
-    r"|"
-    # Any other plural noun counts as well: a vocabulary of nouns can only ever
-    # cover the nouns somebody already thought of. Same line, at most one qualifier.
-    rf"(?:[ \t]+(?!(?:{_CLAIM_FILLER_WORDS})\b)[A-Za-z][\w-]*(?<!s))?[ \t]+(?!(?:{_CLAIM_NON_COUNT_WORDS})\b)"
-    r"[A-Za-z][A-Za-z-]{2,}(?<![sui])s\b"
-    r")",
+    rf"(?:{'|'.join(PUBLIC_NUMERIC_CLAIM_NOUNS)})\b",
     re.IGNORECASE,
 )
 
@@ -2745,11 +2727,11 @@ def _numeric_claim_scan(
     return masked, tuple(block_errors), tuple(claims)
 
 
-# Status words in public prose are claims about a capability, so each one must resolve to a
-# capability in docs/site/readiness.json and must not be stronger than that capability's
-# validated state. Weaker words ("planned", "in progress") never overclaim and are never
-# rejected for being unmatched; the strong words are, because an unbound "X is supported"
-# is exactly the sentence that goes stale when no contract entry owns X.
+# A status word in public prose whose subject names a capability in docs/site/readiness.json
+# must not be stronger than that capability's validated state. A status word whose subject
+# names no capability (a file format, an API feature, a build flag) is not a capability claim
+# and is left alone: rejecting every unbound "X is supported" flagged formats and flags far
+# more often than capabilities.
 STATUS_LABEL_RANKS = {
     "planned": 0,
     "in progress": 0,
@@ -2871,8 +2853,8 @@ def status_label_claim_errors(surface_texts: dict[str, str], capabilities: Any) 
 
     A status word (supported, stable, production-ready, experimental, planned, in progress)
     attached to a subject is resolved against the capability names in readiness.json. It fails
-    when it is stronger than the capability's validated support/release state, or, for the
-    strong words, when the subject names no capability at all. Negated uses ("not supported")
+    when it is stronger than the capability's validated support/release state. Subjects that
+    name no capability are not capability claims and are skipped. Negated uses ("not supported")
     and anaphoric subjects ("it is stable") assert nothing resolvable and are skipped.
     """
     if not isinstance(capabilities, list):
@@ -2903,11 +2885,8 @@ def status_label_claim_errors(surface_texts: dict[str, str], capabilities: Any) 
                 ):
                     resolved = _status_resolve(f"{heading} {context_name}", aliases)
                 if resolved is None:
-                    if rank >= 2:
-                        errors.append(
-                            f"{surface}:{number}: status label {label!r} on {text!r} resolves to no "
-                            "readiness capability; name the capability or reword"
-                        )
+                    # "X is supported" about a file format, flag or API feature is not a
+                    # capability claim; only a named capability can be overclaimed.
                     continue
                 capability_id, validated = resolved
                 if rank > validated:

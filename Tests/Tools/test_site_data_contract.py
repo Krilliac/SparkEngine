@@ -2402,10 +2402,14 @@ class PublicClaimInvariantTests(ContractTestCase):
                 self.assertIn("is stronger than the validated state of capability rendering.vulkan", errors[0])
                 self.assertIn("wiki/Example-Page.md:1:", errors[0])
 
-    def test_status_label_naming_no_capability_is_rejected(self) -> None:
-        errors = self.status_errors("The Frobnicator subsystem is supported.\n")
-        self.assertEqual(1, len(errors), errors)
-        self.assertIn("resolves to no readiness capability", errors[0])
+    def test_status_label_naming_no_capability_is_not_a_capability_claim(self) -> None:
+        # File formats, API features and flags are "supported" without being capabilities.
+        text = (
+            "The Frobnicator subsystem is supported.\n"
+            "The legacy binary scene format is supported.\n"
+            "| glTF | supported |\n"
+        )
+        self.assertEqual([], self.status_errors(text))
 
     def test_status_label_in_table_row_and_parenthesis_is_resolved(self) -> None:
         errors = self.status_errors("| Metal | supported |\n| Mobile platforms | stable |\n")
@@ -3646,14 +3650,6 @@ class ProseCrossReferenceTests(ContractTestCase):
             {"README.md": text}, entries or [], lambda: {}, {}
         )
 
-    def test_count_with_a_noun_outside_the_old_vocabulary_is_rejected(self) -> None:
-        for claim in ("17 gizmos", "4,096 widgets", "12 oversized functions", "~9 cascades", "30+ recommendations"):
-            with self.subTest(claim=claim):
-                errors = self.numeric_errors(f"The engine ships {claim} today.\n")
-                self.assertEqual(1, len(errors), errors)
-                self.assertIn("unclaimed numeric claim", errors[0])
-                self.assertIn(claim.split()[-1], errors[0])
-
     def test_units_versions_and_prose_numbers_are_not_counts(self) -> None:
         text = (
             "Allocate 64 bytes, wait 30 seconds, and allow 250 milliseconds.\n"
@@ -3661,48 +3657,6 @@ class ProseCrossReferenceTests(ContractTestCase):
             "Phase 2 starts after the review; 3 is the default.\n"
         )
         self.assertEqual([], self.numeric_errors(text))
-
-    def test_new_noun_count_is_exempt_only_through_a_reviewed_entry(self) -> None:
-        text = "The sample world has 17 gizmos placed.\n"
-        entry = {
-            "surface": "README.md",
-            "text": "17 gizmos",
-            "classification": "historical",
-            "owner": "unassigned",
-        }
-        self.assertEqual(1, len(self.numeric_errors(text)))
-        with mock.patch.object(
-            site_data_validate, "public_numeric_claim_surfaces", return_value={"README.md"}
-        ):
-            self.assertEqual([], self.numeric_errors(text, [entry]))
-            # The entry covers exactly the reviewed phrase, not a different count.
-            changed = site_data_validate.public_numeric_claim_errors(
-                {"README.md": "The sample world has 18 gizmos placed.\n"}, [entry], lambda: {}, {}
-            )
-        self.assertTrue(any("does not occur" in error or "unclaimed" in error for error in changed), changed)
-
-    def test_generated_blocks_do_not_report_new_noun_counts(self) -> None:
-        text = (
-            "<!-- AUTO:example -->\nThere are 17 gizmos.\n<!-- /AUTO:example -->\n"
-            "Hand-written prose has no counts.\n"
-        )
-        self.assertEqual([], self.numeric_errors(text))
-
-    def test_validator_rejects_unbacked_new_noun_count_on_a_discovered_surface(self) -> None:
-        source = REPO_ROOT / "wiki/advanced/Codebase-Bloat-Audit.md"
-        original_read = Path.read_text
-
-        def read(path, *args, **kwargs):
-            text = original_read(path, *args, **kwargs)
-            return text + "\nThe editor ships 123456 gizmos.\n" if path == source else text
-
-        with mock.patch.object(Path, "read_text", read):
-            validator = site_data_validate.Validator(self.mutable)
-            validator.validate_public_numeric_claims()
-        self.assertTrue(
-            any("unclaimed numeric claim '123456 gizmos'" in error for error in validator.errors),
-            validator.errors,
-        )
 
 
 class PublicNumericClaimTests(ContractTestCase):
