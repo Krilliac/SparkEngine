@@ -60,21 +60,16 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <exception>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <typeindex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#include <sanitizer/msan_interface.h>
-#define SPARK_EVENTBUS_MSAN 1
-#endif
-#endif
 
 namespace Spark
 {
@@ -229,26 +224,22 @@ namespace Spark
          */
         template <typename E> void Publish(const E& event)
         {
-            // Guard against infinite recursion: if a handler re-publishes the same
-            // event type, the nested Publish is silently dropped.  Uses a thread_local
-            // flag so independent threads can publish concurrently.
-            thread_local bool publishing = false;
-#ifdef SPARK_EVENTBUS_MSAN
-            // MSan false positive, not an uninitialised read: `publishing` is
-            // constant-initialised and only ever assigned true/false.  In a
-            // dlopen'd module it lives in dynamic TLS that ld.so mallocs and
-            // zero-fills with uninstrumented code; MSan's __tls_get_addr hook
-            // unpoisons only the first block it sees per TLS module id, so after
-            // dlclose + re-dlopen (same id reused) the fresh block stays poisoned
-            // (compiler-rt sanitizer_tls_get_addr.cpp: `if (!dtv || dtv->beg)`).
-            __msan_unpoison(&publishing, sizeof(publishing));
-#endif
-            if (publishing)
-                return;
-
             ChannelOf<E>* ch = FindChannel<E>();
             if (!ch)
                 return;
+
+            // Guard against infinite recursion: if a handler re-publishes the same
+            // event type on this bus and thread, the nested Publish is silently
+            // dropped.  The guard lives on the bus, not in a thread_local: a module
+            // image that defines a thread-local variable is never unloaded by dyld.
+            const PublishingEntry self{std::this_thread::get_id(), ch};
+            {
+                std::lock_guard<std::mutex> lock(m_publishingMutex);
+                if (std::find(m_publishing.begin(), m_publishing.end(), self) != m_publishing.end())
+                    return;
+                m_publishing.push_back(self);
+            }
+            const PublishingScope scope{*this, self};
 
             std::vector<std::function<void(const E&)>> snapshot;
             {
@@ -258,7 +249,6 @@ namespace Spark
                     snapshot.push_back(entry.handler);
             }
 
-            publishing = true;
             for (auto& handler : snapshot)
             {
                 try
@@ -272,7 +262,6 @@ namespace Spark
                 {
                 }
             }
-            publishing = false;
         }
 
         /**
@@ -339,31 +328,72 @@ namespace Spark
             std::vector<Entry> entries;
         };
 
+        // A (thread, channel) pair currently dispatching on this bus.
+        using PublishingEntry = std::pair<std::thread::id, const IChannel*>;
+
+        // Removes this Publish call's recursion-guard entry, even if dispatch throws.
+        struct PublishingScope
+        {
+            EventBus& bus;
+            PublishingEntry entry;
+
+            ~PublishingScope()
+            {
+                std::lock_guard<std::mutex> lock(bus.m_publishingMutex);
+                auto& active = bus.m_publishing;
+                active.erase(std::find(active.begin(), active.end(), entry));
+            }
+        };
+
+#if defined(__APPLE__)
+        // Internal-linkage types (anonymous namespaces, function-local classes) are
+        // distinct even when their mangled names match, so they never match by name.
+        static bool IsSharedTypeName(const char* name) noexcept
+        {
+            return name[0] != 'Z' && std::strstr(name, "_GLOBAL__N") == nullptr;
+        }
+#endif
+
+        // Find the channel for E. The caller holds m_channelsMutex.
+        template <typename E> IChannel* FindChannelLocked() const
+        {
+            const auto it = m_channels.find(std::type_index(typeid(E)));
+            if (it != m_channels.end())
+                return it->second.get();
+#if defined(__APPLE__)
+            // Apple's arm64 libc++ compares a unique type_info (host) and a non-unique
+            // one (a hidden-visibility module) by address only, so the same SDK event
+            // type misses across the module boundary. Fall back to the mangled name.
+            const char* name = typeid(E).name();
+            if (IsSharedTypeName(name))
+            {
+                for (const auto& [key, channel] : m_channels)
+                {
+                    if (std::strcmp(key.name(), name) == 0)
+                        return channel.get();
+                }
+            }
+#endif
+            return nullptr;
+        }
+
         // Get or create the channel for E (acquires m_channelsMutex)
         template <typename E> ChannelOf<E>& GetOrCreateChannel()
         {
-            std::type_index key = typeid(E);
             std::lock_guard<std::mutex> lock(m_channelsMutex);
-            auto it = m_channels.find(key);
-            if (it == m_channels.end())
-            {
-                auto ch = std::make_unique<ChannelOf<E>>();
-                auto* raw = ch.get();
-                m_channels.emplace(key, std::move(ch));
-                return *raw;
-            }
-            return *static_cast<ChannelOf<E>*>(it->second.get());
+            if (IChannel* existing = FindChannelLocked<E>())
+                return *static_cast<ChannelOf<E>*>(existing);
+            auto ch = std::make_unique<ChannelOf<E>>();
+            auto* raw = ch.get();
+            m_channels.emplace(std::type_index(typeid(E)), std::move(ch));
+            return *raw;
         }
 
         // Find the channel for E without creating it (acquires m_channelsMutex)
         template <typename E> ChannelOf<E>* FindChannel()
         {
-            std::type_index key = typeid(E);
             std::lock_guard<std::mutex> lock(m_channelsMutex);
-            auto it = m_channels.find(key);
-            if (it == m_channels.end())
-                return nullptr;
-            return static_cast<ChannelOf<E>*>(it->second.get());
+            return static_cast<ChannelOf<E>*>(FindChannelLocked<E>());
         }
 
         // Remove a specific subscription by ID
@@ -381,6 +411,8 @@ namespace Spark
 
         mutable std::mutex m_channelsMutex;
         std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;
+        std::mutex m_publishingMutex;
+        std::vector<PublishingEntry> m_publishing;
         std::atomic<uint64_t> m_nextId{0};
         std::shared_ptr<LifetimeToken> m_lifetime = std::make_shared<LifetimeToken>();
     };
