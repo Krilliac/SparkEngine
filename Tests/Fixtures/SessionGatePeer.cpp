@@ -12,6 +12,7 @@
 #include "Account/MMOAccountSystem.h"
 #include "Character/MMOCharacterSystem.h"
 #include "Player/MMOPlayerSystem.h"
+#include "Persistence/MMOPersistenceSystem.h"
 #include "Engine/Networking/NetworkManager.h"
 #include "Engine/Networking/NetworkTrustStore.h"
 #include "Core/EngineContext.h"
@@ -26,14 +27,17 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <exception>
 #include <format>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 namespace
 {
@@ -48,11 +52,19 @@ namespace
     constexpr std::string_view kAlicePassword = "mod320-alice-password";
     constexpr std::string_view kBobPassword = "mod320-bob-password";
 
+    // Upper bounds, not expected durations: every wait polls for readiness and returns as soon as the
+    // reply or state arrives. They are generous so a CPU-starved host (three processes sharing a
+    // 600000-round PBKDF2) is not misread as a failure; the coordinator enforces the overall limit.
+    constexpr auto kConnectTimeout = std::chrono::seconds(60);
+    constexpr auto kReplyTimeout = std::chrono::seconds(60);
+    constexpr auto kStateTimeout = std::chrono::seconds(60);
+
     struct Options
     {
         std::string role;
         uint16_t port = 0;
         std::string key;
+        std::string store; ///< server only: durable MMOPersistenceSystem file shared across restarts
     };
 
     void Emit(std::string_view body)
@@ -94,6 +106,10 @@ namespace
             {
                 options.key = value;
             }
+            else if (flag == "--store")
+            {
+                options.store = value;
+            }
             else
             {
                 return std::nullopt;
@@ -106,6 +122,10 @@ namespace
         if (options.role == "server")
         {
             return options;
+        }
+        if (!options.store.empty())
+        {
+            return std::nullopt;
         }
         return options.port != 0 && options.key.size() == Spark::Net::HANDSHAKE_PUBLIC_KEY_SIZE * 2
                    ? std::optional<Options>(std::move(options))
@@ -200,7 +220,7 @@ namespace
         for (unsigned attempt = 0; attempt < 20; ++attempt)
         {
             packet.requestId = gate.GetLastReply().requestId + 1;
-            if (!gate.Send(packet) || !PumpUntilReply(network, gate, packet.requestId, std::chrono::seconds(12)))
+            if (!gate.Send(packet) || !PumpUntilReply(network, gate, packet.requestId, kReplyTimeout))
             {
                 Spark::SecureErase(packet.password.data(), packet.password.size());
                 // Diagnostics only: operation and outcome, never the credential.
@@ -238,7 +258,185 @@ namespace
         return gate.Initialize(network, accounts, characters, players);
     }
 
-    int RunServer()
+    /// Thread-safe line queue: the stdin thread produces, the server loop consumes on the game thread.
+    struct CommandQueue
+    {
+        std::mutex mutex;
+        std::deque<std::string> pending;
+        std::atomic<bool> quit{false};
+
+        void Push(std::string command)
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            pending.push_back(std::move(command));
+        }
+
+        std::optional<std::string> Pop()
+        {
+            const std::lock_guard<std::mutex> lock(mutex);
+            if (pending.empty())
+            {
+                return std::nullopt;
+            }
+            std::string command = std::move(pending.front());
+            pending.pop_front();
+            return command;
+        }
+    };
+
+    std::vector<std::string_view> Tokens(const std::string& line)
+    {
+        std::vector<std::string_view> tokens;
+        size_t start = 0;
+        while (start < line.size())
+        {
+            const size_t end = line.find(' ', start);
+            const size_t stop = end == std::string::npos ? line.size() : end;
+            if (stop > start)
+            {
+                tokens.emplace_back(line.data() + start, stop - start);
+            }
+            start = stop + 1;
+        }
+        return tokens;
+    }
+
+    /// The authoritative actor of a character, wherever the gate placed its client.
+    const MMO::MMOPlayer* FindActor(const MMO::MMOPlayerSystem& players, uint32_t characterId)
+    {
+        for (uint32_t clientId = 1; clientId <= 256; ++clientId)
+        {
+            const MMO::MMOPlayer* actor = players.GetPlayer(clientId);
+            if (actor && actor->characterId == characterId)
+            {
+                return actor;
+            }
+        }
+        return nullptr;
+    }
+
+    /**
+     * Store commands. They only call production persistence over production server state:
+     *   save <account> <character>   write the owned character with its live authoritative position
+     *   saveworld <leader> <member>  write one guild of two stored characters
+     *   load <character>             read the character row back
+     *   loadworld                    read the guilds back
+     *   alloc                        reserve the next durable character id
+     */
+    void HandleStoreCommand(const std::string& line, MMO::MMOPersistenceSystem* store,
+                            const MMO::MMOCharacterSystem& characters, const MMO::MMOPlayerSystem& players)
+    {
+        const std::vector<std::string_view> words = Tokens(line);
+        if (words.empty())
+        {
+            return;
+        }
+        std::array<uint32_t, 2> numbers{};
+        for (size_t index = 1; index < words.size() && index <= numbers.size(); ++index)
+        {
+            if (!ParseUInt(words[index], numbers[index - 1]))
+            {
+                Emit(std::format("store-failed command={} reason=bad-argument", words[0]));
+                return;
+            }
+        }
+        if (!store || !store->IsInitialized())
+        {
+            Emit(std::format("store-failed command={} reason=no-store", words[0]));
+            return;
+        }
+
+        if (words[0] == "save" && words.size() == 3)
+        {
+            const uint32_t accountId = numbers[0];
+            const uint32_t characterId = numbers[1];
+            const MMO::CharacterSummary* summary = characters.GetCharacter(characterId);
+            const MMO::MMOPlayer* actor = FindActor(players, characterId);
+            if (!summary || !actor || !characters.OwnsCharacter(accountId, characterId))
+            {
+                Emit(std::format("store-failed command=save character={} reason=unknown-character", characterId));
+                return;
+            }
+            MMO::CharacterSaveData data;
+            data.characterId = characterId;
+            data.accountId = accountId;
+            data.name = summary->name;
+            data.level = summary->level;
+            data.areaId = summary->areaId;
+            data.posX = actor->posX;
+            data.posY = actor->posY;
+            data.posZ = actor->posZ;
+            if (!store->SaveCharacterSync(data))
+            {
+                Emit(std::format("store-failed command=save character={} reason=write", characterId));
+                return;
+            }
+            Emit(std::format("saved character={} account={} x={:.3f} z={:.3f}", characterId, accountId, data.posX,
+                             data.posZ));
+        }
+        else if (words[0] == "saveworld" && words.size() == 3)
+        {
+            const MMO::CharacterSummary* leader = characters.GetCharacter(numbers[0]);
+            const MMO::CharacterSummary* member = characters.GetCharacter(numbers[1]);
+            if (!leader || !member)
+            {
+                Emit("store-failed command=saveworld reason=unknown-character");
+                return;
+            }
+            MMO::Guild guild;
+            guild.id = 1;
+            guild.name = "Mod320Guild";
+            guild.tag = "M320";
+            guild.motd = "survives a process kill";
+            guild.leaderId = leader->characterId;
+            guild.bankCurrency = 320;
+            guild.members.push_back({leader->characterId, leader->name, MMO::GuildRank::Leader});
+            guild.members.push_back({member->characterId, member->name, MMO::GuildRank::Member});
+            MMO::WorldSaveData world;
+            world.guilds.push_back(std::move(guild));
+            world.nextGuildId = 2;
+            if (!store->SaveWorldSync(world))
+            {
+                Emit("store-failed command=saveworld reason=write");
+                return;
+            }
+            Emit("worldsaved guilds=1");
+        }
+        else if (words[0] == "load" && words.size() == 2)
+        {
+            MMO::CharacterSaveData data;
+            if (!store->LoadCharacter(numbers[0], data))
+            {
+                Emit(std::format("store-failed command=load character={} reason=missing", numbers[0]));
+                return;
+            }
+            Emit(std::format("loaded character={} account={} name={} x={:.3f} z={:.3f}", data.characterId,
+                             data.accountId, data.name, data.posX, data.posZ));
+        }
+        else if (words[0] == "loadworld" && words.size() == 1)
+        {
+            MMO::WorldSaveData world;
+            if (!store->LoadWorld(world) || world.guilds.size() != 1)
+            {
+                Emit("store-failed command=loadworld reason=read");
+                return;
+            }
+            const MMO::Guild& guild = world.guilds.front();
+            Emit(std::format("worldloaded guilds={} name={} leader={} bank={} members={} nextGuildId={}",
+                             world.guilds.size(), guild.name, guild.leaderId, guild.bankCurrency, guild.members.size(),
+                             world.nextGuildId));
+        }
+        else if (words[0] == "alloc" && words.size() == 1)
+        {
+            Emit(std::format("allocated character={}", store->AllocateCharacterId()));
+        }
+        else
+        {
+            Emit(std::format("store-failed command={} reason=unknown-command", words[0]));
+        }
+    }
+
+    int RunServer(const Options& options)
     {
         auto& network = Spark::Net::NetworkManager::GetInstance();
         auto identity = Spark::Net::GenerateServerIdentity();
@@ -260,31 +458,46 @@ namespace
         MMO::MMOCharacterSystem characters;
         MMO::MMOPlayerSystem players;
         MMO::MMOSessionGate gate;
+        MMO::MMOPersistenceSystem store;
         if (!InitializeSystems(network, context, gate, accounts, characters, players))
         {
             return 3;
         }
+        if (!options.store.empty())
+        {
+            // Character IDs now come from the store's durable counter, as in the production module.
+            if (!store.Initialize(&context, options.store))
+            {
+                return 5;
+            }
+            characters.SetPersistence(&store);
+        }
         Emit(std::format("ready port={} key={}", network.GetBoundPort(),
                          EncodeKey(network.GetSecurityConfig().identity->publicKey)));
 
-        const auto quit = std::make_shared<std::atomic<bool>>(false);
+        const auto commands = std::make_shared<CommandQueue>();
         std::thread stdinThread(
-            [quit]
+            [commands]
             {
                 std::string command;
                 while (std::getline(std::cin, command))
                 {
                     if (command == "quit")
                     {
-                        quit->store(true);
+                        commands->quit.store(true);
                         return;
                     }
+                    commands->Push(std::move(command));
                 }
-                quit->store(true);
+                commands->quit.store(true);
             });
         auto previous = Clock::now();
-        while (!quit->load())
+        while (!commands->quit.load())
         {
+            while (const auto command = commands->Pop())
+            {
+                HandleStoreCommand(*command, options.store.empty() ? nullptr : &store, characters, players);
+            }
             const auto now = Clock::now();
             const float delta = (std::min)(std::chrono::duration<float>(now - previous).count(), 0.1F);
             previous = now;
@@ -297,6 +510,7 @@ namespace
         players.Shutdown();
         characters.Shutdown();
         accounts.Shutdown();
+        store.Shutdown();
         network.StopServer();
         network.Shutdown();
         return 0;
@@ -318,7 +532,7 @@ namespace
             return 2;
         }
 
-        const auto connectionDeadline = Clock::now() + std::chrono::seconds(12);
+        const auto connectionDeadline = Clock::now() + kConnectTimeout;
         auto connectPrevious = Clock::now();
         while (network.GetConnectionState() != Spark::Net::ConnectionState::Connected &&
                Clock::now() < connectionDeadline)
@@ -497,7 +711,7 @@ namespace
             {
                 return 12;
             }
-            const auto stateDeadline = Clock::now() + std::chrono::seconds(12);
+            const auto stateDeadline = Clock::now() + kStateTimeout;
             const Packet* ownState = nullptr;
             const Packet* targetState = nullptr;
             auto statePrevious = Clock::now();
@@ -546,5 +760,5 @@ int main(int argc, char** argv)
     {
         return 1;
     }
-    return options->role == "server" ? RunServer() : RunClient(*options);
+    return options->role == "server" ? RunServer(*options) : RunClient(*options);
 }

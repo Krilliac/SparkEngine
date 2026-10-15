@@ -4,6 +4,17 @@ The peer executable owns no test server behavior.  This coordinator only starts
 the three production-process peers, exchanges character IDs, and checks the
 observable success and refusal events.  Credentials remain constants inside the
 C++ fixture and are never passed as arguments or printed.
+
+After the two clients finish, the server process is killed without a graceful
+shutdown and a second server process is started on the same durable store.  The
+restarted process must read back both characters (name, owner, authoritative
+position), the saved guild, and must never reissue a character ID.
+
+Timing: every wait polls for the event it needs and returns the moment it
+arrives, so a fast host pays nothing.  The limits are upper bounds sized for a
+CPU-starved host (three processes sharing a 600000-round PBKDF2); the PBKDF2
+cost is never lowered.  A peer that exits early fails the wait immediately
+instead of running out the clock.
 """
 
 from __future__ import annotations
@@ -11,8 +22,10 @@ from __future__ import annotations
 import argparse
 import math
 import queue
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -74,15 +87,40 @@ class Peer:
 
 
 def wait_for(peers: list[Peer], predicate, deadline: float) -> bool:
-    while time.monotonic() < deadline:
+    """Poll until predicate() holds; False on deadline or when a waited-on peer died."""
+    while True:
         for peer in peers:
             peer.pump()
         if predicate():
             return True
-        if any(peer.process.poll() not in (None, 0) for peer in peers):
+        if time.monotonic() >= deadline:
             return False
+        if any(peer.process.poll() not in (None, 0) for peer in peers):
+            # Drain what the peer printed before it exited, then give the predicate one last look.
+            time.sleep(0.05)
+            for peer in peers:
+                peer.pump()
+            return predicate()
         time.sleep(0.01)
-    return False
+
+
+def request(peer: Peer, command: str, prefix: str, deadline: float) -> dict[str, str]:
+    """Send one server command and return the fields of its reply line."""
+    seen = len(peer.lines)
+    peer.send(command)
+
+    def reply() -> str | None:
+        for line in peer.lines[seen:]:
+            if line.startswith("SESSION_GATE " + prefix) or line.startswith("SESSION_GATE store-failed"):
+                return line
+        return None
+
+    if not wait_for([peer], lambda: reply() is not None, deadline):
+        raise RuntimeError(f"server gave no reply to '{command}'")
+    line = reply() or ""
+    if line.startswith("SESSION_GATE store-failed"):
+        raise RuntimeError(f"server refused '{command}': {line}")
+    return parse_fields(line)
 
 
 def launch(peer_path: str, role: str, *extra: str) -> Peer:
@@ -107,8 +145,10 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=150.0)
     args = parser.parse_args()
     peers: list[Peer] = []
+    store_dir = tempfile.mkdtemp(prefix="mod320-store-")
+    store = f"{store_dir}/mmo_session_gate.db"
     try:
-        server = launch(args.peer, "server")
+        server = launch(args.peer, "server", "--store", store)
         peers.append(server)
         deadline = time.monotonic() + args.timeout
         if not wait_for([server], lambda: server.find("ready ") is not None, deadline):
@@ -170,11 +210,55 @@ def main() -> int:
             raise RuntimeError("client B ownership violations were not rejected")
         if not alice.find("negative unauthenticated=refused") or not bob.find("negative unauthenticated=refused"):
             raise RuntimeError("unauthenticated create or enter was not rejected")
+
+        account_of = {alice_character: account_a, bob_character: account_b}
+        saved = request(server, f"save {account_a} {alice_character}", "saved ", deadline)
+        saved_b = request(server, f"save {account_b} {bob_character}", "saved ", deadline)
+        for view in (saved, saved_b):
+            if abs(float(view.get("x", "nan")) - 1.0) > 0.001 or abs(float(view.get("z", "nan"))) > 0.001:
+                raise RuntimeError("the server did not save the authoritative position")
+        request(server, f"saveworld {alice_character} {bob_character}", "worldsaved ", deadline)
+
         alice.stop()
         bob.stop()
-        server.stop()
-        if any(peer.process.returncode != 0 for peer in peers):
-            raise RuntimeError("a peer exited non-zero: " + ", ".join(f"{p.name}={p.process.returncode}" for p in peers))
+        if any(peer.process.returncode != 0 for peer in (alice, bob)):
+            raise RuntimeError("a client exited non-zero: " + ", ".join(f"{p.name}={p.process.returncode}" for p in (alice, bob)))
+
+        # Cold restart: no graceful shutdown, no flush; only what was committed survives.
+        server.process.kill()
+        server.process.wait(timeout=30)
+        peers.remove(server)
+        restarted = launch(args.peer, "server", "--store", store)
+        peers.append(restarted)
+        if not wait_for([restarted], lambda: restarted.find("ready ") is not None, deadline):
+            raise RuntimeError("restarted server did not come up on the same store")
+
+        for character, name in ((alice_character, "Alice"), (bob_character, "Bob")):
+            loaded = request(restarted, f"load {character}", "loaded ", deadline)
+            if loaded.get("character") != character or loaded.get("name") != name:
+                raise RuntimeError(f"restarted server lost character {name}")
+            if loaded.get("account") != account_of[character]:
+                raise RuntimeError(f"restarted server lost the owner of {name}")
+            if abs(float(loaded.get("x", "nan")) - 1.0) > 0.001 or abs(float(loaded.get("z", "nan"))) > 0.001:
+                raise RuntimeError(f"restarted server lost the saved position of {name}")
+        world = request(restarted, "loadworld", "worldloaded ", deadline)
+        if (
+            world.get("guilds") != "1"
+            or world.get("name") != "Mod320Guild"
+            or world.get("leader") != alice_character
+            or world.get("bank") != "320"
+            or world.get("members") != "2"
+            or world.get("nextGuildId") != "2"
+        ):
+            raise RuntimeError("restarted server lost the saved guild")
+        fresh = request(restarted, "alloc", "allocated ", deadline)
+        fresh_id = int(fresh.get("character", "0"))
+        if fresh_id <= max(int(alice_character), int(bob_character)):
+            raise RuntimeError("restarted server reissued a character ID")
+
+        restarted.stop()
+        if restarted.process.returncode != 0:
+            raise RuntimeError(f"restarted server exited non-zero: {restarted.process.returncode}")
         print("MOD-320 three-process session gate: PASS")
         return 0
     except (RuntimeError, OSError, ValueError) as error:
@@ -188,6 +272,7 @@ def main() -> int:
     finally:
         for peer in reversed(peers):
             peer.stop()
+        shutil.rmtree(store_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
