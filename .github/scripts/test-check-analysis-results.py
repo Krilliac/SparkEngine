@@ -2,6 +2,7 @@
 """CI-110: the CodeQL gate blocks new findings against a reviewed baseline and fails closed."""
 
 import copy
+import datetime
 import importlib.util
 import json
 from pathlib import Path
@@ -17,6 +18,9 @@ GATE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GATE)
 
 REVIEW = "reviewed: vendored code"
+OWNER = "Krilliac"
+TODAY = datetime.date.today()
+EXPIRES = (TODAY + datetime.timedelta(days=90)).isoformat()
 
 
 def finding(rule="cpp/unsafe", path="Src/a.cpp", fingerprint="abc123:1", **extra):
@@ -40,7 +44,8 @@ def clean():
 
 def baseline(*entries):
     return {"schema": 1, "findings": [
-        {"language": language, "ruleId": rule, "path": path, "fingerprint": fingerprint, "review": REVIEW}
+        {"language": language, "ruleId": rule, "path": path, "fingerprint": fingerprint, "review": REVIEW,
+         "owner": OWNER, "expires": EXPIRES}
         for language, rule, path, fingerprint in entries]}
 
 
@@ -119,7 +124,11 @@ class AnalysisGateTests(unittest.TestCase):
         good = baseline(("c-cpp", "cpp/unsafe", "Src/a.cpp", "abc123:1"))
         mutants = [None, {"findings": []}, {"schema": 2, "findings": []}, {"schema": 1}]
         for mutate in (lambda e: e.update(review=""), lambda e: e.pop("review"), lambda e: e.update(extra=1),
-                       lambda e: e.update(language="java"), lambda e: e.update(fingerprint=" ")):
+                       lambda e: e.update(language="java"), lambda e: e.update(fingerprint=" "),
+                       lambda e: e.pop("owner"), lambda e: e.update(owner=" "),
+                       lambda e: e.pop("expires"), lambda e: e.update(expires=""),
+                       lambda e: e.update(expires="next year"), lambda e: e.update(expires="2027-13-40"),
+                       lambda e: e.update(expires="20271231"), lambda e: e.update(expires=20271231)):
             document = copy.deepcopy(good)
             mutate(document["findings"][0])
             mutants.append(document)
@@ -130,12 +139,59 @@ class AnalysisGateTests(unittest.TestCase):
             with self.subTest(document=document), self.assertRaises(ValueError):
                 GATE.load_baseline(document, "c-cpp")
 
+    def test_expired_entry_fails_closed(self):
+        document = baseline(("c-cpp", "cpp/unsafe", "Src/a.cpp", "abc123:1"))
+        yesterday = (TODAY - datetime.timedelta(days=1)).isoformat()
+        document["findings"][0]["expires"] = yesterday
+        with self.assertRaisesRegex(ValueError, "expired"):
+            GATE.load_baseline(document, "c-cpp")
+        document["findings"][0]["expires"] = TODAY.isoformat()
+        self.assertEqual(len(GATE.load_baseline(document, "c-cpp")), 1)
+
+    def test_expiry_is_judged_against_the_supplied_date(self):
+        document = baseline(("c-cpp", "cpp/unsafe", "Src/a.cpp", "abc123:1"))
+        later = TODAY + datetime.timedelta(days=91)
+        with self.assertRaisesRegex(ValueError, "expired"):
+            GATE.load_baseline(document, "c-cpp", today=later)
+
+    def test_entry_beyond_the_exception_horizon_fails_closed(self):
+        document = baseline(("c-cpp", "cpp/unsafe", "Src/a.cpp", "abc123:1"))
+        document["findings"][0]["expires"] = (TODAY + datetime.timedelta(days=367)).isoformat()
+        with self.assertRaisesRegex(ValueError, "horizon"):
+            GATE.load_baseline(document, "c-cpp")
+        document["findings"][0]["expires"] = (TODAY + datetime.timedelta(days=366)).isoformat()
+        self.assertEqual(len(GATE.load_baseline(document, "c-cpp")), 1)
+
+    def test_horizon_matches_the_supply_chain_checker(self):
+        spec = importlib.util.spec_from_file_location(
+            "supply_chain", Path(__file__).resolve().parents[2] / "tools" / "check-supply-chain.py")
+        checker = importlib.util.module_from_spec(spec)
+        sys.modules.setdefault("supply_chain", checker)
+        spec.loader.exec_module(checker)
+        self.assertEqual(GATE.MAX_EXPIRY_DAYS, checker.MAX_EXCEPTION_HORIZON_DAYS)
+
+    def test_expired_baseline_exits_with_status_two(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.sarif"
+            baseline_path = Path(directory) / "baseline.json"
+            document = baseline(("c-cpp", "cpp/old", "Src/a.cpp", "abc123:1"))
+            document["findings"][0]["expires"] = (TODAY - datetime.timedelta(days=1)).isoformat()
+            baseline_path.write_text(json.dumps(document), encoding="utf-8")
+            report = clean()
+            report["runs"][0]["results"] = [finding(rule="cpp/old")]
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            result = subprocess.run([sys.executable, str(SCRIPT), str(report_path), "--language", "c-cpp",
+                                     "--baseline", str(baseline_path)], capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("expired", result.stderr)
+
     def test_committed_baseline_is_valid_and_reviewed(self):
         document = json.loads(BASELINE.read_text(encoding="utf-8"))
         total = sum(len(GATE.load_baseline(document, language)) for language in GATE.LANGUAGES)
         self.assertEqual(total, len(document["findings"]))
         for entry in document["findings"]:
             self.assertGreaterEqual(len(entry["review"]), 40, entry)
+            self.assertTrue(entry["owner"].strip(), entry)
 
     def test_cli_exit_codes_are_gate_consumable(self):
         with tempfile.TemporaryDirectory() as directory:

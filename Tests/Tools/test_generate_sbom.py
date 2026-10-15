@@ -675,6 +675,10 @@ class TestRealRepositoryLock(unittest.TestCase):
         self.assertTrue(self.inventory)
         for dep in self.inventory:
             self.assertTrue(bool(dep.cpe) != bool(dep.cpe_unavailable_reason), f"{dep.name}: cpe xor reason")
+            if not dep.cpe:
+                self.assertTrue(bool(dep.purl) != bool(dep.purl_unavailable_reason),
+                                f"{dep.name}: a CPE-less dependency needs a purl xor the reason there is none")
+                self.assertEqual(bool(dep.purl), bool(dep.purl_review), f"{dep.name}: purl and purl_review")
             if dep.kind == "submodule":
                 self.assertTrue(dep.upstream_version, f"{dep.name}: a submodule pin needs its upstream release")
         self.assertTrue(any(dep.cpe for dep in self.inventory), "no dependency carries a CPE; the scan is vacuous")
@@ -717,7 +721,8 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
         super().setUp()
         self.write("CMakeLists.txt", 'set(SPARK_ENGINE_VERSION "1.2.3" CACHE STRING "version")\n')
         self.write("LICENSE", "Fixture Open License 1.0\n\nCopyright (c) 2026 fixture\n")
-        self.set_policy(cpe_unavailable_reason="The fixture dependency has no NVD product.")
+        self.set_policy(cpe_unavailable_reason="The fixture dependency has no NVD product.",
+                        purl_unavailable_reason="The fixture dependency has no package URL.")
         self.commit("sbom inputs")
 
     def set_policy(self, **fields: str) -> None:
@@ -755,6 +760,7 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
         self.assertEqual(demo["downloadLocation"], "https://github.com/example/demo")
         self.assertNotIn("externalRefs", demo, "a vendored snapshot without an upstream version asserts no purl")
         self.assertIn("No CPE: The fixture dependency has no NVD product.", demo["comment"])
+        self.assertIn("No reviewed purl: The fixture dependency has no package URL.", demo["comment"])
         digest = self.lock()["tree_digests"]["ThirdParty/Utils/demo"]["digest"]
         self.assertIn(f"sha256:{digest}", demo["sourceInfo"])
         self.assertEqual(
@@ -811,7 +817,8 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
     def test_unresolvable_license_is_refused(self) -> None:
         manifest = self.repo / "ThirdParty/dependencies.lock"
         manifest.write_text(manifest.read_text(encoding="utf-8").replace("|MIT|", "|Proprietary|"), encoding="utf-8")
-        self.set_policy(declared="Proprietary", spdx="LicenseRef-Proprietary", cpe_unavailable_reason="x" * 16)
+        self.set_policy(declared="Proprietary", spdx="LicenseRef-Proprietary", cpe_unavailable_reason="x" * 16,
+                        purl_unavailable_reason="x" * 16)
         self.commit()
         code, _, err = self.run_main()
         self.assertEqual(code, 1)
@@ -823,6 +830,24 @@ class TestGenerateFakeRepository(base.FakeRepoCase):
         code, _, err = self.run_main()
         self.assertEqual(code, 1)
         self.assertIn("names no cpe or cpe_unavailable_reason", err)
+
+    def test_cpe_less_dependency_without_a_purl_mapping_is_refused(self) -> None:
+        self.set_policy(cpe_unavailable_reason="The fixture dependency has no NVD product.")
+        self.commit()
+        code, _, err = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("no CPE and no reviewed purl mapping", err)
+
+    def test_reviewed_purl_is_emitted_with_the_upstream_version(self) -> None:
+        self.set_policy(upstream_version="1.2.3", cpe_unavailable_reason="The fixture dependency has no NVD product.",
+                        purl="pkg:github/example/demo", purl_review="Fixture: the source URL is the upstream repo.")
+        self.commit()
+        code, out, err = self.run_main()
+        self.assertEqual(code, 0, err)
+        demo = json.loads(out)["packages"][1]
+        locators = [ref["referenceLocator"] for ref in demo["externalRefs"] if ref["referenceType"] == "purl"]
+        self.assertIn("pkg:github/example/demo@1.2.3", locators)
+        self.assertIn("Reviewed purl: Fixture: the source URL is the upstream repo.", demo["comment"])
 
     def test_cpe_is_emitted_as_a_security_reference_with_the_upstream_version(self) -> None:
         cpe = "cpe:2.3:a:example:demo:1.2.3:*:*:*:*:*:*:*"
@@ -899,6 +924,18 @@ class TestInventoryConsistency(unittest.TestCase):
     def test_dependency_without_cpe_or_reason_is_refused(self) -> None:
         with self.assertRaisesRegex(sbom.SbomError, "names no cpe or cpe_unavailable_reason"):
             self.inventory(self.fields("a" * 40), self.record(cpe=None))
+
+    def test_cpe_less_submodule_needs_a_purl_mapping_or_reason(self) -> None:
+        cpe_less = self.record(cpe=None, cpe_unavailable_reason="The fixture has no NVD product.")
+        with self.assertRaisesRegex(sbom.SbomError, "no CPE and no reviewed purl mapping"):
+            self.inventory(self.fields("a" * 40), cpe_less)
+        (dep,) = self.inventory(self.fields("a" * 40), {
+            **cpe_less, "purl": "pkg:github/example/sub", "purl_review": "Fixture: reviewed upstream."})
+        self.assertIn("pkg:github/example/sub@1.0.0",
+                      [ref["referenceLocator"] for ref in sbom._package(dep)["externalRefs"]])
+        (dep,) = self.inventory(self.fields("a" * 40), {
+            **cpe_less, "purl_unavailable_reason": "Fixture: the code has no upstream package."})
+        self.assertIn("No reviewed purl: Fixture: the code has no upstream package.", sbom._package(dep)["comment"])
 
     def test_upstream_version_must_agree_with_the_tag_commit(self) -> None:
         with self.assertRaisesRegex(sbom.SbomError, "must not claim commits past it"):
