@@ -267,20 +267,31 @@ The repository is public, so the workflow runs only on `workflow_dispatch` and p
 refuses any other repository. No `pull_request`, `pull_request_target`, `issue_comment`, `workflow_run` or
 `schedule` trigger may ever reach the `spark-gpu` label, and release environments stay on GitHub-hosted runners.
 
+The triggers in this file are not the whole boundary: a fork pull request runs the workflows in its own head, so it
+can add a new workflow that targets `spark-gpu`. Two controls close that path. The repository must require approval
+for workflows from **all** outside collaborators (the default only stops first-time contributors), and
+`test_workflow_privilege_boundaries.py` fails if any other workflow names `self-hosted` or `spark-gpu`, or if
+`gpu-certification.yml` gains a trigger, secret, environment or write permission. The test is defence in depth only,
+since a pull request can edit it too; approval is the control that holds. This is a personal account, so runner
+groups restricted to one workflow are not available. An ephemeral runner in a VM would isolate jobs better, but
+loses direct GPU access; the runner instead runs as a non-administrator account holding no secrets.
+
 #### Registering the runner
 
 The owner runs these steps; they need a registration token and install a Windows service.
 
-1. Update Visual Studio 2022 (Visual Studio Installer, Update) until a Developer PowerShell `cl` prints
+1. In Settings, Actions, General, set "Approval for running fork pull request workflows from contributors" to
+   require approval for all outside collaborators. Do this first: the repository is on "first-time contributors"
+   today, which would let anyone with one merged pull request run code on the workstation.
+2. Update Visual Studio 2022 (Visual Studio Installer, Update) until a Developer PowerShell `cl` prints
    `Version 19.44.35229`. The Shipping configure refuses any other compiler build.
-2. Install Python 3.12 for all users with "Add to PATH", so the service account finds `python`.
-3. Create a standard local account for the service (not an administrator), e.g. `spark-runner`.
-4. On GitHub, open Settings, Actions, Runners, New self-hosted runner, Windows x64. Download and extract the runner
+3. Install Python 3.12 for all users with "Add to PATH", so the service account finds `python`.
+4. Create a standard local account for the service (not an administrator), e.g. `spark-runner`.
+5. On GitHub, open Settings, Actions, Runners, New self-hosted runner, Windows x64. Download and extract the runner
    into `C:\actions-runner` (outside any user profile) as that page shows.
-5. In `C:\actions-runner`, run `.\config.cmd --url https://github.com/Krilliac/SparkEngine --token <TOKEN>
+6. In `C:\actions-runner`, run `.\config.cmd --url https://github.com/Krilliac/SparkEngine --token <TOKEN>
    --name spark-gpu-01 --labels spark-gpu --work _work --runasservice`, and give `.\spark-runner` when it asks for
    the service account. `self-hosted`, `Windows` and `X64` are added automatically.
-6. In Settings, Actions, General, require approval for fork pull request workflows from all outside collaborators.
 7. After the workflow reaches `Working`, start it from Actions, GPU certification, Run workflow.
 
 A run builds the whole Shipping tree with `--parallel 1` and holds the GPU for its duration, so expect it to compete
