@@ -112,6 +112,7 @@ if(REPORTER_SOURCES)
         target_include_directories(SparkCrashReporterManifestTests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src
             ${CMAKE_CURRENT_SOURCE_DIR}/../SparkEngine/Source
+            ${CMAKE_CURRENT_SOURCE_DIR}/../SparkSDK/Include
         )
         target_compile_definitions(SparkCrashReporterManifestTests PRIVATE
             _CRT_SECURE_NO_WARNINGS
