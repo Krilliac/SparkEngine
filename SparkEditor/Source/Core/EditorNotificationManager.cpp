@@ -67,6 +67,16 @@ namespace SparkEditor
         };
     } // namespace
 
+    float EditorNotificationManager::ToastWidth(float workWidth)
+    {
+        // Preferred width is Em(26) (at least 280 px), capped at a share of the work area so a large UI scale
+        // wraps the text instead of covering the panels; a narrow window still gets a readable Em(16) toast.
+        const float preferred = std::max(Ui::Em(26.0f), Ui::Px(280.0f));
+        const float viewportCap = std::max(0.0f, workWidth) * kMaxToastViewportFraction;
+        const float readable = std::min(Ui::Em(16.0f), workWidth - Ui::Px(32.0f));
+        return std::max(1.0f, std::max(std::min(preferred, viewportCap), readable));
+    }
+
     float EditorNotificationManager::DefaultDuration(NotificationSeverity severity) noexcept
     {
         switch (severity)
@@ -151,8 +161,7 @@ namespace SparkEditor
         const float stripe = Ui::Px(3.0f);
         const float rounding = Ui::Px(6.0f);
         const float closeSide = std::max(Ui::Px(24.0f), ImGui::GetFrameHeight());
-        const float maxWidth = std::max(1.0f, viewport->WorkSize.x - Ui::Px(32.0f));
-        const float width = std::min(std::max(Ui::Em(26.0f), Ui::Px(280.0f)), maxWidth);
+        const float width = ToastWidth(viewport->WorkSize.x);
         const float textLeft = stripe + padX;
         const float wrapWidth = std::max(1.0f, width - textLeft - padX);
 

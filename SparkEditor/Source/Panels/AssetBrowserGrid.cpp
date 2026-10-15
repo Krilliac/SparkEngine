@@ -121,10 +121,9 @@ namespace SparkEditor
                 RefreshAssets();
             }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(Spark::Ui::Em(7.0f));
-            ImGui::SliderFloat("##Size", &m_thumbnailSize, 32.0f, 128.0f, "%.0f px");
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Thumbnail Size");
+            // The value is printed beside the track: a centred "64 px" sat under the grab at every scale.
+            Spark::Ui::SliderWithValue("##Size", &m_thumbnailSize, 32.0f, 128.0f, "%.0f px", Spark::Ui::Em(6.0f),
+                                       "Thumbnail Size");
 
             // Breadcrumb navigation
             Spark::Ui::ToolbarSeparator();

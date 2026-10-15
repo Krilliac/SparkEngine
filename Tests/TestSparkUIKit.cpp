@@ -695,4 +695,99 @@ TEST(Gated_SparkUi_SdkFallbackColoursMatchEmberDark)
     EXPECT_EQ(Sdk::kFallbackTextOnAccent, packed(Role::TextOnAccent));
 }
 
+TEST(Gated_SparkUi_HeroBannerCaptionReadsInEveryAppearance)
+{
+    for (const PaletteId family : kFamilies)
+    {
+        for (const Appearance appearance : kAppearances)
+        {
+            const Tokens tokens = GenerateTokens(BuiltinSeed(family), appearance);
+            const HeroBannerStyle style = ChooseHeroBannerStyle(tokens);
+            EXPECT_GE(style.captionContrast, kHeroCaptionContrastMinimum);
+            // Recompute against every colour the banner can show under the text, independently of
+            // the value the chooser reports.
+            const Rgba raised = Get(tokens, Role::SurfaceRaised);
+            std::vector<Rgba> banner;
+            if (style.gradient)
+            {
+                for (const std::uint32_t stop : kBrandGradientStops)
+                {
+                    banner.push_back(Composite(WithAlpha(Hex(stop), style.washAlpha), raised));
+                }
+            }
+            else
+            {
+                banner.push_back(raised);
+            }
+            for (const Rgba& colour : banner)
+            {
+                EXPECT_GE(ContrastRatio(Get(tokens, style.caption), colour), kHeroCaptionContrastMinimum);
+                EXPECT_GE(ContrastRatio(Get(tokens, style.title), colour), TextContrastMinimum(appearance));
+            }
+            // High Contrast draws a flat, bordered surface instead of the brand wash.
+            EXPECT_EQ(style.gradient, appearance != Appearance::HighContrast);
+        }
+    }
+    // The Light version line measured 4.37:1 once rendered in the thin mono face; it now uses primary ink.
+    EXPECT_TRUE(ChooseHeroBannerStyle(EmberTokens(Appearance::Light)).caption == Role::TextPrimary);
+}
+
+TEST(Gated_SparkUi_FitTextToWidthKeepsEndsAndUtf8)
+{
+    // One unit per code point, so the expected cuts are exact.
+    const auto codePoints = [](std::string_view text)
+    {
+        float count = 0.0f;
+        for (const char c : text)
+        {
+            count += (static_cast<unsigned char>(c) & 0xC0u) != 0x80u ? 1.0f : 0.0f;
+        }
+        return count;
+    };
+
+    EXPECT_EQ(FitTextToWidth("abcdefghij", 10.0f, codePoints, EllipsisPosition::Middle, "~"),
+              std::string("abcdefghij"));
+    EXPECT_EQ(FitTextToWidth("abcdefghij", 7.0f, codePoints, EllipsisPosition::Middle, "~"), std::string("abc~hij"));
+    EXPECT_EQ(FitTextToWidth("abcdefghij", 7.0f, codePoints, EllipsisPosition::Leading, "~"), std::string("~efghij"));
+    EXPECT_EQ(FitTextToWidth("abcdefghij", 0.5f, codePoints, EllipsisPosition::Middle, "~"), std::string());
+
+    // A path keeps its file name when the folder is cut from the front.
+    const std::string path = "D:/Projects/Some/Very/Deep/Folder/Levels/Arena.scene";
+    const std::string fitted = FitTextToWidth(path, 20.0f, codePoints, EllipsisPosition::Leading, "~");
+    EXPECT_EQ(fitted.size(), std::size_t{20});
+    EXPECT_TRUE(fitted.ends_with("Levels/Arena.scene"));
+
+    // Multi-byte text is only cut between code points: alpha..theta (8 code points, 16 bytes).
+    const std::string greek = "\xce\xb1\xce\xb2\xce\xb3\xce\xb4\xce\xb5\xce\xb6\xce\xb7\xce\xb8";
+    const std::string ellipsis = "\xe2\x80\xa6";
+    EXPECT_EQ(FitTextToWidth(greek, 5.0f, codePoints, EllipsisPosition::Middle, ellipsis),
+              std::string("\xce\xb1\xce\xb2") + ellipsis + "\xce\xb7\xce\xb8");
+}
+
+TEST(Gated_SparkUi_SliderValueSitsBesideTrack)
+{
+    ScopedImGuiContext context;
+    ScopedImGuiContext::BuildAtlas();
+    Install(context.Get(), EmberDark(), 1.0f, 1.0f, false);
+
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(600.0f, 200.0f));
+    ImGui::Begin("Slider host", nullptr, ImGuiWindowFlags_NoSavedSettings);
+    const float trackWidth = Em(6.0f);
+    const ImVec2 start = ImGui::GetCursorScreenPos();
+    float size = 64.0f;
+    EXPECT_FALSE(SliderWithValue("##Size", &size, 32.0f, 128.0f, "%.0f px", trackWidth, "Thumbnail Size"));
+    // The last item is the value slot; it starts after the track instead of sharing its rectangle.
+    const ImVec2 slotMin = ImGui::GetItemRectMin();
+    const ImVec2 slotMax = ImGui::GetItemRectMax();
+    ImGui::End();
+    ImGui::EndFrame();
+
+    EXPECT_GE(slotMin.x, start.x + trackWidth);
+    EXPECT_NEAR(slotMin.y, start.y, 0.5f);
+    EXPECT_GT(slotMax.x - slotMin.x, 0.0f);
+    EXPECT_EQ(size, 64.0f); // an untouched slider leaves the value alone
+}
+
 #endif // SPARK_TEST_HAS_IMGUI

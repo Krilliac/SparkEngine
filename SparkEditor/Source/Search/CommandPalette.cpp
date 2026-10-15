@@ -213,7 +213,9 @@ namespace SparkEditor
                     ImGui::SetCursorPosY(textTop);
                     Ui::KeyHint(action.shortcut.c_str());
                 }
-                ImGui::SetCursorPosY(rowTop + rowHeight + ImGui::GetStyle().ItemSpacing.y);
+                // No cursor move after the last item: the row's line height is already the Selectable's, so the
+                // next row starts one ItemSpacing below it. Moving the cursor past the row without submitting an
+                // item would extend the child's bounds by SetCursorPos, which Dear ImGui reports as an error.
 
                 ImGui::PopID();
             }

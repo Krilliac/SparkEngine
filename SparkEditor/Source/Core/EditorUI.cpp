@@ -761,10 +761,13 @@ namespace SparkEditor
         ImGui::SetNextWindowSize(viewport->WorkSize);
         ImGui::SetNextWindowViewport(viewport->ID);
 
-        ImGuiWindowFlags dockspaceFlags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking |
-                                          ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
-                                          ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                                          ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+        // No ImGuiWindowFlags_MenuBar: the menus live in the viewport's main menu bar (BeginMainMenuBar), which
+        // already reserves its strip of the work area. A host menu bar here was an empty, scale-sized band between
+        // the menus and the toolbar.
+        const ImGuiWindowFlags dockspaceFlags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+                                                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+                                                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                                                ImGuiWindowFlags_NoNavFocus;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -785,10 +788,17 @@ namespace SparkEditor
             m_defaultDockLayoutResetRequested = false;
         }
 
-        // The toolbar strip follows the UI scale: a tree built, saved or restored from imgui.ini at another scale
-        // (Ctrl+=, a move to a monitor with a different DPI) would otherwise clip the toolbar buttons.
-        if (const ImGuiWindow* toolbarWindow = ImGui::FindWindowByName("##Toolbar"))
-            FitEditorToolbarNode(toolbarWindow->DockNode, Spark::Ui::Scale());
+        // The dock tree follows the UI scale: a tree built, saved or restored from imgui.ini at another scale
+        // (Ctrl+=, a move to a monitor with a different DPI) would otherwise clip the toolbar buttons and squeeze
+        // the side docks. The toolbar strip is refitted exactly; other docks only grow to their scaled minimum.
+        {
+            const std::string hierarchyWindow = PanelDockWindowName("Hierarchy");
+            const std::string inspectorWindow = PanelDockWindowName("Inspector");
+            const std::string consoleWindow = PanelDockWindowName("Console");
+            const auto nameOrNull = [](const std::string& name) { return name.empty() ? nullptr : name.c_str(); };
+            FitEditorDockTree({nameOrNull(hierarchyWindow), nameOrNull(inspectorWindow), nameOrNull(consoleWindow)},
+                              Spark::Ui::Scale());
+        }
 
         // Menu bar is rendered inside the dockspace window
         RenderMainMenuBar();
@@ -838,22 +848,28 @@ namespace SparkEditor
         // windows after Reset Layout.
         auto dockPanel = [this](const char* key, ImGuiID node)
         {
-            const auto it = m_panels.find(key);
-            if (it == m_panels.end() || !it->second)
-                return;
-            const std::string dockName = "###" + it->second->GetID();
-            ImGui::DockBuilderDockWindow(dockName.c_str(), node);
+            const std::string dockName = PanelDockWindowName(key);
+            if (!dockName.empty())
+                ImGui::DockBuilderDockWindow(dockName.c_str(), node);
         };
         dockPanel("Hierarchy", dockLeft);
         dockPanel("Inspector", dockRight);
         dockPanel("SceneView", dockCenter);
         dockPanel("GameView", dockCenter);
         ImGui::DockBuilderDockWindow(EditorStartPage::kWindowName, dockCenter);
-        ImGui::DockBuilderDockWindow("##Toolbar", dockToolbar);
+        ImGui::DockBuilderDockWindow(EditorToolbarWindowName, dockToolbar);
         dockPanel("Console", dockBottom);
         dockPanel("AssetBrowser", dockBottom);
 
         ImGui::DockBuilderFinish(dockspaceId);
+    }
+
+    std::string EditorUI::PanelDockWindowName(const char* panelKey) const
+    {
+        const auto it = m_panels.find(panelKey);
+        if (it == m_panels.end() || !it->second)
+            return {};
+        return "###" + it->second->GetID();
     }
 
     void EditorUI::Shutdown()

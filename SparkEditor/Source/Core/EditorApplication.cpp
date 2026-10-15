@@ -162,6 +162,22 @@ namespace SparkEditor
             return failInitialization();
         }
         NotifyPreferencesLoadProblem();
+        // A --project that did not open used to drop the user into the Project Browser with only a console line.
+        // Say why, in the log and as an error notification that stays until dismissed.
+        if (!m_config.projectPath.empty() && m_config.projectPath != ".")
+        {
+            const ProjectManager* projects = m_ui->GetProjectManager();
+            if (projects != nullptr && !projects->HasOpenProject())
+            {
+                const std::string reason = projects->GetLastOpenError().empty()
+                                               ? "The project at '" + m_config.projectPath + "' was not opened."
+                                               : projects->GetLastOpenError();
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Startup project '%s' was not opened: %s",
+                                m_config.projectPath.c_str(), reason.c_str());
+                console.LogError("Startup project was not opened: " + reason);
+                m_ui->Notify(NotificationSeverity::Error, "Could not open project", reason);
+            }
+        }
         // Give EditorUI access to the plugin manager for menu bar rendering
         m_ui->SetPluginManager(&m_pluginManager);
         console.LogSuccess("EditorUI initialized successfully");

@@ -17,6 +17,7 @@
 #include "Spark/UiTheme.h" // Spark::Ui::Sdk::HudFont: the host's HUD face (dynamic, crisp at any size)
 
 #include <imgui.h>
+#include <algorithm>
 #include <cmath>
 
 namespace Terrafront::TFUi
@@ -25,6 +26,26 @@ namespace Terrafront::TFUi
     inline constexpr float kSqrt3 = 1.7320508f;
     inline constexpr float kPi = 3.14159265f;
     inline constexpr float kDeg2Rad = kPi / 180.0f;
+
+    /// Effective UI scale of the host overlay (EngineSettings uiScale): the value the host publishes in its
+    /// SparkUiRuntimeBlock, else the context's own font scale. Every TERRAFRONT screen multiplies its logical
+    /// (100 %) geometry by this so text, panels and offsets grow together.
+    inline float UiScale()
+    {
+        if (const Spark::Ui::Sdk::SparkUiRuntimeBlock* block = Spark::Ui::Sdk::Runtime();
+            block != nullptr && block->scale > 0.0f)
+        {
+            return block->scale;
+        }
+        const ImGuiStyle& style = ImGui::GetStyle();
+        return std::max(0.5f, style.FontScaleMain * style.FontScaleDpi);
+    }
+
+    /// Logical (100 %) pixels to screen pixels at the current UI scale.
+    inline float Px(float logical)
+    {
+        return logical * UiScale();
+    }
 
     inline ImU32 FactionCol(FactionId f, float alpha = 1.0f)
     {

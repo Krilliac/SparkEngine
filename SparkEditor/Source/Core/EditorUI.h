@@ -552,6 +552,8 @@ namespace SparkEditor
         void RenderPanels();
         void RenderModalDialogs();
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
+        /// "###<panel id>" dock window name of the panel registered under @p panelKey; empty when there is none.
+        std::string PanelDockWindowName(const char* panelKey) const;
         void UpdateStats(float deltaTime);
         void CreatePanels();
         void CreateCorePanels(

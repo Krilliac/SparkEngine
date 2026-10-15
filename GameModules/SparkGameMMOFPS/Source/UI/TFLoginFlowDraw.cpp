@@ -8,12 +8,17 @@
  * Split from TFLoginFlow.cpp per the repo file-size rule (TFHUDDraw.cpp
  * pattern — same class, feature-owned translation units). TFLoginFlow.cpp
  * keeps the lifecycle, state machine, reply sinks, and sends.
+ *
+ * Scale: every offset, size and font size is a logical (100 %) value times
+ * TFUi::UiScale(), so the screens stay coherent at uiScale 1.0, 1.5 and 2.0.
+ * The panel and the sign-in form come from UI/TFLoginLayout.h (headless-tested).
  */
 #include "UI/TFLoginFlow.h"
 
 #include "Account/TFCharacterSystem.h" // kTFMaxCharSlots
 #include "Data/TFDataTables.h"
 #include "Game/TFLanDiscovery.h" // kTFLanBeaconPort, TFLanServerEntry
+#include "UI/TFLoginLayout.h"
 #include "UI/TFUiCommon.h"
 #include "Utils/SecureMemory.h"
 
@@ -29,6 +34,20 @@ namespace Terrafront
 {
 
 #ifdef SPARK_HAS_IMGUI
+
+    namespace
+    {
+        constexpr ImU32 kTitleInk = IM_COL32(235, 235, 235, 235);
+        constexpr ImU32 kSubtitleInk = IM_COL32(170, 174, 180, 210);
+        constexpr ImU32 kLabelInk = IM_COL32(150, 154, 160, 200);
+        constexpr ImU32 kErrorInk = IM_COL32(235, 110, 105, 235);
+
+        /// Field label in the HUD face at an explicit (already scaled) size, top-left at @p pos.
+        void AddLabel(ImDrawList* dl, float fontSize, ImVec2 pos, const char* text)
+        {
+            dl->AddText(Spark::Ui::Sdk::HudFont(), fontSize, pos, kLabelInk, text);
+        }
+    } // namespace
 
     void TFLoginFlow::RenderUI()
     {
@@ -50,29 +69,28 @@ namespace Terrafront
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(6, 8, 12, 235));
 
-        const float panelW = std::min(600.0f, vp->Size.x * 0.92f);
-        const float panelH = std::min(560.0f, vp->Size.y * 0.88f);
-        const float panelX = vp->Pos.x + (vp->Size.x - panelW) * 0.5f;
-        const float panelY = vp->Pos.y + (vp->Size.y - panelH) * 0.5f;
-        dl->AddRectFilled(ImVec2(panelX, panelY), ImVec2(panelX + panelW, panelY + panelH), IM_COL32(16, 19, 25, 235),
-                          6.0f);
-        dl->AddRect(ImVec2(panelX, panelY), ImVec2(panelX + panelW, panelY + panelH), IM_COL32(120, 124, 130, 150),
-                    6.0f, 0, 2.0f);
+        const TFLoginLayout::PanelRect panel =
+            TFLoginLayout::ComputePanel(vp->Pos.x, vp->Pos.y, vp->Size.x, vp->Size.y, TFUi::UiScale());
+        const ImVec2 panelMin(panel.x, panel.y);
+        const ImVec2 panelMax(panel.x + panel.w, panel.y + panel.h);
+        const float rounding = TFUi::Px(6.0f);
+        dl->AddRectFilled(panelMin, panelMax, IM_COL32(16, 19, 25, 235), rounding);
+        dl->AddRect(panelMin, panelMax, IM_COL32(120, 124, 130, 150), rounding, 0, std::max(1.0f, TFUi::Px(2.0f)));
 
         switch (m_state)
         {
         case TFFlowState::Login:
         case TFFlowState::Register:
-            RenderLoginScreen(panelX, panelY, panelW, panelH);
+            RenderLoginScreen(panel.x, panel.y, panel.w, panel.h);
             break;
         case TFFlowState::CharSelect:
-            RenderCharacterSelectScreen(panelX, panelY, panelW, panelH);
+            RenderCharacterSelectScreen(panel.x, panel.y, panel.w, panel.h);
             break;
         case TFFlowState::CharCreate:
-            RenderCharacterCreateScreen(panelX, panelY, panelW, panelH);
+            RenderCharacterCreateScreen(panel.x, panel.y, panel.w, panel.h);
             break;
         case TFFlowState::EnteringWorld:
-            RenderEnteringWorldScreen(panelX, panelY, panelW, panelH);
+            RenderEnteringWorldScreen(panel.x, panel.y, panel.w, panel.h);
             break;
         case TFFlowState::InWorld:
             break;
@@ -86,36 +104,33 @@ namespace Terrafront
         using namespace TFUi;
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const bool registering = (m_state == TFFlowState::Register);
+        const TFLoginLayout::SignInForm form =
+            TFLoginLayout::ComputeSignInForm({panelX, panelY, panelW, panelH}, UiScale(), ImGui::GetFrameHeight());
 
-        AddTextCentered(dl, 28.0f, ImVec2(panelX + panelW * 0.5f, panelY + 44.0f), IM_COL32(235, 235, 235, 235),
+        AddTextCentered(dl, form.titleSize, ImVec2(form.centerX, form.titleCenterY), kTitleInk,
                         registering ? "CREATE ACCOUNT" : "TERRAFRONT");
-        AddTextCentered(dl, 14.0f, ImVec2(panelX + panelW * 0.5f, panelY + 74.0f), IM_COL32(170, 174, 180, 210),
+        AddTextCentered(dl, form.subtitleSize, ImVec2(form.centerX, form.subtitleCenterY), kSubtitleInk,
                         registering ? "Choose a callsign and passphrase." : "Sign in to deploy.");
 
-        const float fieldW = panelW - 120.0f;
-        const float fieldX = panelX + 60.0f;
-
-        dl->AddText(ImVec2(fieldX, panelY + 108.0f), IM_COL32(150, 154, 160, 200), "CALLSIGN");
-        ImGui::SetCursorScreenPos(ImVec2(fieldX, panelY + 126.0f));
-        ImGui::SetNextItemWidth(fieldW);
+        AddLabel(dl, form.labelSize, ImVec2(form.fieldX, form.callsignLabelY), "CALLSIGN");
+        ImGui::SetCursorScreenPos(ImVec2(form.fieldX, form.callsignInputY));
+        ImGui::SetNextItemWidth(form.fieldW);
         ImGui::InputText("##tf_user", m_username, sizeof(m_username));
 
-        dl->AddText(ImVec2(fieldX, panelY + 178.0f), IM_COL32(150, 154, 160, 200), "PASSPHRASE");
-        ImGui::SetCursorScreenPos(ImVec2(fieldX, panelY + 196.0f));
-        ImGui::SetNextItemWidth(fieldW);
+        AddLabel(dl, form.labelSize, ImVec2(form.fieldX, form.passphraseLabelY), "PASSPHRASE");
+        ImGui::SetCursorScreenPos(ImVec2(form.fieldX, form.passphraseInputY));
+        ImGui::SetNextItemWidth(form.fieldW);
         ImGui::InputText("##tf_pass", m_password, sizeof(m_password), ImGuiInputTextFlags_Password);
 
         if (!m_error.empty())
-            AddTextCentered(dl, 15.0f, ImVec2(panelX + panelW * 0.5f, panelY + 244.0f), IM_COL32(235, 110, 105, 235),
-                            m_error.c_str());
+            AddTextCentered(dl, form.errorSize, ImVec2(form.centerX, form.errorCenterY), kErrorInk, m_error.c_str());
 
         const bool blocked = m_pending != PendingOp::None;
-        const float btnY = panelY + panelH - 80.0f;
-        const float btnW = (fieldW - 20.0f) * 0.5f;
+        const ImVec2 buttonSize(form.buttonW, form.buttonH);
 
-        ImGui::SetCursorScreenPos(ImVec2(fieldX, btnY));
+        ImGui::SetCursorScreenPos(ImVec2(form.fieldX, form.buttonY));
         ImGui::BeginDisabled(blocked);
-        if (ImGui::Button(registering ? "Register##tf_submit" : "Login##tf_submit", ImVec2(btnW, 44.0f)))
+        if (ImGui::Button(registering ? "Register##tf_submit" : "Login##tf_submit", buttonSize))
         {
             if (registering)
                 SendRegister();
@@ -124,9 +139,9 @@ namespace Terrafront
         }
         ImGui::EndDisabled();
 
-        ImGui::SameLine(0.0f, 20.0f);
+        ImGui::SameLine(0.0f, form.buttonGap);
         ImGui::BeginDisabled(blocked);
-        if (ImGui::Button(registering ? "Back to Login##tf_toggle" : "Create Account##tf_toggle", ImVec2(btnW, 44.0f)))
+        if (ImGui::Button(registering ? "Back to Login##tf_toggle" : "Create Account##tf_toggle", buttonSize))
         {
             m_state = registering ? TFFlowState::Login : TFFlowState::Register;
             m_error.clear();
@@ -135,21 +150,25 @@ namespace Terrafront
 
         // --- W11 server-browser lane: LAN SERVERS list between the form and the
         // footer buttons. Arms the scanner (idempotent; latched off on bind fail).
-        const float lanHeaderY = panelY + 272.0f;
-        dl->AddText(ImVec2(fieldX, lanHeaderY), IM_COL32(150, 154, 160, 200), "LAN SERVERS");
-        const float listY = lanHeaderY + 20.0f;
-        RenderLanServerList(fieldX, listY, fieldW, (btnY - 12.0f) - listY, blocked);
+        // A panel too short for the list (high UI scale in a small window) hides
+        // the whole section rather than drawing it over the buttons.
+        if (form.showLan)
+        {
+            AddLabel(dl, form.labelSize, ImVec2(form.fieldX, form.lanHeaderY), "LAN SERVERS");
+            RenderLanServerList(form.fieldX, form.lanListY, form.fieldW, form.lanListH, blocked);
+        }
     }
 
     void TFLoginFlow::RenderLanServerList(float x, float y, float w, float h, bool blocked)
     {
-        if (h < 24.0f)
+        using namespace TFUi;
+        if (h < Px(TFLoginLayout::Metric::kMinListHeight))
             return;
 
         m_lan.StartScanning();
 
         ImGui::SetCursorScreenPos(ImVec2(x, y));
-        ImGui::BeginChild("##tf_lanlist", ImVec2(w, h), true);
+        ImGui::BeginChild("##tf_lanlist", ImVec2(w, h), ImGuiChildFlags_Borders);
 
         const std::vector<TFLanServerEntry>& servers = m_lan.Servers();
         if (!m_lan.IsScanAvailable())
@@ -171,10 +190,10 @@ namespace Terrafront
             {
                 ImGui::PushID(row++);
                 ImGui::BeginDisabled(!canJoin);
-                if (ImGui::Button("Join", ImVec2(56.0f, 0.0f)))
+                if (ImGui::Button("Join", ImVec2(Px(56.0f), 0.0f)))
                     JoinLanServer(s.ip, s.gamePort);
                 ImGui::EndDisabled();
-                ImGui::SameLine(0.0f, 10.0f);
+                ImGui::SameLine(0.0f, Px(10.0f));
                 char line[160];
                 std::snprintf(line, sizeof(line), "%s   %u/%u   %s   %s:%u", s.name.c_str(),
                               static_cast<unsigned>(s.players), static_cast<unsigned>(s.maxPlayers), s.map.c_str(),
@@ -191,57 +210,66 @@ namespace Terrafront
     {
         using namespace TFUi;
         ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float centerX = panelX + panelW * 0.5f;
 
-        AddTextCentered(dl, 26.0f, ImVec2(panelX + panelW * 0.5f, panelY + 38.0f), IM_COL32(235, 235, 235, 235),
-                        "SELECT CHARACTER");
+        AddTextCentered(dl, Px(26.0f), ImVec2(centerX, panelY + Px(38.0f)), kTitleInk, "SELECT CHARACTER");
 
-        const float pad = 20.0f;
-        const float rowH = 52.0f;
-        float y = panelY + 76.0f;
+        const float pad = Px(20.0f);
+        const float footY = panelY + panelH - Px(64.0f);
+        const float errorCenterY = footY - Px(22.0f);
+        const float listTop = panelY + Px(76.0f);
+        const float listBottom = errorCenterY - Px(18.0f);
 
+        // The slots scroll inside their own region so a high UI scale never pushes them under the footer.
+        ImGui::SetCursorScreenPos(ImVec2(panelX + pad, listTop));
+        ImGui::BeginChild("##tf_chars", ImVec2(panelW - pad * 2.0f, std::max(Px(52.0f), listBottom - listTop)),
+                          ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
+        ImDrawList* listDl = ImGui::GetWindowDrawList();
+        const float lineHeight = ImGui::GetTextLineHeight();
+        const float rowH = std::max(Px(52.0f), lineHeight * 2.0f + Px(12.0f));
         for (size_t i = 0; i < m_chars.size(); ++i)
         {
             const TF_CharBrief& c = m_chars[i];
             const FactionId f = static_cast<FactionId>(c.faction);
             const bool selected = (m_selectedIdx == static_cast<int>(i));
+            const ImVec2 rowPos = ImGui::GetCursorScreenPos();
 
-            ImGui::SetCursorScreenPos(ImVec2(panelX + pad, y));
             char label[96];
             // Bounded read: the name array is fixed-width (validated at receipt too).
             std::snprintf(label, sizeof(label), "%.*s##char%zu", static_cast<int>(strnlen(c.name, sizeof(c.name))),
                           c.name, i);
-            if (ImGui::Selectable(label, selected, 0, ImVec2(panelW - pad * 2.0f, rowH)))
+            if (ImGui::Selectable(label, selected, 0, ImVec2(ImGui::GetContentRegionAvail().x, rowH)))
                 m_selectedIdx = static_cast<int>(i);
 
             char tag[64];
             std::snprintf(tag, sizeof(tag), "%s   -   Rank %u", FactionTag(f), static_cast<unsigned>(c.rank));
-            dl->AddText(ImVec2(panelX + pad + 8.0f, y + rowH * 0.5f - 8.0f), FactionCol(f, 0.9f), tag);
-
-            y += rowH + 8.0f;
+            listDl->AddText(ImVec2(rowPos.x + Px(8.0f), rowPos.y + lineHeight + Px(6.0f)), FactionCol(f, 0.9f), tag);
         }
-
         if (m_chars.empty())
-            AddTextCentered(dl, 15.0f, ImVec2(panelX + panelW * 0.5f, y + 24.0f), IM_COL32(170, 174, 180, 210),
+        {
+            const ImVec2 origin = ImGui::GetCursorScreenPos();
+            AddTextCentered(listDl, Px(15.0f), ImVec2(centerX, origin.y + Px(24.0f)), kSubtitleInk,
                             "No characters yet. Create one to deploy.");
+        }
+        ImGui::EndChild();
 
         if (!m_error.empty())
-            AddTextCentered(dl, 14.0f, ImVec2(panelX + panelW * 0.5f, panelY + panelH - 120.0f),
-                            IM_COL32(235, 110, 105, 235), m_error.c_str());
+            AddTextCentered(dl, Px(14.0f), ImVec2(centerX, errorCenterY), kErrorInk, m_error.c_str());
 
         const bool hasSel = m_selectedIdx >= 0 && m_selectedIdx < static_cast<int>(m_chars.size());
         const bool blocked = m_pending != PendingOp::None;
-        const float footY = panelY + panelH - 64.0f;
-        const float pad2 = 20.0f;
+        const float buttonH = Px(40.0f);
+        const float gap = Px(12.0f);
 
-        ImGui::SetCursorScreenPos(ImVec2(panelX + pad2, footY));
+        ImGui::SetCursorScreenPos(ImVec2(panelX + pad, footY));
         ImGui::BeginDisabled(blocked || !hasSel);
-        if (ImGui::Button("Enter World##tf_enter", ImVec2(140.0f, 40.0f)))
+        if (ImGui::Button("Enter World##tf_enter", ImVec2(Px(140.0f), buttonH)))
             SendEnterWorld(m_chars[static_cast<size_t>(m_selectedIdx)].id);
         ImGui::EndDisabled();
 
-        ImGui::SameLine(0.0f, 12.0f);
+        ImGui::SameLine(0.0f, gap);
         ImGui::BeginDisabled(blocked || m_chars.size() >= static_cast<size_t>(kTFMaxCharSlots));
-        if (ImGui::Button("Create New##tf_createbtn", ImVec2(120.0f, 40.0f)))
+        if (ImGui::Button("Create New##tf_createbtn", ImVec2(Px(120.0f), buttonH)))
         {
             std::memset(m_createName, 0, sizeof(m_createName));
             m_createFaction = FactionId::MRA;
@@ -250,14 +278,15 @@ namespace Terrafront
         }
         ImGui::EndDisabled();
 
-        ImGui::SameLine(0.0f, 12.0f);
+        ImGui::SameLine(0.0f, gap);
         ImGui::BeginDisabled(blocked || !hasSel);
-        if (ImGui::Button("Delete##tf_delete", ImVec2(90.0f, 40.0f)))
+        if (ImGui::Button("Delete##tf_delete", ImVec2(Px(90.0f), buttonH)))
             SendCharDelete(m_chars[static_cast<size_t>(m_selectedIdx)].id);
         ImGui::EndDisabled();
 
-        ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 100.0f, footY));
-        if (ImGui::Button("Logout##tf_logout", ImVec2(80.0f, 40.0f)))
+        const float logoutW = Px(80.0f);
+        ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - pad - logoutW, footY));
+        if (ImGui::Button("Logout##tf_logout", ImVec2(logoutW, buttonH)))
             Logout();
     }
 
@@ -265,21 +294,34 @@ namespace Terrafront
     {
         using namespace TFUi;
         ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float centerX = panelX + panelW * 0.5f;
 
-        AddTextCentered(dl, 26.0f, ImVec2(panelX + panelW * 0.5f, panelY + 38.0f), IM_COL32(235, 235, 235, 235),
-                        "NEW CHARACTER");
+        AddTextCentered(dl, Px(26.0f), ImVec2(centerX, panelY + Px(38.0f)), kTitleInk, "NEW CHARACTER");
 
-        const float fieldW = panelW - 120.0f;
-        const float fieldX = panelX + 60.0f;
-        dl->AddText(ImVec2(fieldX, panelY + 82.0f), IM_COL32(150, 154, 160, 200), "NAME");
-        ImGui::SetCursorScreenPos(ImVec2(fieldX, panelY + 100.0f));
+        // NAME label over its input, then the faction cards, laid out top-down.
+        const float fieldW = panelW - Px(120.0f);
+        const float fieldX = panelX + Px(60.0f);
+        const float labelSize = Px(TFLoginLayout::Metric::kLabelSize);
+        float y = panelY + Px(70.0f);
+        AddLabel(dl, labelSize, ImVec2(fieldX, y), "NAME");
+        y += labelSize + Px(TFLoginLayout::Metric::kLabelGap);
+        ImGui::SetCursorScreenPos(ImVec2(fieldX, y));
         ImGui::SetNextItemWidth(fieldW);
         ImGui::InputText("##tf_charname", m_createName, sizeof(m_createName));
+        y += ImGui::GetFrameHeight() + Px(20.0f);
 
-        const float pad = 16.0f;
+        const float footY = panelY + panelH - Px(64.0f);
+        const float errorCenterY = footY - Px(22.0f);
+        const float pad = Px(16.0f);
         const float cardW = (panelW - pad * 4.0f) / 3.0f;
-        const float cardH = 150.0f;
-        const float cardsY = panelY + 156.0f;
+        const float cardsY = y;
+        const float cardH = std::clamp(errorCenterY - Px(18.0f) - cardsY, 0.0f, Px(150.0f));
+        // The faction button holds two lines (name, tag); the blurb gets what is left of the card.
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const float twoLineButtonH = ImGui::GetTextLineHeight() * 2.0f + style.FramePadding.y * 2.0f;
+        const float buttonH = std::min(cardH, std::max(cardH * 0.5f, twoLineButtonH));
+        const float blurbGap = Px(8.0f);
+        const float blurbH = cardH - buttonH - blurbGap;
         int i = 0;
         for (FactionId f : {FactionId::MRA, FactionId::AUC, FactionId::HLX})
         {
@@ -296,34 +338,40 @@ namespace Terrafront
 
             char label[96];
             std::snprintf(label, sizeof(label), "%s\n[%s]##facc%d", FactionName(f), FactionTag(f), i);
-            if (ImGui::Button(label, ImVec2(cardW, cardH * 0.5f)))
+            if (ImGui::Button(label, ImVec2(cardW, buttonH)))
                 m_createFaction = f;
             ImGui::PopStyleColor(3);
 
-            const FactionDef* fd = m_ctx->data ? m_ctx->data->GetFaction(f) : nullptr;
-            ImGui::SetCursorScreenPos(ImVec2(x + 4.0f, cardsY + cardH * 0.5f + 8.0f));
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + cardW - 8.0f);
-            ImGui::TextWrapped("%s", fd && !fd->blurb.empty() ? fd->blurb.c_str() : "");
-            ImGui::PopTextWrapPos();
+            // The blurb wraps and clips inside the card, so it never runs into the footer.
+            if (blurbH >= ImGui::GetTextLineHeight())
+            {
+                const FactionDef* fd = m_ctx->data ? m_ctx->data->GetFaction(f) : nullptr;
+                ImGui::SetCursorScreenPos(ImVec2(x + Px(4.0f), cardsY + buttonH + blurbGap));
+                ImGui::PushID(i);
+                ImGui::BeginChild("##tf_factionblurb", ImVec2(cardW - Px(8.0f), blurbH), ImGuiChildFlags_None,
+                                  ImGuiWindowFlags_NoBackground);
+                ImGui::TextWrapped("%s", fd && !fd->blurb.empty() ? fd->blurb.c_str() : "");
+                ImGui::EndChild();
+                ImGui::PopID();
+            }
             ++i;
         }
 
         if (!m_error.empty())
-            AddTextCentered(dl, 14.0f, ImVec2(panelX + panelW * 0.5f, panelY + panelH - 100.0f),
-                            IM_COL32(235, 110, 105, 235), m_error.c_str());
+            AddTextCentered(dl, Px(14.0f), ImVec2(centerX, errorCenterY), kErrorInk, m_error.c_str());
 
         const bool blocked = m_pending != PendingOp::None;
-        const float footY = panelY + panelH - 64.0f;
+        const float buttonRowH = Px(40.0f);
 
         ImGui::SetCursorScreenPos(ImVec2(fieldX, footY));
         ImGui::BeginDisabled(blocked);
-        if (ImGui::Button("Create##tf_createsubmit", ImVec2(140.0f, 40.0f)))
+        if (ImGui::Button("Create##tf_createsubmit", ImVec2(Px(140.0f), buttonRowH)))
             SendCharCreate();
         ImGui::EndDisabled();
 
-        ImGui::SameLine(0.0f, 16.0f);
+        ImGui::SameLine(0.0f, Px(16.0f));
         ImGui::BeginDisabled(blocked);
-        if (ImGui::Button("Back##tf_createback", ImVec2(100.0f, 40.0f)))
+        if (ImGui::Button("Back##tf_createback", ImVec2(Px(100.0f), buttonRowH)))
         {
             m_error.clear();
             m_state = TFFlowState::CharSelect;
@@ -335,15 +383,14 @@ namespace Terrafront
     {
         using namespace TFUi;
         ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 center(panelX + panelW * 0.5f, panelY + panelH * 0.45f);
 
-        AddTextCentered(dl, 24.0f, ImVec2(panelX + panelW * 0.5f, panelY + panelH * 0.45f),
-                        IM_COL32(235, 235, 235, 235), "Entering the Cindral Wastes...");
+        AddTextCentered(dl, Px(24.0f), center, kTitleInk, "Entering the Cindral Wastes...");
 
         char dots[8];
         const int n = 1 + (static_cast<int>(m_enterTimer * 2.0f) % 3);
         std::snprintf(dots, sizeof(dots), "%.*s", n, "...");
-        AddTextCentered(dl, 16.0f, ImVec2(panelX + panelW * 0.5f, panelY + panelH * 0.45f + 34.0f),
-                        IM_COL32(170, 174, 180, 210), dots);
+        AddTextCentered(dl, Px(16.0f), ImVec2(center.x, center.y + Px(34.0f)), kSubtitleInk, dots);
     }
 
     void TFLoginFlow::RenderDebugUI()

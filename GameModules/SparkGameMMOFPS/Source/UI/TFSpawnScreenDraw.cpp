@@ -62,14 +62,16 @@ namespace Terrafront
         ImDrawList* dl = ImGui::GetWindowDrawList();
         dl->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(6, 8, 12, 215));
 
-        const float panelW = std::min(960.0f, vp->Size.x * 0.92f);
-        const float panelH = std::min(600.0f, vp->Size.y * 0.88f);
+        // 960 x 600 logical, narrowed to the viewport; every offset below scales with TFUi::UiScale().
+        const float panelW = std::min(TFUi::Px(960.0f), vp->Size.x * 0.92f);
+        const float panelH = std::min(TFUi::Px(600.0f), std::max(vp->Size.y * 0.5f, vp->Size.y - TFUi::Px(16.0f)));
         const float panelX = vp->Pos.x + (vp->Size.x - panelW) * 0.5f;
         const float panelY = vp->Pos.y + (vp->Size.y - panelH) * 0.5f;
+        const float rounding = TFUi::Px(6.0f);
         dl->AddRectFilled(ImVec2(panelX, panelY), ImVec2(panelX + panelW, panelY + panelH), IM_COL32(16, 19, 25, 235),
-                          6.0f);
+                          rounding);
         dl->AddRect(ImVec2(panelX, panelY), ImVec2(panelX + panelW, panelY + panelH),
-                    TFUi::FactionCol(m_ctx->localFaction, 0.55f), 6.0f, 0, 2.0f);
+                    TFUi::FactionCol(m_ctx->localFaction, 0.55f), rounding, 0, std::max(1.0f, TFUi::Px(2.0f)));
 
         if (m_ctx->localFaction == FactionId::None)
             DrawFactionSplash(panelX, panelY, panelW, panelH);
@@ -84,19 +86,20 @@ namespace Terrafront
         using namespace TFUi;
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
-        AddTextCentered(dl, 30.0f, ImVec2(panelX + panelW * 0.5f, panelY + 44.0f), IM_COL32(235, 235, 235, 235),
+        AddTextCentered(dl, Px(30.0f), ImVec2(panelX + panelW * 0.5f, panelY + Px(44.0f)), IM_COL32(235, 235, 235, 235),
                         "CHOOSE YOUR FACTION");
-        AddTextCentered(dl, 15.0f, ImVec2(panelX + panelW * 0.5f, panelY + 76.0f), IM_COL32(170, 174, 180, 210),
+        AddTextCentered(dl, Px(15.0f), ImVec2(panelX + panelW * 0.5f, panelY + Px(76.0f)), IM_COL32(170, 174, 180, 210),
                         "Veyra is shattered. Three powers war over its flux wells.");
 
-        const float pad = 22.0f;
+        const float pad = Px(22.0f);
         const float cardW = (panelW - pad * 4.0f) / 3.0f;
-        const float cardH = panelH - 160.0f;
+        const float cardH = panelH - Px(160.0f);
+        const float cardsY = panelY + Px(104.0f);
         int i = 0;
         for (FactionId f : {FactionId::MRA, FactionId::AUC, FactionId::HLX})
         {
             const float x = panelX + pad + static_cast<float>(i) * (cardW + pad);
-            ImGui::SetCursorScreenPos(ImVec2(x, panelY + 104.0f));
+            ImGui::SetCursorScreenPos(ImVec2(x, cardsY));
 
             float c[4];
             FactionColor(f, c);
@@ -111,8 +114,8 @@ namespace Terrafront
             ImGui::PopStyleColor(3);
 
             const FactionDef* fd = m_ctx->data->GetFaction(f);
-            ImGui::SetCursorScreenPos(ImVec2(x + 4.0f, panelY + 112.0f + cardH * 0.5f));
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + cardW - 8.0f); // window-local
+            ImGui::SetCursorScreenPos(ImVec2(x + Px(4.0f), cardsY + Px(8.0f) + cardH * 0.5f));
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + cardW - Px(8.0f)); // window-local
             ImGui::TextWrapped("%s", fd && !fd->blurb.empty() ? fd->blurb.c_str() : "");
             ImGui::PopTextWrapPos();
             ++i;
@@ -129,7 +132,8 @@ namespace Terrafront
 
         char buf[224];
         std::snprintf(buf, sizeof(buf), "DEPLOY  -  %s", FactionName(myFaction));
-        AddTextCentered(dl, 26.0f, ImVec2(panelX + panelW * 0.5f, panelY + 32.0f), FactionCol(myFaction, 1.0f), buf);
+        AddTextCentered(dl, Px(26.0f), ImVec2(panelX + panelW * 0.5f, panelY + Px(32.0f)), FactionCol(myFaction, 1.0f),
+                        buf);
 
         // W6: last-death summary from the HUD (valid until the next local spawn).
         if (m_ctx->hud && m_ctx->hud->LastDeath().valid)
@@ -141,28 +145,64 @@ namespace Terrafront
             else
                 std::snprintf(buf, sizeof(buf), "Killed by %s   [%s]%s", d.killerName.c_str(), d.weaponName.c_str(),
                               d.headshot ? "   HEADSHOT" : "");
-            AddTextCentered(dl, 14.0f, ImVec2(panelX + panelW * 0.5f, panelY + 52.0f),
+            AddTextCentered(dl, Px(14.0f), ImVec2(panelX + panelW * 0.5f, panelY + Px(52.0f)),
                             d.headshot ? IM_COL32(245, 130, 110, 225) : IM_COL32(185, 188, 194, 210), buf);
         }
 
-        const float pad = 20.0f;
-        const float topY = panelY + 62.0f;
-        const float listH = panelH - 62.0f - 76.0f;
+        // W10 sanctuary-v2: class-terminal mode while alive — the server denies
+        // TF_SpawnRequest for a live pawn, so DEPLOY is disabled and the picked
+        // class simply persists (m_selClass) until the next real deploy.
+        const bool aliveTerminal = m_terminalMode && LocalPawnAlive();
+
+        // ---- footer geometry (before the lists, which end above it) -----------------
+        // Buttons right to left: DEPLOY, OPEN MAP, the terminal CLOSE slot, LOADOUT. Each is its logical
+        // width or its label, whichever is wider. The status and hint lines sit left of the buttons, or
+        // above them when the row has no room for both (high UI scale in a narrow window).
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const auto buttonWidth = [&](const char* label, float logical)
+        { return std::max(Px(logical), ImGui::CalcTextSize(label, nullptr, true).x + style.FramePadding.x * 2.0f); };
+        const char* const statusWidest =
+            aliveTerminal ? "Class terminal - selection applies on your next deploy" : "Respawn in 88.8s";
+        const char* const hint =
+            aliveTerminal ? "E or CLOSE - leave the terminal" : "M - continent map (click a linked region to deploy)";
+        const float pad = Px(20.0f);
+        const float gap = Px(15.0f);
+        const float buttonH = Px(44.0f);
+        const float lineH = ImGui::GetTextLineHeight();
+        const float hintOffsetY = lineH + Px(5.0f);
+        const float deployW = buttonWidth("DEPLOY (88.8s)", 175.0f);
+        const float mapW = buttonWidth("OPEN MAP", 120.0f);
+        const float closeW = buttonWidth("CLOSE", 120.0f);
+        const float loadoutW = buttonWidth("LOADOUT", 120.0f);
+        const float deployX = panelX + panelW - pad - deployW;
+        const float mapX = deployX - gap - mapW;
+        const float closeX = mapX - gap - closeW;
+        const float loadoutX = closeX - gap - loadoutW;
+        const float statusW = std::max(ImGui::CalcTextSize(statusWidest).x, ImGui::CalcTextSize(hint).x);
+        const bool stackedFooter = panelX + pad + statusW + gap > loadoutX;
+        const float buttonsY = panelY + panelH - Px(16.0f) - buttonH;
+        const float statusY = stackedFooter ? buttonsY - Px(8.0f) - hintOffsetY - lineH : buttonsY + Px(8.0f);
+        const float footerTop = stackedFooter ? statusY : buttonsY;
+
+        const float topY = panelY + Px(62.0f);
+        const float listH = std::max(lineH * 3.0f, footerTop - Px(16.0f) - topY);
         const float classW = panelW * 0.38f - pad * 1.5f;
         const float spawnW = panelW - classW - pad * 3.0f;
 
         // ---- class picker ------------------------------------------------------
         ImGui::SetCursorScreenPos(ImVec2(panelX + pad, topY));
-        ImGui::BeginChild("##tf_classes", ImVec2(classW, listH), true);
+        ImGui::BeginChild("##tf_classes", ImVec2(classW, listH), ImGuiChildFlags_Borders);
         ImGui::TextDisabled("CLASS");
         ImGui::Separator();
+        const float classRowH = std::max(Px(38.0f), lineH * 2.0f + Px(4.0f)); // two lines: name, role
         for (const ClassDef& cd : m_ctx->data->AllClasses())
         {
             const bool isColossus = (cd.id == ClassId::Colossus);
             const bool selected = (cd.id == m_selClass);
             std::snprintf(buf, sizeof(buf), "%s\n  %s%s##cls%u", cd.name.c_str(), cd.role.c_str(),
                           isColossus ? "  (exosuit - via terminal)" : "", static_cast<unsigned>(cd.id));
-            if (ImGui::Selectable(buf, selected, isColossus ? ImGuiSelectableFlags_Disabled : 0, ImVec2(0.0f, 38.0f)))
+            if (ImGui::Selectable(buf, selected, isColossus ? ImGuiSelectableFlags_Disabled : 0,
+                                  ImVec2(0.0f, classRowH)))
                 m_selClass = cd.id;
             if (!isColossus && ImGui::IsItemHovered() && !cd.ability.name.empty())
                 ImGui::SetTooltip("%s - %s", cd.ability.name.c_str(), cd.ability.desc.c_str());
@@ -332,13 +372,7 @@ namespace Terrafront
             effRespawnLeft = std::max(
                 0.0f, m_respawnLeft - std::max(0.0f, kTFRespawnDelaySec - m_ctx->vehicles->AegisRespawnDelaySec()));
 
-        // W10 sanctuary-v2: class-terminal mode while alive — the server denies
-        // TF_SpawnRequest for a live pawn, so DEPLOY is disabled and the picked
-        // class simply persists (m_selClass) until the next real deploy.
-        const bool aliveTerminal = m_terminalMode && LocalPawnAlive();
-
-        const float footY = panelY + panelH - 60.0f;
-        ImGui::SetCursorScreenPos(ImVec2(panelX + pad, footY + 8.0f));
+        ImGui::SetCursorScreenPos(ImVec2(panelX + pad, statusY));
         if (aliveTerminal)
             ImGui::TextColored(ImVec4(0.55f, 0.80f, 0.95f, 1.0f),
                                "Class terminal - selection applies on your next deploy");
@@ -347,31 +381,28 @@ namespace Terrafront
         else
             ImGui::TextColored(ImVec4(0.55f, 0.95f, 0.55f, 1.0f), "Ready to deploy");
 
-        ImGui::SetCursorScreenPos(ImVec2(panelX + pad, footY + 28.0f));
-        if (aliveTerminal)
-            ImGui::TextDisabled("E or CLOSE - leave the terminal");
-        else
-            ImGui::TextDisabled("M - continent map (click a linked region to deploy)");
+        ImGui::SetCursorScreenPos(ImVec2(panelX + pad, statusY + hintOffsetY));
+        ImGui::TextDisabled("%s", hint);
 
         if (m_terminalMode)
         {
-            ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 465.0f, footY));
-            if (ImGui::Button("CLOSE", ImVec2(120.0f, 44.0f)))
+            ImGui::SetCursorScreenPos(ImVec2(closeX, buttonsY));
+            if (ImGui::Button("CLOSE", ImVec2(closeW, buttonH)))
                 Close();
         }
 
         // loadout-depth wave: reachable from the deploy panel (and the
         // sanctuary class terminal, via terminal mode above — same button).
         // Left of OPEN MAP so it never collides with the terminal CLOSE slot.
-        ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 600.0f, footY));
-        if (ImGui::Button("LOADOUT", ImVec2(120.0f, 44.0f)) && m_ctx->loadoutUI)
+        ImGui::SetCursorScreenPos(ImVec2(loadoutX, buttonsY));
+        if (ImGui::Button("LOADOUT", ImVec2(loadoutW, buttonH)) && m_ctx->loadoutUI)
             m_ctx->loadoutUI->Open();
 
-        ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 330.0f, footY));
-        if (ImGui::Button("OPEN MAP", ImVec2(120.0f, 44.0f)) && m_ctx->map)
+        ImGui::SetCursorScreenPos(ImVec2(mapX, buttonsY));
+        if (ImGui::Button("OPEN MAP", ImVec2(mapW, buttonH)) && m_ctx->map)
             m_ctx->map->Open();
 
-        ImGui::SetCursorScreenPos(ImVec2(panelX + panelW - 195.0f, footY));
+        ImGui::SetCursorScreenPos(ImVec2(deployX, buttonsY));
         const bool blocked = aliveTerminal || (effRespawnLeft > 0.0f) || (m_debounce > 0.0f) || !m_ctx->clientNet ||
                              !m_ctx->clientNet->IsConnected();
         ImGui::BeginDisabled(blocked);
@@ -380,7 +411,7 @@ namespace Terrafront
         else
             std::snprintf(buf, sizeof(buf), "DEPLOY");
         Spark::Ui::Sdk::PushSuccessButton();
-        if (ImGui::Button(buf, ImVec2(175.0f, 44.0f)))
+        if (ImGui::Button(buf, ImVec2(deployW, buttonH)))
             SendSpawnRequest();
         Spark::Ui::Sdk::PopSuccessButton();
         ImGui::EndDisabled();

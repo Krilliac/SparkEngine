@@ -54,6 +54,7 @@ namespace SparkLauncher
             constexpr const char* kDragon = "\xef\x9b\x95";     ///< U+F6D5
             constexpr const char* kCompass = "\xef\x85\x8e";    ///< U+F14E
             constexpr const char* kBolt = "\xef\x83\xa7";       ///< U+F0E7
+            constexpr const char* kTrashCan = "\xef\x8b\xad";   ///< U+F2ED
         } // namespace Icon
 
         // Menu and button labels (glyph + two spaces + words, the kit's icon-label spacing).
@@ -64,8 +65,9 @@ namespace SparkLauncher
         constexpr const char* kMenuRemove = "\xef\x8b\xad  Remove from list\xe2\x80\xa6"; // U+F2ED trash-can
         constexpr const char* kOpenExistingLabel = "Open Existing\xe2\x80\xa6";
         constexpr const char* kNewProjectLabel = "\xef\x81\xa7  New Project"; // U+F067 plus
+        constexpr const char* kOpenLabel = "Open";
         constexpr const char* kLocateLabel = "Locate\xe2\x80\xa6";
-        constexpr const char* kRemoveLabel = "Remove\xe2\x80\xa6";
+        constexpr const char* kRemoveTooltip = "Remove from list\xe2\x80\xa6";
         constexpr const char* kBrowseLabel = "Browse\xe2\x80\xa6";
         constexpr const char* kRemovalPopupId = "##ConfirmRemoveRecentProject";
 
@@ -82,28 +84,15 @@ namespace SparkLauncher
         constexpr float kProjectRowHeightEm = 3.6f;
         constexpr float kProjectRowPadding = 12.0f;
         constexpr float kProjectMetaWidthEm = 9.0f;
+        constexpr float kChipPaddingY = 2.0f; ///< Vertical padding of the kit's status chip (SparkUI Pill).
         constexpr float kCardWidthEm = 15.0f;
         constexpr float kCardHeightEm = 7.0f;
         constexpr float kCardItemSpacingY = 4.0f;
         constexpr float kSectionGap = 12.0f;
         constexpr int kCardDescriptionLines = 2;
         constexpr auto kSuccessBannerLifetime = std::chrono::seconds(6);
-        constexpr std::string_view kEllipsis = "...";
-
-        /// Byte offset of every UTF-8 code point start in @p text.
-        std::vector<std::size_t> CodepointStarts(std::string_view text)
-        {
-            std::vector<std::size_t> starts;
-            starts.reserve(text.size());
-            for (std::size_t i = 0; i < text.size(); ++i)
-            {
-                if ((static_cast<unsigned char>(text[i]) & 0xC0u) != 0x80u)
-                {
-                    starts.push_back(i);
-                }
-            }
-            return starts;
-        }
+        using LauncherLayout::CodepointStarts;
+        using LauncherLayout::kEllipsis;
 
         float TextWidth(std::string_view text)
         {
@@ -114,37 +103,14 @@ namespace SparkLauncher
         /// the current font. Cuts only at code point boundaries.
         std::string MiddleEllipsis(std::string_view text, float maxWidth)
         {
-            if (TextWidth(text) <= maxWidth)
-            {
-                return std::string(text);
-            }
-            const std::vector<std::size_t> starts = CodepointStarts(text);
-            const std::size_t count = starts.size();
-            const auto build = [&](std::size_t keep)
-            {
-                const std::size_t head = (keep + 1) / 2;
-                const std::size_t tail = keep / 2;
-                std::string out(text.substr(0, head < count ? starts[head] : text.size()));
-                out += kEllipsis;
-                out += text.substr(tail == 0 ? text.size() : starts[count - tail]);
-                return out;
-            };
-            // Largest number of kept code points whose shortened form still fits.
-            std::size_t low = 0;
-            std::size_t high = count;
-            while (low < high)
-            {
-                const std::size_t mid = (low + high + 1) / 2;
-                if (TextWidth(build(mid)) <= maxWidth)
-                {
-                    low = mid;
-                }
-                else
-                {
-                    high = mid - 1;
-                }
-            }
-            return build(low);
+            return LauncherLayout::MiddleEllipsis(text, maxWidth, TextWidth);
+        }
+
+        /// @p path shortened to fit @p maxWidth in the current font by dropping whole directory names
+        /// ("D:/.../bin/Release"), so the cut never lands in the middle of a folder name.
+        std::string EllipsizePath(std::string_view path, float maxWidth)
+        {
+            return LauncherLayout::EllipsizePath(path, maxWidth, TextWidth);
         }
 
         /// @p text cut at a code point boundary (with "...") so it wraps to at most @p maxLines
@@ -408,12 +374,23 @@ namespace SparkLauncher
                 Ui::ScopedFont small(FontRole::Small);
                 Ui::SecondaryText("Engine");
             }
-            ImGui::SetCursorScreenPos(ImVec2(windowPos.x + margin, top + labelHeight));
+            // The path is cut at folder boundaries ("D:/.../bin/Release") and sits on a real item (with an
+            // ID) so hovering it reliably shows the full path and clicking copies it.
+            const ImVec2 pathPos(windowPos.x + margin, top + labelHeight);
             Ui::ScopedFont mono(FontRole::MonoSmall);
-            Ui::ScopedRoleColor ink(ImGuiCol_Text, Role::TextSecondary);
-            const std::string shown = MiddleEllipsis(engineDirectory, width - margin * 2.0f);
-            ImGui::TextUnformatted(shown.c_str());
-            HoverTooltip(engineDirectory.c_str());
+            const std::string shown = EllipsizePath(engineDirectory, width - margin * 2.0f);
+            const ImVec2 pathSize(std::max(1.0f, TextWidth(shown)), pathHeight);
+            ImGui::SetCursorScreenPos(pathPos);
+            if (ImGui::InvisibleButton("##EngineDirectory", pathSize))
+            {
+                ImGui::SetClipboardText(engineDirectory.c_str());
+            }
+            const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort);
+            ImGui::GetWindowDrawList()->AddText(pathPos, Ui::Col(Role::TextSecondary), shown.c_str());
+            if (hovered)
+            {
+                ImGui::SetTooltip("%s\nClick to copy the path.", engineDirectory.c_str());
+            }
         }
 
         void DrawRail(LauncherApp& app)
@@ -592,16 +569,17 @@ namespace SparkLauncher
             drawList->ChannelsSplit(2);
             drawList->ChannelsSetCurrent(1);
 
-            // Columns, right to left: actions, metadata, then name and path in what is left.
+            // Columns, right to left: square secondary action, primary action, metadata, then name and
+            // path. Every row uses the same columns whether or not its project still exists, so the
+            // Missing chip sits under "Opened ...", "Locate..." under "Open" and the remove button
+            // under the more-actions button.
             const float side = IconButtonSide();
-            const float actionsWidth =
-                project.valid ? ButtonWidth("Open") + style.ItemSpacing.x + side
-                              : ButtonWidth(kLocateLabel) + style.ItemSpacing.x + ButtonWidth(kRemoveLabel);
-            const float actionsX = max.x - pad - actionsWidth;
-            const float metaWidth = Ui::Em(kProjectMetaWidthEm);
-            const float metaX = actionsX - pad - metaWidth;
-            const float textX = min.x + pad;
-            const float textWidth = std::max(0.0f, metaX - pad - textX);
+            const LauncherLayout::ProjectRowColumns columns = LauncherLayout::ComputeProjectRowColumns(
+                min.x, max.x, pad, style.ItemSpacing.x, Ui::Em(kProjectMetaWidthEm),
+                std::max(ButtonWidth(kOpenLabel), ButtonWidth(kLocateLabel)), side);
+            const float metaX = columns.metaX;
+            const float textX = columns.textX;
+            const float textWidth = columns.textWidth;
 
             float nameHeight = 0.0f;
             float pathHeight = 0.0f;
@@ -627,42 +605,48 @@ namespace SparkLauncher
             {
                 Ui::ScopedFont mono(FontRole::MonoSmall);
                 Ui::ScopedRoleColor ink(ImGuiCol_Text, Role::TextSecondary);
-                const std::string path = MiddleEllipsis(project.path, textWidth);
+                const std::string path = EllipsizePath(project.path, textWidth);
                 ImGui::TextUnformatted(path.c_str());
                 HoverTooltip(project.path.c_str());
             }
 
-            if (project.valid)
+            // Metadata column: first line "Opened ..." (or the Missing chip), second line the engine
+            // version badge, for present and missing projects alike.
             {
-                ImGui::SetCursorScreenPos(ImVec2(metaX, top));
+                Ui::ScopedFont small(FontRole::Small);
+                if (project.valid)
                 {
-                    Ui::ScopedFont small(FontRole::Small);
+                    ImGui::SetCursorScreenPos(ImVec2(metaX, top));
                     Ui::SecondaryText("%s", OpenedAgo(project.lastOpened, now).c_str());
+                    HoverTooltip(FormatTimestamp(project.lastOpened).c_str());
                 }
-                HoverTooltip(FormatTimestamp(project.lastOpened).c_str());
-                if (!project.engineVersion.empty())
+                else
                 {
-                    ImGui::SetCursorScreenPos(ImVec2(metaX, top + nameHeight + gap));
-                    Ui::Badge(project.engineVersion.c_str());
-                    HoverTooltip("Engine version the project was last saved with");
+                    // The chip's own vertical padding sits above the line so its label shares the
+                    // baseline of "Opened ..." in the other rows.
+                    ImGui::SetCursorScreenPos(ImVec2(metaX, top - Ui::Px(kChipPaddingY)));
+                    Ui::StatusChip(Status::Error, "Missing",
+                                   "The project file no longer exists at this path. Locate it or remove it from "
+                                   "the list.");
                 }
             }
-            else
+            if (!project.engineVersion.empty())
             {
-                ImGui::SetCursorScreenPos(ImVec2(metaX, min.y + (height - ImGui::GetFrameHeight()) * 0.5f));
-                Ui::StatusChip(Status::Error, "Missing",
-                               "The project file no longer exists at this path. Locate it or remove it from the list.");
+                ImGui::SetCursorScreenPos(ImVec2(metaX, top + nameHeight + gap));
+                Ui::Badge(project.engineVersion.c_str());
+                HoverTooltip("Engine version the project was last saved with");
             }
 
-            ImGui::SetCursorScreenPos(ImVec2(actionsX, min.y + (height - ImGui::GetFrameHeight()) * 0.5f));
+            const float buttonY = min.y + (height - ImGui::GetFrameHeight()) * 0.5f;
+            ImGui::SetCursorScreenPos(ImVec2(columns.primaryX, buttonY));
             if (project.valid)
             {
-                if (Ui::PrimaryButton("Open"))
+                if (Ui::PrimaryButton(kOpenLabel, ImVec2(columns.primaryWidth, 0.0f)))
                 {
                     action.kind = RowAction::Kind::Launch;
                     action.target = LaunchTarget::Editor;
                 }
-                ImGui::SameLine();
+                ImGui::SetCursorScreenPos(ImVec2(columns.secondaryX, buttonY));
                 if (Ui::IconButton("##More", Ui::Glyph::kEllipsis, "More actions"))
                 {
                     ImGui::OpenPopup("##ProjectActions");
@@ -707,12 +691,12 @@ namespace SparkLauncher
             }
             else
             {
-                if (Ui::SecondaryButton(kLocateLabel))
+                if (Ui::SecondaryButton(kLocateLabel, ImVec2(columns.primaryWidth, 0.0f)))
                 {
                     action.kind = RowAction::Kind::Locate;
                 }
-                ImGui::SameLine();
-                if (Ui::SecondaryButton(kRemoveLabel))
+                ImGui::SetCursorScreenPos(ImVec2(columns.secondaryX, buttonY));
+                if (Ui::IconButton("##Remove", Icon::kTrashCan, kRemoveTooltip))
                 {
                     RequestRemoval(state, project);
                 }

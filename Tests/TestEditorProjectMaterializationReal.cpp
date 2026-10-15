@@ -12,7 +12,9 @@
  *    template into a new project;
  *  - the editor's hard-coded template registry still matches each package's
  *    template.json;
- *  - opening a template package does not rewrite the checked-in package.
+ *  - opening a template package does not rewrite the checked-in package;
+ *  - opening a project whose generated build scaffold lies past MAX_PATH works on Windows, and an
+ *    open that fails keeps the filesystem reason (GetLastOpenError) for the startup notification.
  */
 
 #include "TestFramework.h"
@@ -20,7 +22,9 @@
 
 #include "Core/ProjectManager.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -286,6 +290,143 @@ TEST(ProjectMaterialization_OpeningATemplatePackageNeverRewritesIt)
     EXPECT_FALSE(manager.SaveProject());
     EXPECT_EQ(ReadTextFile(document), before);
 
+    std::error_code cleanupEc;
+    fs::remove_all(scratch, cleanupEc);
+}
+
+namespace
+{
+    /// Absolute length of the long-path fixture's project directory. CreateDirectoryW (without the \\?\
+    /// prefix) refuses 248 characters or more, so this directory can still be staged with plain calls,
+    /// while "<dir>/Source" (249) and "<dir>/Source/GameModule.cpp" (264) are past the Win32 limits:
+    /// the geometry of the screenshot pass that failed with "The filename or extension is too long".
+    constexpr std::size_t kLongProjectDirLength = 242;
+
+    std::string Utf8(const fs::path& path)
+    {
+        const std::u8string value = path.u8string();
+        return {reinterpret_cast<const char*>(value.data()), value.size()};
+    }
+
+    /// The fixture's own spelling for checks and cleanup past MAX_PATH (the test binary is not
+    /// long-path aware): \\?\ + the absolute path on Windows once it is 248 characters or longer.
+    fs::path LongPathSpelling(const fs::path& path)
+    {
+#ifdef _WIN32
+        std::wstring text = fs::absolute(path).lexically_normal().native();
+        std::replace(text.begin(), text.end(), L'/', L'\\');
+        if (text.size() < 248 || text.starts_with(L"\\\\"))
+        {
+            return path;
+        }
+        return fs::path(L"\\\\?\\" + text);
+#else
+        return path;
+#endif
+    }
+
+    /// Directory under @p base whose absolute path is exactly @p length characters long.
+    fs::path PadDirectoryToLength(const fs::path& base, std::size_t length)
+    {
+        constexpr std::size_t kSegmentLength = 60;
+        fs::path directory = base;
+        std::size_t remaining = length - base.native().size(); // separators included
+        while (remaining > 0)
+        {
+            // A segment costs its name plus one separator; never leave a remainder of one, which
+            // would need an empty name.
+            std::size_t name = std::min(kSegmentLength, remaining - 1);
+            if (remaining - (name + 1) == 1)
+            {
+                --name;
+            }
+            directory /= std::string(name, 'p');
+            remaining -= name + 1;
+        }
+        return directory;
+    }
+
+    /// A project directory holding only its .sparkproject, so OpenProject must generate the build scaffold.
+    fs::path StageScaffoldlessProject(const fs::path& projectDir)
+    {
+        fs::create_directories(projectDir);
+        const fs::path document = projectDir / "LP.sparkproject";
+        WriteTextFile(document, "{\n"
+                                "  \"projectFileVersion\": 1,\n"
+                                "  \"name\": \"LP\",\n"
+                                "  \"version\": \"1.0.0\",\n"
+                                "  \"description\": \"Long-path scaffold fixture\",\n"
+                                "  \"engineVersion\": \"0.9.0\",\n"
+                                "  \"template\": \"empty\",\n"
+                                "  \"createdTime\": 0,\n"
+                                "  \"lastModified\": 0,\n"
+                                "  \"modules\": [\"LP\"],\n"
+                                "  \"scenes\": []\n"
+                                "}\n");
+        return document;
+    }
+} // namespace
+
+TEST(ProjectMaterialization_OpenScaffoldsAProjectPastMaxPath)
+{
+    const fs::path scratch = MakeScratchDirectory("longpath");
+    ASSERT_TRUE(scratch.native().size() + 8 < kLongProjectDirLength);
+    const fs::path projectDir = PadDirectoryToLength(scratch, kLongProjectDirLength);
+    ASSERT_EQ(projectDir.native().size(), kLongProjectDirLength);
+    const fs::path document = StageScaffoldlessProject(projectDir);
+    ASSERT_TRUE(fs::is_regular_file(document));
+
+    SparkEditor::Testing::IsolatedProjectManager manager;
+    manager.Initialize();
+    std::string error;
+    const bool opened = manager.OpenProject(Utf8(document), &error);
+    EXPECT_TRUE(opened);
+    EXPECT_EQ(error, std::string());
+    EXPECT_EQ(manager.GetLastOpenError(), std::string());
+    EXPECT_TRUE(manager.HasOpenProject());
+
+    // Every generated file is there, including the ones past MAX_PATH.
+    const fs::path source = projectDir / "Source";
+    EXPECT_GE(source.native().size(), std::size_t{248});
+    EXPECT_TRUE(fs::is_directory(LongPathSpelling(source)));
+    for (const fs::path& generated : {projectDir / "CMakeLists.txt", projectDir / "spark.modules.json",
+                                      source / "GameModule.h", source / "GameModule.cpp"})
+    {
+        EXPECT_TRUE(fs::is_regular_file(LongPathSpelling(generated)));
+    }
+    EXPECT_STR_CONTAINS(ReadTextFile(LongPathSpelling(source / "GameModule.cpp")), "SPARK_IMPLEMENT_MODULE(LPModule)");
+
+    manager.CloseProject();
+    std::error_code cleanupEc;
+    fs::remove_all(LongPathSpelling(scratch), cleanupEc);
+}
+
+TEST(ProjectMaterialization_OpenFailureKeepsTheFilesystemReason)
+{
+    const fs::path scratch = MakeScratchDirectory("scaffoldfail");
+    const fs::path projectDir = scratch / "Blocked";
+    const fs::path document = StageScaffoldlessProject(projectDir);
+    // A regular file where the scaffold needs the Source directory makes the scaffold step fail.
+    WriteTextFile(projectDir / "Source", "not a directory");
+
+    SparkEditor::Testing::IsolatedProjectManager manager;
+    manager.Initialize();
+    std::string error;
+    EXPECT_FALSE(manager.OpenProject(Utf8(document), &error));
+    EXPECT_FALSE(manager.HasOpenProject());
+    EXPECT_STR_CONTAINS(error, "Could not add the missing build scaffold");
+    // The reason names what went wrong instead of stopping at the generic sentence.
+    EXPECT_STR_CONTAINS(error, "': ");
+    // Callers that passed no error string (the --project startup notification) read the same reason.
+    EXPECT_EQ(manager.GetLastOpenError(), error);
+
+    // A later successful open clears it.
+    std::error_code removeEc;
+    fs::remove(projectDir / "Source", removeEc);
+    EXPECT_TRUE(manager.OpenProject(Utf8(document)));
+    EXPECT_EQ(manager.GetLastOpenError(), std::string());
+
+    manager.CloseProject();
     std::error_code cleanupEc;
     fs::remove_all(scratch, cleanupEc);
 }

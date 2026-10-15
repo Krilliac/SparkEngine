@@ -21,6 +21,7 @@
 
 #ifdef SPARK_HAS_IMGUI
 #include "Spark/UiTheme.h" // Spark::Ui::Sdk::HudFont
+#include "UI/TFUiCommon.h" // TFUi::UiScale
 
 #include <imgui.h>
 #endif
@@ -98,6 +99,8 @@ namespace Terrafront
                     XMMatrixPerspectiveFovLH(XM_PIDIV4 * 1.6f, vp->Size.x / vp->Size.y, 0.3f, 6000.0f);
 
                 ImDrawList* dl = ImGui::GetForegroundDrawList();
+                const float scale = TFUi::UiScale();
+                const float shadowOffset = std::max(1.0f, std::round(scale));
                 m_pings->ForEachActivePing(
                     [&](const TFPingView& p)
                     {
@@ -117,8 +120,8 @@ namespace Terrafront
                         const float fontSize = ImGui::GetFontSize() * 0.92f;
                         ImFont* const font = Spark::Ui::Sdk::HudFont();
                         const ImVec2 sz = font->CalcTextSizeA(fontSize, 1.0e9f, 0.0f, label);
-                        const ImVec2 pos(sp.x - sz.x * 0.5f, sp.y + 4.0f);
-                        dl->AddText(font, fontSize, ImVec2(pos.x + 1.0f, pos.y + 1.0f),
+                        const ImVec2 pos(sp.x - sz.x * 0.5f, sp.y + 4.0f * scale);
+                        dl->AddText(font, fontSize, ImVec2(pos.x + shadowOffset, pos.y + shadowOffset),
                                     IM_COL32(0, 0, 0, static_cast<int>(alpha * 190.0f)), label);
                         dl->AddText(font, fontSize, pos, PingCol32(p.type, alpha), label);
                     });

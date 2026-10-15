@@ -15,6 +15,8 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string>
 
@@ -108,14 +110,27 @@ namespace SparkEditor
         const float inset = Ui::Px(24.0f);
         const ImVec2 min = ImGui::GetCursorScreenPos();
         const ImVec2 max(min.x + ImGui::GetContentRegionAvail().x, min.y + height);
-        const float rounding = Ui::Px(Ui::ActiveTokens().metrics.rCard);
+        const Ui::Tokens& tokens = Ui::ActiveTokens();
+        const float rounding = Ui::Px(tokens.metrics.rCard);
+        // Paint and text roles are chosen by measured contrast against the banner's own colours.
+        const Ui::HeroBannerStyle style = Ui::ChooseHeroBannerStyle(tokens);
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(min, max, Ui::Col(Ui::Role::SurfaceRaised), rounding);
-        // A faint wash keeps text contrast on the raised surface; the full-strength gradient is the bottom rule.
-        Ui::DrawBrandGradient(drawList, min, max, 0.14f);
-        Ui::DrawBrandGradient(drawList, ImVec2(min.x, max.y - Ui::Px(3.0f)), max);
-        Ui::DrawLogomark(drawList, ImVec2(min.x + inset + markSize * 0.5f, min.y + height * 0.5f), markSize, true);
+        if (style.gradient)
+        {
+            // A faint wash keeps text contrast on the raised surface; the full-strength gradient is the bottom rule.
+            Ui::DrawBrandGradient(drawList, min, max, style.washAlpha);
+            Ui::DrawBrandGradient(drawList, ImVec2(min.x, max.y - Ui::Px(3.0f)), max);
+        }
+        else
+        {
+            // High Contrast: a flat surface with a strong outline, no brand colour behind the text.
+            const float border = std::max(1.0f, std::round(Ui::Scale()));
+            drawList->AddRect(min, max, Ui::Col(Ui::Role::BorderStrong), rounding, 0, border);
+        }
+        Ui::DrawLogomark(drawList, ImVec2(min.x + inset + markSize * 0.5f, min.y + height * 0.5f), markSize,
+                         style.gradient);
 
         // Line heights are measured with each font pushed: FontSize() is the logical 100 % size, while the
         // band and gap above are device pixels, so the rendered size (logical x UI scale) is what centres.
@@ -136,13 +151,13 @@ namespace SparkEditor
         ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop));
         {
             Ui::ScopedFont display(Ui::FontRole::Display);
-            Ui::TextRole(Ui::Role::TextPrimary, "Spark Engine");
+            Ui::TextRole(style.title, "Spark Engine");
         }
         ImGui::SetCursorScreenPos(ImVec2(textLeft, textTop + displayHeight + lineGap));
         {
             Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
-            Ui::TextRole(Ui::Role::TextSecondary, "Editor %d.%d.%d", SPARK_ENGINE_VERSION_MAJOR,
-                         SPARK_ENGINE_VERSION_MINOR, SPARK_ENGINE_VERSION_PATCH);
+            Ui::TextRole(style.caption, "Editor %d.%d.%d", SPARK_ENGINE_VERSION_MAJOR, SPARK_ENGINE_VERSION_MINOR,
+                         SPARK_ENGINE_VERSION_PATCH);
         }
 
         ImGui::SetCursorScreenPos(ImVec2(min.x, max.y + Ui::Px(12.0f)));
@@ -183,17 +198,23 @@ namespace SparkEditor
             const std::string fileName = slash == std::string::npos ? scene : scene.substr(slash + 1);
             const std::string folder = slash == std::string::npos ? std::string() : scene.substr(0, slash);
             ImGui::PushID(scene.c_str());
-            if (ImGui::Selectable(fileName.c_str(), false, ImGuiSelectableFlags_AllowOverlap))
+            // Both parts are shortened with a middle ellipsis to the width actually left in this
+            // column, so a long path never ends clipped mid-word; the tooltip carries the full path.
+            const std::string nameLabel = Ui::FitTextToWidth(fileName, ImGui::GetContentRegionAvail().x);
+            if (ImGui::Selectable(nameLabel.c_str(), false, ImGuiSelectableFlags_AllowOverlap))
             {
                 chosen = scene;
                 picked = true;
             }
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
-                ImGui::SetTooltip("%s", scene.c_str());
-            ImGui::SameLine();
             {
+                ImGui::SetTooltip("%s", scene.c_str());
+            }
+            if (!folder.empty())
+            {
+                ImGui::SameLine();
                 Ui::ScopedFont mono(Ui::FontRole::MonoSmall);
-                Ui::TextRole(Ui::Role::TextSecondary, "%s", folder.c_str());
+                Ui::TruncatedText(folder, 0.0f, Ui::Role::TextSecondary, scene.c_str());
             }
             ImGui::PopID();
         }

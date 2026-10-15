@@ -17,6 +17,10 @@
 #include "SparkUI/Tokens.h"
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <string>
+#include <string_view>
 
 #include <imgui.h>
 
@@ -81,6 +85,40 @@ namespace Spark::Ui
     /// @brief Keyboard shortcut hint (Small face, TextSecondary), e.g. "Ctrl+S".
     void KeyHint(const char* keys);
 
+    // --- text fitting ------------------------------------------------------------------------
+
+    /// @brief Which part of a too-long text FitTextToWidth replaces with the ellipsis.
+    enum class EllipsisPosition : std::uint8_t
+    {
+        Leading, ///< Keep the end (".../proj/Scenes"): the tail of a path names the leaf.
+        Middle   ///< Keep both ends ("C:/Users/.../Scenes"): drive and leaf stay visible.
+    };
+
+    /// @brief Shorten @p text with @p ellipsis so that @p measure of the result is at most @p maxWidth.
+    /// @param measure Width of a UTF-8 string in the caller's units; must grow with the string.
+    /// @return @p text unchanged when it fits; otherwise the longest shortening that fits, cut only at
+    ///         UTF-8 code point boundaries (Middle keeps half the kept code points from each end);
+    ///         empty when not even the ellipsis fits.
+    /// @details ImGui-free and pure, so it is testable with any measure. Allocates the result string;
+    ///          O(log n) measure calls.
+    std::string FitTextToWidth(std::string_view text, float maxWidth,
+                               const std::function<float(std::string_view)>& measure,
+                               EllipsisPosition where = EllipsisPosition::Middle,
+                               std::string_view ellipsis = "\xe2\x80\xa6");
+
+    /// @brief FitTextToWidth measured with the current ImGui font. The ellipsis is U+2026 when the
+    ///        font has it and "..." otherwise.
+    std::string FitTextToWidth(std::string_view text, float maxWidth,
+                               EllipsisPosition where = EllipsisPosition::Middle);
+
+    /// @brief Text in role @p r, shortened with an ellipsis to fit @p maxWidth instead of being
+    ///        clipped mid-glyph by the window or table column.
+    /// @param maxWidth Width in pixels; <= 0 uses the rest of the content region on this line.
+    /// @param tooltip Shown on hover; nullptr shows the full @p text, and only when it was shortened.
+    /// @return True when the text was shortened.
+    bool TruncatedText(std::string_view text, float maxWidth = 0.0f, Role r = Role::TextPrimary,
+                       const char* tooltip = nullptr, EllipsisPosition where = EllipsisPosition::Middle);
+
     // --- structure ---------------------------------------------------------------------------
 
     /// @brief Collapsible section header in the Strong face with an optional icon.
@@ -125,6 +163,15 @@ namespace Spark::Ui
     bool SegmentedControl(const char* id, const char* const* labels, int count, int* current);
     /// @brief Separator between toolbar groups.
     void ToolbarSeparator();
+    /// @brief Slider whose value is printed beside the track in the monospace face, so the grab
+    ///        never covers it.
+    /// @param valueFormat printf format of the value label, e.g. "%.0f px". The value snaps to the
+    ///        number the label prints, as ImGui's own sliders snap to their display format.
+    /// @param sliderWidth Track width in pixels; <= 0 uses Em(6).
+    /// @param tooltip Shown when the track or the label is hovered; nullptr shows none.
+    /// @return True when the value changed.
+    bool SliderWithValue(const char* id, float* value, float minValue, float maxValue, const char* valueFormat,
+                         float sliderWidth = 0.0f, const char* tooltip = nullptr);
 
     // --- buttons -----------------------------------------------------------------------------
 
@@ -181,6 +228,28 @@ namespace Spark::Ui
     ///          wins. When neither reaches the appearance's text minimum (High Contrast needs 7:1)
     ///          the band is flat SurfaceRaised with TextPrimary instead.
     BrandBandStyle ChooseBrandBandStyle(const Tokens& t) noexcept;
+
+    /// @brief How the editor Start-page hero banner is painted.
+    struct HeroBannerStyle
+    {
+        bool gradient = true;               ///< Brand wash + gradient rule; false = flat surface with a border.
+        float washAlpha = 0.14f;            ///< Opacity of the brand gradient over SurfaceRaised.
+        Role title = Role::TextPrimary;     ///< "Spark Engine" (Display face).
+        Role caption = Role::TextSecondary; ///< Version line (MonoSmall face).
+        float captionContrast = 0.0f;       ///< Caption contrast on the banner's least favourable colour.
+    };
+
+    /// @brief Minimum token contrast for the hero caption: its MonoSmall strokes are about one pixel
+    ///        wide, so anti-aliasing never reaches full ink. A 6.7:1 token pair measured 4.4:1 in the
+    ///        rendered Light banner; AAA 7:1 on the tokens keeps the rendered text above 4.5:1.
+    inline constexpr float kHeroCaptionContrastMinimum = 7.0f;
+
+    /// @brief Choose the hero banner paint and text roles for @p t by measured contrast.
+    /// @details High Contrast drops the brand wash for a flat SurfaceRaised banner outlined in
+    ///          BorderStrong. Otherwise the banner colours are SurfaceRaised under each brand stop at
+    ///          washAlpha; the caption is TextSecondary when it reaches kHeroCaptionContrastMinimum
+    ///          on every one of them, else TextPrimary.
+    HeroBannerStyle ChooseHeroBannerStyle(const Tokens& t) noexcept;
 
     // --- cards -------------------------------------------------------------------------------
 

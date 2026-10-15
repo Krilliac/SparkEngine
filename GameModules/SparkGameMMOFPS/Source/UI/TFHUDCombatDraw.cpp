@@ -64,8 +64,9 @@ namespace Terrafront
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImGuiViewport* vp = ImGui::GetMainViewport();
-        float y = vp->Pos.y + 18.0f;
-        const float right = vp->Pos.x + vp->Size.x - 20.0f;
+        const float scale = TFUi::UiScale();
+        float y = vp->Pos.y + 18.0f * scale;
+        const float right = vp->Pos.x + vp->Size.x - 20.0f * scale;
 
         for (const KillfeedEntry& e : m_killfeed)
         {
@@ -82,8 +83,9 @@ namespace Terrafront
             if (e.involvesLocal)
             {
                 // Subtle plate behind rows the local player is part of.
-                dl->AddRectFilled(ImVec2(x - 6.0f, y - 2.0f), ImVec2(right + 6.0f, y + wK.y + 2.0f),
-                                  ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 1.0f, 0.12f * a)), 3.0f);
+                dl->AddRectFilled(ImVec2(x - 6.0f * scale, y - 2.0f * scale),
+                                  ImVec2(right + 6.0f * scale, y + wK.y + 2.0f * scale),
+                                  ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 1.0f, 1.0f, 0.12f * a)), 3.0f * scale);
             }
             dl->AddText(ImVec2(x, y), HudDetail::FactionCol(e.killerF, a), e.killer.c_str());
             x += wK.x;
@@ -92,7 +94,7 @@ namespace Terrafront
             dl->AddText(ImVec2(x, y), ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.35f, 0.25f, a)), hs);
             x += wH.x;
             dl->AddText(ImVec2(x, y), HudDetail::FactionCol(e.victimF, a), e.victim.c_str());
-            y += wK.y + 4.0f;
+            y += wK.y + 4.0f * scale;
         }
     }
 
@@ -102,9 +104,10 @@ namespace Terrafront
         ImGuiViewport* vp = ImGui::GetMainViewport();
         const ImVec2 c(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f);
         constexpr float kPi = 3.14159265f;
+        const float scale = TFUi::UiScale();
 
         // Octant flashes (fallback when no attacker position was known).
-        const float octRadius = 88.0f;
+        const float octRadius = 88.0f * scale;
         for (int i = 0; i < 8; ++i)
         {
             if (m_octant[i] <= 0.0f)
@@ -114,7 +117,7 @@ namespace Terrafront
             const float center = -kPi * 0.5f + static_cast<float>(i) * (kPi * 0.25f);
             const float half = kPi * 0.125f * 0.8f;
             dl->PathArcTo(c, octRadius, center - half, center + half, 12);
-            dl->PathStroke(ImGui::ColorConvertFloat4ToU32(ImVec4(0.95f, 0.15f, 0.12f, a * 0.9f)), 0, 6.0f);
+            dl->PathStroke(ImGui::ColorConvertFloat4ToU32(ImVec4(0.95f, 0.15f, 0.12f, a * 0.9f)), 0, 6.0f * scale);
         }
 
         // World-anchored pings rotate with the camera (direction stored world XZ).
@@ -122,7 +125,7 @@ namespace Terrafront
         if (!cam)
             return;
         const float camYaw = cam->GetRotation().y; // radians, 0 faces +Z (north)
-        const float pingRadius = 106.0f;
+        const float pingRadius = 106.0f * scale;
         for (const DamagePing& p : m_pings)
         {
             if (p.intensity <= 0.0f)
@@ -133,11 +136,12 @@ namespace Terrafront
             const float center = -kPi * 0.5f + rel;
             const float half = 0.26f + 0.10f * a;
             dl->PathArcTo(c, pingRadius, center - half, center + half, 14);
-            dl->PathStroke(ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.42f, 0.10f, a)), 0, 7.0f);
+            dl->PathStroke(ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.42f, 0.10f, a)), 0, 7.0f * scale);
             // Direction tip so the arc reads as an arrow, not a ring segment.
-            const float tipX = c.x + std::cos(center) * (pingRadius + 9.0f);
-            const float tipY = c.y + std::sin(center) * (pingRadius + 9.0f);
-            dl->AddCircleFilled(ImVec2(tipX, tipY), 3.0f, ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.55f, 0.2f, a)));
+            const float tipX = c.x + std::cos(center) * (pingRadius + 9.0f * scale);
+            const float tipY = c.y + std::sin(center) * (pingRadius + 9.0f * scale);
+            dl->AddCircleFilled(ImVec2(tipX, tipY), 3.0f * scale,
+                                ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.55f, 0.2f, a)));
         }
     }
 
@@ -148,12 +152,14 @@ namespace Terrafront
         const ImVec2 c(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f);
 
         dl->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), IM_COL32(0, 0, 0, 140));
+        const float scale = TFUi::UiScale();
 
-        CombatTextCentered(dl, 40.0f, ImVec2(c.x, c.y - 80.0f), IM_COL32(235, 60, 55, 235), "YOU ARE DOWN");
+        CombatTextCentered(dl, 40.0f * scale, ImVec2(c.x, c.y - 80.0f * scale), IM_COL32(235, 60, 55, 235),
+                           "YOU ARE DOWN");
 
         char timer[32];
         std::snprintf(timer, sizeof(timer), "%.1f", m_respawnLeft);
-        CombatTextCentered(dl, 64.0f, ImVec2(c.x, c.y - 10.0f), IM_COL32(240, 240, 240, 240), timer);
+        CombatTextCentered(dl, 64.0f * scale, ImVec2(c.x, c.y - 10.0f * scale), IM_COL32(240, 240, 240, 240), timer);
 
         // Death summary: who / weapon / distance (+ headshot marker).
         if (m_death.valid)
@@ -165,20 +171,20 @@ namespace Terrafront
             else
                 std::snprintf(line, sizeof(line), "Killed by %s   [%s]%s", m_death.killerName.c_str(),
                               m_death.weaponName.c_str(), m_death.headshot ? "   HEADSHOT" : "");
-            CombatTextCentered(dl, 18.0f, ImVec2(c.x, c.y + 34.0f),
+            CombatTextCentered(dl, 18.0f * scale, ImVec2(c.x, c.y + 34.0f * scale),
                                m_death.headshot ? IM_COL32(250, 120, 100, 235) : IM_COL32(215, 215, 220, 225), line);
         }
 
         if (m_deployCooldown > 0.0f)
         {
-            CombatTextCentered(dl, 22.0f, ImVec2(c.x, c.y + 66.0f), IM_COL32(160, 220, 160, 230),
+            CombatTextCentered(dl, 22.0f * scale, ImVec2(c.x, c.y + 66.0f * scale), IM_COL32(160, 220, 160, 230),
                                "DEPLOY REQUESTED...");
         }
         else
         {
             const bool ready = m_respawnLeft <= 0.0f;
             const float pulse = ready ? 0.65f + 0.35f * std::sin(static_cast<float>(ImGui::GetTime()) * 4.0f) : 0.45f;
-            CombatTextCentered(dl, 22.0f, ImVec2(c.x, c.y + 66.0f),
+            CombatTextCentered(dl, 22.0f * scale, ImVec2(c.x, c.y + 66.0f * scale),
                                ImGui::ColorConvertFloat4ToU32(ImVec4(0.95f, 0.95f, 0.95f, pulse)),
                                "PRESS SPACE TO DEPLOY AT SKYANCHOR");
         }
@@ -208,7 +214,8 @@ namespace Terrafront
             return;
 
         ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f + 96.0f),
+        const float scale = TFUi::UiScale();
+        ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f + 96.0f * scale),
                                 ImGuiCond_Always, ImVec2(0.5f, 0.0f));
         ImGui::SetNextWindowBgAlpha(0.0f);
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
@@ -221,11 +228,12 @@ namespace Terrafront
         }
 
         Spark::Ui::Sdk::PushSuccessButton();
-        if (ImGui::Button("DEPLOY SCREEN", ImVec2(150.0f, 34.0f)) && m_ctx->spawnUI)
+        const float buttonH = 34.0f * scale;
+        if (ImGui::Button("DEPLOY SCREEN", ImVec2(150.0f * scale, buttonH)) && m_ctx->spawnUI)
             m_ctx->spawnUI->Open();
         Spark::Ui::Sdk::PopSuccessButton();
         ImGui::SameLine();
-        if (ImGui::Button("MAP", ImVec2(90.0f, 34.0f)) && m_ctx->map)
+        if (ImGui::Button("MAP", ImVec2(90.0f * scale, buttonH)) && m_ctx->map)
             m_ctx->map->Open();
 
         ImGui::End();

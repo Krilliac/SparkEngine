@@ -656,8 +656,88 @@ namespace SparkEditor
             return result;
         }
 
-        bool WriteNewFile(const fs::path& path, const std::string& contents)
+        /**
+         * Spelling of @p path for a filesystem call that must work past MAX_PATH whether or not the
+         * process is long-path aware (Windows' LongPathsEnabled policy is off by default): absolute,
+         * normalised and prefixed with \\?\ (\\?\UNC\ for a share). CreateDirectoryW already fails at
+         * 248 characters, so every path that long is prefixed. Shorter, already prefixed and device
+         * paths, and every path on other platforms, come back unchanged. Use it only at the call
+         * boundary: stored and displayed paths keep their ordinary spelling.
+         */
+        fs::path ExtendedLengthPath(const fs::path& path)
         {
+#ifdef _WIN32
+            constexpr std::size_t kShortPathLimit = 248;
+            constexpr std::wstring_view kPrefix = L"\\\\?\\";
+            constexpr std::wstring_view kDevicePrefix = L"\\\\.\\";
+            const std::wstring_view native = path.native();
+            if (path.empty() || native.starts_with(kPrefix) || native.starts_with(kDevicePrefix))
+            {
+                return path;
+            }
+            std::error_code ec;
+            const fs::path absolute = fs::absolute(path, ec);
+            if (ec)
+            {
+                return path;
+            }
+            // \\?\ turns off Win32 normalisation, so '.', '..' and '/' must be resolved here.
+            std::wstring text = absolute.lexically_normal().native();
+            std::replace(text.begin(), text.end(), L'/', L'\\');
+            if (text.size() < kShortPathLimit)
+            {
+                return path;
+            }
+            if (text.starts_with(L"\\\\"))
+            {
+                return fs::path(std::wstring(L"\\\\?\\UNC\\") + text.substr(2));
+            }
+            return fs::path(std::wstring(kPrefix) + text);
+#else
+            return path;
+#endif
+        }
+
+        /// fs::create_directories that also works past MAX_PATH on Windows (see ExtendedLengthPath).
+        /// Throws fs::filesystem_error on failure, like the call it replaces.
+        void MakeDirectories(const fs::path& directory)
+        {
+#ifdef _WIN32
+            std::error_code ec;
+            const fs::path absolute = fs::absolute(directory, ec);
+            if (ec)
+            {
+                throw fs::filesystem_error("create_directories", directory, ec);
+            }
+            const fs::path normalized = absolute.lexically_normal();
+            fs::path partial = normalized.root_path();
+            for (const fs::path& component : normalized.relative_path())
+            {
+                if (component.empty())
+                {
+                    continue; // the empty name after a trailing separator
+                }
+                partial /= component;
+                const fs::path target = ExtendedLengthPath(partial);
+                std::error_code statusEc;
+                if (fs::is_directory(target, statusEc))
+                {
+                    continue;
+                }
+                fs::create_directory(target, ec);
+                if (ec)
+                {
+                    throw fs::filesystem_error("create_directories", directory, ec);
+                }
+            }
+#else
+            fs::create_directories(directory);
+#endif
+        }
+
+        bool WriteNewFile(const fs::path& requestedPath, const std::string& contents)
+        {
+            const fs::path path = ExtendedLengthPath(requestedPath);
             if (fs::exists(path))
                 return true;
             std::ofstream file(path, std::ios::binary);
@@ -1328,6 +1408,27 @@ namespace SparkEditor
 
     bool ProjectManager::OpenProject(const std::string& sparkprojectPath, std::string* error)
     {
+        std::string reason;
+        const bool opened = TryOpenProject(sparkprojectPath, &reason);
+        if (opened)
+        {
+            m_lastOpenError.clear();
+        }
+        else
+        {
+            m_lastOpenError = reason.empty() ? "Could not open project '" + sparkprojectPath + "'" : reason;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Project '%s' was not opened: %s", sparkprojectPath.c_str(),
+                            m_lastOpenError.c_str());
+        }
+        if (error)
+        {
+            *error = std::move(reason);
+        }
+        return opened;
+    }
+
+    bool ProjectManager::TryOpenProject(const std::string& sparkprojectPath, std::string* error)
+    {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (error)
         {
@@ -1394,11 +1495,16 @@ namespace SparkEditor
             // Older editor-created projects predate the standalone build skeleton.
             // Add only missing generated files; never overwrite user-authored build
             // scripts or module sources.
-            if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name))
+            std::string scaffoldError;
+            if (!EnsureBuildScaffold(m_currentProject.path, m_currentProject.name, &scaffoldError))
             {
                 if (error)
                 {
                     *error = "Could not add the missing build scaffold to project '" + m_currentProject.path + "'";
+                    if (!scaffoldError.empty())
+                    {
+                        *error += ": " + scaffoldError;
+                    }
                 }
                 restorePreviousProject();
                 return false;
@@ -1764,7 +1870,8 @@ namespace SparkEditor
         const auto readDocument = [](const std::string& path, ProjectDocumentFields& fields, std::string& reason)
         {
             std::string content;
-            switch (ReadRegularFileBounded(PathFromUtf8(path), kMaximumProjectDocumentBytes, content))
+            switch (
+                ReadRegularFileBounded(ExtendedLengthPath(PathFromUtf8(path)), kMaximumProjectDocumentBytes, content))
             {
             case BoundedReadStatus::Ok:
                 break;
@@ -1974,7 +2081,7 @@ namespace SparkEditor
         try
         {
             const fs::path root = PathFromUtf8(projectPath);
-            fs::create_directories(root);
+            MakeDirectories(root);
 
             // Core directories every project needs
             for (const fs::path& directory :
@@ -1982,14 +2089,14 @@ namespace SparkEditor
                   root / "Assets/Materials", root / "Assets/Audio", root / "Assets/Fonts", root / "Assets/Prefabs",
                   root / "Scenes", root / "Scripts", root / "Config", root / "Temp", root / "Saved",
                   root / "Saved/Backups"})
-                fs::create_directories(directory);
+                MakeDirectories(directory);
 
             // Template-specific directories
             if (templateType == ProjectTemplate::FirstPerson || templateType == ProjectTemplate::ThirdPerson)
             {
-                fs::create_directories(root / "Assets/Characters");
-                fs::create_directories(root / "Assets/Weapons");
-                fs::create_directories(root / "Assets/UI");
+                MakeDirectories(root / "Assets/Characters");
+                MakeDirectories(root / "Assets/Weapons");
+                MakeDirectories(root / "Assets/UI");
             }
 
             // Create a scene through the same serializer the editor uses to
@@ -1998,8 +2105,8 @@ namespace SparkEditor
             const auto* descriptor = FindProjectTemplateDescriptor(templateType);
             const fs::path scenePath =
                 root / (descriptor ? fs::path(descriptor->defaultScene) : fs::path("Scenes/Default.sparkscene"));
-            fs::create_directories(scenePath.parent_path());
-            if (!CreateDefaultScene(PathToUtf8(scenePath), templateType))
+            MakeDirectories(scenePath.parent_path());
+            if (!CreateDefaultScene(PathToUtf8(ExtendedLengthPath(scenePath)), templateType))
                 return false;
 
             // Create editor settings
@@ -2010,7 +2117,7 @@ namespace SparkEditor
 
             // Create .gitignore for the project
             {
-                std::ofstream gitignore(root / ".gitignore");
+                std::ofstream gitignore(ExtendedLengthPath(root / ".gitignore"));
                 if (gitignore.is_open())
                 {
                     gitignore << "# Spark Engine Project\n";
@@ -2102,13 +2209,14 @@ namespace SparkEditor
         return Spark::SaveWorld(world, scenePath);
     }
 
-    bool ProjectManager::EnsureBuildScaffold(const std::string& projectPath, const std::string& projectName)
+    bool ProjectManager::EnsureBuildScaffold(const std::string& projectPath, const std::string& projectName,
+                                             std::string* error)
     {
         try
         {
             const fs::path root = fs::absolute(PathFromUtf8(projectPath)).lexically_normal();
             const fs::path source = root / "Source";
-            fs::create_directories(source);
+            MakeDirectories(source);
 
             const std::string target = MakeCodeIdentifier(projectName);
             const std::string displayName = EscapeCppString(projectName);
@@ -2172,21 +2280,41 @@ namespace SparkEditor
                     << "      \"loadOrder\": 1000\n"
                     << "    }\n  ]\n}\n";
 
-            return WriteNewFile(root / "CMakeLists.txt", cmake.str()) &&
-                   WriteNewFile(source / "GameModule.h", header.str()) &&
-                   WriteNewFile(source / "GameModule.cpp", implementation.str()) &&
-                   WriteNewFile(root / "spark.modules.json", modules.str());
+            const std::array<std::pair<fs::path, std::string>, 4> files = {{
+                {root / "CMakeLists.txt", cmake.str()},
+                {source / "GameModule.h", header.str()},
+                {source / "GameModule.cpp", implementation.str()},
+                {root / "spark.modules.json", modules.str()},
+            }};
+            for (const auto& [path, contents] : files)
+            {
+                if (!WriteNewFile(path, contents))
+                {
+                    const std::string message = "could not write '" + PathToUtf8(path) + "'";
+                    std::cerr << "Error creating project build scaffold: " << message << "\n";
+                    if (error)
+                    {
+                        *error = message;
+                    }
+                    return false;
+                }
+            }
+            return true;
         }
         catch (const std::exception& e)
         {
             std::cerr << "Error creating project build scaffold: " << e.what() << "\n";
+            if (error)
+            {
+                *error = e.what();
+            }
             return false;
         }
     }
 
     void ProjectManager::CreateDefaultEditorSettings(const std::string& configPath)
     {
-        std::ofstream file(PathFromUtf8(configPath) / "EditorSettings.json");
+        std::ofstream file(ExtendedLengthPath(PathFromUtf8(configPath) / "EditorSettings.json"));
         if (!file.is_open())
             return;
 

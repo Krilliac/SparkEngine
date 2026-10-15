@@ -14,7 +14,6 @@
 
 #include "ModuleManager.h"
 #include "../Utils/LogMacros.h"
-#include "../Utils/SparkConsole.h"
 
 #ifdef SPARK_HAS_IMGUI
 #include "EngineSettings.h"
@@ -206,14 +205,15 @@ namespace Spark::GameImGui
 
         // One-shot diagnostics: confirm the overlay runs and whether module UI
         // actually submitted geometry (0 vertices => injection/HUD gating issue).
+        // Routed through the Logger so it lands in Logs/SparkEngine_*.log (where
+        // release checks grep for it) as well as the console via ConsoleSink.
         static bool s_loggedOnce = false;
         if (!s_loggedOnce)
         {
             s_loggedOnce = true;
             const ImDrawData* dd = ImGui::GetDrawData();
-            Spark::SimpleConsole::GetInstance().LogInfo(
-                "GameImGui overlay first frame: " + std::to_string(dd ? dd->TotalVtxCount : -1) + " verts, " +
-                std::to_string(dd ? dd->CmdListsCount : -1) + " cmd lists");
+            SPARK_LOG_INFO(Spark::LogCategory::Core, "GameImGui overlay first frame: %d verts, %d cmd lists",
+                           dd ? dd->TotalVtxCount : -1, dd ? dd->CmdListsCount : -1);
         }
 
         g_inOverlay = false;

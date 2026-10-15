@@ -3288,6 +3288,281 @@ TEST(Gated_EditorDockLayout_ToolbarNodeFollowsScale)
     ImGui::SetCurrentContext(previous);
 }
 
+TEST(Gated_EditorDockLayout_DefaultDocksScaleWithUi)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1920.0f, 1080.0f);
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    ImGui::NewFrame();
+    ImGui::Begin("##DockLayoutDefaultScaleTest");
+
+    const ImGuiID root = 0x53444F43;
+    const ImVec2 size(1920.0f, 1080.0f);
+    const float separator = ImGui::GetStyle().DockingSeparatorSize;
+    const auto width = [](ImGuiID id)
+    {
+        const ImGuiDockNode* node = ImGui::DockBuilderGetNode(id);
+        return node != nullptr ? node->Size.x : -1.0f;
+    };
+    const auto height = [](ImGuiID id)
+    {
+        const ImGuiDockNode* node = ImGui::DockBuilderGetNode(id);
+        return node != nullptr ? node->Size.y : -1.0f;
+    };
+
+    // 100 %: the default ratios are unchanged on a 1080p workspace.
+    EditorDockNodes nodes = BuildEditorDockLayout(root, size, 1.0f);
+    EXPECT_NEAR(width(nodes.left), 0.18f * (size.x - separator), 1.0f);
+    EXPECT_NEAR(width(nodes.right), 0.22f * (size.x - separator - width(nodes.left) - separator), 1.0f);
+
+    // 200 %: Hierarchy, Inspector and the bottom row get their scaled minimum extents; the centre keeps room.
+    nodes = BuildEditorDockLayout(root, size, 2.0f);
+    EXPECT_GE(width(nodes.left), EditorLeftDockExtent.minExtent * 2.0f - 1.0f);
+    EXPECT_GE(width(nodes.right), EditorRightDockExtent.minExtent * 2.0f - 1.0f);
+    EXPECT_GE(height(nodes.bottom), EditorBottomDockExtent.minExtent * 2.0f - 1.0f);
+    EXPECT_GE(width(nodes.center), size.x * 0.4f);
+
+    // 300 %: the caps hold, so the centre documents still get most of the width.
+    nodes = BuildEditorDockLayout(root, size, 3.0f);
+    EXPECT_LE(width(nodes.left), EditorLeftDockExtent.maxRatio * (size.x - separator) + 1.0f);
+    EXPECT_GE(width(nodes.center), size.x * 0.35f);
+    EXPECT_GT(height(nodes.center), 0.0f);
+
+    ImGui::DockBuilderRemoveNode(root);
+    ImGui::End();
+    ImGui::EndFrame();
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+namespace
+{
+    constexpr const char* kDockTestHierarchy = "###Hierarchy";
+    constexpr const char* kDockTestInspector = "###Inspector";
+    constexpr const char* kDockTestConsole = "###Console";
+    constexpr const char* kDockTestScene = "###SceneView";
+
+    /// Fresh docking context sized like a 1080p editor work area, with the font atlas built.
+    ImGuiContext* CreateEditorDockTestContext()
+    {
+        ImGuiContext* context = ImGui::CreateContext();
+        ImGui::SetCurrentContext(context);
+        ImGuiIO& io = ImGui::GetIO();
+        io.IniFilename = nullptr;
+        io.DisplaySize = ImVec2(1920.0f, 1080.0f);
+        io.DeltaTime = 1.0f / 60.0f;
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        unsigned char* pixels = nullptr;
+        int textureWidth = 0;
+        int textureHeight = 0;
+        io.Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+        return context;
+    }
+
+    /// One frame shaped like EditorUI::Render: host dockspace, optional default tree, the per-frame fit, then the
+    /// toolbar and panel windows.
+    void RunEditorDockTestFrame(float scale, bool buildDefaultLayout)
+    {
+        ImGui::NewFrame();
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin("##DockTestHost", nullptr,
+                     ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
+        ImGui::PopStyleVar();
+        const ImGuiID dockspace = ImGui::GetID("DockTestSpace");
+        ImGui::DockSpace(dockspace);
+        if (buildDefaultLayout)
+        {
+            const EditorDockNodes nodes = BuildEditorDockLayout(dockspace, viewport->WorkSize, scale);
+            ImGui::DockBuilderDockWindow(EditorToolbarWindowName, nodes.toolbar);
+            ImGui::DockBuilderDockWindow(kDockTestHierarchy, nodes.left);
+            ImGui::DockBuilderDockWindow(kDockTestInspector, nodes.right);
+            ImGui::DockBuilderDockWindow(kDockTestConsole, nodes.bottom);
+            ImGui::DockBuilderDockWindow(kDockTestScene, nodes.center);
+            ImGui::DockBuilderFinish(dockspace);
+        }
+        FitEditorDockTree({kDockTestHierarchy, kDockTestInspector, kDockTestConsole}, scale);
+        ImGui::End();
+
+        for (const char* name :
+             {EditorToolbarWindowName, kDockTestHierarchy, kDockTestInspector, kDockTestConsole, kDockTestScene})
+        {
+            ImGui::Begin(name);
+            ImGui::TextUnformatted("content");
+            ImGui::End();
+        }
+        ImGui::EndFrame();
+    }
+
+    ImGuiDockNode* DockTestNodeOf(const char* windowName)
+    {
+        ImGuiWindow* window = ImGui::FindWindowByName(windowName);
+        return window != nullptr ? window->DockNode : nullptr;
+    }
+} // namespace
+
+TEST(Gated_EditorDockLayout_LoadedLayoutFitsToolbarAndDocksAtEveryScale)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+
+    // A workspace built and saved at 100 %, then stripped of NoTabBar like an imgui.ini written before the toolbar
+    // strip hid its tab bar (the release screenshots: an empty tab stub, buttons clipped at every scale).
+    ImGuiContext* builder = CreateEditorDockTestContext();
+    RunEditorDockTestFrame(1.0f, true);
+    for (int frame = 0; frame < 3; ++frame)
+        RunEditorDockTestFrame(1.0f, false);
+    const ImGuiDockNode* builtToolbar = DockTestNodeOf(EditorToolbarWindowName);
+    EXPECT_TRUE(builtToolbar != nullptr && builtToolbar->IsNoTabBar());
+    const ImGuiDockNode* builtHierarchy = DockTestNodeOf(kDockTestHierarchy);
+    const float savedHierarchyWidth = builtHierarchy != nullptr ? builtHierarchy->Size.x : -1.0f;
+    std::size_t iniSize = 0;
+    const char* iniData = ImGui::SaveIniSettingsToMemory(&iniSize);
+    std::string ini(iniData, iniSize);
+    ImGui::DestroyContext(builder);
+    const std::string noTabBar = " NoTabBar=1";
+    EXPECT_TRUE(ini.find(noTabBar) != std::string::npos);
+    for (std::size_t at = ini.find(noTabBar); at != std::string::npos; at = ini.find(noTabBar))
+        ini.erase(at, noTabBar.size());
+
+    for (float scale : {1.0f, 1.5f, 2.0f})
+    {
+        ImGuiContext* context = CreateEditorDockTestContext();
+        ImGui::LoadIniSettingsFromMemory(ini.c_str(), ini.size());
+        for (int frame = 0; frame < 6; ++frame)
+            RunEditorDockTestFrame(scale, false);
+
+        // EXPECT, not ASSERT: an early exit would leave this context current.
+        const ImGuiDockNode* toolbar = DockTestNodeOf(EditorToolbarWindowName);
+        EXPECT_TRUE(toolbar != nullptr);
+        if (toolbar != nullptr)
+        {
+            EXPECT_NEAR(toolbar->Size.y, EditorToolbarHeight(scale), 0.5f);
+            EXPECT_TRUE(toolbar->IsNoTabBar());
+            EXPECT_TRUE(toolbar->TabBar == nullptr);
+        }
+        const ImGuiWindow* toolbarWindow = ImGui::FindWindowByName(EditorToolbarWindowName);
+        EXPECT_TRUE(toolbarWindow != nullptr);
+        if (toolbarWindow != nullptr)
+        {
+            // No tab bar or title above the buttons: the whole strip is toolbar content.
+            EXPECT_NEAR(toolbarWindow->TitleBarHeight, 0.0f, 0.001f);
+            EXPECT_NEAR(toolbarWindow->Size.y, EditorToolbarHeight(scale), 0.5f);
+        }
+
+        const float workWidth = ImGui::GetMainViewport()->WorkSize.x;
+        const float separator = ImGui::GetStyle().DockingSeparatorSize;
+        const ImGuiDockNode* hierarchy = DockTestNodeOf(kDockTestHierarchy);
+        const ImGuiDockNode* inspector = DockTestNodeOf(kDockTestInspector);
+        const ImGuiDockNode* console = DockTestNodeOf(kDockTestConsole);
+        const ImGuiDockNode* scene = DockTestNodeOf(kDockTestScene);
+        EXPECT_TRUE(hierarchy != nullptr && inspector != nullptr && console != nullptr && scene != nullptr);
+        if (hierarchy != nullptr && inspector != nullptr && console != nullptr && scene != nullptr)
+        {
+            EXPECT_GE(hierarchy->Size.x, EditorLeftDockExtent.minExtent * scale - 1.0f);
+            EXPECT_GE(inspector->Size.x, EditorRightDockExtent.minExtent * scale - 1.0f);
+            EXPECT_GE(console->Size.y, EditorBottomDockExtent.minExtent * scale - 1.0f);
+            EXPECT_GE(scene->Size.x, workWidth * 0.4f);
+            EXPECT_LE(hierarchy->Size.x, EditorLeftDockExtent.maxRatio * (workWidth - separator) + 1.0f);
+            if (scale == 1.0f)
+            {
+                // Wide enough already: the saved proportions are left exactly as the user had them.
+                EXPECT_NEAR(hierarchy->Size.x, savedHierarchyWidth, 0.5f);
+            }
+        }
+        ImGui::DestroyContext(context);
+    }
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorDockLayout_DockFitIsGrowOnly)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = CreateEditorDockTestContext();
+    RunEditorDockTestFrame(1.0f, true);
+    for (int frame = 0; frame < 3; ++frame)
+        RunEditorDockTestFrame(1.0f, false);
+
+    // The user dragged the Hierarchy wider than any minimum: a scale change keeps that width.
+    ImGuiDockNode* hierarchy = DockTestNodeOf(kDockTestHierarchy);
+    EXPECT_TRUE(hierarchy != nullptr);
+    if (hierarchy != nullptr)
+    {
+        LockEditorDockNodeExtent(hierarchy, ImGuiAxis_X, 520.0f);
+        RunEditorDockTestFrame(1.0f, false);
+        EXPECT_NEAR(hierarchy->Size.x, 520.0f, 0.5f);
+        EXPECT_FALSE(FitEditorDockExtent(hierarchy, ImGuiAxis_X, EditorLeftDockExtent, 2.0f));
+        for (int frame = 0; frame < 3; ++frame)
+            RunEditorDockTestFrame(2.0f, false);
+        EXPECT_NEAR(hierarchy->Size.x, 520.0f, 0.5f);
+    }
+    EXPECT_FALSE(FitEditorDockExtent(nullptr, ImGuiAxis_X, EditorLeftDockExtent, 2.0f));
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
+TEST(Gated_EditorNotificationManager_ToastWidthIsCappedByViewport)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGui::GetIO().IniFilename = nullptr;
+    ImGui::GetIO().DisplaySize = ImVec2(1920.0f, 1080.0f);
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+    const Spark::Ui::Tokens tokens =
+        Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember), Spark::Ui::Appearance::Dark);
+
+    // 100 % on a wide screen: the preferred width, untouched by the cap.
+    Spark::Ui::Install(context, tokens, 1.0f, 1.0f, false);
+    ImGui::NewFrame();
+    EXPECT_NEAR(EditorNotificationManager::ToastWidth(1920.0f), std::max(Spark::Ui::Em(26.0f), Spark::Ui::Px(280.0f)),
+                0.5f);
+    ImGui::EndFrame();
+
+    // 200 %: the toast wraps inside 28 % of the work area and sits inside it, above the status bar strip.
+    Spark::Ui::Install(context, tokens, 1.0f, 2.0f, false);
+    EditorNotificationManager notifications;
+    notifications.Notify(NotificationSeverity::Success, "Project opened",
+                         "EditorSmoke is ready. Recent scenes and the asset database were restored.");
+    ImGui::NewFrame();
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float preferred = std::max(Spark::Ui::Em(26.0f), Spark::Ui::Px(280.0f));
+    notifications.Render();
+    const ImGuiWindow* toast = ImGui::FindWindowByName("##Notification1");
+    EXPECT_TRUE(toast != nullptr);
+    if (toast != nullptr)
+    {
+        const float cap = viewport->WorkSize.x * EditorNotificationManager::kMaxToastViewportFraction;
+        EXPECT_LT(cap, preferred);
+        EXPECT_LE(toast->Size.x, cap + 0.5f);
+        EXPECT_GE(toast->Size.x, Spark::Ui::Em(16.0f) - 0.5f);
+        EXPECT_LE(toast->Pos.x + toast->Size.x, viewport->WorkPos.x + viewport->WorkSize.x);
+        EXPECT_LE(toast->Pos.y + toast->Size.y, viewport->WorkPos.y + viewport->WorkSize.y);
+    }
+    ImGui::EndFrame();
+
+    // A narrow window still gets a readable toast rather than a 28 % sliver.
+    ImGui::NewFrame();
+    EXPECT_NEAR(EditorNotificationManager::ToastWidth(800.0f), Spark::Ui::Em(16.0f), 0.5f);
+    ImGui::EndFrame();
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
+
 TEST(Gated_InspectorVectorControl_FitsPanelWithoutChangingValues)
 {
     ImGuiContext* previous = ImGui::GetCurrentContext();
@@ -3732,6 +4007,53 @@ TEST(Gated_EditorTheme_BlendedThemeBlendsAllColours)
 }
 
 // --- CommandPalette full tests ---
+
+TEST(Gated_CommandPalette_ResultsListRaisesNoImGuiError)
+{
+    ImGuiContext* previous = ImGui::GetCurrentContext();
+    ImGuiContext* context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(context);
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.DisplaySize = ImVec2(1280.0f, 720.0f);
+    io.DeltaTime = 1.0f / 60.0f;
+    unsigned char* pixels = nullptr;
+    int textureWidth = 0;
+    int textureHeight = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &textureWidth, &textureHeight);
+
+    // Count recoverable ImGui errors instead of asserting, so a regression fails this test with a number. The
+    // results list used to move the cursor past its last row without an item, which ImGui 1.89+ reports from
+    // EndChild ("SetCursorPos() to extend window/parent boundaries"): the red error box on every Ctrl+P.
+    io.ConfigErrorRecoveryEnableAssert = false;
+    int errors = 0;
+    context->ErrorCallback = [](ImGuiContext*, void* userData, const char*) { ++*static_cast<int*>(userData); };
+    context->ErrorCallbackUserData = &errors;
+
+    CommandPalette palette;
+    palette.RegisterAction("Save Scene", "Command", []() {}, "Ctrl+S");
+    palette.RegisterAction("Reset Layout", "Layout", []() {});
+    palette.RegisterAction("Open Scene", "Scene", []() {}, "Ctrl+O");
+    palette.Open();
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        ImGui::NewFrame();
+        palette.Render();
+        ImGui::EndFrame();
+    }
+    EXPECT_EQ(errors, 0);
+    EXPECT_TRUE(palette.IsOpen());
+
+    // The empty-result state ends the list with text only.
+    palette.SetFilter("zzzz-no-match");
+    ImGui::NewFrame();
+    palette.Render();
+    ImGui::EndFrame();
+    EXPECT_EQ(errors, 0);
+
+    ImGui::DestroyContext(context);
+    ImGui::SetCurrentContext(previous);
+}
 
 TEST(Gated_CommandPalette_OpenCloseToggle)
 {

@@ -21,7 +21,11 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include <imgui_internal.h>
 
@@ -150,6 +154,28 @@ namespace Spark::Ui
             drawList->AddRect(min, max, ImGui::GetColorU32(colour), Px(ActiveTokens().metrics.rFrame) + offset, 0,
                               thickness);
             drawList->PopClipRect();
+        }
+
+        /// Byte offset of every UTF-8 code point start in @p text, then text.size(). Continuation
+        /// bytes (10xxxxxx) are never boundaries, so a cut between two entries stays valid UTF-8.
+        std::vector<std::size_t> CodePointBoundaries(std::string_view text)
+        {
+            std::vector<std::size_t> bounds;
+            bounds.reserve(text.size() + 1);
+            for (std::size_t i = 0; i < text.size(); ++i)
+            {
+                if ((static_cast<unsigned char>(text[i]) & 0xC0u) != 0x80u)
+                {
+                    bounds.push_back(i);
+                }
+            }
+            bounds.push_back(text.size());
+            return bounds;
+        }
+
+        float CurrentFontWidth(std::string_view text)
+        {
+            return text.empty() ? 0.0f : ImGui::CalcTextSize(text.data(), text.data() + text.size()).x;
         }
 
         /// Rounded pill at the cursor, reserved as one item.
@@ -285,6 +311,86 @@ namespace Spark::Ui
         ImGui::PushStyleColor(ImGuiCol_Text, ColV(Role::TextSecondary));
         ImGui::TextUnformatted(keys != nullptr ? keys : "");
         ImGui::PopStyleColor();
+    }
+
+    // --- text fitting ------------------------------------------------------------------------
+
+    std::string FitTextToWidth(std::string_view text, float maxWidth,
+                               const std::function<float(std::string_view)>& measure, EllipsisPosition where,
+                               std::string_view ellipsis)
+    {
+        if (!measure || measure(text) <= maxWidth)
+        {
+            return std::string(text);
+        }
+        const std::vector<std::size_t> bounds = CodePointBoundaries(text);
+        const std::size_t codePoints = bounds.size() - 1;
+        const auto shorten = [&](std::size_t kept)
+        {
+            const std::size_t head = where == EllipsisPosition::Middle ? kept / 2 : 0;
+            const std::size_t tail = kept - head;
+            const std::size_t tailStart = bounds[codePoints - tail];
+            std::string out;
+            out.reserve(bounds[head] + ellipsis.size() + (text.size() - tailStart));
+            out.append(text.substr(0, bounds[head]));
+            out.append(ellipsis);
+            out.append(text.substr(tailStart));
+            return out;
+        };
+        const auto fits = [&](std::size_t kept) { return measure(shorten(kept)) <= maxWidth; };
+        if (!fits(0))
+        {
+            return {};
+        }
+        // Largest number of kept code points that fits. Only measured candidates are returned, so
+        // the result fits even where a proportional font makes width not strictly monotonic.
+        std::size_t low = 0;
+        std::size_t high = codePoints > 0 ? codePoints - 1 : 0;
+        while (low < high)
+        {
+            const std::size_t mid = low + (high - low + 1) / 2;
+            if (fits(mid))
+            {
+                low = mid;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+        return shorten(low);
+    }
+
+    std::string FitTextToWidth(std::string_view text, float maxWidth, EllipsisPosition where)
+    {
+        constexpr ImWchar kEllipsisCodePoint = 0x2026;
+        ImFont* font = ImGui::GetFont();
+        const std::string_view ellipsis =
+            font != nullptr && font->IsGlyphInFont(kEllipsisCodePoint) ? "\xe2\x80\xa6" : "...";
+        return FitTextToWidth(text, maxWidth, CurrentFontWidth, where, ellipsis);
+    }
+
+    bool TruncatedText(std::string_view text, float maxWidth, Role r, const char* tooltip, EllipsisPosition where)
+    {
+        const float width = maxWidth > 0.0f ? maxWidth : ImGui::GetContentRegionAvail().x;
+        const std::string shown = FitTextToWidth(text, width, where);
+        const bool shortened = shown != text;
+        ImGui::PushStyleColor(ImGuiCol_Text, ColV(r));
+        ImGui::TextUnformatted(shown.data(), shown.data() + shown.size());
+        ImGui::PopStyleColor();
+        if (tooltip != nullptr)
+        {
+            ItemTooltip(tooltip);
+        }
+        else if (shortened && !text.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
+                 ImGui::BeginTooltip())
+        {
+            ImGui::PushTextWrapPos(Em(30.0f));
+            ImGui::TextUnformatted(text.data(), text.data() + text.size());
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+        return shortened;
     }
 
     // --- structure ---------------------------------------------------------------------------
@@ -523,6 +629,63 @@ namespace Spark::Ui
         ImGui::SameLine();
         VerticalSeparator();
         ImGui::SameLine();
+    }
+
+    bool SliderWithValue(const char* id, float* value, float minValue, float maxValue, const char* valueFormat,
+                         float sliderWidth, const char* tooltip)
+    {
+        if (value == nullptr || valueFormat == nullptr)
+        {
+            return false;
+        }
+        ImGui::PushID(id);
+        const float frameHeight = ImGui::GetFrameHeight();
+        ImGui::SetNextItemWidth(sliderWidth > 0.0f ? sliderWidth : Em(6.0f));
+        // An empty display format keeps the track free of text. ImGui then skips its own rounding
+        // and Ctrl+Click text entry (which would parse that format), so the value is snapped to the
+        // number the label prints below.
+        const bool changed = ImGui::SliderFloat("##track", value, minValue, maxValue, "",
+                                                ImGuiSliderFlags_NoInput | ImGuiSliderFlags_AlwaysClamp);
+        bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip);
+
+        char label[64] = {};
+        std::snprintf(label, sizeof(label), valueFormat, static_cast<double>(*value));
+        if (changed)
+        {
+            char* end = nullptr;
+            const float snapped = std::strtof(label, &end);
+            if (end != label && std::isfinite(snapped))
+            {
+                *value = std::clamp(snapped, std::min(minValue, maxValue), std::max(minValue, maxValue));
+                std::snprintf(label, sizeof(label), valueFormat, static_cast<double>(*value));
+            }
+        }
+
+        ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+        {
+            ScopedFont mono(FontRole::Mono);
+            // Reserve the widest label of the range so neighbours do not shift while dragging; the
+            // number is right-aligned in that slot so its digits stay put.
+            char bound[64] = {};
+            std::snprintf(bound, sizeof(bound), valueFormat, static_cast<double>(minValue));
+            float slotWidth = ImGui::CalcTextSize(bound).x;
+            std::snprintf(bound, sizeof(bound), valueFormat, static_cast<double>(maxValue));
+            slotWidth = std::max(slotWidth, ImGui::CalcTextSize(bound).x);
+            const float labelWidth = ImGui::CalcTextSize(label).x;
+            slotWidth = std::max(slotWidth, labelWidth);
+
+            const ImVec2 slot = ImGui::GetCursorScreenPos();
+            ImGui::Dummy(ImVec2(slotWidth, frameHeight));
+            hovered = hovered || ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip);
+            const ImVec2 textPos(slot.x + slotWidth - labelWidth, slot.y + (frameHeight - ImGui::GetFontSize()) * 0.5f);
+            ImGui::GetWindowDrawList()->AddText(textPos, Col(Role::TextPrimary), label);
+        }
+        if (hovered && tooltip != nullptr && tooltip[0] != '\0')
+        {
+            ImGui::SetTooltip("%s", tooltip);
+        }
+        ImGui::PopID();
+        return changed;
     }
 
     // --- buttons -----------------------------------------------------------------------------
@@ -798,6 +961,43 @@ namespace Spark::Ui
             style.gradient = false;
             style.ink = Role::TextPrimary;
             style.worstContrast = ContrastRatio(Get(t, Role::TextPrimary), Get(t, Role::SurfaceRaised));
+        }
+        return style;
+    }
+
+    HeroBannerStyle ChooseHeroBannerStyle(const Tokens& t) noexcept
+    {
+        HeroBannerStyle style;
+        const Rgba raised = Get(t, Role::SurfaceRaised);
+        std::array<Rgba, std::size(kBrandGradientStops)> banner{};
+        if (t.appearance == Appearance::HighContrast)
+        {
+            style.gradient = false;
+            banner.fill(raised);
+        }
+        else
+        {
+            for (std::size_t i = 0; i < banner.size(); ++i)
+            {
+                banner[i] = Composite(WithAlpha(Hex(kBrandGradientStops[i]), style.washAlpha), raised);
+            }
+        }
+        const auto worstContrast = [&](Role role)
+        {
+            float worst = FLT_MAX;
+            for (const Rgba& colour : banner)
+            {
+                worst = std::min(worst, ContrastRatio(Get(t, role), colour));
+            }
+            return worst;
+        };
+        // Secondary ink is preferred for the version line; when its measured contrast falls short
+        // it is replaced by primary ink rather than tolerated.
+        style.captionContrast = worstContrast(Role::TextSecondary);
+        if (style.captionContrast < kHeroCaptionContrastMinimum)
+        {
+            style.caption = Role::TextPrimary;
+            style.captionContrast = worstContrast(Role::TextPrimary);
         }
         return style;
     }

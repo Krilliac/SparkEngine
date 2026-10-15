@@ -28,6 +28,7 @@
 #include <imgui.h>           // bare-launch project selector panel
 #endif
 #include <algorithm> // std::max (project selector row layout)
+#include <cfloat>    // FLT_MAX (project selector size constraints)
 #include <cstddef>
 #include <utility> // std::exchange (project selector choice hand-off)
 #include <filesystem>
@@ -151,14 +152,22 @@ bool LoadGameModules(ModuleManager& manager, LPWSTR cmdLine)
 }
 
 #ifdef SPARK_HAS_IMGUI
+/// Logical (100 %) gap kept between the project selector and every window edge.
+static constexpr float kProjectSelectorMargin = 24.0f;
+/// Project selector width in ems of the body font, narrowed to the window when it is smaller.
+static constexpr float kProjectSelectorWidthEm = 32.0f;
+
 /**
  * @brief ImGui panel listing discovered game modules (bare-launch flow).
  *
  * Runs inside GameImGui::RenderOverlay on the main thread. Only records the
  * choice — the actual module load happens in the main loop next frame.
  * Drawn with the Spark UI kit: brand header and one row per module (name over
- * file name, Launch on the right). The panel is attached only while candidates
- * exist (SparkEngineWindowsInit.cpp), and every path that clears them detaches it.
+ * file name, Launch on the right). The panel is capped to the window with a
+ * margin and only the module list scrolls, so the header and the footer stay
+ * visible at every UI scale and window size. The panel is attached only while
+ * candidates exist (SparkEngineWindowsInit.cpp), and every path that clears them
+ * detaches it.
  */
 void DrawProjectSelectorPanel()
 {
@@ -167,17 +176,33 @@ void DrawProjectSelectorPanel()
 
     namespace Ui = Spark::Ui;
     const ImGuiIO& io = ImGui::GetIO();
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.45f), ImGuiCond_Always,
+    const ImGuiStyle& style = ImGui::GetStyle();
+
+    // The panel never outgrows the window at any UI scale: the header and the footer always show, and
+    // only the module list between them scrolls when there are more modules than room.
+    const float margin = Ui::Px(kProjectSelectorMargin);
+    const float width = std::min(Ui::Em(kProjectSelectorWidthEm), std::max(1.0f, io.DisplaySize.x - margin * 2.0f));
+    const float maxHeight = std::max(1.0f, io.DisplaySize.y - margin * 2.0f);
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always,
                             ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(Ui::Em(32.0f), 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(width, 0.0f), ImGuiCond_Always); // 0 = fit the height to the contents
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(FLT_MAX, maxHeight));
     ImGui::Begin("Select Project###SparkProjectSelector", nullptr,
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings);
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoScrollWithMouse);
 
     Ui::BrandHeader("Spark Engine", "Select a project to launch");
     ImGui::Spacing();
-
     Ui::SubHeader("Game modules next to the engine");
+
+    // Footer below the list: item spacing, separator, spacing, checkbox row, spacing, tip line.
+    const float footerHeight = style.ItemSpacing.y * 3.0f + std::max(1.0f, Ui::Px(1.0f)) + ImGui::GetFrameHeight() +
+                               ImGui::GetTextLineHeight();
+    const float listMaxHeight = std::max(ImGui::GetFrameHeightWithSpacing() * 2.0f,
+                                         maxHeight - ImGui::GetCursorPosY() - footerHeight - style.WindowPadding.y);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(FLT_MAX, listMaxHeight));
+    ImGui::BeginChild("##ModuleList", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeY);
     const float launchWidth = Ui::Em(6.0f);
     for (std::size_t index = 0; index < g_projectSelectorCandidates.size(); ++index)
     {
@@ -210,6 +235,7 @@ void DrawProjectSelectorPanel()
 
         ImGui::Spacing();
     }
+    ImGui::EndChild();
 
     ImGui::Separator();
     ImGui::Checkbox("Remember choice (writes spark.modules.json)", &g_projectSelectorRemember);

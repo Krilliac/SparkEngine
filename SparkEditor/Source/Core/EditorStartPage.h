@@ -7,7 +7,10 @@
  * Draw() reports what the user chose instead of calling back into EditorUI, so the page owns no editor state.
  *
  * Contract: game thread only; draws into the current ImGui context. EditorUI owns the single instance by value.
- * Drawing allocates nothing except the returned recent-scene path when one is chosen.
+ * Drawing allocates only the recent-scene labels shortened to fit (at most ten small strings per frame, from
+ * EditorPreferences' cap) and the returned recent-scene path when one is chosen. The hero banner's paint and
+ * text roles come from Spark::Ui::ChooseHeroBannerStyle, so High Contrast gets a flat outlined banner and the
+ * version line keeps measured contrast in every appearance.
  */
 
 #pragma once

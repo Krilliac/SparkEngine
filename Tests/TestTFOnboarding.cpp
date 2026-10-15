@@ -23,6 +23,7 @@
 #include "Net/TFScramWire.h"
 #include "Console/TFQuickplay.h"
 #include "UI/TFLoginFlow.h"
+#include "UI/TFLoginLayout.h"
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -1571,4 +1572,95 @@ TEST(TFLoginFlow_ClientRefusesHostileChallenge)
     TFScramClient idle;
     TFAuthErr error = TFAuthErr::Ok;
     EXPECT_FALSE(idle.Answer(base, error).has_value());
+}
+
+
+// ---------------------------------------------------------------------------
+// Sign-in panel layout at UI scale 1.0 / 1.5 / 2.0 (UI/TFLoginLayout.h; drawn by TFLoginFlowDraw.cpp).
+// The input height follows the HUD body font (15 px) plus its frame padding, both scaled, as at draw time.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    constexpr float kTFLoginViewportW = 1280.0f;
+    constexpr float kTFLoginViewportH = 720.0f;
+
+    float TFLoginInputHeight(float scale)
+    {
+        return (15.0f + 2.0f * 6.0f) * scale;
+    }
+} // namespace
+
+TEST(TFLoginLayout_LabelsSitAboveTheirInputsAtEveryScale)
+{
+    for (const float scale : {1.0f, 1.5f, 2.0f})
+    {
+        const auto panel = TFLoginLayout::ComputePanel(0.0f, 0.0f, kTFLoginViewportW, kTFLoginViewportH, scale);
+        const auto form = TFLoginLayout::ComputeSignInForm(panel, scale, TFLoginInputHeight(scale));
+
+        // Each label ends above its input with a visible gap, and the first input ends above the second label.
+        EXPECT_LT(form.callsignLabelY + form.labelSize, form.callsignInputY);
+        EXPECT_LT(form.callsignInputY + form.inputHeight, form.passphraseLabelY);
+        EXPECT_LT(form.passphraseLabelY + form.labelSize, form.passphraseInputY);
+        // The subtitle ends above the first label; the error line sits between the form and the buttons.
+        EXPECT_LT(form.subtitleCenterY + form.subtitleSize * 0.5f, form.callsignLabelY);
+        EXPECT_GT(form.errorCenterY - form.errorSize * 0.5f, form.passphraseInputY + form.inputHeight);
+        EXPECT_LE(form.errorCenterY + form.errorSize * 0.5f, form.buttonY);
+    }
+}
+
+TEST(TFLoginLayout_TextAndSpacingScaleWithTheUi)
+{
+    const auto at = [](float scale)
+    {
+        const auto panel = TFLoginLayout::ComputePanel(0.0f, 0.0f, 3840.0f, 2160.0f, scale);
+        return TFLoginLayout::ComputeSignInForm(panel, scale, TFLoginInputHeight(scale));
+    };
+    const auto base = at(1.0f);
+    for (const float scale : {1.5f, 2.0f})
+    {
+        const auto scaled = at(scale);
+        EXPECT_NEAR(scaled.titleSize, base.titleSize * scale, 1e-3f);
+        EXPECT_NEAR(scaled.subtitleSize, base.subtitleSize * scale, 1e-3f);
+        EXPECT_NEAR(scaled.labelSize, base.labelSize * scale, 1e-3f);
+        EXPECT_NEAR(scaled.buttonH, base.buttonH * scale, 1e-3f);
+        // With room to spare (4K) every offset from the panel corner grows by the same factor.
+        const auto panel = TFLoginLayout::ComputePanel(0.0f, 0.0f, 3840.0f, 2160.0f, scale);
+        const auto basePanel = TFLoginLayout::ComputePanel(0.0f, 0.0f, 3840.0f, 2160.0f, 1.0f);
+        EXPECT_NEAR(panel.w, basePanel.w * scale, 1e-3f);
+        EXPECT_NEAR(scaled.passphraseInputY - panel.y, (base.passphraseInputY - basePanel.y) * scale, 1e-3f);
+        EXPECT_NEAR(scaled.fieldX - panel.x, (base.fieldX - basePanel.x) * scale, 1e-3f);
+    }
+}
+
+TEST(TFLoginLayout_PanelFitsA720pWindowUpToScaleTwo)
+{
+    for (const float scale : {1.0f, 1.5f, 2.0f})
+    {
+        const auto panel = TFLoginLayout::ComputePanel(0.0f, 0.0f, kTFLoginViewportW, kTFLoginViewportH, scale);
+        EXPECT_GE(panel.x, 0.0f);
+        EXPECT_GE(panel.y, 0.0f);
+        EXPECT_LE(panel.x + panel.w, kTFLoginViewportW);
+        EXPECT_LE(panel.y + panel.h, kTFLoginViewportH);
+
+        const auto form = TFLoginLayout::ComputeSignInForm(panel, scale, TFLoginInputHeight(scale));
+        EXPECT_GE(form.titleCenterY - form.titleSize * 0.5f, panel.y);
+        EXPECT_LE(form.buttonY + form.buttonH, panel.y + panel.h);
+        EXPECT_GE(form.fieldX, panel.x);
+        EXPECT_LE(form.fieldX + form.fieldW, panel.x + panel.w);
+        // The LAN list keeps a usable height between the form and the buttons at every scale in 720p.
+        EXPECT_TRUE(form.showLan);
+        EXPECT_GE(form.lanListH, TFLoginLayout::Metric::kMinListHeight * scale);
+        EXPECT_LE(form.lanListY + form.lanListH, form.buttonY);
+    }
+}
+
+TEST(TFLoginLayout_TooShortAPanelHidesTheLanListInsteadOfOverlapping)
+{
+    // A panel that only has room for the form: the LAN section is dropped and the buttons stay below the form.
+    const TFLoginLayout::PanelRect panel{0.0f, 0.0f, 600.0f, 300.0f};
+    const auto form = TFLoginLayout::ComputeSignInForm(panel, 1.0f, TFLoginInputHeight(1.0f));
+    EXPECT_FALSE(form.showLan);
+    EXPECT_NEAR(form.lanListH, 0.0f, 1e-6f);
+    EXPECT_GE(form.buttonY, form.errorCenterY + form.errorSize * 0.5f);
 }
