@@ -1378,7 +1378,7 @@
       "description": "Register the slow installed-SDK template verification as a CTest",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4679,
+      "line": 4684,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1387,10 +1387,10 @@
       "description": "Register real-time installed-package objective runs for experimental game modules",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4057,
+      "line": 4062,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:4052",
+          "id": "Tests/CMakeLists.txt:4057",
           "branch": 0,
           "branches": [
             "BUILD_GAME_MODULES AND NOT CMAKE_CROSSCOMPILING AND TARGET SparkEngine"
@@ -1404,7 +1404,7 @@
       "description": "Register the slow Linux installed-package consumer test (PackageConsumer_*)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4717,
+      "line": 4722,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1413,7 +1413,7 @@
       "description": "Register installed CPack tree repeatability qualification",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4950,
+      "line": 4955,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1422,10 +1422,10 @@
       "description": "Register the ten-minute headless FPS/NullRHI soak (label soak)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 4000,
+      "line": 4005,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:3928",
+          "id": "Tests/CMakeLists.txt:3933",
           "branch": 0,
           "branches": [
             "Python3_Interpreter_FOUND"
@@ -1439,7 +1439,7 @@
       "description": "Register the TF-110 dedicated server + two-client run (label terrafront-multiclient)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 5214,
+      "line": 5219,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1457,7 +1457,7 @@
       "description": "Register the OpenGL hardware-row lane (needs a GPU-backed GL 4.5 context)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1972,
+      "line": 1977,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -1544,7 +1544,7 @@
       "description": "Run the ctest SparkTests lanes with --warn-is-error (known-flaky waivers become failures)",
       "default": "OFF",
       "file": "Tests/CMakeLists.txt",
-      "line": 1830,
+      "line": 1835,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -2663,10 +2663,10 @@
       "target": "SparkCrashArtifactSandboxProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 2330,
+      "line": 2335,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:2329",
+          "id": "Tests/CMakeLists.txt:2334",
           "branch": 0,
           "branches": [
             "MSVC AND NOT CMAKE_CROSSCOMPILING"
@@ -2799,10 +2799,10 @@
       "target": "SparkCrashSymbolicationProbe",
       "kind": "executable",
       "file": "Tests/CMakeLists.txt",
-      "line": 5952,
+      "line": 5957,
       "conditionFrames": [
         {
-          "id": "Tests/CMakeLists.txt:5950",
+          "id": "Tests/CMakeLists.txt:5955",
           "branch": 0,
           "branches": [
             "CMAKE_SYSTEM_NAME STREQUAL \"Linux\" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOUND\n   AND Python3_Interpreter_FOUND AND CMAKE_OBJCOPY AND CMAKE_ADDR2LINE"
@@ -5584,7 +5584,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 2330,
+          "line": 2335,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5692,7 +5692,7 @@
       "declarations": [
         {
           "file": "Tests/CMakeLists.txt",
-          "line": 5952,
+          "line": 5957,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -16553,7 +16553,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "994ac64e6a30729c"
+            "runDigest": "82d6b81a7baf41e1"
           },
           {
             "index": 5,
@@ -16565,7 +16565,7 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "582c97e7e4151750"
+            "runDigest": "d61eed8813360d8b"
           },
           {
             "index": 6,
@@ -17272,7 +17272,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 6,
+        "stepCount": 7,
         "steps": [
           {
             "index": 0,
@@ -17324,7 +17324,7 @@
           },
           {
             "index": 4,
-            "name": "Run MMO integration tests",
+            "name": "Run two-client session gate",
             "id": "",
             "uses": "",
             "shell": "",
@@ -17332,10 +17332,22 @@
             "continueOnError": "absent",
             "hasRun": true,
             "env": [],
-            "runDigest": "14ff38f17a1e59e3"
+            "runDigest": "91a9bab924cd7a71"
           },
           {
             "index": 5,
+            "name": "Run MMO world and persistence cases",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "2a6296c4313153cd"
+          },
+          {
+            "index": 6,
             "name": "Upload module MMO integration logs",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -22513,7 +22525,7 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json",
+        "command": "ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-gcc-release",
@@ -22536,7 +22548,7 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/linux-gcc-release  -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_'  --no-tests=error --output-on-failure 2>&1 | tee package-consumer-tests.log",
+        "command": "ctest --test-dir build/linux-gcc-release  -R 'PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_'  --no-tests=error --output-on-failure 2>&1 | tee package-consumer-tests.log",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-gcc-release",
@@ -23145,7 +23157,7 @@
       },
       {
         "job": "module-MMO-integration",
-        "step": "Run MMO integration tests",
+        "step": "Run two-client session gate",
         "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
@@ -23158,7 +23170,7 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/linux-gcc-release  -R 'MMOIntegratedWorld|MMOAccount_|MMOWorld_|MMOPersistence_|MMO320_NoDemoIdentityGate'  --no-tests=error --output-on-failure 2>&1 | tee module-mmo-tests.log",
+        "command": "ctest --test-dir build/linux-gcc-release -R '^MMOIntegratedWorld_TwoClientSessionGate$' --no-tests=error           --output-on-failure 2>&1 | tee module-mmo-session-gate.log",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-gcc-release",
@@ -28364,7 +28376,7 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json",
+        "command": "ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-gcc-release",
@@ -28387,7 +28399,7 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/linux-gcc-release  -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_'  --no-tests=error --output-on-failure 2>&1 | tee package-consumer-tests.log",
+        "command": "ctest --test-dir build/linux-gcc-release  -R 'PackageConsumer_|CLI_ClaimsMatchBehavior|GamePackager_'  --no-tests=error --output-on-failure 2>&1 | tee package-consumer-tests.log",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-gcc-release",
@@ -28627,7 +28639,7 @@
       },
       {
         "job": "module-MMO-integration",
-        "step": "Run MMO integration tests",
+        "step": "Run two-client session gate",
         "stepIndex": 4,
         "matrix": {},
         "matrixResolved": true,
@@ -28640,7 +28652,7 @@
         "gating": "advisory",
         "tool": "ctest",
         "kind": "test",
-        "command": "ctest --test-dir build/linux-gcc-release  -R 'MMOIntegratedWorld|MMOAccount_|MMOWorld_|MMOPersistence_|MMO320_NoDemoIdentityGate'  --no-tests=error --output-on-failure 2>&1 | tee module-mmo-tests.log",
+        "command": "ctest --test-dir build/linux-gcc-release -R '^MMOIntegratedWorld_TwoClientSessionGate$' --no-tests=error           --output-on-failure 2>&1 | tee module-mmo-session-gate.log",
         "commandProvenance": "literal",
         "configuration": "",
         "testDir": "build/linux-gcc-release",

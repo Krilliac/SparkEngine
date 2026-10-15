@@ -222,6 +222,7 @@
         "Engine/Networking/NetworkBindPolicy.h",
         "Engine/Networking/NetworkClientId.h",
         "Engine/Networking/NetworkManager.h",
+        "Engine/Networking/NetworkWireLimits.h",
         "Engine/Networking/WorldServer.h",
         "Engine/World/TimeOfDaySystem.h",
         "Engine/World/WorldOriginSystem.h",
@@ -243,7 +244,7 @@
         "Utils/SecureRandom.h",
         "Utils/SparkConsole.h"
       ],
-      "privateEngineHeaderCount": 34,
+      "privateEngineHeaderCount": 35,
       "copiedInfrastructureFiles": []
     },
     {
