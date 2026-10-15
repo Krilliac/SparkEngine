@@ -1,6 +1,7 @@
 """Caller contracts only: native decoder callback is always synthetic."""
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import time
@@ -19,6 +20,8 @@ class DecodeContracts(unittest.TestCase):
         self.exe = self.root/'SparkTests.exe'
         self.exe.write_bytes(b'synthetic executable; never executed')
         self.variant = ''
+        self.profile = {key: '1' for key in decoder.DECLARED_PROFILE_KEYS}
+        self.profile['fps.profile.health'] = '75.500000'
 
     def child(self, command, *, cwd, environment, timeout):
         self.assertEqual(environment['SPARK_TEST_NAME_PREFIX'], decoder.CASE)
@@ -27,7 +30,7 @@ class DecodeContracts(unittest.TestCase):
         primary = Path(environment['SPARK_FPS_DECODE_DIRECTORY'])/'fps_quicksave.spark_save'
         identity = decoder.file_identity(primary, decoder.INPUT_CAP)
         receipt = dict(inputSha256=identity['sha256'], inputBytes=identity['bytes'],
-                       canonicalProfile={'fps.profile.version': '1', 'fps.profile.class': '1'})
+                       canonicalProfile=dict(self.profile))
         if self.variant == 'wrong-hash':
             receipt['inputSha256'] = '0'*64
         if self.variant == 'input-mutation':
@@ -62,6 +65,32 @@ class DecodeContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.invoke()
         self.assertFalse(list(self.root.glob('save-decode-*/content-receipt.json')))
+
+    def test_incomplete_or_malformed_profile_never_publishes_success(self):
+        mutations = {
+            'missing-armor': lambda p: p.pop('fps.profile.armor'),
+            'missing-weapon': lambda p: p.pop('fps.profile.weapon'),
+            'missing-class': lambda p: p.pop('fps.profile.class'),
+            'extra-field': lambda p: p.update({'fps.profile.extra': '1'}),
+            'non-numeric': lambda p: p.update({'fps.profile.health': 'abc'}),
+            'non-finite': lambda p: p.update({'fps.profile.armor': 'nan'}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name):
+                self.profile = {key: '1' for key in decoder.DECLARED_PROFILE_KEYS}
+                mutate(self.profile)
+                with self.assertRaises(ValueError):
+                    self.invoke()
+        self.assertFalse(list(self.root.glob('save-decode-*/content-receipt.json')))
+
+    def test_declared_keys_match_the_native_profile_writer(self):
+        source = (Path(__file__).resolve().parents[2] / 'GameModules/SparkGameFPS/Source/Game/FPSLocalProfile.cpp')
+        text = source.read_text(encoding='utf-8')
+        written = {'fps.profile.' + name for name in re.findall(r'customState\[Key\("(\w+)"\)\]', text)}
+        written.add('fps.profile.version')  # stamped by WriteModuleSchemaVersion(kSchema, ...)
+        self.assertEqual(written, set(decoder.DECLARED_PROFILE_KEYS))
+        header = source.with_suffix('.h').read_text(encoding='utf-8')
+        self.assertIn('"fps.profile.version"', header)
 
     def test_outside_input_and_backup_rejected_before_child(self):
         owned = self.root/'inner'

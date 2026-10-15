@@ -58,6 +58,10 @@ class GameObject;
 class Player;
 class ProjectilePool;
 class PhysicsSystem;
+namespace SparkFPS
+{
+    class FPSMultiplayerSystem;
+}
 namespace Spark
 {
     class EventBus;
@@ -744,6 +748,12 @@ class SPARK_GAME_API Game
      * @param dt Frame delta (seconds)
      */
     void UpdateMultiplayer(float dt);
+
+    /**
+     * @brief Apply the session's local-player verdict (health, death, respawn, reconcile snap) to m_player.
+     * @param multiplayer The FPS session that owns the logic; this is only the thin applier.
+     */
+    void ApplyMultiplayerResults(SparkFPS::FPSMultiplayerSystem& multiplayer);
 
     bool m_networkInitialized{false};      ///< Whether a multiplayer session initialized NetworkManager
     float m_networkInputAccumulator{0.0f}; ///< Unsent simulated time toward the next 60 Hz input

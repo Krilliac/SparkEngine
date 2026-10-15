@@ -24,6 +24,11 @@ namespace
 {
     namespace fs = std::filesystem;
     constexpr size_t kInputCap = 16 * 1024 * 1024;
+    // Mirrors fps_owned_save_decode.DECLARED_PROFILE_KEYS: the schema stamp plus every declared field.
+    constexpr std::array<const char*, 11> kDeclaredProfileKeys = {
+        "fps.profile.version",  "fps.profile.level",  "fps.profile.xp",     "fps.profile.class",
+        "fps.profile.weapon",   "fps.profile.kills",  "fps.profile.deaths", "fps.profile.score",
+        "fps.profile.playTime", "fps.profile.health", "fps.profile.armor"};
 
     void RequirePlainPath(const fs::path& path)
     {
@@ -101,6 +106,12 @@ TEST(FPSInputDispatch_DecodeOwnedPrimary)
                 Spark::FPSQuickLoadStatus::Loaded);
     std::unordered_map<std::string, std::string> canonical;
     profile.WriteTo(canonical); // Existing persisted-profile schema and float precision.
+    // The loaded profile must expose every declared field and nothing else, so the caller can assert each one.
+    ASSERT_EQ(canonical.size(), kDeclaredProfileKeys.size());
+    for (const char* key : kDeclaredProfileKeys)
+    {
+        ASSERT_TRUE(canonical.count(key) == 1u);
+    }
     RequirePrimaryOnly(directory);
     ASSERT_TRUE(ReadPrimary(primary) == before);
     auto canonicalJson = nlohmann::json::object();

@@ -193,6 +193,7 @@ namespace SparkFPS
         if (after > 0.01f && after != before)
         {
             ++m_correctionCount;
+            m_localReport.correctionPending = true;
             Spark::Net::NetworkManager::GetInstance().SetPredictionCorrectionCount(m_correctionCount);
         }
 
@@ -210,6 +211,96 @@ namespace SparkFPS
         local.acknowledgedInputSequence = authoritativeState.acknowledgedInputSequence;
         local.sequenceNumber = authoritativeState.sequenceNumber;
         CopyPredictedMotionToLocal();
+    }
+
+    // ============================================================================
+    // Game consumption
+    // ============================================================================
+
+    LocalPlayerUpdate FPSMultiplayerSystem::TakeLocalPlayerUpdate()
+    {
+        LocalPlayerUpdate update;
+        // A client's own state is a locally made placeholder until the server's first snapshot for it has
+        // been reconciled, so nothing is reported before then (0 is also the host's id, hence the id check).
+        const bool authoritative = m_isServer || (m_localClientId != Spark::Net::INVALID_CLIENT &&
+                                                  m_lastLocalAuthoritySequence != 0 && !m_hasPendingLocalAuthority);
+        const auto stateIt =
+            (m_isActive && authoritative) ? m_playerStates.find(m_localClientId) : m_playerStates.end();
+        if (stateIt == m_playerStates.end())
+        {
+            m_localReport = LocalReport{};
+            return update;
+        }
+
+        const NetworkPlayerState& state = stateIt->second;
+        update.valid = true;
+        update.posX = state.posX;
+        update.posY = state.posY;
+        update.posZ = state.posZ;
+        update.yaw = state.yaw;
+        update.pitch = state.pitch;
+        update.health = state.health;
+        update.isAlive = state.isAlive;
+
+        const bool seen = m_localReport.seen;
+        update.healthChanged = !seen || state.health != m_localReport.health;
+        update.died = seen && m_localReport.alive && !state.isAlive;
+        update.respawned = seen && !m_localReport.alive && state.isAlive;
+        update.teleport = !seen || update.respawned || m_localReport.correctionPending;
+
+        m_localReport.seen = true;
+        m_localReport.alive = state.isAlive;
+        m_localReport.health = state.health;
+        m_localReport.correctionPending = false;
+        return update;
+    }
+
+    RemoteProxyDelta FPSMultiplayerSystem::TakeRemoteProxyDelta()
+    {
+        RemoteProxyDelta delta;
+        for (auto it = m_remoteProxies.begin(); it != m_remoteProxies.end();)
+        {
+            const bool gone = !m_isActive || it->first == m_localClientId || !m_playerStates.contains(it->first);
+            if (gone)
+            {
+                delta.removed.push_back(it->first);
+                it = m_remoteProxies.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        if (m_isActive)
+        {
+            for (const auto& [clientId, state] : m_playerStates)
+            {
+                if (clientId == m_localClientId)
+                {
+                    continue;
+                }
+                auto [proxyIt, inserted] = m_remoteProxies.try_emplace(clientId);
+                if (inserted)
+                {
+                    delta.added.push_back(clientId);
+                }
+                RemotePlayerProxy& proxy = proxyIt->second;
+                proxy.clientId = clientId;
+                proxy.posX = state.posX;
+                proxy.posY = state.posY;
+                proxy.posZ = state.posZ;
+                proxy.yaw = state.yaw;
+                proxy.pitch = state.pitch;
+                proxy.health = state.health;
+                proxy.isAlive = state.isAlive;
+                proxy.currentWeapon = state.currentWeapon;
+            }
+        }
+
+        std::sort(delta.added.begin(), delta.added.end());
+        std::sort(delta.removed.begin(), delta.removed.end());
+        return delta;
     }
 
     void FPSMultiplayerSystem::CopyPredictedMotionToLocal()

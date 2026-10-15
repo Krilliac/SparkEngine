@@ -113,10 +113,13 @@ the current profile restoration does not restore the player's position.
   networking is enabled (experimental; outside `stable-v1`). `FPSMultiplayerSystem` is the module's only network path:
   the game ticks it each frame and sends the local player's WASD/look/fire input at a fixed 60 Hz once the session is
   connected. `net_status` reports a client as `connecting` until the server admits it and assigns an id; a rejected,
-  timed-out or lost connection ends the session and logs `[FPSMultiplayer] Connection failed: <reason>`. The game does not
-  yet read the authoritative state back (open under `MOD-315`): the rendered local `Player` keeps its own movement,
-  collision and health, remote players are not rendered, and server-side hits do not change the local `Player`. The
-  convergence evidence below is of `FPSMultiplayerSystem` state, not of the rendered game.
+  timed-out or lost connection ends the session and logs `[FPSMultiplayer] Connection failed: <reason>`. `net_status`
+  reports RTT and loss as `n/a` unless a connected client has measured them, so a host or a client still handshaking
+  never shows a made-up `0ms`. `Game::UpdateMultiplayer` applies the session's verdict to the rendered local `Player`
+  through `FPSMultiplayerSystem::TakeLocalPlayerUpdate`: server-owned health, death and respawn, and a snap to the
+  reconciled position on spawn, respawn or a prediction correction. Between corrections the `Player` keeps its own
+  movement and collision. Remote players are tracked (`TakeRemoteProxyDelta`) but not yet rendered: the game has no
+  render proxy for them (open under `MOD-315`). The convergence evidence below is of `FPSMultiplayerSystem` state.
 - The developer commands listed in `Source/Console/FPSConsolePolicy.h` (`god`, `noclip`, `player_tp`, `spawn`,
   `game_timescale`, `scene_load`, `scene_save`, `gamemode`, `give`, `quest_start`, `quest_all`, `destroy`,
   `weather`, `dialogue_start`, `seq_play`, `seq_stop`, `seq_time`, `wave_skip`, `wave_difficulty`, `xp`,

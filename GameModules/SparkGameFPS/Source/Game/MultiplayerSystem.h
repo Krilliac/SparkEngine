@@ -23,11 +23,12 @@
  * - Allocation: per-player maps grow on join; each 20Hz snapshot builds one payload.
  * - Scalability: at most kMaxPlayers players per session (the batch size limit).
  *
- * ## Game integration (open, MOD-315)
- * The FPS Game only feeds this system: it ticks it and sends the local player's input.
- * Nothing in the game reads the authoritative state back yet: the rendered local Player
- * keeps its own movement and health, remote players are not rendered, and server-side
- * hits do not change the local Player. Convergence evidence covers this system's state.
+ * ## Game integration (MOD-315)
+ * Game::UpdateMultiplayer ticks this system, sends the local player's input, and applies
+ * what TakeLocalPlayerUpdate reports (server health, death, respawn, and a reconcile
+ * correction) to the rendered local Player. TakeRemoteProxyDelta reports the remote
+ * players that joined or left since the last call. Remote players are tracked but not yet
+ * drawn: the game has no render proxy for them (open).
  */
 
 #pragma once
@@ -157,6 +158,42 @@ namespace SparkFPS
         std::vector<uint8_t> Serialize() const;
 
         static PlayerInput Deserialize(const uint8_t* data, size_t size);
+    };
+
+    /**
+     * @brief What the rendered game applies to its local Player, as of the last TakeLocalPlayerUpdate.
+     *
+     * Every flag is an edge: it is true for exactly one TakeLocalPlayerUpdate call.
+     */
+    struct LocalPlayerUpdate
+    {
+        bool valid = false; ///< The session holds a state for the local player; other fields are meaningful.
+        float posX = 0.0f, posY = 0.0f, posZ = 0.0f; ///< Reconciled (client) or authoritative (host) position.
+        float yaw = 0.0f, pitch = 0.0f;
+        float health = 100.0f;      ///< Server-owned health.
+        bool isAlive = true;        ///< Server-owned life state.
+        bool healthChanged = false; ///< health differs from the last reported value (or this is the first report).
+        bool died = false;          ///< isAlive went true -> false.
+        bool respawned = false;     ///< isAlive went false -> true.
+        bool teleport = false;      ///< Move the Player to the position: first report, respawn or reconcile correction.
+    };
+
+    /** @brief A remote player's replicated state, as the game would draw it. */
+    struct RemotePlayerProxy
+    {
+        uint32_t clientId = 0;
+        float posX = 0.0f, posY = 0.0f, posZ = 0.0f;
+        float yaw = 0.0f, pitch = 0.0f;
+        float health = 100.0f;
+        bool isAlive = true;
+        uint8_t currentWeapon = 0;
+    };
+
+    /** @brief Remote players that appeared or disappeared since the previous TakeRemoteProxyDelta. */
+    struct RemoteProxyDelta
+    {
+        std::vector<uint32_t> added;
+        std::vector<uint32_t> removed;
     };
 
     /** @brief Per-player score tracking. */
@@ -291,6 +328,24 @@ namespace SparkFPS
          */
         bool IsConnected() const;
 
+        /**
+         * @brief Report the local player's authoritative state and the edges since the last call.
+         *
+         * Empty (valid == false) when no session is live or the local player has no state yet.
+         * The caller applies the result to its rendered Player; calling it consumes the edges.
+         */
+        LocalPlayerUpdate TakeLocalPlayerUpdate();
+
+        /**
+         * @brief Refresh the remote-player proxy table and report who joined or left since the last call.
+         *
+         * Safe to call with no session: every proxy then reports as removed. The local player is never a proxy.
+         */
+        RemoteProxyDelta TakeRemoteProxyDelta();
+
+        /** @brief Current remote-player proxies, keyed by client id (updated by TakeRemoteProxyDelta). */
+        const std::unordered_map<uint32_t, RemotePlayerProxy>& GetRemoteProxies() const { return m_remoteProxies; }
+
         /** @brief Get local client ID. */
         uint32_t GetLocalClientId() const { return m_localClientId; }
 
@@ -300,11 +355,18 @@ namespace SparkFPS
         /** @brief Console status string. */
         std::string Console_GetStatus() const;
 
+        /**
+         * @brief Link metrics. RTT and loss are measured only by a connected client; a host, an inactive
+         *        system and a client still handshaking have no measured link, so those fields stay 0 with
+         *        their *Measured flag false rather than reporting a made-up 0 ms / 0 %.
+         */
         struct MultiplayerDebugMetrics
         {
             float packetLossPercent = 0.0f;
             float rttMs = 0.0f;
             uint32_t correctionCount = 0;
+            bool rttMeasured = false;  ///< rttMs comes from at least one RTT sample on a live client link.
+            bool lossMeasured = false; ///< packetLossPercent comes from packets received on a live client link.
         };
         MultiplayerDebugMetrics GetDebugMetrics() const;
 
@@ -406,6 +468,17 @@ namespace SparkFPS
         /// Server: seconds of applied input until each player may fire again (fire-rate limit).
         std::unordered_map<uint32_t, float> m_fireCooldown;
         uint32_t m_correctionCount = 0;
+
+        /// What TakeLocalPlayerUpdate last reported, so it can return edges.
+        struct LocalReport
+        {
+            bool seen = false;
+            bool alive = true;
+            float health = 100.0f;
+            bool correctionPending = false; ///< Set by a reconcile that moved the predicted position.
+        };
+        LocalReport m_localReport;
+        std::unordered_map<uint32_t, RemotePlayerProxy> m_remoteProxies;
     };
 
 } // namespace SparkFPS

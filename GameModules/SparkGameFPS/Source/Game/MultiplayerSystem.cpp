@@ -80,6 +80,7 @@ namespace SparkFPS
         m_hasPendingLocalAuthority = false;
         m_lastLocalAuthoritySequence = 0;
         m_lastSnapshotBatch = 0;
+        m_localReport = LocalReport{};
         m_inputBudget.clear();
         // A new session starts a new input sequence; a stale ACK from an earlier session
         // must not make the first snapshots of this one look old. The default-constructed
