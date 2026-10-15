@@ -130,4 +130,43 @@ if(CMAKE_MATCH_1 EQUAL 0 OR CMAKE_MATCH_2 EQUAL 0)
         "Installed FPS asset reference closure checked nothing (${CMAKE_MATCH_1} references in "
         "${CMAKE_MATCH_2} scene and material files); the staged Assets tree carries no authored content")
 endif()
+set(_reference_parsed_files "${CMAKE_MATCH_2}")
 message(STATUS "Installed FPS asset reference closure passed: ${_reference_summary}")
+
+# ENG-220: the summary above only proves the closure looked at something. Pin it
+# to the staged manifest: every listed scene and Materials/*.json entry must have
+# been parsed (a material a scene names outside Materials/ may add to the count,
+# never subtract from it), and the arena scene the package exists to run must be
+# listed. A verifier that silently dropped a file class would parse fewer files
+# than the manifest lists and fail here.
+file(READ "${_asset_manifest}" _manifest_json)
+string(JSON _manifest_entries GET "${_manifest_json}" entries)
+string(JSON _manifest_entry_count LENGTH "${_manifest_entries}")
+set(_listed_reference_files 0)
+set(_listed_arena_scene FALSE)
+if(_manifest_entry_count GREATER 0)
+    math(EXPR _manifest_last_entry "${_manifest_entry_count} - 1")
+    foreach(_entry_index RANGE ${_manifest_last_entry})
+        string(JSON _entry_path GET "${_manifest_entries}" ${_entry_index} path)
+        string(TOLOWER "${_entry_path}" _entry_path_lower)
+        if(_entry_path_lower MATCHES "\\.scene$" OR
+           (_entry_path MATCHES "^Materials/" AND _entry_path_lower MATCHES "\\.json$"))
+            math(EXPR _listed_reference_files "${_listed_reference_files} + 1")
+        endif()
+        if(_entry_path STREQUAL "Scenes/level1.scene")
+            set(_listed_arena_scene TRUE)
+        endif()
+    endforeach()
+endif()
+if(NOT _listed_arena_scene)
+    message(FATAL_ERROR
+        "Installed FPS asset manifest does not list Scenes/level1.scene, the scene the package runs")
+endif()
+if(_reference_parsed_files LESS _listed_reference_files)
+    message(FATAL_ERROR
+        "Installed FPS asset reference closure parsed ${_reference_parsed_files} scene and material files, but "
+        "the staged manifest lists ${_listed_reference_files}: '${_reference_summary}'")
+endif()
+message(STATUS
+    "Installed FPS asset manifest pins the closure: ${_reference_parsed_files} parsed >= "
+    "${_listed_reference_files} listed scene and material files")

@@ -19,6 +19,11 @@ a clean machine lacks. The Visual C++ runtime (vcruntime140*.dll,
 msvcp140*.dll, concrt140.dll) is deliberately not a system DLL; the package
 must ship it.
 
+Content decoders that the engine loads through COM instead of the import table
+(``CONTENT_DECODER_DLLS``, today windowscodecs.dll for textures) are not visible
+to that walk, so when a system directory is available and the package ships
+SparkEngine.exe each one must also be present there.
+
 A malformed or truncated image, a package with no images at all, and an
 unresolved import all fail with exit status 1, and every unresolved
 ``importer -> dll`` pair is named. The parser is stdlib-only so the contract
@@ -78,6 +83,19 @@ SYSTEM_DLLS = frozenset(
         "xinput1_4.dll",
     )
 )
+
+# Content decoders the engine reaches through COM or LoadLibrary rather than the
+# import table, so the walk above cannot see them. The package relies on the
+# operating system to provide each one, and a Windows image that lacks it (for
+# example a Server Core or N edition without the media feature) loads no
+# texture. Required in the system directory whenever the package ships
+# SparkEngine.exe. Keep this explicit: a new entry is a new clean-machine assumption.
+CONTENT_DECODER_DLLS = {
+    # TextureSystemWindowsTexture.cpp, GraphicsDeviceResourcesWindowsTextures.cpp,
+    # AssetTypesWindowsMedia.cpp: CoCreateInstance(CLSID_WICImagingFactory) decodes PNG/JPEG/BMP/TGA.
+    "windowscodecs.dll": "WIC image decoder",
+}
+CONTENT_DECODER_HOST_IMAGE = "sparkengine.exe"
 
 API_SET_PREFIXES = ("api-ms-win-", "ext-ms-")
 IMAGE_EXTENSIONS = (".exe", ".dll")
@@ -248,6 +266,14 @@ def check_package(root: Path, system_directory: Path | None) -> tuple[int, list[
                     failures.append(f"{label} -> {name} ({kind}): system DLL missing from {system_directory}")
                     continue
                 failures.append(f"{label} -> {name} ({kind}): not in the package and not an allowed system DLL")
+
+    if system_listing is not None and any(path.name.lower() == CONTENT_DECODER_HOST_IMAGE for path in images):
+        for decoder, purpose in CONTENT_DECODER_DLLS.items():
+            if decoder not in system_listing:
+                failures.append(
+                    f"content decoder {decoder} ({purpose}) is loaded at runtime by SparkEngine.exe "
+                    f"but is missing from {system_directory}"
+                )
     return len(images), failures
 
 

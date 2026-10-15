@@ -6,6 +6,12 @@
 #   full (default)        playtester launcher, D3D11/WARP smoke and WARP save/reload
 #   headless-save-reload  HEAD-220 NullRHI writer/reader save/reload of the staged
 #                         executable and module (cmake/RunSparkHeadlessFPSSaveReload.cmake)
+#   forced-kill-recovery  HEAD-220 TerminateProcess of the staged headless host after its
+#                         quicksave, then a clean restart on the same user data
+#                         (RunInstalledFPSForcedKillRecovery.cmake)
+#   malformed-content     ENG-220 corrupt scene/GLB/material fixtures handed to the staged
+#                         engine fail with a named diagnostic and a non-zero exit
+#                         (RunInstalledMalformedContent.cmake)
 #   arena-loop            MOD-310 D3D11/WARP single-player loop played by the
 #                         fps_autoplay developer command (RunInstalledFPSArenaLoop.cmake)
 #   repository-isolation  RDY-020 NullRHI and D3D11/WARP runs of package copies inside a
@@ -20,7 +26,7 @@ endforeach()
 if(NOT DEFINED SPARK_FPS_PACKAGE_MODE OR SPARK_FPS_PACKAGE_MODE STREQUAL "")
     set(SPARK_FPS_PACKAGE_MODE full)
 endif()
-if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|arena-loop|repository-isolation)$")
+if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|forced-kill-recovery|malformed-content|arena-loop|repository-isolation)$")
     message(FATAL_ERROR "Unknown SPARK_FPS_PACKAGE_MODE '${SPARK_FPS_PACKAGE_MODE}'")
 endif()
 # fps_autoplay is a developer command, and a Shipping (MinSizeRel) build never
@@ -207,6 +213,32 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
         -P "${SPARK_SOURCE_ROOT}/cmake/RunSparkHeadlessFPSSaveReload.cmake")
     message(STATUS
         "Installed SparkGameFPS runtime package passed NullRHI save/reload at "
+        "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
+    return()
+endif()
+
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "forced-kill-recovery")
+    _run_checked("Validate installed FPS forced-kill recovery" 480
+        "${CMAKE_COMMAND}"
+        "-DSPARK_INSTALLED_ROOT=${_install_root}"
+        "-DSPARK_SOURCE_ROOT=${SPARK_SOURCE_ROOT}"
+        "-DSPARK_TEST_ROOT=${_run_root}/forced-kill-recovery"
+        -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunInstalledFPSForcedKillRecovery.cmake")
+    message(STATUS
+        "Installed SparkGameFPS runtime package survived a forced kill and restarted clean at "
+        "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
+    return()
+endif()
+
+if(SPARK_FPS_PACKAGE_MODE STREQUAL "malformed-content")
+    _run_checked("Validate installed FPS malformed-content diagnostics" 600
+        "${CMAKE_COMMAND}"
+        "-DSPARK_INSTALLED_ROOT=${_install_root}"
+        "-DSPARK_SOURCE_ROOT=${SPARK_SOURCE_ROOT}"
+        "-DSPARK_TEST_ROOT=${_run_root}/malformed-content"
+        -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunInstalledMalformedContent.cmake")
+    message(STATUS
+        "Installed SparkEngine rejected every malformed content fixture by name at "
         "${_source_sha} (${_source_tree_state}, ${SPARK_CONFIG}); evidence retained under ${_run_root}")
     return()
 endif()

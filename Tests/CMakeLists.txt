@@ -3353,6 +3353,29 @@ set_tests_properties(FPSPackage_SaveReloadParserContract PROPERTIES
     LABELS "module;stable-v1;fps;package;unit"
     TIMEOUT 10)
 
+# HEAD-220: the forced-kill recovery helper's validators (kill timing, save state after the kill,
+# restart audit, SPARK_HEADLESS_NULLRHI_RESOURCES live=0) against canned host output; no engine.
+add_test(
+    NAME FPSPackage_ForcedKillRecoveryParserContract
+    COMMAND ${CMAKE_COMMAND}
+        "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+        -DSPARK_FORCED_KILL_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSForcedKillRecovery.cmake)
+set_tests_properties(FPSPackage_ForcedKillRecoveryParserContract PROPERTIES
+    LABELS "module;stable-v1;fps;package;unit"
+    TIMEOUT 60)
+
+# ENG-220: the malformed-content verdict function (exit status, named reason, named fixture, no
+# scene record, positive control) against canned host output, plus a fixture/verdict table check.
+add_test(
+    NAME FPSPackage_MalformedContentParserContract
+    COMMAND ${CMAKE_COMMAND}
+        -DSPARK_MALFORMED_CONTENT_PARSER_SELF_TEST=ON
+        -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledMalformedContent.cmake)
+set_tests_properties(FPSPackage_MalformedContentParserContract PROPERTIES
+    LABELS "gltf-d3d11;module;stable-v1;fps;package;unit"
+    TIMEOUT 10)
+
 if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND
    TARGET SparkEngine AND TARGET SparkGame)
     add_dependencies(SparkTests SparkEngine SparkGame)
@@ -4335,6 +4358,39 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             RUN_SERIAL TRUE
             TIMEOUT 600)
 
+        # HEAD-220: the staged headless host is TerminateProcess-ed after its quicksave and the
+        # next boot on the same user data must restore the save and print live=0 (Windows only:
+        # the registration sits in the WIN32 package block).
+        add_test(
+            NAME FPSHeadlessPackage_ForcedKillRecovery
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/k/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=forced-kill-recovery
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSHeadlessPackage_ForcedKillRecovery PROPERTIES
+            LABELS "package;installed-runtime;fps;nullrhi-headless;save;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 900)
+
+        # ENG-220: corrupt scene, material and GLB fixtures handed to the staged engine's only
+        # content entry point (-scene) fail the launch with a named reason and exit status 4.
+        add_test(
+            NAME FPSPackage_MalformedContentDiagnostics
+            COMMAND ${CMAKE_COMMAND}
+                "-DSPARK_ENGINE_BUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+                "-DSPARK_CONFIG=$<CONFIG>"
+                "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/c/$<CONFIG>"
+                -DSPARK_FPS_PACKAGE_MODE=malformed-content
+                -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
+        set_tests_properties(FPSPackage_MalformedContentDiagnostics PROPERTIES
+            LABELS "gltf-d3d11;package;installed-runtime;asset;nullrhi-headless;integration"
+            RUN_SERIAL TRUE
+            TIMEOUT 900)
+
         # MOD-310: a fresh install prefix plays spawn -> move -> kill -> die ->
         # respawn -> score on D3D11/WARP through the fps_autoplay developer
         # command, scored by GameMode and RespawnSystem. Shipping (MinSizeRel)
@@ -5226,6 +5282,17 @@ if(SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS AND ENABLE_NETWORKING AND SPARK_HEA
         LABELS "terrafront-soak;process"
         RUN_SERIAL TRUE
         TIMEOUT 300)
+    # TF-110: the same driver and budgets for 30 minutes. The label is not terrafront-soak, so the
+    # PR-lane selection (-L '^terrafront-soak$') never runs it; only an explicit
+    # -L '^terrafront-soak-long$' run does. It uses the budget file's bot count (32 bots, 34 actors):
+    # the 100-actor run needs --soak-bots and a tf_bots cap above 32, neither of which exists yet.
+    add_test(
+        NAME TerrafrontSoak_30Min
+        COMMAND ${_tf_harness} --soak-seconds 1800 --timeout 2000 --workdir ${_tf_runs}/soak-30min)
+    set_tests_properties(TerrafrontSoak_30Min PROPERTIES
+        LABELS "terrafront-soak-long"
+        RUN_SERIAL TRUE
+        TIMEOUT 2100)
     # TF-120: a hard-killed server restarts on the same save root with its
     # authoritative state, after an explicit save and after the debounced commit.
     foreach(_tf_run IN ITEMS
