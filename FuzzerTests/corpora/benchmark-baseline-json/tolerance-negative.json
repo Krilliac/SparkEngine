@@ -1,0 +1,11 @@
+{
+  "baselines": [
+    {
+      "scenario": "alpha",
+      "metrics": {
+        "FrameTime": 12.5
+      },
+      "tolerance": -1e39
+    }
+  ]
+}

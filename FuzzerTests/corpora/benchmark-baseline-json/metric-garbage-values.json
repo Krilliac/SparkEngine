@@ -1,0 +1,14 @@
+{
+  "baselines": [
+    {
+      "scenario": "alpha",
+      "metrics": {
+        "Word": abc,
+        "Blank": ,
+        "Trailing": 1.5.5,
+        "Zero": 0
+      },
+      "tolerance": abc
+    }
+  ]
+}

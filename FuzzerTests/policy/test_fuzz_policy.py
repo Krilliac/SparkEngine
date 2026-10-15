@@ -175,6 +175,8 @@ FUZZ_SMOKE_TARGETS = (
     "SparkFuzzLauncherTemplate",
     "SparkFuzzLauncherModuleManifest",
     "SparkFuzzEditorPreferences",
+    "SparkFuzzFreezeBufferBlob",
+    "SparkFuzzBenchmarkBaselineJson",
 )
 FUZZ_BUILD_COMMAND = "cmake --build build/fuzz-policy --target " + " ".join(FUZZ_SMOKE_TARGETS)
 

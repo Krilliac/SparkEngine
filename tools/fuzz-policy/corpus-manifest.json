@@ -1837,6 +1837,40 @@
         "smoke_seconds": 10
       },
       "regressions": []
+    },
+    {
+      "id": "freeze-buffer-blob-corpus",
+      "parser_id": "freeze-buffer-blob",
+      "corpus_dir": "FuzzerTests/corpora/freeze-buffer-blob",
+      "last_verified": "2026-10-15",
+      "content_digest": "d9c1a0e317cde5f4577243053b7985519aa4948e2098e6c79387d38aa63d9afc",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 14,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": []
+    },
+    {
+      "id": "benchmark-baseline-json-corpus",
+      "parser_id": "benchmark-baseline-json",
+      "corpus_dir": "FuzzerTests/corpora/benchmark-baseline-json",
+      "last_verified": "2026-10-15",
+      "content_digest": "220ea0d2731861fb69400ff2726058976644d330ef9b8145c4400c83c45dc142",
+      "budget": {
+        "max_input_bytes": 65536,
+        "max_parse_time_ms": 1000,
+        "max_memory_mb": 256,
+        "max_depth": 1,
+        "max_corpus_entries": 18,
+        "max_corpus_bytes": 65536,
+        "smoke_seconds": 10
+      },
+      "regressions": []
     }
   ]
 }

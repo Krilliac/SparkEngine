@@ -3937,3 +3937,103 @@ set_tests_properties(FuzzUILayoutSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;securi
 set_tests_properties(FuzzAssetCookerSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
 set_tests_properties(FuzzLauncherTemplateSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
 set_tests_properties(FuzzLauncherModuleManifestSmoke PROPERTIES LABELS "fuzz;fuzz-smoke;security" TIMEOUT 10 WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}")
+
+# SEC-120 save-state blob reader. FreezeSystem.h is header-only, so the libc++
+# adapter compiles the production FreezeSystem/FreezeBuffer templates itself and
+# meets the libstdc++ libFuzzer driver only at the C ABI in
+# FuzzFreezeBufferBlobProduction.h (same split as SparkFuzzJsonUtils).
+add_executable(SparkFuzzFreezeBufferBlob
+    FuzzFreezeBufferBlob.cpp
+    FuzzFreezeBufferBlobProduction.cpp
+)
+set_source_files_properties(
+    FuzzFreezeBufferBlobProduction.cpp
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzFreezeBufferBlob PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzFreezeBufferBlob PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzFreezeBufferBlob PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzFreezeBufferBlob PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzFreezeBufferBlob PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzFreezeBufferBlobSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzFreezeBufferBlob>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=14
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/freeze-buffer-blob"
+)
+set_tests_properties(FuzzFreezeBufferBlobSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
+
+# SEC-120 benchmark baseline reader. BenchmarkFrameworkBaseline.cpp holds
+# LoadBaseline and its line helpers; the adapter supplies only the private-constructor
+# GetInstance() seam instead of linking BenchmarkFramework.cpp (console and scenarios).
+# Same libstdc++ driver / libc++ production split as SparkFuzzJsonUtils.
+add_executable(SparkFuzzBenchmarkBaselineJson
+    FuzzBenchmarkBaselineJson.cpp
+    FuzzBenchmarkBaselineJsonProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp"
+)
+set_source_files_properties(
+    FuzzBenchmarkBaselineJsonProduction.cpp
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source/Utils/BenchmarkFrameworkBaseline.cpp"
+    PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
+)
+target_include_directories(SparkFuzzBenchmarkBaselineJson PRIVATE
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkEngine/Source"
+)
+target_compile_features(SparkFuzzBenchmarkBaselineJson PRIVATE cxx_std_23)
+target_compile_options(SparkFuzzBenchmarkBaselineJson PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -O1
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(SparkFuzzBenchmarkBaselineJson PRIVATE
+    -fsanitize=fuzzer,address,undefined
+    -fno-sanitize-recover=undefined
+    -fno-omit-frame-pointer
+    -Wl,--gc-sections
+)
+target_link_libraries(SparkFuzzBenchmarkBaselineJson PRIVATE Threads::Threads c++ c++abi)
+
+add_test(
+    NAME FuzzBenchmarkBaselineJsonSmoke
+    COMMAND $<TARGET_FILE:SparkFuzzBenchmarkBaselineJson>
+        -max_len=65536
+        -timeout=1
+        -rss_limit_mb=256
+        # Replay every reviewed seed exactly once; mutation campaigns belong
+        # to scheduled jobs and must not make this merge gate time-dependent.
+        -runs=18
+        "${SPARK_FUZZ_PROJECT_ROOT}/FuzzerTests/corpora/benchmark-baseline-json"
+)
+set_tests_properties(FuzzBenchmarkBaselineJsonSmoke PROPERTIES
+    LABELS "fuzz;fuzz-smoke;security"
+    TIMEOUT 10
+    WORKING_DIRECTORY "${SPARK_FUZZ_PROJECT_ROOT}"
+)
