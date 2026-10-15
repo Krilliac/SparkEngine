@@ -167,7 +167,16 @@ class RepositoryInventoryTests(unittest.TestCase):
         # security-runtime configure instead of owning a second linux-shipping leg.
         # terrafront-multiclient (TF CI) owns one leg; visual-script-package
         # (ENG-200) configures the engine and its packager project.
-        self.assertEqual(len(configs), 37)
+        # The advisory PR lanes add 20 legs: persistence-integration (DATA-120,
+        # Linux and Windows), package-consumer-linux and -windows (ASSET-220),
+        # scripting-integration (ENG-200), prototype-module-kit (MOD-295),
+        # module-FPS-package-windows (MOD-310/ENG-220: windows-shipping plus the
+        # BUILD_TESTS=ON reconfigure of the same tree), module-FPS-singleplayer
+        # (MOD-310), module-FPS-multiplayer (MOD-315), module-MMO-integration
+        # (MOD-320), the six module package runs (MOD-330..MOD-380),
+        # terrafront-migration and terrafront-recovery (TF-120) and
+        # networking-disabled-contract (SEC-100).
+        self.assertEqual(len(configs), 57)
         self.assertEqual(
             sorted({entry["job"] for entry in configs}),
             [
@@ -188,12 +197,30 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "experimental-module-lifecycle",
                 "fuzz-policy",
                 "golden-linux",
+                "module-ARPG",
+                "module-FPS-multiplayer",
+                "module-FPS-package-windows",
+                "module-FPS-singleplayer",
+                "module-MMO-integration",
+                "module-OpenWorld",
+                "module-Platformer",
+                "module-RPG",
+                "module-RTS",
+                "module-Racing",
                 "network-integration",
                 "network-security",
+                "networking-disabled-contract",
+                "package-consumer-linux",
+                "package-consumer-windows",
+                "persistence-integration",
+                "prototype-module-kit",
                 "reproducibility-windows",
+                "scripting-integration",
                 "security-runtime",
                 "service-contract",
+                "terrafront-migration",
                 "terrafront-multiclient",
+                "terrafront-recovery",
                 "visual-script-package",
             ],
         )

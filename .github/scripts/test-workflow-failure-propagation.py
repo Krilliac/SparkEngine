@@ -1495,6 +1495,18 @@ def required_workflow_errors(workflow: str) -> list[str]:
                         "2>&1 | tee telemetry-tests.log",
                     ),
                 ),
+                # OPS-100 c2/c3: the build-id symbolication canary.
+                (
+                    "Run crash-canary label",
+                    (
+                        "set -o pipefail",
+                        "ctest --test-dir build/linux-shipping",
+                        "--output-on-failure",
+                        "--no-tests=error",
+                        "-L '^crash-canary$'",
+                        "2>&1 | tee security-crash-canary.log",
+                    ),
+                ),
             ),
         ),
         (
@@ -2524,6 +2536,202 @@ def check_format_gate_errors(document: dict, script: str) -> list[str]:
     return errors
 
 
+# Hosted PR-lane jobs that the readiness work items name. Every one is advisory until an exact-commit run
+# qualifies it, stays outside required-ci-gate, never uses an experimental Shipping preset (the ownership gate
+# in tools/site-data/workflow_ownership.py would reject it) and may not hide a failure. Each entry carries the
+# command fragments the lane must keep, so a dropped step or selector fails here instead of shrinking the
+# evidence, and the CTest names that must stay registered in Tests/CMakeLists.txt.
+ADVISORY_CI_LANES = {
+    "persistence-integration": {
+        "runs-on": "${{ matrix.os }}",
+        "fragments": ("-L '^persistence$'", "--no-tests=error", "ubuntu-24.04", "windows-2022",
+                      "linux-gcc-release", "windows-release"),
+        "tests": (),
+    },
+    "package-consumer-linux": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("-DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON", "--no-tests=error",
+                      "PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_"),
+        "tests": ("PackageConsumer_LinuxInstalledSDK", "PackageConsumer_SourceTreeBoundaryDetection",
+                  "CLI_ClaimsMatchBehavior"),
+    },
+    "package-consumer-windows": {
+        "runs-on": "windows-2022",
+        "fragments": ("--preset windows-release", "^SDKConsumer_InstalledEmptyProjectTemplate$",
+                      "--no-tests=error"),
+        "tests": ("SDKConsumer_InstalledEmptyProjectTemplate",),
+    },
+    "scripting-integration": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("-DENABLE_ANGELSCRIPT=ON", "-L '^scripting-integration$'", "--no-tests=error"),
+        "tests": ("ScriptBindingsReal", "ScriptHotReloadReal", "VisualScriptRuntimePackagedLoop"),
+    },
+    "prototype-module-kit": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("-L '^prototype-module-kit$'", "--no-tests=error"),
+        "tests": ("PrototypeModuleKit_Helpers",),
+    },
+    "module-FPS-package-windows": {
+        "runs-on": "windows-2022",
+        "fragments": ("--preset windows-shipping", "-DBUILD_TESTS=ON", "ENABLE_VULKAN:BOOL=OFF",
+                      "PEImportClosure_Contract", "FPSPackage_InstalledRuntime",
+                      "WindowsCertification_PackageDependencyClosure", "len(names) != 3",
+                      "FPSPackage|FPSHeadlessPackage|FPSPublicSDK", "--no-tests=error"),
+        "tests": ("PEImportClosure_Contract", "FPSPackage_InstalledRuntime",
+                  "WindowsCertification_PackageDependencyClosure", "FPSHeadlessPackage_NullRHISaveReload",
+                  "FPSPublicSDK_InstalledConsumers"),
+    },
+    "module-FPS-singleplayer": {
+        "runs-on": "windows-2022",
+        "fragments": ("--preset windows-release", "--config Release", "^FPSSinglePlayerSlice_InstalledArenaLoop$",
+                      "--no-tests=error"),
+        "tests": ("FPSSinglePlayerSlice_InstalledArenaLoop",),
+    },
+    "module-FPS-multiplayer": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("SparkFPSLANLoopbackPeer", "^FPSLANTwoClientConvergence$",
+                      "SPARK_TEST_NAME_PREFIX=FPSMultiplayerProduction_", "^NetworkSecurity_Transport_",
+                      "--no-tests=error"),
+        "tests": ("FPSLANTwoClientConvergence", "NetworkSecurity_"),
+    },
+    "module-MMO-integration": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("SparkMMOSessionGatePeer",
+                      "MMOIntegratedWorld|MMOAccount_|MMOWorld_|MMOPersistence_|MMO320_NoDemoIdentityGate",
+                      "--no-tests=error"),
+        "tests": ("MMOIntegratedWorld_TwoClientSessionGate",),
+    },
+    "module-ARPG": {
+        "runs-on": "windows-2022",
+        "fragments": ("-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON", "SparkGameARPG",
+                      "^ARPGDungeonPackage_ClearAndRestart$", "--no-tests=error"),
+        "tests": (),
+        "module-run": "ARPGDungeonPackage_ClearAndRestart",
+    },
+    "module-Platformer": {
+        "runs-on": "windows-2022",
+        "fragments": ("-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON", "SparkGamePlatformer",
+                      "^PlatformerCompletionPackage_Level0ThreeMinutes$", "--no-tests=error"),
+        "tests": (),
+        "module-run": "PlatformerCompletionPackage_Level0ThreeMinutes",
+    },
+    "module-RPG": {
+        "runs-on": "windows-2022",
+        "fragments": ("-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON", "SparkGameRPG",
+                      "^RPGQuestSlicePackage_WolfHuntRestart$", "--no-tests=error"),
+        "tests": (),
+        "module-run": "RPGQuestSlicePackage_WolfHuntRestart",
+    },
+    "module-RTS": {
+        "runs-on": "windows-2022",
+        "fragments": ("-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON", "SparkGameRTS",
+                      "^RTSSkirmishPackage_DeterministicVictory$", "--no-tests=error"),
+        "tests": (),
+        "module-run": "RTSSkirmishPackage_DeterministicVictory",
+    },
+    "module-Racing": {
+        "runs-on": "windows-2022",
+        "fragments": ("-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON", "SparkGameRacing",
+                      "^RacingCompleteRacePackage_Circuit$", "--no-tests=error"),
+        "tests": (),
+        "module-run": "RacingCompleteRacePackage_Circuit",
+    },
+    "module-OpenWorld": {
+        "runs-on": "windows-2022",
+        "fragments": ("-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON", "SparkGameOpenWorld", "-R '^OpenWorld'",
+                      "--no-tests=error"),
+        "tests": ("OpenWorldPersistence",),
+    },
+    "terrafront-migration": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("-R TerrafrontMigration", "--no-tests=error"),
+        "tests": ("TerrafrontMigration_Reservation", "TerrafrontMigration_Participant"),
+    },
+    "terrafront-recovery": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("^(TerrafrontMigration_|TF120_|TerrafrontRestart_)",
+                      "-DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON", "--no-tests=error"),
+        "tests": ("TF120_Residency", "TF120_SharedRoot", "TerrafrontRestart_"),
+    },
+    # SEC-100 c3: kept out of the blocking security-runtime job until a hosted run proves the
+    # ENABLE_NETWORKING=OFF + BUILD_TESTS=ON configure.
+    "networking-disabled-contract": {
+        "runs-on": "ubuntu-24.04",
+        "fragments": ("cmake -S . -B build/networking-off", "-DBUILD_TESTS=ON -DENABLE_NETWORKING=OFF",
+                      "--target SparkNetworkingDisabledCompileContract",
+                      "-R '^SparkNetworkingDisabledCompileContract$'", "--no-tests=error"),
+        "tests": ("SparkNetworkingDisabledCompileContract",),
+    },
+}
+# Used by the jobs that run installed Shipping packages; every other lane must use a non-Shipping preset.
+SHIPPING_PRESET_ALLOWED = {"module-FPS-package-windows": "windows-shipping"}
+
+
+def advisory_ci_lane_errors(document: dict, tests_cmake: str) -> list[str]:
+    """Check each advisory PR-lane job named in ADVISORY_CI_LANES against its fail-closed contract."""
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return ["workflow has no jobs mapping"]
+    gate = jobs.get("required-ci-gate") or {}
+    needs = gate.get("needs") or []
+    errors: list[str] = []
+    module_runs = dict(re.findall(r'"([A-Za-z0-9_]+)\|SparkGame[A-Za-z]+\|[a-z]+\|(\d+)"', tests_cmake))
+    # A name (or name prefix) counts only when an add_test(NAME ...) registers it; a mention in a CMake
+    # comment or an unrelated string must not satisfy the check.
+    registered_cmake = re.sub(r"(?m)#.*$", "", tests_cmake)
+    for job_id, spec in ADVISORY_CI_LANES.items():
+        job = jobs.get(job_id)
+        if not isinstance(job, dict):
+            errors.append(f"{job_id} job is missing")
+            continue
+        if job.get("runs-on") != spec["runs-on"]:
+            errors.append(f"{job_id} must run on {spec['runs-on']}")
+        if job.get("continue-on-error") is not True:
+            errors.append(f"{job_id} must declare job-level continue-on-error: true")
+        if "advisory" not in str(job.get("name") or ""):
+            errors.append(f"{job_id} display name does not say advisory")
+        if "if" in job:
+            errors.append(f"{job_id} declares a job-level if")
+        if job_id in needs:
+            errors.append(f"{job_id} is a required-ci-gate dependency before a hosted pass")
+        timeout = job.get("timeout-minutes")
+        if not isinstance(timeout, int) or timeout <= 0:
+            errors.append(f"{job_id} has no positive timeout-minutes")
+        steps = [step for step in job.get("steps") or [] if isinstance(step, dict)]
+        runs = "\n".join(str(step.get("run", "")) for step in steps)
+        body = runs + "\n" + json.dumps(job)
+        for fragment in spec["fragments"]:
+            if fragment not in body:
+                errors.append(f"{job_id} is missing {fragment}")
+        for step in steps:
+            if "continue-on-error" in step:
+                errors.append(f"{job_id} step {step.get('name')!r} suppresses failure")
+            if re.search(r"\|\|\s*true\b", str(step.get("run", ""))):
+                errors.append(f"{job_id} step {step.get('name')!r} suppresses failure")
+            run = str(step.get("run", ""))
+            if "tee " in run and "pipefail" not in run:
+                errors.append(f"{job_id} step {step.get('name')!r} pipes through tee without pipefail")
+            if "ctest " in run and "--no-tests=error" not in run:
+                errors.append(f"{job_id} step {step.get('name')!r} ctest can pass on an empty selection")
+        for preset in re.findall(r"--preset\s+([A-Za-z0-9_-]+)", runs):
+            if preset in ("linux-shipping", "macos-shipping"):
+                errors.append(f"{job_id} runs experimental Shipping preset {preset}")
+            if preset.endswith("shipping") and preset != SHIPPING_PRESET_ALLOWED.get(job_id):
+                errors.append(f"{job_id} runs Shipping preset {preset} without ownership")
+        for name in spec["tests"]:
+            if not re.search(rf"\bNAME\s+{re.escape(name)}", registered_cmake):
+                errors.append(f"{job_id} names {name}, which Tests/CMakeLists.txt does not register")
+        run_name = spec.get("module-run")
+        if run_name:
+            registered = module_runs.get(run_name)
+            if registered is None:
+                errors.append(f"{job_id} names {run_name}, which is not a registered module package run")
+            elif isinstance(timeout, int) and timeout * 60 <= int(registered):
+                errors.append(f"{job_id} timeout-minutes does not exceed the {registered} s CTest TIMEOUT")
+    return errors
+
+
 class WorkflowFailurePropagationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -3324,6 +3532,9 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             "          --timeout-seconds 1800 || true\n\n    - name: Extract error summary",
             1,
         )
+        mutations["security runtime crash-canary selector dropped"] = self.build.replace(
+            "-L '^crash-canary$'", "-L '^crash-security$'", 1
+        )
         for label, mutated in mutations.items():
             with self.subTest(mutation=label):
                 self.assertNotEqual(mutated, self.build, "mutation fixture did not alter YAML")
@@ -4095,6 +4306,75 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             errors = reproducibility_windows_errors(document)
             with self.subTest(case=index, expected=expected):
                 self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_advisory_ci_lanes_are_fail_closed_and_outside_the_gate(self) -> None:
+        self.assertEqual(advisory_ci_lane_errors(parse_workflow_yaml(self.build), self.tests_cmake), [])
+
+    def test_advisory_ci_lane_test_names_need_a_live_registration(self) -> None:
+        document = parse_workflow_yaml(self.build)
+        commented = self.tests_cmake.replace("add_test(NAME NetworkSecurity_", "# add_test(NAME NetworkSecurity_")
+        self.assertNotEqual(commented, self.tests_cmake)
+        errors = advisory_ci_lane_errors(document, commented)
+        self.assertTrue(any("names NetworkSecurity_" in error for error in errors), errors)
+
+    def test_advisory_ci_lane_contract_rejects_each_regression(self) -> None:
+        baseline = parse_workflow_yaml(self.build)
+
+        def step_with(jobs: dict, job_id: str, fragment: str) -> dict:
+            matches = [s for s in jobs[job_id]["steps"] if fragment in str(s.get("run", ""))]
+            self.assertTrue(matches, (job_id, fragment))
+            return matches[0]
+
+        def edit_run(job_id: str, old: str, new: str):
+            def change(jobs: dict) -> None:
+                step_with(jobs, job_id, old)
+                for target in jobs[job_id]["steps"]:
+                    if old in str(target.get("run", "")):
+                        target["run"] = target["run"].replace(old, new)
+
+            return change
+
+        cases = (
+            (lambda jobs: jobs.pop("module-RTS"), "module-RTS job is missing"),
+            (lambda jobs: jobs["persistence-integration"].pop("continue-on-error"), "continue-on-error"),
+            (lambda jobs: jobs["terrafront-recovery"].update({"name": "Terrafront recovery"}), "does not say advisory"),
+            (lambda jobs: jobs["module-ARPG"].update({"if": "false"}), "job-level if"),
+            (lambda jobs: jobs["required-ci-gate"]["needs"].append("module-Racing"), "required-ci-gate dependency"),
+            (lambda jobs: jobs["module-RTS"].update({"timeout-minutes": 30}), "does not exceed"),
+            (lambda jobs: jobs["module-RPG"].update({"timeout-minutes": 15}), "does not exceed"),
+            (edit_run("scripting-integration", "-L '^scripting-integration$'", "-L '^scripting$'"),
+             "-L '^scripting-integration$'"),
+            (edit_run("prototype-module-kit", "--no-tests=error", "--output-on-failure"), "--no-tests=error"),
+            (edit_run("module-FPS-package-windows", "len(names) != 3", "len(names) != 0"), "len(names) != 3"),
+            (edit_run("module-FPS-package-windows", "windows-shipping -DBUILD_TESTS=ON",
+                      "windows-shipping -DBUILD_TESTS=OFF"), "-DBUILD_TESTS=ON"),
+            (edit_run("module-FPS-multiplayer", "SPARK_TEST_NAME_PREFIX=FPSMultiplayerProduction_",
+                      "SPARK_TEST_NAME_PREFIX=FPSMultiplayer_"), "FPSMultiplayerProduction_"),
+            (edit_run("module-MMO-integration", "MMO320_NoDemoIdentityGate", "MMO320_Other"),
+             "MMO320_NoDemoIdentityGate"),
+            (edit_run("module-Platformer", "-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON",
+                      "-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=OFF"), "-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON"),
+            (edit_run("package-consumer-linux", "linux-gcc-release", "linux-shipping"), "Shipping preset"),
+            (edit_run("terrafront-migration", "--output-on-failure 2>&1", "--output-on-failure 2>&1 || true #"),
+             "suppresses failure"),
+            (lambda jobs: jobs["module-OpenWorld"]["steps"][0].update({"continue-on-error": True}),
+             "suppresses failure"),
+            (edit_run("networking-disabled-contract", "-DBUILD_TESTS=ON -DENABLE_NETWORKING=OFF",
+                      "-DBUILD_TESTS=ON -DENABLE_NETWORKING=ON"), "-DENABLE_NETWORKING=OFF"),
+            (edit_run("networking-disabled-contract", "--target SparkNetworkingDisabledCompileContract",
+                      "--target SparkTests"), "--target SparkNetworkingDisabledCompileContract"),
+            (edit_run("networking-disabled-contract", "-R '^SparkNetworkingDisabledCompileContract$'",
+                      "-R 'Contract'"), "SparkNetworkingDisabledCompileContract$"),
+            (lambda jobs: jobs["required-ci-gate"]["needs"].append("networking-disabled-contract"),
+             "required-ci-gate dependency"),
+            (lambda jobs: jobs["terrafront-recovery"]["steps"].clear(), "TerrafrontRestart_"),
+        )
+        for mutate, expected in cases:
+            with self.subTest(expected=expected):
+                document = copy.deepcopy(baseline)
+                mutate(document["jobs"])
+                errors = advisory_ci_lane_errors(document, self.tests_cmake)
+                self.assertTrue(any(expected in error for error in errors), (expected, errors))
 
     def test_mingw_wine_lane_is_manual_advisory_and_labeled_experimental(self) -> None:
         self.assertEqual(experimental_mingw_lane_errors(parse_workflow_yaml(self.build)), [])

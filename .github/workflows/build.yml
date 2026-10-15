@@ -1046,6 +1046,16 @@ jobs:
         ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
           -R '^TelemetrySpool$' 2>&1 | tee telemetry-tests.log
 
+    # OPS-100: the symbolication canary crashes a probe through the production signal handler and resolves
+    # the fault to file:line from a build-id symbol store. crash-security is selected by the label loop above
+    # (CrashReporter_Consent, SparkCrashReporter/CMakeLists.txt); SparkCrashSymbolicationProbe is a SparkTests
+    # build dependency, so the target build above already produced it.
+    - name: Run crash-canary label
+      run: |
+        set -o pipefail
+        ctest --test-dir build/linux-shipping --output-on-failure --no-tests=error \
+          -L '^crash-canary$' 2>&1 | tee security-crash-canary.log
+
     - name: Extract security runtime error summary
       if: failure()
       run: |
@@ -1054,7 +1064,8 @@ jobs:
           error-summary.json \
           security-configure.log security-build.log security-remote-admin-selectors.log \
           security-remote-admin.log security-gateway.log security-crash-security.log \
-          telemetry-tests.log
+          telemetry-tests.log security-crash-canary.log security-networking-off-configure.log \
+          security-networking-off-build.log security-networking-off-tests.log
 
     - name: Upload security runtime error summary
       if: failure()
@@ -2226,6 +2237,20 @@ jobs:
           --images build/shipping-runtime-stage \
           --symbols build/shipping-symbols/symbols \
           --output build/shipping-symbols/shipping-symbol-manifest.json
+
+    - name: Validate staged Shipping executable BOM (ASSET-220)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The release workflow validates its own stage; this validates the stage the per-PR Shipping
+        # lane installed above, with the same validator parameters as release.yml. Every path is
+        # passed absolute.
+        cmake \
+          "-DSPARK_PACKAGE_ROOT=${{ github.workspace }}/build/shipping-runtime-stage" \
+          -DSPARK_PACKAGE_LAYOUT=runtime -DSPARK_PACKAGE_PROFILE=stable-v1 \
+          "-DSPARK_PACKAGE_EXPECTED_MODULE_MANIFEST=${{ github.workspace }}/build/windows-shipping/SparkEngineGameModules.cmake" \
+          -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe \
+          -P "${{ github.workspace }}/cmake/ValidateStagedPackageExecutables.cmake"
 
     - name: Verify Shipping runtime dependency closure (PLT-200)
       shell: bash
@@ -5316,6 +5341,927 @@ jobs:
             experimental-module-lifecycle.log
           retention-days: 14  # OD-17: experimental artifacts are kept 14 days
           if-no-files-found: warn
+
+  # DATA-120: every persistence-labelled CTest (concurrent writers, N-1 migrations, rollback and forced-failure
+  # recovery fixtures, TERRAFRONT residency) on Linux and Windows.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  persistence-integration:
+    name: "Persistence integration (${{ matrix.label }}, advisory)"
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - label: linux
+          os: ubuntu-24.04
+          preset: linux-gcc-release
+          config: Release
+          parallel: 4
+        - label: windows
+          os: windows-2022
+          preset: windows-release
+          config: Release
+          parallel: 2
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Setup MSVC
+      if: runner.os == 'Windows'
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure persistence tests
+      run: |
+        set -euo pipefail
+        cmake --preset ${{ matrix.preset }} 2>&1 | tee persistence-configure.log
+    - name: Build SparkTests
+      run: |
+        set -euo pipefail
+        cmake --build --preset ${{ matrix.preset }} --config ${{ matrix.config }} --target SparkTests \
+          --parallel ${{ matrix.parallel }} 2>&1 | tee persistence-build.log
+    - name: Run persistence label
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/${{ matrix.preset }} -C ${{ matrix.config }} -L '^persistence$' \
+          --no-tests=error --output-on-failure 2>&1 | tee persistence-tests.log
+    - name: Upload persistence integration logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: persistence-integration-${{ matrix.label }}-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          persistence-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # ASSET-220: install this build into a build-owned prefix and build the generated game and the
+  # Tests/PackageSmoke consumer solely against it; the CLI/packager claim tests run in the same tree.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  package-consumer-linux:
+    name: "Package consumer (Linux installed SDK, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure Linux package consumer tree
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release -DSPARK_ENABLE_PACKAGE_CONSUMER_TESTS=ON 2>&1 | tee package-consumer-configure.log
+    - name: Build the full tree to install
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --parallel "$(nproc)" 2>&1 | tee package-consumer-build.log
+    - name: Pin package consumer selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_' --show-only=json-v1 --no-tests=error > package-consumer-selection.json
+        python3 - <<'PY'
+        import json
+
+        required = ['CLI_ClaimsMatchBehavior', 'PackageConsumer_LinuxInstalledSDK', 'PackageConsumer_SourceTreeBoundaryDetection']
+        names = [test["name"] for test in json.load(open("package-consumer-selection.json", encoding="utf-8"))["tests"]]
+        missing = sorted(name for name in required if names.count(name) != 1)
+        if missing:
+            raise SystemExit(f"selection is missing or duplicates registered tests: {missing}")
+        print(f"{len(names)} tests selected; every required test registered exactly once")
+        PY
+    - name: Run package consumer and claim tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release \
+          -R 'PackageConsumer_|SparkNewFromInstalledPrefixTests|CLI_ClaimsMatchBehavior|GamePackager_' \
+          --no-tests=error --output-on-failure 2>&1 | tee package-consumer-tests.log
+    - name: Upload package consumer logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-consumer-linux-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          package-consumer-*.log
+          package-consumer-selection.json
+          build/linux-gcc-release/package-consumer-linux/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # ASSET-220: SDKConsumer_InstalledEmptyProjectTemplate installs this Windows build into its own test
+  # root and builds the spark-cli generated EmptyProject game against that installed SDK.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  package-consumer-windows:
+    name: "Package consumer (Windows installed prefix, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure Windows package consumer tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES=SparkGameFPS 2>&1 | tee package-consumer-windows-configure.log
+    - name: Build the full tree to install
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee package-consumer-windows-build.log
+    - name: Run installed empty-project template
+      run: |
+        set -euo pipefail
+        # The test installs SPARK_ENGINE_BUILD_DIR into its own SPARK_TEST_ROOT prefix and builds the
+        # generated game against it (Tests/CMakeLists.txt), so no separate install step is needed here.
+        ctest --test-dir build/windows-release -C Release \
+          -R '^SDKConsumer_InstalledEmptyProjectTemplate$' --no-tests=error --output-on-failure \
+          2>&1 | tee package-consumer-windows-tests.log
+    - name: Upload package consumer Windows logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: package-consumer-windows-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          package-consumer-windows-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # ENG-200: real AngelScript VM over the Jolt world, audio/animation bindings, hot reload and the
+  # visual-script packaged loop. visual-script-package stays a separate advisory lane.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  scripting-integration:
+    name: "Scripting integration (Linux Release, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure Release with AngelScript and Jolt
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release -DENABLE_ANGELSCRIPT=ON 2>&1 | tee scripting-configure.log
+    - name: Build SparkTests
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --target SparkTests --parallel "$(nproc)" 2>&1 | tee scripting-build.log
+    - name: Pin scripting-integration selection
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^scripting-integration$' --show-only=json-v1 --no-tests=error > scripting-selection.json
+        python3 - <<'PY'
+        import json
+
+        required = ["ScriptBindingsReal", "ScriptContactDispatchReal", "ScriptMediaBindingsReal",
+            "ScriptRuntimeLifecycleReal", "SEC3ScriptHardening", "ScriptHotReloadReal",
+            "VisualScriptRuntimePackagedLoop"]
+        names = [test["name"] for test in json.load(open("scripting-selection.json", encoding="utf-8"))["tests"]]
+        missing = sorted(name for name in required if names.count(name) != 1)
+        if missing:
+            raise SystemExit(f"selection is missing or duplicates registered tests: {missing}")
+        print(f"{len(names)} tests selected; every required test registered exactly once")
+        PY
+    - name: Run scripting-integration label
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^scripting-integration$' --no-tests=error \
+          --output-on-failure 2>&1 | tee scripting-tests.log
+    - name: Upload scripting integration logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: scripting-integration-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          scripting-*.log
+          scripting-selection.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-295: the shared module-kit helpers run against production SDK surfaces; prototype completion
+  # stays outside stable-v1.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  prototype-module-kit:
+    name: "Prototype module kit (advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure module kit tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release 2>&1 | tee prototype-module-kit-configure.log
+    - name: Build SparkTests
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --target SparkTests --parallel "$(nproc)" 2>&1 | tee prototype-module-kit-build.log
+    - name: Run prototype-module-kit label
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -L '^prototype-module-kit$' --no-tests=error \
+          --output-on-failure 2>&1 | tee prototype-module-kit-tests.log
+    - name: Upload prototype module kit logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: prototype-module-kit-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          prototype-module-kit-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-310 / ENG-220: the stable-v1 windows-shipping product set configured with BUILD_TESTS=ON so the
+  # installed-package CTests register. PEImportClosure_Contract, FPSPackage_InstalledRuntime and the
+  # package dependency closure are pinned to exactly three registered tests, so a dropped registration
+  # fails here instead of shrinking the selection. ENABLE_VULKAN stays OFF (the preset's value).
+  # This is NOT the reviewed shipping product set: the windows-shipping tree is reconfigured with
+  # BUILD_TESTS=ON (the preset ships BUILD_TESTS=OFF), so the job tests a Shipping-configuration build
+  # with test targets added. The preset use is allow-listed in SHIPPING_PRESET_ALLOWED
+  # (.github/scripts/test-workflow-failure-propagation.py).
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it.
+  module-FPS-package-windows:
+    name: "Module FPS package (windows-shipping, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure windows-shipping with tests
+      run: |
+        set -euo pipefail
+        # The preset configures the stable-v1 product set unmodified (the build matrix forbids
+        # overriding it); the follow-up configure of the same tree only registers the CTests.
+        cmake --preset windows-shipping 2>&1 | tee module-fps-package-configure.log
+        cmake -B build/windows-shipping -DBUILD_TESTS=ON 2>&1 | tee -a module-fps-package-configure.log
+        grep -q '^ENABLE_VULKAN:BOOL=OFF$' build/windows-shipping/CMakeCache.txt
+    - name: Build windows-shipping with tests
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-shipping --config MinSizeRel --parallel 1 2>&1 | tee module-fps-package-build.log
+    - name: Pin ENG-220 closure tests to an exact count
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-shipping -C MinSizeRel -R '^(PEImportClosure_Contract|FPSPackage_InstalledRuntime|WindowsCertification_PackageDependencyClosure)$' --show-only=json-v1 --no-tests=error > module-fps-package-eng220-selection.json
+        python - <<'PY'
+        import json
+
+        required = ['FPSPackage_InstalledRuntime', 'PEImportClosure_Contract', 'WindowsCertification_PackageDependencyClosure']
+        names = [test["name"] for test in json.load(open("module-fps-package-eng220-selection.json", encoding="utf-8"))["tests"]]
+        missing = sorted(name for name in required if names.count(name) != 1)
+        if missing:
+            raise SystemExit(f"selection is missing or duplicates registered tests: {missing}")
+        if len(names) != 3:
+            raise SystemExit(f"expected exactly 3 closure tests, found {len(names)}")
+        print(f"{len(names)} tests selected; every required test registered exactly once")
+        PY
+    - name: Run FPS package, headless package, public SDK and closure tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-shipping -C MinSizeRel \
+          -R 'FPSPackage|FPSHeadlessPackage|FPSPublicSDK|PEImportClosure_Contract|WindowsCertification_PackageDependencyClosure' \
+          --no-tests=error --output-on-failure 2>&1 | tee module-fps-package-tests.log
+    - name: Upload module FPS package logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-fps-package-windows-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-fps-package-*.log
+          module-fps-package-eng220-selection.json
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-310: Release configuration, because FPSSinglePlayerSlice_InstalledArenaLoop (fps_autoplay needs
+  # developer commands) is not registered in MinSizeRel Shipping.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-FPS-singleplayer:
+    name: "Module FPS single-player (Windows Release, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure FPS single-player tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES=SparkGameFPS 2>&1 | tee module-fps-singleplayer-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-fps-singleplayer-build.log
+    - name: Run the installed arena loop
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^FPSSinglePlayerSlice_InstalledArenaLoop$' \
+          --no-tests=error --output-on-failure 2>&1 | tee module-fps-singleplayer-arena.log
+    - name: Run the remaining single-player slice tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^FPSSinglePlayerSlice_' \
+          -E 'InstalledArenaLoop' --no-tests=error --output-on-failure \
+          2>&1 | tee module-fps-singleplayer-slice.log
+    - name: Upload module FPS single-player logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-fps-singleplayer-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-fps-singleplayer-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-315: three-process loopback convergence (SparkFPSLANLoopbackPeer), the production
+  # FPSMultiplayerSystem case family and the NET-100 transport hostile-input tests. Never gates the
+  # stable-v1 single-player result.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-FPS-multiplayer:
+    name: "Module FPS multiplayer (Linux, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure multiplayer tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release 2>&1 | tee module-fps-multiplayer-configure.log
+    - name: Build SparkTests and the LAN loopback peer
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --target SparkTests SparkFPSLANLoopbackPeer \
+          --parallel "$(nproc)" 2>&1 | tee module-fps-multiplayer-build.log
+    - name: Run two-client LAN convergence
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -R '^FPSLANTwoClientConvergence$' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-fps-multiplayer-lan.log
+    - name: Run production multiplayer system cases
+      run: |
+        set -euo pipefail
+        # An empty selection exits non-zero (TestMain: no tests matched the filter).
+        SPARK_TEST_NAME_PREFIX=FPSMultiplayerProduction_ build/linux-gcc-release/bin/SparkTests --warn-is-error \
+          2>&1 | tee module-fps-multiplayer-production.log
+    - name: Run NET-100 transport tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -R '^NetworkSecurity_Transport_' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-fps-multiplayer-transport.log
+    - name: Upload module FPS multiplayer logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-fps-multiplayer-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-fps-multiplayer-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-320: two real peer processes authenticate through the session gate, plus the account, world and
+  # persistence families and the no-demo-identity gate.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-MMO-integration:
+    name: "Module MMO integration (Linux, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure MMO integration tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release 2>&1 | tee module-mmo-configure.log
+    - name: Build SparkTests and the session-gate peer
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --target SparkMMOSessionGatePeer SparkTests \
+          --parallel "$(nproc)" 2>&1 | tee module-mmo-build.log
+    - name: Run MMO integration tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release \
+          -R 'MMOIntegratedWorld|MMOAccount_|MMOWorld_|MMOPersistence_|MMO320_NoDemoIdentityGate' \
+          --no-tests=error --output-on-failure 2>&1 | tee module-mmo-tests.log
+    - name: Upload module MMO integration logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-mmo-integration-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-mmo-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-330: ARPG installed-package objective on Windows (-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON).
+  # The CTest timeout of the selected run is 600 s; the 240 minute job timeout covers the build and it.
+  # SparkGameFPS stays selected because the Windows test tree requires the stable-v1 module target.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-ARPG:
+    name: "Module ARPG packaged run (Windows, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure ARPG package run tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES="SparkGameFPS;SparkGameARPG" -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON 2>&1 | tee module-ARPG-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-ARPG-build.log
+    - name: Run ARPG selectors
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^ARPGDungeonPackage_ClearAndRestart$' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-ARPG-tests.log
+    - name: Upload module ARPG logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-ARPG-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-ARPG-*.log
+          build/windows-release/module-package-runs/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-340: Platformer installed-package objective on Windows (-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON).
+  # The CTest timeout of the selected run is 420 s; the 240 minute job timeout covers the build and it.
+  # SparkGameFPS stays selected because the Windows test tree requires the stable-v1 module target.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-Platformer:
+    name: "Module Platformer packaged run (Windows, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure Platformer package run tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES="SparkGameFPS;SparkGamePlatformer" -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON 2>&1 | tee module-Platformer-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-Platformer-build.log
+    - name: Run Platformer selectors
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^PlatformerCompletionPackage_Level0ThreeMinutes$' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-Platformer-tests.log
+    - name: Upload module Platformer logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-Platformer-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-Platformer-*.log
+          build/windows-release/module-package-runs/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-350: RPG installed-package objective on Windows (-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON).
+  # The CTest timeout of the selected run is 900 s; the 240 minute job timeout covers the build and it.
+  # SparkGameFPS stays selected because the Windows test tree requires the stable-v1 module target.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-RPG:
+    name: "Module RPG packaged run (Windows, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure RPG package run tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES="SparkGameFPS;SparkGameRPG" -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON 2>&1 | tee module-RPG-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-RPG-build.log
+    - name: Run RPG selectors
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^RPGQuestSlicePackage_WolfHuntRestart$' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-RPG-tests.log
+    - name: Upload module RPG logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-RPG-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-RPG-*.log
+          build/windows-release/module-package-runs/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-370: RTS installed-package objective on Windows (-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON).
+  # The CTest timeout of the selected run is 1800 s; the 240 minute job timeout covers the build and it.
+  # SparkGameFPS stays selected because the Windows test tree requires the stable-v1 module target.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-RTS:
+    name: "Module RTS packaged run (Windows, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure RTS package run tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES="SparkGameFPS;SparkGameRTS" -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON 2>&1 | tee module-RTS-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-RTS-build.log
+    - name: Run RTS selectors
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^RTSSkirmishPackage_DeterministicVictory$' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-RTS-tests.log
+    - name: Upload module RTS logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-RTS-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-RTS-*.log
+          build/windows-release/module-package-runs/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-380: Racing installed-package objective on Windows (-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON).
+  # The CTest timeout of the selected run is 900 s; the 240 minute job timeout covers the build and it.
+  # SparkGameFPS stays selected because the Windows test tree requires the stable-v1 module target.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-Racing:
+    name: "Module Racing packaged run (Windows, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure Racing package run tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES="SparkGameFPS;SparkGameRacing" -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON 2>&1 | tee module-Racing-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-Racing-build.log
+    - name: Run Racing selectors
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^RacingCompleteRacePackage_Circuit$' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-Racing-tests.log
+    - name: Upload module Racing logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-Racing-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-Racing-*.log
+          build/windows-release/module-package-runs/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # MOD-360: OpenWorld installed-package objective on Windows (-DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON).
+  # The CTest timeout of the selected run is 120 s; the 240 minute job timeout covers the build and it.
+  # SparkGameFPS stays selected because the Windows test tree requires the stable-v1 module target.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  module-OpenWorld:
+    name: "Module OpenWorld packaged run (Windows, advisory)"
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+    - name: Configure OpenWorld package run tree
+      run: |
+        set -euo pipefail
+        cmake --preset windows-release -DENABLE_VULKAN=OFF -DSPARK_GAME_MODULES="SparkGameFPS;SparkGameOpenWorld" -DSPARK_ENABLE_MODULE_PACKAGE_RUNS=ON 2>&1 | tee module-OpenWorld-configure.log
+    - name: Build the full tree
+      run: |
+        set -euo pipefail
+        # --parallel 1: MSBuild /m x cl /MP is an N^2 process explosion on a 2-core runner.
+        cmake --build --preset windows-release --config Release --parallel 1 2>&1 | tee module-OpenWorld-build.log
+    - name: Run OpenWorld selectors
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/windows-release -C Release -R '^OpenWorld' --no-tests=error \
+          --output-on-failure 2>&1 | tee module-OpenWorld-tests.log
+    - name: Upload module OpenWorld logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: module-OpenWorld-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          module-OpenWorld-*.log
+          build/windows-release/module-package-runs/**/*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # TF-120: reservation, participant, cross-continent travel and gateway dispatch migration CTests.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  terrafront-migration:
+    name: "Terrafront migration (advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure migration tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release 2>&1 | tee terrafront-migration-configure.log
+    - name: Build SparkTests
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --target SparkTests --parallel "$(nproc)" 2>&1 | tee terrafront-migration-build.log
+    - name: Run Terrafront migration tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -R TerrafrontMigration --no-tests=error \
+          --output-on-failure 2>&1 | tee terrafront-migration-tests.log
+    - name: Upload Terrafront migration logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: terrafront-migration-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          terrafront-migration-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # TF-120: forced source/destination crash recovery (TerrafrontMigration_*, TF120_ residency and shared-root
+  # peers) and cold/ungraceful server restart (TerrafrontRestart_*). The 30 minute soak lives in
+  # operations-scheduled.yml: this workflow has no schedule trigger.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency until a hosted
+  # exact-commit run qualifies it. Non-Shipping preset on purpose (workflow_ownership.py).
+  terrafront-recovery:
+    name: "Terrafront recovery (Linux, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure Terrafront recovery tests
+      run: |
+        set -euo pipefail
+        cmake --preset linux-gcc-release -DBUILD_GAME_MODULES=ON -DENABLE_NETWORKING=ON \
+          -DSPARK_HEADLESS_SUPPORT=ON -DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON \
+          2>&1 | tee terrafront-recovery-configure.log
+    - name: Build Terrafront processes and tests
+      run: |
+        set -euo pipefail
+        cmake --build --preset linux-gcc-release --target SparkEngine SparkGameMMOFPS SparkTests \
+          --parallel 2 2>&1 | tee terrafront-recovery-build.log
+    - name: Run Terrafront recovery tests
+      run: |
+        set -euo pipefail
+        ctest --test-dir build/linux-gcc-release -R '^(TerrafrontMigration_|TF120_|TerrafrontRestart_)' \
+          --no-tests=error --output-on-failure 2>&1 | tee terrafront-recovery-tests.log
+    - name: Upload Terrafront recovery logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: terrafront-recovery-${{ github.sha }}-${{ github.run_attempt }}
+        path: |
+          terrafront-recovery-*.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/summary.json
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/stdout.log
+          build/linux-gcc-release/Testing/terrafront-multiclient/**/stderr.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: ignore
+
+  # SEC-100: the stable-v1 Windows profile disables networking. A separate Linux tree with
+  # ENABLE_NETWORKING=OFF proves the public headers stay independently buildable without it.
+  # Advisory (job-level continue-on-error) and NOT a required-ci-gate dependency: no CI leg had configured
+  # ENABLE_NETWORKING=OFF with BUILD_TESTS=ON before, so it stays out of the blocking security-runtime job
+  # until a hosted exact-commit run qualifies it.
+  networking-disabled-contract:
+    name: "Networking-disabled compile contract (Linux, advisory)"
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        submodules: recursive
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev
+    - name: Configure networking-disabled compile contract
+      run: |
+        set -o pipefail
+        cmake -S . -B build/networking-off -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc \
+          -DCMAKE_CXX_COMPILER=g++ -DSPARK_STRICT_DEPS=ON -DBUILD_TESTS=ON -DENABLE_NETWORKING=OFF \
+          2>&1 | tee security-networking-off-configure.log
+    - name: Build networking-disabled compile contract
+      run: |
+        set -o pipefail
+        cmake --build build/networking-off --target SparkNetworkingDisabledCompileContract \
+          --parallel $(nproc) 2>&1 | tee security-networking-off-build.log
+    - name: Run networking-disabled compile contract
+      run: |
+        set -o pipefail
+        ctest --test-dir build/networking-off --output-on-failure --no-tests=error \
+          -R '^SparkNetworkingDisabledCompileContract$' 2>&1 | tee security-networking-off-tests.log
+    - name: Upload networking-disabled contract logs
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: networking-disabled-contract-${{ github.sha }}-${{ github.run_attempt }}
+        path: security-networking-off-*.log
+        retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+        if-no-files-found: warn
 
   # DOC-410: documentation exact-currentness, broken links and the docs contract.
   # Moved from site-data.yml so a stale generator, missing result or broken link
