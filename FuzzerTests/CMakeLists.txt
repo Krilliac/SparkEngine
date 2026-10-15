@@ -2327,6 +2327,7 @@ add_executable(SparkFuzzInstallState
     FuzzInstallState.cpp
     FuzzInstallStateProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src/InstallState.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src/PathUtf8.cpp"
 )
 # Same split as SparkFuzzJsonUtils: the libFuzzer driver and FuzzInstallState.cpp use
 # libstdc++; the production reader and the adapter use libc++ and meet the driver
@@ -2334,6 +2335,7 @@ add_executable(SparkFuzzInstallState
 set_source_files_properties(
     FuzzInstallStateProduction.cpp
     "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src/InstallState.cpp"
+    "${SPARK_FUZZ_PROJECT_ROOT}/SparkInstaller/src/PathUtf8.cpp"
     PROPERTIES COMPILE_OPTIONS "-stdlib=libc++"
 )
 target_include_directories(SparkFuzzInstallState PRIVATE
