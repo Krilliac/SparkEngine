@@ -263,13 +263,19 @@ class ReleaseProfileShapeTests(ContractTestCase):
         self.assertIn("installed", values["product"])
         self.assertEqual(profile["firstPartyGameCapabilityIds"], ["modules.fps"])
 
-    def test_toolchain_line_is_honestly_unpinned(self) -> None:
+    def test_toolchain_line_states_the_shipping_pin_and_pending_certification(self) -> None:
+        # The claim must name exactly what cmake/WindowsShippingToolchain.json pins,
+        # and must not present the pin as executed or certified.
+        pin = json.loads((REPO_ROOT / "cmake" / "WindowsShippingToolchain.json").read_text(encoding="utf-8"))
         profile = self.profile_of(self.mutable)
-        toolchain = next(value for value in profile["scope"] if value["id"] == "toolchain")
-        self.assertIn("not pinned", toolchain["value"])
+        toolchain = next(value for value in profile["scope"] if value["id"] == "toolchain")["value"]
+        self.assertIn("cmake/WindowsShippingToolchain.json", toolchain)
+        for key in ("msvcToolsVersion", "compilerVersion", "windowsSdkVersion"):
+            self.assertIn(pin[key], toolchain, key)
+        self.assertIn("certification are pending", toolchain)
         limitations = " ".join(profile["limitations"]).lower()
-        self.assertIn("no exact msvc compiler build", limitations)
-        self.assertIn("windows sdk version", limitations)
+        self.assertIn("rejects measured drift", limitations)
+        self.assertIn("certification and protected build authority remain pending", limitations)
 
     def test_optional_lan_is_not_a_product_requirement(self) -> None:
         profile = self.profile_of(self.mutable)
