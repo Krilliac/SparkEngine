@@ -508,33 +508,38 @@ namespace Spark
     {
         // Bounded wait: the writer or flush thread releases these locks within
         // microseconds, but a lock held by the crashing thread never comes back.
-        const auto tryLockBriefly = [](std::mutex& mutex)
+        // The returned lock owns the mutex only if one of the attempts succeeded.
+        const auto lockBriefly = [](std::mutex& mutex)
         {
-            for (int attempt = 0; attempt < 50; ++attempt)
+            std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
+            for (int attempt = 1; attempt < 50 && !lock.owns_lock(); ++attempt)
             {
-                if (mutex.try_lock())
-                {
-                    return true;
-                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                if (lock.try_lock())
+                {
+                    break;
+                }
             }
-            return false;
+            return lock;
         };
 
         try
         {
             // Lock order sink, then queue: the same as AsyncWriterThread.
-            if (!tryLockBriefly(m_sinkMutex))
+            const std::unique_lock<std::mutex> sinkLock = lockBriefly(m_sinkMutex);
+            if (!sinkLock.owns_lock())
             {
                 return;
             }
-            std::lock_guard<std::mutex> sinkLock(m_sinkMutex, std::adopt_lock);
 
             std::queue<LogMessage> pending;
-            if (m_asyncEnabled.load(std::memory_order_relaxed) && tryLockBriefly(m_queueMutex))
+            if (m_asyncEnabled.load(std::memory_order_relaxed))
             {
-                std::lock_guard<std::mutex> queueLock(m_queueMutex, std::adopt_lock);
-                std::swap(pending, m_messageQueue);
+                const std::unique_lock<std::mutex> queueLock = lockBriefly(m_queueMutex);
+                if (queueLock.owns_lock())
+                {
+                    std::swap(pending, m_messageQueue);
+                }
             }
             for (; !pending.empty(); pending.pop())
             {
