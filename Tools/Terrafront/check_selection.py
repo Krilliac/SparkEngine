@@ -21,6 +21,7 @@ EXPECTED = {
         "TerrafrontRestart_UngracefulKillRestoresLastCommit",
     ),
     "terrafront-soak": ("TerrafrontSoak_Short",),
+    "terrafront-soak-long": ("TerrafrontSoak_30Min",),
 }
 
 

@@ -57,14 +57,18 @@ class SelectionTests(unittest.TestCase):
         self.assertIs(job["continue-on-error"], True)
         self.assertNotIn("terrafront-multiclient", jobs["required-ci-gate"]["needs"])
         steps = job["steps"]
-        runs = "\n".join(step.get("run", "") for step in steps)
+        # The 30-minute soak is selected by the scheduled operations workflow, the rest by build.yml.
+        scheduled = yaml.safe_load(
+            (ROOT / ".github/workflows/operations-scheduled.yml").read_text(encoding="utf-8"))["jobs"]
+        selecting = [*steps, *(step for scheduled_job in scheduled.values() for step in scheduled_job.get("steps", []))]
+        runs = "\n".join(step.get("run", "") for step in selecting)
         for flag in ("-DBUILD_TESTS=ON", "-DSPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS=ON",
                      "-DSPARK_HEADLESS_SUPPORT=ON", "--target SparkEngine SparkGameMMOFPS SparkTests"):
             self.assertIn(flag, runs)
         for label in check_selection.EXPECTED:
             self.assertIn(f"--show-only=json-v1 --no-tests=error -L '^{label}$'", runs)
             self.assertIn(f"check_selection.py {label}-selection.json --label {label}", runs)
-            run = next(step["run"] for step in steps if f"-L '^{label}$'" in step.get("run", "")
+            run = next(step["run"] for step in selecting if f"-L '^{label}$'" in step.get("run", "")
                        and "--show-only" not in step["run"])
             self.assertIn("--no-tests=error", run)
             self.assertIn("set -euo pipefail", run)
@@ -72,6 +76,7 @@ class SelectionTests(unittest.TestCase):
             self.assertNotIn("continue-on-error", step)
         upload = next(step for step in steps if "upload-artifact@" in step.get("uses", ""))
         self.assertEqual(upload["if"], "always()")
+        self.assertIn("check_selection.py terrafront-soak-long-selection.json --label terrafront-soak-long", runs)
         self.assertIn("**/summary.json", upload["with"]["path"])
         self.assertIn("**/exec_audit.log", upload["with"]["path"])
         self.assertNotIn("**/userdata", upload["with"]["path"])
