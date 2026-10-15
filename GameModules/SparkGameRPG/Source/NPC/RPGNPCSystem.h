@@ -140,6 +140,14 @@ namespace RPG
         std::vector<const NPCData*> GetNPCsInArea(uint32_t areaId) const;
         std::string GetNPCListString() const;
 
+        /**
+         * @brief One-line navigation probe for an NPC (the rpg_npc_route console command)
+         * @param npcId NPC to describe
+         * @return "[id] name (Area n) behavior=<b> pos=(x, y, z) route=<next>/<count>" where route counts the
+         *         NavMesh waypoints of the walk in progress (0/0 when standing); "No NPC with id N" if unknown
+         */
+        std::string GetNPCRouteString(uint32_t npcId) const;
+
         // === Disposition ===
         void AdjustDisposition(uint32_t npcId, int change);
         NPCDisposition GetDispositionTier(int value) const;
