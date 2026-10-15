@@ -2848,6 +2848,20 @@ def _status_candidates(line: str) -> Iterable[tuple[str, str, int]]:
             yield match.group("subject"), match.group("label"), match.start("label")
 
 
+@functools.lru_cache(maxsize=1024)
+def _status_label_units(text: str) -> tuple[tuple[int, str, str, tuple[tuple[str, str, int], ...]], ...]:
+    """Parse one surface into (line number, unit, heading, status candidates).
+
+    The parse depends only on the text, and the contract suite validates the same surfaces
+    dozens of times per process, so it is memoized on the text itself.
+    """
+    masked, _ = _mask_public_claim_prose(text)
+    return tuple(
+        (number, line, heading, tuple(_status_candidates(line)))
+        for number, line, heading in _status_headings_and_lines(masked)
+    )
+
+
 def status_label_claim_errors(surface_texts: dict[str, str], capabilities: Any) -> list[str]:
     """Return errors for status words that no validated capability backs.
 
@@ -2864,10 +2878,9 @@ def status_label_claim_errors(surface_texts: dict[str, str], capabilities: Any) 
     for surface in sorted(surface_texts):
         if surface in GENERATED_CLAIM_SURFACES or surface.startswith(GENERATED_CLAIM_PREFIXES):
             continue
-        masked, _ = _mask_public_claim_prose(surface_texts[surface])
         context_name = _normalized_claim_text(Path(surface).stem.replace("-", " ").replace("_", " "))
-        for number, line, heading in _status_headings_and_lines(masked):
-            for subject, label, offset in _status_candidates(line):
+        for number, line, heading, candidates in _status_label_units(surface_texts[surface]):
+            for subject, label, offset in candidates:
                 label_key = re.sub(r"[- ]", " ", label).replace("production ready", "production-ready")
                 rank = STATUS_LABEL_RANKS.get(label_key)
                 if rank is None:
