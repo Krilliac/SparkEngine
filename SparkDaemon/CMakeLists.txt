@@ -40,6 +40,7 @@ add_executable(SparkDaemon ${DAEMON_SOURCES})
 target_include_directories(SparkDaemon PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/SparkEngine/Source
+    ${CMAKE_SOURCE_DIR}/SparkSDK/Include
 )
 
 find_package(Threads REQUIRED)
@@ -83,6 +84,7 @@ add_executable(SparkCollabServer
 target_include_directories(SparkCollabServer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/SparkEngine/Source
+    ${CMAKE_SOURCE_DIR}/SparkSDK/Include
 )
 target_link_libraries(SparkCollabServer PRIVATE Threads::Threads)
 if(WIN32)
@@ -122,6 +124,7 @@ add_executable(SparkOrchestrator
 target_include_directories(SparkOrchestrator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/SparkEngine/Source
+    ${CMAKE_SOURCE_DIR}/SparkSDK/Include
 )
 target_link_libraries(SparkOrchestrator PRIVATE Threads::Threads)
 if(WIN32)
@@ -152,6 +155,7 @@ if(BUILD_TESTS)
     target_include_directories(SparkDaemonServiceTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/SparkEngine/Source
+        ${CMAKE_SOURCE_DIR}/SparkSDK/Include
     )
     target_link_libraries(SparkDaemonServiceTests PRIVATE Threads::Threads)
     if(WIN32)

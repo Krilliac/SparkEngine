@@ -78,6 +78,8 @@ add_executable(SparkShaderCompiler
 target_include_directories(SparkShaderCompiler PRIVATE
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source/Graphics/RHI"
     "${CMAKE_SOURCE_DIR}/SparkEngine/Source"
+    # Core/PlatformTypes.h forwards to <Spark/Detail/PlatformTypes.h> in the SDK.
+    "${CMAKE_SOURCE_DIR}/SparkSDK/Include"
 )
 
 target_compile_features(SparkShaderCompiler PRIVATE cxx_std_23)
