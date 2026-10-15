@@ -3043,7 +3043,7 @@
       "target": "SparkFuzzAchievement",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3817,
+      "line": 3819,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3053,7 +3053,7 @@
       "target": "SparkFuzzAnimationBinary",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2501,
+      "line": 2503,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3073,7 +3073,7 @@
       "target": "SparkFuzzAssetCooker",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3829,
+      "line": 3831,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3083,7 +3083,7 @@
       "target": "SparkFuzzAssetMigration",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3815,
+      "line": 3817,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3103,7 +3103,7 @@
       "target": "SparkFuzzAsyncDatabase",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2604,
+      "line": 2606,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3113,7 +3113,7 @@
       "target": "SparkFuzzBenchmarkBaselineJson",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3996,
+      "line": 3998,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3203,7 +3203,7 @@
       "target": "SparkFuzzEditorLayout",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3765,
+      "line": 3767,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3223,7 +3223,7 @@
       "target": "SparkFuzzEditorPreferences",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3666,
+      "line": 3668,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3233,7 +3233,7 @@
       "target": "SparkFuzzEditorProjectFile",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3457,
+      "line": 3459,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3243,7 +3243,7 @@
       "target": "SparkFuzzEditorRecovery",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3506,
+      "line": 3508,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3253,7 +3253,7 @@
       "target": "SparkFuzzEditorSceneImport",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3568,
+      "line": 3570,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3263,7 +3263,7 @@
       "target": "SparkFuzzEditorSceneJson",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3341,
+      "line": 3343,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3273,7 +3273,7 @@
       "target": "SparkFuzzEditorSceneLoad",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3396,
+      "line": 3398,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3283,7 +3283,7 @@
       "target": "SparkFuzzEditorThemeImport",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3619,
+      "line": 3621,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3293,7 +3293,7 @@
       "target": "SparkFuzzEditorWindowLayout",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3717,
+      "line": 3719,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3303,7 +3303,7 @@
       "target": "SparkFuzzEngineSettings",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2967,
+      "line": 2969,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3313,7 +3313,7 @@
       "target": "SparkFuzzEntityArchetype",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3074,
+      "line": 3076,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3323,7 +3323,7 @@
       "target": "SparkFuzzEventResponse",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3819,
+      "line": 3821,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3373,7 +3373,7 @@
       "target": "SparkFuzzFreezeBufferBlob",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3945,
+      "line": 3947,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3383,7 +3383,7 @@
       "target": "SparkFuzzGatewayAreaControlState",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2710,
+      "line": 2712,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3423,7 +3423,7 @@
       "target": "SparkFuzzLauncherModuleManifest",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3839,
+      "line": 3841,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3433,7 +3433,7 @@
       "target": "SparkFuzzLauncherTemplate",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3834,
+      "line": 3836,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3453,7 +3453,7 @@
       "target": "SparkFuzzMMOCharacterRecord",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2659,
+      "line": 2661,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3493,7 +3493,7 @@
       "target": "SparkFuzzMaterialEditorFiles",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2914,
+      "line": 2916,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3503,7 +3503,7 @@
       "target": "SparkFuzzMaterialLoader",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2867,
+      "line": 2869,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3523,7 +3523,7 @@
       "target": "SparkFuzzModManifest",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2385,
+      "line": 2387,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3533,7 +3533,7 @@
       "target": "SparkFuzzModuleSidecar",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3122,
+      "line": 3124,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3573,7 +3573,7 @@
       "target": "SparkFuzzOrchestrationJournal",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2553,
+      "line": 2555,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3583,7 +3583,7 @@
       "target": "SparkFuzzOrchestratorIdentity",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2759,
+      "line": 2761,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3593,7 +3593,7 @@
       "target": "SparkFuzzPluginMetadata",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3173,
+      "line": 3175,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3603,7 +3603,7 @@
       "target": "SparkFuzzRTSPersistence",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2812,
+      "line": 2814,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3623,7 +3623,7 @@
       "target": "SparkFuzzReflectionBinary",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3227,
+      "line": 3229,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3633,7 +3633,7 @@
       "target": "SparkFuzzReplay",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 2449,
+      "line": 2451,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3729,7 +3729,7 @@
       "target": "SparkFuzzRuntimePrefab",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3813,
+      "line": 3815,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3789,7 +3789,7 @@
       "target": "SparkFuzzShaderDiskCache",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3276,
+      "line": 3278,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3879,7 +3879,7 @@
       "target": "SparkFuzzUILayout",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3823,
+      "line": 3825,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -3889,7 +3889,7 @@
       "target": "SparkFuzzVirtualFileSystem",
       "kind": "executable",
       "file": "FuzzerTests/CMakeLists.txt",
-      "line": 3021,
+      "line": 3023,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -5962,7 +5962,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3817,
+          "line": 3819,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -5980,7 +5980,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2501,
+          "line": 2503,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6016,7 +6016,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3829,
+          "line": 3831,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6034,7 +6034,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3815,
+          "line": 3817,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6070,7 +6070,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2604,
+          "line": 2606,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6088,7 +6088,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3996,
+          "line": 3998,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6250,7 +6250,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3765,
+          "line": 3767,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6286,7 +6286,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3666,
+          "line": 3668,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6304,7 +6304,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3457,
+          "line": 3459,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6322,7 +6322,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3506,
+          "line": 3508,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6340,7 +6340,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3568,
+          "line": 3570,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6358,7 +6358,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3341,
+          "line": 3343,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6376,7 +6376,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3396,
+          "line": 3398,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6394,7 +6394,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3619,
+          "line": 3621,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6412,7 +6412,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3717,
+          "line": 3719,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6430,7 +6430,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2967,
+          "line": 2969,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6448,7 +6448,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3074,
+          "line": 3076,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6466,7 +6466,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3819,
+          "line": 3821,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6556,7 +6556,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3945,
+          "line": 3947,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6574,7 +6574,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2710,
+          "line": 2712,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6646,7 +6646,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3839,
+          "line": 3841,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6664,7 +6664,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3834,
+          "line": 3836,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6700,7 +6700,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2659,
+          "line": 2661,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6772,7 +6772,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2914,
+          "line": 2916,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6790,7 +6790,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2867,
+          "line": 2869,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6826,7 +6826,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2385,
+          "line": 2387,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6844,7 +6844,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3122,
+          "line": 3124,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6916,7 +6916,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2553,
+          "line": 2555,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6934,7 +6934,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2759,
+          "line": 2761,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6952,7 +6952,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3173,
+          "line": 3175,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -6970,7 +6970,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2812,
+          "line": 2814,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7006,7 +7006,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3227,
+          "line": 3229,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7024,7 +7024,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 2449,
+          "line": 2451,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7168,7 +7168,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3813,
+          "line": 3815,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7276,7 +7276,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3276,
+          "line": 3278,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7438,7 +7438,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3823,
+          "line": 3825,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7456,7 +7456,7 @@
       "declarations": [
         {
           "file": "FuzzerTests/CMakeLists.txt",
-          "line": 3021,
+          "line": 3023,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
