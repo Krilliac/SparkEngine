@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 351451 |
-| **SparkEditor/Source** | 110214 |
+| **SparkEngine/Source** | 351770 |
+| **SparkEditor/Source** | 110546 |
 | **GameModules** | 163994 |
 | **External services** | 12922 |
 | **Asset pipeline** | 3231 |
-| **Tests** | 280545 |
+| **Tests** | 281082 |
 | **SparkConsole/src** | 1866 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~949435** |
+| **Total C++ (excl. ThirdParty)** | **~950681** |
 
 ### File Counts
 
@@ -46,7 +46,7 @@ Graphics contains 125771 lines, or 35% of `SparkEngine/Source`. This is a source
 | Graphics | 125771 | 35.7% |
 | Engine (all subsystems) | 100266 | 28.5% |
 | Utils | 49037 | 13.9% |
-| Core | 32228 | 9.1% |
+| Core | 32225 | 9.1% |
 | Physics | 11142 | 3.1% |
 | Audio | 6961 | 1.9% |
 | Input | 3968 | 1.1% |
@@ -104,14 +104,14 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 110214 |
+| Total editor lines | 110546 |
 
 ## Testing Metrics
 
 | Metric | Count |
 |--------|------:|
 | Test files | 744 |
-| TEST() definitions | 8604 |
+| TEST() definitions | 8621 |
 | Configured sanitizer workflow lanes | ASan + UBSan + LSan + TSan + MSan |
 
 ## Build System Metrics
@@ -187,7 +187,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 2957 |
+| `EditorUI.cpp` | 3003 |
 | `ProjectManager.cpp` | 2362 |
 | `BuildPipeline.cpp` | 1881 |
 | `CollaborativeEditSession.cpp` | 1773 |
@@ -195,7 +195,7 @@ inventory is implementation evidence, not support certification.
 | `VisualScriptPanel.cpp` | 1702 |
 | `PerformanceProfiler.cpp` | 1688 |
 | `GameViewPanel.cpp` | 1616 |
-| `HierarchyPanel.cpp` | 1566 |
+| `HierarchyPanel.cpp` | 1567 |
 | `InspectorPanel.cpp` | 1481 |
 
 ## Shader Inventory

@@ -2141,19 +2141,19 @@
 | `backend` | function | Tests | [TestTelemetry.cpp:L236](../../Tests/TestTelemetry.cpp#L236) |  |
 | `Backend_BeginFrame` | function | SparkLauncher | [LauncherBackend.h:L33](../../SparkLauncher/src/LauncherBackend.h#L33) | Make the process DPI aware, open the centred window, create the ImGui context and |
 | `Backend_BeginFrame` | function | SparkLauncher | [LauncherBackendLinux.cpp:L126](../../SparkLauncher/src/LauncherBackendLinux.cpp#L126) |  |
-| `Backend_BeginFrame` | function | SparkLauncher | [LauncherBackendWindows.cpp:L333](../../SparkLauncher/src/LauncherBackendWindows.cpp#L333) |  |
+| `Backend_BeginFrame` | function | SparkLauncher | [LauncherBackendWindows.cpp:L334](../../SparkLauncher/src/LauncherBackendWindows.cpp#L334) |  |
 | `Backend_EndFrame` | function | SparkLauncher | [LauncherBackend.h:L34](../../SparkLauncher/src/LauncherBackend.h#L34) | Make the process DPI aware, open the centred window, create the ImGui context and |
 | `Backend_EndFrame` | function | SparkLauncher | [LauncherBackendLinux.cpp:L154](../../SparkLauncher/src/LauncherBackendLinux.cpp#L154) |  |
-| `Backend_EndFrame` | function | SparkLauncher | [LauncherBackendWindows.cpp:L364](../../SparkLauncher/src/LauncherBackendWindows.cpp#L364) |  |
+| `Backend_EndFrame` | function | SparkLauncher | [LauncherBackendWindows.cpp:L365](../../SparkLauncher/src/LauncherBackendWindows.cpp#L365) |  |
 | `Backend_Init` | function | SparkLauncher | [LauncherBackend.h:L31](../../SparkLauncher/src/LauncherBackend.h#L31) | Make the process DPI aware, open the centred window, create the ImGui context and |
 | `Backend_Init` | function | SparkLauncher | [LauncherBackendLinux.cpp:L65](../../SparkLauncher/src/LauncherBackendLinux.cpp#L65) |  |
-| `Backend_Init` | function | SparkLauncher | [LauncherBackendWindows.cpp:L296](../../SparkLauncher/src/LauncherBackendWindows.cpp#L296) |  |
+| `Backend_Init` | function | SparkLauncher | [LauncherBackendWindows.cpp:L297](../../SparkLauncher/src/LauncherBackendWindows.cpp#L297) |  |
 | `Backend_ShowFatalError` | function | SparkLauncher | [LauncherBackend.h:L41](../../SparkLauncher/src/LauncherBackend.h#L41) | Tell the user that the launcher cannot start: a modal message box (MessageBoxW on |
 | `Backend_ShowFatalError` | function | SparkLauncher | [LauncherBackendLinux.cpp:L200](../../SparkLauncher/src/LauncherBackendLinux.cpp#L200) |  |
-| `Backend_ShowFatalError` | function | SparkLauncher | [LauncherBackendWindows.cpp:L419](../../SparkLauncher/src/LauncherBackendWindows.cpp#L419) |  |
+| `Backend_ShowFatalError` | function | SparkLauncher | [LauncherBackendWindows.cpp:L420](../../SparkLauncher/src/LauncherBackendWindows.cpp#L420) |  |
 | `Backend_Shutdown` | function | SparkLauncher | [LauncherBackend.h:L32](../../SparkLauncher/src/LauncherBackend.h#L32) | Make the process DPI aware, open the centred window, create the ImGui context and |
 | `Backend_Shutdown` | function | SparkLauncher | [LauncherBackendLinux.cpp:L167](../../SparkLauncher/src/LauncherBackendLinux.cpp#L167) |  |
-| `Backend_Shutdown` | function | SparkLauncher | [LauncherBackendWindows.cpp:L375](../../SparkLauncher/src/LauncherBackendWindows.cpp#L375) |  |
+| `Backend_Shutdown` | function | SparkLauncher | [LauncherBackendWindows.cpp:L376](../../SparkLauncher/src/LauncherBackendWindows.cpp#L376) |  |
 | `BackendProjection` | function | SparkEngine | [GraphicsEngineSubmit.cpp:L78](../../SparkEngine/Source/Graphics/GraphicsEngineSubmit.cpp#L78) |  |
 | `backendRequest` | function | Tests | [TestRHI240LinuxForwardPassReal.cpp:L543](../../Tests/TestRHI240LinuxForwardPassReal.cpp#L543) |  |
 | `backendRequest` | function | Tests | [TestRHI240LinuxForwardPassReal.cpp:L585](../../Tests/TestRHI240LinuxForwardPassReal.cpp#L585) |  |
@@ -5897,7 +5897,7 @@
 | `CreateCamera` | function | GameModules | [TFWorldSetup.h:L153](../../GameModules/SparkGameMMOFPS/Source/World/TFWorldSetup.h#L153) |  |
 | `CreateCapsuleShape` | function | SparkEngine | [PhysicsSystem.h:L800](../../SparkEngine/Source/Physics/PhysicsSystem.h#L800) |  |
 | `CreateCascadedShadowMap` | function | SparkEngine | [LightingSystem.h:L464](../../SparkEngine/Source/Graphics/LightingSystem.h#L464) |  |
-| `CreateCentredWindow` | function | SparkLauncher | [LauncherBackendWindows.cpp:L264](../../SparkLauncher/src/LauncherBackendWindows.cpp#L264) |  |
+| `CreateCentredWindow` | function | SparkLauncher | [LauncherBackendWindows.cpp:L265](../../SparkLauncher/src/LauncherBackendWindows.cpp#L265) |  |
 | `CreateCharacter` | function | GameModules | [MMOCharacterSystem.h:L166](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h#L166) |  |
 | `CreateCharacter` | function | GameModules | [MMOPersistenceSystem.h:L210](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L210) |  |
 | `CreateCharacter` | function | GameModules | [TFDatabase.h:L272](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L272) |  |
@@ -7134,7 +7134,7 @@
 | `DefWindowProcW` | function | SparkEditor | [EditorApplicationWindows.cpp:L629](../../SparkEditor/Source/Core/EditorApplicationWindows.cpp#L629) |  |
 | `DefWindowProcW` | function | SparkEngine | [SparkEngineWindowsWin32.cpp:L508](../../SparkEngine/Source/Core/SparkEngineWindowsWin32.cpp#L508) |  |
 | `DefWindowProcW` | function | SparkInstaller | [BackendWindows.cpp:L186](../../SparkInstaller/src/gui/BackendWindows.cpp#L186) |  |
-| `DefWindowProcW` | function | SparkLauncher | [LauncherBackendWindows.cpp:L237](../../SparkLauncher/src/LauncherBackendWindows.cpp#L237) |  |
+| `DefWindowProcW` | function | SparkLauncher | [LauncherBackendWindows.cpp:L238](../../SparkLauncher/src/LauncherBackendWindows.cpp#L238) |  |
 | `DegreesToRadians` | function | SparkEngine | [MathUtils.h:L140](../../SparkEngine/Source/Utils/MathUtils.h#L140) |  |
 | `Delete` | function | GameModules | [TFCharacterSystem.h:L54](../../GameModules/SparkGameMMOFPS/Source/Account/TFCharacterSystem.h#L54) |  |
 | `Delete` | function | SparkDaemon | [CollaborationService.cpp:L68](../../SparkDaemon/src/CollaborationService.cpp#L68) |  |
@@ -18073,32 +18073,32 @@
 | `HierarchyPanel::BeginWorldEntityRename` | method | SparkEditor | [HierarchyPanel.cpp:L463](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L463) |  |
 | `HierarchyPanel::ClearSelection` | method | SparkEditor | [HierarchyPanel.cpp:L162](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L162) |  |
 | `HierarchyPanel::CollapseObject` | method | SparkEditor | [HierarchyPanel.cpp:L180](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L180) |  |
-| `HierarchyPanel::CreateObject` | method | SparkEditor | [HierarchyPanel.cpp:L1093](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1093) |  |
-| `HierarchyPanel::DeleteObject` | method | SparkEditor | [HierarchyPanel.cpp:L1208](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1208) |  |
-| `HierarchyPanel::DuplicateObject` | method | SparkEditor | [HierarchyPanel.cpp:L1149](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1149) |  |
+| `HierarchyPanel::CreateObject` | method | SparkEditor | [HierarchyPanel.cpp:L1094](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1094) |  |
+| `HierarchyPanel::DeleteObject` | method | SparkEditor | [HierarchyPanel.cpp:L1209](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1209) |  |
+| `HierarchyPanel::DuplicateObject` | method | SparkEditor | [HierarchyPanel.cpp:L1150](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1150) |  |
 | `HierarchyPanel::ExpandObject` | method | SparkEditor | [HierarchyPanel.cpp:L175](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L175) |  |
 | `HierarchyPanel::FocusObject` | method | SparkEditor | [HierarchyPanel.cpp:L190](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L190) |  |
-| `HierarchyPanel::GetChildObjects` | method | SparkEditor | [HierarchyPanel.cpp:L1041](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1041) |  |
-| `HierarchyPanel::GetObjectIcon` | method | SparkEditor | [HierarchyPanel.cpp:L1012](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1012) |  |
-| `HierarchyPanel::GetSceneObjects` | method | SparkEditor | [HierarchyPanel.cpp:L1552](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1552) |  |
+| `HierarchyPanel::GetChildObjects` | method | SparkEditor | [HierarchyPanel.cpp:L1042](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1042) |  |
+| `HierarchyPanel::GetObjectIcon` | method | SparkEditor | [HierarchyPanel.cpp:L1013](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1013) |  |
+| `HierarchyPanel::GetSceneObjects` | method | SparkEditor | [HierarchyPanel.cpp:L1553](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1553) |  |
 | `HierarchyPanel::HandleEvent` | method | SparkEditor | [HierarchyPanel.cpp:L116](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L116) |  |
-| `HierarchyPanel::HandleObjectDragDrop` | method | SparkEditor | [HierarchyPanel.cpp:L987](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L987) |  |
+| `HierarchyPanel::HandleObjectDragDrop` | method | SparkEditor | [HierarchyPanel.cpp:L988](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L988) |  |
 | `HierarchyPanel::Initialize` | method | SparkEditor | [HierarchyPanel.cpp:L40](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L40) |  |
 | `HierarchyPanel::IsObjectExpanded` | method | SparkEditor | [HierarchyPanel.cpp:L185](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L185) |  |
 | `HierarchyPanel::IsObjectSelected` | method | SparkEditor | [HierarchyPanel.cpp:L170](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L170) |  |
-| `HierarchyPanel::MoveObject` | method | SparkEditor | [HierarchyPanel.cpp:L1362](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1362) |  |
-| `HierarchyPanel::NotifyObjectOperation` | method | SparkEditor | [HierarchyPanel.cpp:L1511](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1511) |  |
-| `HierarchyPanel::NotifySelectionChanged` | method | SparkEditor | [HierarchyPanel.cpp:L1486](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1486) |  |
-| `HierarchyPanel::ObjectOrDescendantPassesFilter` | method | SparkEditor | [HierarchyPanel.cpp:L1075](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1075) |  |
-| `HierarchyPanel::PassesFilter` | method | SparkEditor | [HierarchyPanel.cpp:L1057](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1057) |  |
+| `HierarchyPanel::MoveObject` | method | SparkEditor | [HierarchyPanel.cpp:L1363](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1363) |  |
+| `HierarchyPanel::NotifyObjectOperation` | method | SparkEditor | [HierarchyPanel.cpp:L1512](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1512) |  |
+| `HierarchyPanel::NotifySelectionChanged` | method | SparkEditor | [HierarchyPanel.cpp:L1487](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1487) |  |
+| `HierarchyPanel::ObjectOrDescendantPassesFilter` | method | SparkEditor | [HierarchyPanel.cpp:L1076](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1076) |  |
+| `HierarchyPanel::PassesFilter` | method | SparkEditor | [HierarchyPanel.cpp:L1058](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1058) |  |
 | `HierarchyPanel::RegisterObjectOperationCallback` | method | SparkEditor | [HierarchyPanel.cpp:L217](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L217) |  |
 | `HierarchyPanel::RegisterSelectionCallback` | method | SparkEditor | [HierarchyPanel.cpp:L212](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L212) |  |
-| `HierarchyPanel::RenameObject` | method | SparkEditor | [HierarchyPanel.cpp:L1330](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1330) |  |
+| `HierarchyPanel::RenameObject` | method | SparkEditor | [HierarchyPanel.cpp:L1331](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1331) |  |
 | `HierarchyPanel::RenameWorldEntity` | method | SparkEditor | [HierarchyPanel.cpp:L474](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L474) |  |
 | `HierarchyPanel::Render` | method | SparkEditor | [HierarchyPanel.cpp:L81](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L81) |  |
-| `HierarchyPanel::RenderEmptyContextMenu` | method | SparkEditor | [HierarchyPanel.cpp:L928](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L928) |  |
+| `HierarchyPanel::RenderEmptyContextMenu` | method | SparkEditor | [HierarchyPanel.cpp:L929](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L929) |  |
 | `HierarchyPanel::RenderHierarchyTree` | method | SparkEditor | [HierarchyPanel.cpp:L320](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L320) |  |
-| `HierarchyPanel::RenderObjectContextMenu` | method | SparkEditor | [HierarchyPanel.cpp:L884](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L884) |  |
+| `HierarchyPanel::RenderObjectContextMenu` | method | SparkEditor | [HierarchyPanel.cpp:L885](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L885) |  |
 | `HierarchyPanel::RenderObjectNode` | method | SparkEditor | [HierarchyPanel.cpp:L739](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L739) |  |
 | `HierarchyPanel::RenderSearchBar` | method | SparkEditor | [HierarchyPanel.cpp:L312](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L312) |  |
 | `HierarchyPanel::RenderToolbar` | method | SparkEditor | [HierarchyPanel.cpp:L232](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L232) |  |
@@ -18106,7 +18106,7 @@
 | `HierarchyPanel::RenderWorldHierarchy` | method | SparkEditor | [HierarchyPanel.cpp:L490](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L490) |  |
 | `HierarchyPanel::RenderWorldToolbar` | method | SparkEditor | [HierarchyPanel.cpp:L430](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L430) |  |
 | `HierarchyPanel::ReparentWorldEntity` | method | SparkEditor | [HierarchyPanel.cpp:L729](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L729) |  |
-| `HierarchyPanel::ResetToDefault` | method | SparkEditor | [HierarchyPanel.cpp:L1521](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1521) |  |
+| `HierarchyPanel::ResetToDefault` | method | SparkEditor | [HierarchyPanel.cpp:L1522](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1522) |  |
 | `HierarchyPanel::SelectObject` | method | SparkEditor | [HierarchyPanel.cpp:L144](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L144) |  |
 | `HierarchyPanel::SetScene` | method | SparkEditor | [HierarchyPanel.cpp:L121](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L121) |  |
 | `HierarchyPanel::SetSearchFilter` | method | SparkEditor | [HierarchyPanel.cpp:L222](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L222) |  |
@@ -18114,7 +18114,7 @@
 | `HierarchyPanel::SetWorld` | method | SparkEditor | [HierarchyPanel.cpp:L128](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L128) |  |
 | `HierarchyPanel::Shutdown` | method | SparkEditor | [HierarchyPanel.cpp:L106](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L106) |  |
 | `HierarchyPanel::Update` | method | SparkEditor | [HierarchyPanel.cpp:L72](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L72) |  |
-| `HierarchyPanel::UpdateSelection` | method | SparkEditor | [HierarchyPanel.cpp:L1462](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1462) |  |
+| `HierarchyPanel::UpdateSelection` | method | SparkEditor | [HierarchyPanel.cpp:L1463](../../SparkEditor/Source/Panels/HierarchyPanel.cpp#L1463) |  |
 | `hintFont` | function | SparkEditor | [CommandPalette.cpp:L208](../../SparkEditor/Source/Search/CommandPalette.cpp#L208) |  |
 | `hintPos` | function | SparkEditor | [GameViewPanel.cpp:L973](../../SparkEditor/Source/Panels/GameViewPanel.cpp#L973) |  |
 | `hintPos` | function | SparkEditor | [GameViewPanel.cpp:L982](../../SparkEditor/Source/Panels/GameViewPanel.cpp#L982) |  |
@@ -20983,7 +20983,7 @@
 | `LaunchContext::CanonicalPath` | method | SparkEditor | [EditorPluginDiscovery.h:L33](../../SparkEditor/Source/Core/EditorPluginDiscovery.h#L33) |  |
 | `LaunchContext::PathFromUtf8` | method | SparkEditor | [GameModuleSelectorPanel.cpp:L135](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.cpp#L135) |  |
 | `LaunchContext::PathFromUtf8` | method | SparkEditor | [GameModuleSelectorPanel.cpp:L186](../../SparkEditor/Source/Panels/GameModuleSelectorPanel.cpp#L186) |  |
-| `LaunchContext::PathToUtf8` | method | SparkEditor | [EditorFonts.cpp:L51](../../SparkEditor/Source/Core/EditorFonts.cpp#L51) |  |
+| `LaunchContext::PathToUtf8` | method | SparkEditor | [EditorFonts.cpp:L52](../../SparkEditor/Source/Core/EditorFonts.cpp#L52) |  |
 | `LaunchContext::PathToUtf8` | method | SparkEditor | [PlayControlLaunch.cpp:L375](../../SparkEditor/Source/Panels/PlayControlLaunch.cpp#L375) |  |
 | `LaunchContext::PathToUtf8` | method | SparkEditor | [PlayControlLaunch.cpp:L408](../../SparkEditor/Source/Panels/PlayControlLaunch.cpp#L408) |  |
 | `LaunchContext::PathToUtf8` | method | SparkEditor | [EditorProcessLaunch.cpp:L129](../../SparkEditor/Source/Utils/EditorProcessLaunch.cpp#L129) |  |
@@ -31090,7 +31090,7 @@
 | `RegisterWeatherAndTimeOfDay` | function | GameModules | [MMOEngineSystems.h:L90](../../GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.h#L90) |  |
 | `RegisterWeatherCommands` | function | SparkEngine | [SubsystemConsoleCommands.cpp:L524](../../SparkEngine/Source/Core/SubsystemConsoleCommands.cpp#L524) |  |
 | `RegisterWidgetType` | function | SparkEngine | [UIFactory.h:L124](../../SparkEngine/Source/Engine/UI/UIFactory.h#L124) | Register a custom widget type factory |
-| `RegisterWindowClass` | function | SparkLauncher | [LauncherBackendWindows.cpp:L240](../../SparkLauncher/src/LauncherBackendWindows.cpp#L240) |  |
+| `RegisterWindowClass` | function | SparkLauncher | [LauncherBackendWindows.cpp:L241](../../SparkLauncher/src/LauncherBackendWindows.cpp#L241) |  |
 | `RegisterWizard` | function | SparkEditor | [EditorAutomation.h:L317](../../SparkEditor/Source/Panels/EditorAutomation.h#L317) | Register a wizard |
 | `registrar` | function | Tests | [TestScriptHookManagerPhaseBB.cpp:L331](../../Tests/TestScriptHookManagerPhaseBB.cpp#L331) |  |
 | `RegistrationHandle` | function | SparkEngine | [SaveSystem.cpp:L291](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L291) |  |
